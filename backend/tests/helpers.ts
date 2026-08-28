@@ -19,28 +19,33 @@ export interface TestHarness {
   close: () => Promise<void>;
 }
 
-export async function createHarness(clock: Clock = systemClock): Promise<TestHarness> {
+export async function createHarness(
+  clock: Clock = systemClock,
+  options: { publicBaseUrl?: string } = {},
+): Promise<TestHarness> {
+  const resolvedClock = clock ?? systemClock;
+  const publicBaseUrl = options.publicBaseUrl ?? "http://127.0.0.1";
   const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-v2-"));
   const opened = await createPgliteDatabase();
   await migrate(opened.db);
   const objectStore = new LocalObjectStore(
     path.join(dir, "objects"),
-    "http://127.0.0.1",
+    publicBaseUrl,
     "test-upload-secret",
   );
   const app = createApp({
     db: opened.db,
     objectStore,
-    clock,
+    clock: resolvedClock,
     auth: new BearerUserAdapter(opened.db),
-    publicBaseUrl: "http://127.0.0.1",
+    publicBaseUrl,
     devAuth: true,
   });
 
   return {
     db: opened.db,
     app,
-    clock,
+    clock: resolvedClock,
     objectStore,
     close: async () => {
       await opened.close();

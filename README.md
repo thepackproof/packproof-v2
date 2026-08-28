@@ -9,6 +9,7 @@ The Proof is the product. This repository implements one transaction-bound PackP
 ## Layout
 
 - `backend/` — modular monolith REST API
+- `mobile/` — Phase 10 thin Expo client
 - `docs/` — binding specification and architecture
 
 ## Quick start

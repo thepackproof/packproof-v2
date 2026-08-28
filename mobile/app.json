@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "PackProof V2",
+    "slug": "packproof-v2",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "packproof-v2",
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Capture seller evidence for this Proof.",
+        "NSPhotoLibraryUsageDescription": "Select captured evidence if the camera is unavailable.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.packproof.v2",
+      "usesCleartextTraffic": true,
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Capture seller evidence for this Proof.",
+          "photosPermission": "Select captured evidence if the camera is unavailable."
+        }
+      ]
+    ]
+  }
+}
