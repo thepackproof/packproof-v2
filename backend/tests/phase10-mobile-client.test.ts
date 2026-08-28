@@ -165,4 +165,76 @@ describe("Phase 10 mobile V2 API client", () => {
     expect(sellerFinal.status).toBe("FINALIZED");
     expect(buyerFinal.status).toBe("FINALIZED");
   });
+
+  it("reads and updates the same transaction and shipping context from seller and buyer clients", async () => {
+    const ctx = await startClientServer();
+    close = ctx.close;
+
+    const sellerLogin = await ctx.seller.login("seller-ctx");
+    ctx.sellerToken.value = sellerLogin.token;
+    const buyerLogin = await ctx.buyer.login("buyer-ctx");
+    ctx.buyerToken.value = buyerLogin.token;
+
+    const txn = await ctx.seller.createTransaction({
+      externalReference: "ORD-CLIENT-1",
+      transactionDate: "2026-08-20",
+      itemTitle: "Watch",
+      itemDescription: "Steel case",
+      quantity: 1,
+      transactionValue: 120,
+      currency: "usd",
+      shipping: {
+        carrier: "FedEx",
+        service: "2Day",
+        trackingNumber: "FX123",
+        shipmentDate: "2026-08-21",
+      },
+    });
+    expect(txn.currency).toBe("USD");
+    const proof = await ctx.seller.createOrGetProof(txn.transactionId);
+    const invite = await ctx.seller.createInvitation(proof.proofId, "buyer@example.com");
+    await ctx.buyer.acceptInvitation(invite.invitation.token);
+
+    const sellerTxn = await ctx.seller.getTransaction(txn.transactionId);
+    const buyerTxn = await ctx.buyer.getTransaction(txn.transactionId);
+    expect(buyerTxn.itemTitle).toBe(sellerTxn.itemTitle);
+    expect(buyerTxn.shipping).toEqual(sellerTxn.shipping);
+
+    const updatedTxn = await ctx.seller.updateTransaction(txn.transactionId, {
+      itemTitle: "Watch updated",
+    });
+    expect(updatedTxn.itemTitle).toBe("Watch updated");
+    const updatedShip = await ctx.seller.updateShipping(txn.transactionId, {
+      trackingNumber: "FX999",
+    });
+    expect(updatedShip.shipping?.trackingNumber).toBe("FX999");
+    expect((await ctx.buyer.getTransaction(txn.transactionId)).itemTitle).toBe("Watch updated");
+    expect((await ctx.buyer.getTransaction(txn.transactionId)).shipping?.trackingNumber).toBe(
+      "FX999",
+    );
+
+    const bytes = new Uint8Array(Buffer.from("ctx-client-evidence"));
+    await ctx.seller.submitEvidence({
+      proofId: proof.proofId,
+      bytes,
+      contentType: "image/jpeg",
+      idempotencyKey: "ctx-capture",
+    });
+    const finalized = await ctx.seller.finalizeProof(proof.proofId);
+    const manifest = finalized.manifest.manifest as {
+      transaction: { itemTitle: string | null };
+      shipping: { trackingNumber: string | null };
+    };
+    expect(manifest.transaction.itemTitle).toBe("Watch updated");
+    expect(manifest.shipping.trackingNumber).toBe("FX999");
+    const buyerManifest = await ctx.buyer.getManifest(proof.proofId);
+    expect(buyerManifest.sha256).toBe(finalized.manifest.sha256);
+
+    await expect(
+      ctx.seller.updateTransaction(txn.transactionId, { itemTitle: "nope" }),
+    ).rejects.toMatchObject({ code: "PROOF_ALREADY_FINALIZED" });
+    await expect(
+      ctx.seller.updateShipping(txn.transactionId, { trackingNumber: "nope" }),
+    ).rejects.toMatchObject({ code: "PROOF_ALREADY_FINALIZED" });
+  });
 });

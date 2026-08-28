@@ -17,7 +17,12 @@ import {
 import { finalizeProof, getManifest } from "./domain/finalize.js";
 import { acceptInvitation, createInvitation } from "./domain/invitations.js";
 import { getProofForUser } from "./domain/proofs.js";
-import { createTransaction, getTransaction } from "./domain/transactions.js";
+import {
+  createTransaction,
+  getTransaction,
+  updateShipping,
+  updateTransaction,
+} from "./domain/transactions.js";
 import { ensureIdentityUser } from "./domain/users.js";
 import type { ObjectStore } from "./s3/object-store.js";
 
@@ -125,10 +130,7 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/transactions",
     asyncRoute(async (req, res) => {
-      const result = await createTransaction(deps.db, deps.clock, bearerUser(req), {
-        externalReference: req.body?.externalReference ?? null,
-        metadata: req.body?.metadata ?? {},
-      });
+      const result = await createTransaction(deps.db, deps.clock, bearerUser(req), req.body);
       res.status(201).json(result);
     }),
   );
@@ -137,6 +139,34 @@ export function createApp(deps: AppDependencies): Express {
     "/transactions/:id",
     asyncRoute(async (req, res) => {
       const result = await getTransaction(deps.db, bearerUser(req), req.params.id);
+      res.json(result);
+    }),
+  );
+
+  app.patch(
+    "/transactions/:id/shipping",
+    asyncRoute(async (req, res) => {
+      const result = await updateShipping(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body,
+      );
+      res.json(result);
+    }),
+  );
+
+  app.patch(
+    "/transactions/:id",
+    asyncRoute(async (req, res) => {
+      const result = await updateTransaction(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body,
+      );
       res.json(result);
     }),
   );

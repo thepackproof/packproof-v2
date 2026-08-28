@@ -5,13 +5,55 @@ export type ProofStatus =
   | "EVIDENCE_COMMITTED"
   | "FINALIZED";
 
+export interface ShippingView {
+  carrier: string | null;
+  service: string | null;
+  trackingNumber: string | null;
+  shipmentDate: string | null;
+}
+
 export interface TransactionView {
   transactionId: string;
   externalReference: string | null;
+  transactionDate: string | null;
+  itemTitle: string | null;
+  itemDescription: string | null;
+  quantity: number | null;
+  transactionValue: number | null;
+  currency: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
   metadata: unknown;
+  shipping: ShippingView | null;
+  proofId: string | null;
+  proofStatus: string | null;
+  sellerUserId: string;
+  buyerUserId: string | null;
+}
+
+export interface TransactionWriteInput {
+  externalReference?: string | null;
+  transactionDate?: string | null;
+  itemTitle?: string | null;
+  itemDescription?: string | null;
+  quantity?: number | null;
+  transactionValue?: number | null;
+  currency?: string | null;
+  metadata?: unknown;
+  shipping?: {
+    carrier?: string | null;
+    service?: string | null;
+    trackingNumber?: string | null;
+    shipmentDate?: string | null;
+  } | null;
+}
+
+export interface ShippingWriteInput {
+  carrier?: string | null;
+  service?: string | null;
+  trackingNumber?: string | null;
+  shipmentDate?: string | null;
 }
 
 export interface ProofView {
@@ -23,10 +65,7 @@ export interface ProofView {
   updatedAt: string;
   finalizedAt: string | null;
   manifestId: string | null;
-  transaction: {
-    externalReference: string | null;
-    metadata: unknown;
-  };
+  transaction: TransactionView;
   participants: Array<{
     participantId: string;
     userId: string;
@@ -113,21 +152,58 @@ export class PackProofV2Client {
     });
   }
 
-  async createTransaction(input: {
-    externalReference?: string | null;
-    metadata?: unknown;
-  }): Promise<TransactionView> {
+  async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {
     return this.request("/transactions", {
       method: "POST",
       body: {
         externalReference: input.externalReference ?? null,
+        transactionDate: input.transactionDate ?? null,
+        itemTitle: input.itemTitle ?? null,
+        itemDescription: input.itemDescription ?? null,
+        quantity: input.quantity ?? null,
+        transactionValue: input.transactionValue ?? null,
+        currency: input.currency ?? null,
         metadata: input.metadata ?? {},
+        shipping: input.shipping ?? null,
       },
     });
   }
 
   async getTransaction(transactionId: string): Promise<TransactionView> {
     return this.request(`/transactions/${encodeURIComponent(transactionId)}`);
+  }
+
+  async updateTransaction(
+    transactionId: string,
+    input: TransactionWriteInput,
+  ): Promise<TransactionView> {
+    return this.request(`/transactions/${encodeURIComponent(transactionId)}`, {
+      method: "PATCH",
+      body: {
+        externalReference: input.externalReference,
+        transactionDate: input.transactionDate,
+        itemTitle: input.itemTitle,
+        itemDescription: input.itemDescription,
+        quantity: input.quantity,
+        transactionValue: input.transactionValue,
+        currency: input.currency,
+      },
+    });
+  }
+
+  async updateShipping(
+    transactionId: string,
+    input: ShippingWriteInput,
+  ): Promise<TransactionView> {
+    return this.request(`/transactions/${encodeURIComponent(transactionId)}/shipping`, {
+      method: "PATCH",
+      body: {
+        carrier: input.carrier,
+        service: input.service,
+        trackingNumber: input.trackingNumber,
+        shipmentDate: input.shipmentDate,
+      },
+    });
   }
 
   async createOrGetProof(transactionId: string): Promise<ProofView> {

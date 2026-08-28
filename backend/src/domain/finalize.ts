@@ -17,8 +17,11 @@ import {
   type EvidenceRow,
   type ManifestRow,
   type ParticipantRow,
+  type ProofRow,
+  type ShippingRow,
   type TransactionRow,
 } from "./types.js";
+import { asNullableNumber, shippingForManifest } from "./transaction-fields.js";
 
 export interface ManifestView {
   manifestId: string;
@@ -63,6 +66,16 @@ export async function finalizeProof(
   proofId: string,
 ): Promise<FinalizeView> {
   return db.transaction(async (tx) => {
+    const existingProof = await tx.query<ProofRow>(`SELECT * FROM proofs WHERE id = $1`, [proofId]);
+    if (!existingProof.rows[0]) {
+      throw new DomainError("PROOF_NOT_FOUND", "Proof not found", 404);
+    }
+    await tx.query(`SELECT id FROM transactions WHERE id = $1 FOR UPDATE`, [
+      existingProof.rows[0].transaction_id,
+    ]);
+    await tx.query(`SELECT id FROM transaction_shipping WHERE transaction_id = $1 FOR UPDATE`, [
+      existingProof.rows[0].transaction_id,
+    ]);
     const proof = await loadProof(tx, proofId, true);
     await requireParticipant(tx, proofId, actorUserId, "SELLER");
 
@@ -135,6 +148,11 @@ export async function finalizeProof(
     if (!txn) {
       throw new DomainError("TRANSACTION_NOT_FOUND", "Transaction not found", 404);
     }
+    const shipping = await tx.query<ShippingRow>(
+      `SELECT * FROM transaction_shipping WHERE transaction_id = $1`,
+      [proof.transaction_id],
+    );
+    const ship = shippingForManifest(shipping.rows[0]);
 
     const now = clock.now();
     const auditEventIds = await listAuditIds(tx, proofId);
@@ -144,8 +162,21 @@ export async function finalizeProof(
       proofId,
       transactionId: proof.transaction_id,
       transaction: {
+        transactionId: proof.transaction_id,
         externalReference: txn.external_reference,
+        transactionDate: txn.transaction_date,
+        itemTitle: txn.item_title,
+        itemDescription: txn.item_description,
+        quantity: asNullableNumber(txn.quantity),
+        transactionValue: asNullableNumber(txn.transaction_value),
+        currency: txn.currency,
         metadata: txn.transaction_metadata ?? {},
+      },
+      shipping: {
+        carrier: ship.carrier,
+        service: ship.service,
+        trackingNumber: ship.trackingNumber,
+        shipmentDate: ship.shipmentDate,
       },
       participants: participants.rows
         .map((row) => ({

@@ -17,6 +17,7 @@ import {
   newIdempotencyKey,
   type ManifestView,
   type ProofView,
+  type TransactionView,
 } from "./src/v2-api";
 import {
   clearCachedState,
@@ -31,6 +32,34 @@ type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "ret
 const DEFAULT_API =
   Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://127.0.0.1:3000";
 
+interface ContextForm {
+  externalReference: string;
+  transactionDate: string;
+  itemTitle: string;
+  itemDescription: string;
+  quantity: string;
+  transactionValue: string;
+  currency: string;
+  carrier: string;
+  service: string;
+  trackingNumber: string;
+  shipmentDate: string;
+}
+
+const EMPTY_FORM: ContextForm = {
+  externalReference: "",
+  transactionDate: "",
+  itemTitle: "",
+  itemDescription: "",
+  quantity: "",
+  transactionValue: "",
+  currency: "",
+  carrier: "",
+  service: "",
+  trackingNumber: "",
+  shipmentDate: "",
+};
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("auth");
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API);
@@ -39,6 +68,9 @@ export default function App() {
   const [invitationInput, setInvitationInput] = useState("");
   const [session, setSession] = useState<CachedClientState | null>(null);
   const [proof, setProof] = useState<ProofView | null>(null);
+  const [transactionDetail, setTransactionDetail] = useState<TransactionView | null>(null);
+  const [createForm, setCreateForm] = useState<ContextForm>(EMPTY_FORM);
+  const [editForm, setEditForm] = useState<ContextForm>(EMPTY_FORM);
   const [manifest, setManifest] = useState<ManifestView | null>(null);
   const [captureStatus, setCaptureStatus] = useState<LocalCaptureStatus>("idle");
   const [busy, setBusy] = useState(false);
@@ -79,6 +111,12 @@ export default function App() {
             getToken: () => cached.token,
           }).getProof(cached.proofId);
           setProof(fresh);
+          const txn = await new PackProofV2Client({
+            baseUrl: cached.apiBaseUrl,
+            getToken: () => cached.token,
+          }).getTransaction(fresh.transactionId);
+          setTransactionDetail(txn);
+          setEditForm(formFromTransaction(txn));
           setScreen("proof");
           if (fresh.status === "FINALIZED") {
             const loaded = await new PackProofV2Client({
@@ -119,6 +157,9 @@ export default function App() {
   async function refreshProof(proofId: string): Promise<ProofView> {
     const fresh = await client.getProof(proofId);
     setProof(fresh);
+    const txn = await client.getTransaction(fresh.transactionId);
+    setTransactionDetail(txn);
+    setEditForm(formFromTransaction(txn));
     if (fresh.status === "FINALIZED") {
       setManifest(await client.getManifest(proofId));
     } else {
@@ -182,6 +223,9 @@ export default function App() {
                   };
                   await persist(next);
                   setProof(null);
+                  setTransactionDetail(null);
+                  setCreateForm(EMPTY_FORM);
+                  setEditForm(EMPTY_FORM);
                   setManifest(null);
                   setScreen("home");
                 })
@@ -194,14 +238,17 @@ export default function App() {
           <View style={styles.card}>
             <Text>Signed in as {session.subject}</Text>
             <Text selectable>userId {session.userId}</Text>
+            <Text style={styles.heading}>New transaction</Text>
+            <ContextFields form={createForm} onChange={setCreateForm} />
             <Action
-              label="Create or resume seller Proof"
+              label="Create transaction and Proof"
               disabled={busy}
               onPress={() =>
                 run(async () => {
+                  const parsed = parseContextForm(createForm);
                   const txn = await client.createTransaction({
-                    externalReference: `v2:${session.subject}`,
-                    metadata: { source: "packproof-v2-mobile" },
+                    ...parsed.transaction,
+                    shipping: parsed.shipping,
                   });
                   const created = await client.createOrGetProof(txn.transactionId);
                   const next = {
@@ -263,6 +310,9 @@ export default function App() {
                   await clearCachedState();
                   setSession(null);
                   setProof(null);
+                  setTransactionDetail(null);
+                  setCreateForm(EMPTY_FORM);
+                  setEditForm(EMPTY_FORM);
                   setManifest(null);
                   setScreen("auth");
                 })
@@ -278,6 +328,61 @@ export default function App() {
             <Text selectable>transactionId {proof.transactionId}</Text>
             <Text>status {proof.status}</Text>
             <Text>role {role ?? "none"}</Text>
+            <Text style={styles.heading}>Transaction and shipping</Text>
+            {transactionDetail ? (
+              <TransactionFacts
+                transaction={transactionDetail}
+                proofId={proof.proofId}
+                proofStatus={proof.status}
+                sellerUserId={
+                  proof.participants.find((p) => p.role === "SELLER")?.userId ??
+                  transactionDetail.sellerUserId
+                }
+                buyerUserId={
+                  proof.participants.find((p) => p.role === "BUYER")?.userId ??
+                  transactionDetail.buyerUserId
+                }
+              />
+            ) : (
+              <Text>Loading transaction from server…</Text>
+            )}
+            {!finalized && role === "SELLER" ? (
+              <View>
+                <Text style={styles.heading}>Edit transaction</Text>
+                <ContextFields form={editForm} onChange={setEditForm} />
+                <Action
+                  label="Save transaction details"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const parsed = parseContextForm(editForm);
+                      const updated = await client.updateTransaction(proof.transactionId, {
+                        ...parsed.transaction,
+                      });
+                      setTransactionDetail(updated);
+                      setEditForm(formFromTransaction(updated));
+                      await refreshProof(proof.proofId);
+                    })
+                  }
+                />
+                <Action
+                  label="Save shipping details"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const parsed = parseContextForm(editForm);
+                      const updated = await client.updateShipping(
+                        proof.transactionId,
+                        parsed.shipping,
+                      );
+                      setTransactionDetail(updated);
+                      setEditForm(formFromTransaction(updated));
+                      await refreshProof(proof.proofId);
+                    })
+                  }
+                />
+              </View>
+            ) : null}
             <Text>participants</Text>
             {proof.participants.map((p) => (
               <Text key={p.participantId}>
@@ -445,6 +550,228 @@ function Action(props: { label: string; disabled: boolean; onPress: () => void }
   );
 }
 
+function displayValue(value: string | number | null | undefined): string {
+  if (value == null || value === "") {
+    return "—";
+  }
+  return String(value);
+}
+
+function formFromTransaction(transaction: TransactionView): ContextForm {
+  return {
+    externalReference: transaction.externalReference ?? "",
+    transactionDate: transaction.transactionDate ?? "",
+    itemTitle: transaction.itemTitle ?? "",
+    itemDescription: transaction.itemDescription ?? "",
+    quantity: transaction.quantity == null ? "" : String(transaction.quantity),
+    transactionValue:
+      transaction.transactionValue == null ? "" : String(transaction.transactionValue),
+    currency: transaction.currency ?? "",
+    carrier: transaction.shipping?.carrier ?? "",
+    service: transaction.shipping?.service ?? "",
+    trackingNumber: transaction.shipping?.trackingNumber ?? "",
+    shipmentDate: transaction.shipping?.shipmentDate ?? "",
+  };
+}
+
+function parseOptionalInteger(raw: string, field: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!/^[1-9][0-9]*$/.test(trimmed)) {
+    throw new Error(`${field} must be a positive integer`);
+  }
+  return Number(trimmed);
+}
+
+function parseOptionalAmount(raw: string, field: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${field} must be a number`);
+  }
+  return value;
+}
+
+function parseContextForm(form: ContextForm): {
+  transaction: {
+    externalReference: string | null;
+    transactionDate: string | null;
+    itemTitle: string | null;
+    itemDescription: string | null;
+    quantity: number | null;
+    transactionValue: number | null;
+    currency: string | null;
+  };
+  shipping: {
+    carrier: string | null;
+    service: string | null;
+    trackingNumber: string | null;
+    shipmentDate: string | null;
+  };
+} {
+  return {
+    transaction: {
+      externalReference: form.externalReference.trim() || null,
+      transactionDate: form.transactionDate.trim() || null,
+      itemTitle: form.itemTitle.trim() || null,
+      itemDescription: form.itemDescription.trim() || null,
+      quantity: parseOptionalInteger(form.quantity, "quantity"),
+      transactionValue: parseOptionalAmount(form.transactionValue, "transaction value"),
+      currency: form.currency.trim() || null,
+    },
+    shipping: {
+      carrier: form.carrier.trim() || null,
+      service: form.service.trim() || null,
+      trackingNumber: form.trackingNumber.trim() || null,
+      shipmentDate: form.shipmentDate.trim() || null,
+    },
+  };
+}
+
+function ContextFields(props: {
+  form: ContextForm;
+  onChange: (form: ContextForm) => void;
+}) {
+  const set = (key: keyof ContextForm, value: string) => {
+    props.onChange({ ...props.form, [key]: value });
+  };
+  return (
+    <View>
+      <LabeledInput
+        label="Transaction reference / order number"
+        value={props.form.externalReference}
+        onChangeText={(value) => set("externalReference", value)}
+      />
+      <LabeledInput
+        label="Transaction date (YYYY-MM-DD)"
+        value={props.form.transactionDate}
+        onChangeText={(value) => set("transactionDate", value)}
+      />
+      <LabeledInput
+        label="Item title"
+        value={props.form.itemTitle}
+        onChangeText={(value) => set("itemTitle", value)}
+      />
+      <LabeledInput
+        label="Item description"
+        value={props.form.itemDescription}
+        onChangeText={(value) => set("itemDescription", value)}
+        multiline
+      />
+      <LabeledInput
+        label="Quantity"
+        value={props.form.quantity}
+        onChangeText={(value) => set("quantity", value)}
+        keyboardType="number-pad"
+      />
+      <LabeledInput
+        label="Transaction value"
+        value={props.form.transactionValue}
+        onChangeText={(value) => set("transactionValue", value)}
+        keyboardType="decimal-pad"
+      />
+      <LabeledInput
+        label="Currency"
+        value={props.form.currency}
+        onChangeText={(value) => set("currency", value)}
+        autoCapitalize="characters"
+      />
+      <LabeledInput
+        label="Carrier"
+        value={props.form.carrier}
+        onChangeText={(value) => set("carrier", value)}
+      />
+      <LabeledInput
+        label="Shipping service"
+        value={props.form.service}
+        onChangeText={(value) => set("service", value)}
+      />
+      <LabeledInput
+        label="Tracking number"
+        value={props.form.trackingNumber}
+        onChangeText={(value) => set("trackingNumber", value)}
+      />
+      <LabeledInput
+        label="Shipment date (YYYY-MM-DD)"
+        value={props.form.shipmentDate}
+        onChangeText={(value) => set("shipmentDate", value)}
+      />
+    </View>
+  );
+}
+
+function TransactionFacts(props: {
+  transaction: TransactionView;
+  proofId: string;
+  proofStatus: string;
+  sellerUserId: string | null | undefined;
+  buyerUserId: string | null | undefined;
+}) {
+  const shipping = props.transaction.shipping;
+  return (
+    <View>
+      <Fact label="item title" value={props.transaction.itemTitle} />
+      <Fact label="item description" value={props.transaction.itemDescription} />
+      <Fact label="quantity" value={props.transaction.quantity} />
+      <Fact
+        label="transaction value"
+        value={
+          props.transaction.transactionValue == null
+            ? null
+            : `${props.transaction.transactionValue} ${props.transaction.currency ?? ""}`.trim()
+        }
+      />
+      <Fact label="transaction reference" value={props.transaction.externalReference} />
+      <Fact label="transaction date" value={props.transaction.transactionDate} />
+      <Fact label="seller" value={props.sellerUserId} />
+      <Fact label="buyer" value={props.buyerUserId} />
+      <Fact label="carrier" value={shipping?.carrier} />
+      <Fact label="shipping service" value={shipping?.service} />
+      <Fact label="tracking number" value={shipping?.trackingNumber} />
+      <Fact label="shipment date" value={shipping?.shipmentDate} />
+      <Fact label="associated Proof ID" value={props.proofId} />
+      <Fact label="current Proof status" value={props.proofStatus} />
+    </View>
+  );
+}
+
+function Fact(props: { label: string; value: string | number | null | undefined }) {
+  return (
+    <Text selectable>
+      {props.label} {displayValue(props.value)}
+    </Text>
+  );
+}
+
+function LabeledInput(props: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  multiline?: boolean;
+  keyboardType?: "default" | "number-pad" | "decimal-pad";
+  autoCapitalize?: "none" | "characters";
+}) {
+  return (
+    <View>
+      <Text style={styles.label}>{props.label}</Text>
+      <TextInput
+        style={[styles.input, props.multiline ? styles.multiline : null]}
+        value={props.value}
+        onChangeText={props.onChangeText}
+        autoCapitalize={props.autoCapitalize ?? "none"}
+        autoCorrect={false}
+        multiline={props.multiline}
+        keyboardType={props.keyboardType ?? "default"}
+      />
+    </View>
+  );
+}
+
 function formatError(error: unknown): string {
   if (error instanceof ApiError) {
     return `${error.code}: ${error.message}`;
@@ -501,6 +828,7 @@ const styles = StyleSheet.create({
   heading: { fontWeight: "700", marginTop: 8 },
   label: { marginTop: 6, fontWeight: "600" },
   input: { borderWidth: 1, borderColor: "#999", padding: 8 },
+  multiline: { minHeight: 72, textAlignVertical: "top" },
   button: { backgroundColor: "#111", padding: 12 },
   buttonDisabled: { opacity: 0.4 },
   buttonText: { color: "#fff", textAlign: "center" },

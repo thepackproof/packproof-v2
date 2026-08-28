@@ -64,6 +64,23 @@ export interface TransactionRow {
   created_at: Date | string;
   updated_at: Date | string;
   transaction_metadata: unknown;
+  transaction_date: string | null;
+  item_title: string | null;
+  item_description: string | null;
+  quantity: string | number | null;
+  transaction_value: string | number | null;
+  currency: string | null;
+}
+
+export interface ShippingRow {
+  id: string;
+  transaction_id: string;
+  carrier: string | null;
+  service: string | null;
+  tracking_number: string | null;
+  shipment_date: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
 }
 
 export interface ManifestRow {
