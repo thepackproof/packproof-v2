@@ -19,7 +19,9 @@
     "android": {
       "package": "com.packproof.v2",
       "usesCleartextTraffic": true,
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
       [
@@ -28,7 +30,8 @@
           "cameraPermission": "Capture seller evidence for this Proof.",
           "photosPermission": "Select captured evidence if the camera is unavailable."
         }
-      ]
+      ],
+      "expo-asset"
     ]
   }
 }
