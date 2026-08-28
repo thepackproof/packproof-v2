@@ -1,0 +1,20 @@
+---
+description: PackProof V2 domain invariants. These override conflicting legacy assumptions.
+alwaysApply: true
+---
+
+# PackProof V2 invariants
+
+This repository is PackProof V2. It is an independent codebase, not a branch of PackProof.
+
+The Proof is the center of the system. Clients never define Proof existence or status.
+
+- One transaction = one Proof. Enforced by `UNIQUE(transaction_id)`. Create-or-return; never duplicate.
+- Proofs are server-side and persistent. Navigation, logout, capture, and local storage must not delete or invalidate a Proof.
+- Clients issue commands (`createOrGetProof`, `acceptInvitation`, `commitEvidence`, `finalizeProof`). Clients never write Proof status.
+- Evidence is append-only. Do not edit committed evidence in place or replace a file while keeping the same evidence id.
+- Invitations grant access to an existing Proof. They must not create, own, or destroy Proofs.
+- Capture/upload UI state is not Proof state.
+- Finalization writes a deterministic canonical manifest and SHA-256. After `FINALIZED`, reject mutation.
+
+Durable Proof changes must: authenticate, authorize, load Proof, validate transition, mutate in a DB transaction, enforce constraints, append audit, return authoritative state.

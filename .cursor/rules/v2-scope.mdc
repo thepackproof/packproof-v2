@@ -1,0 +1,14 @@
+---
+description: PackProof V2 release-candidate scope. Do not expand.
+alwaysApply: true
+---
+
+# PackProof V2 scope
+
+Build only the release-candidate vertical slice: two users, one transaction, one Proof, seller + buyer, invitation, seller evidence, SHA-256 commit, finalize, retrieve manifest.
+
+Do not add integrations, claims, analytics, billing, orgs, GraphQL, Kafka, Kubernetes, Firebase/Firestore domain storage, microservices, or extra Proof/evidence tiers.
+
+When a choice appears: preserve invariants, then integrity, then determinism, then smallest server-side implementation. Database constraints beat UI assumptions. Do not optimize for unrequested future work.
+
+Stop when the slice works. Do not continue under the guise of finishing architecture.
