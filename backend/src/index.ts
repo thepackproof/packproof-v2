@@ -24,7 +24,7 @@ const app = createApp({
 
 const server = app.listen(config.port, () => {
   console.log(
-    `PackProof V2 API listening on ${config.port} using ${opened.engine}`,
+    `PackProof V2 API listening on ${config.port} using ${opened.engine} objectStore=${config.objectStore}`,
   );
 });
 

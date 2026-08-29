@@ -9,30 +9,33 @@ import { migrate } from "../src/db/migrate.js";
 import { createPgliteDatabase } from "../src/db/pglite.js";
 import type { Database } from "../src/db/database.js";
 import { LocalObjectStore } from "../src/s3/local-object-store.js";
+import type { ObjectStore } from "../src/s3/object-store.js";
 import { insertUser } from "../src/domain/users.js";
 
 export interface TestHarness {
   db: Database;
   app: ReturnType<typeof createApp>;
   clock: Clock;
-  objectStore: LocalObjectStore;
+  objectStore: ObjectStore;
   close: () => Promise<void>;
 }
 
 export async function createHarness(
   clock: Clock = systemClock,
-  options: { publicBaseUrl?: string } = {},
+  options: { publicBaseUrl?: string; objectStore?: ObjectStore } = {},
 ): Promise<TestHarness> {
   const resolvedClock = clock ?? systemClock;
   const publicBaseUrl = options.publicBaseUrl ?? "http://127.0.0.1";
   const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-v2-"));
   const opened = await createPgliteDatabase();
   await migrate(opened.db);
-  const objectStore = new LocalObjectStore(
-    path.join(dir, "objects"),
-    publicBaseUrl,
-    "test-upload-secret",
-  );
+  const objectStore =
+    options.objectStore ??
+    new LocalObjectStore(
+      path.join(dir, "objects"),
+      publicBaseUrl,
+      "test-upload-secret",
+    );
   const app = createApp({
     db: opened.db,
     objectStore,

@@ -2,7 +2,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DomainError } from "../domain/errors.js";
-import type { ObjectStore, StoredObject, UploadTarget } from "./object-store.js";
+import { sha256Hex } from "../hash.js";
+import { assertSafeObjectKey } from "./object-key.js";
+import type { ObjectDigest, ObjectStore, StoredObject, UploadTarget } from "./object-store.js";
 
 export class LocalObjectStore implements ObjectStore {
   constructor(
@@ -12,7 +14,7 @@ export class LocalObjectStore implements ObjectStore {
   ) {}
 
   async put(key: string, body: Buffer, contentType: string): Promise<void> {
-    const filePath = this.filePath(key);
+    const filePath = this.filePath(assertSafeObjectKey(key));
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, body);
     await writeFile(`${filePath}.meta.json`, JSON.stringify({ contentType }), "utf8");
@@ -20,7 +22,7 @@ export class LocalObjectStore implements ObjectStore {
 
   async get(key: string): Promise<StoredObject | null> {
     try {
-      const filePath = this.filePath(key);
+      const filePath = this.filePath(assertSafeObjectKey(key));
       const body = await readFile(filePath);
       const meta = JSON.parse(await readFile(`${filePath}.meta.json`, "utf8")) as {
         contentType: string;
@@ -31,12 +33,24 @@ export class LocalObjectStore implements ObjectStore {
     }
   }
 
+  async digest(key: string): Promise<ObjectDigest | null> {
+    const stored = await this.get(key);
+    if (!stored) {
+      return null;
+    }
+    return {
+      sha256: sha256Hex(stored.body),
+      byteSize: stored.body.byteLength,
+      contentType: stored.contentType,
+    };
+  }
+
   async createUploadTarget(input: {
     key: string;
     contentType: string;
   }): Promise<UploadTarget> {
     const exp = Date.now() + 60 * 60 * 1000;
-    const token = this.sign(input.key, exp);
+    const token = this.sign(assertSafeObjectKey(input.key), exp);
     return {
       method: "PUT",
       url: `${this.publicBaseUrl}/upload/${token}`,
@@ -50,7 +64,7 @@ export class LocalObjectStore implements ObjectStore {
     contentType: string | undefined,
   ): Promise<{ key: string }> {
     const { key } = this.verify(token);
-    await this.put(key, body, contentType ?? "application/octet-stream");
+    await this.put(assertSafeObjectKey(key), body, contentType ?? "application/octet-stream");
     return { key };
   }
 

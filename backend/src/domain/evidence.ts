@@ -1,7 +1,7 @@
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
-import { sha256Hex } from "../hash.js";
 import { newId } from "../ids.js";
+import { evidenceObjectKey } from "../s3/object-key.js";
 import type { ObjectStore, UploadTarget } from "../s3/object-store.js";
 import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
@@ -35,7 +35,7 @@ export interface EvidenceCommitView {
 }
 
 function objectKeyFor(proofId: string, evidenceId: string): string {
-  return `proofs/${proofId}/evidence/${evidenceId}`;
+  return evidenceObjectKey(proofId, evidenceId);
 }
 
 export async function initializeEvidenceUpload(
@@ -176,63 +176,40 @@ export async function commitEvidence(
   evidenceId: string,
   clientSha256?: string,
 ): Promise<EvidenceCommitView> {
-  return db.transaction(async (tx) => {
-    const proof = await loadProof(tx, proofId, true);
-    await requireParticipant(tx, proofId, actorUserId, "SELLER");
+  const prepared = await db.transaction(async (tx) => {
+    return loadEvidenceForCommit(tx, actorUserId, proofId, evidenceId);
+  });
+  if (prepared.committed) {
+    return prepared.committed;
+  }
 
-    const found = await tx.query<EvidenceRow>(
-      `SELECT * FROM evidence WHERE id = $1 AND proof_id = $2 FOR UPDATE`,
-      [evidenceId, proofId],
+  const digest = await objectStore.digest(prepared.objectKey);
+  if (!digest) {
+    throw new DomainError(
+      "EVIDENCE_OBJECT_MISSING",
+      "Uploaded object was not found",
+      409,
     );
-    const evidence = found.rows[0];
-    if (!evidence) {
-      throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence not found", 404);
-    }
-    if (evidence.submitted_by !== actorUserId) {
-      throw new DomainError(
-        "PARTICIPANT_NOT_AUTHORIZED",
-        "Only the submitting seller can commit this evidence",
-        403,
-      );
-    }
+  }
+  if (!contentTypesCompatible(digest.contentType, prepared.contentType)) {
+    throw new DomainError(
+      "EVIDENCE_METADATA_MISMATCH",
+      "Uploaded object content type does not match the pending evidence record",
+      422,
+    );
+  }
+  if (clientSha256 && clientSha256.toLowerCase() !== digest.sha256) {
+    throw new DomainError(
+      "EVIDENCE_HASH_MISMATCH",
+      "Client hash does not match independently computed SHA-256",
+      422,
+    );
+  }
 
-    if (evidence.validation_status === "COMMITTED" && evidence.sha256 && evidence.committed_at) {
-      return {
-        evidenceId: evidence.id,
-        proofId,
-        sha256: evidence.sha256,
-        byteSize: Number(evidence.byte_size ?? 0),
-        validationStatus: evidence.validation_status,
-        committedAt: asRequiredIso(evidence.committed_at),
-        proof: await getProofView(tx, proofId),
-      };
-    }
-
-    assertNotFinalized(proof);
-    if (proof.status !== "READY_FOR_EVIDENCE" && proof.status !== "EVIDENCE_COMMITTED") {
-      throw new DomainError(
-        "INVALID_PROOF_TRANSITION",
-        "Proof is not ready for evidence commitment",
-        422,
-      );
-    }
-
-    const stored = await objectStore.get(evidence.object_key);
-    if (!stored) {
-      throw new DomainError(
-        "EVIDENCE_OBJECT_MISSING",
-        "Uploaded object was not found",
-        409,
-      );
-    }
-
-    const sha256 = sha256Hex(stored.body);
-    if (clientSha256 && clientSha256.toLowerCase() !== sha256) {
-      throw new DomainError(
-        "EVIDENCE_HASH_MISMATCH",
-        "Client hash does not match independently computed SHA-256",
-        422,
-      );
+  return db.transaction(async (tx) => {
+    const current = await loadEvidenceForCommit(tx, actorUserId, proofId, evidenceId);
+    if (current.committed) {
+      return current.committed;
     }
 
     const now = clock.now().toISOString();
@@ -243,10 +220,10 @@ export async function commitEvidence(
               committed_at = $4,
               validation_status = 'COMMITTED'
         WHERE id = $1 AND committed_at IS NULL`,
-      [evidenceId, sha256, stored.body.byteLength, now],
+      [evidenceId, digest.sha256, digest.byteSize, now],
     );
 
-    if (proof.status === "READY_FOR_EVIDENCE") {
+    if (current.proofStatus === "READY_FOR_EVIDENCE") {
       await tx.query(
         `UPDATE proofs SET status = 'EVIDENCE_COMMITTED', updated_at = $2 WHERE id = $1`,
         [proofId, now],
@@ -259,18 +236,90 @@ export async function commitEvidence(
       proofId,
       actorUserId,
       eventType: "EVIDENCE_COMMITTED",
-      eventData: { evidenceId, sha256, byteSize: stored.body.byteLength },
+      eventData: { evidenceId, sha256: digest.sha256, byteSize: digest.byteSize },
       at: clock.now(),
     });
 
     return {
       evidenceId,
       proofId,
-      sha256,
-      byteSize: stored.body.byteLength,
+      sha256: digest.sha256,
+      byteSize: digest.byteSize,
       validationStatus: "COMMITTED",
       committedAt: now,
       proof: await getProofView(tx, proofId),
     };
   });
+}
+
+async function loadEvidenceForCommit(
+  tx: Database,
+  actorUserId: string,
+  proofId: string,
+  evidenceId: string,
+): Promise<
+  | { committed: EvidenceCommitView; objectKey?: never; contentType?: never; proofStatus?: never }
+  | { committed: null; objectKey: string; contentType: string; proofStatus: string }
+> {
+  const proof = await loadProof(tx, proofId, true);
+  await requireParticipant(tx, proofId, actorUserId, "SELLER");
+
+  const found = await tx.query<EvidenceRow>(
+    `SELECT * FROM evidence WHERE id = $1 AND proof_id = $2 FOR UPDATE`,
+    [evidenceId, proofId],
+  );
+  const evidence = found.rows[0];
+  if (!evidence) {
+    throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence not found", 404);
+  }
+  if (evidence.submitted_by !== actorUserId) {
+    throw new DomainError(
+      "PARTICIPANT_NOT_AUTHORIZED",
+      "Only the submitting seller can commit this evidence",
+      403,
+    );
+  }
+
+  if (evidence.validation_status === "COMMITTED" && evidence.sha256 && evidence.committed_at) {
+    return {
+      committed: {
+        evidenceId: evidence.id,
+        proofId,
+        sha256: evidence.sha256,
+        byteSize: Number(evidence.byte_size ?? 0),
+        validationStatus: evidence.validation_status,
+        committedAt: asRequiredIso(evidence.committed_at),
+        proof: await getProofView(tx, proofId),
+      },
+    };
+  }
+
+  assertNotFinalized(proof);
+  if (proof.status !== "READY_FOR_EVIDENCE" && proof.status !== "EVIDENCE_COMMITTED") {
+    throw new DomainError(
+      "INVALID_PROOF_TRANSITION",
+      "Proof is not ready for evidence commitment",
+      422,
+    );
+  }
+
+  return {
+    committed: null,
+    objectKey: evidence.object_key,
+    contentType: evidence.content_type,
+    proofStatus: proof.status,
+  };
+}
+
+function contentTypesCompatible(stored: string, expected: string): boolean {
+  const storedType = mediaType(stored);
+  const expectedType = mediaType(expected);
+  if (!storedType || !expectedType) {
+    return true;
+  }
+  return storedType === expectedType;
+}
+
+function mediaType(value: string): string {
+  return value.split(";")[0]?.trim().toLowerCase() ?? "";
 }

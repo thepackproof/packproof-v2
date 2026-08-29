@@ -7,9 +7,14 @@ import type { ObjectStore } from "./object-store.js";
 export function createObjectStore(config: AppConfig): ObjectStore {
   if (config.objectStore === "s3") {
     if (!config.awsS3Bucket || !config.awsRegion) {
-      throw new Error("AWS_S3_BUCKET and AWS_REGION are required for OBJECT_STORE=s3");
+      throw new Error(
+        "PACKPROOF_S3_BUCKET (or AWS_S3_BUCKET) and AWS_REGION are required when PACKPROOF_OBJECT_STORAGE=s3",
+      );
     }
-    return new AwsS3ObjectStore(config.awsS3Bucket, config.awsRegion);
+    return new AwsS3ObjectStore(config.awsS3Bucket, {
+      region: config.awsRegion,
+      expiresInSeconds: config.s3UploadExpiresSeconds,
+    });
   }
   return new LocalObjectStore(
     path.join(config.pgliteDir, "objects"),
