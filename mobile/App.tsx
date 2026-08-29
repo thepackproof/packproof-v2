@@ -9,8 +9,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import * as FileSystem from "expo-file-system";
-import * as ImagePicker from "expo-image-picker";
 import {
   ApiError,
   PackProofV2Client,
@@ -20,13 +18,23 @@ import {
   type TransactionView,
 } from "./src/v2-api";
 import {
+  describeLocalCapture,
+  discardLocalCapture,
+  formatBytes,
+  formatDuration,
+  localCaptureExists,
+  recordPackingEvidence,
+  uploadCaptureFile,
+  type LocalCapture,
+} from "./src/capture";
+import {
   clearCachedState,
   loadCachedState,
   saveCachedState,
   type CachedClientState,
 } from "./src/session";
 
-type Screen = "auth" | "home" | "proof";
+type Screen = "auth" | "home" | "proof" | "capture";
 type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "retry";
 
 const DEFAULT_API =
@@ -73,6 +81,8 @@ export default function App() {
   const [editForm, setEditForm] = useState<ContextForm>(EMPTY_FORM);
   const [manifest, setManifest] = useState<ManifestView | null>(null);
   const [captureStatus, setCaptureStatus] = useState<LocalCaptureStatus>("idle");
+  const [localCapture, setLocalCapture] = useState<LocalCapture | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
@@ -102,7 +112,26 @@ export default function App() {
         setInvitationInput(cached.invitationToken);
       }
       if (cached.captureUri) {
-        setCaptureStatus("retry");
+        const restored = await describeLocalCapture(cached.captureUri, {
+          byteSize: cached.captureByteSize,
+          durationMs: cached.captureDurationMs,
+          contentType: cached.evidenceContentType,
+        });
+        if (restored) {
+          setLocalCapture(restored);
+          setCaptureStatus(cached.evidenceIdempotencyKey ? "retry" : "captured");
+        } else {
+          await persist({
+            ...cached,
+            captureUri: null,
+            evidenceIdempotencyKey: null,
+            evidenceContentType: null,
+            captureByteSize: null,
+            captureDurationMs: null,
+          });
+          setCaptureStatus("idle");
+          setError("Local capture was removed by the device. Record packing evidence again.");
+        }
       }
       if (cached.proofId) {
         try {
@@ -142,6 +171,22 @@ export default function App() {
     await saveCachedState(next);
   }
 
+  async function persistCapture(next: LocalCapture | null, idempotencyKey: string | null): Promise<void> {
+    const current = sessionRef.current;
+    if (!current) {
+      return;
+    }
+    setLocalCapture(next);
+    await persist({
+      ...current,
+      captureUri: next?.uri ?? null,
+      evidenceIdempotencyKey: idempotencyKey,
+      evidenceContentType: next?.contentType ?? null,
+      captureByteSize: next?.byteSize ?? null,
+      captureDurationMs: next?.durationMs ?? null,
+    });
+  }
+
   async function run(action: () => Promise<void>): Promise<void> {
     setBusy(true);
     setError(null);
@@ -174,6 +219,17 @@ export default function App() {
 
   const role = proof?.participants.find((p) => p.userId === session?.userId)?.role;
   const finalized = proof?.status === "FINALIZED";
+  const committedEvidence = (proof?.evidence ?? []).filter(
+    (item) => item.validationStatus === "COMMITTED",
+  );
+  const pendingEvidence = (proof?.evidence ?? []).filter(
+    (item) => item.validationStatus === "PENDING",
+  );
+  const canCapture =
+    !finalized &&
+    role === "SELLER" &&
+    proof?.status === "READY_FOR_EVIDENCE" &&
+    committedEvidence.length === 0;
 
   return (
     <View style={styles.root}>
@@ -220,10 +276,15 @@ export default function App() {
                     captureUri: null,
                     evidenceIdempotencyKey: null,
                     evidenceContentType: null,
+                    captureByteSize: null,
+                    captureDurationMs: null,
                   };
                   await persist(next);
                   setProof(null);
                   setTransactionDetail(null);
+                  setLocalCapture(null);
+                  setCaptureStatus("idle");
+                  setUploadPercent(null);
                   setCreateForm(EMPTY_FORM);
                   setEditForm(EMPTY_FORM);
                   setManifest(null);
@@ -305,12 +366,16 @@ export default function App() {
               disabled={busy}
               onPress={() =>
                 run(async () => {
+                  await discardLocalCapture(sessionRef.current?.captureUri);
                   tokenRef.current = null;
                   sessionRef.current = null;
                   await clearCachedState();
                   setSession(null);
                   setProof(null);
                   setTransactionDetail(null);
+                  setLocalCapture(null);
+                  setCaptureStatus("idle");
+                  setUploadPercent(null);
                   setCreateForm(EMPTY_FORM);
                   setEditForm(EMPTY_FORM);
                   setManifest(null);
@@ -389,17 +454,32 @@ export default function App() {
                 {p.role} {p.status} {p.userId}
               </Text>
             ))}
-            <Text>evidence</Text>
-            {proof.evidence.length === 0 ? <Text>none committed/pending</Text> : null}
-            {proof.evidence.map((item) => (
+            <Text style={styles.heading}>Required seller evidence</Text>
+            {committedEvidence.length === 0 ? (
+              <Text>not committed — capture remains local until the server confirms commit</Text>
+            ) : (
+              <Text>committed</Text>
+            )}
+            {committedEvidence.map((item) => (
               <Text key={item.evidenceId} selectable>
-                {item.validationStatus} {item.sha256 ?? ""}
+                COMMITTED {item.sha256 ?? ""} {item.byteSize != null ? formatBytes(item.byteSize) : ""}
               </Text>
             ))}
+            {pendingEvidence.length > 0 && committedEvidence.length === 0 ? (
+              <Text>upload started but not committed</Text>
+            ) : null}
             {session.invitationToken ? (
               <Text selectable>invitation {session.invitationToken}</Text>
             ) : null}
-            <Text>local capture {captureStatus}</Text>
+            <Text>
+              local capture {captureStatus}
+              {localCapture
+                ? ` ${formatBytes(localCapture.byteSize)} ${formatDuration(localCapture.durationMs)}`
+                : ""}
+            </Text>
+            {captureStatus === "uploading" && uploadPercent != null ? (
+              <Text>upload {uploadPercent}%</Text>
+            ) : null}
             {manifest ? (
               <View>
                 <Text style={styles.heading}>Final manifest</Text>
@@ -444,93 +524,172 @@ export default function App() {
                     })
                   }
                 />
-                <Action
-                  label="Capture evidence"
-                  disabled={busy}
-                  onPress={() =>
-                    run(async () => {
-                      setCaptureStatus("capturing");
-                      const captured = await captureEvidence();
-                      if (!captured) {
-                        setCaptureStatus(session.captureUri ? "retry" : "idle");
-                        return;
-                      }
-                      const key = session.evidenceIdempotencyKey ?? newIdempotencyKey();
-                      const next = {
-                        ...session,
-                        captureUri: captured.uri,
-                        evidenceIdempotencyKey: key,
-                        evidenceContentType: captured.contentType,
-                      };
-                      await persist(next);
-                      setCaptureStatus("uploading");
-                      try {
-                        const bytes = await readUriBytes(captured.uri);
-                        await client.submitEvidence({
-                          proofId: proof.proofId,
-                          bytes,
-                          contentType: captured.contentType,
-                          idempotencyKey: key,
-                        });
-                        await persist({
-                          ...next,
-                          captureUri: null,
-                          evidenceIdempotencyKey: null,
-                          evidenceContentType: null,
-                        });
-                        setCaptureStatus("idle");
-                        await refreshProof(proof.proofId);
-                      } catch (err) {
-                        setCaptureStatus("retry");
-                        throw err;
-                      }
-                    })
-                  }
-                />
-                {captureStatus === "retry" && session.captureUri && session.evidenceIdempotencyKey ? (
+                {canCapture ? (
                   <Action
-                    label="Retry upload/commit"
+                    label="Capture packing evidence"
+                    disabled={busy}
+                    onPress={() => {
+                      setError(null);
+                      setScreen("capture");
+                    }}
+                  />
+                ) : null}
+                {proof.status === "EVIDENCE_COMMITTED" ? (
+                  <Action
+                    label="Finalize Proof"
                     disabled={busy}
                     onPress={() =>
                       run(async () => {
-                        setCaptureStatus("uploading");
-                        try {
-                          const bytes = await readUriBytes(session.captureUri as string);
-                          await client.submitEvidence({
-                            proofId: proof.proofId,
-                            bytes,
-                            contentType: session.evidenceContentType ?? "image/jpeg",
-                            idempotencyKey: session.evidenceIdempotencyKey as string,
-                          });
-                          await persist({
-                            ...session,
-                            captureUri: null,
-                            evidenceIdempotencyKey: null,
-                            evidenceContentType: null,
-                          });
-                          setCaptureStatus("idle");
-                          await refreshProof(proof.proofId);
-                        } catch (err) {
-                          setCaptureStatus("retry");
-                          throw err;
-                        }
+                        const result = await client.finalizeProof(proof.proofId);
+                        setProof(result.proof);
+                        setManifest(result.manifest);
+                        await refreshProof(result.proof.proofId);
                       })
                     }
                   />
                 ) : null}
-                <Action
-                  label="Finalize Proof"
-                  disabled={busy}
-                  onPress={() =>
-                    run(async () => {
-                      const result = await client.finalizeProof(proof.proofId);
-                      setProof(result.proof);
-                      setManifest(result.manifest);
-                    })
-                  }
-                />
               </View>
             ) : null}
+          </View>
+        ) : null}
+
+        {screen === "capture" && session && proof ? (
+          <View style={styles.card}>
+            <Text style={styles.heading}>Packing evidence capture</Text>
+            <Text>
+              Keep the packing and sealing process visible in the frame for the entire recording.
+              Stop when the package is sealed. This local video is not Proof state until the server
+              commits it.
+            </Text>
+            <Fact label="item title" value={transactionDetail?.itemTitle ?? proof.transaction.itemTitle} />
+            <Fact
+              label="transaction reference"
+              value={transactionDetail?.externalReference ?? proof.transaction.externalReference}
+            />
+            <Fact
+              label="carrier"
+              value={
+                transactionDetail?.shipping?.carrier ?? proof.transaction.shipping?.carrier
+              }
+            />
+            <Fact
+              label="tracking number"
+              value={
+                transactionDetail?.shipping?.trackingNumber ??
+                proof.transaction.shipping?.trackingNumber
+              }
+            />
+            <Text selectable>proofId {proof.proofId}</Text>
+            <Text>Proof status {proof.status}</Text>
+            <Text>local capture {captureStatus}</Text>
+            {localCapture ? (
+              <View>
+                <Text>local video ready</Text>
+                <Text>{formatBytes(localCapture.byteSize)}</Text>
+                <Text>{formatDuration(localCapture.durationMs)}</Text>
+                <Text selectable>{localCapture.uri}</Text>
+              </View>
+            ) : (
+              <Text>no local capture</Text>
+            )}
+            {captureStatus === "uploading" ? (
+              <Text>upload {uploadPercent ?? 0}% — evidence is not committed yet</Text>
+            ) : null}
+            {captureStatus === "retry" ? (
+              <Text>upload or commit failed. Local capture kept. Proof is unchanged.</Text>
+            ) : null}
+
+            <Action
+              label={localCapture ? "Retake video" : "Record packing evidence"}
+              disabled={busy || captureStatus === "uploading"}
+              onPress={() =>
+                run(async () => {
+                  setCaptureStatus("capturing");
+                  const captured = await recordPackingEvidence();
+                  if (!captured) {
+                    setCaptureStatus(localCapture ? "captured" : "idle");
+                    return;
+                  }
+                  if (localCapture && localCapture.uri !== captured.uri) {
+                    await discardLocalCapture(localCapture.uri);
+                  }
+                  await persistCapture(captured, session.evidenceIdempotencyKey);
+                  setCaptureStatus("captured");
+                  const fresh = await client.getProof(proof.proofId);
+                  setProof(fresh);
+                })
+              }
+            />
+            {localCapture && captureStatus !== "uploading" ? (
+              <Action
+                label="Discard local capture"
+                disabled={busy}
+                onPress={() =>
+                  run(async () => {
+                    await discardLocalCapture(localCapture.uri);
+                    await persistCapture(null, session.evidenceIdempotencyKey);
+                    setCaptureStatus("idle");
+                    const fresh = await client.getProof(proof.proofId);
+                    setProof(fresh);
+                  })
+                }
+              />
+            ) : null}
+            {localCapture ? (
+              <Action
+                label={captureStatus === "retry" ? "Retry upload and commit" : "Submit capture"}
+                disabled={busy || captureStatus === "uploading"}
+                onPress={() =>
+                  run(async () => {
+                    const available = await localCaptureExists(localCapture.uri);
+                    if (!available) {
+                      await persistCapture(null, null);
+                      setCaptureStatus("idle");
+                      throw new Error(
+                        "Captured video is no longer available. Record packing evidence again.",
+                      );
+                    }
+                    const key = session.evidenceIdempotencyKey ?? newIdempotencyKey();
+                    await persistCapture(localCapture, key);
+                    setCaptureStatus("uploading");
+                    setUploadPercent(0);
+                    try {
+                      const initialized = await client.initializeEvidenceUpload(proof.proofId, {
+                        contentType: localCapture.contentType,
+                        idempotencyKey: key,
+                      });
+                      await uploadCaptureFile({
+                        baseUrl: apiBaseUrl.trim(),
+                        target: initialized.upload,
+                        fileUri: localCapture.uri,
+                        contentType: localCapture.contentType,
+                        onProgress: setUploadPercent,
+                      });
+                      await client.commitEvidence(proof.proofId, initialized.evidenceId);
+                      await discardLocalCapture(localCapture.uri);
+                      await persistCapture(null, null);
+                      setCaptureStatus("idle");
+                      setUploadPercent(null);
+                      await refreshProof(proof.proofId);
+                      setScreen("proof");
+                    } catch (err) {
+                      setCaptureStatus("retry");
+                      throw err;
+                    }
+                  })
+                }
+              />
+            ) : null}
+            <Action
+              label="Back to Proof"
+              disabled={busy && captureStatus === "uploading"}
+              onPress={() =>
+                run(async () => {
+                  await refreshProof(proof.proofId);
+                  setScreen("proof");
+                })
+              }
+            />
           </View>
         ) : null}
       </ScrollView>
@@ -780,43 +939,6 @@ function formatError(error: unknown): string {
     return error.message;
   }
   return String(error);
-}
-
-async function captureEvidence(): Promise<{ uri: string; contentType: string } | null> {
-  const camera = await ImagePicker.requestCameraPermissionsAsync();
-  if (camera.granted) {
-    const photo = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.5,
-    });
-    if (!photo.canceled && photo.assets[0]?.uri) {
-      return { uri: photo.assets[0].uri, contentType: photo.assets[0].mimeType ?? "image/jpeg" };
-    }
-  }
-  const library = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!library.granted) {
-    throw new Error("Camera and media library permission denied");
-  }
-  const picked = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 0.5,
-  });
-  if (picked.canceled || !picked.assets[0]?.uri) {
-    return null;
-  }
-  return { uri: picked.assets[0].uri, contentType: picked.assets[0].mimeType ?? "image/jpeg" };
-}
-
-async function readUriBytes(uri: string): Promise<Uint8Array> {
-  const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: "base64",
-  });
-  const binary = globalThis.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 const styles = StyleSheet.create({

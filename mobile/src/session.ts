@@ -13,6 +13,8 @@ export interface CachedClientState {
   captureUri: string | null;
   evidenceIdempotencyKey: string | null;
   evidenceContentType: string | null;
+  captureByteSize: number | null;
+  captureDurationMs: number | null;
 }
 
 export async function loadCachedState(): Promise<CachedClientState | null> {
@@ -21,7 +23,24 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
     return null;
   }
   try {
-    return JSON.parse(raw) as CachedClientState;
+    const parsed = JSON.parse(raw) as Partial<CachedClientState>;
+    if (!parsed.apiBaseUrl || !parsed.userId || !parsed.token) {
+      return null;
+    }
+    return {
+      apiBaseUrl: parsed.apiBaseUrl,
+      subject: parsed.subject ?? "",
+      userId: parsed.userId,
+      token: parsed.token,
+      proofId: parsed.proofId ?? null,
+      transactionId: parsed.transactionId ?? null,
+      invitationToken: parsed.invitationToken ?? null,
+      captureUri: parsed.captureUri ?? null,
+      evidenceIdempotencyKey: parsed.evidenceIdempotencyKey ?? null,
+      evidenceContentType: parsed.evidenceContentType ?? null,
+      captureByteSize: parsed.captureByteSize ?? null,
+      captureDurationMs: parsed.captureDurationMs ?? null,
+    };
   } catch {
     return null;
   }
