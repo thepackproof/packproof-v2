@@ -35,7 +35,7 @@ import {
 } from "./src/session";
 
 type Screen = "auth" | "home" | "proof" | "capture";
-type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "retry";
+type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
 
 const DEFAULT_API =
   Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://127.0.0.1:3000";
@@ -478,7 +478,10 @@ export default function App() {
                 : ""}
             </Text>
             {captureStatus === "uploading" && uploadPercent != null ? (
-              <Text>upload {uploadPercent}%</Text>
+              <Text>upload {uploadPercent}% — not committed</Text>
+            ) : null}
+            {captureStatus === "uploaded" ? (
+              <Text>uploaded — committing on the server. Not committed until the API confirms.</Text>
             ) : null}
             {manifest ? (
               <View>
@@ -593,7 +596,10 @@ export default function App() {
               <Text>no local capture</Text>
             )}
             {captureStatus === "uploading" ? (
-              <Text>upload {uploadPercent ?? 0}% — evidence is not committed yet</Text>
+              <Text>upload {uploadPercent ?? 0}% — bytes transferring. Not committed.</Text>
+            ) : null}
+            {captureStatus === "uploaded" ? (
+              <Text>uploaded — committing on the server. Not committed until the API confirms.</Text>
             ) : null}
             {captureStatus === "retry" ? (
               <Text>upload or commit failed. Local capture kept. Proof is unchanged.</Text>
@@ -601,7 +607,7 @@ export default function App() {
 
             <Action
               label={localCapture ? "Retake video" : "Record packing evidence"}
-              disabled={busy || captureStatus === "uploading"}
+              disabled={busy || captureStatus === "uploading" || captureStatus === "uploaded"}
               onPress={() =>
                 run(async () => {
                   setCaptureStatus("capturing");
@@ -620,7 +626,7 @@ export default function App() {
                 })
               }
             />
-            {localCapture && captureStatus !== "uploading" ? (
+            {localCapture && captureStatus !== "uploading" && captureStatus !== "uploaded" ? (
               <Action
                 label="Discard local capture"
                 disabled={busy}
@@ -638,7 +644,7 @@ export default function App() {
             {localCapture ? (
               <Action
                 label={captureStatus === "retry" ? "Retry upload and commit" : "Submit capture"}
-                disabled={busy || captureStatus === "uploading"}
+                disabled={busy || captureStatus === "uploading" || captureStatus === "uploaded"}
                 onPress={() =>
                   run(async () => {
                     const available = await localCaptureExists(localCapture.uri);
@@ -665,6 +671,7 @@ export default function App() {
                         contentType: localCapture.contentType,
                         onProgress: setUploadPercent,
                       });
+                      setCaptureStatus("uploaded");
                       await client.commitEvidence(proof.proofId, initialized.evidenceId);
                       await discardLocalCapture(localCapture.uri);
                       await persistCapture(null, null);
