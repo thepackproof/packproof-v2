@@ -1,5 +1,5 @@
 import path from "node:path";
-import { BearerUserAdapter } from "./auth/adapter.js";
+import { createAuthentication, isDevLoginEnabled } from "./auth/create-auth.js";
 import { systemClock } from "./clock.js";
 import { loadConfig, loadEnvFile } from "./config.js";
 import { migrate } from "./db/migrate.js";
@@ -17,9 +17,9 @@ const app = createApp({
   db: opened.db,
   objectStore: createObjectStore(config),
   clock: systemClock,
-  auth: new BearerUserAdapter(opened.db),
+  auth: createAuthentication(config, opened.db, systemClock),
   publicBaseUrl: config.publicBaseUrl,
-  devAuth: config.devAuth,
+  devAuth: isDevLoginEnabled(config),
 });
 
 const server = app.listen(config.port, () => {

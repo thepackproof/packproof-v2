@@ -24,20 +24,27 @@ function headerValue(
   return value;
 }
 
+export function extractBearerToken(
+  headers: Record<string, string | string[] | undefined>,
+): string {
+  const header = headerValue(headers, "authorization");
+  if (!header || !header.toLowerCase().startsWith("bearer ")) {
+    throw new DomainError("UNAUTHENTICATED", "Missing bearer token", 401);
+  }
+  const token = header.slice(7).trim();
+  if (!token) {
+    throw new DomainError("UNAUTHENTICATED", "Missing bearer token", 401);
+  }
+  return token;
+}
+
 export class BearerUserAdapter implements AuthenticationAdapter {
   constructor(private readonly db: Database) {}
 
   async authenticate(
     headers: Record<string, string | string[] | undefined>,
   ): Promise<AuthContext> {
-    const header = headerValue(headers, "authorization");
-    if (!header || !header.toLowerCase().startsWith("bearer ")) {
-      throw new DomainError("UNAUTHENTICATED", "Missing bearer token", 401);
-    }
-    const userId = header.slice(7).trim();
-    if (!userId) {
-      throw new DomainError("UNAUTHENTICATED", "Missing bearer token", 401);
-    }
+    const userId = extractBearerToken(headers);
     const found = await this.db.query(`SELECT id FROM users WHERE id = $1`, [
       userId,
     ]);

@@ -11,12 +11,19 @@ describe("storage configuration", () => {
         PACKPROOF_S3_BUCKET: "packproof-v2-evidence",
         AWS_REGION: "us-east-1",
         PACKPROOF_S3_UPLOAD_EXPIRES_SECONDS: "900",
+        PACKPROOF_AUTH_MODE: "cognito",
+        PACKPROOF_COGNITO_USER_POOL_ID: "us-east-1_example",
+        PACKPROOF_COGNITO_CLIENT_ID: "exampleClientId",
       }),
     ).toMatchObject({
       objectStore: "s3",
       awsS3Bucket: "packproof-v2-evidence",
       awsRegion: "us-east-1",
       s3UploadExpiresSeconds: 900,
+      authMode: "cognito",
+      cognitoUserPoolId: "us-east-1_example",
+      cognitoClientId: "exampleClientId",
+      cognitoRegion: "us-east-1",
     });
   });
 

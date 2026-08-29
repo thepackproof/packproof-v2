@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export type AuthMode = "dev" | "cognito";
+
 export interface AppConfig {
   port: number;
   publicBaseUrl: string;
@@ -10,6 +12,10 @@ export interface AppConfig {
   awsRegion?: string;
   awsS3Bucket?: string;
   s3UploadExpiresSeconds: number;
+  authMode: AuthMode;
+  cognitoUserPoolId?: string;
+  cognitoClientId?: string;
+  cognitoRegion?: string;
   devAuth: boolean;
   uploadSecret: string;
 }
@@ -52,9 +58,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     awsRegion: env.AWS_REGION,
     awsS3Bucket: env.PACKPROOF_S3_BUCKET || env.AWS_S3_BUCKET || undefined,
     s3UploadExpiresSeconds: parseS3UploadExpiresSeconds(env),
+    authMode: parseAuthMode(env),
+    cognitoUserPoolId: env.PACKPROOF_COGNITO_USER_POOL_ID || undefined,
+    cognitoClientId: env.PACKPROOF_COGNITO_CLIENT_ID || undefined,
+    cognitoRegion: env.PACKPROOF_COGNITO_REGION || env.AWS_REGION || undefined,
     devAuth: env.PACKPROOF_DEV_AUTH === "true",
     uploadSecret: env.PACKPROOF_UPLOAD_SECRET ?? "dev-upload-secret",
   };
+}
+
+export function parseAuthMode(env: NodeJS.ProcessEnv = process.env): AuthMode {
+  const raw = env.PACKPROOF_AUTH_MODE ?? "dev";
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "dev") {
+    return "dev";
+  }
+  if (normalized === "cognito") {
+    return "cognito";
+  }
+  throw new Error(
+    `PACKPROOF_AUTH_MODE must be "dev" or "cognito" (received ${JSON.stringify(raw)})`,
+  );
 }
 
 export function parseObjectStoreMode(env: NodeJS.ProcessEnv = process.env): "local" | "s3" {

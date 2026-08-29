@@ -16,6 +16,15 @@ Modular monolith. Domain commands own Proof state. HTTP only translates requests
 
 See `.env.example`.
 
+## Authentication
+
+`PACKPROOF_AUTH_MODE` selects the adapter explicitly:
+
+- `dev` — development bearer tokens and `POST /auth/dev/login` when `PACKPROOF_DEV_AUTH=true`. Default. No Cognito required.
+- `cognito` — verify Cognito JWTs, map `sub` through `auth_identities`, and use the internal PackProof `user_...` id. Development login is disabled.
+
+Cognito is an authentication adapter only. Proofs continue to reference PackProof user ids.
+
 ## Evidence object storage
 
 `PACKPROOF_OBJECT_STORAGE` selects the adapter explicitly:
