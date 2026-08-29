@@ -52,14 +52,30 @@ async function cognitoCall<T>(
   action: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const response = await fetch(endpoint(config.region), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-amz-json-1.1",
-      "X-Amz-Target": `AWSCognitoIdentityProviderService.${action}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  let response: Response;
+  try {
+    response = await fetch(endpoint(config.region), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-amz-json-1.1",
+        "X-Amz-Target": `AWSCognitoIdentityProviderService.${action}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new CognitoAuthError(
+        "TimeoutError",
+        "Could not reach the account service. Check the device network and try again.",
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   const payload = (await response.json().catch(() => ({}))) as {
     __type?: string;
     message?: string;
@@ -237,6 +253,9 @@ export function formatCognitoError(error: unknown): string {
         return error.message || "Password does not meet the account requirements.";
       case "LimitExceededException":
         return "Too many attempts. Wait a moment and try again.";
+      case "TimeoutError":
+      case "AbortError":
+        return "Could not reach the account service. Check the device network and try again.";
       case "InvalidParameterException":
         return error.message || "Check the account details and try again.";
       default:

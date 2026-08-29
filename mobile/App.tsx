@@ -33,7 +33,6 @@ import {
   defaultCognitoConfig,
   CognitoAuthError,
   formatCognitoError,
-  parseAuthMode,
   type AuthMode,
   type CognitoConfig,
 } from "./src/cognito";
@@ -58,8 +57,7 @@ type Screen = "auth" | "home" | "proof" | "capture";
 type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset";
 type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
 
-const DEFAULT_API =
-  Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://127.0.0.1:3000";
+const DEFAULT_API = "http://127.0.0.1:3000";
 
 interface ContextForm {
   externalReference: string;
@@ -94,6 +92,7 @@ export default function App() {
   const [authPane, setAuthPane] = useState<AuthPane>("signIn");
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API);
   const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
+  const [showCognitoSettings, setShowCognitoSettings] = useState(false);
   const [cognitoPoolId, setCognitoPoolId] = useState(defaultCognitoConfig().userPoolId);
   const [cognitoClientId, setCognitoClientId] = useState(defaultCognitoConfig().clientId);
   const [cognitoRegion, setCognitoRegion] = useState(defaultCognitoConfig().region);
@@ -199,6 +198,8 @@ export default function App() {
           sessionRef.current = null;
           await clearCachedState();
           setSession(null);
+          setAuthMode(defaultAuthMode());
+          setAuthPane("signIn");
           setScreen("auth");
           setError("Session expired. Sign in again.");
           return;
@@ -461,15 +462,18 @@ export default function App() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <Text style={styles.label}>Auth mode</Text>
-            <TextInput
-              style={styles.input}
-              value={authMode}
-              onChangeText={(value) => setAuthMode(parseAuthMode(value))}
-              autoCapitalize="none"
-              autoCorrect={false}
+            <Text style={styles.label}>Auth mode: {authMode}</Text>
+            <Action
+              label="Use development sign-in"
+              disabled={busy}
+              onPress={() => setAuthMode("dev")}
             />
-            {authMode === "cognito" ? (
+            <Action
+              label="Use PackProof account"
+              disabled={busy}
+              onPress={() => setAuthMode("cognito")}
+            />
+            {authMode === "cognito" && showCognitoSettings ? (
               <View>
                 <Text style={styles.label}>Cognito User Pool ID</Text>
                 <TextInput
@@ -496,6 +500,13 @@ export default function App() {
                   autoCorrect={false}
                 />
               </View>
+            ) : null}
+            {authMode === "cognito" ? (
+              <Action
+                label={showCognitoSettings ? "Hide Cognito settings" : "Show Cognito settings"}
+                disabled={busy}
+                onPress={() => setShowCognitoSettings((value) => !value)}
+              />
             ) : null}
 
             {authPane === "signIn" ? (
