@@ -13,10 +13,30 @@ import {
   ApiError,
   PackProofV2Client,
   newIdempotencyKey,
+  type InvitationInboxView,
   type ManifestView,
+  type ProfileView,
   type ProofView,
+  type PublicProfileView,
   type TransactionView,
 } from "./src/v2-api";
+import {
+  cognitoConfirmForgotPassword,
+  cognitoConfirmSignUp,
+  cognitoForgotPassword,
+  cognitoGlobalSignOut,
+  cognitoRefresh,
+  cognitoResendConfirmation,
+  cognitoSignIn,
+  cognitoSignUp,
+  defaultAuthMode,
+  defaultCognitoConfig,
+  CognitoAuthError,
+  formatCognitoError,
+  parseAuthMode,
+  type AuthMode,
+  type CognitoConfig,
+} from "./src/cognito";
 import {
   describeLocalCapture,
   discardLocalCapture,
@@ -35,6 +55,7 @@ import {
 } from "./src/session";
 
 type Screen = "auth" | "home" | "proof" | "capture";
+type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset";
 type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
 
 const DEFAULT_API =
@@ -70,9 +91,24 @@ const EMPTY_FORM: ContextForm = {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("auth");
+  const [authPane, setAuthPane] = useState<AuthPane>("signIn");
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API);
+  const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
+  const [cognitoPoolId, setCognitoPoolId] = useState(defaultCognitoConfig().userPoolId);
+  const [cognitoClientId, setCognitoClientId] = useState(defaultCognitoConfig().clientId);
+  const [cognitoRegion, setCognitoRegion] = useState(defaultCognitoConfig().region);
   const [subject, setSubject] = useState("seller-1");
-  const [inviteeIdentifier, setInviteeIdentifier] = useState("buyer@example.com");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
+  const [displayNameInput, setDisplayNameInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PublicProfileView[]>([]);
+  const [selectedBuyer, setSelectedBuyer] = useState<PublicProfileView | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<InvitationInboxView[]>([]);
+  const [inviteeIdentifier, setInviteeIdentifier] = useState("");
   const [invitationInput, setInvitationInput] = useState("");
   const [session, setSession] = useState<CachedClientState | null>(null);
   const [proof, setProof] = useState<ProofView | null>(null);
@@ -107,7 +143,20 @@ export default function App() {
       sessionRef.current = cached;
       setSession(cached);
       setApiBaseUrl(cached.apiBaseUrl);
+      setAuthMode(cached.authMode);
       setSubject(cached.subject);
+      setEmail(cached.email ?? "");
+      setUsernameInput(cached.username ?? "");
+      setDisplayNameInput(cached.displayName ?? "");
+      if (cached.cognitoUserPoolId) {
+        setCognitoPoolId(cached.cognitoUserPoolId);
+      }
+      if (cached.cognitoClientId) {
+        setCognitoClientId(cached.cognitoClientId);
+      }
+      if (cached.cognitoRegion) {
+        setCognitoRegion(cached.cognitoRegion);
+      }
       if (cached.invitationToken) {
         setInvitationInput(cached.invitationToken);
       }
@@ -133,32 +182,28 @@ export default function App() {
           setError("Local capture was removed by the device. Record packing evidence again.");
         }
       }
-      if (cached.proofId) {
-        try {
-          const fresh = await new PackProofV2Client({
-            baseUrl: cached.apiBaseUrl,
-            getToken: () => cached.token,
-          }).getProof(cached.proofId);
-          setProof(fresh);
-          const txn = await new PackProofV2Client({
-            baseUrl: cached.apiBaseUrl,
-            getToken: () => cached.token,
-          }).getTransaction(fresh.transactionId);
-          setTransactionDetail(txn);
-          setEditForm(formFromTransaction(txn));
+      try {
+        const restored = await restoreAuthoritativeSession(cached);
+        if (!restored) {
+          return;
+        }
+        if (cached.proofId) {
+          await refreshProof(cached.proofId);
           setScreen("proof");
-          if (fresh.status === "FINALIZED") {
-            const loaded = await new PackProofV2Client({
-              baseUrl: cached.apiBaseUrl,
-              getToken: () => cached.token,
-            }).getManifest(fresh.proofId);
-            setManifest(loaded);
-          }
-        } catch (err) {
-          setError(formatError(err));
+        } else {
           setScreen("home");
         }
-      } else {
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          tokenRef.current = null;
+          sessionRef.current = null;
+          await clearCachedState();
+          setSession(null);
+          setScreen("auth");
+          setError("Session expired. Sign in again.");
+          return;
+        }
+        setError(formatError(err));
         setScreen("home");
       }
     })();
@@ -169,6 +214,144 @@ export default function App() {
     sessionRef.current = next;
     setSession(next);
     await saveCachedState(next);
+  }
+
+  function requireCognitoConfig(): CognitoConfig {
+    const config: CognitoConfig = {
+      userPoolId: cognitoPoolId.trim(),
+      clientId: cognitoClientId.trim(),
+      region: cognitoRegion.trim() || "us-east-1",
+    };
+    if (!config.userPoolId || !config.clientId) {
+      throw new Error("Cognito User Pool ID and app client ID are required");
+    }
+    return config;
+  }
+
+  async function applyProfile(profile: ProfileView): Promise<void> {
+    const current = sessionRef.current;
+    if (!current) {
+      return;
+    }
+    await persist({
+      ...current,
+      userId: profile.userId,
+      username: profile.username,
+      displayName: profile.displayName,
+    });
+    setUsernameInput(profile.username ?? "");
+    setDisplayNameInput(profile.displayName ?? "");
+  }
+
+  async function restoreAuthoritativeSession(
+    cached: CachedClientState,
+  ): Promise<CachedClientState | null> {
+    let next = cached;
+    if (cached.authMode === "cognito" && cached.refreshToken) {
+      const needsRefresh =
+        !cached.accessExpiresAt || cached.accessExpiresAt - Date.now() < 60_000;
+      if (needsRefresh) {
+        const refreshed = await cognitoRefresh(
+          {
+            userPoolId: cached.cognitoUserPoolId ?? cognitoPoolId,
+            clientId: cached.cognitoClientId ?? cognitoClientId,
+            region: cached.cognitoRegion ?? cognitoRegion,
+          },
+          cached.refreshToken,
+        );
+        next = {
+          ...cached,
+          token: refreshed.accessToken,
+          idToken: refreshed.idToken,
+          refreshToken: refreshed.refreshToken,
+          accessExpiresAt: refreshed.expiresAt,
+        };
+        await persist(next);
+      }
+    }
+    const api = new PackProofV2Client({
+      baseUrl: next.apiBaseUrl,
+      getToken: () => tokenRef.current,
+    });
+    const profile = await api.getMe();
+    await applyProfile(profile);
+    const inbox = await api.listInvitations();
+    setPendingInvites(inbox.invitations);
+    return sessionRef.current;
+  }
+
+  async function establishSession(input: {
+    token: string;
+    subject: string;
+    email?: string | null;
+    refreshToken?: string | null;
+    idToken?: string | null;
+    accessExpiresAt?: number | null;
+  }): Promise<ProfileView> {
+    tokenRef.current = input.token;
+    const profile = await client.getMe();
+    const next: CachedClientState = {
+      apiBaseUrl: apiBaseUrl.trim(),
+      authMode,
+      subject: input.subject,
+      email: input.email ?? null,
+      userId: profile.userId,
+      username: profile.username,
+      displayName: profile.displayName,
+      token: input.token,
+      refreshToken: input.refreshToken ?? null,
+      idToken: input.idToken ?? null,
+      accessExpiresAt: input.accessExpiresAt ?? null,
+      cognitoUserPoolId: authMode === "cognito" ? cognitoPoolId.trim() : null,
+      cognitoClientId: authMode === "cognito" ? cognitoClientId.trim() : null,
+      cognitoRegion: authMode === "cognito" ? cognitoRegion.trim() : null,
+      proofId: null,
+      transactionId: null,
+      invitationToken: null,
+      captureUri: null,
+      evidenceIdempotencyKey: null,
+      evidenceContentType: null,
+      captureByteSize: null,
+      captureDurationMs: null,
+    };
+    await persist(next);
+    await applyProfile(profile);
+    const inbox = await client.listInvitations();
+    setPendingInvites(inbox.invitations);
+    setProof(null);
+    setTransactionDetail(null);
+    setLocalCapture(null);
+    setCaptureStatus("idle");
+    setUploadPercent(null);
+    setCreateForm(EMPTY_FORM);
+    setEditForm(EMPTY_FORM);
+    setManifest(null);
+    setSearchResults([]);
+    setSelectedBuyer(null);
+    return profile;
+  }
+
+  async function finishSignIn(input: {
+    token: string;
+    subject: string;
+    email?: string | null;
+    refreshToken?: string | null;
+    idToken?: string | null;
+    accessExpiresAt?: number | null;
+  }): Promise<void> {
+    const profile = await establishSession(input);
+    if (!profile.username && usernameInput.trim()) {
+      const updated = await client.updateProfile({
+        username: usernameInput.trim(),
+        displayName: displayNameInput.trim() || usernameInput.trim(),
+      });
+      await applyProfile(updated);
+    }
+  }
+
+  async function refreshPendingInvites(): Promise<void> {
+    const inbox = await client.listInvitations();
+    setPendingInvites(inbox.invitations);
   }
 
   async function persistCapture(next: LocalCapture | null, idempotencyKey: string | null): Promise<void> {
@@ -187,10 +370,38 @@ export default function App() {
     });
   }
 
+  async function ensureFreshCognitoToken(): Promise<void> {
+    const current = sessionRef.current;
+    if (
+      !current ||
+      current.authMode !== "cognito" ||
+      !current.refreshToken ||
+      (current.accessExpiresAt && current.accessExpiresAt - Date.now() > 60_000)
+    ) {
+      return;
+    }
+    const refreshed = await cognitoRefresh(
+      {
+        userPoolId: current.cognitoUserPoolId ?? cognitoPoolId,
+        clientId: current.cognitoClientId ?? cognitoClientId,
+        region: current.cognitoRegion ?? cognitoRegion,
+      },
+      current.refreshToken,
+    );
+    await persist({
+      ...current,
+      token: refreshed.accessToken,
+      idToken: refreshed.idToken,
+      refreshToken: refreshed.refreshToken,
+      accessExpiresAt: refreshed.expiresAt,
+    });
+  }
+
   async function run(action: () => Promise<void>): Promise<void> {
     setBusy(true);
     setError(null);
     try {
+      await ensureFreshCognitoToken();
       await action();
     } catch (err) {
       setError(formatError(err));
@@ -250,55 +461,396 @@ export default function App() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <Text style={styles.label}>Dev subject</Text>
+            <Text style={styles.label}>Auth mode</Text>
             <TextInput
               style={styles.input}
-              value={subject}
-              onChangeText={setSubject}
+              value={authMode}
+              onChangeText={(value) => setAuthMode(parseAuthMode(value))}
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <Action
-              label="Sign in"
-              disabled={busy}
-              onPress={() =>
-                run(async () => {
-                  const result = await client.login(subject.trim());
-                  tokenRef.current = result.token;
-                  const next: CachedClientState = {
-                    apiBaseUrl: apiBaseUrl.trim(),
-                    subject: subject.trim(),
-                    userId: result.userId,
-                    token: result.token,
-                    proofId: null,
-                    transactionId: null,
-                    invitationToken: null,
-                    captureUri: null,
-                    evidenceIdempotencyKey: null,
-                    evidenceContentType: null,
-                    captureByteSize: null,
-                    captureDurationMs: null,
-                  };
-                  await persist(next);
-                  setProof(null);
-                  setTransactionDetail(null);
-                  setLocalCapture(null);
-                  setCaptureStatus("idle");
-                  setUploadPercent(null);
-                  setCreateForm(EMPTY_FORM);
-                  setEditForm(EMPTY_FORM);
-                  setManifest(null);
-                  setScreen("home");
-                })
-              }
-            />
+            {authMode === "cognito" ? (
+              <View>
+                <Text style={styles.label}>Cognito User Pool ID</Text>
+                <TextInput
+                  style={styles.input}
+                  value={cognitoPoolId}
+                  onChangeText={setCognitoPoolId}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.label}>Cognito app client ID</Text>
+                <TextInput
+                  style={styles.input}
+                  value={cognitoClientId}
+                  onChangeText={setCognitoClientId}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.label}>Cognito region</Text>
+                <TextInput
+                  style={styles.input}
+                  value={cognitoRegion}
+                  onChangeText={setCognitoRegion}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            ) : null}
+
+            {authPane === "signIn" ? (
+              <View>
+                {authMode === "dev" ? (
+                  <View>
+                    <Text style={styles.label}>Dev subject</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={subject}
+                      onChangeText={setSubject}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                ) : (
+                  <View>
+                    <Text style={styles.label}>Email</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                    />
+                    <Text style={styles.label}>Password</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={password}
+                      onChangeText={setPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      secureTextEntry
+                    />
+                  </View>
+                )}
+                <Action
+                  label="Sign in"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      if (authMode === "dev") {
+                        const result = await client.login(subject.trim());
+                        await finishSignIn({
+                          token: result.token,
+                          subject: subject.trim(),
+                        });
+                      } else {
+                        const tokens = await cognitoSignIn(requireCognitoConfig(), {
+                          email: email.trim(),
+                          password,
+                        });
+                        setPassword("");
+                        await finishSignIn({
+                          token: tokens.accessToken,
+                          subject: email.trim(),
+                          email: email.trim(),
+                          refreshToken: tokens.refreshToken,
+                          idToken: tokens.idToken,
+                          accessExpiresAt: tokens.expiresAt,
+                        });
+                      }
+                      setScreen("home");
+                    })
+                  }
+                />
+                {authMode === "cognito" ? (
+                  <View>
+                    <Action label="Create account" disabled={busy} onPress={() => setAuthPane("createAccount")} />
+                    <Action label="Forgot password" disabled={busy} onPress={() => setAuthPane("forgot")} />
+                    <Action
+                      label="I have a verification code"
+                      disabled={busy}
+                      onPress={() => setAuthPane("verify")}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {authPane === "createAccount" ? (
+              <View>
+                <Text style={styles.heading}>Create account</Text>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                <Text style={styles.label}>Password</Text>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                <Text style={styles.label}>Username</Text>
+                <TextInput
+                  style={styles.input}
+                  value={usernameInput}
+                  onChangeText={setUsernameInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.label}>Display name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={displayNameInput}
+                  onChangeText={setDisplayNameInput}
+                  autoCorrect={false}
+                />
+                <Action
+                  label="Create account"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const created = await cognitoSignUp(requireCognitoConfig(), {
+                        email: email.trim(),
+                        password,
+                      });
+                      setPassword("");
+                      if (created.userConfirmed) {
+                        setAuthPane("signIn");
+                      } else {
+                        setAuthPane("verify");
+                      }
+                    })
+                  }
+                />
+                <Action label="Back to sign in" disabled={busy} onPress={() => setAuthPane("signIn")} />
+              </View>
+            ) : null}
+
+            {authPane === "verify" ? (
+              <View>
+                <Text style={styles.heading}>Verify email</Text>
+                <Text>Enter the verification code sent to {email || "your email"}.</Text>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                <Text style={styles.label}>Verification code</Text>
+                <TextInput
+                  style={styles.input}
+                  value={verificationCode}
+                  onChangeText={setVerificationCode}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="number-pad"
+                />
+                <Action
+                  label="Verify email"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      await cognitoConfirmSignUp(requireCognitoConfig(), {
+                        email: email.trim(),
+                        code: verificationCode.trim(),
+                      });
+                      setVerificationCode("");
+                      setAuthPane("signIn");
+                    })
+                  }
+                />
+                <Action
+                  label="Resend verification code"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      await cognitoResendConfirmation(requireCognitoConfig(), email.trim());
+                    })
+                  }
+                />
+                <Action label="Back to sign in" disabled={busy} onPress={() => setAuthPane("signIn")} />
+              </View>
+            ) : null}
+
+            {authPane === "forgot" ? (
+              <View>
+                <Text style={styles.heading}>Forgot password</Text>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                <Action
+                  label="Send reset code"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      await cognitoForgotPassword(requireCognitoConfig(), email.trim());
+                      setAuthPane("reset");
+                    })
+                  }
+                />
+                <Action label="Back to sign in" disabled={busy} onPress={() => setAuthPane("signIn")} />
+              </View>
+            ) : null}
+
+            {authPane === "reset" ? (
+              <View>
+                <Text style={styles.heading}>Reset password</Text>
+                <Text>Enter the reset code sent to {email || "your email"}.</Text>
+                <Text style={styles.label}>Reset code</Text>
+                <TextInput
+                  style={styles.input}
+                  value={verificationCode}
+                  onChangeText={setVerificationCode}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="number-pad"
+                />
+                <Text style={styles.label}>New password</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                <Action
+                  label="Reset password"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      await cognitoConfirmForgotPassword(requireCognitoConfig(), {
+                        email: email.trim(),
+                        code: verificationCode.trim(),
+                        password: newPassword,
+                      });
+                      setVerificationCode("");
+                      setNewPassword("");
+                      setAuthPane("signIn");
+                    })
+                  }
+                />
+                <Action label="Back to sign in" disabled={busy} onPress={() => setAuthPane("signIn")} />
+              </View>
+            ) : null}
           </View>
         ) : null}
 
         {screen === "home" && session ? (
           <View style={styles.card}>
-            <Text>Signed in as {session.subject}</Text>
+            <Text style={styles.heading}>Account</Text>
+            <Text>Signed in as {session.username ?? session.subject}</Text>
+            <Text>{session.displayName ?? ""}</Text>
             <Text selectable>userId {session.userId}</Text>
+            {!session.username ? (
+              <View>
+                <Text>Complete your PackProof username to appear in search.</Text>
+                <Text style={styles.label}>Username</Text>
+                <TextInput
+                  style={styles.input}
+                  value={usernameInput}
+                  onChangeText={setUsernameInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.label}>Display name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={displayNameInput}
+                  onChangeText={setDisplayNameInput}
+                  autoCorrect={false}
+                />
+                <Action
+                  label="Save profile"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const updated = await client.updateProfile({
+                        username: usernameInput.trim(),
+                        displayName: displayNameInput.trim() || usernameInput.trim(),
+                      });
+                      await applyProfile(updated);
+                    })
+                  }
+                />
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.label}>Display name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={displayNameInput}
+                  onChangeText={setDisplayNameInput}
+                  autoCorrect={false}
+                />
+                <Action
+                  label="Update display name"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const updated = await client.updateProfile({
+                        displayName: displayNameInput.trim(),
+                      });
+                      await applyProfile(updated);
+                    })
+                  }
+                />
+              </View>
+            )}
+            <Text style={styles.heading}>Pending invitations</Text>
+            {pendingInvites.length === 0 ? <Text>No pending invitations.</Text> : null}
+            {pendingInvites.map((invite) => (
+              <View key={invite.invitationId} style={styles.invite}>
+                <Text selectable>
+                  {invite.inviter.displayName ?? invite.inviter.username ?? invite.inviter.userId}
+                </Text>
+                <Text>{invite.transaction.itemTitle ?? "Untitled item"}</Text>
+                <Text>{invite.transaction.externalReference ?? ""}</Text>
+                <Text selectable>proofId {invite.proofId}</Text>
+                <Text>{invite.createdAt}</Text>
+                <Action
+                  label="Accept invitation"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const accepted = await client.acceptInvitation(invite.invitationId);
+                      const next = {
+                        ...session,
+                        proofId: accepted.proof.proofId,
+                        transactionId: accepted.proof.transactionId,
+                      };
+                      await persist(next);
+                      await refreshPendingInvites();
+                      await refreshProof(accepted.proof.proofId);
+                      setScreen("proof");
+                    })
+                  }
+                />
+              </View>
+            ))}
+            <Action
+              label="Refresh invitations"
+              disabled={busy}
+              onPress={() => run(async () => refreshPendingInvites())}
+            />
             <Text style={styles.heading}>New transaction</Text>
             <ContextFields form={createForm} onChange={setCreateForm} />
             <Action
@@ -366,6 +918,16 @@ export default function App() {
               disabled={busy}
               onPress={() =>
                 run(async () => {
+                  if (session.authMode === "cognito" && session.token && session.cognitoClientId) {
+                    await cognitoGlobalSignOut(
+                      {
+                        userPoolId: session.cognitoUserPoolId ?? cognitoPoolId,
+                        clientId: session.cognitoClientId,
+                        region: session.cognitoRegion ?? cognitoRegion,
+                      },
+                      session.token,
+                    );
+                  }
                   await discardLocalCapture(sessionRef.current?.captureUri);
                   tokenRef.current = null;
                   sessionRef.current = null;
@@ -379,6 +941,11 @@ export default function App() {
                   setCreateForm(EMPTY_FORM);
                   setEditForm(EMPTY_FORM);
                   setManifest(null);
+                  setPendingInvites([]);
+                  setSearchResults([]);
+                  setSelectedBuyer(null);
+                  setPassword("");
+                  setAuthPane("signIn");
                   setScreen("auth");
                 })
               }
@@ -504,7 +1071,59 @@ export default function App() {
 
             {!finalized && role === "SELLER" ? (
               <View>
-                <Text style={styles.label}>Invitee identifier</Text>
+                <Text style={styles.heading}>Invite PackProof user</Text>
+                <Text style={styles.label}>Search username</Text>
+                <TextInput
+                  style={styles.input}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Action
+                  label="Search users"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const result = await client.searchUsers(searchQuery.trim());
+                      setSearchResults(result.users);
+                    })
+                  }
+                />
+                {searchResults.map((user) => (
+                  <Action
+                    key={user.userId}
+                    label={
+                      selectedBuyer?.userId === user.userId
+                        ? `Selected ${user.username}`
+                        : `${user.username} — ${user.displayName ?? user.userId}`
+                    }
+                    disabled={busy}
+                    onPress={() => setSelectedBuyer(user)}
+                  />
+                ))}
+                <Action
+                  label={
+                    selectedBuyer
+                      ? `Invite ${selectedBuyer.username}`
+                      : "Invite selected buyer"
+                  }
+                  disabled={busy || !selectedBuyer}
+                  onPress={() =>
+                    run(async () => {
+                      if (!selectedBuyer) {
+                        return;
+                      }
+                      const invited = await client.createInvitation(proof.proofId, {
+                        inviteeUserId: selectedBuyer.userId,
+                      });
+                      const next = { ...session, invitationToken: invited.invitation.token };
+                      await persist(next);
+                      await refreshProof(proof.proofId);
+                    })
+                  }
+                />
+                <Text style={styles.label}>Token invitation fallback</Text>
                 <TextInput
                   style={styles.input}
                   value={inviteeIdentifier}
@@ -513,8 +1132,8 @@ export default function App() {
                   autoCorrect={false}
                 />
                 <Action
-                  label="Invite buyer"
-                  disabled={busy}
+                  label="Invite by identifier"
+                  disabled={busy || !inviteeIdentifier.trim()}
                   onPress={() =>
                     run(async () => {
                       const invited = await client.createInvitation(
@@ -942,6 +1561,9 @@ function formatError(error: unknown): string {
   if (error instanceof ApiError) {
     return `${error.code}: ${error.message}`;
   }
+  if (error instanceof CognitoAuthError) {
+    return formatCognitoError(error);
+  }
   if (error instanceof Error) {
     return error.message;
   }
@@ -954,6 +1576,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: "700" },
   subtitle: { color: "#444" },
   card: { gap: 10, borderWidth: 1, borderColor: "#ccc", padding: 12 },
+  invite: { gap: 6, borderWidth: 1, borderColor: "#ddd", padding: 8 },
   heading: { fontWeight: "700", marginTop: 8 },
   label: { marginTop: 6, fontWeight: "600" },
   input: { borderWidth: 1, borderColor: "#999", padding: 8 },

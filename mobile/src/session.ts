@@ -4,9 +4,19 @@ const STORAGE_KEY = "packproof-v2.session";
 
 export interface CachedClientState {
   apiBaseUrl: string;
+  authMode: "dev" | "cognito";
   subject: string;
+  email: string | null;
   userId: string;
+  username: string | null;
+  displayName: string | null;
   token: string;
+  refreshToken: string | null;
+  idToken: string | null;
+  accessExpiresAt: number | null;
+  cognitoUserPoolId: string | null;
+  cognitoClientId: string | null;
+  cognitoRegion: string | null;
   proofId: string | null;
   transactionId: string | null;
   invitationToken: string | null;
@@ -29,9 +39,19 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
     }
     return {
       apiBaseUrl: parsed.apiBaseUrl,
-      subject: parsed.subject ?? "",
+      authMode: parsed.authMode === "cognito" ? "cognito" : "dev",
+      subject: parsed.subject ?? parsed.email ?? "",
+      email: parsed.email ?? null,
       userId: parsed.userId,
+      username: parsed.username ?? null,
+      displayName: parsed.displayName ?? null,
       token: parsed.token,
+      refreshToken: parsed.refreshToken ?? null,
+      idToken: parsed.idToken ?? null,
+      accessExpiresAt: parsed.accessExpiresAt ?? null,
+      cognitoUserPoolId: parsed.cognitoUserPoolId ?? null,
+      cognitoClientId: parsed.cognitoClientId ?? null,
+      cognitoRegion: parsed.cognitoRegion ?? null,
       proofId: parsed.proofId ?? null,
       transactionId: parsed.transactionId ?? null,
       invitationToken: parsed.invitationToken ?? null,

@@ -87,11 +87,45 @@ export interface InvitationView {
   invitationId: string;
   proofId: string;
   inviteeIdentifier: string;
+  inviteeUserId?: string | null;
   status: string;
   token: string;
   createdAt: string;
   acceptedAt: string | null;
   expiresAt: string | null;
+}
+
+export interface ProfileView {
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicProfileView {
+  userId: string;
+  username: string;
+  displayName: string | null;
+}
+
+export interface InvitationInboxView {
+  invitationId: string;
+  proofId: string;
+  status: string;
+  createdAt: string;
+  expiresAt: string | null;
+  inviter: {
+    userId: string;
+    username: string | null;
+    displayName: string | null;
+  };
+  transaction: {
+    transactionId: string;
+    itemTitle: string | null;
+    externalReference: string | null;
+  };
 }
 
 export interface ManifestView {
@@ -150,6 +184,28 @@ export class PackProofV2Client {
       auth: false,
       body: { subject },
     });
+  }
+
+  async getMe(): Promise<ProfileView> {
+    return this.request("/me");
+  }
+
+  async updateProfile(input: {
+    username?: string;
+    displayName?: string;
+  }): Promise<ProfileView> {
+    return this.request("/me/profile", {
+      method: "PATCH",
+      body: input,
+    });
+  }
+
+  async searchUsers(query: string): Promise<{ users: PublicProfileView[] }> {
+    return this.request(`/users/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async listInvitations(): Promise<{ invitations: InvitationInboxView[] }> {
+    return this.request("/invitations");
   }
 
   async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {
@@ -218,11 +274,15 @@ export class PackProofV2Client {
 
   async createInvitation(
     proofId: string,
-    inviteeIdentifier: string,
+    inviteeIdentifier: string | { inviteeIdentifier?: string; inviteeUserId?: string },
   ): Promise<{ invitation: InvitationView; proof: ProofView }> {
+    const body =
+      typeof inviteeIdentifier === "string"
+        ? { inviteeIdentifier }
+        : inviteeIdentifier;
     return this.request(`/proofs/${encodeURIComponent(proofId)}/invitations`, {
       method: "POST",
-      body: { inviteeIdentifier },
+      body,
     });
   }
 
