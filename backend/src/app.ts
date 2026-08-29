@@ -15,7 +15,12 @@ import {
   initializeEvidenceUpload,
 } from "./domain/evidence.js";
 import { finalizeProof, getManifest } from "./domain/finalize.js";
-import { acceptInvitation, createInvitation } from "./domain/invitations.js";
+import {
+  acceptInvitation,
+  createInvitation,
+  listPendingInvitations,
+} from "./domain/invitations.js";
+import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
 import { getProofForUser } from "./domain/proofs.js";
 import {
   createTransaction,
@@ -192,6 +197,41 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
+  app.get(
+    "/me",
+    asyncRoute(async (req, res) => {
+      const result = await getProfile(deps.db, bearerUser(req));
+      res.json(result);
+    }),
+  );
+
+  app.patch(
+    "/me/profile",
+    asyncRoute(async (req, res) => {
+      const result = await updateProfile(deps.db, deps.clock, bearerUser(req), {
+        username: req.body?.username,
+        displayName: req.body?.displayName,
+      });
+      res.json(result);
+    }),
+  );
+
+  app.get(
+    "/users/search",
+    asyncRoute(async (req, res) => {
+      const result = await searchUsers(deps.db, req.query.q);
+      res.json({ users: result });
+    }),
+  );
+
+  app.get(
+    "/invitations",
+    asyncRoute(async (req, res) => {
+      const result = await listPendingInvitations(deps.db, bearerUser(req));
+      res.json({ invitations: result });
+    }),
+  );
+
   app.post(
     "/proofs/:id/invitations",
     asyncRoute(async (req, res) => {
@@ -200,7 +240,14 @@ export function createApp(deps: AppDependencies): Express {
         deps.clock,
         bearerUser(req),
         req.params.id,
-        String(req.body?.inviteeIdentifier ?? ""),
+        {
+          inviteeIdentifier:
+            req.body?.inviteeIdentifier == null
+              ? undefined
+              : String(req.body.inviteeIdentifier),
+          inviteeUserId:
+            req.body?.inviteeUserId == null ? undefined : String(req.body.inviteeUserId),
+        },
       );
       res.status(201).json(result);
     }),

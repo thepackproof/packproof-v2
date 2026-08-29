@@ -50,6 +50,7 @@ export interface InvitationRow {
   proof_id: string;
   inviter_user_id: string;
   invitee_identifier: string;
+  invitee_user_id?: string | null;
   status: InvitationStatus;
   token: string;
   created_at: Date | string;
