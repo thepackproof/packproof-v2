@@ -1,0 +1,182 @@
+import type { CanonicalProof, InvitationInboxView, ProofCollectionItem } from "../api/types";
+
+export const summary: ProofCollectionItem = {
+  schema: "packproof.proof.summary/v1",
+  proofId: "proof_01ABCVERYLONGIDENTIFIERVALUE",
+  transactionId: "txn_01",
+  role: "SELLER",
+  status: "READY_FOR_EVIDENCE",
+  createdAt: "2026-08-30T12:00:00.000Z",
+  updatedAt: "2026-08-30T12:05:00.000Z",
+  finalizedAt: null,
+  transaction: {
+    externalReference: "ORD-48392",
+    itemTitle: "Vintage camera",
+    transactionDate: "2026-08-29",
+    carrier: "UPS",
+    trackingNumber: "1Z999",
+  },
+};
+
+export const invitation: InvitationInboxView = {
+  invitationId: "inv_01",
+  proofId: "proof_01ABCVERYLONGIDENTIFIERVALUE",
+  status: "PENDING",
+  createdAt: "2026-08-30T12:01:00.000Z",
+  expiresAt: null,
+  inviter: { userId: "user_seller", username: "seller", displayName: "Seller" },
+  transaction: {
+    transactionId: "txn_01",
+    itemTitle: "Vintage camera",
+    externalReference: "ORD-48392",
+  },
+};
+
+export const canonicalProof: CanonicalProof = {
+  schema: "packproof.proof.canonical/v1",
+  proofId: "proof_01ABCVERYLONGIDENTIFIERVALUE",
+  transactionId: "txn_01",
+  status: "EVIDENCE_COMMITTED",
+  version: 1,
+  createdAt: "2026-08-30T12:00:00.000Z",
+  updatedAt: "2026-08-30T12:10:00.000Z",
+  finalizedAt: null,
+  manifestId: null,
+  transaction: {
+    transactionId: "txn_01",
+    externalReference: "ORD-48392",
+    transactionDate: "2026-08-29",
+    itemTitle: "Vintage camera",
+    itemDescription: "Black body",
+    quantity: 1,
+    transactionValue: 120,
+    currency: "USD",
+    createdBy: "user_seller",
+    createdAt: "2026-08-30T12:00:00.000Z",
+    updatedAt: "2026-08-30T12:00:00.000Z",
+    metadata: {},
+    shipping: {
+      carrier: "UPS",
+      service: null,
+      trackingNumber: "1Z999",
+      shipmentDate: null,
+    },
+    proofId: "proof_01ABCVERYLONGIDENTIFIERVALUE",
+    proofStatus: "EVIDENCE_COMMITTED",
+    sellerUserId: "user_seller",
+    buyerUserId: "user_buyer",
+  },
+  participants: [
+    {
+      participantId: "prt_s",
+      userId: "user_seller",
+      role: "SELLER",
+      status: "JOINED",
+      invitationState: "ACCEPTED",
+      joinedAt: "2026-08-30T12:00:00.000Z",
+    },
+    {
+      participantId: "prt_b",
+      userId: "user_buyer",
+      role: "BUYER",
+      status: "JOINED",
+      invitationState: "ACCEPTED",
+      joinedAt: "2026-08-30T12:02:00.000Z",
+    },
+  ],
+  invitations: [],
+  evidence: [
+    {
+      evidenceId: "evd_1",
+      evidenceType: "SELLER_EVIDENCE",
+      validationStatus: "COMMITTED",
+      submittedBy: "user_seller",
+      createdAt: "2026-08-30T12:08:00.000Z",
+      receivedAt: "2026-08-30T12:08:00.000Z",
+      committedAt: "2026-08-30T12:09:00.000Z",
+      sha256: "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888",
+      byteSize: 12,
+      digest: {
+        algorithm: "SHA-256",
+        sha256: "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888",
+      },
+    },
+  ],
+  attestations: [
+    {
+      kind: "ATTESTATION",
+      attestationId: "att_1",
+      attestedBy: "user_seller",
+      statement: "PACKED_DESCRIBED_ITEM",
+      relatedEvidenceId: "evd_1",
+      createdAt: "2026-08-30T12:09:30.000Z",
+      digest: { algorithm: "SHA-256", sha256: "aa".repeat(32) },
+    },
+  ],
+  events: [
+    {
+      eventId: "aud_1",
+      eventType: "PROOF_CREATED",
+      actorUserId: "user_seller",
+      at: "2026-08-30T12:00:00.000Z",
+      data: {},
+    },
+    {
+      eventId: "aud_2",
+      eventType: "PARTICIPANT_JOINED",
+      actorUserId: "user_buyer",
+      at: "2026-08-30T12:02:00.000Z",
+      data: {},
+    },
+    {
+      eventId: "aud_3",
+      eventType: "EVIDENCE_COMMITTED",
+      actorUserId: "user_seller",
+      at: "2026-08-30T12:09:00.000Z",
+      data: {},
+    },
+  ],
+  facts: [
+    {
+      kind: "FACT",
+      name: "EVIDENCE_DIGEST_RECORDED",
+      at: "2026-08-30T12:09:00.000Z",
+      data: { sha256: "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888" },
+    },
+  ],
+  external: {
+    records: [
+      {
+        kind: "EXTERNAL",
+        field: "transaction.itemTitle",
+        value: "Vintage camera",
+        source: "PARTICIPANT_SUPPLIED",
+        verifiedByPackProof: false,
+      },
+      {
+        kind: "EXTERNAL",
+        field: "shipping.trackingNumber",
+        value: "1Z999",
+        source: "PARTICIPANT_SUPPLIED",
+        verifiedByPackProof: false,
+      },
+    ],
+    references: [
+      {
+        tenantKey: "packproof:transaction",
+        externalTransactionId: "ORD-48392",
+        source: "PARTICIPANT_SUPPLIED",
+      },
+    ],
+  },
+  integrity: {
+    algorithm: "SHA-256",
+    evidence: [
+      {
+        evidenceId: "evd_1",
+        sha256: "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888",
+      },
+    ],
+    manifestSha256: null,
+  },
+};

@@ -98,7 +98,7 @@ All surfaces speak the API. None of them define Proof existence or status.
 | Surface | Relationship to the core |
 | --- | --- |
 | Mobile app | Authenticated participant client |
-| Web portal | Same Proof, same authorization |
+| Web reference client (`web/`) | Same Proof, same authorization |
 | Marketplace / claims / enterprise | Same Proof, scoped credentials later |
 
 Signed webhooks, API keys, billing, and tenant administration are out of scope here. When they appear, they authorize access to this Proof. They do not fork it.

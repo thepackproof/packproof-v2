@@ -20,6 +20,7 @@ const app = createApp({
   auth: createAuthentication(config, opened.db, systemClock),
   publicBaseUrl: config.publicBaseUrl,
   devAuth: isDevLoginEnabled(config),
+  corsOrigins: config.webOrigins,
 });
 
 const server = app.listen(config.port, "0.0.0.0", () => {

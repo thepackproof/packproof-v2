@@ -70,3 +70,7 @@ Object keys are generated server-side as `evidence/<proofId>/<evidenceId>/object
 ### Optional live S3 test
 
 Disabled unless `PACKPROOF_S3_INTEGRATION=1` and S3 storage is configured. Uses prefix `evidence/_packproof_test/` and deletes those objects afterward. Never required for `npm test`.
+
+## Web origin
+
+Browser clients listed in `PACKPROOF_WEB_ORIGINS` receive CORS headers. The first-party reference client is `web/`. See `docs/WEB_CLIENT.md`.

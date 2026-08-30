@@ -10,6 +10,7 @@ The Proof is the product. This repository implements one transaction-bound PackP
 
 - `backend/` — modular monolith REST API
 - `mobile/` — Phase 10 thin Expo client
+- `web/` — first-party reference client for the canonical Proof API
 - `docs/` — binding specification and architecture
 
 ## Quick start
@@ -34,3 +35,4 @@ Set `PACKPROOF_DEV_AUTH=true` to create local users via `POST /auth/dev/login`.
 - [Development plan](docs/DEVELOPMENT_PLAN.md)
 - [Architecture](docs/architecture.md)
 - [Canonical Proof contract](docs/CANONICAL_PROOF_ARCHITECTURE.md)
+- [Web reference client](docs/WEB_CLIENT.md)

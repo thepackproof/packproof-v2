@@ -40,6 +40,7 @@ export interface AppDependencies {
   auth: AuthenticationAdapter;
   publicBaseUrl: string;
   devAuth: boolean;
+  corsOrigins?: string[];
 }
 
 function asyncRoute(
@@ -48,6 +49,13 @@ function asyncRoute(
   return (req, res, next) => {
     void fn(req, res).catch(next);
   };
+}
+
+function headerOrigin(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
 }
 
 function bearerUser(req: Request): string {
@@ -69,6 +77,24 @@ declare global {
 export function createApp(deps: AppDependencies): Express {
   const app = express();
   app.disable("x-powered-by");
+  const corsOrigins = deps.corsOrigins ?? [];
+  app.use((req, res, next) => {
+    const origin = headerOrigin(req.headers.origin);
+    if (origin && corsOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Authorization, Content-Type, Idempotency-Key",
+      );
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, OPTIONS");
+    }
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
   app.use(express.json({ limit: "2mb" }));
   app.use(
     express.raw({

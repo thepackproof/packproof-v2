@@ -64,7 +64,7 @@ Unsuccessful requests must not leave a half-mutated Proof. Explicit codes includ
 
 ## Definition of done
 
-Database enforces one Proof per transaction. Proofs survive navigation, restart, logout. Invitations only authorize. Evidence retry-safe and independently hashed. Transitions server-side. Premature finalize rejected. Manifest deterministic, hashed, immutable. Repeated finalize returns the same manifest. API and domain tests pass. Two-device test is a later phase.
+Database enforces one Proof per transaction. Proofs survive navigation, restart, logout. Invitations only authorize. Evidence retry-safe and independently hashed. Transitions server-side. Premature finalize rejected. Manifest deterministic, hashed, immutable. Repeated finalize returns the same manifest. API and domain tests pass. Two-device test is a later phase. The first-party web client in `web/` is a reference surface for the same API; it does not define Proof state.
 
 ## Development order
 

@@ -11,7 +11,7 @@ A PackProof is one immutable, transaction-bound evidence record whose history ca
 ## Shape
 
 ```text
-Clients (Android later, web later, API tests now)
+Clients (mobile, web reference client, API tests)
           │
           ▼
      PackProof REST API
@@ -62,6 +62,8 @@ Do not use DynamoDB or Firebase as canonical Proof storage. Do not put Proof tra
 See `backend/README.md`. Tests use PostgreSQL-compatible PGlite. Runtime uses `DATABASE_URL` PostgreSQL when configured.
 
 Phase 10 mobile client: `mobile/`. It issues V2 domain commands and renders returned Proof state. It does not own Proof lifecycle.
+
+Web reference client: `web/`. Same API, same canonical Proof. See [WEB_CLIENT.md](WEB_CLIENT.md).
 
 ## Canonical Proof contract
 

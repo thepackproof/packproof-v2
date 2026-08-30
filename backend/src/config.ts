@@ -18,6 +18,7 @@ export interface AppConfig {
   cognitoRegion?: string;
   devAuth: boolean;
   uploadSecret: string;
+  webOrigins: string[];
 }
 
 export function loadEnvFile(cwd = process.cwd()): void {
@@ -77,7 +78,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     cognitoRegion: env.PACKPROOF_COGNITO_REGION || env.AWS_REGION || undefined,
     devAuth: env.PACKPROOF_DEV_AUTH === "true",
     uploadSecret: env.PACKPROOF_UPLOAD_SECRET ?? "dev-upload-secret",
+    webOrigins: parseWebOrigins(env),
   };
+}
+
+export function parseWebOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = env.PACKPROOF_WEB_ORIGINS ?? "http://127.0.0.1:5173,http://localhost:5173";
+  return raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
 }
 
 export function parseAuthMode(env: NodeJS.ProcessEnv = process.env): AuthMode {
