@@ -20,6 +20,7 @@ import {
   createInvitation,
   listPendingInvitations,
 } from "./domain/invitations.js";
+import { listMyProofs } from "./domain/proof-collection.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
 import { getProofForUser } from "./domain/proofs.js";
 import {
@@ -202,6 +203,14 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       const result = await getProfile(deps.db, bearerUser(req));
       res.json(result);
+    }),
+  );
+
+  app.get(
+    "/me/proofs",
+    asyncRoute(async (req, res) => {
+      const proofs = await listMyProofs(deps.db, bearerUser(req));
+      res.json({ proofs });
     }),
   );
 

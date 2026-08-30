@@ -128,6 +128,23 @@ export interface InvitationInboxView {
   };
 }
 
+export interface ProofCollectionItem {
+  proofId: string;
+  transactionId: string;
+  role: "SELLER" | "BUYER" | string;
+  status: ProofStatus | string;
+  createdAt: string;
+  updatedAt: string;
+  finalizedAt: string | null;
+  transaction: {
+    externalReference: string | null;
+    itemTitle: string | null;
+    transactionDate: string | null;
+    carrier: string | null;
+    trackingNumber: string | null;
+  };
+}
+
 export interface ManifestView {
   manifestId: string;
   proofId: string;
@@ -206,6 +223,10 @@ export class PackProofV2Client {
 
   async listInvitations(): Promise<{ invitations: InvitationInboxView[] }> {
     return this.request("/invitations");
+  }
+
+  async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
+    return this.request("/me/proofs");
   }
 
   async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {

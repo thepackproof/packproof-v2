@@ -16,6 +16,7 @@ import {
   type InvitationInboxView,
   type ManifestView,
   type ProfileView,
+  type ProofCollectionItem,
   type ProofView,
   type PublicProfileView,
   type TransactionView,
@@ -107,6 +108,7 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<PublicProfileView[]>([]);
   const [selectedBuyer, setSelectedBuyer] = useState<PublicProfileView | null>(null);
   const [pendingInvites, setPendingInvites] = useState<InvitationInboxView[]>([]);
+  const [proofCollection, setProofCollection] = useState<ProofCollectionItem[]>([]);
   const [inviteeIdentifier, setInviteeIdentifier] = useState("");
   const [invitationInput, setInvitationInput] = useState("");
   const [session, setSession] = useState<CachedClientState | null>(null);
@@ -186,12 +188,7 @@ export default function App() {
         if (!restored) {
           return;
         }
-        if (cached.proofId) {
-          await refreshProof(cached.proofId);
-          setScreen("proof");
-        } else {
-          setScreen("home");
-        }
+        setScreen("home");
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           tokenRef.current = null;
@@ -278,6 +275,8 @@ export default function App() {
     await applyProfile(profile);
     const inbox = await api.listInvitations();
     setPendingInvites(inbox.invitations);
+    const collection = await api.listMyProofs();
+    setProofCollection(collection.proofs);
     return sessionRef.current;
   }
 
@@ -319,6 +318,8 @@ export default function App() {
     await applyProfile(profile);
     const inbox = await client.listInvitations();
     setPendingInvites(inbox.invitations);
+    const collection = await client.listMyProofs();
+    setProofCollection(collection.proofs);
     setProof(null);
     setTransactionDetail(null);
     setLocalCapture(null);
@@ -353,6 +354,20 @@ export default function App() {
   async function refreshPendingInvites(): Promise<void> {
     const inbox = await client.listInvitations();
     setPendingInvites(inbox.invitations);
+  }
+
+  async function refreshProofCollection(): Promise<void> {
+    const collection = await client.listMyProofs();
+    setProofCollection(collection.proofs);
+  }
+
+  async function openDiscoveredProof(proofId: string): Promise<void> {
+    const current = sessionRef.current;
+    if (current) {
+      await persist({ ...current, proofId });
+    }
+    await refreshProof(proofId);
+    setScreen("proof");
   }
 
   async function persistCapture(next: LocalCapture | null, idempotencyKey: string | null): Promise<void> {
@@ -437,6 +452,8 @@ export default function App() {
   const pendingEvidence = (proof?.evidence ?? []).filter(
     (item) => item.validationStatus === "PENDING",
   );
+  const activeProofs = proofCollection.filter((item) => item.status !== "FINALIZED");
+  const completedProofs = proofCollection.filter((item) => item.status === "FINALIZED");
   const canCapture =
     !finalized &&
     role === "SELLER" &&
@@ -826,6 +843,56 @@ export default function App() {
                 />
               </View>
             )}
+            <Text style={styles.heading}>Active Proofs</Text>
+            {activeProofs.length === 0 ? <Text>No active Proofs.</Text> : null}
+            {activeProofs.map((item) => (
+              <View key={item.proofId} style={styles.invite}>
+                <Text>{item.transaction.itemTitle ?? "Untitled item"}</Text>
+                <Text>{item.transaction.externalReference ?? ""}</Text>
+                <Text>
+                  {item.role} {item.status}
+                </Text>
+                <Text>
+                  {[item.transaction.carrier, item.transaction.trackingNumber]
+                    .filter(Boolean)
+                    .join(" ")}
+                </Text>
+                <Text selectable>proofId {item.proofId}</Text>
+                <Action
+                  label="Open Proof"
+                  disabled={busy}
+                  onPress={() => run(async () => openDiscoveredProof(item.proofId))}
+                />
+              </View>
+            ))}
+            <Text style={styles.heading}>Completed Proofs</Text>
+            {completedProofs.length === 0 ? <Text>No completed Proofs.</Text> : null}
+            {completedProofs.map((item) => (
+              <View key={item.proofId} style={styles.invite}>
+                <Text>{item.transaction.itemTitle ?? "Untitled item"}</Text>
+                <Text>{item.transaction.externalReference ?? ""}</Text>
+                <Text>
+                  {item.role} {item.status}
+                </Text>
+                <Text>{item.finalizedAt ?? ""}</Text>
+                <Text selectable>proofId {item.proofId}</Text>
+                <Action
+                  label="Open finalized Proof"
+                  disabled={busy}
+                  onPress={() => run(async () => openDiscoveredProof(item.proofId))}
+                />
+              </View>
+            ))}
+            <Action
+              label="Refresh Proofs"
+              disabled={busy}
+              onPress={() =>
+                run(async () => {
+                  await refreshProofCollection();
+                  await refreshPendingInvites();
+                })
+              }
+            />
             <Text style={styles.heading}>Pending invitations</Text>
             {pendingInvites.length === 0 ? <Text>No pending invitations.</Text> : null}
             {pendingInvites.map((invite) => (
@@ -850,6 +917,7 @@ export default function App() {
                       };
                       await persist(next);
                       await refreshPendingInvites();
+                      await refreshProofCollection();
                       await refreshProof(accepted.proof.proofId);
                       setScreen("proof");
                     })
@@ -881,6 +949,7 @@ export default function App() {
                     transactionId: created.transactionId,
                   };
                   await persist(next);
+                  await refreshProofCollection();
                   await refreshProof(created.proofId);
                   setScreen("proof");
                 })
@@ -953,6 +1022,7 @@ export default function App() {
                   setEditForm(EMPTY_FORM);
                   setManifest(null);
                   setPendingInvites([]);
+                  setProofCollection([]);
                   setSearchResults([]);
                   setSelectedBuyer(null);
                   setPassword("");
@@ -1077,7 +1147,13 @@ export default function App() {
             <Action
               label="Leave screen"
               disabled={busy}
-              onPress={() => setScreen("home")}
+              onPress={() =>
+                run(async () => {
+                  await refreshProofCollection();
+                  await refreshPendingInvites();
+                  setScreen("home");
+                })
+              }
             />
 
             {!finalized && role === "SELLER" ? (
