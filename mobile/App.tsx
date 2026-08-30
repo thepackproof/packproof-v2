@@ -30,8 +30,6 @@ import {
   cognitoResendConfirmation,
   cognitoSignIn,
   cognitoSignUp,
-  defaultAuthMode,
-  defaultCognitoConfig,
   CognitoAuthError,
   formatCognitoError,
   type AuthMode,
@@ -53,13 +51,39 @@ import {
   saveCachedState,
   type CachedClientState,
 } from "./src/session";
+import {
+  resolveRuntimeConfig,
+  shouldRestoreCachedSession,
+  type ResolvedRuntimeConfig,
+} from "./src/runtime-config";
+
+const IS_RELEASE_CLIENT = !__DEV__;
+
+function currentRuntime(cached?: {
+  apiBaseUrl?: string | null;
+  authMode?: AuthMode | null;
+  cognitoUserPoolId?: string | null;
+  cognitoClientId?: string | null;
+  cognitoRegion?: string | null;
+} | null): ResolvedRuntimeConfig {
+  return resolveRuntimeConfig({
+    env: {
+      EXPO_PUBLIC_PACKPROOF_API_BASE_URL: process.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL,
+      EXPO_PUBLIC_PACKPROOF_AUTH_MODE: process.env.EXPO_PUBLIC_PACKPROOF_AUTH_MODE,
+      EXPO_PUBLIC_COGNITO_USER_POOL_ID: process.env.EXPO_PUBLIC_COGNITO_USER_POOL_ID,
+      EXPO_PUBLIC_COGNITO_CLIENT_ID: process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID,
+      EXPO_PUBLIC_COGNITO_REGION: process.env.EXPO_PUBLIC_COGNITO_REGION,
+    },
+    isRelease: IS_RELEASE_CLIENT,
+    cached,
+  });
+}
+
+const INITIAL_RUNTIME = currentRuntime();
 
 type Screen = "auth" | "home" | "proof" | "capture";
 type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset";
 type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
-
-const DEFAULT_API =
-  process.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL?.trim() || "http://127.0.0.1:3000";
 
 interface ContextForm {
   externalReference: string;
@@ -92,12 +116,12 @@ const EMPTY_FORM: ContextForm = {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("auth");
   const [authPane, setAuthPane] = useState<AuthPane>("signIn");
-  const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API);
-  const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
+  const [apiBaseUrl, setApiBaseUrl] = useState(INITIAL_RUNTIME.apiBaseUrl);
+  const [authMode, setAuthMode] = useState<AuthMode>(INITIAL_RUNTIME.authMode);
   const [showCognitoSettings, setShowCognitoSettings] = useState(false);
-  const [cognitoPoolId, setCognitoPoolId] = useState(defaultCognitoConfig().userPoolId);
-  const [cognitoClientId, setCognitoClientId] = useState(defaultCognitoConfig().clientId);
-  const [cognitoRegion, setCognitoRegion] = useState(defaultCognitoConfig().region);
+  const [cognitoPoolId, setCognitoPoolId] = useState(INITIAL_RUNTIME.cognito.userPoolId);
+  const [cognitoClientId, setCognitoClientId] = useState(INITIAL_RUNTIME.cognito.clientId);
+  const [cognitoRegion, setCognitoRegion] = useState(INITIAL_RUNTIME.cognito.region);
   const [subject, setSubject] = useState("seller-1");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -141,39 +165,53 @@ export default function App() {
       if (!cached) {
         return;
       }
-      tokenRef.current = cached.token;
-      sessionRef.current = cached;
-      setSession(cached);
-      setApiBaseUrl(cached.apiBaseUrl);
-      setAuthMode(cached.authMode);
-      setSubject(cached.subject);
-      setEmail(cached.email ?? "");
-      setUsernameInput(cached.username ?? "");
-      setDisplayNameInput(cached.displayName ?? "");
-      if (cached.cognitoUserPoolId) {
-        setCognitoPoolId(cached.cognitoUserPoolId);
+      const runtime = currentRuntime(cached);
+      applyResolvedRuntime(runtime);
+      if (!shouldRestoreCachedSession(cached, IS_RELEASE_CLIENT)) {
+        tokenRef.current = null;
+        sessionRef.current = null;
+        await clearCachedState();
+        return;
       }
-      if (cached.cognitoClientId) {
-        setCognitoClientId(cached.cognitoClientId);
+      const next: CachedClientState = {
+        ...cached,
+        apiBaseUrl: runtime.apiBaseUrl,
+        authMode: runtime.authMode,
+        cognitoUserPoolId: runtime.cognito.userPoolId,
+        cognitoClientId: runtime.cognito.clientId,
+        cognitoRegion: runtime.cognito.region,
+      };
+      tokenRef.current = next.token;
+      sessionRef.current = next;
+      setSession(next);
+      if (
+        next.apiBaseUrl !== cached.apiBaseUrl ||
+        next.authMode !== cached.authMode ||
+        next.cognitoUserPoolId !== cached.cognitoUserPoolId ||
+        next.cognitoClientId !== cached.cognitoClientId ||
+        next.cognitoRegion !== cached.cognitoRegion
+      ) {
+        await saveCachedState(next);
       }
-      if (cached.cognitoRegion) {
-        setCognitoRegion(cached.cognitoRegion);
+      setSubject(next.subject);
+      setEmail(next.email ?? "");
+      setUsernameInput(next.username ?? "");
+      setDisplayNameInput(next.displayName ?? "");
+      if (next.invitationToken) {
+        setInvitationInput(next.invitationToken);
       }
-      if (cached.invitationToken) {
-        setInvitationInput(cached.invitationToken);
-      }
-      if (cached.captureUri) {
-        const restored = await describeLocalCapture(cached.captureUri, {
-          byteSize: cached.captureByteSize,
-          durationMs: cached.captureDurationMs,
-          contentType: cached.evidenceContentType,
+      if (next.captureUri) {
+        const restored = await describeLocalCapture(next.captureUri, {
+          byteSize: next.captureByteSize,
+          durationMs: next.captureDurationMs,
+          contentType: next.evidenceContentType,
         });
         if (restored) {
           setLocalCapture(restored);
-          setCaptureStatus(cached.evidenceIdempotencyKey ? "retry" : "captured");
+          setCaptureStatus(next.evidenceIdempotencyKey ? "retry" : "captured");
         } else {
           await persist({
-            ...cached,
+            ...next,
             captureUri: null,
             evidenceIdempotencyKey: null,
             evidenceContentType: null,
@@ -185,18 +223,19 @@ export default function App() {
         }
       }
       try {
-        const restored = await restoreAuthoritativeSession(cached);
+        const restored = await restoreAuthoritativeSession(next);
         if (!restored) {
           return;
         }
         setScreen("home");
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
+          const compiled = currentRuntime();
           tokenRef.current = null;
           sessionRef.current = null;
           await clearCachedState();
           setSession(null);
-          setAuthMode(defaultAuthMode());
+          applyResolvedRuntime(compiled);
           setAuthPane("signIn");
           setScreen("auth");
           setError("Session expired. Sign in again.");
@@ -208,11 +247,30 @@ export default function App() {
     })();
   }, []);
 
+  function applyResolvedRuntime(runtime: ResolvedRuntimeConfig): void {
+    setApiBaseUrl(runtime.apiBaseUrl);
+    setAuthMode(runtime.authMode);
+    setCognitoPoolId(runtime.cognito.userPoolId);
+    setCognitoClientId(runtime.cognito.clientId);
+    setCognitoRegion(runtime.cognito.region);
+  }
+
   async function persist(next: CachedClientState): Promise<void> {
-    tokenRef.current = next.token;
-    sessionRef.current = next;
-    setSession(next);
-    await saveCachedState(next);
+    const runtime = currentRuntime(IS_RELEASE_CLIENT ? null : next);
+    const stored: CachedClientState = IS_RELEASE_CLIENT
+      ? {
+          ...next,
+          apiBaseUrl: runtime.apiBaseUrl,
+          authMode: "cognito",
+          cognitoUserPoolId: runtime.cognito.userPoolId,
+          cognitoClientId: runtime.cognito.clientId,
+          cognitoRegion: runtime.cognito.region,
+        }
+      : next;
+    tokenRef.current = stored.token;
+    sessionRef.current = stored;
+    setSession(stored);
+    await saveCachedState(stored);
   }
 
   function requireCognitoConfig(): CognitoConfig {
@@ -473,25 +531,31 @@ export default function App() {
         {screen === "auth" ? (
           <View style={styles.card}>
             <Text style={styles.label}>API base URL</Text>
-            <TextInput
-              style={styles.input}
-              value={apiBaseUrl}
-              onChangeText={setApiBaseUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            {INITIAL_RUNTIME.allowsApiOverride ? (
+              <TextInput
+                style={styles.input}
+                value={apiBaseUrl}
+                onChangeText={setApiBaseUrl}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            ) : (
+              <Text selectable>{apiBaseUrl}</Text>
+            )}
             <Text style={styles.label}>Auth mode: {authMode}</Text>
-            <Action
-              label="Use development sign-in"
-              disabled={busy}
-              onPress={() => setAuthMode("dev")}
-            />
+            {INITIAL_RUNTIME.allowsDevAuth ? (
+              <Action
+                label="Use development sign-in"
+                disabled={busy}
+                onPress={() => setAuthMode("dev")}
+              />
+            ) : null}
             <Action
               label="Use PackProof account"
               disabled={busy}
               onPress={() => setAuthMode("cognito")}
             />
-            {authMode === "cognito" && showCognitoSettings ? (
+            {authMode === "cognito" && showCognitoSettings && INITIAL_RUNTIME.allowsApiOverride ? (
               <View>
                 <Text style={styles.label}>Cognito User Pool ID</Text>
                 <TextInput
@@ -519,7 +583,7 @@ export default function App() {
                 />
               </View>
             ) : null}
-            {authMode === "cognito" ? (
+            {authMode === "cognito" && INITIAL_RUNTIME.allowsApiOverride ? (
               <Action
                 label={showCognitoSettings ? "Hide Cognito settings" : "Show Cognito settings"}
                 disabled={busy}
@@ -1027,6 +1091,7 @@ export default function App() {
                   setSearchResults([]);
                   setSelectedBuyer(null);
                   setPassword("");
+                  applyResolvedRuntime(currentRuntime());
                   setAuthPane("signIn");
                   setScreen("auth");
                 })

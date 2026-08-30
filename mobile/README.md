@@ -11,4 +11,4 @@ Thin Expo client over the V2 API. It does not own Proof lifecycle state.
 
 Development mode still accepts subjects such as `seller-1` and `buyer-1`. Production-capable accounts use `PACKPROOF_AUTH_MODE=cognito` on the API and `cognito` in the client. The client talks to Cognito directly for sign-up, verification, sign-in, and password reset. It never sends a password to the PackProof API.
 
-On a physical device, set the API base URL to the machine LAN address, for example `http://192.168.1.10:3000`.
+On a physical device in Expo Go, set the API base URL to the machine LAN address, for example `http://192.168.1.10:3000`. That override is development-only. Google Play / release builds always use the compiled staging API and Cognito settings from `eas.json` profile `internal-staging` and ignore a cached localhost URL.

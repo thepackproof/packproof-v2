@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": ">= 13.2.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "internal-staging": {
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+        "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "cognito",
+        "EXPO_PUBLIC_COGNITO_USER_POOL_ID": "us-east-1_GdgTeYaOO",
+        "EXPO_PUBLIC_COGNITO_CLIENT_ID": "34pnucunllka2jcs8hsq762m5e",
+        "EXPO_PUBLIC_COGNITO_REGION": "us-east-1"
+      }
+    }
+  },
+  "submit": {
+    "internal-staging": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "completed"
+      }
+    }
+  }
+}
