@@ -1,0 +1,131 @@
+# Deploy the PackProof V2 web reference client to staging CloudFront.
+# Updates PACKPROOF_WEB_ORIGINS on the existing Express API. Does not rebuild the API image.
+param(
+  [string]$Region = "us-east-1",
+  [string]$FoundationStack = "packproof-v2-staging",
+  [string]$WebStack = "packproof-v2-staging-web",
+  [string]$ApiServiceName = "packproof-v2-staging-api",
+  [string]$StagingApiUrl = "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws"
+)
+
+$ErrorActionPreference = "Continue"
+$Aws = "$env:LOCALAPPDATA\Programs\Amazon\AWSCLIV2\aws.exe"
+if (-not (Test-Path $Aws)) {
+  $Aws = "aws"
+}
+
+function Invoke-Aws {
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$AwsArgs)
+  & $Aws @AwsArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "aws $($AwsArgs -join ' ') failed with exit $LASTEXITCODE"
+  }
+}
+
+function Invoke-AwsJson {
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$AwsArgs)
+  $raw = & $Aws @AwsArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "aws $($AwsArgs -join ' ') failed with exit $LASTEXITCODE"
+  }
+  if (-not $raw) {
+    return $null
+  }
+  return ($raw | ConvertFrom-Json)
+}
+
+function Get-StackOutputs([string]$Name) {
+  $map = @{}
+  $stack = Invoke-AwsJson cloudformation describe-stacks --stack-name $Name --region $Region
+  foreach ($item in $stack.Stacks[0].Outputs) {
+    $map[$item.OutputKey] = $item.OutputValue
+  }
+  return $map
+}
+
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$WebRoot = Join-Path $RepoRoot "web"
+$WebTemplate = Join-Path $PSScriptRoot "web.yaml"
+$Foundation = Get-StackOutputs $FoundationStack
+
+Write-Host "Validating $WebTemplate"
+Invoke-Aws cloudformation validate-template --template-body "file://$WebTemplate" --region $Region | Out-Null
+
+Write-Host "Deploying $WebStack"
+Invoke-Aws cloudformation deploy `
+  --stack-name $WebStack `
+  --template-file $WebTemplate `
+  --region $Region `
+  --no-fail-on-empty-changeset
+
+$Web = Get-StackOutputs $WebStack
+$WebUrl = $Web.WebUrl.TrimEnd("/")
+Write-Host "WEB_URL=$WebUrl"
+
+Write-Host "Building web client against $StagingApiUrl"
+$env:VITE_PACKPROOF_API_BASE_URL = $StagingApiUrl
+$env:VITE_PACKPROOF_AUTH_MODE = "cognito"
+$env:VITE_PACKPROOF_COGNITO_USER_POOL_ID = $Foundation.CognitoUserPoolId
+$env:VITE_PACKPROOF_COGNITO_CLIENT_ID = $Foundation.CognitoClientId
+$env:VITE_PACKPROOF_COGNITO_REGION = $Region
+Push-Location $WebRoot
+try {
+  npm run build
+  if ($LASTEXITCODE -ne 0) {
+    throw "web production build failed"
+  }
+} finally {
+  Pop-Location
+}
+
+$Dist = Join-Path $WebRoot "dist"
+if (-not (Test-Path (Join-Path $Dist "index.html"))) {
+  throw "web/dist/index.html is missing"
+}
+
+Write-Host "Uploading $Dist to s3://$($Web.WebBucketName)"
+Invoke-Aws s3 sync $Dist "s3://$($Web.WebBucketName)/" --region $Region --delete --cache-control "public,max-age=31536000,immutable" --exclude "index.html"
+Invoke-Aws s3 cp (Join-Path $Dist "index.html") "s3://$($Web.WebBucketName)/index.html" --region $Region --cache-control "no-cache,no-store,must-revalidate" --content-type "text/html"
+
+Write-Host "Invalidating CloudFront $($Web.DistributionId)"
+Invoke-Aws cloudfront create-invalidation --distribution-id $Web.DistributionId --paths "/*" --region $Region | Out-Null
+
+Write-Host "Updating API CORS for $WebUrl"
+$services = Invoke-AwsJson ecs describe-services --cluster $Foundation.ClusterName --services $ApiServiceName --region $Region
+$serviceArn = $services.services[0].serviceArn
+if (-not $serviceArn) {
+  throw "Express API service $ApiServiceName was not found"
+}
+$express = Invoke-AwsJson ecs describe-express-gateway-service --service-arn $serviceArn --region $Region
+$current = $express.service.activeConfigurations[0].primaryContainer
+$environment = @()
+$replaced = $false
+foreach ($item in $current.environment) {
+  if ($item.name -eq "PACKPROOF_WEB_ORIGINS") {
+    $environment += @{ name = "PACKPROOF_WEB_ORIGINS"; value = $WebUrl }
+    $replaced = $true
+  } else {
+    $environment += @{ name = $item.name; value = $item.value }
+  }
+}
+if (-not $replaced) {
+  $environment += @{ name = "PACKPROOF_WEB_ORIGINS"; value = $WebUrl }
+}
+$container = @{
+  image = $current.image
+  containerPort = $current.containerPort
+  awsLogsConfiguration = $current.awsLogsConfiguration
+  environment = $environment
+  secrets = $current.secrets
+}
+$containerFile = Join-Path $env:TEMP "packproof-express-web-cors.json"
+[System.IO.File]::WriteAllText($containerFile, ($container | ConvertTo-Json -Depth 8))
+Invoke-Aws ecs update-express-gateway-service `
+  --service-arn $serviceArn `
+  --region $Region `
+  --health-check-path /health `
+  --primary-container "file://$containerFile" | Out-Null
+
+Write-Host "STAGING_WEB_URL=$WebUrl"
+Write-Host "STAGING_API_URL=$StagingApiUrl"
+Write-Host "CORS=$WebUrl"

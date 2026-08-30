@@ -5,7 +5,8 @@ param(
   [string]$FoundationStack = "packproof-v2-staging",
   [string]$ApiStack = "packproof-v2-staging-api",
   [string]$EcrName = "packproof-v2-staging-api",
-  [string]$ImageTag = (Get-Date -Format "yyyyMMddHHmmss")
+  [string]$ImageTag = (Get-Date -Format "yyyyMMddHHmmss"),
+  [string]$WebOrigins = ""
 )
 
 $ErrorActionPreference = "Continue"
@@ -181,6 +182,9 @@ $container = @{
     @{ name = "PACKPROOF_DB_USER"; valueFrom = "${secretArn}:username::" }
     @{ name = "PACKPROOF_DB_PASSWORD"; valueFrom = "${secretArn}:password::" }
   )
+}
+if ($WebOrigins.Trim()) {
+  $container.environment += @{ name = "PACKPROOF_WEB_ORIGINS"; value = $WebOrigins.Trim() }
 }
 $network = @{
   subnets = @($Outputs.PublicSubnetA, $Outputs.PublicSubnetB)

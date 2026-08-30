@@ -51,6 +51,7 @@ No UI/capture/upload states.
 - PostgreSQL on RDS or Aurora PostgreSQL
 - S3 for evidence objects
 - ECS/Fargate for this API
+- S3 + CloudFront for the staging web reference client (separate origin; CORS via `PACKPROOF_WEB_ORIGINS`)
 - KMS only if signing is introduced later
 - SQS only for genuine async jobs (none in this slice)
 - CloudWatch logs
@@ -63,7 +64,7 @@ See `backend/README.md`. Tests use PostgreSQL-compatible PGlite. Runtime uses `D
 
 Phase 10 mobile client: `mobile/`. It issues V2 domain commands and renders returned Proof state. It does not own Proof lifecycle.
 
-Web reference client: `web/`. Same API, same canonical Proof. See [WEB_CLIENT.md](WEB_CLIENT.md).
+Web reference client: `web/`. Same API, same canonical Proof. Local Vite for development. Staging hosting is S3 + CloudFront; see [WEB_CLIENT.md](WEB_CLIENT.md).
 
 ## Canonical Proof contract
 

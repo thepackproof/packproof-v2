@@ -69,6 +69,28 @@ npm run build
 npm run preview
 ```
 
+## Staging
+
+The web client and mobile client are separate origins. Both talk to the same ECS API.
+
+```text
+cd infra
+.\deploy-web.ps1
+```
+
+That command:
+
+1. Deploys private S3 + CloudFront (`packproof-v2-staging-web`)
+2. Builds `web/` with Cognito and the staging API URL baked in
+3. Uploads `web/dist` and invalidates CloudFront
+4. Sets `PACKPROOF_WEB_ORIGINS` on the existing Express API to the CloudFront origin
+
+Staging web URL: `https://dvpmnwc27i8tw.cloudfront.net`
+
+SPA routes such as `/proofs/:id` are served by CloudFront error fallback to `index.html`. The API stays on `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`. The API image must include the CORS middleware; setting `PACKPROOF_WEB_ORIGINS` on an older image has no effect.
+
+Do not embed Cognito secrets, database credentials, or S3 keys. The web bundle is public.
+
 ## Deployment
 
-Static files from `web/dist`. Point the browser origin at the API with CORS (`PACKPROOF_WEB_ORIGINS`) or serve the app behind the same host. Do not embed Cognito secrets or AWS credentials. The web client is public.
+Static files from `web/dist`. Staging uses S3 + CloudFront. Local Vite still proxies to `http://127.0.0.1:3000`. Cross-origin deployments set `PACKPROOF_WEB_ORIGINS` to the exact HTTPS origin.

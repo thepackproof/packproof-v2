@@ -33,6 +33,10 @@ Parameters:
     Type: String
   CognitoClientId:
     Type: String
+  WebOrigins:
+    Type: String
+    Default: ""
+    Description: Exact browser origins allowed by PACKPROOF_WEB_ORIGINS. Empty leaves CORS unset.
 
 Resources:
   ExpressService:
@@ -88,6 +92,8 @@ Resources:
             Value: require
           - Name: PACKPROOF_PUBLIC_URL
             Value: !Ref PublicUrl
+          - Name: PACKPROOF_WEB_ORIGINS
+            Value: !Ref WebOrigins
         Secrets:
           - Name: PACKPROOF_DB_USER
             ValueFrom: !Sub "${DatabaseSecretArn}:username::"

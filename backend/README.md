@@ -73,4 +73,4 @@ Disabled unless `PACKPROOF_S3_INTEGRATION=1` and S3 storage is configured. Uses 
 
 ## Web origin
 
-Browser clients listed in `PACKPROOF_WEB_ORIGINS` receive CORS headers. The first-party reference client is `web/`. See `docs/WEB_CLIENT.md`.
+Browser clients listed in `PACKPROOF_WEB_ORIGINS` receive CORS headers. The first-party reference client is `web/`. Staging hosting is S3 + CloudFront via `infra/deploy-web.ps1`. See `docs/WEB_CLIENT.md`.

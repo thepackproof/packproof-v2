@@ -30,6 +30,8 @@ GET http://127.0.0.1:3000/health
 
 Set `PACKPROOF_DEV_AUTH=true` to create local users via `POST /auth/dev/login`.
 
+Staging API: `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`. Staging web: `infra/deploy-web.ps1` (S3 + CloudFront, same API). See [docs/WEB_CLIENT.md](docs/WEB_CLIENT.md).
+
 ## Documentation
 
 - [Development plan](docs/DEVELOPMENT_PLAN.md)
