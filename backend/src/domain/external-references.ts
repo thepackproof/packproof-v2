@@ -53,6 +53,20 @@ export async function listProofExternalReferences(
   return found.rows.map(toExternalReferenceView);
 }
 
+export async function findProofExternalReference(
+  db: Database,
+  proofId: string,
+  tenantKey: string,
+): Promise<ProofExternalReferenceView | null> {
+  const tenant = normalizeTenantKey(tenantKey);
+  const found = await db.query<ProofExternalReferenceRow>(
+    `SELECT * FROM proof_external_references
+      WHERE proof_id = $1 AND tenant_key = $2`,
+    [proofId, tenant],
+  );
+  return found.rows[0] ? toExternalReferenceView(found.rows[0]) : null;
+}
+
 export async function findProofIdByExternalReference(
   db: Database,
   tenantKey: string,
@@ -109,6 +123,19 @@ export async function bindProofExternalReference(
       return toExternalReferenceView(existing.rows[0]);
     }
 
+    const established = await tx.query<ProofExternalReferenceRow>(
+      `SELECT * FROM proof_external_references
+        WHERE proof_id = $1 AND tenant_key = $2`,
+      [input.proofId, tenantKey],
+    );
+    if (established.rows[0]) {
+      throw new DomainError(
+        "EXTERNAL_REFERENCE_ALREADY_BOUND",
+        "This tenant already has an immutable identity binding on this Proof",
+        409,
+      );
+    }
+
     const now = clock.now();
     const referenceId = newId("xref");
     const provenance = {
@@ -140,13 +167,32 @@ export async function bindProofExternalReference(
       );
     } catch (error) {
       if (isUniqueViolation(error)) {
-        const raced = await tx.query<ProofExternalReferenceRow>(
+        const racedLookup = await tx.query<ProofExternalReferenceRow>(
           `SELECT * FROM proof_external_references
             WHERE tenant_key = $1 AND external_transaction_id = $2`,
           [tenantKey, externalTransactionId],
         );
-        if (raced.rows[0]?.proof_id === input.proofId) {
-          return toExternalReferenceView(raced.rows[0]);
+        if (racedLookup.rows[0]?.proof_id === input.proofId) {
+          return toExternalReferenceView(racedLookup.rows[0]);
+        }
+        if (racedLookup.rows[0]) {
+          throw new DomainError(
+            "EXTERNAL_REFERENCE_CONFLICT",
+            "External transaction reference is already bound to another Proof",
+            409,
+          );
+        }
+        const racedTenant = await tx.query<ProofExternalReferenceRow>(
+          `SELECT * FROM proof_external_references
+            WHERE proof_id = $1 AND tenant_key = $2`,
+          [input.proofId, tenantKey],
+        );
+        if (racedTenant.rows[0]) {
+          throw new DomainError(
+            "EXTERNAL_REFERENCE_ALREADY_BOUND",
+            "This tenant already has an immutable identity binding on this Proof",
+            409,
+          );
         }
         throw new DomainError(
           "EXTERNAL_REFERENCE_CONFLICT",
@@ -178,13 +224,21 @@ export async function bindProofExternalReference(
   });
 }
 
-export async function bindTransactionExternalReference(
+export async function ensureTransactionExternalReference(
   db: Database,
   clock: Clock,
   actorUserId: string,
   proofId: string,
   externalReference: string | null,
 ): Promise<ProofExternalReferenceView | null> {
+  const established = await findProofExternalReference(
+    db,
+    proofId,
+    PACKPROOF_TRANSACTION_TENANT,
+  );
+  if (established) {
+    return established;
+  }
   if (!externalReference) {
     return null;
   }

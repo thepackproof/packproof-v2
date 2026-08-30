@@ -7,13 +7,19 @@ import { DomainError, errorCodeFromSql } from "../src/domain/errors.js";
 import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
 import {
   bindProofExternalReference,
+  findProofExternalReference,
   findProofIdByExternalReference,
 } from "../src/domain/external-references.js";
 import { finalizeProof } from "../src/domain/finalize.js";
 import { sha256Hex } from "../src/hash.js";
 import { acceptInvitation, createInvitation } from "../src/domain/invitations.js";
-import { createTransaction } from "../src/domain/transactions.js";
-import { CANONICAL_PROOF_SCHEMA, PROOF_SUMMARY_SCHEMA, TRUST_KIND } from "../src/domain/trust.js";
+import { createTransaction, updateTransaction } from "../src/domain/transactions.js";
+import {
+  CANONICAL_PROOF_SCHEMA,
+  PACKPROOF_TRANSACTION_TENANT,
+  PROOF_SUMMARY_SCHEMA,
+  TRUST_KIND,
+} from "../src/domain/trust.js";
 import { auth, createHarness, createUser, login, type TestHarness } from "./helpers.js";
 
 async function readyProof(harness: TestHarness, seller: string, buyer: string) {
@@ -309,6 +315,101 @@ describe("canonical Proof contract", () => {
       ],
     );
     await expect(sqlDuplicate).rejects.toSatisfy((error: unknown) => isUniqueViolation(error));
+  });
+
+  it("treats an established external binding as immutable identity, not transaction metadata", async () => {
+    harness = await createHarness();
+    const seller = await createUser(harness);
+    const txn = await createTransaction(harness.db, harness.clock, seller, {
+      externalReference: "ORD-IDENTITY-1",
+      itemTitle: "Identity item",
+    });
+    const created = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId);
+    const original = await findProofExternalReference(
+      harness.db,
+      created.proofId,
+      PACKPROOF_TRANSACTION_TENANT,
+    );
+    expect(original?.externalTransactionId).toBe("ORD-IDENTITY-1");
+
+    await updateTransaction(harness.db, harness.clock, seller, txn.transactionId, {
+      externalReference: "ORD-IDENTITY-2",
+      itemTitle: "Renamed item",
+    });
+    const afterUpdate = await createOrGetProof(
+      harness.db,
+      harness.clock,
+      seller,
+      txn.transactionId,
+    );
+    expect(afterUpdate.proofId).toBe(created.proofId);
+    expect(afterUpdate.transaction.externalReference).toBe("ORD-IDENTITY-2");
+    expect(afterUpdate.external.references).toHaveLength(1);
+    expect(afterUpdate.external.references[0]).toMatchObject({
+      tenantKey: PACKPROOF_TRANSACTION_TENANT,
+      externalTransactionId: "ORD-IDENTITY-1",
+    });
+    expect(
+      await findProofIdByExternalReference(
+        harness.db,
+        PACKPROOF_TRANSACTION_TENANT,
+        "ORD-IDENTITY-1",
+      ),
+    ).toBe(created.proofId);
+    expect(
+      await findProofIdByExternalReference(
+        harness.db,
+        PACKPROOF_TRANSACTION_TENANT,
+        "ORD-IDENTITY-2",
+      ),
+    ).toBeNull();
+
+    await expect(
+      bindProofExternalReference(harness.db, harness.clock, seller, {
+        proofId: created.proofId,
+        tenantKey: PACKPROOF_TRANSACTION_TENANT,
+        externalTransactionId: "ORD-IDENTITY-2",
+        source: "PARTICIPANT_SUPPLIED",
+      }),
+    ).rejects.toMatchObject({
+      code: "EXTERNAL_REFERENCE_ALREADY_BOUND",
+    } satisfies Partial<DomainError>);
+
+    const lateTxn = await createTransaction(harness.db, harness.clock, seller, {
+      itemTitle: "No identity yet",
+    });
+    const lateProof = await createOrGetProof(
+      harness.db,
+      harness.clock,
+      seller,
+      lateTxn.transactionId,
+    );
+    expect(lateProof.external.references).toEqual([]);
+    await updateTransaction(harness.db, harness.clock, seller, lateTxn.transactionId, {
+      externalReference: "ORD-LATE-1",
+    });
+    const established = await createOrGetProof(
+      harness.db,
+      harness.clock,
+      seller,
+      lateTxn.transactionId,
+    );
+    expect(established.external.references).toHaveLength(1);
+    expect(established.external.references[0].externalTransactionId).toBe("ORD-LATE-1");
+
+    const sqlSecondIdentity = harness.db.query(
+      `INSERT INTO proof_external_references (
+         id, proof_id, tenant_key, external_transaction_id, source, provenance, created_at
+       ) VALUES ($1, $2, $3, $4, 'PARTICIPANT_SUPPLIED', '{}'::jsonb, $5)`,
+      [
+        "xref_second_identity",
+        created.proofId,
+        PACKPROOF_TRANSACTION_TENANT,
+        "ORD-IDENTITY-2",
+        harness.clock.now().toISOString(),
+      ],
+    );
+    await expect(sqlSecondIdentity).rejects.toSatisfy((error: unknown) => isUniqueViolation(error));
   });
 
   it("preserves the existing finalize lifecycle on the canonical Proof", async () => {

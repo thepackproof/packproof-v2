@@ -3,7 +3,7 @@ import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
 import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
-import { bindTransactionExternalReference } from "./external-references.js";
+import { ensureTransactionExternalReference } from "./external-references.js";
 import { getProofView, loadProof, type ProofView } from "./proofs.js";
 import type { ProofRow, TransactionRow } from "./types.js";
 
@@ -36,7 +36,7 @@ export async function createOrGetProof(
     );
     if (existing.rows[0]) {
       await requireExistingSeller(tx, existing.rows[0].id, actorUserId);
-      await bindTransactionExternalReference(
+      await ensureTransactionExternalReference(
         tx,
         clock,
         actorUserId,
@@ -65,7 +65,7 @@ export async function createOrGetProof(
           throw error;
         }
         await requireExistingSeller(tx, raced.rows[0].id, actorUserId);
-        await bindTransactionExternalReference(
+        await ensureTransactionExternalReference(
           tx,
           clock,
           actorUserId,
@@ -97,7 +97,7 @@ export async function createOrGetProof(
       at: clock.now(),
     });
 
-    await bindTransactionExternalReference(
+    await ensureTransactionExternalReference(
       tx,
       clock,
       actorUserId,

@@ -208,6 +208,8 @@ export async function updateTransaction(
         at: now,
       });
     }
+    // Transaction metadata is not Proof identity. Do not bind or rebind
+    // proof_external_references from this update.
 
     return loadTransactionView(tx, transactionId);
   });

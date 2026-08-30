@@ -76,15 +76,20 @@ Future integration credentials must resolve to this same gate. They must not rea
 
 ## External references
 
-Integrations must not create a second Proof for the same external transaction.
+An external Proof binding is an infrastructure identity association, not editable transaction metadata.
 
-`proof_external_references` enforces:
+`tenant_key + external_transaction_id → proof_id`
 
-`UNIQUE(tenant_key, external_transaction_id) → proof_id`
+Once established for a tenant on a Proof, the mapping is immutable. There is no silent rebind. A later `PATCH` of `transaction.externalReference` updates participant-supplied metadata only. `createOrGetProof` may establish a missing `packproof:transaction` binding; it must not replace one.
 
-Tenant key plus external transaction identifier resolve to at most one Proof. The mapping is written server-side. Clients cannot be trusted to prevent duplicates.
+Server-side uniqueness:
 
-The reserved tenant `packproof:transaction` binds a transaction `externalReference` when a Proof is created. Other tenants (for example `marketplace:example`) are the future integration seam. This repository does not yet expose API-key or marketplace onboarding.
+- `UNIQUE(tenant_key, external_transaction_id)` — one external transaction cannot resolve to two Proofs
+- `UNIQUE(proof_id, tenant_key)` — one tenant cannot hold two identities on the same Proof
+
+Clients cannot be trusted to prevent duplicates. An explicit, auditable rebind is out of scope; until one exists, reject `EXTERNAL_REFERENCE_ALREADY_BOUND`.
+
+`transactions.external_reference` remains `EXTERNAL` metadata. The reserved tenant `packproof:transaction` is the identity slot established from that field when a Proof is first bound. Other tenants (for example `marketplace:example`) are the future integration seam. This repository does not yet expose API-key or marketplace onboarding.
 
 ## Surfaces
 
