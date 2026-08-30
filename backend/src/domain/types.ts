@@ -92,6 +92,43 @@ export interface ManifestRow {
   created_at: Date | string;
 }
 
+export type AttestationStatement = "PACKED_DESCRIBED_ITEM" | "RECEIVED_PACKAGE";
+
+export type ExternalReferenceSource = "PARTICIPANT_SUPPLIED" | "INTEGRATION";
+
+export interface AttestationRow {
+  id: string;
+  proof_id: string;
+  participant_id: string;
+  attested_by: string;
+  statement: AttestationStatement | string;
+  related_evidence_id: string | null;
+  related_event_id: string | null;
+  sha256: string;
+  created_at: Date | string;
+}
+
+export interface ProofExternalReferenceRow {
+  id: string;
+  proof_id: string;
+  tenant_key: string;
+  external_transaction_id: string;
+  source: ExternalReferenceSource | string;
+  supplied_by: string | null;
+  provenance: unknown;
+  created_at: Date | string;
+}
+
+export interface AuditEventRow {
+  id: string;
+  proof_id: string;
+  actor_user_id: string | null;
+  event_type: string;
+  event_version: number;
+  event_data: unknown;
+  created_at: Date | string;
+}
+
 export function asIso(value: Date | string | null | undefined): string | null {
   if (value == null) {
     return null;

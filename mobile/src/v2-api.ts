@@ -57,6 +57,7 @@ export interface ShippingWriteInput {
 }
 
 export interface ProofView {
+  schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
   transactionId: string;
   status: ProofStatus | string;
@@ -65,22 +66,88 @@ export interface ProofView {
   updatedAt: string;
   finalizedAt: string | null;
   manifestId: string | null;
+  identity?: {
+    proofId: string;
+    transactionId: string;
+    status: string;
+    version: number;
+    createdAt: string;
+    finalizedAt: string | null;
+  };
   transaction: TransactionView;
   participants: Array<{
     participantId: string;
     userId: string;
     role: string;
     status: "JOINED" | string;
+    invitationState?: string;
+    authorization?: string;
     joinedAt: string;
+  }>;
+  invitations?: Array<{
+    invitationId: string;
+    inviteeIdentifier: string;
+    inviteeUserId: string | null;
+    status: string;
+    createdAt: string;
+    acceptedAt: string | null;
+    expiresAt: string | null;
   }>;
   evidence: Array<{
     evidenceId: string;
     evidenceType: string;
     validationStatus: string;
+    submittedBy?: string;
+    createdAt?: string;
+    receivedAt?: string;
     sha256: string | null;
     byteSize: number | null;
     committedAt: string | null;
+    objectKey?: string;
+    contentType?: string;
+    digest?: { algorithm: string; sha256: string } | null;
   }>;
+  attestations?: Array<{
+    kind: "ATTESTATION" | string;
+    attestationId: string;
+    attestedBy: string;
+    statement: string;
+    relatedEvidenceId: string | null;
+    createdAt: string;
+    digest: { algorithm: string; sha256: string };
+  }>;
+  events?: Array<{
+    eventId: string;
+    eventType: string;
+    actorUserId: string | null;
+    at: string;
+    data: Record<string, unknown>;
+  }>;
+  facts?: Array<{
+    kind: "FACT" | string;
+    name: string;
+    at: string;
+    data: Record<string, unknown>;
+  }>;
+  external?: {
+    records: Array<{
+      kind: "EXTERNAL" | string;
+      field: string;
+      value: unknown;
+      source: string;
+      verifiedByPackProof: boolean;
+    }>;
+    references: Array<{
+      tenantKey: string;
+      externalTransactionId: string;
+      source: string;
+    }>;
+  };
+  integrity?: {
+    algorithm: string;
+    evidence: Array<{ evidenceId: string; sha256: string }>;
+    manifestSha256: string | null;
+  };
 }
 
 export interface InvitationView {
@@ -129,6 +196,7 @@ export interface InvitationInboxView {
 }
 
 export interface ProofCollectionItem {
+  schema?: "packproof.proof.summary/v1" | string;
   proofId: string;
   transactionId: string;
   role: "SELLER" | "BUYER" | string;

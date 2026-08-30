@@ -20,6 +20,7 @@ import {
   createInvitation,
   listPendingInvitations,
 } from "./domain/invitations.js";
+import { commitAttestation } from "./domain/attestations.js";
 import { listMyProofs } from "./domain/proof-collection.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
 import { getProofForUser } from "./domain/proofs.js";
@@ -310,6 +311,24 @@ export function createApp(deps: AppDependencies): Express {
         req.body?.sha256,
       );
       res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/attestations",
+    asyncRoute(async (req, res) => {
+      const result = await commitAttestation(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        {
+          statement: req.body?.statement == null ? undefined : String(req.body.statement),
+          relatedEvidenceId:
+            req.body?.relatedEvidenceId == null ? undefined : String(req.body.relatedEvidenceId),
+        },
+      );
+      res.status(201).json(result);
     }),
   );
 

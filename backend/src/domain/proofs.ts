@@ -1,40 +1,9 @@
 import type { Database } from "../db/database.js";
+import { getCanonicalProof, type CanonicalProof } from "./canonical-proof.js";
 import { DomainError } from "./errors.js";
-import { loadTransactionView, type TransactionView } from "./transactions.js";
-import {
-  asIso,
-  asRequiredIso,
-  type EvidenceRow,
-  type ParticipantRow,
-  type ProofRow,
-} from "./types.js";
+import type { ParticipantRow, ProofRow } from "./types.js";
 
-export interface ProofView {
-  proofId: string;
-  transactionId: string;
-  status: string;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  finalizedAt: string | null;
-  manifestId: string | null;
-  transaction: TransactionView;
-  participants: Array<{
-    participantId: string;
-    userId: string;
-    role: string;
-    status: "JOINED";
-    joinedAt: string;
-  }>;
-  evidence: Array<{
-    evidenceId: string;
-    evidenceType: string;
-    validationStatus: string;
-    sha256: string | null;
-    byteSize: number | null;
-    committedAt: string | null;
-  }>;
-}
+export type ProofView = CanonicalProof;
 
 export async function loadProof(
   db: Database,
@@ -53,6 +22,15 @@ export async function loadProof(
 }
 
 export async function requireParticipant(
+  db: Database,
+  proofId: string,
+  userId: string,
+  role?: "SELLER" | "BUYER",
+): Promise<ParticipantRow> {
+  return authorizeProofAccess(db, proofId, userId, role);
+}
+
+export async function authorizeProofAccess(
   db: Database,
   proofId: string,
   userId: string,
@@ -86,43 +64,7 @@ export function assertNotFinalized(proof: ProofRow): void {
 }
 
 export async function getProofView(db: Database, proofId: string): Promise<ProofView> {
-  const proof = await loadProof(db, proofId);
-  const transaction = await loadTransactionView(db, proof.transaction_id);
-  const participants = await db.query<ParticipantRow>(
-    `SELECT * FROM proof_participants WHERE proof_id = $1 ORDER BY role ASC, joined_at ASC`,
-    [proofId],
-  );
-  const evidence = await db.query<EvidenceRow>(
-    `SELECT * FROM evidence WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
-    [proofId],
-  );
-
-  return {
-    proofId: proof.id,
-    transactionId: proof.transaction_id,
-    status: proof.status,
-    version: Number(proof.version),
-    createdAt: asRequiredIso(proof.created_at),
-    updatedAt: asRequiredIso(proof.updated_at),
-    finalizedAt: asIso(proof.finalized_at),
-    manifestId: proof.manifest_id,
-    transaction,
-    participants: participants.rows.map((row) => ({
-      participantId: row.id,
-      userId: row.user_id,
-      role: row.role,
-      status: "JOINED" as const,
-      joinedAt: asRequiredIso(row.joined_at),
-    })),
-    evidence: evidence.rows.map((row) => ({
-      evidenceId: row.id,
-      evidenceType: row.evidence_type,
-      validationStatus: row.validation_status,
-      sha256: row.sha256,
-      byteSize: row.byte_size == null ? null : Number(row.byte_size),
-      committedAt: asIso(row.committed_at),
-    })),
-  };
+  return getCanonicalProof(db, proofId);
 }
 
 export async function getProofForUser(
@@ -130,6 +72,6 @@ export async function getProofForUser(
   actorUserId: string,
   proofId: string,
 ): Promise<ProofView> {
-  await requireParticipant(db, proofId, actorUserId);
+  await authorizeProofAccess(db, proofId, actorUserId);
   return getProofView(db, proofId);
 }

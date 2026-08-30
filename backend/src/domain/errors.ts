@@ -32,6 +32,8 @@ export function errorCodeFromSql(error: unknown): string | null {
     "EVIDENCE_ALREADY_COMMITTED",
     "AUDIT_IMMUTABLE",
     "MANIFEST_IMMUTABLE",
+    "ATTESTATION_IMMUTABLE",
+    "EXTERNAL_REFERENCE_IMMUTABLE",
   ];
   return codes.find((code) => message.includes(code)) ?? null;
 }

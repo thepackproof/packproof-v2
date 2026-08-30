@@ -1,9 +1,11 @@
 import type { Database } from "../db/database.js";
+import { PROOF_SUMMARY_SCHEMA } from "./trust.js";
 import { asIso, asRequiredIso, type ParticipantRole, type ProofStatus } from "./types.js";
 
 export const PROOF_COLLECTION_LIMIT = 100;
 
 export interface ProofCollectionItem {
+  schema: typeof PROOF_SUMMARY_SCHEMA;
   proofId: string;
   transactionId: string;
   role: ParticipantRole;
@@ -67,6 +69,7 @@ export async function listMyProofs(
   );
 
   return found.rows.map((row) => ({
+    schema: PROOF_SUMMARY_SCHEMA,
     proofId: row.proof_id,
     transactionId: row.transaction_id,
     role: row.role,

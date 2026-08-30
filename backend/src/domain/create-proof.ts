@@ -3,6 +3,7 @@ import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
 import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
+import { bindTransactionExternalReference } from "./external-references.js";
 import { getProofView, loadProof, type ProofView } from "./proofs.js";
 import type { ProofRow, TransactionRow } from "./types.js";
 
@@ -35,6 +36,13 @@ export async function createOrGetProof(
     );
     if (existing.rows[0]) {
       await requireExistingSeller(tx, existing.rows[0].id, actorUserId);
+      await bindTransactionExternalReference(
+        tx,
+        clock,
+        actorUserId,
+        existing.rows[0].id,
+        txn.external_reference,
+      );
       return getProofView(tx, existing.rows[0].id);
     }
 
@@ -57,6 +65,13 @@ export async function createOrGetProof(
           throw error;
         }
         await requireExistingSeller(tx, raced.rows[0].id, actorUserId);
+        await bindTransactionExternalReference(
+          tx,
+          clock,
+          actorUserId,
+          raced.rows[0].id,
+          txn.external_reference,
+        );
         return getProofView(tx, raced.rows[0].id);
       }
       throw error;
@@ -82,6 +97,13 @@ export async function createOrGetProof(
       at: clock.now(),
     });
 
+    await bindTransactionExternalReference(
+      tx,
+      clock,
+      actorUserId,
+      proofId,
+      txn.external_reference,
+    );
     return getProofView(tx, proofId);
   });
 }

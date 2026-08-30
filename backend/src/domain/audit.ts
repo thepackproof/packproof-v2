@@ -1,5 +1,15 @@
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
+import { asRequiredIso, type AuditEventRow } from "./types.js";
+
+export interface AuditEventView {
+  eventId: string;
+  eventType: string;
+  eventVersion: number;
+  actorUserId: string | null;
+  at: string;
+  data: Record<string, unknown>;
+}
 
 export async function appendAudit(
   db: Database,
@@ -29,9 +39,38 @@ export async function appendAudit(
 }
 
 export async function listAuditIds(db: Database, proofId: string): Promise<string[]> {
-  const result = await db.query<{ id: string }>(
-    `SELECT id FROM audit_events WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
+  const events = await listAuditEvents(db, proofId);
+  return events.map((event) => event.eventId);
+}
+
+export async function listAuditEvents(
+  db: Database,
+  proofId: string,
+): Promise<AuditEventView[]> {
+  const result = await db.query<AuditEventRow>(
+    `SELECT * FROM audit_events WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
     [proofId],
   );
-  return result.rows.map((row) => row.id);
+  return result.rows.map((row) => ({
+    eventId: row.id,
+    eventType: row.event_type,
+    eventVersion: Number(row.event_version),
+    actorUserId: row.actor_user_id,
+    at: asRequiredIso(row.created_at),
+    data: asEventData(row.event_data),
+  }));
+}
+
+export function asEventData(value: unknown): Record<string, unknown> {
+  if (value == null) {
+    return {};
+  }
+  if (typeof value === "string") {
+    const parsed = JSON.parse(value) as unknown;
+    return asEventData(parsed);
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
 }

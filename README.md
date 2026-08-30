@@ -33,3 +33,4 @@ Set `PACKPROOF_DEV_AUTH=true` to create local users via `POST /auth/dev/login`.
 
 - [Development plan](docs/DEVELOPMENT_PLAN.md)
 - [Architecture](docs/architecture.md)
+- [Canonical Proof contract](docs/CANONICAL_PROOF_ARCHITECTURE.md)

@@ -62,3 +62,9 @@ Do not use DynamoDB or Firebase as canonical Proof storage. Do not put Proof tra
 See `backend/README.md`. Tests use PostgreSQL-compatible PGlite. Runtime uses `DATABASE_URL` PostgreSQL when configured.
 
 Phase 10 mobile client: `mobile/`. It issues V2 domain commands and renders returned Proof state. It does not own Proof lifecycle.
+
+## Canonical Proof contract
+
+One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks, and portals consume the same Proof through the API authorization boundary.
+
+See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md).
