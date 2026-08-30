@@ -22,9 +22,9 @@ const app = createApp({
   devAuth: isDevLoginEnabled(config),
 });
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, "0.0.0.0", () => {
   console.log(
-    `PackProof V2 API listening on ${config.port} using ${opened.engine} objectStore=${config.objectStore}`,
+    `PackProof V2 API listening on ${config.port} engine=${opened.engine} objectStore=${config.objectStore} authMode=${config.authMode}`,
   );
 });
 

@@ -48,11 +48,24 @@ export function loadEnvFile(cwd = process.cwd()): void {
   }
 }
 
+export function composeDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const host = env.PACKPROOF_DB_HOST?.trim();
+  const user = env.PACKPROOF_DB_USER?.trim();
+  const password = env.PACKPROOF_DB_PASSWORD;
+  const name = env.PACKPROOF_DB_NAME?.trim();
+  const port = (env.PACKPROOF_DB_PORT ?? "5432").trim();
+  if (!host || !user || password == null || password === "" || !name) {
+    return undefined;
+  }
+  const sslmode = (env.PACKPROOF_DB_SSLMODE ?? "require").trim() || "require";
+  return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(name)}?sslmode=${encodeURIComponent(sslmode)}`;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: Number(env.PORT ?? 3000),
     publicBaseUrl: env.PACKPROOF_PUBLIC_URL ?? "http://127.0.0.1:3000",
-    databaseUrl: env.DATABASE_URL || undefined,
+    databaseUrl: env.DATABASE_URL || composeDatabaseUrl(env) || undefined,
     pgliteDir: path.resolve(env.PGLITE_DIR ?? path.join(process.cwd(), "data")),
     objectStore: parseObjectStoreMode(env),
     awsRegion: env.AWS_REGION,

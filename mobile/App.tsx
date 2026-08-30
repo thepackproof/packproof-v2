@@ -58,7 +58,8 @@ type Screen = "auth" | "home" | "proof" | "capture";
 type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset";
 type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
 
-const DEFAULT_API = "http://127.0.0.1:3000";
+const DEFAULT_API =
+  process.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL?.trim() || "http://127.0.0.1:3000";
 
 interface ContextForm {
   externalReference: string;

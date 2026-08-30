@@ -1,0 +1,24 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - ls -la
+      - test -f src/index.ts
+      - test -f migrations/001_init.sql
+      - ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+      - ECR=$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
+      - IMAGE_TAG=${IMAGE_TAG:-$(date -u +%Y%m%d%H%M%S)}
+  build:
+    commands:
+      - docker build -t $ECR:$IMAGE_TAG -t $ECR:latest .
+  post_build:
+    commands:
+      - docker push $ECR:$IMAGE_TAG
+      - docker push $ECR:latest
+      - printf '%s' "$IMAGE_TAG" > image-tag.txt
+
+artifacts:
+  files:
+    - image-tag.txt

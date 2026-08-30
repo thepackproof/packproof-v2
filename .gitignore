@@ -9,3 +9,5 @@ Thumbs.db
 backend/data/
 .expo/
 mobile/.expo/
+infra/cdk.out
+infra/.cache

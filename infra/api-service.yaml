@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: PackProof V2 staging API on ECS Express Mode / Fargate.
+
+Parameters:
+  ClusterName:
+    Type: String
+  ImageUri:
+    Type: String
+  PublicUrl:
+    Type: String
+    Default: ""
+  TaskRoleArn:
+    Type: String
+  TaskExecutionRoleArn:
+    Type: String
+  InfrastructureRoleArn:
+    Type: String
+  PublicSubnetA:
+    Type: String
+  PublicSubnetB:
+    Type: String
+  DatabaseEndpoint:
+    Type: String
+  DatabasePort:
+    Type: String
+  DatabaseSecretArn:
+    Type: String
+  LogGroupName:
+    Type: String
+  EvidenceBucket:
+    Type: String
+  CognitoUserPoolId:
+    Type: String
+  CognitoClientId:
+    Type: String
+
+Resources:
+  ExpressService:
+    Type: AWS::ECS::ExpressGatewayService
+    Properties:
+      ServiceName: packproof-v2-staging-api
+      Cluster: !Ref ClusterName
+      Cpu: "256"
+      Memory: "512"
+      HealthCheckPath: /health
+      ExecutionRoleArn: !Ref TaskExecutionRoleArn
+      TaskRoleArn: !Ref TaskRoleArn
+      InfrastructureRoleArn: !Ref InfrastructureRoleArn
+      NetworkConfiguration:
+        Subnets:
+          - !Ref PublicSubnetA
+          - !Ref PublicSubnetB
+      ScalingTarget:
+        MinTaskCount: 1
+        MaxTaskCount: 1
+      PrimaryContainer:
+        Image: !Ref ImageUri
+        ContainerPort: 3000
+        AwsLogsConfiguration:
+          LogGroup: !Ref LogGroupName
+          LogStreamPrefix: api
+        Environment:
+          - Name: NODE_ENV
+            Value: production
+          - Name: PORT
+            Value: "3000"
+          - Name: PACKPROOF_AUTH_MODE
+            Value: cognito
+          - Name: PACKPROOF_OBJECT_STORAGE
+            Value: s3
+          - Name: AWS_REGION
+            Value: us-east-1
+          - Name: PACKPROOF_S3_BUCKET
+            Value: !Ref EvidenceBucket
+          - Name: PACKPROOF_COGNITO_USER_POOL_ID
+            Value: !Ref CognitoUserPoolId
+          - Name: PACKPROOF_COGNITO_CLIENT_ID
+            Value: !Ref CognitoClientId
+          - Name: PACKPROOF_COGNITO_REGION
+            Value: us-east-1
+          - Name: PACKPROOF_DB_HOST
+            Value: !Ref DatabaseEndpoint
+          - Name: PACKPROOF_DB_PORT
+            Value: !Ref DatabasePort
+          - Name: PACKPROOF_DB_NAME
+            Value: packproof_v2
+          - Name: PACKPROOF_DB_SSLMODE
+            Value: require
+          - Name: PACKPROOF_PUBLIC_URL
+            Value: !Ref PublicUrl
+        Secrets:
+          - Name: PACKPROOF_DB_USER
+            ValueFrom: !Sub "${DatabaseSecretArn}:username::"
+          - Name: PACKPROOF_DB_PASSWORD
+            ValueFrom: !Sub "${DatabaseSecretArn}:password::"
+
+Outputs:
+  ServiceArn:
+    Value: !GetAtt ExpressService.ServiceArn
+  StagingEndpoint:
+    Value: !GetAtt ExpressService.Endpoint
+  LoadBalancerArn:
+    Value: !GetAtt ExpressService.ECSManagedResourceArns.IngressPath.LoadBalancerArn
