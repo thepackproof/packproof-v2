@@ -75,18 +75,22 @@ Object keys are generated server-side as `evidence/<proofId>/<evidenceId>/object
 
 `PACKPROOF_CREDENTIAL_STORE` selects the server-side store (`memory`, `env`, or `secrets-manager`). Domain code never reads env vars, Secrets Manager, or files directly. Connections store a credential *reference*, not tokens.
 
-When `PACKPROOF_CREDENTIAL_STORE=secrets-manager`, the ECS task role should allow:
+When `PACKPROOF_CREDENTIAL_STORE=secrets-manager`, the ECS **task role** (the application SDK role, not the task execution role) should allow:
 
 ```json
 {
   "Sid": "TrustedIntegrationSecrets",
   "Effect": "Allow",
   "Action": ["secretsmanager:GetSecretValue"],
-  "Resource": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/v2/integrations/*"
+  "Resource": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*"
 }
 ```
 
-Use the default AWS credential chain (task role). Do not put static AWS keys or provider tokens in source, `web/` env, or Expo public env. Do not deploy live carrier credentials in this slice.
+Staging EasyPost uses secret name `packproof/staging/integrations/easypost`. See [docs/EASYPOST_TRACKING_INTEGRATION.md](../docs/EASYPOST_TRACKING_INTEGRATION.md).
+
+Local development (`PACKPROOF_DEV_AUTH=true`) may bind a connection with `POST /dev/integrations/easypost/connect` and `{ "transactionId", "credentialReference" }` only. Clients must not send API keys. Staging Cognito does not register `/dev` routes; operators bind connections in SQL after creating the secret.
+
+Use the default AWS credential chain (task role). Do not put static AWS keys or provider tokens in source, `web/` env, or Expo public env. EasyPost is implemented as a test/staging tracking adapter, not a production carrier rollout.
 
 ### Optional live S3 test
 

@@ -7,6 +7,8 @@ import { createDemoCarrierAdapter } from "./demo-carrier.js";
 import type { ShipmentObservationAdapter } from "./shipment-adapter.js";
 import { createTrustedDemoCarrierAdapter } from "./trusted-demo-carrier.js";
 import type { TrustedShipmentAdapter } from "./trusted-shipment-adapter.js";
+import { createEasyPostShipmentAdapter } from "./easypost/adapter.js";
+import type { EasyPostTrackerClient } from "./easypost/client.js";
 
 export class IntegrationAdapterRegistry {
   constructor(
@@ -60,13 +62,20 @@ export class IntegrationAdapterRegistry {
   }
 }
 
-export function createDefaultIntegrationRegistry(clock: Clock): IntegrationAdapterRegistry {
+export function createDefaultIntegrationRegistry(
+  clock: Clock,
+  options: { easypostClient?: EasyPostTrackerClient } = {},
+): IntegrationAdapterRegistry {
   const demo = createDemoMarketplaceAdapter(clock);
   const carrier = createDemoCarrierAdapter(clock);
   const trusted = createTrustedDemoCarrierAdapter();
+  const easypost = createEasyPostShipmentAdapter(options.easypostClient);
   return new IntegrationAdapterRegistry(
     new Map([[demo.adapterKey, demo]]),
     new Map([[carrier.adapterKey, carrier]]),
-    new Map([[trusted.adapterKey, trusted]]),
+    new Map([
+      [trusted.adapterKey, trusted],
+      [easypost.adapterKey, easypost],
+    ]),
   );
 }

@@ -94,6 +94,8 @@ Resources:
             Value: !Ref PublicUrl
           - Name: PACKPROOF_WEB_ORIGINS
             Value: !Ref WebOrigins
+          - Name: PACKPROOF_CREDENTIAL_STORE
+            Value: secrets-manager
         Secrets:
           - Name: PACKPROOF_DB_USER
             ValueFrom: !Sub "${DatabaseSecretArn}:username::"

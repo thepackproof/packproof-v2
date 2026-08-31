@@ -13,6 +13,8 @@ export interface TrustedTrackingSnapshot {
   provider: string;
   carrier: string | null;
   observations: TrustedTrackingObservation[];
+  providerCursor?: string | null;
+  mode?: string | null;
 }
 
 export interface VerifiedWebhookResult {
@@ -30,6 +32,8 @@ export interface TrustedShipmentAdapter {
     trackingNumber: string;
     transactionId: string;
     externalTransactionId: string | null;
+    carrier?: string | null;
+    providerCursor?: string | null;
     credentials: IntegrationCredentials;
   }): Promise<TrustedTrackingSnapshot>;
   verifyWebhook(input: {

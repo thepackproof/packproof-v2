@@ -2,7 +2,15 @@
 
 PackProof records **shipment identity** and **shipment observations** as separate things.
 
-This repository does not connect to a live carrier. It adds an append-only observation log, a reference `demo-carrier` adapter, a fake trusted `trusted-demo-carrier` adapter, and a chronology read model. A future UPS/FedEx/USPS/Shippo/EasyPost adapter plugs into the trusted runtime. See [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md).
+This repository records append-only shipment observations associated with a Proof.
+
+Adapters currently registered:
+
+- `demo-carrier` — reference fixture. Not a carrier.
+- `trusted-demo-carrier` — fake trusted harness for tests.
+- `easypost-tracker` — trusted EasyPost Tracker adapter for **test/staging tracking**. Not a production EasyPost rollout. Does not buy labels.
+
+UPS/FedEx/USPS/DHL/Shippo remain unimplemented. See [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md) and [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md).
 
 ## Identity vs observations
 
@@ -206,19 +214,21 @@ Core finalization appears as “Core PackProof finalized” with the manifest ha
 | --- | --- | --- |
 | Reference import | Authenticated seller asking PackProof to run a **reference** adapter | `POST /integrations/shipment-events/import` with `mode: "reference"` |
 | Participant observation | Joined participant | `POST /transactions/:id/shipment-events` — provenance is always `PARTICIPANT_SUPPLIED` |
-| Future live carrier | Server-side trusted adapter + credential store | `POST /transactions/:id/shipment-sync` and `POST /integrations/webhooks/:adapterKey`. See [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md) |
+| Trusted server adapter | Server-side trusted adapter + credential store | `POST /transactions/:id/shipment-sync` and `POST /integrations/webhooks/:adapterKey`. EasyPost Trackers use `easypost-tracker`. See [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md) and [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md) |
 
 The reference import route accepts only `adapterKey`, `mode`, `transactionId` and/or `externalTransactionId`, and optional `throughEventType`. It rejects carrier facts and raw provider payloads. Ordinary clients cannot pretend to be UPS by posting tracking events.
 
 `demo-carrier` is `kind: "reference"`. A live adapter must be `kind: "trusted"`, hold API secrets only on the server, and use the trusted runtime. Do not put carrier tokens in Expo config, browser JavaScript, shipment events, manifests, audit events, or client storage.
 
-## How a future UPS / FedEx / USPS / Shippo / EasyPost adapter plugs in
+## How a future UPS / FedEx / USPS / Shippo adapter plugs in
+
+EasyPost is already an adapter (`easypost-tracker`). Do not add EasyPost-specific columns to `shipment_events`.
 
 Implement `TrustedShipmentAdapter` (`kind: "trusted"`). Keep HTTP, OAuth, polling, and provider pagination **inside the adapter**. Map provider statuses onto the normalized types (or `CARRIER_EVENT`). Pass `sourceEventId` when the provider has a stable activity id. Register the adapter on `IntegrationAdapterRegistry` as a trusted shipment adapter. Store secrets in the credential store and a credential *reference* on `integration_connections`.
 
 Then call `executeTrustedShipmentSync()` or ingest a verified webhook. Do not teach `importShipmentObservations()` UPS XML, FedEx JSON, or EasyPost tracker shapes. Do not expose a participant route that accepts arbitrary trusted events.
 
-Reference `ShipmentObservationAdapter` remains for development adapters such as `demo-carrier`. This slice also registers `trusted-demo-carrier`, a fake trusted adapter for tests. Neither is a live carrier.
+Reference `ShipmentObservationAdapter` remains for development adapters such as `demo-carrier`. `trusted-demo-carrier` remains the fake trusted harness. Neither is a live carrier.
 
 ## API
 

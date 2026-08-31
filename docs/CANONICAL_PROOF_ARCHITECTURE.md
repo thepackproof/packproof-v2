@@ -52,7 +52,7 @@ The contract includes:
 - **Attestations** — who attested, the bounded statement, related evidence, digest
 - **Events** — append-only audit of committed actions (`PROOF_CREATED`, `PARTICIPANT_INVITED`, `PARTICIPANT_JOINED`, `EVIDENCE_COMMITTED`, `ATTESTATION_COMMITTED`, `PROOF_FINALIZED`, and related existing types)
 - **Shipment observations** — append-only carrier/participant observations associated with the Proof; they may arrive after `FINALIZED` and are not part of the core manifest
-- **Shipment sync availability** — whether an ACTIVE trusted integration connection is bound (`connectionId`, `adapterKey`, `provider`, `status`). Never includes credential references or secrets
+- **Shipment sync availability** — whether an ACTIVE trusted integration connection is bound (`connectionId`, `adapterKey`, `provider`, `status`). Never includes credential references or secrets. EasyPost Tracker observations, when present, are shipment events (`provider = easypost`); they are not core Proof facts.
 - **Chronology** — presentation read model over audit + shipment observations (`PROOF` / `COMMERCE` / `SHIPMENT`). Not lifecycle state and not evidence tiers
 - **Integrity** — recorded evidence digests and finalized manifest digest
 - **Shipment integrity supplement** — a separate recomputed read (`GET /proofs/:id/shipment-integrity`, schema `packproof.shipment.integrity/v1`). It associates current shipment-event hashes with the frozen core manifest. It is not a second Proof, not a new lifecycle status, and not part of the core manifest.

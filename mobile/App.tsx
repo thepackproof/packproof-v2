@@ -1282,10 +1282,15 @@ export default function App() {
             ) : null}
             {proof.shipmentSync?.available ? (
               <View>
-                <Text style={styles.heading}>Trusted shipment sync</Text>
+                <Text style={styles.heading}>
+                  {proof.shipmentSync.provider === "easypost"
+                    ? "Tracking via EasyPost"
+                    : "Trusted shipment sync"}
+                </Text>
                 <Text>
-                  PackProof refreshes observations through the server-side trusted adapter. This app
-                  does not send provider credentials.
+                  {proof.shipmentSync.provider === "easypost"
+                    ? "PackProof asks EasyPost for carrier tracking observations. EasyPost is not the carrier. This app does not send API keys. Test/staging tracking only."
+                    : "PackProof refreshes observations through the server-side trusted adapter. This app does not send provider credentials."}
                 </Text>
                 <Action
                   label="Sync shipment"
@@ -1924,7 +1929,9 @@ function ChronologyList(props: { proof: ProofView }) {
             : entry.category === "SHIPMENT"
               ? entry.source === "PARTICIPANT_SUPPLIED"
                 ? "Participant observation"
-                : "Carrier observation"
+                : entry.provider === "easypost"
+                  ? "Carrier observation via EasyPost"
+                  : "Carrier observation"
               : "PackProof event";
         return (
           <View

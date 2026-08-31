@@ -139,12 +139,19 @@ export function externalFieldLabel(field: string): string {
 export function chronologyCategoryLabel(
   category: string,
   source?: string,
+  provider?: string | null,
 ): string {
   if (category === "COMMERCE") {
     return "Commerce event";
   }
   if (category === "SHIPMENT") {
-    return source === "PARTICIPANT_SUPPLIED" ? "Participant observation" : "Carrier observation";
+    if (source === "PARTICIPANT_SUPPLIED") {
+      return "Participant observation";
+    }
+    if (provider === "easypost") {
+      return "Carrier observation via EasyPost";
+    }
+    return "Carrier observation";
   }
   return "PackProof event";
 }

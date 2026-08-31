@@ -240,6 +240,17 @@ export async function updateConnectionStatus(
   );
 }
 
+export async function loadShipmentSyncCursor(
+  db: Database,
+  transactionId: string,
+): Promise<string | null> {
+  const found = await db.query<{ provider_cursor: string | null }>(
+    `SELECT provider_cursor FROM shipment_sync_states WHERE transaction_id = $1`,
+    [transactionId],
+  );
+  return found.rows[0]?.provider_cursor ?? null;
+}
+
 export async function recordShipmentSyncState(
   db: Database,
   clock: Clock,
@@ -249,6 +260,7 @@ export async function recordShipmentSyncState(
     succeeded: boolean;
     errorCode?: string | null;
     retryable?: boolean | null;
+    providerCursor?: string | null;
   },
 ): Promise<void> {
   const now = clock.now().toISOString();
@@ -256,13 +268,14 @@ export async function recordShipmentSyncState(
     `INSERT INTO shipment_sync_states (
        transaction_id, connection_id, last_attempted_at, last_succeeded_at,
        last_error_code, last_error_retryable, provider_cursor, updated_at
-     ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $3)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $3)
      ON CONFLICT (transaction_id) DO UPDATE SET
        connection_id = EXCLUDED.connection_id,
        last_attempted_at = EXCLUDED.last_attempted_at,
        last_succeeded_at = COALESCE(EXCLUDED.last_succeeded_at, shipment_sync_states.last_succeeded_at),
        last_error_code = EXCLUDED.last_error_code,
        last_error_retryable = EXCLUDED.last_error_retryable,
+       provider_cursor = COALESCE(EXCLUDED.provider_cursor, shipment_sync_states.provider_cursor),
        updated_at = EXCLUDED.updated_at`,
     [
       input.transactionId,
@@ -271,6 +284,7 @@ export async function recordShipmentSyncState(
       input.succeeded ? now : null,
       input.succeeded ? null : (input.errorCode ?? null),
       input.succeeded ? null : (input.retryable ?? null),
+      input.providerCursor ?? null,
     ],
   );
 }

@@ -61,6 +61,11 @@ import {
   TRUSTED_DEMO_CARRIER_PROVIDER,
   TRUSTED_DEMO_WEBHOOK_SECRET,
 } from "./integrations/trusted-demo-carrier.js";
+import {
+  EASYPOST_TRACKER_ADAPTER_KEY,
+  easypostCredentialReferenceAllowed,
+} from "./integrations/easypost/adapter.js";
+import { EASYPOST_PROVIDER } from "./integrations/easypost/normalize.js";
 
 export interface AppDependencies {
   db: Database;
@@ -338,6 +343,46 @@ export function createApp(deps: AppDependencies): Express {
         const connection = await createIntegrationConnection(deps.db, deps.clock, actor, {
           adapterKey: TRUSTED_DEMO_CARRIER_ADAPTER_KEY,
           provider: TRUSTED_DEMO_CARRIER_PROVIDER,
+          credentialReference,
+        });
+        const shipmentSync = await bindTransactionShipmentConnection(
+          deps.db,
+          deps.clock,
+          actor,
+          transactionId,
+          connection.connectionId,
+        );
+        res.status(201).json({ connection, shipmentSync });
+      }),
+    );
+    app.post(
+      "/dev/integrations/easypost/connect",
+      asyncRoute(async (req, res) => {
+        const actor = bearerUser(req);
+        const body =
+          req.body != null && typeof req.body === "object" && !Array.isArray(req.body)
+            ? (req.body as Record<string, unknown>)
+            : {};
+        if (body.apiKey != null || body.webhookSecret != null || body.credentials != null) {
+          throw integrationTrustBoundary(
+            "EasyPost credentials cannot be supplied by the client",
+          );
+        }
+        const transactionId = String(body.transactionId ?? "").trim();
+        const credentialReference = String(body.credentialReference ?? "").trim();
+        if (!transactionId) {
+          throw new DomainError("INVALID_SHIPMENT_EVENT", "transactionId is required", 400);
+        }
+        if (!credentialReference || !easypostCredentialReferenceAllowed(credentialReference)) {
+          throw new DomainError(
+            "INVALID_SHIPMENT_EVENT",
+            "credentialReference must be an env, memory, or Secrets Manager reference",
+            400,
+          );
+        }
+        const connection = await createIntegrationConnection(deps.db, deps.clock, actor, {
+          adapterKey: EASYPOST_TRACKER_ADAPTER_KEY,
+          provider: EASYPOST_PROVIDER,
           credentialReference,
         });
         const shipmentSync = await bindTransactionShipmentConnection(

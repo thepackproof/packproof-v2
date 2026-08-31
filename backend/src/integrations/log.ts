@@ -5,6 +5,9 @@ export function logIntegrationEvent(entry: {
   proofId?: string;
   outcome: string;
   observationCount?: number;
+  createdCount?: number;
+  carrier?: string;
+  mode?: string;
   durationMs?: number;
 }): void {
   console.log(
@@ -16,6 +19,9 @@ export function logIntegrationEvent(entry: {
       proofId: entry.proofId,
       outcome: entry.outcome,
       observationCount: entry.observationCount,
+      createdCount: entry.createdCount,
+      carrier: entry.carrier,
+      mode: entry.mode,
       durationMs: entry.durationMs,
     }),
   );

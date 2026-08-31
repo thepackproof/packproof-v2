@@ -12,6 +12,7 @@ export interface ChronologyEntry {
   title: string;
   description: string | null;
   source: string;
+  provider?: string | null;
   relatedEntityId: string | null;
   eventType: string;
 }
@@ -21,6 +22,8 @@ const SKIP_AUDIT_TYPES = new Set([
   "SHIPMENT_EVENT_RECORDED",
   "EXTERNAL_REFERENCE_BOUND",
   "TRANSACTION_DETAILS_UPDATED",
+  "SHIPMENT_SYNC_COMPLETED",
+  "TRUSTED_SHIPMENT_EVENTS_IMPORTED",
 ]);
 
 export function buildChronology(input: {
@@ -110,6 +113,7 @@ function mapShipmentEvent(event: ShipmentEventView): ChronologyEntry {
     title: shipmentTitle(event),
     description: shipmentDescription(event),
     source: event.source,
+    provider: event.provider,
     relatedEntityId: event.id,
     eventType: event.eventType,
   };
@@ -123,8 +127,18 @@ function shipmentTitle(event: ShipmentEventView): string {
     case "CARRIER_ACCEPTED":
       return carrier ? `Package accepted by ${carrier}` : "Package accepted";
     case "WEIGHT_RECORDED": {
-      const weight = event.eventData.weightLb;
-      const unit = typeof event.eventData.unit === "string" ? event.eventData.unit : "lb";
+      const weight =
+        typeof event.eventData.weightLb === "number"
+          ? event.eventData.weightLb
+          : typeof event.eventData.value === "number"
+            ? event.eventData.value
+            : null;
+      const unit =
+        typeof event.eventData.unit === "string"
+          ? event.eventData.unit
+          : event.eventData.weightLb != null
+            ? "lb"
+            : "oz";
       if (typeof weight === "number") {
         return `Recorded weight: ${weight} ${unit}`;
       }
@@ -158,7 +172,15 @@ function shipmentTitle(event: ShipmentEventView): string {
 }
 
 function shipmentDescription(event: ShipmentEventView): string | null {
-  return event.location;
+  const location = event.location;
+  const via =
+    event.provider === "easypost" && event.source === "SHIPPING_PROVIDER_API"
+      ? "Carrier observation via EasyPost"
+      : null;
+  if (location && via) {
+    return `${location}. ${via}`;
+  }
+  return location ?? via;
 }
 
 function shippingLabel(

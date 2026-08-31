@@ -99,6 +99,7 @@ export interface ChronologyEntry {
   title: string;
   description: string | null;
   source: string;
+  provider?: string | null;
   relatedEntityId: string | null;
   eventType: string;
 }

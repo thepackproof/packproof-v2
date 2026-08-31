@@ -20,6 +20,7 @@ import {
 } from "./integration-errors.js";
 import {
   loadBoundConnection,
+  loadShipmentSyncCursor,
   recordShipmentSyncState,
   type IntegrationConnectionRow,
 } from "./integration-connections.js";
@@ -80,6 +81,7 @@ export async function executeTrustedShipmentSync(
   if (!trackingNumber) {
     throw trackingNotFound();
   }
+  const providerCursor = await loadShipmentSyncCursor(db, transactionId);
 
   let snapshot: TrustedTrackingSnapshot;
   try {
@@ -87,6 +89,8 @@ export async function executeTrustedShipmentSync(
       trackingNumber,
       transactionId,
       externalTransactionId: bundle.txn.external_reference,
+      carrier: bundle.shipping?.carrier ?? null,
+      providerCursor,
       credentials,
     });
   } catch (error) {
@@ -97,6 +101,7 @@ export async function executeTrustedShipmentSync(
       transactionId,
       proofId: bundle.proofId ?? undefined,
       outcome: errorCode(error),
+      carrier: bundle.shipping?.carrier ?? undefined,
       durationMs: Date.now() - started,
     });
     throw error;
@@ -114,6 +119,7 @@ export async function executeTrustedShipmentSync(
     transactionId,
     connectionId: connection.id,
     succeeded: true,
+    providerCursor: snapshot.providerCursor ?? null,
   });
   if (imported.createdCount > 0 && imported.proofId) {
     await appendAudit(db, {
@@ -137,6 +143,9 @@ export async function executeTrustedShipmentSync(
     proofId: imported.proofId,
     outcome: "SYNC_COMPLETED",
     observationCount: imported.createdCount,
+    createdCount: imported.createdCount,
+    carrier: snapshot.carrier ?? undefined,
+    mode: snapshot.mode ?? undefined,
     durationMs: Date.now() - started,
   });
   return toSyncResult(connection, adapter, imported, false);

@@ -266,7 +266,7 @@ export function EventTimeline(props: { proof: CanonicalProof }) {
                 <div className="row">
                   <strong>{entry.title}</strong>
                   <span className={`badge badge-chronology badge-chronology-${entry.category.toLowerCase()}`}>
-                    {chronologyCategoryLabel(entry.category, entry.source)}
+                    {chronologyCategoryLabel(entry.category, entry.source, entry.provider)}
                   </span>
                 </div>
                 {entry.description ? <span>{entry.description}</span> : null}

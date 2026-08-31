@@ -19,7 +19,7 @@ Clients (mobile, web reference client, API tests)
           ▼
    Modular monolith (this repo, backend/)
  ├── Transactions
- ├── Integrations (reference adapters + trusted carrier runtime)
+ ├── Integrations (reference adapters + trusted runtime, including EasyPost Trackers in test/staging)
  ├── Proofs
  ├── Participants
  ├── Invitations
@@ -57,7 +57,7 @@ No UI/capture/upload states.
 - S3 + CloudFront for the staging web reference client (separate origin; CORS via `PACKPROOF_WEB_ORIGINS`)
 - KMS only if signing is introduced later
 - SQS only for genuine async jobs (none in this slice)
-- CloudWatch logs
+- Secrets Manager for trusted integration credentials. The ECS **task role** (application AWS SDK) may call `secretsmanager:GetSecretValue` on `packproof/staging/integrations/*`. The task execution role is only for image pull, logs, and injected RDS credentials.
 
 Do not use DynamoDB or Firebase as canonical Proof storage. Do not put Proof transitions on Lambda.
 
@@ -75,4 +75,4 @@ One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks,
 
 See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md).
 
-Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). The trusted carrier runtime is described in [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md). Live marketplace and carrier connectors are not implemented.
+Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). The trusted carrier runtime is described in [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md). EasyPost Tracker test/staging tracking is described in [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md). Live marketplace connectors and direct UPS/FedEx/USPS/Shippo APIs are not implemented. EasyPost is not a production-supported carrier rollout.

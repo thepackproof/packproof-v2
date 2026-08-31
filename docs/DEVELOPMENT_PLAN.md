@@ -27,7 +27,7 @@ Supported: two users, two devices, one transaction, one Proof, seller, buyer, in
 
 Out of scope: Salesforce, Zendesk, live carriers, live marketplaces, returns, receiver capture, witness, analytics, billing, orgs, GraphQL, Kafka, Kubernetes, Firebase/Firestore domain storage, microservices, extra tiers, AI analysis.
 
-A provider-neutral transaction ingestion seam with a reference adapter is in scope. Append-only shipment observations associated with a Proof are in scope. A recomputed shipment integrity supplement that links those observations to the frozen core manifest is in scope. A trusted carrier integration runtime (credential store, connections, sync, webhook verification, fake trusted adapter) is in scope. Real eBay/Shopify/Shippo/EasyPost/UPS/FedEx connectors are not.
+A provider-neutral transaction ingestion seam with a reference adapter is in scope. Append-only shipment observations associated with a Proof are in scope. A recomputed shipment integrity supplement that links those observations to the frozen core manifest is in scope. A trusted carrier integration runtime (credential store, connections, sync, webhook verification, fake trusted adapter) is in scope. An EasyPost Tracker adapter (`easypost-tracker`) is in scope for **test/staging tracking observations only**; it is not a production EasyPost rollout and does not buy labels. Real eBay/Shopify/Shippo/UPS/FedEx/USPS connectors are not.
 
 ## Required flow
 

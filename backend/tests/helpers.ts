@@ -12,6 +12,7 @@ import { LocalObjectStore } from "../src/s3/local-object-store.js";
 import type { ObjectStore } from "../src/s3/object-store.js";
 import { insertUser } from "../src/domain/users.js";
 import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
+import type { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
 
 export interface TestHarness {
   db: Database;
@@ -24,7 +25,11 @@ export interface TestHarness {
 
 export async function createHarness(
   clock: Clock = systemClock,
-  options: { publicBaseUrl?: string; objectStore?: ObjectStore } = {},
+  options: {
+    publicBaseUrl?: string;
+    objectStore?: ObjectStore;
+    integrations?: IntegrationAdapterRegistry;
+  } = {},
 ): Promise<TestHarness> {
   const resolvedClock = clock ?? systemClock;
   const publicBaseUrl = options.publicBaseUrl ?? "http://127.0.0.1";
@@ -47,6 +52,7 @@ export async function createHarness(
     publicBaseUrl,
     devAuth: true,
     credentialStore,
+    integrations: options.integrations,
   });
 
   return {

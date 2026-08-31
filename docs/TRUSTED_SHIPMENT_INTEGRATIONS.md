@@ -1,13 +1,13 @@
 # Trusted shipment integrations
 
-This repository does not connect to UPS, FedEx, USPS, DHL, Shippo, EasyPost, or any other live provider. It adds the **trusted carrier runtime** that a future live adapter will use.
+This repository does not connect to UPS, FedEx, USPS, DHL, or Shippo. It does register a trusted EasyPost **Tracker** adapter (`easypost-tracker`) for **test/staging tracking observations**. That adapter is not a production EasyPost rollout and does not buy labels. See [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md).
 
 ```text
 PARTICIPANT / CLIENT
         │
         │ cannot claim trusted carrier provenance
         ▼
-PackProof participant API
+    PackProof participant API
 TRUSTED SERVER INTEGRATION
         │
         │ server-owned credentials + adapter
@@ -34,7 +34,13 @@ Append-only shipment_events
 
 Clients cannot choose `source`, `provider`, adapter output, or credentials on the trusted path. Request JSON does not decide trusted provenance.
 
-`demo-carrier` remains a development/reference adapter. It is not a production carrier. `trusted-demo-carrier` is a fake **trusted** adapter used by tests and local development. It is also not a live carrier.
+Adapter kinds currently registered:
+
+| Adapter | Kind | Role |
+| --- | --- | --- |
+| `demo-carrier` | `reference` | Development fixture. Not a carrier. |
+| `trusted-demo-carrier` | `trusted` | Fake trusted harness for tests. Not a live provider. |
+| `easypost-tracker` | `trusted` | Real EasyPost Tracker adapter. Test/staging capable. `provider = easypost`. Underlying `carrier` (UPS, etc.) is preserved when EasyPost reports it. |
 
 ## Trust boundary
 
@@ -64,7 +70,7 @@ Implementations:
 
 - `MemoryCredentialStore` — tests and in-process seeds
 - `EnvCredentialStore` — `credential_reference` `env:VAR_NAME` reads that process env var (JSON object or a bare API key)
-- `SecretsManagerCredentialStore` — `credential_reference` is a secret ARN or `packproof/...` name. ECS task role must allow `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/v2/integrations/*`. No static AWS keys in source.
+- `SecretsManagerCredentialStore` — `credential_reference` is a secret ARN, `sm:name`, or `packproof/...` name. The ECS **task role** (not the execution role) must allow `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*`. Staging EasyPost uses `packproof/staging/integrations/easypost`. No static AWS keys in source.
 
 `PACKPROOF_CREDENTIAL_STORE=memory|env|secrets-manager` (default `env`). The composite store still consults memory first so development seeding works.
 
@@ -95,6 +101,8 @@ interface TrustedShipmentAdapter {
     trackingNumber: string;
     transactionId: string;
     externalTransactionId: string | null;
+    carrier?: string | null;
+    providerCursor?: string | null;
     credentials: IntegrationCredentials;
   }): Promise<TrustedTrackingSnapshot>;
   verifyWebhook(input: {
@@ -129,7 +137,10 @@ Scheduling (cron, EventBridge, SQS, Lambda) is out of scope. The same function i
 
 `POST /integrations/webhooks/:adapterKey` is unauthenticated. It uses the raw body.
 
-The fake `trusted-demo-carrier` signature is **test-only**: HMAC-SHA256 of `timestamp + "." + rawBody` with `webhookSecret`, headers `x-packproof-webhook-timestamp` (unix seconds) and `x-packproof-webhook-signature`. Timestamps older than 5 minutes are `WEBHOOK_REPLAY_REJECTED`. That scheme is not production security.
+Webhook verification is adapter-specific:
+
+- `trusted-demo-carrier` (test-only): HMAC-SHA256 of `timestamp + "." + rawBody` with `webhookSecret`, headers `x-packproof-webhook-timestamp` (unix seconds) and `x-packproof-webhook-signature`. Timestamps older than 5 minutes are `WEBHOOK_REPLAY_REJECTED`. That scheme is not production security.
+- `easypost-tracker`: EasyPost `X-Hmac-Signature` (`hmac-sha256-hex=…`) over the raw body using the current official HMAC scheme. Unsigned events are rejected when a webhook secret is configured. See [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md).
 
 After verification, PackProof looks up the transaction by tracking number + adapter binding. Duplicate `provider_event_id` receipts are idempotent (`replayed: true`). Shipment-event unique constraints remain the second line of defense.
 
@@ -154,9 +165,11 @@ No automated retry scheduler. `error.retryable` is for a future worker.
 
 ## How a future live provider plugs in
 
+EasyPost Trackers are implemented as `easypost-tracker`. UPS/FedEx/USPS/DHL/Shippo are still future work.
+
 1. Implement `TrustedShipmentAdapter` with `kind: "trusted"`.
 2. Keep HTTP, OAuth, and pagination inside the adapter.
-3. Store secrets in Secrets Manager; put the ARN in `credential_reference`.
+3. Store secrets in Secrets Manager; put the name/ARN in `credential_reference`.
 4. Register the adapter on `IntegrationAdapterRegistry`.
 5. Create an `ACTIVE` connection and bind it to the transaction.
 6. Call `executeTrustedShipmentSync` or receive verified webhooks.
@@ -165,6 +178,8 @@ Do not teach `shipment_events` UPS XML or EasyPost tracker JSON.
 
 ## Clients
 
-Web and mobile may show **Sync shipment** when `proof.shipmentSync.available` is true. Development-only **Connect trusted demo** calls `POST /dev/integrations/trusted-demo/connect` when the API has `PACKPROOF_DEV_AUTH=true`. That route is not registered in Cognito production mode.
+Web and mobile may show **Sync shipment** when `proof.shipmentSync.available` is true. When `provider` is `easypost`, the label is **Tracking via EasyPost** (test/staging wording). Timeline titles keep the underlying carrier; source metadata says **Carrier observation via EasyPost**.
 
-Clients never send trusted provenance, provider payloads, or secrets.
+Development-only **Connect trusted demo** calls `POST /dev/integrations/trusted-demo/connect` when the API has `PACKPROOF_DEV_AUTH=true`. Local EasyPost binding is `POST /dev/integrations/easypost/connect` with a credential *reference* only. Those routes are not registered in Cognito staging/production mode.
+
+Clients never send trusted provenance, provider payloads, or secrets. Clients never call EasyPost.

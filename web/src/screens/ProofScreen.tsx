@@ -226,10 +226,15 @@ export function ProofScreen(props: {
       ) : null}
       {canSyncShipment ? (
         <section className="section stack">
-          <h2>Trusted shipment sync</h2>
+          <h2>
+            {proof.shipmentSync?.provider === "easypost"
+              ? "Tracking via EasyPost"
+              : "Trusted shipment sync"}
+          </h2>
           <p className="note">
-            Asks PackProof to refresh observations through the server-side trusted adapter. This
-            client does not send provider credentials or provenance fields.
+            {proof.shipmentSync?.provider === "easypost"
+              ? "PackProof asks EasyPost for carrier tracking observations. EasyPost is not the carrier. This client does not send API keys. Test/staging tracking only — not a production EasyPost rollout."
+              : "Asks PackProof to refresh observations through the server-side trusted adapter. This client does not send provider credentials or provenance fields."}
           </p>
           <button
             className="btn"

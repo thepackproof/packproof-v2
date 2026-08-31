@@ -63,6 +63,30 @@ export async function ingestTrustedShipmentWebhook(
       const result = await adapter.verifyWebhook({ headers, rawBody, credentials });
       const trackingNumber = result.trackingNumber?.trim() ?? "";
       if (!trackingNumber) {
+        if (result.observations.length === 0 && result.providerEventId) {
+          const replayed = await insertWebhookReceipt(db, clock, {
+            adapterKey: adapter.adapterKey,
+            providerEventId: result.providerEventId,
+            signatureSha256: sha256Hex(rawBody),
+          });
+          logIntegrationEvent({
+            adapterKey: adapter.adapterKey,
+            connectionId: candidate.id,
+            outcome: "WEBHOOK_IGNORED",
+            durationMs: Date.now() - started,
+          });
+          return {
+            transactionId: "",
+            proofId: "",
+            connectionId: candidate.id,
+            adapterKey: adapter.adapterKey,
+            provider: adapter.provider,
+            createdCount: 0,
+            eventCount: 0,
+            events: [],
+            replayed,
+          };
+        }
         lastError = trackingNotFound();
         continue;
       }
