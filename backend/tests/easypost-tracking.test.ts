@@ -551,6 +551,7 @@ describe("staging IAM and EasyPost secrets", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
     const staging = await readFile(path.join(root, "infra/staging.yaml"), "utf8");
     const api = await readFile(path.join(root, "infra/api-service.yaml"), "utf8");
+    const deploy = await readFile(path.join(root, "infra/deploy.ps1"), "utf8");
 
     const taskRole = staging.split("TaskRole:")[1]?.split("InfrastructureRole:")[0] ?? "";
     const executionRole = staging.split("TaskExecutionRole:")[1]?.split("TaskRole:")[0] ?? "";
@@ -565,6 +566,12 @@ describe("staging IAM and EasyPost secrets", () => {
     expect(api).toMatch(/ExecutionRoleArn: !Ref TaskExecutionRoleArn/);
     expect(api).toMatch(/PACKPROOF_CREDENTIAL_STORE/);
     expect(api).toMatch(/secrets-manager/);
+    expect(deploy).toMatch(/PACKPROOF_CREDENTIAL_STORE/);
+    expect(deploy).toMatch(/secrets-manager/);
+    expect(deploy).toMatch(/--task-role-arn/);
+    expect(deploy).not.toMatch(/EZTK/);
+    expect(deploy).not.toMatch(/EZAK/);
+    expect(deploy).not.toMatch(/webhookSecret/);
     expect(api).not.toMatch(/EZTK/);
     expect(api).not.toMatch(/EZAK/);
     expect(api).not.toMatch(/webhookSecret/);

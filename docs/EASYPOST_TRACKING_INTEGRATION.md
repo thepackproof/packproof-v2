@@ -117,7 +117,7 @@ Raw EasyPost error bodies are not returned to clients. Operators may mark a conn
 3. `integration_connections.credential_reference` = `packproof/staging/integrations/easypost` (or `arn:aws:secretsmanager:…`).
 4. ECS **task role** `packproof-v2-staging-task` has `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*`.
 5. The task **execution** role only reads the RDS master-user secret for injected `PACKPROOF_DB_USER` / `PACKPROOF_DB_PASSWORD`. Application SDK calls do not use the execution role.
-6. Set `PACKPROOF_CREDENTIAL_STORE=secrets-manager` on the API task (already in `infra/api-service.yaml`).
+6. Set `PACKPROOF_CREDENTIAL_STORE=secrets-manager` on the running API task. `infra/api-service.yaml` is the contract. The documented apply path is `infra/deploy.ps1`, which updates the Express Mode service through the ECS CLI and must inject that variable on the container. Default `PACKPROOF_CREDENTIAL_STORE` is `env`; omitting it means the task role can read Secrets Manager but the process will not.
 
 Default AWS Secrets Manager encryption uses the AWS-managed key; no extra KMS statements are added.
 
@@ -193,3 +193,17 @@ Participants cannot assign `provider=easypost` or `SHIPPING_PROVIDER_API`. The r
 - Test/staging only until the production checklist is completed.
 - Tracker id reuse follows EasyPost’s three-month create/get behavior.
 - Webhook processing is synchronous; a queue is a later slice if EasyPost’s response-time expectation cannot be met.
+
+## Staging verification (2026-08-31)
+
+Deployed commit attempted: `34734012ebb11177571b714fa96fbe45133b3acb`.
+
+Result: **not verified**. Operator AWS session was expired (`aws sts get-caller-identity` failed). CloudFormation validate/deploy and Secrets Manager inspection were not run.
+
+Documented staging API `GET /health` returned `{"status":"ok"}`. `POST /auth/dev/login` returned 404 (Cognito mode). `POST /integrations/webhooks/easypost-tracker` without a signature returned `UNAUTHENTICATED` / missing bearer token, so the EasyPost webhook public boundary from this commit is **not** the currently serving release.
+
+A deploy-path defect was found and fixed: `infra/deploy.ps1` omitted `PACKPROOF_CREDENTIAL_STORE=secrets-manager` from the Express Mode container environment.
+
+No live EasyPost TEST API or TEST webhook was executed. No EasyPost secret values were read or printed.
+
+Operator unblock: `aws login` (or equivalent), then `infra/deploy.ps1` from this repository, then create `packproof/staging/integrations/easypost` if missing, bind an ACTIVE `easypost-tracker` connection, and repeat the smoke test above.

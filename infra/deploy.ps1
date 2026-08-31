@@ -177,6 +177,7 @@ $container = @{
     @{ name = "PACKPROOF_DB_PORT"; value = $Outputs.DatabasePort }
     @{ name = "PACKPROOF_DB_NAME"; value = "packproof_v2" }
     @{ name = "PACKPROOF_DB_SSLMODE"; value = "require" }
+    @{ name = "PACKPROOF_CREDENTIAL_STORE"; value = "secrets-manager" }
   )
   secrets = @(
     @{ name = "PACKPROOF_DB_USER"; valueFrom = "${secretArn}:username::" }
