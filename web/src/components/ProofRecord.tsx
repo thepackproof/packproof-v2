@@ -50,6 +50,13 @@ export function ProofOverview(props: { proof: CanonicalProof }) {
         PackProof recorded them; it did not independently verify the listing, order, or shipment
         contents.
       </p>
+      {props.proof.transaction.provenance ? (
+        <p className="note">
+          Imported from {props.proof.transaction.provenance.provider} (
+          {props.proof.transaction.provenance.source}). This is provenance, not a verification
+          level.
+        </p>
+      ) : null}
       {records.length === 0 ? (
         <p className="empty">No external transaction details were supplied.</p>
       ) : (

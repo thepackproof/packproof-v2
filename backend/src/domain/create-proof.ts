@@ -4,6 +4,10 @@ import { newId } from "../ids.js";
 import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
 import { ensureTransactionExternalReference } from "./external-references.js";
+import {
+  ensureImportAuditEvents,
+  ensureIntegrationExternalReferences,
+} from "./integration-identities.js";
 import { getProofView, loadProof, type ProofView } from "./proofs.js";
 import type { ProofRow, TransactionRow } from "./types.js";
 
@@ -43,6 +47,14 @@ export async function createOrGetProof(
         existing.rows[0].id,
         txn.external_reference,
       );
+      await ensureIntegrationExternalReferences(
+        tx,
+        clock,
+        actorUserId,
+        existing.rows[0].id,
+        transactionId,
+      );
+      await ensureImportAuditEvents(tx, clock, actorUserId, existing.rows[0].id, transactionId);
       return getProofView(tx, existing.rows[0].id);
     }
 
@@ -72,6 +84,14 @@ export async function createOrGetProof(
           raced.rows[0].id,
           txn.external_reference,
         );
+        await ensureIntegrationExternalReferences(
+          tx,
+          clock,
+          actorUserId,
+          raced.rows[0].id,
+          transactionId,
+        );
+        await ensureImportAuditEvents(tx, clock, actorUserId, raced.rows[0].id, transactionId);
         return getProofView(tx, raced.rows[0].id);
       }
       throw error;
@@ -104,6 +124,8 @@ export async function createOrGetProof(
       proofId,
       txn.external_reference,
     );
+    await ensureIntegrationExternalReferences(tx, clock, actorUserId, proofId, transactionId);
+    await ensureImportAuditEvents(tx, clock, actorUserId, proofId, transactionId);
     return getProofView(tx, proofId);
   });
 }

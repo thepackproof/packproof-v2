@@ -1,4 +1,5 @@
 import { DomainError } from "./errors.js";
+import type { TransactionProvenanceView } from "./provenance.js";
 import { asRequiredIso, type ShippingRow, type TransactionRow } from "./types.js";
 
 const TITLE_MAX = 200;
@@ -31,6 +32,7 @@ export interface TransactionView {
   proofStatus: string | null;
   sellerUserId: string;
   buyerUserId: string | null;
+  provenance: TransactionProvenanceView | null;
 }
 
 export interface TransactionCreateInput {
@@ -107,6 +109,7 @@ export function toTransactionView(
     proofId: string | null;
     proofStatus: string | null;
     buyerUserId: string | null;
+    provenance?: TransactionProvenanceView | null;
   },
 ): TransactionView {
   return {
@@ -127,6 +130,7 @@ export function toTransactionView(
     proofStatus: extras.proofStatus,
     sellerUserId: row.created_by,
     buyerUserId: extras.buyerUserId,
+    provenance: extras.provenance ?? null,
   };
 }
 

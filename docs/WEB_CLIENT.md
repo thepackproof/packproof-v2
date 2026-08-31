@@ -25,6 +25,7 @@ Session tokens are stored in `sessionStorage` for the tab only. A `401` clears t
 ## Discovery and retrieval
 
 - Home calls `GET /me/proofs` and `GET /invitations`. Summaries are not treated as full Proofs.
+- Create Proof can import a reference marketplace purchase (`POST /integrations/transactions/import`) or enter the transaction manually. The review screen renders the server transaction. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md).
 - Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`.
 - Cached `proofId` values in the URL are shortcuts only.
 - Invitations addressed to the signed-in account appear in discovery. An invitation ID can also be accepted from home. Tokens from create/accept responses are discarded by the API client.

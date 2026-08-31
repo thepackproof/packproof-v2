@@ -198,6 +198,26 @@ export function App() {
           busy={busy}
           error={error}
           onCancel={() => go("/")}
+          onImportPurchase={() => {
+            setBusy(true);
+            setError(null);
+            return api
+              .importTransaction({ adapterKey: "demo-marketplace", createProof: false })
+              .catch((caught) => {
+                setError(handleError(caught));
+                throw caught;
+              })
+              .finally(() => setBusy(false));
+          }}
+          onConfirmImport={(transactionId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .createOrGetProof(transactionId)
+              .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
           onCreate={(input: TransactionWriteInput) => {
             setBusy(true);
             setError(null);

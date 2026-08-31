@@ -237,4 +237,33 @@ describe("Phase 10 mobile V2 API client", () => {
       ctx.seller.updateShipping(txn.transactionId, { trackingNumber: "nope" }),
     ).rejects.toMatchObject({ code: "PROOF_ALREADY_FINALIZED" });
   });
+
+  it("imports a reference purchase through the mobile client and reuses the canonical transaction", async () => {
+    const ctx = await startClientServer();
+    close = ctx.close;
+    const sellerLogin = await ctx.seller.login("import-client-seller");
+    ctx.sellerToken.value = sellerLogin.token;
+
+    const first = await ctx.seller.importTransaction({
+      adapterKey: "demo-marketplace",
+      externalTransactionId: "DM-MOBILE-1",
+      createProof: true,
+    });
+    expect(first.transaction.itemTitle).toBe("Vintage film camera");
+    expect(first.transaction.shipping?.trackingNumber).toBe("1Z999AA10123456784");
+    expect(first.transaction.provenance?.source).toBe("MARKETPLACE_API");
+    expect(first.proof?.proofId).toBe(first.transaction.proofId);
+
+    const second = await ctx.seller.importTransaction({
+      adapterKey: "demo-marketplace",
+      externalTransactionId: "DM-MOBILE-1",
+      createProof: true,
+    });
+    expect(second.transaction.transactionId).toBe(first.transaction.transactionId);
+    expect(second.proof?.proofId).toBe(first.proof?.proofId);
+
+    const fromServer = await ctx.seller.getTransaction(first.transaction.transactionId);
+    expect(fromServer.itemTitle).toBe(first.transaction.itemTitle);
+    expect(fromServer.provenance?.provider).toBe("demo-marketplace");
+  });
 });

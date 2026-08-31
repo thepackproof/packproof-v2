@@ -32,6 +32,21 @@ export interface TransactionView {
   proofStatus: string | null;
   sellerUserId: string;
   buyerUserId: string | null;
+  provenance?: {
+    source: string;
+    adapterKey: string;
+    provider: string;
+    tenantKey: string;
+    externalTransactionId: string;
+    sourceRecordId: string | null;
+    importedAt: string;
+    payloadSha256: string | null;
+    buyer: {
+      externalId: string | null;
+      displayName: string | null;
+      email: string | null;
+    } | null;
+  } | null;
 }
 
 export interface TransactionWriteInput {
@@ -214,6 +229,18 @@ export interface ManifestView {
   sha256: string;
   canonicalJson: string;
   manifest: unknown;
+}
+
+export interface TransactionImportView {
+  transaction: TransactionView;
+  proof: CanonicalProof | null;
+  identity: {
+    adapterKey: string;
+    tenantKey: string;
+    externalTransactionId: string;
+    source: string;
+  };
+  created: boolean;
 }
 
 export class ApiError extends Error {

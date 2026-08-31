@@ -7,6 +7,7 @@ import {
   type ProfileView,
   type ProofCollectionItem,
   type PublicProfileView,
+  type TransactionImportView,
   type TransactionView,
   type TransactionWriteInput,
 } from "./types";
@@ -51,6 +52,22 @@ export class PackProofApi {
     return this.request("/transactions", {
       method: "POST",
       body: input,
+    });
+  }
+
+  async importTransaction(input: {
+    adapterKey?: string;
+    externalTransactionId?: string | null;
+    createProof?: boolean;
+  } = {}): Promise<TransactionImportView> {
+    return this.request("/integrations/transactions/import", {
+      method: "POST",
+      body: {
+        adapterKey: input.adapterKey ?? "demo-marketplace",
+        mode: "reference",
+        externalTransactionId: input.externalTransactionId ?? null,
+        createProof: input.createProof === true,
+      },
     });
   }
 

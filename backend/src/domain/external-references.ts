@@ -250,7 +250,7 @@ export async function ensureTransactionExternalReference(
   });
 }
 
-function normalizeTenantKey(value: string): string {
+export function normalizeTenantKey(value: string): string {
   const tenant = value.trim().toLowerCase();
   if (!tenant || tenant.length > TENANT_MAX || !/^[a-z0-9][a-z0-9:_-]*$/.test(tenant)) {
     throw new DomainError("INVALID_EXTERNAL_REFERENCE", "tenantKey is invalid", 400);
@@ -265,7 +265,7 @@ function normalizeTenantKey(value: string): string {
   return tenant;
 }
 
-function normalizeExternalTransactionId(value: string): string {
+export function normalizeExternalTransactionId(value: string): string {
   const externalId = value.trim();
   if (!externalId || externalId.length > EXTERNAL_ID_MAX) {
     throw new DomainError(

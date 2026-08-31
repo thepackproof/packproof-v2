@@ -30,6 +30,21 @@ export interface TransactionView {
   proofStatus: string | null;
   sellerUserId: string;
   buyerUserId: string | null;
+  provenance?: {
+    source: string;
+    adapterKey: string;
+    provider: string;
+    tenantKey: string;
+    externalTransactionId: string;
+    sourceRecordId: string | null;
+    importedAt: string;
+    payloadSha256: string | null;
+    buyer: {
+      externalId: string | null;
+      displayName: string | null;
+      email: string | null;
+    } | null;
+  } | null;
 }
 
 export interface TransactionWriteInput {
@@ -237,6 +252,18 @@ export interface EvidenceUploadView {
   upload: UploadTarget;
 }
 
+export interface TransactionImportView {
+  transaction: TransactionView;
+  proof: ProofView | null;
+  identity: {
+    adapterKey: string;
+    tenantKey: string;
+    externalTransactionId: string;
+    source: string;
+  };
+  created: boolean;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly code: string,
@@ -310,6 +337,22 @@ export class PackProofV2Client {
         currency: input.currency ?? null,
         metadata: input.metadata ?? {},
         shipping: input.shipping ?? null,
+      },
+    });
+  }
+
+  async importTransaction(input: {
+    adapterKey?: string;
+    externalTransactionId?: string | null;
+    createProof?: boolean;
+  } = {}): Promise<TransactionImportView> {
+    return this.request("/integrations/transactions/import", {
+      method: "POST",
+      body: {
+        adapterKey: input.adapterKey ?? "demo-marketplace",
+        mode: "reference",
+        externalTransactionId: input.externalTransactionId ?? null,
+        createProof: input.createProof === true,
       },
     });
   }

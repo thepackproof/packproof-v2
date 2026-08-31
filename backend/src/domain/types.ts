@@ -119,6 +119,16 @@ export interface ProofExternalReferenceRow {
   created_at: Date | string;
 }
 
+export interface TransactionIntegrationIdentityRow {
+  id: string;
+  transaction_id: string;
+  tenant_key: string;
+  external_transaction_id: string;
+  adapter_key: string;
+  source: string;
+  created_at: Date | string;
+}
+
 export interface AuditEventRow {
   id: string;
   proof_id: string;

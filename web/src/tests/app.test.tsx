@@ -65,6 +65,44 @@ describe("PackProof web reference client", () => {
             proof: canonicalProof,
           });
         }
+        if (url.endsWith("/integrations/transactions/import")) {
+          return json({
+            created: true,
+            identity: {
+              adapterKey: "demo-marketplace",
+              tenantKey: "marketplace:demo-marketplace",
+              externalTransactionId: "DM-WEB-1",
+              source: "MARKETPLACE_API",
+            },
+            proof: null,
+            transaction: {
+              ...canonicalProof.transaction,
+              transactionId: "txn_imported",
+              proofId: null,
+              proofStatus: null,
+              itemTitle: "Vintage film camera",
+              externalReference: "DM-WEB-1",
+              provenance: {
+                source: "MARKETPLACE_API",
+                adapterKey: "demo-marketplace",
+                provider: "demo-marketplace",
+                tenantKey: "marketplace:demo-marketplace",
+                externalTransactionId: "DM-WEB-1",
+                sourceRecordId: "demo-order-DM-WEB-1",
+                importedAt: "2026-08-31T15:00:00.000Z",
+                payloadSha256: "aa".repeat(32),
+                buyer: { externalId: "buyer_demo_1", displayName: "Alex Buyer", email: "alex.buyer@example.com" },
+              },
+            },
+          });
+        }
+        if (url.endsWith("/transactions/txn_imported/proof")) {
+          return json({
+            ...canonicalProof,
+            transactionId: "txn_imported",
+            transaction: { ...canonicalProof.transaction, transactionId: "txn_imported" },
+          });
+        }
         if (url.endsWith("/me/proofs-fail")) {
           return json({ error: { code: "INTERNAL", message: "down" } }, 500);
         }
@@ -204,5 +242,44 @@ describe("PackProof web reference client", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Proofs" })).toBeInTheDocument();
     });
+  });
+
+  it("reviews a server-imported purchase before creating the Proof", async () => {
+    signInSession();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Create Proof" }));
+    expect(await screen.findByRole("button", { name: "Import purchase" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enter manually" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Import purchase" }));
+    expect(await screen.findByRole("heading", { name: "Review imported purchase" })).toBeInTheDocument();
+    expect(screen.getByText("Vintage film camera")).toBeInTheDocument();
+    expect(screen.getByText("DM-WEB-1")).toBeInTheDocument();
+    expect(screen.getByText("Alex Buyer")).toBeInTheDocument();
+    expect(screen.getByText("MARKETPLACE_API")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Use imported purchase" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proof record" })).toBeInTheDocument();
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/integrations/transactions/import",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const importCall = vi.mocked(fetch).mock.calls.find((call) =>
+      String(call[0]).endsWith("/integrations/transactions/import"),
+    );
+    expect(importCall?.[1]).toEqual(
+      expect.objectContaining({
+        body: JSON.stringify({
+          adapterKey: "demo-marketplace",
+          mode: "reference",
+          externalTransactionId: null,
+          createProof: false,
+        }),
+      }),
+    );
+    expect(String(importCall?.[1] && "body" in importCall[1] ? importCall[1].body : "")).not.toContain(
+      "ebay_order_id",
+    );
   });
 });

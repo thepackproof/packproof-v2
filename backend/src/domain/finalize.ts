@@ -19,9 +19,11 @@ import {
   type ParticipantRow,
   type ProofRow,
   type ShippingRow,
+  type TransactionIntegrationIdentityRow,
   type TransactionRow,
 } from "./types.js";
 import { asNullableNumber, shippingForManifest } from "./transaction-fields.js";
+import { provenanceFromIdentity, manifestProvenance } from "./provenance.js";
 
 export interface ManifestView {
   manifestId: string;
@@ -153,6 +155,16 @@ export async function finalizeProof(
       [proof.transaction_id],
     );
     const ship = shippingForManifest(shipping.rows[0]);
+    const identity = await tx.query<TransactionIntegrationIdentityRow>(
+      `SELECT * FROM transaction_integration_identities
+        WHERE transaction_id = $1
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1`,
+      [proof.transaction_id],
+    );
+    const provenance = manifestProvenance(
+      provenanceFromIdentity(identity.rows[0] ?? null, txn.transaction_metadata),
+    );
 
     const now = clock.now();
     const auditEventIds = await listAuditIds(tx, proofId);
@@ -171,6 +183,7 @@ export async function finalizeProof(
         transactionValue: asNullableNumber(txn.transaction_value),
         currency: txn.currency,
         metadata: txn.transaction_metadata ?? {},
+        ...(provenance ? { provenance } : {}),
       },
       shipping: {
         carrier: ship.carrier,

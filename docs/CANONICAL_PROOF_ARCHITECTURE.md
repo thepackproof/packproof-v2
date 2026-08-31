@@ -89,7 +89,7 @@ Server-side uniqueness:
 
 Clients cannot be trusted to prevent duplicates. An explicit, auditable rebind is out of scope; until one exists, reject `EXTERNAL_REFERENCE_ALREADY_BOUND`.
 
-`transactions.external_reference` remains `EXTERNAL` metadata. The reserved tenant `packproof:transaction` is the identity slot established from that field when a Proof is first bound. Other tenants (for example `marketplace:example`) are the future integration seam. This repository does not yet expose API-key or marketplace onboarding.
+`transactions.external_reference` remains `EXTERNAL` metadata. The reserved tenant `packproof:transaction` is the identity slot established from that field when a Proof is first bound. Integration tenants (for example `marketplace:demo-marketplace`) are bound from imported purchases. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). This repository does not yet expose API-key marketplace onboarding or live provider connectors.
 
 ## Surfaces
 

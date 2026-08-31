@@ -372,6 +372,9 @@ function collectFacts(input: {
 }
 
 function collectExternalRecords(transaction: TransactionView): CanonicalExternalRecord[] {
+  const fieldSource: CanonicalExternalRecord["source"] = transaction.provenance
+    ? "INTEGRATION"
+    : "PARTICIPANT_SUPPLIED";
   const records: Array<{ field: string; value: unknown }> = [
     { field: "transaction.externalReference", value: transaction.externalReference },
     { field: "transaction.transactionDate", value: transaction.transactionDate },
@@ -386,6 +389,14 @@ function collectExternalRecords(transaction: TransactionView): CanonicalExternal
     { field: "shipping.trackingNumber", value: transaction.shipping?.trackingNumber ?? null },
     { field: "shipping.shipmentDate", value: transaction.shipping?.shipmentDate ?? null },
   ];
+  if (transaction.provenance) {
+    records.push(
+      { field: "transaction.provenance.source", value: transaction.provenance.source },
+      { field: "transaction.provenance.provider", value: transaction.provenance.provider },
+      { field: "transaction.provenance.adapterKey", value: transaction.provenance.adapterKey },
+      { field: "transaction.provenance.tenantKey", value: transaction.provenance.tenantKey },
+    );
+  }
 
   return records
     .filter((record) => record.value != null && record.value !== "")
@@ -393,7 +404,7 @@ function collectExternalRecords(transaction: TransactionView): CanonicalExternal
       kind: TRUST_KIND.EXTERNAL,
       field: record.field,
       value: record.value,
-      source: "PARTICIPANT_SUPPLIED" as const,
+      source: fieldSource,
       verifiedByPackProof: false as const,
     }));
 }

@@ -19,6 +19,7 @@ Clients (mobile, web reference client, API tests)
           ▼
    Modular monolith (this repo, backend/)
  ├── Transactions
+ ├── Integrations (provider-neutral import; reference adapter only)
  ├── Proofs
  ├── Participants
  ├── Invitations
@@ -71,3 +72,5 @@ Web reference client: `web/`. Same API, same canonical Proof. Local Vite for dev
 One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks, and portals consume the same Proof through the API authorization boundary.
 
 See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md).
+
+Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Live marketplace and carrier connectors are not implemented.

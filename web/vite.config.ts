@@ -20,6 +20,7 @@ export default defineConfig({
       "/me": api,
       "/proofs": api,
       "/transactions": api,
+      "/integrations": api,
       "/invitations": api,
       "/users": api,
     },

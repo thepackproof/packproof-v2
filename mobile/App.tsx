@@ -19,6 +19,7 @@ import {
   type ProofCollectionItem,
   type ProofView,
   type PublicProfileView,
+  type TransactionImportView,
   type TransactionView,
 } from "./src/v2-api";
 import {
@@ -83,6 +84,7 @@ const INITIAL_RUNTIME = currentRuntime();
 
 type Screen = "auth" | "home" | "proof" | "capture";
 type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset";
+type CreateMode = "menu" | "manual" | "review";
 type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
 
 interface ContextForm {
@@ -140,6 +142,8 @@ export default function App() {
   const [proof, setProof] = useState<ProofView | null>(null);
   const [transactionDetail, setTransactionDetail] = useState<TransactionView | null>(null);
   const [createForm, setCreateForm] = useState<ContextForm>(EMPTY_FORM);
+  const [createMode, setCreateMode] = useState<CreateMode>("menu");
+  const [importReview, setImportReview] = useState<TransactionImportView | null>(null);
   const [editForm, setEditForm] = useState<ContextForm>(EMPTY_FORM);
   const [manifest, setManifest] = useState<ManifestView | null>(null);
   const [captureStatus, setCaptureStatus] = useState<LocalCaptureStatus>("idle");
@@ -385,6 +389,8 @@ export default function App() {
     setCaptureStatus("idle");
     setUploadPercent(null);
     setCreateForm(EMPTY_FORM);
+    setCreateMode("menu");
+    setImportReview(null);
     setEditForm(EMPTY_FORM);
     setManifest(null);
     setSearchResults([]);
@@ -995,31 +1001,106 @@ export default function App() {
               disabled={busy}
               onPress={() => run(async () => refreshPendingInvites())}
             />
-            <Text style={styles.heading}>New transaction</Text>
-            <ContextFields form={createForm} onChange={setCreateForm} />
-            <Action
-              label="Create transaction and Proof"
-              disabled={busy}
-              onPress={() =>
-                run(async () => {
-                  const parsed = parseContextForm(createForm);
-                  const txn = await client.createTransaction({
-                    ...parsed.transaction,
-                    shipping: parsed.shipping,
-                  });
-                  const created = await client.createOrGetProof(txn.transactionId);
-                  const next = {
-                    ...session,
-                    proofId: created.proofId,
-                    transactionId: created.transactionId,
-                  };
-                  await persist(next);
-                  await refreshProofCollection();
-                  await refreshProof(created.proofId);
-                  setScreen("proof");
-                })
-              }
-            />
+            <Text style={styles.heading}>Create PackProof</Text>
+            {createMode === "menu" ? (
+              <View>
+                <Action
+                  label="Import purchase"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const imported = await client.importTransaction({
+                        adapterKey: "demo-marketplace",
+                        createProof: false,
+                      });
+                      setImportReview(imported);
+                      setCreateMode("review");
+                    })
+                  }
+                />
+                <Action
+                  label="Enter manually"
+                  disabled={busy}
+                  onPress={() => {
+                    setCreateForm(EMPTY_FORM);
+                    setCreateMode("manual");
+                  }}
+                />
+              </View>
+            ) : null}
+            {createMode === "manual" ? (
+              <View>
+                <ContextFields form={createForm} onChange={setCreateForm} />
+                <Action
+                  label="Create transaction and Proof"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const parsed = parseContextForm(createForm);
+                      const txn = await client.createTransaction({
+                        ...parsed.transaction,
+                        shipping: parsed.shipping,
+                      });
+                      const created = await client.createOrGetProof(txn.transactionId);
+                      const next = {
+                        ...session,
+                        proofId: created.proofId,
+                        transactionId: created.transactionId,
+                      };
+                      await persist(next);
+                      await refreshProofCollection();
+                      await refreshProof(created.proofId);
+                      setCreateMode("menu");
+                      setImportReview(null);
+                      setScreen("proof");
+                    })
+                  }
+                />
+                <Action
+                  label="Back"
+                  disabled={busy}
+                  onPress={() => {
+                    setCreateMode("menu");
+                    setCreateForm(EMPTY_FORM);
+                  }}
+                />
+              </View>
+            ) : null}
+            {createMode === "review" && importReview ? (
+              <View>
+                <ImportedPurchaseReview imported={importReview} />
+                <Action
+                  label="Use imported purchase"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      const created = await client.createOrGetProof(
+                        importReview.transaction.transactionId,
+                      );
+                      const next = {
+                        ...session,
+                        proofId: created.proofId,
+                        transactionId: created.transactionId,
+                      };
+                      await persist(next);
+                      await refreshProofCollection();
+                      await refreshProof(created.proofId);
+                      setCreateMode("menu");
+                      setImportReview(null);
+                      setScreen("proof");
+                    })
+                  }
+                />
+                <Action
+                  label="Back"
+                  disabled={busy}
+                  onPress={() => {
+                    setCreateMode("menu");
+                    setImportReview(null);
+                  }}
+                />
+              </View>
+            ) : null}
             {session.proofId ? (
               <Action
                 label="Open cached Proof from server"
@@ -1084,6 +1165,8 @@ export default function App() {
                   setCaptureStatus("idle");
                   setUploadPercent(null);
                   setCreateForm(EMPTY_FORM);
+                  setCreateMode("menu");
+                  setImportReview(null);
                   setEditForm(EMPTY_FORM);
                   setManifest(null);
                   setPendingInvites([]);
@@ -1643,6 +1726,39 @@ function ContextFields(props: {
   );
 }
 
+function ImportedPurchaseReview(props: { imported: TransactionImportView }) {
+  const transaction = props.imported.transaction;
+  const shipping = transaction.shipping;
+  const provenance = transaction.provenance;
+  const buyer = provenance?.buyer;
+  return (
+    <View>
+      <Text style={styles.heading}>Review imported purchase</Text>
+      <Text>Confirm the server-returned details. PackProof recorded them; it did not verify them.</Text>
+      <Fact label="item" value={transaction.itemTitle} />
+      <Fact label="description" value={transaction.itemDescription} />
+      <Fact label="transaction/order reference" value={transaction.externalReference} />
+      <Fact label="purchase date" value={transaction.transactionDate} />
+      <Fact label="quantity" value={transaction.quantity} />
+      <Fact
+        label="value"
+        value={
+          transaction.transactionValue == null
+            ? null
+            : `${transaction.transactionValue} ${transaction.currency ?? ""}`.trim()
+        }
+      />
+      <Fact label="buyer" value={buyer?.displayName ?? buyer?.email ?? buyer?.externalId} />
+      <Fact label="carrier" value={shipping?.carrier} />
+      <Fact label="shipping service" value={shipping?.service} />
+      <Fact label="tracking number" value={shipping?.trackingNumber} />
+      <Fact label="shipment date" value={shipping?.shipmentDate} />
+      <Fact label="source" value={provenance?.source} />
+      <Fact label="provider" value={provenance?.provider ?? props.imported.identity.adapterKey} />
+    </View>
+  );
+}
+
 function TransactionFacts(props: {
   transaction: TransactionView;
   proofId: string;
@@ -1672,6 +1788,8 @@ function TransactionFacts(props: {
       <Fact label="shipping service" value={shipping?.service} />
       <Fact label="tracking number" value={shipping?.trackingNumber} />
       <Fact label="shipment date" value={shipping?.shipmentDate} />
+      <Fact label="source" value={props.transaction.provenance?.source} />
+      <Fact label="provider" value={props.transaction.provenance?.provider} />
       <Fact label="associated Proof ID" value={props.proofId} />
       <Fact label="current Proof status" value={props.proofStatus} />
     </View>

@@ -14,17 +14,25 @@ import {
   type ShippingWrite,
   type TransactionView,
 } from "./transaction-fields.js";
-import type { ProofRow, ShippingRow, TransactionRow } from "./types.js";
+import { provenanceFromIdentity } from "./provenance.js";
+import type {
+  ProofRow,
+  ShippingRow,
+  TransactionIntegrationIdentityRow,
+  TransactionRow,
+} from "./types.js";
+import type { TransactionProvenanceView } from "./provenance.js";
 
 export type { ShippingView, TransactionView } from "./transaction-fields.js";
 export { toTransactionView } from "./transaction-fields.js";
 
-interface TransactionBundle {
+export interface TransactionBundle {
   txn: TransactionRow;
   shipping: ShippingRow | null;
   proofId: string | null;
   proofStatus: string | null;
   buyerUserId: string | null;
+  provenance: TransactionProvenanceView | null;
 }
 
 export async function createTransaction(
@@ -101,11 +109,7 @@ export async function getTransaction(
     throw new DomainError("TRANSACTION_NOT_FOUND", "Transaction not found", 404);
   }
   await assertCanReadTransaction(db, actorUserId, bundle);
-  return toTransactionView(bundle.txn, bundle.shipping, {
-    proofId: bundle.proofId,
-    proofStatus: bundle.proofStatus,
-    buyerUserId: bundle.buyerUserId,
-  });
+  return toView(bundle);
 }
 
 export async function updateTransaction(
@@ -156,11 +160,7 @@ export async function updateTransaction(
     };
     const changed = changedEntries(before, after);
     if (Object.keys(changed).length === 0) {
-      return toTransactionView(locked.txn, locked.shipping, {
-        proofId: locked.proofId,
-        proofStatus: locked.proofStatus,
-        buyerUserId: locked.buyerUserId,
-      });
+      return toView(locked);
     }
 
     const now = clock.now();
@@ -250,11 +250,7 @@ export async function updateShipping(
     };
     const changed = changedEntries(current, next);
     if (Object.keys(changed).length === 0) {
-      return toTransactionView(locked.txn, locked.shipping, {
-        proofId: locked.proofId,
-        proofStatus: locked.proofStatus,
-        buyerUserId: locked.buyerUserId,
-      });
+      return toView(locked);
     }
 
     const now = clock.now();
@@ -303,11 +299,7 @@ export async function loadTransactionView(
   if (!bundle) {
     throw new DomainError("TRANSACTION_NOT_FOUND", "Transaction not found", 404);
   }
-  return toTransactionView(bundle.txn, bundle.shipping, {
-    proofId: bundle.proofId,
-    proofStatus: bundle.proofStatus,
-    buyerUserId: bundle.buyerUserId,
-  });
+  return toView(bundle);
 }
 
 export async function loadTransactionBundle(
@@ -343,16 +335,24 @@ async function attachContext(db: Database, txn: TransactionRow): Promise<Transac
     );
     buyerUserId = buyer.rows[0]?.user_id ?? null;
   }
+  const identity = await db.query<TransactionIntegrationIdentityRow>(
+    `SELECT * FROM transaction_integration_identities
+      WHERE transaction_id = $1
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1`,
+    [txn.id],
+  );
   return {
     txn,
     shipping: shipping.rows[0] ?? null,
     proofId: proofRow?.id ?? null,
     proofStatus: proofRow?.status ?? null,
     buyerUserId,
+    provenance: provenanceFromIdentity(identity.rows[0] ?? null, txn.transaction_metadata),
   };
 }
 
-async function lockTransactionContext(
+export async function lockTransactionContext(
   db: Database,
   transactionId: string,
 ): Promise<TransactionBundle> {
@@ -374,7 +374,7 @@ async function lockTransactionContext(
   return attachContext(db, txn);
 }
 
-async function insertShipping(
+export async function insertShipping(
   db: Database,
   transactionId: string,
   shipping: ShippingWrite,
@@ -437,6 +437,15 @@ function assertNotFinalizedContext(bundle: TransactionBundle): void {
       409,
     );
   }
+}
+
+function toView(bundle: TransactionBundle): TransactionView {
+  return toTransactionView(bundle.txn, bundle.shipping, {
+    proofId: bundle.proofId,
+    proofStatus: bundle.proofStatus,
+    buyerUserId: bundle.buyerUserId,
+    provenance: bundle.provenance,
+  });
 }
 
 function snapshotTransactionDetails(row: TransactionRow): Record<string, unknown> {

@@ -69,6 +69,10 @@ export function eventLabel(eventType: string): string {
       return "Proof finalized";
     case "EXTERNAL_REFERENCE_BOUND":
       return "External identity bound";
+    case "TRANSACTION_IMPORTED":
+      return "Transaction imported";
+    case "SHIPPING_DETAILS_IMPORTED":
+      return "Shipping details imported";
     case "TRANSACTION_DETAILS_UPDATED":
       return "Transaction details updated";
     case "SHIPPING_DETAILS_UPDATED":
@@ -122,6 +126,10 @@ export function externalFieldLabel(field: string): string {
     "shipping.service": "Shipping service",
     "shipping.trackingNumber": "Tracking number",
     "shipping.shipmentDate": "Shipment date",
+    "transaction.provenance.source": "Import source",
+    "transaction.provenance.provider": "Import provider",
+    "transaction.provenance.adapterKey": "Import adapter",
+    "transaction.provenance.tenantKey": "Import tenant",
   };
   return labels[field] ?? field;
 }

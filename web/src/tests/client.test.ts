@@ -44,4 +44,40 @@ describe("API client boundary", () => {
       status: 401,
     } satisfies Partial<ApiError>);
   });
+
+  it("imports through the reference adapter contract rather than a client-built transaction", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          created: true,
+          identity: {
+            adapterKey: "demo-marketplace",
+            tenantKey: "marketplace:demo-marketplace",
+            externalTransactionId: "DM-1",
+            source: "MARKETPLACE_API",
+          },
+          proof: null,
+          transaction: { transactionId: "txn_1", itemTitle: "Vintage film camera" },
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    const imported = await api.importTransaction({ adapterKey: "demo-marketplace" });
+    expect(imported.transaction.itemTitle).toBe("Vintage film camera");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/integrations/transactions/import",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          adapterKey: "demo-marketplace",
+          mode: "reference",
+          externalTransactionId: null,
+          createProof: false,
+        }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
 });

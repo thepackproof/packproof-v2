@@ -31,7 +31,11 @@ import {
   updateTransaction,
 } from "./domain/transactions.js";
 import { ensureIdentityUser } from "./domain/users.js";
+import { importNormalizedTransaction } from "./domain/transaction-import.js";
 import type { ObjectStore } from "./s3/object-store.js";
+import type { IntegrationAdapterRegistry } from "./integrations/registry.js";
+import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
+import { parseIntegrationImportRequest } from "./integrations/import-request.js";
 
 export interface AppDependencies {
   db: Database;
@@ -41,6 +45,7 @@ export interface AppDependencies {
   publicBaseUrl: string;
   devAuth: boolean;
   corsOrigins?: string[];
+  integrations?: IntegrationAdapterRegistry;
 }
 
 function asyncRoute(
@@ -78,6 +83,7 @@ export function createApp(deps: AppDependencies): Express {
   const app = express();
   app.disable("x-powered-by");
   const corsOrigins = deps.corsOrigins ?? [];
+  const integrations = deps.integrations ?? createDefaultIntegrationRegistry(deps.clock);
   app.use((req, res, next) => {
     const origin = headerOrigin(req.headers.origin);
     if (origin && corsOrigins.includes(origin)) {
@@ -165,6 +171,35 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       const result = await createTransaction(deps.db, deps.clock, bearerUser(req), req.body);
       res.status(201).json(result);
+    }),
+  );
+
+  app.post(
+    "/integrations/transactions/import",
+    asyncRoute(async (req, res) => {
+      const parsed = parseIntegrationImportRequest(req.body);
+      const adapter = integrations.get(parsed.adapterKey);
+      if (adapter.kind !== "reference") {
+        throw new DomainError(
+          "INTEGRATION_TRUST_BOUNDARY",
+          "This route accepts reference adapters only",
+          403,
+        );
+      }
+      const imported = await adapter.fetchPurchase({
+        externalTransactionId: parsed.externalTransactionId,
+      });
+      const result = await importNormalizedTransaction(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        imported,
+        {
+          createProof: parsed.createProof,
+          adapterKey: adapter.adapterKey,
+        },
+      );
+      res.status(result.created ? 201 : 200).json(result);
     }),
   );
 
