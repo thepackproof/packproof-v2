@@ -237,12 +237,20 @@ Write-Host "Ensuring desired count is 1 and forcing a new task set"
 Invoke-Aws ecs update-service --cluster $Outputs.ClusterName --service $ApiStack --desired-count 1 --force-new-deployment --region $Region | Out-Null
 
 function Get-RunningTaskImages {
-  $listed = Invoke-AwsJson ecs list-tasks --cluster $Outputs.ClusterName --service-name $ApiStack --desired-status RUNNING --region $Region
-  $arns = @($listed.taskArns)
+  $listedRaw = & $Aws ecs list-tasks --cluster $Outputs.ClusterName --service-name $ApiStack --desired-status RUNNING --region $Region --output json
+  if ($LASTEXITCODE -ne 0) {
+    throw "aws ecs list-tasks failed with exit $LASTEXITCODE"
+  }
+  $listed = $listedRaw | ConvertFrom-Json
+  $arns = @($listed.taskArns | Where-Object { $_ })
   if ($arns.Count -eq 0) {
     return @()
   }
-  $described = Invoke-AwsJson ecs describe-tasks --cluster $Outputs.ClusterName --tasks @($arns) --region $Region
+  $describedRaw = & $Aws ecs describe-tasks --cluster $Outputs.ClusterName --tasks $arns --region $Region --output json
+  if ($LASTEXITCODE -ne 0) {
+    throw "aws ecs describe-tasks failed with exit $LASTEXITCODE"
+  }
+  $described = $describedRaw | ConvertFrom-Json
   return @($described.tasks | ForEach-Object { $_.containers[0].image })
 }
 

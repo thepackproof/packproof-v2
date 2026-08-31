@@ -575,6 +575,7 @@ describe("staging IAM and EasyPost secrets", () => {
     expect(deploy).toMatch(/PACKPROOF_ENVIRONMENT/);
     expect(deploy).toMatch(/force-new-deployment/);
     expect(deploy).toMatch(/runningNewImage/);
+    expect(deploy).toMatch(/ecs describe-tasks --cluster \$Outputs\.ClusterName --tasks \$arns/);
     expect(deploy).toMatch(/--task-role-arn/);
     expect(dockerfile).toMatch(/public\.ecr\.aws\/docker\/library\/node:22-alpine/);
     expect(dockerfile).not.toMatch(/^FROM node:/m);
