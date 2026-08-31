@@ -86,11 +86,9 @@ Shipment **events** may still be inserted. They do not:
 - modify committed evidence
 - reopen the Proof or change Proof status
 
-They are immutable supplements associated with the same Proof.
+They remain append-only observations associated with the same Proof. They do not become a second Proof.
 
 ## Hash association
-
-There is no separate shipment-supplement table in this slice, and this is not a blockchain.
 
 Each observation stores:
 
@@ -104,6 +102,88 @@ Pre-finalization events keep `core_manifest_sha256 = null`. They are not rewritt
 Chronology **display** order uses `occurred_at` (source time). Hash-chain order uses append time. Those can differ; that is expected.
 
 Optional `payload_sha256` may fingerprint a provider payload the adapter saw. Raw provider JSON is not canonical Proof state.
+
+## Shipment integrity supplement
+
+Pre-finalization events keep `core_manifest_sha256 = null` and are never rewritten. If packing then finalizes and no later carrier event arrives, those rows stay associated through `proof_id` only. Their event chain never receives a `core_manifest_sha256`. That is the remaining integrity edge this supplement closes.
+
+```text
+CORE PACKPROOF
+Frozen canonical manifest
+Immutable
+        +
+SHIPMENT EVENTS
+Append-only observations
+Immutable
+        +
+SHIPMENT INTEGRITY SUPPLEMENT
+Deterministic cryptographic association
+Recomputable from canonical rows
+Does not mutate either of the above
+```
+
+The supplement is not a Proof lifecycle state, not a second Proof, and not a blockchain. It does not publish blocks, mint tokens, or create an independently consensus-verified ledger. It is an integrity/read artifact for the existing canonical Proof.
+
+### Persistence
+
+The current supplement is **recomputed on request** from canonical database state. There is no supplement table and no migration in this slice. Nothing is updated or deleted because nothing is stored.
+
+A later shipment event changes the current digest. That is a new projection over a longer immutable event list. Earlier event rows and the frozen core manifest stay unchanged. Historical supplement snapshots are out of scope.
+
+### Canonical structure
+
+Schema: `packproof.shipment.supplement/v1`.
+
+The integrity envelope is `packproof.shipment.integrity/v1`.
+
+```ts
+{
+  schema: "packproof.shipment.supplement/v1",
+  proofId,
+  transactionId,
+  coreManifestSha256,
+  shipment: {
+    shippingId,
+    carrier,
+    service,
+    trackingNumber,
+    shipmentDate
+  },
+  events: [
+    { shipmentEventId, sha256 }  // append order: created_at, id
+  ]
+}
+```
+
+`shipmentSupplementSha256 = SHA-256(canonicalize(supplement))` using the same canonicalization helper as the core manifest.
+
+Events are listed in **append order**, not chronology `occurredAt` order. A late observation with an earlier source time stays later in the supplement. Clients cannot choose this order.
+
+### When it can link
+
+A fully linked supplement requires a finalized core manifest SHA.
+
+| State | Result |
+| --- | --- |
+| Proof not finalized | `CORE_NOT_FINALIZED`. No invented root hash. `supplement` is null. `linkedToFinalizedProof` is false. |
+| No shipping identity | `NO_SHIPMENT`. PackProof does not fabricate a shipment. |
+| Finalized + shipping identity, including zero events | `LINKED`. Empty `events: []` is valid. |
+| Finalized + shipping + events | `LINKED`. Includes every current event hash and the frozen core SHA. |
+
+### Verification
+
+`GET /proofs/:id/shipment-integrity` authorizes like other Proof reads, then independently recomputes:
+
+1. Stored core manifest JSON hashes to the stored core SHA.
+2. Each event `content_sha256` from current normalized content.
+3. Each event `sha256` from its stored content hash, stored previous hash, stored `core_manifest_sha256` at insert time, and proof id.
+4. Append-chain previous pointers.
+5. Events belong to this Proof and shipping identity.
+6. Supplement canonical content and SHA-256 from those rows.
+
+Clients must not recompute this. They display the server result.
+
+A passing check means PackProof’s stored shipment record still hashes together with the frozen core. It does **not** mean the carrier’s real-world statement is true, that delivery happened, or that the observation is stronger evidence.
 
 ## Chronology read model
 
@@ -162,5 +242,6 @@ This slice registers only `demo-carrier`. It emits a deterministic fake timeline
 - `POST /transactions/:id/shipment-events` (participant-supplied)
 - `GET /proofs/:id/shipment-events`
 - `GET /proofs/:id/chronology`
+- `GET /proofs/:id/shipment-integrity`
 
 Audit: `SHIPMENT_EVENT_RECORDED` with `{ shipmentEventId, eventType, source, provider }`. This is not a Proof lifecycle transition.

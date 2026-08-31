@@ -44,6 +44,8 @@ Chronology categories (PackProof event, commerce event, carrier observation) nam
 
 Shipment observations may appear after “Core PackProof finalized”. They did not change the frozen core digest.
 
+Finalized Proofs also load `GET /proofs/:id/shipment-integrity` and render a compact shipment-record panel from the server verification result. The browser does not recompute hashes. The panel reports PackProof’s stored-record integrity, not that a carrier’s real-world statement is true.
+
 ## External identity
 
 `tenant_key + external_transaction_id → proof_id` is an immutable infrastructure binding. Editing `transaction.externalReference` changes display metadata only. The web client does not offer rebinding.

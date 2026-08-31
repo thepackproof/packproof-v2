@@ -23,7 +23,7 @@ import {
 import { commitAttestation } from "./domain/attestations.js";
 import { listMyProofs } from "./domain/proof-collection.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
-import { getProofForUser } from "./domain/proofs.js";
+import { authorizeProofAccess, getProofForUser } from "./domain/proofs.js";
 import {
   createTransaction,
   getTransaction,
@@ -33,6 +33,7 @@ import {
 } from "./domain/transactions.js";
 import { ensureIdentityUser } from "./domain/users.js";
 import { importNormalizedTransaction } from "./domain/transaction-import.js";
+import { getShipmentIntegrity } from "./domain/shipment-integrity.js";
 import {
   importShipmentObservations,
   listShipmentEventsForTransaction,
@@ -346,6 +347,15 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       const proof = await getProofForUser(deps.db, bearerUser(req), req.params.id);
       res.json({ proofId: proof.proofId, chronology: proof.chronology });
+    }),
+  );
+
+  app.get(
+    "/proofs/:id/shipment-integrity",
+    asyncRoute(async (req, res) => {
+      await authorizeProofAccess(deps.db, req.params.id, bearerUser(req));
+      const result = await getShipmentIntegrity(deps.db, req.params.id);
+      res.json(result);
     }),
   );
 

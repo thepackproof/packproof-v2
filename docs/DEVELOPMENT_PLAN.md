@@ -27,7 +27,7 @@ Supported: two users, two devices, one transaction, one Proof, seller, buyer, in
 
 Out of scope: Salesforce, Zendesk, live carriers, live marketplaces, returns, receiver capture, witness, analytics, billing, orgs, GraphQL, Kafka, Kubernetes, Firebase/Firestore domain storage, microservices, extra tiers, AI analysis.
 
-A provider-neutral transaction ingestion seam with a reference adapter is in scope. Append-only shipment observations associated with a Proof are in scope. Real eBay/Shopify/Shippo/EasyPost/UPS/FedEx connectors are not.
+A provider-neutral transaction ingestion seam with a reference adapter is in scope. Append-only shipment observations associated with a Proof are in scope. A recomputed shipment integrity supplement that links those observations to the frozen core manifest is in scope. Real eBay/Shopify/Shippo/EasyPost/UPS/FedEx connectors are not.
 
 ## Required flow
 
@@ -35,7 +35,7 @@ Seller signs in → create transaction → create-or-get Proof → invite buyer 
 
 ## Commands
 
-`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`.
+`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`, `getShipmentIntegrity()`.
 
 ## API
 
@@ -49,6 +49,7 @@ REST only:
 - `GET /proofs/:id`
 - `GET /proofs/:id/shipment-events`
 - `GET /proofs/:id/chronology`
+- `GET /proofs/:id/shipment-integrity`
 - `GET /transactions/:id/shipment-events`
 - `POST /transactions/:id/shipment-events`
 - `POST /proofs/:id/invitations`

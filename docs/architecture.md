@@ -25,6 +25,7 @@ Clients (mobile, web reference client, API tests)
  ├── Invitations
  ├── Evidence
  ├── Shipment observations
+ ├── Shipment integrity (recomputed read)
  ├── Finalization
  ├── Authentication adapter
  └── Audit
@@ -74,4 +75,4 @@ One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks,
 
 See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md).
 
-Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Append-only shipment observations are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). Live marketplace and carrier connectors are not implemented.
+Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). Live marketplace and carrier connectors are not implemented.

@@ -355,6 +355,32 @@ export async function listShipmentEventsForProof(
   return result.rows.map(toView);
 }
 
+export async function listShipmentEventRowsAppendOrder(
+  db: Database,
+  proofId: string,
+): Promise<ShipmentEventRow[]> {
+  const result = await db.query<ShipmentEventRow>(
+    `SELECT * FROM shipment_events
+      WHERE proof_id = $1
+      ORDER BY created_at ASC, id ASC`,
+    [proofId],
+  );
+  return result.rows;
+}
+
+export async function listShipmentEventRowsForShippingAppendOrder(
+  db: Database,
+  shippingId: string,
+): Promise<ShipmentEventRow[]> {
+  const result = await db.query<ShipmentEventRow>(
+    `SELECT * FROM shipment_events
+      WHERE shipping_id = $1
+      ORDER BY created_at ASC, id ASC`,
+    [shippingId],
+  );
+  return result.rows;
+}
+
 export async function listShipmentEventsForTransaction(
   db: Database,
   transactionId: string,

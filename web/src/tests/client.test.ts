@@ -115,4 +115,27 @@ describe("API client boundary", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("loads shipment integrity from the server verification route", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          status: "LINKED",
+          proofId: "proof_1",
+          shipmentSupplementSha256: "aa".repeat(32),
+          verification: { valid: true, linkedToFinalizedProof: true },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    const integrity = await api.getShipmentIntegrity("proof_1");
+    expect(integrity.status).toBe("LINKED");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/proofs/proof_1/shipment-integrity",
+      expect.objectContaining({ method: "GET" }),
+    );
+    vi.unstubAllGlobals();
+  });
 });

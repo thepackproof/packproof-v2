@@ -53,6 +53,29 @@ describe("PackProof web reference client", () => {
         if (url.endsWith("/invitations")) {
           return json({ invitations: [invitation] });
         }
+        if (url.includes("/shipment-integrity")) {
+          return json({
+            schema: "packproof.shipment.integrity/v1",
+            status: "CORE_NOT_FINALIZED",
+            proofId: "proof_01ABCVERYLONGIDENTIFIERVALUE",
+            transactionId: "txn_01",
+            shippingId: "shp_1",
+            coreManifestSha256: null,
+            shipmentSupplementSha256: null,
+            eventCount: 0,
+            firstEventSha256: null,
+            latestEventSha256: null,
+            supplement: null,
+            verification: {
+              coreManifestValid: false,
+              eventContentHashesValid: true,
+              eventChainValid: true,
+              supplementValid: false,
+              linkedToFinalizedProof: false,
+              valid: false,
+            },
+          });
+        }
         if (url.includes("/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE") && !url.includes("/attestations")) {
           return json(canonicalProof);
         }
@@ -280,6 +303,89 @@ describe("PackProof web reference client", () => {
     );
     expect(String(importCall?.[1] && "body" in importCall[1] ? importCall[1].body : "")).not.toContain(
       "ebay_order_id",
+    );
+  });
+
+  it("renders server shipment integrity on a finalized Proof", async () => {
+    signInSession();
+    window.history.replaceState(null, "", "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/shipment-integrity")) {
+          return json({
+            schema: "packproof.shipment.integrity/v1",
+            status: "LINKED",
+            algorithm: "SHA-256",
+            proofId: canonicalProof.proofId,
+            transactionId: canonicalProof.transactionId,
+            shippingId: "shp_1",
+            coreManifestSha256: "cc".repeat(32),
+            shipmentSupplementSha256: "dd".repeat(32),
+            eventCount: 2,
+            firstEventSha256: "ee".repeat(32),
+            latestEventSha256: "ff".repeat(32),
+            supplement: {
+              schema: "packproof.shipment.supplement/v1",
+              proofId: canonicalProof.proofId,
+              transactionId: canonicalProof.transactionId,
+              coreManifestSha256: "cc".repeat(32),
+              shipment: {
+                shippingId: "shp_1",
+                carrier: "UPS",
+                service: "Ground",
+                trackingNumber: "1Z999",
+                shipmentDate: "2026-08-21",
+              },
+              events: [
+                { shipmentEventId: "sev_1", sha256: "ee".repeat(32) },
+                { shipmentEventId: "sev_2", sha256: "ff".repeat(32) },
+              ],
+            },
+            verification: {
+              coreManifestValid: true,
+              eventContentHashesValid: true,
+              eventChainValid: true,
+              supplementValid: true,
+              linkedToFinalizedProof: true,
+              valid: true,
+            },
+          });
+        }
+        if (url.includes("/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE")) {
+          return json({
+            ...canonicalProof,
+            status: "FINALIZED",
+            finalizedAt: "2026-08-30T12:20:00.000Z",
+            transaction: { ...canonicalProof.transaction, proofStatus: "FINALIZED" },
+          });
+        }
+        if (url.endsWith("/me")) {
+          return json({
+            userId: "user_seller",
+            username: "seller",
+            displayName: "Seller",
+            status: "ACTIVE",
+            createdAt: "2026-08-30T12:00:00.000Z",
+            updatedAt: "2026-08-30T12:00:00.000Z",
+          });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Shipment record" })).toBeInTheDocument();
+    expect(screen.getByText("2 shipment observations")).toBeInTheDocument();
+    expect(screen.getByText("✓ Linked to finalized PackProof")).toBeInTheDocument();
+    expect(screen.getByText("✓ Shipment event chain valid")).toBeInTheDocument();
+    expect(screen.getByText("dd".repeat(32))).toBeInTheDocument();
+    expect(
+      screen.getByText(/does not verify that a carrier’s real-world statement is true/),
+    ).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE/shipment-integrity",
+      expect.objectContaining({ method: "GET" }),
     );
   });
 });

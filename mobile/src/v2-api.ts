@@ -110,6 +110,44 @@ export interface ShipmentImportView {
   createdCount: number;
 }
 
+export interface ShipmentIntegrityVerification {
+  coreManifestValid: boolean;
+  eventContentHashesValid: boolean;
+  eventChainValid: boolean;
+  supplementValid: boolean;
+  linkedToFinalizedProof: boolean;
+  valid: boolean;
+}
+
+export interface ShipmentIntegrityView {
+  schema?: "packproof.shipment.integrity/v1" | string;
+  status: "LINKED" | "CORE_NOT_FINALIZED" | "NO_SHIPMENT" | string;
+  algorithm?: string;
+  proofId: string;
+  transactionId: string;
+  shippingId: string | null;
+  coreManifestSha256: string | null;
+  shipmentSupplementSha256: string | null;
+  eventCount: number;
+  firstEventSha256: string | null;
+  latestEventSha256: string | null;
+  supplement: {
+    schema?: string;
+    proofId: string;
+    transactionId: string;
+    coreManifestSha256: string;
+    shipment: {
+      shippingId: string;
+      carrier: string | null;
+      service: string | null;
+      trackingNumber: string | null;
+      shipmentDate: string | null;
+    };
+    events: Array<{ shipmentEventId: string; sha256: string }>;
+  } | null;
+  verification: ShipmentIntegrityVerification;
+}
+
 export interface ProofView {
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
@@ -466,6 +504,10 @@ export class PackProofV2Client {
 
   async getProof(proofId: string): Promise<ProofView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}`);
+  }
+
+  async getShipmentIntegrity(proofId: string): Promise<ShipmentIntegrityView> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/shipment-integrity`);
   }
 
   async createInvitation(

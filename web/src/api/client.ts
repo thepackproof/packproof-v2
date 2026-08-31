@@ -11,6 +11,7 @@ import {
   type TransactionView,
   type TransactionWriteInput,
   type ShipmentImportView,
+  type ShipmentIntegrityView,
 } from "./types";
 
 export class PackProofApi {
@@ -47,6 +48,10 @@ export class PackProofApi {
 
   async getProof(proofId: string): Promise<CanonicalProof> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}`);
+  }
+
+  async getShipmentIntegrity(proofId: string): Promise<ShipmentIntegrityView> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/shipment-integrity`);
   }
 
   async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {

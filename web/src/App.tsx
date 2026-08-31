@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PackProofApi } from "./api/client";
 import { ApiError } from "./api/types";
-import type { CanonicalProof, InvitationInboxView, ProofCollectionItem, TransactionWriteInput } from "./api/types";
+import type { CanonicalProof, InvitationInboxView, ProofCollectionItem, ShipmentIntegrityView, TransactionWriteInput } from "./api/types";
 import { clearSession, loadSession, saveSession, type WebSession } from "./auth/session";
 import { CreateProofScreen } from "./screens/CreateProofScreen";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -36,6 +36,7 @@ export function App() {
   const [proofs, setProofs] = useState<ProofCollectionItem[]>([]);
   const [invitations, setInvitations] = useState<InvitationInboxView[]>([]);
   const [proof, setProof] = useState<CanonicalProof | null>(null);
+  const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export function App() {
     setProofs([]);
     setInvitations([]);
     setProof(null);
+    setShipmentIntegrity(null);
     setError(null);
     writePath("/");
     setRoute({ name: "home" });
@@ -67,6 +69,7 @@ export function App() {
     setError(null);
     if (next.name !== "proof" || proof?.proofId !== next.proofId) {
       setProof(null);
+      setShipmentIntegrity(null);
     }
     if (next.name === "home" || next.name === "proof") {
       setLoading(true);
@@ -94,6 +97,7 @@ export function App() {
       const next = parseRoute(window.location.pathname);
       if (next.name !== "proof") {
         setProof(null);
+        setShipmentIntegrity(null);
       }
       setLoading(true);
       setRoute(next);
@@ -128,9 +132,14 @@ export function App() {
       setLoading(true);
       setError(null);
       setProof(null);
+      setShipmentIntegrity(null);
       void api
         .getProof(route.proofId)
-        .then((loaded) => setProof(loaded))
+        .then(async (loaded) => {
+          setProof(loaded);
+          const integrity = await api.getShipmentIntegrity(loaded.proofId);
+          setShipmentIntegrity(integrity);
+        })
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
@@ -234,6 +243,7 @@ export function App() {
       {route.name === "proof" ? (
         <ProofScreen
           proof={route.name === "proof" && proof?.proofId === route.proofId ? proof : null}
+          shipmentIntegrity={shipmentIntegrity}
           currentUserId={session.userId}
           loading={loading}
           error={error}
@@ -271,7 +281,10 @@ export function App() {
             setBusy(true);
             void api
               .finalizeProof(proof.proofId)
-              .then((result) => setProof(result.proof))
+              .then(async (result) => {
+                setProof(result.proof);
+                setShipmentIntegrity(await api.getShipmentIntegrity(result.proof.proofId));
+              })
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
@@ -288,7 +301,10 @@ export function App() {
                 throughEventType: throughEventType ?? null,
               })
               .then(() => api.getProof(proof.proofId))
-              .then((loaded) => setProof(loaded))
+              .then(async (loaded) => {
+                setProof(loaded);
+                setShipmentIntegrity(await api.getShipmentIntegrity(loaded.proofId));
+              })
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}

@@ -54,6 +54,7 @@ The contract includes:
 - **Shipment observations** — append-only carrier/participant observations associated with the Proof; they may arrive after `FINALIZED` and are not part of the core manifest
 - **Chronology** — presentation read model over audit + shipment observations (`PROOF` / `COMMERCE` / `SHIPMENT`). Not lifecycle state and not evidence tiers
 - **Integrity** — recorded evidence digests and finalized manifest digest
+- **Shipment integrity supplement** — a separate recomputed read (`GET /proofs/:id/shipment-integrity`, schema `packproof.shipment.integrity/v1`). It associates current shipment-event hashes with the frozen core manifest. It is not a second Proof, not a new lifecycle status, and not part of the core manifest.
 - **Facts / external** — explicit trust classification
 
 `GET /me/proofs` returns `packproof.proof.summary/v1`. It is a discovery index for the authenticated user. Cached `proofId` values are shortcuts. The server remains the authority.
@@ -74,7 +75,7 @@ Future integration credentials must resolve to this same gate. They must not rea
 - Evidence is append-only after commit. Committed bytes, digest, submitter, and type cannot be replaced in place.
 - Attestations are immutable after insert.
 - Audit events and final manifests are immutable.
-- After `FINALIZED`, mutation of Proof status, evidence, attestations, transaction facts, shipping identity, and the core manifest is rejected. New shipment observations may still be appended; they do not rewrite the core record.
+- After `FINALIZED`, mutation of Proof status, evidence, attestations, transaction facts, shipping identity, and the core manifest is rejected. New shipment observations may still be appended; they do not rewrite the core record. Recomputing the shipment integrity supplement after those appends produces a new digest over the extended event list. That is a current projection, not mutation of historical evidence.
 
 ## External references
 

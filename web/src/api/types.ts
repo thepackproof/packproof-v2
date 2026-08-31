@@ -291,6 +291,44 @@ export interface ShipmentImportView {
   createdCount: number;
 }
 
+export interface ShipmentIntegrityVerification {
+  coreManifestValid: boolean;
+  eventContentHashesValid: boolean;
+  eventChainValid: boolean;
+  supplementValid: boolean;
+  linkedToFinalizedProof: boolean;
+  valid: boolean;
+}
+
+export interface ShipmentIntegrityView {
+  schema?: "packproof.shipment.integrity/v1" | string;
+  status: "LINKED" | "CORE_NOT_FINALIZED" | "NO_SHIPMENT" | string;
+  algorithm?: string;
+  proofId: string;
+  transactionId: string;
+  shippingId: string | null;
+  coreManifestSha256: string | null;
+  shipmentSupplementSha256: string | null;
+  eventCount: number;
+  firstEventSha256: string | null;
+  latestEventSha256: string | null;
+  supplement: {
+    schema?: string;
+    proofId: string;
+    transactionId: string;
+    coreManifestSha256: string;
+    shipment: {
+      shippingId: string;
+      carrier: string | null;
+      service: string | null;
+      trackingNumber: string | null;
+      shipmentDate: string | null;
+    };
+    events: Array<{ shipmentEventId: string; sha256: string }>;
+  } | null;
+  verification: ShipmentIntegrityVerification;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly code: string,

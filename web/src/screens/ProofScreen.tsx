@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CanonicalProof, PublicProfileView } from "../api/types";
+import type { CanonicalProof, PublicProfileView, ShipmentIntegrityView } from "../api/types";
 import {
   AttestationList,
   EventTimeline,
@@ -8,10 +8,12 @@ import {
   ParticipantList,
   ProofHeader,
   ProofOverview,
+  ShipmentIntegrityPanel,
 } from "../components/ProofRecord";
 
 export function ProofScreen(props: {
   proof: CanonicalProof | null;
+  shipmentIntegrity: ShipmentIntegrityView | null;
   currentUserId: string;
   loading: boolean;
   error: string | null;
@@ -201,6 +203,9 @@ export function ProofScreen(props: {
         </section>
       ) : null}
       <EventTimeline proof={proof} />
+      {proof.status === "FINALIZED" ? (
+        <ShipmentIntegrityPanel integrity={props.shipmentIntegrity} />
+      ) : null}
       <IntegrityPanel proof={proof} />
     </main>
   );

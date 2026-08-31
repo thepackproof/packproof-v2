@@ -1,4 +1,4 @@
-import type { CanonicalProof } from "../api/types";
+import type { CanonicalProof, ShipmentIntegrityView } from "../api/types";
 import {
   attestationLabel,
   chronologyCategoryLabel,
@@ -314,6 +314,71 @@ export function IntegrityPanel(props: { proof: CanonicalProof }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+export function ShipmentIntegrityPanel(props: { integrity: ShipmentIntegrityView | null }) {
+  const integrity = props.integrity;
+  if (!integrity || integrity.status === "CORE_NOT_FINALIZED") {
+    return null;
+  }
+  if (integrity.status === "NO_SHIPMENT") {
+    return (
+      <section className="section">
+        <div className="section-head">
+          <h2>Shipment record</h2>
+          <TrustBadge kind="FACT" />
+        </div>
+        <p className="note">
+          No shipment identity is associated with this Proof. PackProof did not invent a shipment
+          record.
+        </p>
+      </section>
+    );
+  }
+  const checks = integrity.verification;
+  const failed = !checks.valid;
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2>Shipment record</h2>
+        <TrustBadge kind="FACT" />
+      </div>
+      <p className="note">
+        This checks that PackProof’s stored shipment observations still hash to the frozen core
+        record. It does not verify that a carrier’s real-world statement is true.
+      </p>
+      {failed ? (
+        <p className="banner banner-error" role="alert">
+          Shipment record integrity check failed. The stored hashes do not recompute to a consistent
+          supplement.
+        </p>
+      ) : null}
+      <p>
+        {integrity.eventCount} shipment observation{integrity.eventCount === 1 ? "" : "s"}
+      </p>
+      <ul className="card-list">
+        <li>
+          {checks.linkedToFinalizedProof
+            ? "✓ Linked to finalized PackProof"
+            : "Not linked to a finalized PackProof"}
+        </li>
+        <li>
+          {checks.eventChainValid ? "✓ Shipment event chain valid" : "Shipment event chain invalid"}
+        </li>
+        <li>
+          {checks.supplementValid
+            ? "✓ Shipment record digest valid"
+            : "Shipment record digest invalid"}
+        </li>
+      </ul>
+      <dl className="dl">
+        <div>
+          <dt>Shipment record SHA-256</dt>
+          <dd className="digest">{integrity.shipmentSupplementSha256 ?? "—"}</dd>
+        </div>
+      </dl>
     </section>
   );
 }

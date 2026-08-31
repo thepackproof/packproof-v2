@@ -1,5 +1,7 @@
 export const CANONICAL_PROOF_SCHEMA = "packproof.proof.canonical/v1" as const;
 export const PROOF_SUMMARY_SCHEMA = "packproof.proof.summary/v1" as const;
+export const SHIPMENT_SUPPLEMENT_SCHEMA = "packproof.shipment.supplement/v1" as const;
+export const SHIPMENT_INTEGRITY_SCHEMA = "packproof.shipment.integrity/v1" as const;
 
 export const TRUST_KIND = {
   FACT: "FACT",

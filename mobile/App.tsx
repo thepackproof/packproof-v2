@@ -19,6 +19,7 @@ import {
   type ProofCollectionItem,
   type ProofView,
   type PublicProfileView,
+  type ShipmentIntegrityView,
   type TransactionImportView,
   type TransactionView,
 } from "./src/v2-api";
@@ -146,6 +147,7 @@ export default function App() {
   const [importReview, setImportReview] = useState<TransactionImportView | null>(null);
   const [editForm, setEditForm] = useState<ContextForm>(EMPTY_FORM);
   const [manifest, setManifest] = useState<ManifestView | null>(null);
+  const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [captureStatus, setCaptureStatus] = useState<LocalCaptureStatus>("idle");
   const [localCapture, setLocalCapture] = useState<LocalCapture | null>(null);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
@@ -502,6 +504,7 @@ export default function App() {
     } else {
       setManifest(null);
     }
+    setShipmentIntegrity(await client.getShipmentIntegrity(proofId));
     const current = sessionRef.current;
     if (current) {
       await persist({ ...current, proofId: fresh.proofId, transactionId: fresh.transactionId });
@@ -1209,6 +1212,7 @@ export default function App() {
               <Text>Loading transaction from server…</Text>
             )}
             <ChronologyList proof={proof} />
+            {finalized ? <ShipmentIntegritySummary integrity={shipmentIntegrity} /> : null}
             {role === "SELLER" ? (
               <View>
                 <Text style={styles.heading}>Demo shipment observations</Text>
@@ -1804,6 +1808,48 @@ function ImportedPurchaseReview(props: { imported: TransactionImportView }) {
       <Fact label="shipment date" value={shipping?.shipmentDate} />
       <Fact label="source" value={provenance?.source} />
       <Fact label="provider" value={provenance?.provider ?? props.imported.identity.adapterKey} />
+    </View>
+  );
+}
+
+function ShipmentIntegritySummary(props: { integrity: ShipmentIntegrityView | null }) {
+  const integrity = props.integrity;
+  if (!integrity || integrity.status === "CORE_NOT_FINALIZED") {
+    return null;
+  }
+  if (integrity.status === "NO_SHIPMENT") {
+    return (
+      <View>
+        <Text style={styles.heading}>Shipment record</Text>
+        <Text>No shipment identity is associated with this Proof.</Text>
+      </View>
+    );
+  }
+  const checks = integrity.verification;
+  return (
+    <View>
+      <Text style={styles.heading}>Shipment record</Text>
+      <Text>
+        {integrity.eventCount} shipment observation{integrity.eventCount === 1 ? "" : "s"}
+      </Text>
+      <Text>
+        This checks PackProof’s stored record integrity. It does not verify a carrier’s real-world
+        statement.
+      </Text>
+      {checks.valid ? null : (
+        <Text style={styles.error}>
+          Shipment record integrity check failed. Stored hashes do not recompute consistently.
+        </Text>
+      )}
+      <Text>
+        {checks.linkedToFinalizedProof
+          ? "✓ Linked to finalized PackProof"
+          : "Not linked to a finalized PackProof"}
+      </Text>
+      <Text>
+        {checks.eventChainValid ? "✓ Shipment event chain valid" : "Shipment event chain invalid"}
+      </Text>
+      <Text selectable>Shipment record SHA-256 {integrity.shipmentSupplementSha256 ?? "—"}</Text>
     </View>
   );
 }
