@@ -566,8 +566,14 @@ describe("staging IAM and EasyPost secrets", () => {
     expect(api).toMatch(/ExecutionRoleArn: !Ref TaskExecutionRoleArn/);
     expect(api).toMatch(/PACKPROOF_CREDENTIAL_STORE/);
     expect(api).toMatch(/secrets-manager/);
+    expect(api).toMatch(/PACKPROOF_RELEASE_SHA/);
+    expect(api).toMatch(/PACKPROOF_ENVIRONMENT/);
     expect(deploy).toMatch(/PACKPROOF_CREDENTIAL_STORE/);
     expect(deploy).toMatch(/secrets-manager/);
+    expect(deploy).toMatch(/PACKPROOF_RELEASE_SHA/);
+    expect(deploy).toMatch(/PACKPROOF_ENVIRONMENT/);
+    expect(deploy).toMatch(/force-new-deployment/);
+    expect(deploy).toMatch(/runningNewImage/);
     expect(deploy).toMatch(/--task-role-arn/);
     expect(deploy).not.toMatch(/EZTK/);
     expect(deploy).not.toMatch(/EZAK/);

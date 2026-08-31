@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { sha256Hex } from "../src/hash.js";
+import { createApp } from "../src/app.js";
+import { BearerUserAdapter } from "../src/auth/adapter.js";
 import { auth, createHarness, login, type TestHarness } from "./helpers.js";
 
 describe("PackProof V2 API workflow", () => {
@@ -15,6 +17,48 @@ describe("PackProof V2 API workflow", () => {
     const response = await request(harness.app).get("/health");
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: "ok" });
+  });
+
+  it("serves a safe release identity without authentication or secrets", async () => {
+    harness = await createHarness();
+    const defaulted = await request(harness.app).get("/meta");
+    expect(defaulted.status).toBe(200);
+    expect(defaulted.body).toEqual({
+      service: "packproof-api",
+      environment: "development",
+      commit: null,
+      version: null,
+      image: null,
+    });
+    expect(JSON.stringify(defaulted.body)).not.toMatch(
+      /password|secret|cognito|DATABASE|PACKPROOF_DB|EZTK|EZAK/i,
+    );
+
+    const identified = createApp({
+      db: harness.db,
+      objectStore: harness.objectStore,
+      clock: harness.clock,
+      auth: new BearerUserAdapter(harness.db),
+      publicBaseUrl: "http://127.0.0.1",
+      devAuth: true,
+      credentialStore: harness.credentialStore,
+      releaseIdentity: {
+        service: "packproof-api",
+        environment: "staging",
+        commit: "6216bc339d9f2bed4c1117660924e32c98682f45",
+        version: "0.1.0",
+        image: "20260831180000",
+      },
+    });
+    const staged = await request(identified).get("/meta");
+    expect(staged.status).toBe(200);
+    expect(staged.body).toEqual({
+      service: "packproof-api",
+      environment: "staging",
+      commit: "6216bc339d9f2bed4c1117660924e32c98682f45",
+      version: "0.1.0",
+      image: "20260831180000",
+    });
   });
 
   it("runs the seller/buyer vertical slice and required failure scenarios", async () => {

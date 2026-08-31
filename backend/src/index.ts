@@ -25,6 +25,7 @@ const app = createApp({
   corsOrigins: config.webOrigins,
   integrations: createDefaultIntegrationRegistry(systemClock),
   credentialStore: createCredentialStore(config),
+  releaseIdentity: config.release,
 });
 
 const server = app.listen(config.port, "0.0.0.0", () => {

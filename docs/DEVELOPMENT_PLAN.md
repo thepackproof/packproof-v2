@@ -48,6 +48,8 @@ REST only:
 - `POST /integrations/transactions/import`
 - `POST /integrations/shipment-events/import`
 - `POST /transactions/:id/proof`
+- `GET /health`
+- `GET /meta`
 - `GET /proofs/:id`
 - `GET /users/search`
 - `GET /proofs/:id/users/search`

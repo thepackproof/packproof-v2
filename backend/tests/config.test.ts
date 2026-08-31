@@ -102,6 +102,31 @@ describe("storage configuration", () => {
     });
   });
 
+  it("exposes only explicit release identity fields", () => {
+    expect(loadConfig({}).release).toEqual({
+      service: "packproof-api",
+      environment: "development",
+      commit: null,
+      version: null,
+      image: null,
+    });
+    expect(
+      loadConfig({
+        PACKPROOF_ENVIRONMENT: "staging",
+        PACKPROOF_RELEASE_SHA: "6216bc339d9f2bed4c1117660924e32c98682f45",
+        PACKPROOF_RELEASE_VERSION: "0.1.0",
+        PACKPROOF_RELEASE_IMAGE: "20260831180000",
+        PACKPROOF_DB_PASSWORD: "should-not-appear",
+      }).release,
+    ).toEqual({
+      service: "packproof-api",
+      environment: "staging",
+      commit: "6216bc339d9f2bed4c1117660924e32c98682f45",
+      version: "0.1.0",
+      image: "20260831180000",
+    });
+  });
+
   it("accepts PACKPROOF_CREDENTIAL_STORE without embedding secrets", () => {
     expect(loadConfig({}).credentialStore).toBe("env");
     expect(loadConfig({ PACKPROOF_CREDENTIAL_STORE: "memory" }).credentialStore).toBe("memory");

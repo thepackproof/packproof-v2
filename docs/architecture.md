@@ -65,6 +65,8 @@ Do not use DynamoDB or Firebase as canonical Proof storage. Do not put Proof tra
 
 See `backend/README.md`. Tests use PostgreSQL-compatible PGlite. Runtime uses `DATABASE_URL` PostgreSQL when configured.
 
+`GET /health` and `GET /meta` are unauthenticated. `/meta` returns only service, environment, commit, version, and image identifiers supplied through explicit release variables. It does not dump process environment.
+
 Phase 10 mobile client: `mobile/`. It issues V2 domain commands and renders returned Proof state. It does not own Proof lifecycle.
 
 Web reference client: `web/`. Same API, same canonical Proof. Local Vite for development. Staging hosting is S3 + CloudFront; see [WEB_CLIENT.md](WEB_CLIENT.md).

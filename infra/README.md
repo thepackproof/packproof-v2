@@ -20,6 +20,6 @@ Staging integration secrets are readable only by the task role:
 
 Secret **values** are never CloudFormation outputs. `DatabaseSecretArn` is an ARN, not a password.
 
-`deploy.ps1` applies the API through the ECS Express Mode CLI, not by updating `api-service.yaml` in place. The script must set `PACKPROOF_CREDENTIAL_STORE=secrets-manager` on the container. The task role IAM update still comes from `cloudformation deploy` of `staging.yaml`.
+`deploy.ps1` applies the API through the ECS Express Mode CLI, not by updating `api-service.yaml` in place. The script must set `PACKPROOF_CREDENTIAL_STORE=secrets-manager` on the container, pass `PACKPROOF_RELEASE_SHA` / `PACKPROOF_RELEASE_IMAGE` for `GET /meta`, and wait until every running task uses the new image. The task role IAM update still comes from `cloudformation deploy` of `staging.yaml`.
 
 See [EASYPOST_TRACKING_INTEGRATION.md](../docs/EASYPOST_TRACKING_INTEGRATION.md).

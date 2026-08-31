@@ -37,6 +37,14 @@ Parameters:
     Type: String
     Default: ""
     Description: Exact browser origins allowed by PACKPROOF_WEB_ORIGINS. Empty leaves CORS unset.
+  ReleaseSha:
+    Type: String
+    Default: ""
+    Description: Git commit SHA for GET /meta. Not a secret.
+  ReleaseImage:
+    Type: String
+    Default: ""
+    Description: Image tag for GET /meta. Not a secret.
 
 Resources:
   ExpressService:
@@ -96,6 +104,12 @@ Resources:
             Value: !Ref WebOrigins
           - Name: PACKPROOF_CREDENTIAL_STORE
             Value: secrets-manager
+          - Name: PACKPROOF_ENVIRONMENT
+            Value: staging
+          - Name: PACKPROOF_RELEASE_SHA
+            Value: !Ref ReleaseSha
+          - Name: PACKPROOF_RELEASE_IMAGE
+            Value: !Ref ReleaseImage
         Secrets:
           - Name: PACKPROOF_DB_USER
             ValueFrom: !Sub "${DatabaseSecretArn}:username::"

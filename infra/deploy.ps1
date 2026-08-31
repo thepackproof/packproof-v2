@@ -48,11 +48,15 @@ $Account = (Invoke-AwsJson sts get-caller-identity).Account
 $EcrUri = "$Account.dkr.ecr.$Region.amazonaws.com/$EcrName"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $BackendRoot = Join-Path $RepoRoot "backend"
+$ReleaseSha = (git -C $RepoRoot rev-parse HEAD).Trim()
+if (-not $ReleaseSha) {
+  throw "Could not resolve git HEAD for PACKPROOF_RELEASE_SHA"
+}
 $FoundationTemplate = Join-Path $PSScriptRoot "staging.yaml"
 $ApiTemplate = Join-Path $PSScriptRoot "api-service.yaml"
 $BuildBucket = "packproof-v2-staging-build-$Account"
 
-Write-Host "Account=$Account Region=$Region ImageTag=$ImageTag"
+Write-Host "Account=$Account Region=$Region ImageTag=$ImageTag ReleaseSha=$ReleaseSha"
 
 & $Aws ecr describe-repositories --repository-names $EcrName --region $Region 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) {
@@ -178,6 +182,9 @@ $container = @{
     @{ name = "PACKPROOF_DB_NAME"; value = "packproof_v2" }
     @{ name = "PACKPROOF_DB_SSLMODE"; value = "require" }
     @{ name = "PACKPROOF_CREDENTIAL_STORE"; value = "secrets-manager" }
+    @{ name = "PACKPROOF_ENVIRONMENT"; value = "staging" }
+    @{ name = "PACKPROOF_RELEASE_SHA"; value = $ReleaseSha }
+    @{ name = "PACKPROOF_RELEASE_IMAGE"; value = $ImageTag }
   )
   secrets = @(
     @{ name = "PACKPROOF_DB_USER"; valueFrom = "${secretArn}:username::" }
@@ -226,21 +233,48 @@ if ($serviceStatus -eq "ACTIVE" -and $serviceArn) {
   $serviceArn = $created.service.serviceArn
 }
 
-Write-Host "Ensuring desired count is 1"
-Invoke-Aws ecs update-service --cluster $Outputs.ClusterName --service $ApiStack --desired-count 1 --region $Region | Out-Null
+Write-Host "Ensuring desired count is 1 and forcing a new task set"
+Invoke-Aws ecs update-service --cluster $Outputs.ClusterName --service $ApiStack --desired-count 1 --force-new-deployment --region $Region | Out-Null
+
+function Get-RunningTaskImages {
+  $listed = Invoke-AwsJson ecs list-tasks --cluster $Outputs.ClusterName --service-name $ApiStack --desired-status RUNNING --region $Region
+  $arns = @($listed.taskArns)
+  if ($arns.Count -eq 0) {
+    return @()
+  }
+  $described = Invoke-AwsJson ecs describe-tasks --cluster $Outputs.ClusterName --tasks @($arns) --region $Region
+  return @($described.tasks | ForEach-Object { $_.containers[0].image })
+}
 
 $endpoint = $null
-for ($i = 0; $i -lt 40; $i++) {
+$converged = $false
+for ($i = 0; $i -lt 80; $i++) {
   $express = Invoke-AwsJson ecs describe-express-gateway-service --service-arn $serviceArn --region $Region
   $endpoint = $express.service.activeConfigurations[0].ingressPaths[0].endpoint
   $counts = Invoke-AwsJson ecs describe-services --cluster $Outputs.ClusterName --services $ApiStack --region $Region
-  $running = $counts.services[0].runningCount
-  $desired = $counts.services[0].desiredCount
-  Write-Host "Service desired=$desired running=$running endpoint=$endpoint"
+  $service = $counts.services[0]
+  $running = $service.runningCount
+  $desired = $service.desiredCount
+  $pending = $service.pendingCount
+  $images = Get-RunningTaskImages
+  $wrong = @($images | Where-Object { $_ -notlike "*:${ImageTag}" })
+  $extra = @($service.deployments | Where-Object { $_.status -ne "PRIMARY" -and ($_.runningCount -gt 0 -or $_.pendingCount -gt 0) })
+  $primary = @($service.deployments | Where-Object { $_.status -eq "PRIMARY" })[0]
+  Write-Host "Service desired=$desired running=$running pending=$pending images=$($images -join ',') extra=$($extra.Count) rollout=$($primary.rolloutState) endpoint=$endpoint"
   if ($desired -eq 0) {
     Invoke-Aws ecs update-service --cluster $Outputs.ClusterName --service $ApiStack --desired-count 1 --region $Region | Out-Null
   }
-  if ($endpoint -and $running -ge 1 -and $desired -ge 1) {
+  if (
+    $endpoint -and
+    $desired -ge 1 -and
+    $running -eq $desired -and
+    $pending -eq 0 -and
+    $images.Count -eq $running -and
+    $wrong.Count -eq 0 -and
+    $extra.Count -eq 0 -and
+    $primary.rolloutState -eq "COMPLETED"
+  ) {
+    $converged = $true
     break
   }
   Start-Sleep -Seconds 15
@@ -248,6 +282,9 @@ for ($i = 0; $i -lt 40; $i++) {
 
 if (-not $endpoint) {
   throw "Express Mode service did not publish an endpoint"
+}
+if (-not $converged) {
+  throw "ECS did not converge onto image tag $ImageTag with a single PRIMARY deployment"
 }
 
 $publicUrl = $endpoint.TrimEnd("/")
@@ -257,4 +294,6 @@ if ($publicUrl -notmatch "^https?://") {
 
 Write-Host "STAGING_URL=$publicUrl"
 Write-Host "IMAGE=$image"
+Write-Host "RELEASE_SHA=$ReleaseSha"
 Write-Host "DB_ENDPOINT=$($Outputs.DatabaseEndpoint)"
+Write-Host "runningNewImage=$ImageTag"

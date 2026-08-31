@@ -55,6 +55,7 @@ import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { parseIntegrationImportRequest } from "./integrations/import-request.js";
 import { parseShipmentImportRequest } from "./integrations/shipment-import-request.js";
 import type { IntegrationCredentialStore, IntegrationCredentials } from "./integrations/credentials.js";
+import { parseReleaseIdentity, type ReleaseIdentity } from "./config.js";
 import { MemoryCredentialStore } from "./integrations/memory-credential-store.js";
 import {
   TRUSTED_DEMO_API_KEY,
@@ -78,6 +79,7 @@ export interface AppDependencies {
   corsOrigins?: string[];
   integrations?: IntegrationAdapterRegistry;
   credentialStore?: IntegrationCredentialStore & { put?: (credentials: IntegrationCredentials) => void };
+  releaseIdentity?: ReleaseIdentity;
 }
 
 function asyncRoute(
@@ -117,6 +119,7 @@ export function createApp(deps: AppDependencies): Express {
   const corsOrigins = deps.corsOrigins ?? [];
   const integrations = deps.integrations ?? createDefaultIntegrationRegistry(deps.clock);
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
+  const releaseIdentity = deps.releaseIdentity ?? parseReleaseIdentity();
   app.use((req, res, next) => {
     const origin = headerOrigin(req.headers.origin);
     if (origin && corsOrigins.includes(origin)) {
@@ -154,6 +157,16 @@ export function createApp(deps: AppDependencies): Express {
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.get("/meta", (_req, res) => {
+    res.json({
+      service: releaseIdentity.service,
+      environment: releaseIdentity.environment,
+      commit: releaseIdentity.commit,
+      version: releaseIdentity.version,
+      image: releaseIdentity.image,
+    });
   });
 
   if (deps.devAuth) {
@@ -194,6 +207,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use((req, _res, next) => {
     if (
       req.path === "/health" ||
+      req.path === "/meta" ||
       req.path.startsWith("/auth/") ||
       req.path.startsWith("/upload/") ||
       req.path.startsWith("/integrations/webhooks/")

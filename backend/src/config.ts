@@ -3,6 +3,14 @@ import path from "node:path";
 
 export type AuthMode = "dev" | "cognito";
 
+export interface ReleaseIdentity {
+  service: string;
+  environment: string;
+  commit: string | null;
+  version: string | null;
+  image: string | null;
+}
+
 export interface AppConfig {
   port: number;
   publicBaseUrl: string;
@@ -20,6 +28,7 @@ export interface AppConfig {
   uploadSecret: string;
   webOrigins: string[];
   credentialStore: "memory" | "env" | "secrets-manager";
+  release: ReleaseIdentity;
 }
 
 export function loadEnvFile(cwd = process.cwd()): void {
@@ -81,6 +90,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     uploadSecret: env.PACKPROOF_UPLOAD_SECRET ?? "dev-upload-secret",
     webOrigins: parseWebOrigins(env),
     credentialStore: parseCredentialStoreMode(env),
+    release: parseReleaseIdentity(env),
+  };
+}
+
+export function parseReleaseIdentity(env: NodeJS.ProcessEnv = process.env): ReleaseIdentity {
+  return {
+    service: "packproof-api",
+    environment: env.PACKPROOF_ENVIRONMENT?.trim() || "development",
+    commit: env.PACKPROOF_RELEASE_SHA?.trim() || null,
+    version: env.PACKPROOF_RELEASE_VERSION?.trim() || null,
+    image: env.PACKPROOF_RELEASE_IMAGE?.trim() || null,
   };
 }
 
