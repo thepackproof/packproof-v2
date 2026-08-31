@@ -552,6 +552,7 @@ describe("staging IAM and EasyPost secrets", () => {
     const staging = await readFile(path.join(root, "infra/staging.yaml"), "utf8");
     const api = await readFile(path.join(root, "infra/api-service.yaml"), "utf8");
     const deploy = await readFile(path.join(root, "infra/deploy.ps1"), "utf8");
+    const dockerfile = await readFile(path.join(root, "backend/Dockerfile"), "utf8");
 
     const taskRole = staging.split("TaskRole:")[1]?.split("InfrastructureRole:")[0] ?? "";
     const executionRole = staging.split("TaskExecutionRole:")[1]?.split("TaskRole:")[0] ?? "";
@@ -575,6 +576,8 @@ describe("staging IAM and EasyPost secrets", () => {
     expect(deploy).toMatch(/force-new-deployment/);
     expect(deploy).toMatch(/runningNewImage/);
     expect(deploy).toMatch(/--task-role-arn/);
+    expect(dockerfile).toMatch(/public\.ecr\.aws\/docker\/library\/node:22-alpine/);
+    expect(dockerfile).not.toMatch(/^FROM node:/m);
     expect(deploy).not.toMatch(/EZTK/);
     expect(deploy).not.toMatch(/EZAK/);
     expect(deploy).not.toMatch(/webhookSecret/);
