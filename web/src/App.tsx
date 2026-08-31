@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PackProofApi } from "./api/client";
 import { ApiError } from "./api/types";
-import type { CanonicalProof, InvitationInboxView, ProofCollectionItem, ShipmentIntegrityView, TransactionWriteInput } from "./api/types";
+import type {
+  CanonicalProof,
+  CommerceConnectionView,
+  CommerceSyncView,
+  FulfillmentQueueItem,
+  InvitationInboxView,
+  ProofCollectionItem,
+  ShipmentIntegrityView,
+  TransactionWriteInput,
+} from "./api/types";
 import { clearSession, loadSession, saveSession, type WebSession } from "./auth/session";
+import { ConnectedStoresScreen } from "./screens/ConnectedStoresScreen";
 import { CreateProofScreen } from "./screens/CreateProofScreen";
+import { FulfillmentDetailScreen } from "./screens/FulfillmentDetailScreen";
+import { FulfillmentQueueScreen } from "./screens/FulfillmentQueueScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { ProofScreen } from "./screens/ProofScreen";
 import { SignInScreen } from "./screens/SignInScreen";
@@ -11,11 +23,24 @@ import { SignInScreen } from "./screens/SignInScreen";
 type Route =
   | { name: "home" }
   | { name: "create" }
-  | { name: "proof"; proofId: string };
+  | { name: "proof"; proofId: string }
+  | { name: "fulfillment" }
+  | { name: "fulfillment-detail"; proofId: string }
+  | { name: "stores" };
 
 function parseRoute(pathname: string): Route {
   if (pathname === "/new") {
     return { name: "create" };
+  }
+  if (pathname === "/fulfillment") {
+    return { name: "fulfillment" };
+  }
+  if (pathname === "/stores") {
+    return { name: "stores" };
+  }
+  const fulfillment = pathname.match(/^\/fulfillment\/([^/]+)$/);
+  if (fulfillment?.[1]) {
+    return { name: "fulfillment-detail", proofId: decodeURIComponent(fulfillment[1]) };
   }
   const proof = pathname.match(/^\/proofs\/([^/]+)$/);
   if (proof?.[1]) {
@@ -40,6 +65,9 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queue, setQueue] = useState<FulfillmentQueueItem[]>([]);
+  const [connections, setConnections] = useState<CommerceConnectionView[]>([]);
+  const [lastSync, setLastSync] = useState<CommerceSyncView | null>(null);
   const tokenRef = useRef<string | null>(session?.token ?? null);
 
   const api = useMemo(
@@ -71,7 +99,13 @@ export function App() {
       setProof(null);
       setShipmentIntegrity(null);
     }
-    if (next.name === "home" || next.name === "proof") {
+    if (
+      next.name === "home" ||
+      next.name === "proof" ||
+      next.name === "fulfillment" ||
+      next.name === "fulfillment-detail" ||
+      next.name === "stores"
+    ) {
       setLoading(true);
     }
     writePath(path);
@@ -174,6 +208,24 @@ export function App() {
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
+    if (route.name === "fulfillment" || route.name === "fulfillment-detail") {
+      setLoading(true);
+      setError(null);
+      void api
+        .listFulfillmentQueue(route.name === "fulfillment-detail" ? "all" : "ready")
+        .then((result) => setQueue(result.items))
+        .catch((caught) => setError(handleError(caught)))
+        .finally(() => setLoading(false));
+    }
+    if (route.name === "stores") {
+      setLoading(true);
+      setError(null);
+      void api
+        .listCommerceConnections()
+        .then((result) => setConnections(result.connections))
+        .catch((caught) => setError(handleError(caught)))
+        .finally(() => setLoading(false));
+    }
   }, [api, route, session]);
 
   if (!session) {
@@ -206,6 +258,40 @@ export function App() {
         >
           PackProof
         </a>
+        <nav className="topbar-nav" aria-label="Primary">
+          <a
+            href="/"
+            aria-current={route.name === "home" ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              go("/");
+            }}
+          >
+            Proofs
+          </a>
+          <a
+            href="/fulfillment"
+            aria-current={
+              route.name === "fulfillment" || route.name === "fulfillment-detail" ? "page" : undefined
+            }
+            onClick={(event) => {
+              event.preventDefault();
+              go("/fulfillment");
+            }}
+          >
+            Fulfillment
+          </a>
+          <a
+            href="/stores"
+            aria-current={route.name === "stores" ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              go("/stores");
+            }}
+          >
+            Stores
+          </a>
+        </nav>
         <div className="topbar-meta">
           <span>{session.displayName || session.username || session.subject}</span>
           <button className="btn btn-secondary" type="button" onClick={signOut}>
@@ -265,6 +351,112 @@ export function App() {
               .createTransaction(input)
               .then((txn) => api.createOrGetProof(txn.transactionId))
               .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+        />
+      ) : null}
+
+      {route.name === "fulfillment" ? (
+        <FulfillmentQueueScreen
+          items={queue.filter((item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT")}
+          loading={loading}
+          error={error}
+          onOpen={(proofId) => go(`/fulfillment/${encodeURIComponent(proofId)}`)}
+        />
+      ) : null}
+
+      {route.name === "fulfillment-detail" ? (
+        <FulfillmentDetailScreen
+          item={queue.find((item) => item.proofId === route.proofId) ?? null}
+          loading={loading}
+          error={error}
+          busy={busy}
+          onAttest={() => {
+            const current = queue.find((item) => item.proofId === route.proofId);
+            if (!current) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            void api
+              .createAttestation(current.proofId, { statement: "PACKED_DESCRIBED_ITEM" })
+              .then(() => api.listFulfillmentQueue("all"))
+              .then((result) => setQueue(result.items))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onComplete={() => {
+            const current = queue.find((item) => item.proofId === route.proofId);
+            if (!current) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            void api
+              .finalizeProof(current.proofId)
+              .then(() => api.listFulfillmentQueue("all"))
+              .then((result) => {
+                setQueue(result.items);
+                go("/fulfillment");
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onCompleteAndNext={() => {
+            const current = queue.find((item) => item.proofId === route.proofId);
+            if (!current) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            void api
+              .finalizeProof(current.proofId)
+              .then(() => api.listFulfillmentQueue("ready"))
+              .then((result) => {
+                setQueue(result.items);
+                const next = result.items[0];
+                if (next) {
+                  go(`/fulfillment/${encodeURIComponent(next.proofId)}`);
+                } else {
+                  go("/fulfillment");
+                }
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onOpenProof={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+        />
+      ) : null}
+
+      {route.name === "stores" ? (
+        <ConnectedStoresScreen
+          connections={connections}
+          lastSync={lastSync}
+          loading={loading}
+          error={error}
+          busy={busy}
+          development={import.meta.env.DEV}
+          onConnectDemo={() => {
+            setBusy(true);
+            setError(null);
+            void api
+              .connectDemoStorefront()
+              .then(() => api.listCommerceConnections())
+              .then((result) => setConnections(result.connections))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onSync={(connectionId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .syncCommerceConnection(connectionId)
+              .then((result) => {
+                setLastSync(result);
+                return api.listCommerceConnections();
+              })
+              .then((result) => setConnections(result.connections))
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}

@@ -81,7 +81,9 @@ Two related mappings exist. They are not duplicates of each other:
 1. **Transaction import identity** — `tenant_key + external_transaction_id → transaction_id` in `transaction_integration_identities`. Needed because a purchase can be imported before a Proof exists.
 2. **Proof identity** — the existing immutable `proof_external_references` row, established when `createOrGetProof` runs.
 
-Tenant keys are derived from provider + provenance source, for example `marketplace:demo-marketplace`. The reserved `packproof:transaction` slot still comes from `transactions.external_reference` as before.
+Tenant keys are derived from provider + provenance source, for example `marketplace:demo-marketplace`. When a stable commerce account/store identity is present, it is appended: `storefront:demo-storefront:demo-store-001`. The reserved `packproof:transaction` slot still comes from `transactions.external_reference` as before.
+
+Automatic fulfillment sync uses this same import function. See [AUTOMATIC_FULFILLMENT_INGESTION.md](AUTOMATIC_FULFILLMENT_INGESTION.md). Multi-item orders persist `transaction_items`. `itemTitle` / `quantity` remain display summaries.
 
 Retrying the same provider + external transaction ID returns the same transaction. If that transaction already has a Proof, the same Proof is returned. An established binding is not silently pointed at a different external transaction. A conflict with another seller’s Proof fails closed (`EXTERNAL_REFERENCE_CONFLICT` or `INTEGRATION_IDENTITY_CONFLICT`).
 
@@ -113,7 +115,7 @@ interface IntegrationAdapter {
 
 Register the adapter in `IntegrationAdapterRegistry`. Keep provider HTTP, OAuth, and pagination inside the adapter. `importNormalizedTransaction` must stay provider-neutral.
 
-This slice registers only `demo-marketplace` (`kind: "reference"`). It simulates a marketplace order for local UX and tests. It is **not** eBay, Shopify, Shippo, EasyPost, or any other live connector.
+This slice registers `demo-marketplace` (`kind: "reference"`) for single-purchase import and `demo-storefront` as a separate commerce fulfillment adapter. Neither is eBay, Shopify, Shippo, EasyPost, or any other live connector.
 
 ## API
 

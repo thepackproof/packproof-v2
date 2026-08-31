@@ -38,5 +38,6 @@ Staging API: `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`.
 - [Architecture](docs/architecture.md)
 - [Canonical Proof contract](docs/CANONICAL_PROOF_ARCHITECTURE.md)
 - [Transaction ingestion](docs/TRANSACTION_INGESTION.md)
+- [Automatic fulfillment ingestion](docs/AUTOMATIC_FULFILLMENT_INGESTION.md)
 - [Shipment observations](docs/SHIPMENT_EVENTS.md)
 - [Web reference client](docs/WEB_CLIENT.md)

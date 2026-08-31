@@ -1,4 +1,10 @@
-import type { CanonicalProof, InvitationInboxView, ProofCollectionItem } from "../api/types";
+import type {
+  CanonicalProof,
+  CommerceConnectionView,
+  FulfillmentQueueItem,
+  InvitationInboxView,
+  ProofCollectionItem,
+} from "../api/types";
 
 export const summary: ProofCollectionItem = {
   schema: "packproof.proof.summary/v1",
@@ -222,4 +228,76 @@ export const canonicalProof: CanonicalProof = {
       eventType: "EVIDENCE_COMMITTED",
     },
   ],
+};
+
+export const fulfillmentItem: FulfillmentQueueItem = {
+  transactionId: "txn_ds_1001",
+  proofId: "proof_ds_1001",
+  connectionId: "icn_demo",
+  provider: "demo-storefront",
+  providerDisplay: "Demo Storefront",
+  externalAccountReference: "demo-store-001",
+  externalOrderId: "DS-1001",
+  externalReference: "DS-1001",
+  items: [
+    {
+      itemId: "itm_1",
+      externalItemId: "line-1001-1",
+      position: 1,
+      title: "Pokémon Booster Box",
+      description: "Sealed English booster box",
+      sku: "SKU-1001",
+      quantity: 1,
+      unitValue: 229,
+      currency: "USD",
+    },
+  ],
+  itemSummary: "Pokémon Booster Box",
+  itemCount: 1,
+  transactionValue: 229,
+  currency: "USD",
+  orderedAt: "2026-08-01T15:00:00.000Z",
+  proofStatus: "READY_FOR_EVIDENCE",
+  participationPolicy: "COUNTERPARTY_OPTIONAL",
+  sellerPackingAttested: false,
+  evidenceCount: 0,
+  pendingEvidenceCount: 0,
+  canComplete: false,
+  workflowState: "READY_TO_PACK",
+};
+
+export const fulfillmentNext: FulfillmentQueueItem = {
+  ...fulfillmentItem,
+  transactionId: "txn_ds_1002",
+  proofId: "proof_ds_1002",
+  externalOrderId: "DS-1002",
+  externalReference: "DS-1002",
+  items: [
+    {
+      itemId: "itm_2",
+      externalItemId: "line-1002-1",
+      position: 1,
+      title: "Vintage Watch",
+      description: null,
+      sku: null,
+      quantity: 1,
+      unitValue: 1500,
+      currency: "USD",
+    },
+  ],
+  itemSummary: "Vintage Watch",
+  transactionValue: 1500,
+};
+
+export const demoConnection: CommerceConnectionView = {
+  connectionId: "icn_demo",
+  adapterKey: "demo-storefront",
+  provider: "demo-storefront",
+  providerDisplay: "Demo Storefront",
+  externalAccountReference: "demo-store-001",
+  status: "ACTIVE",
+  lastSyncAt: null,
+  lastErrorCode: null,
+  retryable: null,
+  readyOrderCount: 7,
 };

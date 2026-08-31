@@ -45,7 +45,7 @@ Do not use product language such as verified seller, authentic item, fraud detec
 
 The contract includes:
 
-- **Identity** — `proofId`, timestamps, lifecycle status, transaction id
+- **Identity** — `proofId`, timestamps, lifecycle status, participation policy (`COUNTERPARTY_REQUIRED` or `COUNTERPARTY_OPTIONAL`), transaction id
 - **Participants** — identity, role, joined/accepted authorization
 - **Invitations** — invitation state without invitation tokens. Sellers invite by PackProof `userId` after authenticated user search. Recipients discover pending invitations from `GET /invitations`, then accept. See [USER_SEARCH_AND_INVITATIONS.md](USER_SEARCH_AND_INVITATIONS.md).
 - **Evidence** — identity, type, submitter, record timestamps, object reference, SHA-256
@@ -93,7 +93,9 @@ Server-side uniqueness:
 
 Clients cannot be trusted to prevent duplicates. An explicit, auditable rebind is out of scope; until one exists, reject `EXTERNAL_REFERENCE_ALREADY_BOUND`.
 
-`transactions.external_reference` remains `EXTERNAL` metadata. The reserved tenant `packproof:transaction` is the identity slot established from that field when a Proof is first bound. Integration tenants (for example `marketplace:demo-marketplace`) are bound from imported purchases. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). This repository does not yet expose API-key marketplace onboarding or live provider connectors.
+`transactions.external_reference` remains `EXTERNAL` metadata. The reserved tenant `packproof:transaction` is the identity slot established from that field when a Proof is first bound. Integration tenants (for example `marketplace:demo-marketplace` or `storefront:demo-storefront:demo-store-001`) are bound from imported purchases. Commerce tenants include a stable store/account identity so two stores may share an order number. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md) and [AUTOMATIC_FULFILLMENT_INGESTION.md](AUTOMATIC_FULFILLMENT_INGESTION.md). This repository does not yet expose API-key marketplace onboarding or live provider connectors.
+
+Participation policy is not an evidence tier. Manual Proofs stay `COUNTERPARTY_REQUIRED`. Auto-generated commerce Proofs are `COUNTERPARTY_OPTIONAL` so the seller can fulfill without a PackProof buyer. The policy is immutable after Proof creation.
 
 ## Surfaces
 

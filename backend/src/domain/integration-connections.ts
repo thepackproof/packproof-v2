@@ -49,6 +49,48 @@ export function toConnectionView(row: IntegrationConnectionRow): IntegrationConn
   };
 }
 
+export async function findOwnerConnection(
+  db: Database,
+  ownerUserId: string,
+  adapterKey: string,
+  externalAccountReference: string,
+): Promise<IntegrationConnectionRow | null> {
+  const found = await db.query<IntegrationConnectionRow>(
+    `SELECT * FROM integration_connections
+      WHERE owner_user_id = $1
+        AND adapter_key = $2
+        AND external_account_reference = $3
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1`,
+    [ownerUserId, adapterKey, externalAccountReference],
+  );
+  return found.rows[0] ?? null;
+}
+
+export async function listOwnerConnections(
+  db: Database,
+  ownerUserId: string,
+  adapterKeys?: string[],
+): Promise<IntegrationConnectionRow[]> {
+  if (adapterKeys && adapterKeys.length > 0) {
+    const found = await db.query<IntegrationConnectionRow>(
+      `SELECT * FROM integration_connections
+        WHERE owner_user_id = $1
+        ORDER BY created_at ASC, id ASC`,
+      [ownerUserId],
+    );
+    const allowed = new Set(adapterKeys);
+    return found.rows.filter((row) => allowed.has(row.adapter_key));
+  }
+  const found = await db.query<IntegrationConnectionRow>(
+    `SELECT * FROM integration_connections
+      WHERE owner_user_id = $1
+      ORDER BY created_at ASC, id ASC`,
+    [ownerUserId],
+  );
+  return found.rows;
+}
+
 export async function createIntegrationConnection(
   db: Database,
   clock: Clock,

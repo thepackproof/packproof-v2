@@ -41,7 +41,15 @@ export function ProofScreen(props: {
   const role = proof?.participants.find((participant) => participant.userId === props.currentUserId)
     ?.role;
   const canAttest = proof && proof.status !== "FINALIZED" && Boolean(role);
-  const canFinalize = proof?.status === "EVIDENCE_COMMITTED" && role === "SELLER";
+  const packingAttested = Boolean(
+    proof?.attestations?.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
+  );
+  const canFinalize =
+    role === "SELLER" &&
+    (proof?.status === "EVIDENCE_COMMITTED" ||
+      (proof?.participationPolicy === "COUNTERPARTY_OPTIONAL" &&
+        proof.status !== "FINALIZED" &&
+        packingAttested));
   const canInvite = Boolean(proof && role === "SELLER" && proof.status !== "FINALIZED");
   const canImportDemoCarrier = proof && role === "SELLER" && Boolean(props.onImportShipmentEvents);
   const canSyncShipment = Boolean(proof?.shipmentSync?.available && props.onSyncShipment);

@@ -30,6 +30,11 @@ import {
   type ParticipantRow,
   type ProofRow,
 } from "./types.js";
+import {
+  DEFAULT_PARTICIPATION_POLICY,
+  requireParticipationPolicy,
+  type ParticipationPolicy,
+} from "./participation.js";
 
 export interface CanonicalParticipant {
   participantId: string;
@@ -104,6 +109,7 @@ export interface CanonicalProof {
   proofId: string;
   transactionId: string;
   status: string;
+  participationPolicy: ParticipationPolicy;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -222,6 +228,10 @@ export async function getCanonicalProof(
     proofId: proof.id,
     transactionId: proof.transaction_id,
     status: proof.status,
+    participationPolicy: requireParticipationPolicy(
+      proof.participation_policy,
+      DEFAULT_PARTICIPATION_POLICY,
+    ),
     version: Number(proof.version),
     createdAt,
     updatedAt,
@@ -406,6 +416,7 @@ function collectExternalRecords(transaction: TransactionView): CanonicalExternal
     { field: "transaction.itemTitle", value: transaction.itemTitle },
     { field: "transaction.itemDescription", value: transaction.itemDescription },
     { field: "transaction.quantity", value: transaction.quantity },
+    { field: "transaction.items", value: transaction.items.some((item) => item.itemId) ? transaction.items : null },
     { field: "transaction.transactionValue", value: transaction.transactionValue },
     { field: "transaction.currency", value: transaction.currency },
     { field: "transaction.metadata", value: transaction.metadata },

@@ -20,6 +20,7 @@ export interface ProofRow {
   finalized_at: Date | string | null;
   manifest_id: string | null;
   version: number;
+  participation_policy?: string;
 }
 
 export interface ParticipantRow {

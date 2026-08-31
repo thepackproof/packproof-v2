@@ -2,8 +2,10 @@ import type { Clock } from "../clock.js";
 import { DomainError } from "../domain/errors.js";
 import { integrationTrustBoundary } from "../domain/integration-errors.js";
 import type { IntegrationAdapter } from "./adapter.js";
+import type { CommerceFulfillmentAdapter } from "./commerce-fulfillment-adapter.js";
 import { createDemoMarketplaceAdapter } from "./demo-marketplace.js";
 import { createDemoCarrierAdapter } from "./demo-carrier.js";
+import { createDemoStorefrontAdapter } from "./demo-storefront.js";
 import type { ShipmentObservationAdapter } from "./shipment-adapter.js";
 import { createTrustedDemoCarrierAdapter } from "./trusted-demo-carrier.js";
 import type { TrustedShipmentAdapter } from "./trusted-shipment-adapter.js";
@@ -15,6 +17,7 @@ export class IntegrationAdapterRegistry {
     private readonly adapters: Map<string, IntegrationAdapter>,
     private readonly shipmentAdapters: Map<string, ShipmentObservationAdapter> = new Map(),
     private readonly trustedShipmentAdapters: Map<string, TrustedShipmentAdapter> = new Map(),
+    private readonly commerceAdapters: Map<string, CommerceFulfillmentAdapter> = new Map(),
   ) {}
 
   get(adapterKey: string): IntegrationAdapter {
@@ -60,6 +63,26 @@ export class IntegrationAdapterRegistry {
     }
     return adapter;
   }
+
+  getCommerce(adapterKey: string): CommerceFulfillmentAdapter {
+    const adapter = this.commerceAdapters.get(adapterKey);
+    if (!adapter) {
+      throw new DomainError(
+        "INTEGRATION_ADAPTER_UNAVAILABLE",
+        "No commerce fulfillment adapter is registered for this key",
+        404,
+      );
+    }
+    return adapter;
+  }
+
+  hasCommerce(adapterKey: string): boolean {
+    return this.commerceAdapters.has(adapterKey);
+  }
+
+  listCommerceAdapterKeys(): string[] {
+    return [...this.commerceAdapters.keys()];
+  }
 }
 
 export function createDefaultIntegrationRegistry(
@@ -70,6 +93,7 @@ export function createDefaultIntegrationRegistry(
   const carrier = createDemoCarrierAdapter(clock);
   const trusted = createTrustedDemoCarrierAdapter();
   const easypost = createEasyPostShipmentAdapter(options.easypostClient);
+  const storefront = createDemoStorefrontAdapter();
   return new IntegrationAdapterRegistry(
     new Map([[demo.adapterKey, demo]]),
     new Map([[carrier.adapterKey, carrier]]),
@@ -77,5 +101,6 @@ export function createDefaultIntegrationRegistry(
       [trusted.adapterKey, trusted],
       [easypost.adapterKey, easypost],
     ]),
+    new Map([[storefront.adapterKey, storefront]]),
   );
 }

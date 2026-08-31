@@ -46,7 +46,28 @@ import { IntegrationError, integrationTrustBoundary } from "./domain/integration
 import {
   bindTransactionShipmentConnection,
   createIntegrationConnection,
+  findOwnerConnection,
+  listOwnerConnections,
+  toConnectionView,
 } from "./domain/integration-connections.js";
+import { executeCommerceFulfillmentSync } from "./domain/commerce-fulfillment-sync.js";
+import {
+  countReadyFulfillmentOrders,
+  listFulfillmentQueue,
+  parseFulfillmentQueueFilter,
+  providerDisplay,
+} from "./domain/fulfillment-queue.js";
+import { loadCommerceSyncState, syncStateView } from "./domain/commerce-order-records.js";
+import { normalizeExternalAccountReference } from "./domain/normalized-fulfillment-order.js";
+import {
+  applyDemoStorefrontScenario,
+  DEMO_STORE_ACCOUNT_PRIMARY,
+  DEMO_STOREFRONT_ADAPTER_KEY,
+  DEMO_STOREFRONT_CREDENTIAL_REFERENCE,
+  DEMO_STOREFRONT_DISPLAY_NAME,
+  DEMO_STOREFRONT_PROVIDER,
+  type DemoStorefrontAdapter,
+} from "./integrations/demo-storefront.js";
 import { executeTrustedShipmentSync } from "./domain/trusted-shipment-sync.js";
 import { ingestTrustedShipmentWebhook } from "./domain/trusted-shipment-webhook.js";
 import type { ObjectStore } from "./s3/object-store.js";
@@ -371,6 +392,84 @@ export function createApp(deps: AppDependencies): Express {
       }),
     );
     app.post(
+      "/dev/integrations/demo-storefront/connect",
+      asyncRoute(async (req, res) => {
+        const actor = bearerUser(req);
+        const body =
+          req.body != null && typeof req.body === "object" && !Array.isArray(req.body)
+            ? (req.body as Record<string, unknown>)
+            : {};
+        if (
+          body.orders != null ||
+          body.payload != null ||
+          body.source != null ||
+          body.provider != null ||
+          body.credentials != null
+        ) {
+          throw integrationTrustBoundary(
+            "Commerce connections do not accept client-supplied storefront payloads",
+          );
+        }
+        const account =
+          body.externalAccountReference == null || body.externalAccountReference === ""
+            ? DEMO_STORE_ACCOUNT_PRIMARY
+            : normalizeExternalAccountReference(body.externalAccountReference);
+        const existing = await findOwnerConnection(
+          deps.db,
+          actor,
+          DEMO_STOREFRONT_ADAPTER_KEY,
+          account,
+        );
+        const connection = existing
+          ? toConnectionView(existing)
+          : await createIntegrationConnection(deps.db, deps.clock, actor, {
+              adapterKey: DEMO_STOREFRONT_ADAPTER_KEY,
+              provider: DEMO_STOREFRONT_PROVIDER,
+              credentialReference: DEMO_STOREFRONT_CREDENTIAL_REFERENCE,
+              externalAccountReference: account,
+            });
+        res.status(existing ? 200 : 201).json({
+          connection: {
+            connectionId: connection.connectionId,
+            adapterKey: connection.adapterKey,
+            provider: connection.provider,
+            providerDisplay: DEMO_STOREFRONT_DISPLAY_NAME,
+            externalAccountReference: connection.externalAccountReference,
+            status: connection.status,
+          },
+        });
+      }),
+    );
+    app.post(
+      "/dev/integrations/demo-storefront/simulate",
+      asyncRoute(async (req, res) => {
+        bearerUser(req);
+        const adapter = integrations.getCommerce(DEMO_STOREFRONT_ADAPTER_KEY) as DemoStorefrontAdapter;
+        const body =
+          req.body != null && typeof req.body === "object" && !Array.isArray(req.body)
+            ? (req.body as Record<string, unknown>)
+            : {};
+        const applied = applyDemoStorefrontScenario(adapter, {
+          scenario: typeof body.scenario === "string" ? body.scenario : undefined,
+          externalAccountReference:
+            typeof body.externalAccountReference === "string"
+              ? body.externalAccountReference
+              : undefined,
+          externalOrderId: typeof body.externalOrderId === "string" ? body.externalOrderId : undefined,
+          paymentState:
+            typeof body.paymentState === "string"
+              ? (body.paymentState as "CONFIRMED")
+              : undefined,
+          fulfillmentState:
+            typeof body.fulfillmentState === "string"
+              ? (body.fulfillmentState as "CANCELLED")
+              : undefined,
+          cancelled: typeof body.cancelled === "boolean" ? body.cancelled : undefined,
+        });
+        res.json({ applied });
+      }),
+    );
+    app.post(
       "/dev/integrations/easypost/connect",
       asyncRoute(async (req, res) => {
         const actor = bearerUser(req);
@@ -535,6 +634,58 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       const proofs = await listMyProofs(deps.db, bearerUser(req));
       res.json({ proofs });
+    }),
+  );
+
+  app.get(
+    "/me/fulfillment-queue",
+    asyncRoute(async (req, res) => {
+      const filter = parseFulfillmentQueueFilter(req.query.filter);
+      const items = await listFulfillmentQueue(deps.db, bearerUser(req), filter);
+      res.json({ items, filter });
+    }),
+  );
+
+  app.get(
+    "/me/integration-connections",
+    asyncRoute(async (req, res) => {
+      const actor = bearerUser(req);
+      const capability = String(req.query.capability ?? "").trim();
+      const adapterKeys =
+        capability === "commerce" ? integrations.listCommerceAdapterKeys() : undefined;
+      const rows = await listOwnerConnections(deps.db, actor, adapterKeys);
+      const connections = [];
+      for (const row of rows) {
+        const sync = syncStateView(await loadCommerceSyncState(deps.db, row.id));
+        connections.push({
+          connectionId: row.id,
+          adapterKey: row.adapter_key,
+          provider: row.provider,
+          providerDisplay: providerDisplay(row.adapter_key, row.provider),
+          externalAccountReference: row.external_account_reference,
+          status: row.status,
+          lastSyncAt: sync.lastSucceededAt,
+          lastErrorCode: sync.lastErrorCode,
+          retryable: sync.retryable,
+          readyOrderCount: await countReadyFulfillmentOrders(deps.db, row.id, actor),
+        });
+      }
+      res.json({ connections });
+    }),
+  );
+
+  app.post(
+    "/me/commerce-connections/:connectionId/sync",
+    asyncRoute(async (req, res) => {
+      parseEmptyTrustedBody(req.body, "Commerce sync does not accept client-supplied order payloads");
+      const result = await executeCommerceFulfillmentSync(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.connectionId,
+        { integrations, credentials: credentialStore },
+      );
+      res.json(result);
     }),
   );
 
@@ -728,20 +879,23 @@ export function createApp(deps: AppDependencies): Express {
   return app;
 }
 
-function parseShipmentSyncRequest(body: unknown): void {
+function parseEmptyTrustedBody(body: unknown, message: string): void {
   if (body == null || body === "") {
     return;
   }
   if (typeof body !== "object" || Array.isArray(body)) {
-    throw integrationTrustBoundary(
-      "Shipment sync does not accept client-supplied provider payloads",
-    );
+    throw integrationTrustBoundary(message);
   }
   const keys = Object.keys(body as Record<string, unknown>);
   if (keys.length === 0) {
     return;
   }
-  throw integrationTrustBoundary(
+  throw integrationTrustBoundary(message);
+}
+
+function parseShipmentSyncRequest(body: unknown): void {
+  parseEmptyTrustedBody(
+    body,
     "Shipment sync does not accept client-supplied provider payloads",
   );
 }

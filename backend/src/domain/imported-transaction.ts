@@ -12,16 +12,31 @@ import {
   type ImportedBuyer,
   type ProvenanceSource,
 } from "./provenance.js";
+import type { TransactionItemWrite } from "./transaction-items.js";
+import { summarizeItems } from "./normalized-fulfillment-order.js";
+import { normalizeExternalAccountReference } from "./normalized-fulfillment-order.js";
 
 export interface ImportedTransaction {
   provider: string;
   externalTransactionId: string;
+  externalAccountReference?: string | null;
+  externalReference?: string | null;
   transactionDate: string | null;
   itemTitle: string | null;
   itemDescription: string | null;
   quantity: number | null;
   transactionValue: number | null;
   currency: string | null;
+  items?: Array<{
+    externalItemId?: string | null;
+    position?: number;
+    title?: string | null;
+    description?: string | null;
+    sku?: string | null;
+    quantity?: number | null;
+    unitValue?: number | null;
+    currency?: string | null;
+  }>;
   shipping: {
     carrier: string | null;
     service: string | null;
@@ -43,12 +58,15 @@ export interface ImportedTransaction {
 export interface ParsedImportedTransaction {
   provider: string;
   externalTransactionId: string;
+  externalAccountReference: string | null;
+  displayExternalReference: string | null;
   transactionDate: string | null;
   itemTitle: string | null;
   itemDescription: string | null;
   quantity: number | null;
   transactionValue: number | null;
   currency: string | null;
+  items: TransactionItemWrite[];
   shipping: ShippingWrite | null;
   buyer: ImportedBuyer | null;
   provenance: {
@@ -72,14 +90,24 @@ export function parseImportedTransaction(input: unknown): ParsedImportedTransact
       400,
     );
   }
+  const items = parseImportedItems(record.items);
+  const summary = items.length
+    ? summarizeItems(items, null, null)
+    : {
+        itemTitle: null,
+        itemDescription: null,
+        quantity: null,
+        transactionValue: null,
+        currency: null,
+      };
   const parsedFields = parseTransactionCreate({
     externalReference: record.externalTransactionId,
     transactionDate: record.transactionDate,
-    itemTitle: record.itemTitle,
-    itemDescription: record.itemDescription,
-    quantity: record.quantity,
-    transactionValue: record.transactionValue,
-    currency: record.currency,
+    itemTitle: record.itemTitle ?? summary.itemTitle,
+    itemDescription: record.itemDescription ?? summary.itemDescription,
+    quantity: record.quantity ?? summary.quantity,
+    transactionValue: record.transactionValue ?? summary.transactionValue,
+    currency: record.currency ?? summary.currency,
     shipping: record.shipping ?? null,
   });
   if (!parsedFields.externalReference) {
@@ -94,15 +122,26 @@ export function parseImportedTransaction(input: unknown): ParsedImportedTransact
   const sourceRecordId = normalizeOptionalText(provenanceRecord.sourceRecordId, "sourceRecordId");
   const shipping =
     record.shipping == null ? null : parseShippingWrite(record.shipping);
+  const externalAccountReference =
+    record.externalAccountReference == null || record.externalAccountReference === ""
+      ? null
+      : normalizeExternalAccountReference(record.externalAccountReference);
+  const displayExternalReference = normalizeOptionalText(
+    record.externalReference,
+    "externalReference",
+  );
   return {
     provider,
     externalTransactionId: parsedFields.externalReference,
+    externalAccountReference,
+    displayExternalReference,
     transactionDate: parsedFields.transactionDate,
     itemTitle: parsedFields.itemTitle,
     itemDescription: parsedFields.itemDescription,
     quantity: parsedFields.quantity,
     transactionValue: parsedFields.transactionValue,
     currency: parsedFields.currency,
+    items,
     shipping: shipping && shippingWriteHasValues(shipping) ? shipping : shipping,
     buyer: parseBuyer(record.buyer),
     provenance: {
@@ -118,6 +157,9 @@ export function importedPayloadFingerprint(parsed: ParsedImportedTransaction): s
     canonicalize({
       provider: parsed.provider,
       externalTransactionId: parsed.externalTransactionId,
+      ...(parsed.externalAccountReference
+        ? { externalAccountReference: parsed.externalAccountReference }
+        : {}),
       transactionDate: parsed.transactionDate,
       itemTitle: parsed.itemTitle,
       itemDescription: parsed.itemDescription,
@@ -126,12 +168,69 @@ export function importedPayloadFingerprint(parsed: ParsedImportedTransaction): s
       currency: parsed.currency,
       shipping: parsed.shipping,
       buyer: parsed.buyer,
+      ...(parsed.items.length > 0 ? { items: parsed.items } : {}),
       provenance: {
         source: parsed.provenance.source,
         sourceRecordId: parsed.provenance.sourceRecordId,
       },
     }),
   );
+}
+
+function parseImportedItems(value: unknown): TransactionItemWrite[] {
+  if (value == null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new DomainError("INVALID_IMPORTED_TRANSACTION", "items must be an array", 400);
+  }
+  return value.map((entry, index) => {
+    const record = asRecord(entry);
+    const position = record.position == null ? index + 1 : Number(record.position);
+    if (!Number.isInteger(position) || position <= 0) {
+      throw new DomainError("INVALID_IMPORTED_TRANSACTION", "item position is invalid", 400);
+    }
+    return {
+      externalItemId: normalizeOptionalText(record.externalItemId, "items.externalItemId"),
+      position,
+      title: normalizeOptionalText(record.title, "items.title"),
+      description: normalizeOptionalText(record.description, "items.description"),
+      sku: normalizeOptionalText(record.sku, "items.sku"),
+      quantity:
+        record.quantity == null || record.quantity === ""
+          ? null
+          : typeof record.quantity === "number" && Number.isInteger(record.quantity) && record.quantity > 0
+            ? record.quantity
+            : (() => {
+                throw new DomainError(
+                  "INVALID_IMPORTED_TRANSACTION",
+                  "items.quantity must be a positive integer",
+                  400,
+                );
+              })(),
+      unitValue:
+        record.unitValue == null || record.unitValue === ""
+          ? null
+          : typeof record.unitValue === "number" && Number.isFinite(record.unitValue) && record.unitValue >= 0
+            ? record.unitValue
+            : (() => {
+                throw new DomainError(
+                  "INVALID_IMPORTED_TRANSACTION",
+                  "items.unitValue must be a non-negative number",
+                  400,
+                );
+              })(),
+      currency:
+        record.currency == null
+          ? null
+          : typeof record.currency === "string" && /^[A-Za-z]{3}$/.test(record.currency.trim())
+            ? record.currency.trim().toUpperCase()
+            : (() => {
+                throw new DomainError("INVALID_IMPORTED_TRANSACTION", "items.currency is invalid", 400);
+              })(),
+      metadata: {},
+    };
+  });
 }
 
 function parseBuyer(value: unknown): ImportedBuyer | null {
@@ -146,6 +245,9 @@ function parseBuyer(value: unknown): ImportedBuyer | null {
   };
   if (!buyer.externalId && !buyer.displayName && !buyer.email) {
     return null;
+  }
+  if (!buyer.email) {
+    return { externalId: buyer.externalId, displayName: buyer.displayName, email: null };
   }
   return buyer;
 }

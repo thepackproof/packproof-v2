@@ -11,7 +11,7 @@ import {
   type ProofRow,
 } from "./types.js";
 
-const TENANT_MAX = 80;
+const TENANT_MAX = 200;
 const EXTERNAL_ID_MAX = 200;
 
 export interface ProofExternalReferenceView {

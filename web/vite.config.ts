@@ -18,6 +18,7 @@ export default defineConfig({
       "/health": api,
       "/auth": api,
       "/me": api,
+      "/dev": api,
       "/proofs": api,
       "/transactions": api,
       "/integrations": api,

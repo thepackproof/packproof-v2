@@ -36,6 +36,8 @@ export function errorCodeFromSql(error: unknown): string | null {
     "EXTERNAL_REFERENCE_IMMUTABLE",
     "INTEGRATION_IDENTITY_IMMUTABLE",
     "SHIPMENT_EVENT_IMMUTABLE",
+    "PARTICIPATION_POLICY_IMMUTABLE",
+    "COMMERCE_ORDER_REBIND",
   ];
   return codes.find((code) => message.includes(code)) ?? null;
 }

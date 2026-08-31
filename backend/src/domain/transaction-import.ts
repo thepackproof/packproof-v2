@@ -29,11 +29,22 @@ import {
   type TransactionView,
 } from "./transaction-fields.js";
 import {
+  insertTransactionItems,
+  itemsCanonical,
+  listTransactionItems,
+  replaceTransactionItems,
+  type TransactionItemWrite,
+} from "./transaction-items.js";
+import {
   insertShipping,
   loadTransactionView,
   lockTransactionContext,
 } from "./transactions.js";
 import type { ShippingRow, TransactionRow } from "./types.js";
+import {
+  DEFAULT_PARTICIPATION_POLICY,
+  type ParticipationPolicy,
+} from "./participation.js";
 
 export interface TransactionImportView {
   transaction: TransactionView;
@@ -45,6 +56,7 @@ export interface TransactionImportView {
     source: string;
   };
   created: boolean;
+  proofCreated: boolean;
 }
 
 export async function importNormalizedTransaction(
@@ -52,13 +64,21 @@ export async function importNormalizedTransaction(
   clock: Clock,
   actorUserId: string,
   imported: unknown,
-  options: { createProof?: boolean; adapterKey?: string } = {},
+  options: {
+    createProof?: boolean;
+    adapterKey?: string;
+    participationPolicy?: ParticipationPolicy;
+  } = {},
 ): Promise<TransactionImportView> {
   const parsed = parseImportedTransaction(imported);
   const adapterKey = options.adapterKey ?? parsed.provider;
   const createProof = options.createProof === true;
   const tenantKey = normalizeTenantKey(
-    tenantKeyForImport(parsed.provider, parsed.provenance.source),
+    tenantKeyForImport(
+      parsed.provider,
+      parsed.provenance.source,
+      parsed.externalAccountReference,
+    ),
   );
   const fingerprint = importedPayloadFingerprint(parsed);
 
@@ -132,8 +152,14 @@ export async function importNormalizedTransaction(
       created = true;
     }
 
+    const existingProof = await tx.query<{ id: string }>(
+      `SELECT id FROM proofs WHERE transaction_id = $1`,
+      [transactionId],
+    );
     if (createProof) {
-      await createOrGetProof(tx, clock, actorUserId, transactionId);
+      await createOrGetProof(tx, clock, actorUserId, transactionId, {
+        participationPolicy: options.participationPolicy ?? DEFAULT_PARTICIPATION_POLICY,
+      });
     }
 
     const transaction = await loadTransactionView(tx, transactionId);
@@ -148,6 +174,7 @@ export async function importNormalizedTransaction(
         source: parsed.provenance.source,
       },
       created,
+      proofCreated: Boolean(createProof && proof && !existingProof.rows[0]),
     };
   });
 }
@@ -163,6 +190,7 @@ async function insertImportedTransaction(
   const now = clock.now();
   const nowIso = now.toISOString();
   const importMeta = buildImportMetadata(parsed, ctx, nowIso);
+  const externalReference = await allocateImportedExternalReference(db, parsed);
   try {
     await db.query(
       `INSERT INTO transactions (
@@ -171,7 +199,7 @@ async function insertImportedTransaction(
        ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12)`,
       [
         id,
-        parsed.externalTransactionId,
+        externalReference,
         actorUserId,
         nowIso,
         nowIso,
@@ -185,14 +213,37 @@ async function insertImportedTransaction(
       ],
     );
   } catch (error) {
-    if (isUniqueViolation(error)) {
+    if (isUniqueViolation(error) && parsed.externalAccountReference) {
+      const scoped = scopedExternalReference(parsed);
+      await db.query(
+        `INSERT INTO transactions (
+           id, external_reference, created_by, created_at, updated_at, transaction_metadata,
+           transaction_date, item_title, item_description, quantity, transaction_value, currency
+         ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12)`,
+        [
+          id,
+          scoped,
+          actorUserId,
+          nowIso,
+          nowIso,
+          JSON.stringify(writeImportMetadata({}, importMeta)),
+          parsed.transactionDate,
+          parsed.itemTitle,
+          parsed.itemDescription,
+          parsed.quantity,
+          parsed.transactionValue,
+          parsed.currency,
+        ],
+      );
+    } else if (isUniqueViolation(error)) {
       throw new DomainError(
         "TRANSACTION_REFERENCE_CONFLICT",
         "externalTransactionId is already used as a transaction reference",
         409,
       );
+    } else {
+      throw error;
     }
-    throw error;
   }
 
   await insertTransactionIdentity(db, {
@@ -206,6 +257,9 @@ async function insertImportedTransaction(
 
   if (parsed.shipping && shippingWriteHasValues(parsed.shipping)) {
     await insertShipping(db, id, parsed.shipping, nowIso);
+  }
+  if (parsed.items.length > 0) {
+    await insertTransactionItems(db, id, parsed.items, nowIso);
   }
   return id;
 }
@@ -221,7 +275,7 @@ async function applyImportedFacts(
   const locked = await lockTransactionContext(db, transactionId);
   const beforeTxn = snapshotTransaction(locked.txn);
   const afterTxn = {
-    externalReference: parsed.externalTransactionId,
+    externalReference: locked.txn.external_reference,
     transactionDate: parsed.transactionDate,
     itemTitle: parsed.itemTitle,
     itemDescription: parsed.itemDescription,
@@ -238,9 +292,11 @@ async function applyImportedFacts(
       : {};
   const previousMeta = readImportMetadata(locked.txn.transaction_metadata);
   const fingerprintUnchanged = previousMeta?.payloadSha256 === ctx.fingerprint;
+  const itemsChanged =
+    parsed.items.length > 0 ? await importedItemsChanged(db, transactionId, parsed.items) : false;
 
   if (locked.proofStatus === "FINALIZED") {
-    if (Object.keys(txnChanged).length > 0 || Object.keys(shipChanged).length > 0) {
+    if (Object.keys(txnChanged).length > 0 || Object.keys(shipChanged).length > 0 || itemsChanged) {
       throw new DomainError(
         "PROOF_ALREADY_FINALIZED",
         "Imported data cannot mutate finalized Proof context",
@@ -253,6 +309,7 @@ async function applyImportedFacts(
   if (
     Object.keys(txnChanged).length === 0 &&
     Object.keys(shipChanged).length === 0 &&
+    !itemsChanged &&
     fingerprintUnchanged
   ) {
     return;
@@ -328,6 +385,10 @@ async function applyImportedFacts(
     );
   }
 
+  if (itemsChanged) {
+    await replaceTransactionItems(db, transactionId, parsed.items, nowIso);
+  }
+
   if (Object.keys(shipChanged).length > 0 && parsed.shipping) {
     if (!locked.shipping) {
       await insertShipping(db, transactionId, nextShipping, nowIso);
@@ -385,6 +446,49 @@ function buildImportMetadata(
     payloadSha256: ctx.fingerprint,
     buyer: parsed.buyer,
   };
+}
+
+async function allocateImportedExternalReference(
+  db: Database,
+  parsed: ParsedImportedTransaction,
+): Promise<string> {
+  const preferred = parsed.displayExternalReference ?? parsed.externalTransactionId;
+  const existing = await db.query<{ id: string }>(
+    `SELECT id FROM transactions WHERE external_reference = $1`,
+    [preferred],
+  );
+  if (!existing.rows[0]) {
+    return preferred;
+  }
+  if (parsed.externalAccountReference) {
+    return scopedExternalReference(parsed);
+  }
+  return preferred;
+}
+
+function scopedExternalReference(parsed: ParsedImportedTransaction): string {
+  return `${parsed.externalAccountReference}/${parsed.externalTransactionId}`;
+}
+
+async function importedItemsChanged(
+  db: Database,
+  transactionId: string,
+  items: TransactionItemWrite[],
+): Promise<boolean> {
+  const current = await listTransactionItems(db, transactionId);
+  const writes: TransactionItemWrite[] = current
+    .filter((item) => item.itemId)
+    .map((item) => ({
+      externalItemId: item.externalItemId,
+      position: item.position,
+      title: item.title,
+      description: item.description,
+      sku: item.sku,
+      quantity: item.quantity,
+      unitValue: item.unitValue,
+      currency: item.currency,
+    }));
+  return itemsCanonical(writes) !== itemsCanonical(items);
 }
 
 function snapshotTransaction(row: TransactionRow): Record<string, unknown> {

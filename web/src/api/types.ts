@@ -16,6 +16,18 @@ export interface ShippingView {
   shipmentDate: string | null;
 }
 
+export interface TransactionItemView {
+  itemId: string | null;
+  externalItemId: string | null;
+  position: number;
+  title: string | null;
+  description: string | null;
+  sku: string | null;
+  quantity: number | null;
+  unitValue: number | null;
+  currency: string | null;
+}
+
 export interface TransactionView {
   transactionId: string;
   externalReference: string | null;
@@ -25,6 +37,7 @@ export interface TransactionView {
   quantity: number | null;
   transactionValue: number | null;
   currency: string | null;
+  items?: TransactionItemView[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -72,6 +85,7 @@ export interface CanonicalProof {
   proofId: string;
   transactionId: string;
   status: ProofStatus | string;
+  participationPolicy?: "COUNTERPARTY_REQUIRED" | "COUNTERPARTY_OPTIONAL" | string;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -350,6 +364,62 @@ export interface ShipmentIntegrityView {
     events: Array<{ shipmentEventId: string; sha256: string }>;
   } | null;
   verification: ShipmentIntegrityVerification;
+}
+
+export type FulfillmentWorkflowState =
+  | "READY_TO_PACK"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "REMOVED_FROM_FULFILLMENT";
+
+export interface FulfillmentQueueItem {
+  transactionId: string;
+  proofId: string;
+  connectionId: string;
+  provider: string;
+  providerDisplay: string;
+  externalAccountReference: string | null;
+  externalOrderId: string;
+  externalReference: string | null;
+  items: TransactionItemView[];
+  itemSummary: string;
+  itemCount: number;
+  transactionValue: number | null;
+  currency: string | null;
+  orderedAt: string | null;
+  proofStatus: string;
+  participationPolicy: string;
+  sellerPackingAttested: boolean;
+  evidenceCount: number;
+  pendingEvidenceCount: number;
+  canComplete: boolean;
+  workflowState: FulfillmentWorkflowState | string;
+}
+
+export interface CommerceConnectionView {
+  connectionId: string;
+  adapterKey: string;
+  provider: string;
+  providerDisplay: string;
+  externalAccountReference: string | null;
+  status: string;
+  lastSyncAt: string | null;
+  lastErrorCode: string | null;
+  retryable: boolean | null;
+  readyOrderCount: number;
+}
+
+export interface CommerceSyncView {
+  connectionId: string;
+  adapterKey: string;
+  provider: string;
+  discoveredCount: number;
+  eligibleCount: number;
+  createdTransactionCount: number;
+  createdProofCount: number;
+  existingProofCount: number;
+  ineligibleCount: number;
+  cursor: string | null;
 }
 
 export class ApiError extends Error {

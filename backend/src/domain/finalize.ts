@@ -14,6 +14,7 @@ import {
 } from "./proofs.js";
 import {
   asRequiredIso,
+  type AttestationRow,
   type EvidenceRow,
   type ManifestRow,
   type ParticipantRow,
@@ -24,6 +25,8 @@ import {
 } from "./types.js";
 import { asNullableNumber, shippingForManifest } from "./transaction-fields.js";
 import { provenanceFromIdentity, manifestProvenance } from "./provenance.js";
+import { listTransactionItems } from "./transaction-items.js";
+import { DEFAULT_PARTICIPATION_POLICY, requireParticipationPolicy } from "./participation.js";
 
 export interface ManifestView {
   manifestId: string;
@@ -106,13 +109,11 @@ export async function finalizeProof(
     }
 
     assertNotFinalized(proof);
-    if (proof.status !== "EVIDENCE_COMMITTED") {
-      throw new DomainError(
-        "PROOF_NOT_READY_FOR_FINALIZATION",
-        "Required evidence is not committed",
-        422,
-      );
-    }
+    const participationPolicy = requireParticipationPolicy(
+      proof.participation_policy,
+      DEFAULT_PARTICIPATION_POLICY,
+    );
+    const merchantOptional = participationPolicy === "COUNTERPARTY_OPTIONAL";
 
     const participants = await tx.query<ParticipantRow>(
       `SELECT * FROM proof_participants WHERE proof_id = $1`,
@@ -120,10 +121,30 @@ export async function finalizeProof(
     );
     const hasSeller = participants.rows.some((row) => row.role === "SELLER");
     const hasBuyer = participants.rows.some((row) => row.role === "BUYER");
-    if (!hasSeller || !hasBuyer) {
+    if (!hasSeller) {
+      throw new DomainError(
+        "PROOF_NOT_READY_FOR_FINALIZATION",
+        "Seller must be joined",
+        422,
+      );
+    }
+    if (!merchantOptional && !hasBuyer) {
       throw new DomainError(
         "PROOF_NOT_READY_FOR_FINALIZATION",
         "Seller and buyer must both be joined",
+        422,
+      );
+    }
+
+    const pendingEvidence = await tx.query<EvidenceRow>(
+      `SELECT * FROM evidence
+        WHERE proof_id = $1 AND validation_status = 'PENDING'`,
+      [proofId],
+    );
+    if (pendingEvidence.rows.length > 0) {
+      throw new DomainError(
+        "PROOF_NOT_READY_FOR_FINALIZATION",
+        "Uncommitted evidence must be committed or is not ready",
         422,
       );
     }
@@ -134,12 +155,44 @@ export async function finalizeProof(
         ORDER BY committed_at ASC, id ASC`,
       [proofId],
     );
-    if (evidence.rows.length === 0) {
-      throw new DomainError(
-        "PROOF_NOT_READY_FOR_FINALIZATION",
-        "Required evidence is not committed",
-        422,
-      );
+    const attestations = await tx.query<AttestationRow>(
+      `SELECT * FROM attestations WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
+      [proofId],
+    );
+    const packingAttested = attestations.rows.some(
+      (row) => row.statement === "PACKED_DESCRIBED_ITEM" && row.attested_by === actorUserId,
+    );
+
+    if (merchantOptional) {
+      if (proof.status !== "READY_FOR_EVIDENCE" && proof.status !== "EVIDENCE_COMMITTED") {
+        throw new DomainError(
+          "PROOF_NOT_READY_FOR_FINALIZATION",
+          "Merchant Proof is not ready for finalization",
+          422,
+        );
+      }
+      if (!packingAttested) {
+        throw new DomainError(
+          "PROOF_NOT_READY_FOR_FINALIZATION",
+          "Seller packing attestation is required",
+          422,
+        );
+      }
+    } else {
+      if (proof.status !== "EVIDENCE_COMMITTED") {
+        throw new DomainError(
+          "PROOF_NOT_READY_FOR_FINALIZATION",
+          "Required evidence is not committed",
+          422,
+        );
+      }
+      if (evidence.rows.length === 0) {
+        throw new DomainError(
+          "PROOF_NOT_READY_FOR_FINALIZATION",
+          "Required evidence is not committed",
+          422,
+        );
+      }
     }
 
     const transaction = await tx.query<TransactionRow>(
@@ -169,7 +222,8 @@ export async function finalizeProof(
     const now = clock.now();
     const auditEventIds = await listAuditIds(tx, proofId);
     const manifestId = newId("man");
-    const payload = {
+    const storedItems = await listTransactionItems(tx, proof.transaction_id);
+    const payload: Record<string, unknown> = {
       manifestVersion: 1,
       proofId,
       transactionId: proof.transaction_id,
@@ -184,6 +238,21 @@ export async function finalizeProof(
         currency: txn.currency,
         metadata: txn.transaction_metadata ?? {},
         ...(provenance ? { provenance } : {}),
+        ...(storedItems.length > 0
+          ? {
+              items: storedItems.map((item) => ({
+                itemId: item.itemId,
+                externalItemId: item.externalItemId,
+                position: item.position,
+                title: item.title,
+                description: item.description,
+                sku: item.sku,
+                quantity: item.quantity,
+                unitValue: item.unitValue,
+                currency: item.currency,
+              })),
+            }
+          : {}),
       },
       shipping: {
         carrier: ship.carrier,
@@ -213,6 +282,17 @@ export async function finalizeProof(
       createdAt: asRequiredIso(proof.created_at),
       finalizedAt: now.toISOString(),
     };
+    if (merchantOptional) {
+      payload.participationPolicy = participationPolicy;
+      payload.attestations = attestations.rows.map((row) => ({
+        attestationId: row.id,
+        attestedBy: row.attested_by,
+        statement: row.statement,
+        relatedEvidenceId: row.related_evidence_id,
+        createdAt: asRequiredIso(row.created_at),
+        sha256: row.sha256,
+      }));
+    }
 
     const canonicalJson = canonicalize(payload);
     const digest = sha256Hex(canonicalJson);

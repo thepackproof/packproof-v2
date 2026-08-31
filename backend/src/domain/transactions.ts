@@ -22,6 +22,11 @@ import type {
   TransactionRow,
 } from "./types.js";
 import type { TransactionProvenanceView } from "./provenance.js";
+import {
+  listTransactionItems,
+  synthesizeItemsFromLegacy,
+  type TransactionItemView,
+} from "./transaction-items.js";
 
 export type { ShippingView, TransactionView } from "./transaction-fields.js";
 export { toTransactionView } from "./transaction-fields.js";
@@ -33,6 +38,7 @@ export interface TransactionBundle {
   proofStatus: string | null;
   buyerUserId: string | null;
   provenance: TransactionProvenanceView | null;
+  items: TransactionItemView[];
 }
 
 export async function createTransaction(
@@ -342,6 +348,17 @@ async function attachContext(db: Database, txn: TransactionRow): Promise<Transac
       LIMIT 1`,
     [txn.id],
   );
+  const storedItems = await listTransactionItems(db, txn.id);
+  const items =
+    storedItems.length > 0
+      ? storedItems
+      : synthesizeItemsFromLegacy({
+          itemTitle: txn.item_title,
+          itemDescription: txn.item_description,
+          quantity: asNullableNumber(txn.quantity),
+          transactionValue: asNullableNumber(txn.transaction_value),
+          currency: txn.currency,
+        });
   return {
     txn,
     shipping: shipping.rows[0] ?? null,
@@ -349,6 +366,7 @@ async function attachContext(db: Database, txn: TransactionRow): Promise<Transac
     proofStatus: proofRow?.status ?? null,
     buyerUserId,
     provenance: provenanceFromIdentity(identity.rows[0] ?? null, txn.transaction_metadata),
+    items,
   };
 }
 
@@ -365,6 +383,9 @@ export async function lockTransactionContext(
     throw new DomainError("TRANSACTION_NOT_FOUND", "Transaction not found", 404);
   }
   await db.query(`SELECT id FROM transaction_shipping WHERE transaction_id = $1 FOR UPDATE`, [
+    transactionId,
+  ]);
+  await db.query(`SELECT id FROM transaction_items WHERE transaction_id = $1 FOR UPDATE`, [
     transactionId,
   ]);
   const proof = await db.query<ProofRow>(
@@ -445,6 +466,7 @@ function toView(bundle: TransactionBundle): TransactionView {
     proofStatus: bundle.proofStatus,
     buyerUserId: bundle.buyerUserId,
     provenance: bundle.provenance,
+    items: bundle.items,
   });
 }
 

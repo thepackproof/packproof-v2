@@ -58,14 +58,17 @@ function mapAuditEvent(event: AuditEventView, transaction: TransactionView): Chr
   switch (event.eventType) {
     case "PROOF_CREATED":
       return entry(event, "PROOF", "Proof created", null, "PACKPROOF");
-    case "TRANSACTION_IMPORTED":
+    case "TRANSACTION_IMPORTED": {
+      const source = eventSource(event, "MARKETPLACE_API");
+      const storefront = source === "STOREFRONT_API";
       return entry(
         event,
         "COMMERCE",
-        "Transaction imported",
-        sourceDescription(event) ?? "Marketplace",
-        eventSource(event, "MARKETPLACE_API"),
+        storefront ? "Order imported" : "Transaction imported",
+        sourceDescription(event) ?? (storefront ? "Demo Storefront" : "Marketplace"),
+        source,
       );
+    }
     case "SHIPPING_DETAILS_IMPORTED":
       return entry(
         event,
@@ -221,7 +224,13 @@ function eventSource(event: AuditEventView, fallback: string): string {
 
 function sourceDescription(event: AuditEventView): string | null {
   if (typeof event.data.adapterKey === "string" && event.data.adapterKey.trim()) {
-    return event.data.adapterKey === "demo-marketplace" ? "Marketplace" : event.data.adapterKey;
+    if (event.data.adapterKey === "demo-marketplace") {
+      return "Marketplace";
+    }
+    if (event.data.adapterKey === "demo-storefront") {
+      return "Demo Storefront";
+    }
+    return event.data.adapterKey;
   }
   if (typeof event.data.provider === "string") {
     return event.data.provider;

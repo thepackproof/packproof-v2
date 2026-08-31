@@ -121,6 +121,7 @@ export function externalFieldLabel(field: string): string {
     "transaction.itemTitle": "Item title",
     "transaction.itemDescription": "Item description",
     "transaction.quantity": "Quantity",
+    "transaction.items": "Line items",
     "transaction.transactionValue": "Transaction value",
     "transaction.currency": "Currency",
     "transaction.metadata": "Transaction metadata",
@@ -154,6 +155,20 @@ export function chronologyCategoryLabel(
     return "Carrier observation";
   }
   return "PackProof event";
+}
+
+export function formatMoney(value: number | null | undefined, currency: string | null | undefined): string {
+  if (value == null) {
+    return "—";
+  }
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+    }).format(value);
+  } catch {
+    return `${value} ${currency ?? ""}`.trim();
+  }
 }
 
 export function displayValue(value: unknown): string {

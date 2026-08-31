@@ -3,7 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { saveSession } from "../auth/session";
-import { canonicalProof, invitation, summary } from "./fixtures";
+import {
+  canonicalProof,
+  demoConnection,
+  fulfillmentItem,
+  fulfillmentNext,
+  invitation,
+  summary,
+} from "./fixtures";
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -514,5 +521,133 @@ describe("PackProof web reference client", () => {
     );
     expect(screen.queryByText("raw-invite-token")).not.toBeInTheDocument();
     expect(JSON.stringify(inviteCall?.[1]?.body ?? "")).not.toContain("email");
+  });
+
+  it("renders the fulfillment queue and a multi-item packing workspace", async () => {
+    signInSession();
+    let attested = false;
+    let finalized = false;
+    const multi = {
+      ...fulfillmentItem,
+      items: [
+        ...fulfillmentItem.items,
+        {
+          itemId: "itm_extra",
+          externalItemId: "line-1001-2",
+          position: 2,
+          title: "Sleeve pack",
+          description: null,
+          sku: null,
+          quantity: 2,
+          unitValue: 6,
+          currency: "USD",
+        },
+      ],
+      itemSummary: "Pokémon Booster Box + 1 more",
+      itemCount: 2,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/me/fulfillment-queue")) {
+          const item = attested ? { ...multi, sellerPackingAttested: true, canComplete: true } : multi;
+          if (finalized && url.includes("filter=ready")) {
+            return json({ items: [fulfillmentNext], filter: "ready" });
+          }
+          return json({ items: finalized ? [fulfillmentNext] : [item, fulfillmentNext], filter: "all" });
+        }
+        if (url.includes("/attestations") && init?.method === "POST") {
+          attested = true;
+          return json({
+            attestation: { attestationId: "att_1", statement: "PACKED_DESCRIBED_ITEM" },
+            proof: canonicalProof,
+          });
+        }
+        if (url.includes("/finalize") && init?.method === "POST") {
+          finalized = true;
+          return json({
+            proof: { ...canonicalProof, status: "FINALIZED" },
+            manifest: { manifestId: "man_1", proofId: multi.proofId, sha256: "aa", canonicalJson: "{}", manifest: {} },
+          });
+        }
+        if (url.endsWith("/me/proofs")) {
+          return json({ proofs: [summary] });
+        }
+        if (url.endsWith("/invitations")) {
+          return json({ invitations: [] });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Fulfillment" }));
+    expect(await screen.findByRole("heading", { name: "Fulfillment" })).toBeInTheDocument();
+    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
+    expect(screen.getByText("Pokémon Booster Box + 1 more")).toBeInTheDocument();
+    expect(screen.getAllByText(/Demo Storefront/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/video is required/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/buyer acceptance/i)).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Pack" })[0]);
+    expect(await screen.findByRole("heading", { name: "Order #DS-1001" })).toBeInTheDocument();
+    expect(screen.getByText("Sleeve pack")).toBeInTheDocument();
+    expect(screen.getByText(/Buyer acceptance is not required/)).toBeInTheDocument();
+    expect(screen.getByText("Optional documentation")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Complete PackProof" })).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /I attest that I packed this order as described/i }));
+    expect(await screen.findByText("Packing attestation recorded")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Complete & Next" }));
+    expect(await screen.findByRole("heading", { name: "Order #DS-1002" })).toBeInTheDocument();
+  });
+
+  it("connects and syncs the demo storefront from Connected Stores", async () => {
+    signInSession();
+    let connected = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/dev/integrations/demo-storefront/connect") && init?.method === "POST") {
+          connected = true;
+          return json({ connection: demoConnection }, 201);
+        }
+        if (url.includes("/me/integration-connections")) {
+          return json({ connections: connected ? [{ ...demoConnection, readyOrderCount: 6 }] : [] });
+        }
+        if (url.includes("/commerce-connections/") && url.endsWith("/sync")) {
+          return json({
+            connectionId: "icn_demo",
+            adapterKey: "demo-storefront",
+            provider: "demo-storefront",
+            discoveredCount: 10,
+            eligibleCount: 6,
+            createdTransactionCount: 6,
+            createdProofCount: 6,
+            existingProofCount: 0,
+            ineligibleCount: 4,
+            cursor: null,
+          });
+        }
+        if (url.endsWith("/me/proofs")) {
+          return json({ proofs: [] });
+        }
+        if (url.endsWith("/invitations")) {
+          return json({ invitations: [] });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Stores" }));
+    expect(await screen.findByRole("heading", { name: "Connected Stores" })).toBeInTheDocument();
+    expect(screen.queryByText(/Connect Shopify/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Connect Demo Storefront" }));
+    expect(await screen.findByText("Demo Store")).toBeInTheDocument();
+    expect(screen.getByText(/6 orders ready/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sync now" }));
+    expect(await screen.findByText(/10 orders discovered/)).toBeInTheDocument();
+    expect(screen.queryByText(/icn_/)).not.toBeInTheDocument();
   });
 });

@@ -10,12 +10,18 @@ import {
 } from "./integration-identities.js";
 import { getProofView, loadProof, type ProofView } from "./proofs.js";
 import type { ProofRow, TransactionRow } from "./types.js";
+import {
+  DEFAULT_PARTICIPATION_POLICY,
+  requireParticipationPolicy,
+  type ParticipationPolicy,
+} from "./participation.js";
 
 export async function createOrGetProof(
   db: Database,
   clock: Clock,
   actorUserId: string,
   transactionId: string,
+  options: { participationPolicy?: ParticipationPolicy } = {},
 ): Promise<ProofView> {
   return db.transaction(async (tx) => {
     const transaction = await tx.query<TransactionRow>(
@@ -60,12 +66,18 @@ export async function createOrGetProof(
 
     const proofId = newId("proof");
     const now = clock.now().toISOString();
+    const participationPolicy = requireParticipationPolicy(
+      options.participationPolicy,
+      DEFAULT_PARTICIPATION_POLICY,
+    );
+    const initialStatus =
+      participationPolicy === "COUNTERPARTY_OPTIONAL" ? "READY_FOR_EVIDENCE" : "OPEN";
     try {
       await tx.query(
         `INSERT INTO proofs (
-           id, transaction_id, status, created_at, updated_at, version
-         ) VALUES ($1, $2, 'OPEN', $3, $3, 1)`,
-        [proofId, transactionId, now],
+           id, transaction_id, status, participation_policy, created_at, updated_at, version
+         ) VALUES ($1, $2, $3, $4, $5, $5, 1)`,
+        [proofId, transactionId, initialStatus, participationPolicy, now],
       );
     } catch (error) {
       if (isUniqueViolation(error)) {

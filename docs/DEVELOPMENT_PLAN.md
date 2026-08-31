@@ -25,9 +25,9 @@ A PackProof is one immutable, transaction-bound evidence record whose history ca
 
 Supported: two users, two devices, one transaction, one Proof, seller, buyer, PackProof user search, account-targeted invitation, acceptance, seller evidence, SHA-256, commit, server-side validation, finalize, retrieve Proof/manifest, minimal UI, retries/idempotency.
 
-Out of scope: Salesforce, Zendesk, live carriers, live marketplaces, returns, receiver capture, witness, analytics, billing, orgs, GraphQL, Kafka, Kubernetes, Firebase/Firestore domain storage, microservices, extra tiers, AI analysis.
+Out of scope: Salesforce, Zendesk, live carriers, live marketplaces (Shopify/eBay/Amazon/Etsy/WooCommerce/Walmart APIs), returns, receiver capture, witness, analytics, billing, orgs, GraphQL, Kafka, Kubernetes, Firebase/Firestore domain storage, microservices, extra tiers, AI analysis, background fulfillment schedulers.
 
-A provider-neutral transaction ingestion seam with a reference adapter is in scope. Append-only shipment observations associated with a Proof are in scope. A recomputed shipment integrity supplement that links those observations to the frozen core manifest is in scope. A trusted carrier integration runtime (credential store, connections, sync, webhook verification, fake trusted adapter) is in scope. An EasyPost Tracker adapter (`easypost-tracker`) is in scope for **test/staging tracking observations only**; it is not a production EasyPost rollout and does not buy labels. Real eBay/Shopify/Shippo/UPS/FedEx/USPS connectors are not.
+A provider-neutral transaction ingestion seam with a reference adapter is in scope. Append-only shipment observations associated with a Proof are in scope. A recomputed shipment integrity supplement that links those observations to the frozen core manifest is in scope. A trusted carrier integration runtime (credential store, connections, sync, webhook verification, fake trusted adapter) is in scope. An EasyPost Tracker adapter (`easypost-tracker`) is in scope for **test/staging tracking observations only**; it is not a production EasyPost rollout and does not buy labels. Automatic fulfillment ingestion — a provider-neutral commerce adapter, `demo-storefront` reference catalog, commerce sync projection, optional-counterparty merchant Proofs, and a seller fulfillment queue — is in scope. Real eBay/Shopify/Shippo/UPS/FedEx/USPS connectors are not. Shopify and eBay adapters are the next slice after this architecture.
 
 ## Required flow
 
@@ -37,7 +37,7 @@ The beta-ready invitation path is account search. Invitees do not handle invitat
 
 ## Commands
 
-`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `searchUsers()`, `searchUsersForProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`, `getShipmentIntegrity()`, `executeTrustedShipmentSync()`.
+`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `searchUsers()`, `searchUsersForProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`, `getShipmentIntegrity()`, `executeTrustedShipmentSync()`, `executeCommerceFulfillmentSync()`.
 
 ## API
 
@@ -50,6 +50,9 @@ REST only:
 - `POST /transactions/:id/proof`
 - `GET /health`
 - `GET /meta`
+- `GET /me/fulfillment-queue`
+- `GET /me/integration-connections`
+- `POST /me/commerce-connections/:connectionId/sync`
 - `GET /proofs/:id`
 - `GET /users/search`
 - `GET /proofs/:id/users/search`

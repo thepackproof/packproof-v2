@@ -25,6 +25,8 @@ Session tokens are stored in `sessionStorage` for the tab only. A `401` clears t
 ## Discovery and retrieval
 
 - Home calls `GET /me/proofs` and `GET /invitations`. Summaries are not treated as full Proofs.
+- **Fulfillment** (`/fulfillment`) is the seller packing queue from `GET /me/fulfillment-queue`. Opening a row is an operational pack/attest/complete view, not a requirement to read the full technical Proof first.
+- **Stores** (`/stores`) lists commerce connections. In development, Connect Demo Storefront and Sync now call server-owned reference routes. Production/Cognito mode does not show a fake Connect Shopify control.
 - Create Proof can import a reference marketplace purchase (`POST /integrations/transactions/import`) or enter the transaction manually. The review screen renders the server transaction. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md).
 - Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations.
 - Cached `proofId` values in the URL are shortcuts only.
@@ -66,7 +68,7 @@ npm run typecheck
 npm run dev
 ```
 
-Vite proxies API paths to `http://127.0.0.1:3000`. Document navigations (`Accept: text/html`) are not proxied, so `/proofs/:id` remains the SPA route. JSON fetches still go to the API. Leave `VITE_PACKPROOF_API_BASE_URL` empty for that proxy. Cross-origin deployments set `PACKPROOF_WEB_ORIGINS` on the API.
+Vite proxies API paths (`/me`, `/proofs`, `/dev`, and the other API prefixes) to `http://127.0.0.1:3000`. Document navigations (`Accept: text/html`) are not proxied, so `/proofs/:id` remains the SPA route. JSON fetches still go to the API. Leave `VITE_PACKPROOF_API_BASE_URL` empty for that proxy. Cross-origin deployments set `PACKPROOF_WEB_ORIGINS` on the API.
 
 ## Commands
 

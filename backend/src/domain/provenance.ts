@@ -45,7 +45,11 @@ export function isProvenanceSource(value: unknown): value is ProvenanceSource {
   return typeof value === "string" && (PROVENANCE_SOURCES as readonly string[]).includes(value);
 }
 
-export function tenantKeyForImport(provider: string, source: ProvenanceSource): string {
+export function tenantKeyForImport(
+  provider: string,
+  source: ProvenanceSource,
+  externalAccountReference?: string | null,
+): string {
   const prefix =
     source === "STOREFRONT_API"
       ? "storefront"
@@ -54,6 +58,10 @@ export function tenantKeyForImport(provider: string, source: ProvenanceSource): 
         : source === "LABEL_SCAN"
           ? "label"
           : "marketplace";
+  const account = externalAccountReference?.trim().toLowerCase();
+  if (account) {
+    return `${prefix}:${provider}:${account}`;
+  }
   return `${prefix}:${provider}`;
 }
 
@@ -113,7 +121,7 @@ export function writeImportMetadata(
       sourceRecordId: importMeta.sourceRecordId,
       importedAt: importMeta.importedAt,
       payloadSha256: importMeta.payloadSha256,
-      buyer: importMeta.buyer,
+      buyer: buyerMetadata(importMeta.buyer),
     },
   };
 }
@@ -135,7 +143,11 @@ export function provenanceFromIdentity(
     sourceRecordId: stored?.sourceRecordId ?? null,
     importedAt: stored?.importedAt || asRequiredIso(identity.created_at),
     payloadSha256: stored?.payloadSha256 ?? null,
-    buyer: stored?.buyer ?? null,
+    buyer: stored?.buyer
+      ? stored.buyer.email
+        ? stored.buyer
+        : { externalId: stored.buyer.externalId, displayName: stored.buyer.displayName, email: null }
+      : null,
   };
 }
 
@@ -168,8 +180,19 @@ export function requireProvenanceSource(value: unknown, field = "provenance.sour
 }
 
 function providerFromTenant(tenantKey: string): string {
-  const sep = tenantKey.indexOf(":");
-  return sep >= 0 ? tenantKey.slice(sep + 1) : tenantKey;
+  const parts = tenantKey.split(":");
+  return parts[1] ?? tenantKey;
+}
+
+function buyerMetadata(buyer: ImportedBuyer | null): Record<string, unknown> | null {
+  if (!buyer) {
+    return null;
+  }
+  return {
+    externalId: buyer.externalId,
+    displayName: buyer.displayName,
+    ...(buyer.email ? { email: buyer.email } : {}),
+  };
 }
 
 function readBuyer(value: unknown): ImportedBuyer | null {
@@ -185,5 +208,9 @@ function readBuyer(value: unknown): ImportedBuyer | null {
   if (!buyer.externalId && !buyer.displayName && !buyer.email) {
     return null;
   }
-  return buyer;
+  return {
+    externalId: buyer.externalId,
+    displayName: buyer.displayName,
+    email: buyer.email,
+  };
 }

@@ -12,6 +12,18 @@ export interface ShippingView {
   shipmentDate: string | null;
 }
 
+export interface TransactionItemView {
+  itemId: string | null;
+  externalItemId: string | null;
+  position: number;
+  title: string | null;
+  description: string | null;
+  sku: string | null;
+  quantity: number | null;
+  unitValue: number | null;
+  currency: string | null;
+}
+
 export interface TransactionView {
   transactionId: string;
   externalReference: string | null;
@@ -21,6 +33,7 @@ export interface TransactionView {
   quantity: number | null;
   transactionValue: number | null;
   currency: string | null;
+  items?: TransactionItemView[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -166,6 +179,7 @@ export interface ProofView {
   proofId: string;
   transactionId: string;
   status: ProofStatus | string;
+  participationPolicy?: "COUNTERPARTY_REQUIRED" | "COUNTERPARTY_OPTIONAL" | string;
   version: number;
   createdAt: string;
   updatedAt: string;

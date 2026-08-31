@@ -1,6 +1,7 @@
 import { DomainError } from "./errors.js";
 import type { TransactionProvenanceView } from "./provenance.js";
 import { asRequiredIso, type ShippingRow, type TransactionRow } from "./types.js";
+import type { TransactionItemView } from "./transaction-items.js";
 
 const TITLE_MAX = 200;
 const DESCRIPTION_MAX = 4000;
@@ -33,6 +34,11 @@ export interface TransactionView {
   sellerUserId: string;
   buyerUserId: string | null;
   provenance: TransactionProvenanceView | null;
+  /**
+   * Authoritative multi-item representation when child rows exist.
+   * itemTitle / quantity remain display summaries for older clients.
+   */
+  items: TransactionItemView[];
 }
 
 export interface TransactionCreateInput {
@@ -110,6 +116,7 @@ export function toTransactionView(
     proofStatus: string | null;
     buyerUserId: string | null;
     provenance?: TransactionProvenanceView | null;
+    items?: TransactionItemView[];
   },
 ): TransactionView {
   return {
@@ -131,6 +138,7 @@ export function toTransactionView(
     sellerUserId: row.created_by,
     buyerUserId: extras.buyerUserId,
     provenance: extras.provenance ?? null,
+    items: extras.items ?? [],
   };
 }
 

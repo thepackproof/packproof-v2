@@ -13,6 +13,9 @@ import {
   type ShipmentImportView,
   type ShipmentIntegrityView,
   type ShipmentSyncView,
+  type CommerceConnectionView,
+  type CommerceSyncView,
+  type FulfillmentQueueItem,
 } from "./types";
 
 export class PackProofApi {
@@ -37,6 +40,32 @@ export class PackProofApi {
 
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
     return this.request("/me/proofs");
+  }
+
+  async listFulfillmentQueue(
+    filter: "ready" | "completed" | "all" = "ready",
+  ): Promise<{ items: FulfillmentQueueItem[]; filter: string }> {
+    return this.request(`/me/fulfillment-queue?filter=${encodeURIComponent(filter)}`);
+  }
+
+  async listCommerceConnections(): Promise<{ connections: CommerceConnectionView[] }> {
+    return this.request("/me/integration-connections?capability=commerce");
+  }
+
+  async syncCommerceConnection(connectionId: string): Promise<CommerceSyncView> {
+    return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/sync`, {
+      method: "POST",
+      body: {},
+    });
+  }
+
+  async connectDemoStorefront(
+    externalAccountReference?: string,
+  ): Promise<{ connection: CommerceConnectionView }> {
+    return this.request("/dev/integrations/demo-storefront/connect", {
+      method: "POST",
+      body: externalAccountReference ? { externalAccountReference } : {},
+    });
   }
 
   async listInvitations(): Promise<{ invitations: InvitationInboxView[] }> {
