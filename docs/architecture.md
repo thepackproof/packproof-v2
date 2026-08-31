@@ -73,6 +73,6 @@ Web reference client: `web/`. Same API, same canonical Proof. Local Vite for dev
 
 One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks, and portals consume the same Proof through the API authorization boundary.
 
-See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md).
+See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md). Account search and account-targeted invitations are described in [USER_SEARCH_AND_INVITATIONS.md](USER_SEARCH_AND_INVITATIONS.md).
 
 Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). The trusted carrier runtime is described in [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md). EasyPost Tracker test/staging tracking is described in [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md). Live marketplace connectors and direct UPS/FedEx/USPS/Shippo APIs are not implemented. EasyPost is not a production-supported carrier rollout.

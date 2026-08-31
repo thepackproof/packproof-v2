@@ -106,16 +106,16 @@ export function ParticipantList(props: { proof: CanonicalProof }) {
       </ul>
       {props.proof.invitations?.some((invitation) => invitation.status === "PENDING") ? (
         <div className="note">
-          Pending invitations are recorded without showing invitation secrets.
+          Pending invitations
           <ul>
             {props.proof.invitations
               .filter((invitation) => invitation.status === "PENDING")
               .map((invitation) => (
                 <li key={invitation.invitationId}>
-                  {invitation.inviteeIdentifier} · invited {formatWhen(invitation.createdAt)}
-                  <div>
-                    <CopyableId value={invitation.invitationId} label="invitation ID" />
-                  </div>
+                  {invitation.inviteeUserId
+                    ? "PackProof account invited"
+                    : "Invitation pending"}{" "}
+                  · {formatWhen(invitation.createdAt)}
                 </li>
               ))}
           </ul>

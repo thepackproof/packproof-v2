@@ -5,7 +5,8 @@ import { asRequiredIso } from "./types.js";
 
 export const USERNAME_MIN_LENGTH = 3;
 export const USERNAME_MAX_LENGTH = 24;
-export const SEARCH_MIN_QUERY_LENGTH = 3;
+export const SEARCH_MIN_QUERY_LENGTH = 2;
+export const SEARCH_MAX_QUERY_LENGTH = 64;
 export const SEARCH_MAX_RESULTS = 20;
 
 const USERNAME_PATTERN = /^[A-Za-z][A-Za-z0-9._]{2,23}$/;
@@ -169,11 +170,18 @@ export function normalizeSearchQuery(raw: unknown): string {
   if (typeof raw !== "string") {
     throw new DomainError("INVALID_SEARCH", "q is required", 400);
   }
-  const query = raw.trim().toLowerCase();
+  const query = raw.trim().replace(/^@+/, "").trim().toLowerCase();
   if (query.length < SEARCH_MIN_QUERY_LENGTH) {
     throw new DomainError(
       "INVALID_SEARCH",
       `q must be at least ${SEARCH_MIN_QUERY_LENGTH} characters`,
+      400,
+    );
+  }
+  if (query.length > SEARCH_MAX_QUERY_LENGTH) {
+    throw new DomainError(
+      "INVALID_SEARCH",
+      `q must be at most ${SEARCH_MAX_QUERY_LENGTH} characters`,
       400,
     );
   }
@@ -190,7 +198,7 @@ export async function searchUsers(
 ): Promise<PublicProfileView[]> {
   const query = normalizeSearchQuery(rawQuery);
   const escaped = escapeLike(query);
-  const usernamePrefix = `${escaped}%`;
+  const prefix = `${escaped}%`;
   const displayContains = `%${escaped}%`;
 
   const found = await db.query<UserProfileRow>(
@@ -200,12 +208,22 @@ export async function searchUsers(
         AND username IS NOT NULL
         AND status = 'ACTIVE'
         AND (
-          username_normalized LIKE $1 ESCAPE '\\'
+          username_normalized = $1
+          OR username_normalized LIKE $2 ESCAPE '\\'
           OR lower(coalesce(display_name, '')) LIKE $2 ESCAPE '\\'
+          OR lower(coalesce(display_name, '')) LIKE $3 ESCAPE '\\'
         )
-      ORDER BY username_normalized ASC, id ASC
-      LIMIT $3`,
-    [usernamePrefix, displayContains, SEARCH_MAX_RESULTS],
+      ORDER BY
+        CASE
+          WHEN username_normalized = $1 THEN 0
+          WHEN username_normalized LIKE $2 ESCAPE '\\' THEN 1
+          WHEN lower(coalesce(display_name, '')) LIKE $2 ESCAPE '\\' THEN 2
+          ELSE 3
+        END,
+        username_normalized ASC,
+        id ASC
+      LIMIT $4`,
+    [query, prefix, displayContains, SEARCH_MAX_RESULTS],
   );
 
   return found.rows.map((row) => ({

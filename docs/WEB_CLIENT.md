@@ -28,7 +28,8 @@ Session tokens are stored in `sessionStorage` for the tab only. A `401` clears t
 - Create Proof can import a reference marketplace purchase (`POST /integrations/transactions/import`) or enter the transaction manually. The review screen renders the server transaction. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md).
 - Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations.
 - Cached `proofId` values in the URL are shortcuts only.
-- Invitations addressed to the signed-in account appear in discovery. An invitation ID can also be accepted from home. Tokens from create/accept responses are discarded by the API client.
+- Invitations addressed to the signed-in account appear in discovery (`GET /invitations`). Accepting uses the invitation id. Tokens from create/accept responses are discarded by the API client.
+- Sellers add a participant by searching PackProof usernames or display names (`GET /proofs/:id/users/search`) and inviting the selected `userId`. Relationship state (You / Already participating / Invitation pending / Invite) comes from the server. Raw invite tokens are not shown. An invitation-ID accept control remains as a collapsed fallback.
 
 ## Trust vocabulary
 

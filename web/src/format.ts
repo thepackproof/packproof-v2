@@ -1,4 +1,4 @@
-import type { ProofStatus } from "./api/types";
+import type { ProofInvitationState, ProofStatus } from "./api/types";
 
 export function shortId(id: string): string {
   if (id.length <= 18) {
@@ -164,4 +164,28 @@ export function displayValue(value: unknown): string {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+export function invitationStateLabel(state: ProofInvitationState | undefined): string {
+  switch (state) {
+    case "SELF":
+      return "You";
+    case "PARTICIPANT":
+      return "Already participating";
+    case "INVITED":
+      return "Invitation pending";
+    case "INELIGIBLE":
+      return "Unavailable";
+    default:
+      return "Invite";
+  }
+}
+
+export function profileInitials(displayName: string | null, username: string): string {
+  const source = (displayName || username).trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
 }

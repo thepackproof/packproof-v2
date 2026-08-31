@@ -107,6 +107,101 @@ describe("PackProof profiles and user search", () => {
     expect(emailQuery.status).toBe(200);
     expect(emailQuery.body.users).toEqual([]);
   });
+
+  it("ranks exact username, prefix, and display-name matches and strips a leading @", async () => {
+    harness = await createHarness();
+    const seller = await login(harness.app, "rank-seller");
+    const exact = await login(harness.app, "rank-exact");
+    const prefix = await login(harness.app, "rank-prefix");
+    const displayPrefix = await login(harness.app, "rank-display");
+    const substring = await login(harness.app, "rank-substr");
+    await completeProfile(harness, seller, "rank_seller", "Rank Seller");
+    await completeProfile(harness, exact, "janesmith", "Other Name");
+    await completeProfile(harness, prefix, "janesmithx", "Zee");
+    await completeProfile(harness, displayPrefix, "alexr", "Jane Rivera");
+    await completeProfile(harness, substring, "bobsmith", "XJaneY");
+
+    const exactSearch = await request(harness.app)
+      .get("/users/search")
+      .query({ q: "@JaneSmith" })
+      .set(auth(seller));
+    expect(exactSearch.status).toBe(200);
+    expect(exactSearch.body.users.map((user: { username: string }) => user.username)).toEqual([
+      "janesmith",
+      "janesmithx",
+    ]);
+
+    const prefixSearch = await request(harness.app)
+      .get("/users/search")
+      .query({ q: "JANE" })
+      .set(auth(seller));
+    expect(prefixSearch.body.users.map((user: { userId: string }) => user.userId)).toEqual([
+      exact,
+      prefix,
+      displayPrefix,
+      substring,
+    ]);
+
+    const displaySearch = await request(harness.app)
+      .get("/users/search")
+      .query({ q: "jane riv" })
+      .set(auth(seller));
+    expect(displaySearch.body.users).toEqual([
+      { userId: displayPrefix, username: "alexr", displayName: "Jane Rivera" },
+    ]);
+  });
+
+  it("rejects empty, short, and oversized queries instead of enumerating accounts", async () => {
+    harness = await createHarness();
+    const seller = await login(harness.app, "enum-seller");
+    await completeProfile(harness, seller, "enum_seller", "Enum Seller");
+    await completeProfile(harness, await login(harness.app, "enum-other"), "enum_other", "Other");
+
+    const missing = await request(harness.app).get("/users/search").set(auth(seller));
+    const empty = await request(harness.app).get("/users/search").query({ q: "" }).set(auth(seller));
+    const short = await request(harness.app).get("/users/search").query({ q: "e" }).set(auth(seller));
+    const atOnly = await request(harness.app).get("/users/search").query({ q: "@" }).set(auth(seller));
+    const oversized = await request(harness.app)
+      .get("/users/search")
+      .query({ q: "e".repeat(65) })
+      .set(auth(seller));
+    expect(missing.status).toBe(400);
+    expect(empty.status).toBe(400);
+    expect(short.status).toBe(400);
+    expect(atOnly.status).toBe(400);
+    expect(oversized.status).toBe(400);
+    expect(missing.body.error.code).toBe("INVALID_SEARCH");
+    expect(empty.body.users).toBeUndefined();
+  });
+
+  it("bounds result count and escapes wildcard characters", async () => {
+    harness = await createHarness();
+    const seller = await login(harness.app, "bound-seller");
+    await completeProfile(harness, seller, "bound_seller", "Bound Seller");
+    for (let index = 0; index < 21; index += 1) {
+      const userId = await login(harness.app, `bound-user-${index}`);
+      await completeProfile(
+        harness,
+        userId,
+        `bound${String(index).padStart(2, "0")}`,
+        `Bound User ${index}`,
+      );
+    }
+
+    const found = await request(harness.app)
+      .get("/users/search")
+      .query({ q: "bound" })
+      .set(auth(seller));
+    expect(found.status).toBe(200);
+    expect(found.body.users).toHaveLength(20);
+
+    const wildcard = await request(harness.app)
+      .get("/users/search")
+      .query({ q: "bo%" })
+      .set(auth(seller));
+    expect(wildcard.status).toBe(200);
+    expect(wildcard.body.users).toEqual([]);
+  });
 });
 
 describe("direct account invitations", () => {
@@ -187,6 +282,9 @@ describe("direct account invitations", () => {
       .set(auth(stranger));
     expect(stolenToken.status).toBe(403);
 
+    const beforeAccept = await request(harness.app).get("/me/proofs").set(auth(buyer));
+    expect(beforeAccept.body.proofs).toEqual([]);
+
     const accept1 = await request(harness.app)
       .post(`/invitations/${invite1.body.invitation.invitationId}/accept`)
       .set(auth(buyer));
@@ -201,6 +299,10 @@ describe("direct account invitations", () => {
     expect(accept2.body.proof.participants.find((p: { role: string }) => p.role === "BUYER").userId).toBe(
       buyer,
     );
+
+    const afterAccept = await request(harness.app).get("/me/proofs").set(auth(buyer));
+    expect(afterAccept.body.proofs).toHaveLength(1);
+    expect(afterAccept.body.proofs[0].proofId).toBe(proofId);
 
     const stillOne = await request(harness.app)
       .post(`/transactions/${txn.body.transactionId}/proof`)
@@ -238,6 +340,139 @@ describe("direct account invitations", () => {
       .set(auth(buyer));
     expect(accepted.status).toBe(200);
     expect(accepted.body.proof.proofId).toBe(proof.proofId);
+  });
+
+  it("annotates Proof-scoped search and rejects self, duplicate, unauthorized, and finalized invites", async () => {
+    harness = await createHarness();
+    const seller = await login(harness.app, "rel-seller");
+    const buyer = await login(harness.app, "rel-buyer");
+    const stranger = await login(harness.app, "rel-stranger");
+    await completeProfile(harness, seller, "rel_seller", "Rel Seller");
+    await completeProfile(harness, buyer, "rel_buyer", "Rel Buyer");
+    await completeProfile(harness, stranger, "rel_stranger", "Rel Stranger");
+
+    const txn = await request(harness.app)
+      .post("/transactions")
+      .set(auth(seller))
+      .send({ itemTitle: "Relationship carton" });
+    const proof = await request(harness.app)
+      .post(`/transactions/${txn.body.transactionId}/proof`)
+      .set(auth(seller));
+    const proofId = proof.body.proofId as string;
+
+    const selfInvite = await request(harness.app)
+      .post(`/proofs/${proofId}/invitations`)
+      .set(auth(seller))
+      .send({ userId: seller });
+    expect(selfInvite.status).toBe(400);
+    expect(selfInvite.body.error.code).toBe("CANNOT_INVITE_SELF");
+
+    const buyerInvite = await request(harness.app)
+      .post(`/proofs/${proofId}/invitations`)
+      .set(auth(buyer))
+      .send({ inviteeUserId: stranger });
+    const strangerInvite = await request(harness.app)
+      .post(`/proofs/${proofId}/invitations`)
+      .set(auth(stranger))
+      .send({ inviteeUserId: buyer });
+    expect(buyerInvite.status).toBe(403);
+    expect(strangerInvite.status).toBe(403);
+
+    const openSearch = await request(harness.app)
+      .get(`/proofs/${proofId}/users/search`)
+      .query({ q: "rel_" })
+      .set(auth(seller));
+    expect(openSearch.status).toBe(200);
+    expect(openSearch.body.users).toEqual(
+      expect.arrayContaining([
+        {
+          userId: seller,
+          username: "rel_seller",
+          displayName: "Rel Seller",
+          invitationState: "SELF",
+        },
+        {
+          userId: buyer,
+          username: "rel_buyer",
+          displayName: "Rel Buyer",
+          invitationState: "NONE",
+        },
+      ]),
+    );
+    expect(JSON.stringify(openSearch.body)).not.toMatch(/email|cognito|password|provider_subject/i);
+
+    const buyerSearch = await request(harness.app)
+      .get(`/proofs/${proofId}/users/search`)
+      .query({ q: "rel_" })
+      .set(auth(buyer));
+    const strangerSearch = await request(harness.app)
+      .get(`/proofs/${proofId}/users/search`)
+      .query({ q: "rel_" })
+      .set(auth(stranger));
+    expect(buyerSearch.status).toBe(403);
+    expect(strangerSearch.status).toBe(403);
+
+    const invited = await request(harness.app)
+      .post(`/proofs/${proofId}/invitations`)
+      .set(auth(seller))
+      .send({ userId: buyer });
+    expect(invited.status).toBe(201);
+    expect(invited.body.invitation.inviteeUserId).toBe(buyer);
+
+    const pendingSearch = await request(harness.app)
+      .get(`/proofs/${proofId}/users/search`)
+      .query({ q: "rel_buyer" })
+      .set(auth(seller));
+    expect(pendingSearch.body.users[0]).toMatchObject({
+      userId: buyer,
+      invitationState: "INVITED",
+    });
+
+    await request(harness.app)
+      .post(`/invitations/${invited.body.invitation.invitationId}/accept`)
+      .set(auth(buyer));
+
+    const joinedSearch = await request(harness.app)
+      .get(`/proofs/${proofId}/users/search`)
+      .query({ q: "rel_buyer" })
+      .set(auth(seller));
+    expect(joinedSearch.body.users[0].invitationState).toBe("PARTICIPANT");
+
+    const reinvite = await request(harness.app)
+      .post(`/proofs/${proofId}/invitations`)
+      .set(auth(seller))
+      .send({ inviteeUserId: buyer });
+    expect(reinvite.status).toBe(409);
+    expect(reinvite.body.error.code).toBe("ALREADY_PARTICIPANT");
+
+    const upload = await request(harness.app)
+      .post(`/proofs/${proofId}/evidence/uploads`)
+      .set(auth(seller))
+      .set("Idempotency-Key", "rel-evidence")
+      .send({ contentType: "video/mp4" });
+    const bytes = Buffer.from("relationship-evidence");
+    await request(harness.app)
+      .put(new URL(upload.body.upload.url as string).pathname)
+      .set("Content-Type", "video/mp4")
+      .send(bytes);
+    await request(harness.app)
+      .post(`/proofs/${proofId}/evidence/${upload.body.evidenceId}/commit`)
+      .set(auth(seller))
+      .send({ sha256: sha256Hex(bytes) });
+    await request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));
+
+    const finalizedSearch = await request(harness.app)
+      .get(`/proofs/${proofId}/users/search`)
+      .query({ q: "rel_" })
+      .set(auth(seller));
+    const finalizedInvite = await request(harness.app)
+      .post(`/proofs/${proofId}/invitations`)
+      .set(auth(seller))
+      .send({ inviteeUserId: stranger });
+    expect(finalizedSearch.status).toBe(409);
+    expect(finalizedSearch.body.error.code).toBe("PROOF_ALREADY_FINALIZED");
+    expect(finalizedInvite.status).toBe(409);
+    expect(finalizedInvite.body.error.code).toBe("PROOF_ALREADY_FINALIZED");
   });
 });
 

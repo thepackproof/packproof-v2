@@ -290,10 +290,13 @@ export interface ProfileView {
   updatedAt: string;
 }
 
+export type ProofInvitationState = "NONE" | "SELF" | "PARTICIPANT" | "INVITED" | "INELIGIBLE";
+
 export interface PublicProfileView {
   userId: string;
   username: string;
   displayName: string | null;
+  invitationState?: ProofInvitationState;
 }
 
 export interface InvitationInboxView {
@@ -418,6 +421,15 @@ export class PackProofV2Client {
 
   async searchUsers(query: string): Promise<{ users: PublicProfileView[] }> {
     return this.request(`/users/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async searchProofUsers(
+    proofId: string,
+    query: string,
+  ): Promise<{ users: PublicProfileView[] }> {
+    return this.request(
+      `/proofs/${encodeURIComponent(proofId)}/users/search?q=${encodeURIComponent(query)}`,
+    );
   }
 
   async listInvitations(): Promise<{ invitations: InvitationInboxView[] }> {

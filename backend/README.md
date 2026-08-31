@@ -10,6 +10,8 @@ Modular monolith. Domain commands own Proof state. HTTP only translates requests
 - `getShipmentIntegrity`
 - `executeTrustedShipmentSync`
 - `createOrGetProof`
+- `searchUsers`
+- `searchUsersForProof`
 - `createInvitation`
 - `acceptInvitation`
 - `initializeEvidenceUpload`

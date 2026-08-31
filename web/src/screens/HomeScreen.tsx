@@ -59,7 +59,13 @@ export function HomeScreen(props: {
                   {invitation.transaction.itemTitle || "Invitation to a Proof"}
                 </div>
                 <div className="meta">
-                  From {invitation.inviter.displayName || invitation.inviter.username || "a participant"}
+                  Pending invitation · invited by{" "}
+                  {invitation.inviter.username
+                    ? `@${invitation.inviter.username}`
+                    : invitation.inviter.displayName || "a participant"}
+                  {invitation.inviter.displayName && invitation.inviter.username
+                    ? ` (${invitation.inviter.displayName})`
+                    : ""}
                   · {formatWhen(invitation.createdAt)}
                 </div>
                 <button
@@ -75,11 +81,10 @@ export function HomeScreen(props: {
         </section>
       ) : null}
 
-      <section className="section">
-        <h2>Accept with an invitation ID</h2>
+      <details className="section fallback-details">
+        <summary>Have an invitation ID?</summary>
         <p className="note">
-          Use an invitation ID from a participant who invited you. Invitation secrets are not shown
-          after acceptance.
+          Use this only if someone sent you an invitation ID. Account invitations appear above.
         </p>
         <form
           className="invite-accept"
@@ -104,7 +109,7 @@ export function HomeScreen(props: {
             Accept invitation
           </button>
         </form>
-      </section>
+      </details>
 
       <div className="filters" role="group" aria-label="Filter Proofs">
         {(

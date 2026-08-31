@@ -47,6 +47,15 @@ export class PackProofApi {
     return this.request(`/users/search?q=${encodeURIComponent(query)}`);
   }
 
+  async searchProofUsers(
+    proofId: string,
+    query: string,
+  ): Promise<{ users: PublicProfileView[] }> {
+    return this.request(
+      `/proofs/${encodeURIComponent(proofId)}/users/search?q=${encodeURIComponent(query)}`,
+    );
+  }
+
   async getProof(proofId: string): Promise<CanonicalProof> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}`);
   }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CanonicalProof, PublicProfileView, ShipmentIntegrityView } from "../api/types";
 import {
   AttestationList,
@@ -10,6 +10,10 @@ import {
   ProofOverview,
   ShipmentIntegrityPanel,
 } from "../components/ProofRecord";
+import { invitationStateLabel, profileInitials } from "../format";
+
+const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_MIN_LENGTH = 2;
 
 export function ProofScreen(props: {
   proof: CanonicalProof | null;
@@ -18,7 +22,7 @@ export function ProofScreen(props: {
   loading: boolean;
   error: string | null;
   busy: boolean;
-  onInvite: (input: { inviteeUserId?: string; inviteeIdentifier?: string }) => void;
+  onInvite: (input: { inviteeUserId: string }) => Promise<void>;
   onAttest: (statement: string) => void;
   onFinalize: () => void;
   onImportShipmentEvents?: (throughEventType?: string) => void;
@@ -26,20 +30,56 @@ export function ProofScreen(props: {
   onConnectTrustedDemo?: () => void;
   onSearchUsers: (query: string) => Promise<PublicProfileView[]>;
 }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PublicProfileView[]>([]);
-  const [invitee, setInvitee] = useState("");
+  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "empty" | "ready" | "error">(
+    "idle",
+  );
+  const searchGeneration = useRef(0);
   const proof = props.proof;
   const role = proof?.participants.find((participant) => participant.userId === props.currentUserId)
     ?.role;
   const canAttest = proof && proof.status !== "FINALIZED" && Boolean(role);
   const canFinalize = proof?.status === "EVIDENCE_COMMITTED" && role === "SELLER";
-  const canInvite =
-    proof && role === "SELLER" && proof.status !== "FINALIZED";
+  const canInvite = Boolean(proof && role === "SELLER" && proof.status !== "FINALIZED");
   const canImportDemoCarrier = proof && role === "SELLER" && Boolean(props.onImportShipmentEvents);
   const canSyncShipment = Boolean(proof?.shipmentSync?.available && props.onSyncShipment);
   const canConnectTrustedDemo =
     proof && role === "SELLER" && !proof.shipmentSync?.available && Boolean(props.onConnectTrustedDemo);
+
+  useEffect(() => {
+    if (!canInvite || !inviteOpen) {
+      return;
+    }
+    const normalized = query.trim().replace(/^@+/, "").trim();
+    if (normalized.length < SEARCH_MIN_LENGTH) {
+      searchGeneration.current += 1;
+      setResults([]);
+      setSearchStatus("idle");
+      return;
+    }
+    const generation = ++searchGeneration.current;
+    setSearchStatus("loading");
+    const handle = window.setTimeout(() => {
+      void props
+        .onSearchUsers(query.trim())
+        .then((users) => {
+          if (generation !== searchGeneration.current) {
+            return;
+          }
+          setResults(users);
+          setSearchStatus(users.length > 0 ? "ready" : "empty");
+        })
+        .catch(() => {
+          if (generation !== searchGeneration.current) {
+            return;
+          }
+          setSearchStatus("error");
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [canInvite, inviteOpen, query, props.onSearchUsers]);
 
   if (props.loading && !proof) {
     return (
@@ -79,54 +119,73 @@ export function ProofScreen(props: {
       <ParticipantList proof={proof} />
       {canInvite ? (
         <section className="section stack">
-          <h2>Invite a participant</h2>
-          <p className="note">
-            Search finds PackProof accounts that already have a username. An identifier invitation
-            can be accepted with the invitation ID. Invitation tokens are never shown here.
-          </p>
-          <form
-            className="stack"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void props
-                .onSearchUsers(query)
-                .then((users) => setResults(users))
-                .catch(() => setResults([]));
-            }}
-          >
-            <label className="field">
-              <span>Search PackProof users</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            <button className="btn btn-secondary" type="submit">
-              Search
+          <h2>Add a participant</h2>
+          {!inviteOpen ? (
+            <button className="btn" type="button" onClick={() => setInviteOpen(true)}>
+              Add participant
             </button>
-          </form>
-          {results.map((user) => (
-            <button
-              key={user.userId}
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => props.onInvite({ inviteeUserId: user.userId })}
-            >
-              Invite {user.displayName || user.username}
-            </button>
-          ))}
-          <label className="field">
-            <span>Or invite by identifier</span>
-            <input value={invitee} onChange={(event) => setInvitee(event.target.value)} />
-          </label>
-          <button
-            className="btn"
-            type="button"
-            disabled={props.busy || !invitee.trim()}
-            onClick={() => props.onInvite({ inviteeIdentifier: invitee.trim() })}
-          >
-            Send invitation
-          </button>
+          ) : (
+            <>
+              <p className="note">
+                Search PackProof accounts by username or name. Invitation links are not required.
+              </p>
+              <label className="field">
+                <span>Search by username or name</span>
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+              </label>
+              {searchStatus === "loading" ? <p className="empty">Searching…</p> : null}
+              {searchStatus === "empty" ? <p className="empty">No PackProof users match that search.</p> : null}
+              {searchStatus === "error" ? (
+                <p className="empty" role="alert">
+                  Search failed. Edit the query to try again.
+                </p>
+              ) : null}
+              <ul className="card-list">
+                {results.map((user) => {
+                  const state = user.invitationState ?? "NONE";
+                  const canSend = state === "NONE" && !props.busy;
+                  return (
+                    <li key={user.userId} className="user-search-row">
+                      <span className="avatar-placeholder" aria-hidden="true">
+                        {profileInitials(user.displayName, user.username)}
+                      </span>
+                      <div className="user-search-copy">
+                        <strong>{user.displayName || user.username}</strong>
+                        <div className="meta">@{user.username}</div>
+                      </div>
+                      {canSend ? (
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => {
+                            void props.onInvite({ inviteeUserId: user.userId }).then(() => {
+                              setResults((current) =>
+                                current.map((row) =>
+                                  row.userId === user.userId
+                                    ? { ...row, invitationState: "INVITED" }
+                                    : row,
+                                ),
+                              );
+                            });
+                          }}
+                        >
+                          Invite
+                        </button>
+                      ) : (
+                        <span className="meta">{invitationStateLabel(state)}</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </section>
       ) : null}
       <EvidenceList proof={proof} />
@@ -218,7 +277,7 @@ export function ProofScreen(props: {
             className="btn"
             type="button"
             disabled={props.busy}
-            onClick={() => props.onConnectTrustedDemo?.()}
+            onClick={props.onConnectTrustedDemo}
           >
             Connect trusted demo
           </button>
@@ -240,7 +299,7 @@ export function ProofScreen(props: {
             className="btn"
             type="button"
             disabled={props.busy}
-            onClick={() => props.onSyncShipment?.()}
+            onClick={props.onSyncShipment}
           >
             Sync shipment
           </button>

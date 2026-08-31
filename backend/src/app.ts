@@ -19,6 +19,7 @@ import {
   acceptInvitation,
   createInvitation,
   listPendingInvitations,
+  searchUsersForProof,
 } from "./domain/invitations.js";
 import { commitAttestation } from "./domain/attestations.js";
 import { listMyProofs } from "./domain/proof-collection.js";
@@ -543,6 +544,19 @@ export function createApp(deps: AppDependencies): Express {
   );
 
   app.get(
+    "/proofs/:id/users/search",
+    asyncRoute(async (req, res) => {
+      const result = await searchUsersForProof(
+        deps.db,
+        bearerUser(req),
+        req.params.id,
+        req.query.q,
+      );
+      res.json({ users: result });
+    }),
+  );
+
+  app.get(
     "/invitations",
     asyncRoute(async (req, res) => {
       const result = await listPendingInvitations(deps.db, bearerUser(req));
@@ -564,7 +578,11 @@ export function createApp(deps: AppDependencies): Express {
               ? undefined
               : String(req.body.inviteeIdentifier),
           inviteeUserId:
-            req.body?.inviteeUserId == null ? undefined : String(req.body.inviteeUserId),
+            req.body?.inviteeUserId == null
+              ? req.body?.userId == null
+                ? undefined
+                : String(req.body.userId)
+              : String(req.body.inviteeUserId),
         },
       );
       res.status(201).json(result);

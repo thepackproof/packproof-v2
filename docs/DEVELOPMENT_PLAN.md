@@ -23,7 +23,7 @@ A PackProof is one immutable, transaction-bound evidence record whose history ca
 
 ## Release-candidate scope
 
-Supported: two users, two devices, one transaction, one Proof, seller, buyer, invitation, acceptance, seller evidence, SHA-256, commit, server-side validation, finalize, retrieve Proof/manifest, minimal UI, retries/idempotency.
+Supported: two users, two devices, one transaction, one Proof, seller, buyer, PackProof user search, account-targeted invitation, acceptance, seller evidence, SHA-256, commit, server-side validation, finalize, retrieve Proof/manifest, minimal UI, retries/idempotency.
 
 Out of scope: Salesforce, Zendesk, live carriers, live marketplaces, returns, receiver capture, witness, analytics, billing, orgs, GraphQL, Kafka, Kubernetes, Firebase/Firestore domain storage, microservices, extra tiers, AI analysis.
 
@@ -31,11 +31,13 @@ A provider-neutral transaction ingestion seam with a reference adapter is in sco
 
 ## Required flow
 
-Seller signs in → create transaction → create-or-get Proof → invite buyer → buyer signs in → accept invitation → seller captures → upload → server verifies SHA-256 → commit → finalize → both retrieve the same finalized Proof.
+Seller signs in → create transaction → create-or-get Proof → search PackProof users → invite by internal user id → buyer signs in → pending invitation appears in discovery → accept invitation → seller captures → upload → server verifies SHA-256 → commit → finalize → both retrieve the same finalized Proof.
+
+The beta-ready invitation path is account search. Invitees do not handle invitation tokens. Token and invitation-ID acceptance remain as compatibility fallbacks.
 
 ## Commands
 
-`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`, `getShipmentIntegrity()`, `executeTrustedShipmentSync()`.
+`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `searchUsers()`, `searchUsersForProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`, `getShipmentIntegrity()`, `executeTrustedShipmentSync()`.
 
 ## API
 
@@ -47,6 +49,9 @@ REST only:
 - `POST /integrations/shipment-events/import`
 - `POST /transactions/:id/proof`
 - `GET /proofs/:id`
+- `GET /users/search`
+- `GET /proofs/:id/users/search`
+- `GET /invitations`
 - `GET /proofs/:id/shipment-events`
 - `GET /proofs/:id/chronology`
 - `GET /proofs/:id/shipment-integrity`
@@ -71,7 +76,7 @@ Transaction creation with external identifiers, Proof creation, invitation creat
 
 ## Errors
 
-Unsuccessful requests must not leave a half-mutated Proof. Explicit codes including `PROOF_ALREADY_FINALIZED`, `PROOF_NOT_READY_FOR_FINALIZATION`, `PARTICIPANT_NOT_AUTHORIZED`, `INVITATION_EXPIRED`, `EVIDENCE_ALREADY_COMMITTED`, `INVALID_PROOF_TRANSITION`, `SHIPMENT_EVENT_CONFLICT`, `SHIPMENT_EVENT_IMMUTABLE`, `INTEGRATION_TRUST_BOUNDARY`, `WEBHOOK_SIGNATURE_INVALID`.
+Unsuccessful requests must not leave a half-mutated Proof. Explicit codes including `PROOF_ALREADY_FINALIZED`, `PROOF_NOT_READY_FOR_FINALIZATION`, `PARTICIPANT_NOT_AUTHORIZED`, `INVITATION_EXPIRED`, `CANNOT_INVITE_SELF`, `ALREADY_PARTICIPANT`, `INVALID_SEARCH`, `EVIDENCE_ALREADY_COMMITTED`, `INVALID_PROOF_TRANSITION`, `SHIPMENT_EVENT_CONFLICT`, `SHIPMENT_EVENT_IMMUTABLE`, `INTEGRATION_TRUST_BOUNDARY`, `WEBHOOK_SIGNATURE_INVALID`.
 
 ## Definition of done
 

@@ -3,6 +3,7 @@ import type { Database } from "../db/database.js";
 import { newId, newInvitationToken } from "../ids.js";
 import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
+import { searchUsers, type PublicProfileView } from "./profiles.js";
 import {
   assertNotFinalized,
   getProofView,
@@ -51,7 +52,14 @@ export interface InvitationInboxView {
 export type InvitationCreateInput = {
   inviteeIdentifier?: string;
   inviteeUserId?: string | null;
+  userId?: string | null;
 };
+
+export type ProofInvitationState = "NONE" | "SELF" | "PARTICIPANT" | "INVITED" | "INELIGIBLE";
+
+export interface ProofUserSearchResult extends PublicProfileView {
+  invitationState: ProofInvitationState;
+}
 
 function toInvitationView(row: InvitationRow): InvitationView {
   return {
@@ -78,7 +86,7 @@ function resolveCreateInput(
     return { identifier, inviteeUserId: null };
   }
 
-  const inviteeUserId = input.inviteeUserId?.trim() || null;
+  const inviteeUserId = (input.inviteeUserId ?? input.userId)?.trim() || null;
   if (inviteeUserId) {
     return {
       identifier: `user:${inviteeUserId}`,
@@ -97,6 +105,60 @@ function resolveCreateInput(
   return { identifier, inviteeUserId: null };
 }
 
+export async function searchUsersForProof(
+  db: Database,
+  actorUserId: string,
+  proofId: string,
+  rawQuery: unknown,
+): Promise<ProofUserSearchResult[]> {
+  const proof = await loadProof(db, proofId);
+  assertNotFinalized(proof);
+  await requireParticipant(db, proofId, actorUserId, "SELLER");
+
+  const users = await searchUsers(db, rawQuery);
+  if (users.length === 0) {
+    return [];
+  }
+
+  const participants = await db.query<{ user_id: string }>(
+    `SELECT user_id FROM proof_participants WHERE proof_id = $1`,
+    [proofId],
+  );
+  const pending = await db.query<{ invitee_user_id: string }>(
+    `SELECT invitee_user_id
+       FROM invitations
+      WHERE proof_id = $1
+        AND status = 'PENDING'
+        AND invitee_user_id IS NOT NULL`,
+    [proofId],
+  );
+  const participantIds = new Set(participants.rows.map((row) => row.user_id));
+  const invitedIds = new Set(pending.rows.map((row) => row.invitee_user_id));
+
+  return users.map((user) => ({
+    ...user,
+    invitationState: invitationStateForUser(user.userId, actorUserId, participantIds, invitedIds),
+  }));
+}
+
+function invitationStateForUser(
+  userId: string,
+  actorUserId: string,
+  participantIds: Set<string>,
+  invitedIds: Set<string>,
+): ProofInvitationState {
+  if (userId === actorUserId) {
+    return "SELF";
+  }
+  if (participantIds.has(userId)) {
+    return "PARTICIPANT";
+  }
+  if (invitedIds.has(userId)) {
+    return "INVITED";
+  }
+  return "NONE";
+}
+
 export async function createInvitation(
   db: Database,
   clock: Clock,
@@ -113,7 +175,7 @@ export async function createInvitation(
 
     if (inviteeUserId) {
       if (inviteeUserId === actorUserId) {
-        throw new DomainError("INVALID_INVITEE", "cannot invite the current seller", 400);
+        throw new DomainError("CANNOT_INVITE_SELF", "cannot invite the current seller", 400);
       }
       const invitee = await tx.query<{ id: string }>(
         `SELECT id FROM users WHERE id = $1`,
@@ -128,7 +190,7 @@ export async function createInvitation(
       );
       if (already.rows[0]) {
         throw new DomainError(
-          "INVALID_INVITEE",
+          "ALREADY_PARTICIPANT",
           "Invitee is already a participant of this Proof",
           409,
         );

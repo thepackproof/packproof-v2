@@ -18,6 +18,7 @@ import {
   type ProfileView,
   type ProofCollectionItem,
   type ProofView,
+  type ProofInvitationState,
   type PublicProfileView,
   type ShipmentIntegrityView,
   type TransactionImportView,
@@ -102,6 +103,9 @@ interface ContextForm {
   shipmentDate: string;
 }
 
+const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_MIN_LENGTH = 2;
+
 const EMPTY_FORM: ContextForm = {
   externalReference: "",
   transactionDate: "",
@@ -134,10 +138,12 @@ export default function App() {
   const [displayNameInput, setDisplayNameInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PublicProfileView[]>([]);
-  const [selectedBuyer, setSelectedBuyer] = useState<PublicProfileView | null>(null);
+  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "empty" | "ready" | "error">(
+    "idle",
+  );
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<InvitationInboxView[]>([]);
   const [proofCollection, setProofCollection] = useState<ProofCollectionItem[]>([]);
-  const [inviteeIdentifier, setInviteeIdentifier] = useState("");
   const [invitationInput, setInvitationInput] = useState("");
   const [session, setSession] = useState<CachedClientState | null>(null);
   const [proof, setProof] = useState<ProofView | null>(null);
@@ -155,6 +161,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
   const sessionRef = useRef<CachedClientState | null>(null);
+  const searchGeneration = useRef(0);
 
   const client = useMemo(
     () =>
@@ -164,6 +171,40 @@ export default function App() {
       }),
     [apiBaseUrl],
   );
+
+  useEffect(() => {
+    if (screen !== "proof" || !inviteOpen || !proof || proof.status === "FINALIZED") {
+      return;
+    }
+    const normalized = searchQuery.trim().replace(/^@+/, "").trim();
+    if (normalized.length < SEARCH_MIN_LENGTH) {
+      searchGeneration.current += 1;
+      setSearchResults([]);
+      setSearchStatus("idle");
+      return;
+    }
+    const generation = ++searchGeneration.current;
+    setSearchStatus("loading");
+    const handle = setTimeout(() => {
+      void client
+        .searchProofUsers(proof.proofId, searchQuery.trim())
+        .then((result) => {
+          if (generation !== searchGeneration.current) {
+            return;
+          }
+          setSearchResults(result.users);
+          setSearchStatus(result.users.length > 0 ? "ready" : "empty");
+        })
+        .catch((caught) => {
+          if (generation !== searchGeneration.current) {
+            return;
+          }
+          setSearchStatus("error");
+          setError(formatError(caught));
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [client, inviteOpen, proof, screen, searchQuery]);
 
   useEffect(() => {
     void (async () => {
@@ -396,7 +437,7 @@ export default function App() {
     setEditForm(EMPTY_FORM);
     setManifest(null);
     setSearchResults([]);
-    setSelectedBuyer(null);
+    setInviteOpen(false);
     return profile;
   }
 
@@ -971,12 +1012,14 @@ export default function App() {
             {pendingInvites.length === 0 ? <Text>No pending invitations.</Text> : null}
             {pendingInvites.map((invite) => (
               <View key={invite.invitationId} style={styles.invite}>
-                <Text selectable>
-                  {invite.inviter.displayName ?? invite.inviter.username ?? invite.inviter.userId}
-                </Text>
+                <Text>Pending invitation</Text>
                 <Text>{invite.transaction.itemTitle ?? "Untitled item"}</Text>
-                <Text>{invite.transaction.externalReference ?? ""}</Text>
-                <Text selectable>proofId {invite.proofId}</Text>
+                <Text>
+                  Invited by{" "}
+                  {invite.inviter.username
+                    ? `@${invite.inviter.username}`
+                    : invite.inviter.displayName ?? "a participant"}
+                </Text>
                 <Text>{invite.createdAt}</Text>
                 <Action
                   label="Accept invitation"
@@ -1116,7 +1159,7 @@ export default function App() {
                 }
               />
             ) : null}
-            <Text style={styles.label}>Invitation token</Text>
+            <Text style={styles.label}>Invitation ID (optional fallback)</Text>
             <TextInput
               style={styles.input}
               value={invitationInput}
@@ -1125,8 +1168,8 @@ export default function App() {
               autoCorrect={false}
             />
             <Action
-              label="Accept invitation"
-              disabled={busy}
+              label="Accept invitation ID"
+              disabled={busy || !invitationInput.trim()}
               onPress={() =>
                 run(async () => {
                   const accepted = await client.acceptInvitation(invitationInput.trim());
@@ -1134,7 +1177,7 @@ export default function App() {
                     ...session,
                     proofId: accepted.proof.proofId,
                     transactionId: accepted.proof.transactionId,
-                    invitationToken: accepted.invitation.token,
+                    invitationToken: null,
                   };
                   await persist(next);
                   await refreshProof(accepted.proof.proofId);
@@ -1175,7 +1218,7 @@ export default function App() {
                   setPendingInvites([]);
                   setProofCollection([]);
                   setSearchResults([]);
-                  setSelectedBuyer(null);
+                  setInviteOpen(false);
                   setPassword("");
                   applyResolvedRuntime(currentRuntime());
                   setAuthPane("signIn");
@@ -1361,9 +1404,6 @@ export default function App() {
             {pendingEvidence.length > 0 && committedEvidence.length === 0 ? (
               <Text>upload started but not committed</Text>
             ) : null}
-            {session.invitationToken ? (
-              <Text selectable>invitation {session.invitationToken}</Text>
-            ) : null}
             <Text>
               local capture {captureStatus}
               {localCapture
@@ -1394,6 +1434,9 @@ export default function App() {
               disabled={busy}
               onPress={() =>
                 run(async () => {
+                  setInviteOpen(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
                   await refreshProofCollection();
                   await refreshPendingInvites();
                   setScreen("home");
@@ -1403,81 +1446,64 @@ export default function App() {
 
             {!finalized && role === "SELLER" ? (
               <View>
-                <Text style={styles.heading}>Invite PackProof user</Text>
-                <Text style={styles.label}>Search username</Text>
-                <TextInput
-                  style={styles.input}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Action
-                  label="Search users"
-                  disabled={busy}
-                  onPress={() =>
-                    run(async () => {
-                      const result = await client.searchUsers(searchQuery.trim());
-                      setSearchResults(result.users);
-                    })
-                  }
-                />
-                {searchResults.map((user) => (
+                <Text style={styles.heading}>Add participant</Text>
+                {!inviteOpen ? (
                   <Action
-                    key={user.userId}
-                    label={
-                      selectedBuyer?.userId === user.userId
-                        ? `Selected ${user.username}`
-                        : `${user.username} — ${user.displayName ?? user.userId}`
-                    }
+                    label="Add participant"
                     disabled={busy}
-                    onPress={() => setSelectedBuyer(user)}
+                    onPress={() => setInviteOpen(true)}
                   />
-                ))}
-                <Action
-                  label={
-                    selectedBuyer
-                      ? `Invite ${selectedBuyer.username}`
-                      : "Invite selected buyer"
-                  }
-                  disabled={busy || !selectedBuyer}
-                  onPress={() =>
-                    run(async () => {
-                      if (!selectedBuyer) {
-                        return;
-                      }
-                      const invited = await client.createInvitation(proof.proofId, {
-                        inviteeUserId: selectedBuyer.userId,
-                      });
-                      const next = { ...session, invitationToken: invited.invitation.token };
-                      await persist(next);
-                      await refreshProof(proof.proofId);
-                    })
-                  }
-                />
-                <Text style={styles.label}>Token invitation fallback</Text>
-                <TextInput
-                  style={styles.input}
-                  value={inviteeIdentifier}
-                  onChangeText={setInviteeIdentifier}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Action
-                  label="Invite by identifier"
-                  disabled={busy || !inviteeIdentifier.trim()}
-                  onPress={() =>
-                    run(async () => {
-                      const invited = await client.createInvitation(
-                        proof.proofId,
-                        inviteeIdentifier.trim(),
+                ) : (
+                  <View>
+                    <Text style={styles.label}>Search by username or name</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    {searchStatus === "loading" ? <Text>Searching…</Text> : null}
+                    {searchStatus === "empty" ? <Text>No PackProof users match that search.</Text> : null}
+                    {searchStatus === "error" ? <Text>Search failed. Edit the query to try again.</Text> : null}
+                    {searchResults.map((user) => {
+                      const state = user.invitationState ?? "NONE";
+                      const canSend = state === "NONE" && !busy;
+                      return (
+                        <View key={user.userId} style={styles.searchRow}>
+                          <Text style={styles.avatar}>{profileInitials(user.displayName, user.username)}</Text>
+                          <View style={styles.searchCopy}>
+                            <Text>{user.displayName || user.username}</Text>
+                            <Text>@{user.username}</Text>
+                          </View>
+                          {canSend ? (
+                            <Action
+                              label="Invite"
+                              disabled={busy}
+                              onPress={() =>
+                                run(async () => {
+                                  await client.createInvitation(proof.proofId, {
+                                    inviteeUserId: user.userId,
+                                  });
+                                  setSearchResults((current) =>
+                                    current.map((row) =>
+                                      row.userId === user.userId
+                                        ? { ...row, invitationState: "INVITED" }
+                                        : row,
+                                    ),
+                                  );
+                                  await refreshProof(proof.proofId);
+                                })
+                              }
+                            />
+                          ) : (
+                            <Text>{invitationStateLabel(state)}</Text>
+                          )}
+                        </View>
                       );
-                      const next = { ...session, invitationToken: invited.invitation.token };
-                      await persist(next);
-                      await refreshProof(proof.proofId);
-                    })
-                  }
-                />
+                    })}
+                  </View>
+                )}
                 {canCapture ? (
                   <Action
                     label="Capture packing evidence"
@@ -2029,6 +2055,30 @@ function LabeledInput(props: {
   );
 }
 
+function invitationStateLabel(state: ProofInvitationState): string {
+  switch (state) {
+    case "SELF":
+      return "You";
+    case "PARTICIPANT":
+      return "Already participating";
+    case "INVITED":
+      return "Invitation pending";
+    case "INELIGIBLE":
+      return "Unavailable";
+    default:
+      return "Invite";
+  }
+}
+
+function profileInitials(displayName: string | null, username: string): string {
+  const source = (displayName || username).trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
+}
+
 function formatError(error: unknown): string {
   if (error instanceof ApiError) {
     return `${error.code}: ${error.message}`;
@@ -2049,6 +2099,15 @@ const styles = StyleSheet.create({
   subtitle: { color: "#444" },
   card: { gap: 10, borderWidth: 1, borderColor: "#ccc", padding: 12 },
   invite: { gap: 6, borderWidth: 1, borderColor: "#ddd", padding: 8 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 },
+  avatar: {
+    width: 36,
+    height: 36,
+    textAlign: "center",
+    textAlignVertical: "center",
+    fontWeight: "700",
+  },
+  searchCopy: { flex: 1, gap: 2 },
   heading: { fontWeight: "700", marginTop: 8 },
   label: { marginTop: 6, fontWeight: "600" },
   input: { borderWidth: 1, borderColor: "#999", padding: 8 },

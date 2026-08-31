@@ -158,4 +158,21 @@ describe("API client boundary", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("searches Proof users on the Proof-scoped route", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ users: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    await api.searchProofUsers("proof_1", "@Buyer");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/proofs/proof_1/users/search?q=%40Buyer",
+      expect.objectContaining({ method: "GET" }),
+    );
+    vi.unstubAllGlobals();
+  });
 });

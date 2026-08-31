@@ -204,10 +204,13 @@ export interface ProfileView {
   updatedAt: string;
 }
 
+export type ProofInvitationState = "NONE" | "SELF" | "PARTICIPANT" | "INVITED" | "INELIGIBLE";
+
 export interface PublicProfileView {
   userId: string;
   username: string;
   displayName: string | null;
+  invitationState?: ProofInvitationState;
 }
 
 export interface InvitationInboxView {

@@ -53,6 +53,9 @@ describe("PackProof web reference client", () => {
         if (url.endsWith("/invitations")) {
           return json({ invitations: [invitation] });
         }
+        if (url.includes("/users/search")) {
+          return json({ users: [] });
+        }
         if (url.includes("/shipment-integrity")) {
           return json({
             schema: "packproof.shipment.integrity/v1",
@@ -387,5 +390,129 @@ describe("PackProof web reference client", () => {
       "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE/shipment-integrity",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("searches PackProof users and invites by user id without showing tokens", async () => {
+    signInSession();
+    window.history.replaceState(null, "", "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE");
+    const searchUsers = [
+      {
+        userId: "user_buyer",
+        username: "janesmith",
+        displayName: "Jane Smith",
+        invitationState: "NONE",
+      },
+      {
+        userId: "user_seller",
+        username: "seller",
+        displayName: "Seller",
+        invitationState: "SELF",
+      },
+      {
+        userId: "user_joined",
+        username: "joineduser",
+        displayName: "Already Here",
+        invitationState: "PARTICIPANT",
+      },
+      {
+        userId: "user_pending",
+        username: "pendinguser",
+        displayName: "Waiter",
+        invitationState: "INVITED",
+      },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (url.includes("/users/search")) {
+        return json({ users: searchUsers });
+      }
+      if (url.includes("/invitations") && method === "POST") {
+        expect(init?.body).toBe(JSON.stringify({ inviteeUserId: "user_buyer" }));
+        return json(
+          {
+            invitation: {
+              invitationId: "inv_created",
+              proofId: canonicalProof.proofId,
+              inviteeUserId: "user_buyer",
+              status: "PENDING",
+              token: "raw-invite-token",
+            },
+            proof: {
+              ...canonicalProof,
+              invitations: [
+                {
+                  invitationId: "inv_created",
+                  inviteeIdentifier: "user:user_buyer",
+                  inviteeUserId: "user_buyer",
+                  status: "PENDING",
+                  createdAt: "2026-08-31T12:00:00.000Z",
+                  acceptedAt: null,
+                  expiresAt: null,
+                },
+              ],
+            },
+          },
+          201,
+        );
+      }
+      if (url.includes("/shipment-integrity")) {
+        return json({ status: "CORE_NOT_FINALIZED", verification: { valid: false } });
+      }
+      if (url.includes("/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE")) {
+        return json(canonicalProof);
+      }
+      if (url.endsWith("/me") && !url.includes("/proofs")) {
+        return json({
+          userId: "user_seller",
+          username: "seller",
+          displayName: "Seller",
+          status: "ACTIVE",
+          createdAt: "2026-08-30T12:00:00.000Z",
+          updatedAt: "2026-08-30T12:00:00.000Z",
+        });
+      }
+      return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Add participant" }));
+    const search = screen.getByLabelText("Search by username or name");
+    expect(search).toBeInTheDocument();
+    await user.type(search, "a");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(
+      fetchMock.mock.calls.some((call) => String(call[0]).includes("/users/search")),
+    ).toBe(false);
+    await user.clear(search);
+    await user.type(search, "buyer");
+    await waitFor(() => {
+      expect(screen.getByText("Jane Smith")).toBeInTheDocument();
+    });
+    expect(screen.getByText("@janesmith")).toBeInTheDocument();
+    expect(screen.getByText("You")).toBeInTheDocument();
+    expect(screen.getByText("Already participating")).toBeInTheDocument();
+    expect(screen.getByText("Invitation pending")).toBeInTheDocument();
+    expect(screen.queryByText("alex.buyer@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("raw-invite-token")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Invite token/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Invite" }));
+    await waitFor(() => {
+      expect(screen.getAllByText("Invitation pending").length).toBeGreaterThan(0);
+    });
+    const inviteCall = fetchMock.mock.calls.find(
+      (call) => String(call[0]).includes("/invitations") && call[1]?.method === "POST",
+    );
+    expect(inviteCall?.[0]).toBe(
+      "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE/invitations",
+    );
+    expect(inviteCall?.[1]).toEqual(
+      expect.objectContaining({
+        body: JSON.stringify({ inviteeUserId: "user_buyer" }),
+      }),
+    );
+    expect(screen.queryByText("raw-invite-token")).not.toBeInTheDocument();
+    expect(JSON.stringify(inviteCall?.[1]?.body ?? "")).not.toContain("email");
   });
 });

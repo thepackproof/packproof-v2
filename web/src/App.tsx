@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PackProofApi } from "./api/client";
 import { ApiError } from "./api/types";
 import type { CanonicalProof, InvitationInboxView, ProofCollectionItem, ShipmentIntegrityView, TransactionWriteInput } from "./api/types";
@@ -91,6 +91,37 @@ export function App() {
     }
     return caught instanceof Error ? caught.message : String(caught);
   }
+
+  const searchProofUsers = useCallback(
+    async (query: string) => {
+      if (!proof) {
+        return [];
+      }
+      const found = await api.searchProofUsers(proof.proofId, query);
+      return found.users;
+    },
+    [api, proof],
+  );
+
+  const inviteProofUser = useCallback(
+    async (input: { inviteeUserId: string }) => {
+      if (!proof) {
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        const result = await api.createInvitation(proof.proofId, input);
+        setProof(result.proof);
+      } catch (caught) {
+        setError(handleError(caught));
+        throw caught;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, proof],
+  );
 
   useEffect(() => {
     const onPop = () => {
@@ -248,21 +279,8 @@ export function App() {
           loading={loading}
           error={error}
           busy={busy}
-          onSearchUsers={async (query) => {
-            const found = await api.searchUsers(query);
-            return found.users;
-          }}
-          onInvite={(input) => {
-            if (!proof) {
-              return;
-            }
-            setBusy(true);
-            void api
-              .createInvitation(proof.proofId, input)
-              .then((result) => setProof(result.proof))
-              .catch((caught) => setError(handleError(caught)))
-              .finally(() => setBusy(false));
-          }}
+          onSearchUsers={searchProofUsers}
+          onInvite={inviteProofUser}
           onAttest={(statement) => {
             if (!proof) {
               return;

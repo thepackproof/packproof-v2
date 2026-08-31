@@ -47,7 +47,7 @@ The contract includes:
 
 - **Identity** — `proofId`, timestamps, lifecycle status, transaction id
 - **Participants** — identity, role, joined/accepted authorization
-- **Invitations** — invitation state without invitation tokens
+- **Invitations** — invitation state without invitation tokens. Sellers invite by PackProof `userId` after authenticated user search. Recipients discover pending invitations from `GET /invitations`, then accept. See [USER_SEARCH_AND_INVITATIONS.md](USER_SEARCH_AND_INVITATIONS.md).
 - **Evidence** — identity, type, submitter, record timestamps, object reference, SHA-256
 - **Attestations** — who attested, the bounded statement, related evidence, digest
 - **Events** — append-only audit of committed actions (`PROOF_CREATED`, `PARTICIPANT_INVITED`, `PARTICIPANT_JOINED`, `EVIDENCE_COMMITTED`, `ATTESTATION_COMMITTED`, `PROOF_FINALIZED`, and related existing types)
