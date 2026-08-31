@@ -53,7 +53,7 @@ module.exports = {
     },
     android: {
       package: "com.thepackproof.app",
-      versionCode: 16,
+      versionCode: 17,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
@@ -71,6 +71,15 @@ module.exports = {
         },
       ],
       "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          android: {
+            compileSdkVersion: 35,
+            targetSdkVersion: 35,
+          },
+        },
+      ],
     ],
     extra: {
       eas: {
