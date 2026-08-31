@@ -138,4 +138,24 @@ describe("API client boundary", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("requests trusted shipment sync without client-supplied provenance", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ createdCount: 1, provider: "trusted-demo-carrier" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    await api.syncShipment("txn_1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/transactions/txn_1/shipment-sync",
+      expect.objectContaining({
+        method: "POST",
+        body: "{}",
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
 });

@@ -41,11 +41,26 @@ import {
   resolveTransactionIdForShipmentImport,
   sliceTimelineThrough,
 } from "./domain/shipment-events.js";
+import { IntegrationError, integrationTrustBoundary } from "./domain/integration-errors.js";
+import {
+  bindTransactionShipmentConnection,
+  createIntegrationConnection,
+} from "./domain/integration-connections.js";
+import { executeTrustedShipmentSync } from "./domain/trusted-shipment-sync.js";
+import { ingestTrustedShipmentWebhook } from "./domain/trusted-shipment-webhook.js";
 import type { ObjectStore } from "./s3/object-store.js";
 import type { IntegrationAdapterRegistry } from "./integrations/registry.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { parseIntegrationImportRequest } from "./integrations/import-request.js";
 import { parseShipmentImportRequest } from "./integrations/shipment-import-request.js";
+import type { IntegrationCredentialStore, IntegrationCredentials } from "./integrations/credentials.js";
+import { MemoryCredentialStore } from "./integrations/memory-credential-store.js";
+import {
+  TRUSTED_DEMO_API_KEY,
+  TRUSTED_DEMO_CARRIER_ADAPTER_KEY,
+  TRUSTED_DEMO_CARRIER_PROVIDER,
+  TRUSTED_DEMO_WEBHOOK_SECRET,
+} from "./integrations/trusted-demo-carrier.js";
 
 export interface AppDependencies {
   db: Database;
@@ -56,6 +71,7 @@ export interface AppDependencies {
   devAuth: boolean;
   corsOrigins?: string[];
   integrations?: IntegrationAdapterRegistry;
+  credentialStore?: IntegrationCredentialStore & { put?: (credentials: IntegrationCredentials) => void };
 }
 
 function asyncRoute(
@@ -94,6 +110,7 @@ export function createApp(deps: AppDependencies): Express {
   app.disable("x-powered-by");
   const corsOrigins = deps.corsOrigins ?? [];
   const integrations = deps.integrations ?? createDefaultIntegrationRegistry(deps.clock);
+  const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
   app.use((req, res, next) => {
     const origin = headerOrigin(req.headers.origin);
     if (origin && corsOrigins.includes(origin)) {
@@ -111,7 +128,17 @@ export function createApp(deps: AppDependencies): Express {
     }
     next();
   });
-  app.use(express.json({ limit: "2mb" }));
+  app.use(
+    "/integrations/webhooks",
+    express.raw({ type: () => true, limit: "256kb" }),
+  );
+  app.use((req, res, next) => {
+    if (Buffer.isBuffer(req.body)) {
+      next();
+      return;
+    }
+    express.json({ limit: "2mb" })(req, res, next);
+  });
   app.use(
     express.raw({
       type: ["application/octet-stream", "video/*", "image/*", "audio/*"],
@@ -162,7 +189,8 @@ export function createApp(deps: AppDependencies): Express {
     if (
       req.path === "/health" ||
       req.path.startsWith("/auth/") ||
-      req.path.startsWith("/upload/")
+      req.path.startsWith("/upload/") ||
+      req.path.startsWith("/integrations/webhooks/")
     ) {
       next();
       return;
@@ -248,6 +276,81 @@ export function createApp(deps: AppDependencies): Express {
       res.status(result.createdCount > 0 ? 201 : 200).json(result);
     }),
   );
+
+  app.post(
+    "/integrations/webhooks/:adapterKey",
+    asyncRoute(async (req, res) => {
+      const rawBody = Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(typeof req.body === "string" ? req.body : "");
+      const result = await ingestTrustedShipmentWebhook(
+        deps.db,
+        deps.clock,
+        req.params.adapterKey,
+        req.headers,
+        rawBody,
+        { integrations, credentials: credentialStore },
+      );
+      res.status(result.createdCount > 0 ? 201 : 200).json(publicSyncResult(result));
+    }),
+  );
+
+  app.post(
+    "/transactions/:id/shipment-sync",
+    asyncRoute(async (req, res) => {
+      parseShipmentSyncRequest(req.body);
+      const result = await executeTrustedShipmentSync(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        { integrations, credentials: credentialStore },
+      );
+      res.status(result.createdCount > 0 ? 201 : 200).json(publicSyncResult(result));
+    }),
+  );
+
+  if (deps.devAuth) {
+    app.post(
+      "/dev/integrations/trusted-demo/connect",
+      asyncRoute(async (req, res) => {
+        const actor = bearerUser(req);
+        const transactionId = String(req.body?.transactionId ?? "").trim();
+        if (!transactionId) {
+          throw new DomainError("INVALID_SHIPMENT_EVENT", "transactionId is required", 400);
+        }
+        if (typeof credentialStore.put !== "function") {
+          throw new DomainError(
+            "INTEGRATION_CREDENTIALS_UNAVAILABLE",
+            "Trusted integration credentials are unavailable",
+            503,
+          );
+        }
+        const credentialReference = `memory:trusted-demo:${actor}:${transactionId}`;
+        credentialStore.put({
+          adapterKey: TRUSTED_DEMO_CARRIER_ADAPTER_KEY,
+          credentialReference,
+          material: {
+            apiKey: TRUSTED_DEMO_API_KEY,
+            webhookSecret: TRUSTED_DEMO_WEBHOOK_SECRET,
+          },
+        });
+        const connection = await createIntegrationConnection(deps.db, deps.clock, actor, {
+          adapterKey: TRUSTED_DEMO_CARRIER_ADAPTER_KEY,
+          provider: TRUSTED_DEMO_CARRIER_PROVIDER,
+          credentialReference,
+        });
+        const shipmentSync = await bindTransactionShipmentConnection(
+          deps.db,
+          deps.clock,
+          actor,
+          transactionId,
+          connection.connectionId,
+        );
+        res.status(201).json({ connection, shipmentSync });
+      }),
+    );
+  }
 
   app.get(
     "/transactions/:id",
@@ -514,6 +617,16 @@ export function createApp(deps: AppDependencies): Express {
   );
 
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
+    if (error instanceof IntegrationError) {
+      res.status(error.httpStatus).json({
+        error: {
+          code: error.code,
+          message: error.message,
+          retryable: error.retryable,
+        },
+      });
+      return;
+    }
     if (error instanceof DomainError) {
       res.status(error.httpStatus).json({
         error: { code: error.code, message: error.message },
@@ -536,4 +649,46 @@ export function createApp(deps: AppDependencies): Express {
   app.use(errors);
 
   return app;
+}
+
+function parseShipmentSyncRequest(body: unknown): void {
+  if (body == null || body === "") {
+    return;
+  }
+  if (typeof body !== "object" || Array.isArray(body)) {
+    throw integrationTrustBoundary(
+      "Shipment sync does not accept client-supplied provider payloads",
+    );
+  }
+  const keys = Object.keys(body as Record<string, unknown>);
+  if (keys.length === 0) {
+    return;
+  }
+  throw integrationTrustBoundary(
+    "Shipment sync does not accept client-supplied provider payloads",
+  );
+}
+
+function publicSyncResult(result: {
+  transactionId: string;
+  proofId: string;
+  connectionId: string;
+  adapterKey: string;
+  provider: string;
+  createdCount: number;
+  eventCount: number;
+  events: unknown;
+  replayed: boolean;
+}) {
+  return {
+    transactionId: result.transactionId,
+    proofId: result.proofId,
+    connectionId: result.connectionId,
+    adapterKey: result.adapterKey,
+    provider: result.provider,
+    createdCount: result.createdCount,
+    eventCount: result.eventCount,
+    events: result.events,
+    replayed: result.replayed,
+  };
 }

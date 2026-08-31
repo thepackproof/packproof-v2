@@ -19,7 +19,7 @@ Clients (mobile, web reference client, API tests)
           ▼
    Modular monolith (this repo, backend/)
  ├── Transactions
- ├── Integrations (provider-neutral import; reference adapters only)
+ ├── Integrations (reference adapters + trusted carrier runtime)
  ├── Proofs
  ├── Participants
  ├── Invitations
@@ -75,4 +75,4 @@ One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks,
 
 See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md).
 
-Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). Live marketplace and carrier connectors are not implemented.
+Provider-neutral purchase import (reference adapter only) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). The trusted carrier runtime is described in [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md). Live marketplace and carrier connectors are not implemented.

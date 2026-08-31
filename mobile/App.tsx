@@ -1261,6 +1261,44 @@ export default function App() {
                 />
               </View>
             ) : null}
+            {__DEV__ && role === "SELLER" && !proof.shipmentSync?.available ? (
+              <View>
+                <Text style={styles.heading}>Trusted demo (development)</Text>
+                <Text>
+                  Seeds a fake trusted carrier connection. Not a live UPS/FedEx/USPS/Shippo/EasyPost
+                  account. Credentials stay on the server.
+                </Text>
+                <Action
+                  label="Connect trusted demo"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      await client.connectTrustedDemo(proof.transactionId);
+                      await refreshProof(proof.proofId);
+                    })
+                  }
+                />
+              </View>
+            ) : null}
+            {proof.shipmentSync?.available ? (
+              <View>
+                <Text style={styles.heading}>Trusted shipment sync</Text>
+                <Text>
+                  PackProof refreshes observations through the server-side trusted adapter. This app
+                  does not send provider credentials.
+                </Text>
+                <Action
+                  label="Sync shipment"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      await client.syncShipment(proof.transactionId);
+                      await refreshProof(proof.proofId);
+                    })
+                  }
+                />
+              </View>
+            ) : null}
             {!finalized && role === "SELLER" ? (
               <View>
                 <Text style={styles.heading}>Edit transaction</Text>

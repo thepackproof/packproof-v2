@@ -168,6 +168,13 @@ export interface CanonicalProof {
     latest: ShipmentEventView | null;
   };
   chronology?: ChronologyEntry[];
+  shipmentSync?: {
+    available: boolean;
+    connectionId: string | null;
+    adapterKey: string | null;
+    provider: string | null;
+    status: string | null;
+  };
 }
 
 export interface ProofCollectionItem {
@@ -289,6 +296,18 @@ export interface ShipmentImportView {
   proofId: string;
   events: ShipmentEventView[];
   createdCount: number;
+}
+
+export interface ShipmentSyncView {
+  transactionId: string;
+  proofId: string;
+  connectionId: string;
+  adapterKey: string;
+  provider: string;
+  createdCount: number;
+  eventCount: number;
+  events: ShipmentEventView[];
+  replayed: boolean;
 }
 
 export interface ShipmentIntegrityVerification {

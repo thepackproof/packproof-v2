@@ -7,6 +7,7 @@ import { createApp } from "./app.js";
 import { openDatabase } from "./db/open.js";
 import { createObjectStore } from "./s3/create-object-store.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
+import { createCredentialStore } from "./integrations/create-credential-store.js";
 
 loadEnvFile(path.resolve(process.cwd()));
 
@@ -23,6 +24,7 @@ const app = createApp({
   devAuth: isDevLoginEnabled(config),
   corsOrigins: config.webOrigins,
   integrations: createDefaultIntegrationRegistry(systemClock),
+  credentialStore: createCredentialStore(config),
 });
 
 const server = app.listen(config.port, "0.0.0.0", () => {

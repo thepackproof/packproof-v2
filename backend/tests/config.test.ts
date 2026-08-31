@@ -98,7 +98,16 @@ describe("storage configuration", () => {
     expect(loadConfig({ NODE_ENV: "production" })).toMatchObject({
       authMode: "dev",
       objectStore: "local",
+      credentialStore: "env",
     });
+  });
+
+  it("accepts PACKPROOF_CREDENTIAL_STORE without embedding secrets", () => {
+    expect(loadConfig({}).credentialStore).toBe("env");
+    expect(loadConfig({ PACKPROOF_CREDENTIAL_STORE: "memory" }).credentialStore).toBe("memory");
+    expect(loadConfig({ PACKPROOF_CREDENTIAL_STORE: "secrets-manager" }).credentialStore).toBe(
+      "secrets-manager",
+    );
   });
 
   it("uses libpq-style sslmode=require without failing RDS certificate chains", () => {

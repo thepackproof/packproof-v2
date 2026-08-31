@@ -11,12 +11,14 @@ import type { Database } from "../src/db/database.js";
 import { LocalObjectStore } from "../src/s3/local-object-store.js";
 import type { ObjectStore } from "../src/s3/object-store.js";
 import { insertUser } from "../src/domain/users.js";
+import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
 
 export interface TestHarness {
   db: Database;
   app: ReturnType<typeof createApp>;
   clock: Clock;
   objectStore: ObjectStore;
+  credentialStore: MemoryCredentialStore;
   close: () => Promise<void>;
 }
 
@@ -36,6 +38,7 @@ export async function createHarness(
       publicBaseUrl,
       "test-upload-secret",
     );
+  const credentialStore = new MemoryCredentialStore();
   const app = createApp({
     db: opened.db,
     objectStore,
@@ -43,6 +46,7 @@ export async function createHarness(
     auth: new BearerUserAdapter(opened.db),
     publicBaseUrl,
     devAuth: true,
+    credentialStore,
   });
 
   return {
@@ -50,6 +54,7 @@ export async function createHarness(
     app,
     clock: resolvedClock,
     objectStore,
+    credentialStore,
     close: async () => {
       await opened.close();
       await rm(dir, { recursive: true, force: true });

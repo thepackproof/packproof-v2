@@ -336,10 +336,20 @@ export async function recordParticipantShipmentEvent(
     source: "PARTICIPANT_SUPPLIED",
     provider: "participant",
     sourceEventId: record.sourceEventId ?? null,
-    eventData: record.eventData,
+    eventData: participantEventData(record.eventData),
     payloadSha256: null,
     authority: "PARTICIPANT",
   });
+}
+
+function participantEventData(value: unknown): Record<string, unknown> {
+  const record =
+    value != null && typeof value === "object" && !Array.isArray(value)
+      ? { ...(value as Record<string, unknown>) }
+      : {};
+  delete record.source;
+  delete record.provider;
+  return record;
 }
 
 export async function listShipmentEventsForProof(

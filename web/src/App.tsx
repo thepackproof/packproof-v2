@@ -308,6 +308,42 @@ export function App() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+          onSyncShipment={() => {
+            if (!proof) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            void api
+              .syncShipment(proof.transactionId)
+              .then(() => api.getProof(proof.proofId))
+              .then(async (loaded) => {
+                setProof(loaded);
+                setShipmentIntegrity(await api.getShipmentIntegrity(loaded.proofId));
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onConnectTrustedDemo={
+            import.meta.env.DEV
+              ? () => {
+                  if (!proof) {
+                    return;
+                  }
+                  setBusy(true);
+                  setError(null);
+                  void api
+                    .connectTrustedDemo(proof.transactionId)
+                    .then(() => api.getProof(proof.proofId))
+                    .then(async (loaded) => {
+                      setProof(loaded);
+                      setShipmentIntegrity(await api.getShipmentIntegrity(loaded.proofId));
+                    })
+                    .catch((caught) => setError(handleError(caught)))
+                    .finally(() => setBusy(false));
+                }
+              : undefined
+          }
         />
       ) : null}
     </div>

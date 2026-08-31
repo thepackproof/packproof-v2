@@ -12,6 +12,7 @@ import {
   type TransactionWriteInput,
   type ShipmentImportView,
   type ShipmentIntegrityView,
+  type ShipmentSyncView,
 } from "./types";
 
 export class PackProofApi {
@@ -92,6 +93,20 @@ export class PackProofApi {
         externalTransactionId: input.externalTransactionId ?? null,
         throughEventType: input.throughEventType ?? null,
       },
+    });
+  }
+
+  async syncShipment(transactionId: string): Promise<ShipmentSyncView> {
+    return this.request(`/transactions/${encodeURIComponent(transactionId)}/shipment-sync`, {
+      method: "POST",
+      body: {},
+    });
+  }
+
+  async connectTrustedDemo(transactionId: string): Promise<unknown> {
+    return this.request("/dev/integrations/trusted-demo/connect", {
+      method: "POST",
+      body: { transactionId },
     });
   }
 

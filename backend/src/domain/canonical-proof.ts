@@ -10,6 +10,10 @@ import {
   getShipmentObservationsForProof,
   type ShipmentObservationsView,
 } from "./shipment-events.js";
+import {
+  getShipmentSyncAvailability,
+  type ShipmentSyncAvailability,
+} from "./integration-connections.js";
 import { loadTransactionView, type TransactionView } from "./transactions.js";
 import {
   CANONICAL_PROOF_SCHEMA,
@@ -137,6 +141,7 @@ export interface CanonicalProof {
     references: ProofExternalReferenceView[];
   };
   shipmentObservations: ShipmentObservationsView;
+  shipmentSync: ShipmentSyncAvailability;
   chronology: ChronologyEntry[];
 }
 
@@ -174,6 +179,7 @@ export async function getCanonicalProof(
     proofId,
     proof.transaction_id,
   );
+  const shipmentSync = await getShipmentSyncAvailability(db, proof.transaction_id);
   const manifest = proof.manifest_id
     ? await db.query<ManifestRow>(`SELECT * FROM final_manifests WHERE proof_id = $1`, [proofId])
     : { rows: [] as ManifestRow[] };
@@ -272,6 +278,7 @@ export async function getCanonicalProof(
       references,
     },
     shipmentObservations,
+    shipmentSync,
     chronology: buildChronology({
       transaction,
       events,

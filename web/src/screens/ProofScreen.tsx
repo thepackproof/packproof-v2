@@ -22,6 +22,8 @@ export function ProofScreen(props: {
   onAttest: (statement: string) => void;
   onFinalize: () => void;
   onImportShipmentEvents?: (throughEventType?: string) => void;
+  onSyncShipment?: () => void;
+  onConnectTrustedDemo?: () => void;
   onSearchUsers: (query: string) => Promise<PublicProfileView[]>;
 }) {
   const [query, setQuery] = useState("");
@@ -35,6 +37,9 @@ export function ProofScreen(props: {
   const canInvite =
     proof && role === "SELLER" && proof.status !== "FINALIZED";
   const canImportDemoCarrier = proof && role === "SELLER" && Boolean(props.onImportShipmentEvents);
+  const canSyncShipment = Boolean(proof?.shipmentSync?.available && props.onSyncShipment);
+  const canConnectTrustedDemo =
+    proof && role === "SELLER" && !proof.shipmentSync?.available && Boolean(props.onConnectTrustedDemo);
 
   if (props.loading && !proof) {
     return (
@@ -200,6 +205,40 @@ export function ProofScreen(props: {
               Import remaining demo observations
             </button>
           </div>
+        </section>
+      ) : null}
+      {canConnectTrustedDemo ? (
+        <section className="section stack">
+          <h2>Trusted demo (development)</h2>
+          <p className="note">
+            Seeds a fake trusted carrier connection for this transaction. It is not UPS, FedEx,
+            USPS, Shippo, or EasyPost. Credentials stay on the server.
+          </p>
+          <button
+            className="btn"
+            type="button"
+            disabled={props.busy}
+            onClick={() => props.onConnectTrustedDemo?.()}
+          >
+            Connect trusted demo
+          </button>
+        </section>
+      ) : null}
+      {canSyncShipment ? (
+        <section className="section stack">
+          <h2>Trusted shipment sync</h2>
+          <p className="note">
+            Asks PackProof to refresh observations through the server-side trusted adapter. This
+            client does not send provider credentials or provenance fields.
+          </p>
+          <button
+            className="btn"
+            type="button"
+            disabled={props.busy}
+            onClick={() => props.onSyncShipment?.()}
+          >
+            Sync shipment
+          </button>
         </section>
       ) : null}
       <EventTimeline proof={proof} />

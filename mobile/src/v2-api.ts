@@ -110,6 +110,18 @@ export interface ShipmentImportView {
   createdCount: number;
 }
 
+export interface ShipmentSyncView {
+  transactionId: string;
+  proofId: string;
+  connectionId: string;
+  adapterKey: string;
+  provider: string;
+  createdCount: number;
+  eventCount: number;
+  events: ShipmentEventView[];
+  replayed: boolean;
+}
+
 export interface ShipmentIntegrityVerification {
   coreManifestValid: boolean;
   eventContentHashesValid: boolean;
@@ -247,6 +259,13 @@ export interface ProofView {
     latest: ShipmentEventView | null;
   };
   chronology?: ChronologyEntry[];
+  shipmentSync?: {
+    available: boolean;
+    connectionId: string | null;
+    adapterKey: string | null;
+    provider: string | null;
+    status: string | null;
+  };
 }
 
 export interface InvitationView {
@@ -456,6 +475,20 @@ export class PackProofV2Client {
         externalTransactionId: input.externalTransactionId ?? null,
         throughEventType: input.throughEventType ?? null,
       },
+    });
+  }
+
+  async syncShipment(transactionId: string): Promise<ShipmentSyncView> {
+    return this.request(`/transactions/${encodeURIComponent(transactionId)}/shipment-sync`, {
+      method: "POST",
+      body: {},
+    });
+  }
+
+  async connectTrustedDemo(transactionId: string): Promise<unknown> {
+    return this.request("/dev/integrations/trusted-demo/connect", {
+      method: "POST",
+      body: { transactionId },
     });
   }
 

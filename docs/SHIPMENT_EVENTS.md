@@ -2,7 +2,7 @@
 
 PackProof records **shipment identity** and **shipment observations** as separate things.
 
-This repository does not connect to a live carrier. It adds an append-only observation log, a reference `demo-carrier` adapter, and a chronology read model. A future UPS/FedEx/USPS/Shippo/EasyPost adapter plugs into the same domain service.
+This repository does not connect to a live carrier. It adds an append-only observation log, a reference `demo-carrier` adapter, a fake trusted `trusted-demo-carrier` adapter, and a chronology read model. A future UPS/FedEx/USPS/Shippo/EasyPost adapter plugs into the trusted runtime. See [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md).
 
 ## Identity vs observations
 
@@ -206,34 +206,19 @@ Core finalization appears as “Core PackProof finalized” with the manifest ha
 | --- | --- | --- |
 | Reference import | Authenticated seller asking PackProof to run a **reference** adapter | `POST /integrations/shipment-events/import` with `mode: "reference"` |
 | Participant observation | Joined participant | `POST /transactions/:id/shipment-events` — provenance is always `PARTICIPANT_SUPPLIED` |
-| Future live carrier | Server-side adapter with server-side credentials | Not exposed on the reference import route |
+| Future live carrier | Server-side trusted adapter + credential store | `POST /transactions/:id/shipment-sync` and `POST /integrations/webhooks/:adapterKey`. See [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md) |
 
 The reference import route accepts only `adapterKey`, `mode`, `transactionId` and/or `externalTransactionId`, and optional `throughEventType`. It rejects carrier facts and raw provider payloads. Ordinary clients cannot pretend to be UPS by posting tracking events.
 
-`demo-carrier` is `kind: "reference"`. A future live adapter must be `kind: "trusted"`, hold API secrets only on the server, and use a separate server-to-server gate. Do not put carrier tokens in Expo config, browser JavaScript, shipment events, manifests, audit events, or client storage.
+`demo-carrier` is `kind: "reference"`. A live adapter must be `kind: "trusted"`, hold API secrets only on the server, and use the trusted runtime. Do not put carrier tokens in Expo config, browser JavaScript, shipment events, manifests, audit events, or client storage.
 
 ## How a future UPS / FedEx / USPS / Shippo / EasyPost adapter plugs in
 
-Implement `ShipmentObservationAdapter`:
+Implement `TrustedShipmentAdapter` (`kind: "trusted"`). Keep HTTP, OAuth, polling, and provider pagination **inside the adapter**. Map provider statuses onto the normalized types (or `CARRIER_EVENT`). Pass `sourceEventId` when the provider has a stable activity id. Register the adapter on `IntegrationAdapterRegistry` as a trusted shipment adapter. Store secrets in the credential store and a credential *reference* on `integration_connections`.
 
-```ts
-interface ShipmentObservationAdapter {
-  readonly adapterKey: string;
-  readonly kind: "reference" | "trusted";
-  fetchShipmentEvents(input: {
-    transactionId: string;
-    trackingNumber: string | null;
-    externalTransactionId: string | null;
-    throughEventType?: string | null;
-  }): Promise<ImportedShipmentEvent[]>;
-}
-```
+Then call `executeTrustedShipmentSync()` or ingest a verified webhook. Do not teach `importShipmentObservations()` UPS XML, FedEx JSON, or EasyPost tracker shapes. Do not expose a participant route that accepts arbitrary trusted events.
 
-Keep HTTP, OAuth, polling, and provider pagination **inside the adapter**. Map provider statuses onto the normalized types (or `CARRIER_EVENT`). Pass `sourceEventId` when the provider has a stable activity id. Register the adapter on `IntegrationAdapterRegistry` as a shipment adapter.
-
-Then call `importShipmentObservations()` / `recordShipmentEvent()`. Do not teach the domain service UPS XML, FedEx JSON, or EasyPost tracker shapes.
-
-This slice registers only `demo-carrier`. It emits a deterministic fake timeline for tests and local UX. It is not a live carrier.
+Reference `ShipmentObservationAdapter` remains for development adapters such as `demo-carrier`. This slice also registers `trusted-demo-carrier`, a fake trusted adapter for tests. Neither is a live carrier.
 
 ## API
 
@@ -243,5 +228,7 @@ This slice registers only `demo-carrier`. It emits a deterministic fake timeline
 - `GET /proofs/:id/shipment-events`
 - `GET /proofs/:id/chronology`
 - `GET /proofs/:id/shipment-integrity`
+- `POST /transactions/:id/shipment-sync`
+- `POST /integrations/webhooks/:adapterKey`
 
-Audit: `SHIPMENT_EVENT_RECORDED` with `{ shipmentEventId, eventType, source, provider }`. This is not a Proof lifecycle transition.
+Audit: `SHIPMENT_EVENT_RECORDED` with `{ shipmentEventId, eventType, source, provider }`. Trusted sync also appends `SHIPMENT_SYNC_COMPLETED` when new observations were created. Verified webhooks append `TRUSTED_SHIPMENT_EVENTS_IMPORTED` the same way. Idempotent retries do not add those batch events.

@@ -97,7 +97,7 @@ Finalized transaction and shipping facts cannot change. An identical retry after
 
 `POST /integrations/transactions/import` accepts only `adapterKey`, optional `externalTransactionId`, `createProof`, and `mode`. It rejects bodies that include purchase fields, `provider`, or raw marketplace payloads. Ordinary clients cannot impersonate eBay or Shopify by posting an `ImportedTransaction`.
 
-Future trusted adapters should be `kind: "trusted"`, hold OAuth/API credentials only on the server, and use a separate server-to-server gate. Do not put marketplace tokens in Expo config, browser JavaScript, transaction metadata, manifests, audit events, or client storage.
+Future trusted adapters should be `kind: "trusted"`, hold OAuth/API credentials only on the server, and use the trusted shipment runtime in [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md). Do not put marketplace tokens in Expo config, browser JavaScript, transaction metadata, manifests, audit events, or client storage.
 
 ## Adapter plug-in
 

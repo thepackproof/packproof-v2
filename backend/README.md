@@ -8,6 +8,7 @@ Modular monolith. Domain commands own Proof state. HTTP only translates requests
 - `importTransaction`
 - `importShipmentEvents`
 - `getShipmentIntegrity`
+- `executeTrustedShipmentSync`
 - `createOrGetProof`
 - `createInvitation`
 - `acceptInvitation`
@@ -69,6 +70,23 @@ Allow only the API runtime role to manage evidence objects:
 Keep the bucket private. Do not grant public `s3:GetObject`. Presigned URLs are the only client upload path and expire.
 
 Object keys are generated server-side as `evidence/<proofId>/<evidenceId>/object`. Clients cannot choose bucket paths.
+
+## Trusted integration credentials
+
+`PACKPROOF_CREDENTIAL_STORE` selects the server-side store (`memory`, `env`, or `secrets-manager`). Domain code never reads env vars, Secrets Manager, or files directly. Connections store a credential *reference*, not tokens.
+
+When `PACKPROOF_CREDENTIAL_STORE=secrets-manager`, the ECS task role should allow:
+
+```json
+{
+  "Sid": "TrustedIntegrationSecrets",
+  "Effect": "Allow",
+  "Action": ["secretsmanager:GetSecretValue"],
+  "Resource": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/v2/integrations/*"
+}
+```
+
+Use the default AWS credential chain (task role). Do not put static AWS keys or provider tokens in source, `web/` env, or Expo public env. Do not deploy live carrier credentials in this slice.
 
 ### Optional live S3 test
 

@@ -19,6 +19,7 @@ export interface AppConfig {
   devAuth: boolean;
   uploadSecret: string;
   webOrigins: string[];
+  credentialStore: "memory" | "env" | "secrets-manager";
 }
 
 export function loadEnvFile(cwd = process.cwd()): void {
@@ -79,7 +80,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     devAuth: env.PACKPROOF_DEV_AUTH === "true",
     uploadSecret: env.PACKPROOF_UPLOAD_SECRET ?? "dev-upload-secret",
     webOrigins: parseWebOrigins(env),
+    credentialStore: parseCredentialStoreMode(env),
   };
+}
+
+export function parseCredentialStoreMode(
+  env: NodeJS.ProcessEnv = process.env,
+): "memory" | "env" | "secrets-manager" {
+  const raw = env.PACKPROOF_CREDENTIAL_STORE ?? "env";
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "memory" || normalized === "env" || normalized === "secrets-manager") {
+    return normalized;
+  }
+  throw new Error(
+    `PACKPROOF_CREDENTIAL_STORE must be "memory", "env", or "secrets-manager" (received ${JSON.stringify(raw)})`,
+  );
 }
 
 export function parseWebOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
