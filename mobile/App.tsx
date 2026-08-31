@@ -1208,6 +1208,55 @@ export default function App() {
             ) : (
               <Text>Loading transaction from server…</Text>
             )}
+            <ChronologyList proof={proof} />
+            {role === "SELLER" ? (
+              <View>
+                <Text style={styles.heading}>Demo shipment observations</Text>
+                <Text>
+                  Reference carrier timeline only. Later observations do not change a finalized core
+                  manifest.
+                </Text>
+                {(
+                  [
+                    ["LABEL_CREATED", "Import label created"],
+                    ["CARRIER_ACCEPTED", "Import accepted"],
+                    ["WEIGHT_RECORDED", "Import weight"],
+                    ["IN_TRANSIT", "Import in transit"],
+                    ["OUT_FOR_DELIVERY", "Import out for delivery"],
+                    ["DELIVERED", "Import delivered"],
+                  ] as const
+                ).map(([eventType, label]) => (
+                  <Action
+                    key={eventType}
+                    label={label}
+                    disabled={busy}
+                    onPress={() =>
+                      run(async () => {
+                        await client.importShipmentEvents({
+                          adapterKey: "demo-carrier",
+                          transactionId: proof.transactionId,
+                          throughEventType: eventType,
+                        });
+                        await refreshProof(proof.proofId);
+                      })
+                    }
+                  />
+                ))}
+                <Action
+                  label="Import remaining demo observations"
+                  disabled={busy}
+                  onPress={() =>
+                    run(async () => {
+                      await client.importShipmentEvents({
+                        adapterKey: "demo-carrier",
+                        transactionId: proof.transactionId,
+                      });
+                      await refreshProof(proof.proofId);
+                    })
+                  }
+                />
+              </View>
+            ) : null}
             {!finalized && role === "SELLER" ? (
               <View>
                 <Text style={styles.heading}>Edit transaction</Text>
@@ -1759,6 +1808,67 @@ function ImportedPurchaseReview(props: { imported: TransactionImportView }) {
   );
 }
 
+function ChronologyList(props: { proof: ProofView }) {
+  const entries = props.proof.chronology ?? [];
+  let sawCoreFinalized = false;
+  return (
+    <View>
+      <Text style={styles.heading}>Chronology</Text>
+      <Text>
+        Source labels name where information came from. They are not evidence levels.
+      </Text>
+      {props.proof.status === "FINALIZED" ? (
+        <View style={styles.frozenNote}>
+          <Text>Core PackProof finalized {props.proof.finalizedAt ?? ""}</Text>
+          <Text selectable>
+            Manifest hash {props.proof.integrity?.manifestSha256 ?? "—"}
+          </Text>
+          <Text>
+            Later shipment observations are recorded separately and did not change this digest.
+          </Text>
+        </View>
+      ) : null}
+      {entries.length === 0 ? <Text>No chronology is available.</Text> : null}
+      {entries.map((entry) => {
+        const isCoreFinalized = entry.eventType === "PROOF_FINALIZED";
+        if (isCoreFinalized) {
+          sawCoreFinalized = true;
+        }
+        const category =
+          entry.category === "COMMERCE"
+            ? "Commerce event"
+            : entry.category === "SHIPMENT"
+              ? entry.source === "PARTICIPANT_SUPPLIED"
+                ? "Participant observation"
+                : "Carrier observation"
+              : "PackProof event";
+        return (
+          <View
+            key={entry.id}
+            style={[
+              styles.timelineItem,
+              entry.category === "COMMERCE"
+                ? styles.timelineCommerce
+                : entry.category === "SHIPMENT"
+                  ? styles.timelineShipment
+                  : styles.timelineProof,
+              isCoreFinalized ? styles.timelineCore : null,
+            ]}
+          >
+            <Text style={styles.heading}>{entry.title}</Text>
+            <Text>{category}</Text>
+            {entry.description ? <Text>{entry.description}</Text> : null}
+            <Text>{entry.occurredAt}</Text>
+            {sawCoreFinalized && entry.category === "SHIPMENT" ? (
+              <Text>Recorded after core finalization; did not change the core manifest.</Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function TransactionFacts(props: {
   transaction: TransactionView;
   proofId: string;
@@ -1857,4 +1967,15 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", textAlign: "center" },
   error: { color: "#a40000" },
   busy: { color: "#333" },
+  timelineItem: {
+    borderLeftWidth: 3,
+    paddingLeft: 8,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  timelineProof: { borderLeftColor: "#1c4334" },
+  timelineCommerce: { borderLeftColor: "#1c3654" },
+  timelineShipment: { borderLeftColor: "#3d4a22" },
+  timelineCore: { backgroundColor: "#e6f0ea" },
+  frozenNote: { backgroundColor: "#e6f0ea", padding: 8, gap: 4 },
 });

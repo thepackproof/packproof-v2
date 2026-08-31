@@ -7,6 +7,8 @@ export type ProofStatus =
 
 export type TrustKind = "FACT" | "ATTESTATION" | "EXTERNAL";
 
+export type ChronologyCategory = "PROOF" | "COMMERCE" | "SHIPMENT";
+
 export interface ShippingView {
   carrier: string | null;
   service: string | null;
@@ -159,6 +161,13 @@ export interface CanonicalProof {
     evidence: Array<{ evidenceId: string; sha256: string }>;
     manifestSha256: string | null;
   };
+  shipmentObservations?: {
+    shippingId: string | null;
+    identity: ShippingView | null;
+    events: ShipmentEventView[];
+    latest: ShipmentEventView | null;
+  };
+  chronology?: ChronologyEntry[];
 }
 
 export interface ProofCollectionItem {
@@ -241,6 +250,45 @@ export interface TransactionImportView {
     source: string;
   };
   created: boolean;
+}
+
+export interface ShipmentEventView {
+  id: string;
+  proofId: string;
+  transactionId: string;
+  shippingId?: string;
+  eventType: string;
+  occurredAt: string;
+  observedAt: string;
+  source: string;
+  provider: string;
+  carrier: string | null;
+  location: string | null;
+  eventData: Record<string, unknown>;
+  sha256: string;
+  contentSha256?: string;
+  previousEventSha256?: string | null;
+  coreManifestSha256?: string | null;
+  payloadSha256?: string | null;
+  sourceEventId: string | null;
+}
+
+export interface ChronologyEntry {
+  id: string;
+  occurredAt: string;
+  category: ChronologyCategory | string;
+  title: string;
+  description: string | null;
+  source: string;
+  relatedEntityId: string | null;
+  eventType: string;
+}
+
+export interface ShipmentImportView {
+  transactionId: string;
+  proofId: string;
+  events: ShipmentEventView[];
+  createdCount: number;
 }
 
 export class ApiError extends Error {

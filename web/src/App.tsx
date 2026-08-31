@@ -275,6 +275,23 @@ export function App() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+          onImportShipmentEvents={(throughEventType) => {
+            if (!proof) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            void api
+              .importShipmentEvents({
+                adapterKey: "demo-carrier",
+                transactionId: proof.transactionId,
+                throughEventType: throughEventType ?? null,
+              })
+              .then(() => api.getProof(proof.proofId))
+              .then((loaded) => setProof(loaded))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
         />
       ) : null}
     </div>

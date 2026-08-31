@@ -27,15 +27,24 @@ import { getProofForUser } from "./domain/proofs.js";
 import {
   createTransaction,
   getTransaction,
+  loadTransactionBundle,
   updateShipping,
   updateTransaction,
 } from "./domain/transactions.js";
 import { ensureIdentityUser } from "./domain/users.js";
 import { importNormalizedTransaction } from "./domain/transaction-import.js";
+import {
+  importShipmentObservations,
+  listShipmentEventsForTransaction,
+  recordParticipantShipmentEvent,
+  resolveTransactionIdForShipmentImport,
+  sliceTimelineThrough,
+} from "./domain/shipment-events.js";
 import type { ObjectStore } from "./s3/object-store.js";
 import type { IntegrationAdapterRegistry } from "./integrations/registry.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { parseIntegrationImportRequest } from "./integrations/import-request.js";
+import { parseShipmentImportRequest } from "./integrations/shipment-import-request.js";
 
 export interface AppDependencies {
   db: Database;
@@ -203,11 +212,75 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
+  app.post(
+    "/integrations/shipment-events/import",
+    asyncRoute(async (req, res) => {
+      const parsed = parseShipmentImportRequest(req.body);
+      const adapter = integrations.getShipment(parsed.adapterKey);
+      if (adapter.kind !== "reference") {
+        throw new DomainError(
+          "INTEGRATION_TRUST_BOUNDARY",
+          "This route accepts reference adapters only",
+          403,
+        );
+      }
+      const actor = bearerUser(req);
+      const transactionId = await resolveTransactionIdForShipmentImport(deps.db, actor, {
+        transactionId: parsed.transactionId,
+        externalTransactionId: parsed.externalTransactionId,
+      });
+      const bundle = await loadTransactionBundle(deps.db, transactionId);
+      const observations = await adapter.fetchShipmentEvents({
+        transactionId,
+        trackingNumber: bundle?.shipping?.tracking_number ?? null,
+        externalTransactionId: parsed.externalTransactionId,
+        throughEventType: parsed.throughEventType,
+      });
+      const sliced = sliceTimelineThrough(observations, parsed.throughEventType);
+      const result = await importShipmentObservations(
+        deps.db,
+        deps.clock,
+        actor,
+        transactionId,
+        sliced,
+      );
+      res.status(result.createdCount > 0 ? 201 : 200).json(result);
+    }),
+  );
+
   app.get(
     "/transactions/:id",
     asyncRoute(async (req, res) => {
       const result = await getTransaction(deps.db, bearerUser(req), req.params.id);
       res.json(result);
+    }),
+  );
+
+  app.get(
+    "/transactions/:id/shipment-events",
+    asyncRoute(async (req, res) => {
+      const transaction = await getTransaction(deps.db, bearerUser(req), req.params.id);
+      const events = await listShipmentEventsForTransaction(deps.db, transaction.transactionId);
+      res.json({
+        transactionId: transaction.transactionId,
+        proofId: transaction.proofId,
+        identity: transaction.shipping,
+        events,
+      });
+    }),
+  );
+
+  app.post(
+    "/transactions/:id/shipment-events",
+    asyncRoute(async (req, res) => {
+      const result = await recordParticipantShipmentEvent(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body,
+      );
+      res.status(result.created ? 201 : 200).json(result);
     }),
   );
 
@@ -257,6 +330,22 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       const result = await getProofForUser(deps.db, bearerUser(req), req.params.id);
       res.json(result);
+    }),
+  );
+
+  app.get(
+    "/proofs/:id/shipment-events",
+    asyncRoute(async (req, res) => {
+      const proof = await getProofForUser(deps.db, bearerUser(req), req.params.id);
+      res.json(proof.shipmentObservations);
+    }),
+  );
+
+  app.get(
+    "/proofs/:id/chronology",
+    asyncRoute(async (req, res) => {
+      const proof = await getProofForUser(deps.db, bearerUser(req), req.params.id);
+      res.json({ proofId: proof.proofId, chronology: proof.chronology });
     }),
   );
 

@@ -6,6 +6,7 @@ Modular monolith. Domain commands own Proof state. HTTP only translates requests
 
 - `createTransaction`
 - `importTransaction`
+- `importShipmentEvents`
 - `createOrGetProof`
 - `createInvitation`
 - `acceptInvitation`

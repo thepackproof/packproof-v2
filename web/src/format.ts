@@ -77,6 +77,8 @@ export function eventLabel(eventType: string): string {
       return "Transaction details updated";
     case "SHIPPING_DETAILS_UPDATED":
       return "Shipping details updated";
+    case "SHIPMENT_EVENT_RECORDED":
+      return "Shipment observation recorded";
     default:
       return eventType.replaceAll("_", " ").toLowerCase();
   }
@@ -132,6 +134,19 @@ export function externalFieldLabel(field: string): string {
     "transaction.provenance.tenantKey": "Import tenant",
   };
   return labels[field] ?? field;
+}
+
+export function chronologyCategoryLabel(
+  category: string,
+  source?: string,
+): string {
+  if (category === "COMMERCE") {
+    return "Commerce event";
+  }
+  if (category === "SHIPMENT") {
+    return source === "PARTICIPANT_SUPPLIED" ? "Participant observation" : "Carrier observation";
+  }
+  return "PackProof event";
 }
 
 export function displayValue(value: unknown): string {

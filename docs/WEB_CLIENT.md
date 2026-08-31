@@ -26,7 +26,7 @@ Session tokens are stored in `sessionStorage` for the tab only. A `401` clears t
 
 - Home calls `GET /me/proofs` and `GET /invitations`. Summaries are not treated as full Proofs.
 - Create Proof can import a reference marketplace purchase (`POST /integrations/transactions/import`) or enter the transaction manually. The review screen renders the server transaction. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md).
-- Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`.
+- Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations.
 - Cached `proofId` values in the URL are shortcuts only.
 - Invitations addressed to the signed-in account appear in discovery. An invitation ID can also be accepted from home. Tokens from create/accept responses are discarded by the API client.
 
@@ -39,6 +39,10 @@ The Proof page labels every section:
 - **External data** — transaction/shipping fields supplied by a participant or integration
 
 The UI does not present attestations or external fields as independently verified facts.
+
+Chronology categories (PackProof event, commerce event, carrier observation) name the source of a timeline entry. They are not stronger/weaker evidence.
+
+Shipment observations may appear after “Core PackProof finalized”. They did not change the frozen core digest.
 
 ## External identity
 

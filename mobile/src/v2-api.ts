@@ -71,6 +71,45 @@ export interface ShippingWriteInput {
   shipmentDate?: string | null;
 }
 
+export interface ShipmentEventView {
+  id: string;
+  proofId: string;
+  transactionId: string;
+  shippingId?: string;
+  eventType: string;
+  occurredAt: string;
+  observedAt: string;
+  source: string;
+  provider: string;
+  carrier: string | null;
+  location: string | null;
+  eventData: Record<string, unknown>;
+  sha256: string;
+  contentSha256?: string;
+  previousEventSha256?: string | null;
+  coreManifestSha256?: string | null;
+  payloadSha256?: string | null;
+  sourceEventId: string | null;
+}
+
+export interface ChronologyEntry {
+  id: string;
+  occurredAt: string;
+  category: "PROOF" | "COMMERCE" | "SHIPMENT" | string;
+  title: string;
+  description: string | null;
+  source: string;
+  relatedEntityId: string | null;
+  eventType: string;
+}
+
+export interface ShipmentImportView {
+  transactionId: string;
+  proofId: string;
+  events: ShipmentEventView[];
+  createdCount: number;
+}
+
 export interface ProofView {
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
@@ -163,6 +202,13 @@ export interface ProofView {
     evidence: Array<{ evidenceId: string; sha256: string }>;
     manifestSha256: string | null;
   };
+  shipmentObservations?: {
+    shippingId: string | null;
+    identity: ShippingView | null;
+    events: ShipmentEventView[];
+    latest: ShipmentEventView | null;
+  };
+  chronology?: ChronologyEntry[];
 }
 
 export interface InvitationView {
@@ -353,6 +399,24 @@ export class PackProofV2Client {
         mode: "reference",
         externalTransactionId: input.externalTransactionId ?? null,
         createProof: input.createProof === true,
+      },
+    });
+  }
+
+  async importShipmentEvents(input: {
+    adapterKey?: string;
+    transactionId?: string | null;
+    externalTransactionId?: string | null;
+    throughEventType?: string | null;
+  }): Promise<ShipmentImportView> {
+    return this.request("/integrations/shipment-events/import", {
+      method: "POST",
+      body: {
+        adapterKey: input.adapterKey ?? "demo-carrier",
+        mode: "reference",
+        transactionId: input.transactionId ?? null,
+        externalTransactionId: input.externalTransactionId ?? null,
+        throughEventType: input.throughEventType ?? null,
       },
     });
   }

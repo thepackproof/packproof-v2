@@ -80,4 +80,39 @@ describe("API client boundary", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("imports demo shipment observations through the reference carrier adapter", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          transactionId: "txn_1",
+          proofId: "proof_1",
+          createdCount: 1,
+          events: [{ id: "sev_1", eventType: "LABEL_CREATED" }],
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    const imported = await api.importShipmentEvents({
+      transactionId: "txn_1",
+      throughEventType: "LABEL_CREATED",
+    });
+    expect(imported.createdCount).toBe(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/integrations/shipment-events/import",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          adapterKey: "demo-carrier",
+          mode: "reference",
+          transactionId: "txn_1",
+          externalTransactionId: null,
+          throughEventType: "LABEL_CREATED",
+        }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
 });

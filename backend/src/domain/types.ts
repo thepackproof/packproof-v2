@@ -139,6 +139,29 @@ export interface AuditEventRow {
   created_at: Date | string;
 }
 
+export interface ShipmentEventRow {
+  id: string;
+  proof_id: string;
+  transaction_id: string;
+  shipping_id: string;
+  event_type: string;
+  occurred_at: Date | string;
+  observed_at: Date | string;
+  created_at: Date | string;
+  carrier: string | null;
+  location_text: string | null;
+  source: string;
+  provider: string;
+  source_event_id: string | null;
+  event_data: unknown;
+  payload_sha256: string | null;
+  content_sha256: string;
+  previous_event_sha256: string | null;
+  core_manifest_sha256: string | null;
+  sha256: string;
+  dedupe_fingerprint: string;
+}
+
 export function asIso(value: Date | string | null | undefined): string | null {
   if (value == null) {
     return null;

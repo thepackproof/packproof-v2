@@ -265,5 +265,16 @@ describe("Phase 10 mobile V2 API client", () => {
     const fromServer = await ctx.seller.getTransaction(first.transaction.transactionId);
     expect(fromServer.itemTitle).toBe(first.transaction.itemTitle);
     expect(fromServer.provenance?.provider).toBe("demo-marketplace");
+
+    const labeled = await ctx.seller.importShipmentEvents({
+      adapterKey: "demo-carrier",
+      transactionId: first.transaction.transactionId,
+      throughEventType: "LABEL_CREATED",
+    });
+    expect(labeled.createdCount).toBe(1);
+    expect(labeled.events[0].eventType).toBe("LABEL_CREATED");
+    const proof = await ctx.seller.getProof(first.proof!.proofId);
+    expect(proof.shipmentObservations?.events).toHaveLength(1);
+    expect(proof.chronology?.some((entry) => entry.eventType === "LABEL_CREATED")).toBe(true);
   });
 });

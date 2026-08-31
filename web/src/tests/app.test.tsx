@@ -145,12 +145,12 @@ describe("PackProof web reference client", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("8af291d4deadbeefcafebabef00d000011112222333344445555666677778888"))
       .toBeInTheDocument();
-    const history = screen.getByRole("heading", { name: "History" }).closest("section");
+    const history = screen.getByRole("heading", { name: "Chronology" }).closest("section");
     expect(history).toBeTruthy();
     const events = within(history as HTMLElement).getAllByRole("listitem");
     expect(events[0]).toHaveTextContent("Proof created");
     expect(events[1]).toHaveTextContent("Participant joined");
-    expect(events[2]).toHaveTextContent("Evidence committed");
+    expect(events[2]).toHaveTextContent("Packing evidence committed");
     expect(fetch).toHaveBeenCalledWith(
       "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE",
       expect.objectContaining({ method: "GET" }),

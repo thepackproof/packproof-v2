@@ -10,6 +10,7 @@ import {
   type TransactionImportView,
   type TransactionView,
   type TransactionWriteInput,
+  type ShipmentImportView,
 } from "./types";
 
 export class PackProofApi {
@@ -67,6 +68,24 @@ export class PackProofApi {
         mode: "reference",
         externalTransactionId: input.externalTransactionId ?? null,
         createProof: input.createProof === true,
+      },
+    });
+  }
+
+  async importShipmentEvents(input: {
+    adapterKey?: string;
+    transactionId?: string | null;
+    externalTransactionId?: string | null;
+    throughEventType?: string | null;
+  }): Promise<ShipmentImportView> {
+    return this.request("/integrations/shipment-events/import", {
+      method: "POST",
+      body: {
+        adapterKey: input.adapterKey ?? "demo-carrier",
+        mode: "reference",
+        transactionId: input.transactionId ?? null,
+        externalTransactionId: input.externalTransactionId ?? null,
+        throughEventType: input.throughEventType ?? null,
       },
     });
   }

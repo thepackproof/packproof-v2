@@ -19,6 +19,7 @@ export function ProofScreen(props: {
   onInvite: (input: { inviteeUserId?: string; inviteeIdentifier?: string }) => void;
   onAttest: (statement: string) => void;
   onFinalize: () => void;
+  onImportShipmentEvents?: (throughEventType?: string) => void;
   onSearchUsers: (query: string) => Promise<PublicProfileView[]>;
 }) {
   const [query, setQuery] = useState("");
@@ -31,6 +32,7 @@ export function ProofScreen(props: {
   const canFinalize = proof?.status === "EVIDENCE_COMMITTED" && role === "SELLER";
   const canInvite =
     proof && role === "SELLER" && proof.status !== "FINALIZED";
+  const canImportDemoCarrier = proof && role === "SELLER" && Boolean(props.onImportShipmentEvents);
 
   if (props.loading && !proof) {
     return (
@@ -156,6 +158,46 @@ export function ProofScreen(props: {
           <button className="btn" type="button" disabled={props.busy} onClick={props.onFinalize}>
             Finalize Proof
           </button>
+        </section>
+      ) : null}
+      {canImportDemoCarrier ? (
+        <section className="section stack">
+          <h2>Demo shipment observations</h2>
+          <p className="note">
+            Imports a reference carrier timeline for this transaction. This is not a live UPS, FedEx,
+            USPS, Shippo, or EasyPost connection. Observations may arrive after the core Proof is
+            finalized and do not change the core manifest.
+          </p>
+          <div className="btn-row">
+            {(
+              [
+                ["LABEL_CREATED", "Label created"],
+                ["CARRIER_ACCEPTED", "Accepted"],
+                ["WEIGHT_RECORDED", "Weight"],
+                ["IN_TRANSIT", "In transit"],
+                ["OUT_FOR_DELIVERY", "Out for delivery"],
+                ["DELIVERED", "Delivered"],
+              ] as const
+            ).map(([eventType, label]) => (
+              <button
+                key={eventType}
+                className="btn btn-secondary"
+                type="button"
+                disabled={props.busy}
+                onClick={() => props.onImportShipmentEvents?.(eventType)}
+              >
+                Import {label}
+              </button>
+            ))}
+            <button
+              className="btn"
+              type="button"
+              disabled={props.busy}
+              onClick={() => props.onImportShipmentEvents?.()}
+            >
+              Import remaining demo observations
+            </button>
+          </div>
         </section>
       ) : null}
       <EventTimeline proof={proof} />

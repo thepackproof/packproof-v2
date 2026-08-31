@@ -51,6 +51,8 @@ The contract includes:
 - **Evidence** — identity, type, submitter, record timestamps, object reference, SHA-256
 - **Attestations** — who attested, the bounded statement, related evidence, digest
 - **Events** — append-only audit of committed actions (`PROOF_CREATED`, `PARTICIPANT_INVITED`, `PARTICIPANT_JOINED`, `EVIDENCE_COMMITTED`, `ATTESTATION_COMMITTED`, `PROOF_FINALIZED`, and related existing types)
+- **Shipment observations** — append-only carrier/participant observations associated with the Proof; they may arrive after `FINALIZED` and are not part of the core manifest
+- **Chronology** — presentation read model over audit + shipment observations (`PROOF` / `COMMERCE` / `SHIPMENT`). Not lifecycle state and not evidence tiers
 - **Integrity** — recorded evidence digests and finalized manifest digest
 - **Facts / external** — explicit trust classification
 
@@ -72,7 +74,7 @@ Future integration credentials must resolve to this same gate. They must not rea
 - Evidence is append-only after commit. Committed bytes, digest, submitter, and type cannot be replaced in place.
 - Attestations are immutable after insert.
 - Audit events and final manifests are immutable.
-- After `FINALIZED`, mutation is rejected.
+- After `FINALIZED`, mutation of Proof status, evidence, attestations, transaction facts, shipping identity, and the core manifest is rejected. New shipment observations may still be appended; they do not rewrite the core record.
 
 ## External references
 

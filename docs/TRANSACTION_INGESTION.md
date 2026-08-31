@@ -134,7 +134,7 @@ Response includes the canonical transaction (with `provenance`), external identi
 
 When an imported transaction is attached to a Proof, the service appends `TRANSACTION_IMPORTED`, `SHIPPING_DETAILS_IMPORTED` (if shipping facts exist), and the existing `EXTERNAL_REFERENCE_BOUND` events. Identical retries do not add redundant events.
 
-Finalization still freezes the canonical transaction and shipping contract. When import provenance exists, a deterministic `transaction.provenance` object is included (source, adapter, tenant, fingerprint). Credentials and raw provider JSON are not.
+Finalization still freezes the canonical transaction and shipping **identity**. When import provenance exists, a deterministic `transaction.provenance` object is included (source, adapter, tenant, fingerprint). Credentials and raw provider JSON are not. Tracking history is not stored on `transaction_shipping`. Later carrier observations use append-only `shipment_events`; see [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md).
 
 ## Clients
 

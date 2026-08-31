@@ -1,8 +1,8 @@
 import type { CanonicalProof } from "../api/types";
 import {
   attestationLabel,
+  chronologyCategoryLabel,
   displayValue,
-  eventLabel,
   externalFieldLabel,
   factLabel,
   formatWhen,
@@ -223,23 +223,57 @@ export function AttestationList(props: { proof: CanonicalProof }) {
 }
 
 export function EventTimeline(props: { proof: CanonicalProof }) {
-  const events = props.proof.events ?? [];
+  const entries = props.proof.chronology ?? [];
+  const finalizedAt = props.proof.finalizedAt;
+  let sawCoreFinalized = false;
   return (
     <section className="section">
       <div className="section-head">
-        <h2>History</h2>
-        <TrustBadge kind="FACT" />
+        <h2>Chronology</h2>
       </div>
-      {events.length === 0 ? (
-        <p className="empty">No events are available on this Proof.</p>
+      <p className="note">
+        This timeline is a presentation of recorded events. Category labels name the source of the
+        information. They are not evidence levels or verification strength.
+      </p>
+      {props.proof.status === "FINALIZED" && props.proof.integrity?.manifestSha256 ? (
+        <p className="note chronology-frozen-note">
+          Core PackProof was frozen at {formatWhen(finalizedAt)}. Later shipment observations are
+          recorded separately and did not change manifest digest{" "}
+          <span className="digest">{props.proof.integrity.manifestSha256}</span>.
+        </p>
+      ) : null}
+      {entries.length === 0 ? (
+        <p className="empty">No chronology is available on this Proof.</p>
       ) : (
         <ol className="timeline">
-          {events.map((event) => (
-            <li key={event.eventId}>
-              <strong>{eventLabel(event.eventType)}</strong>
-              <span className="meta">{formatWhen(event.at)}</span>
-            </li>
-          ))}
+          {entries.map((entry) => {
+            const isCoreFinalized = entry.eventType === "PROOF_FINALIZED";
+            if (isCoreFinalized) {
+              sawCoreFinalized = true;
+            }
+            const afterCore = sawCoreFinalized && !isCoreFinalized && entry.category === "SHIPMENT";
+            return (
+              <li
+                key={entry.id}
+                className={[
+                  `chronology-${entry.category.toLowerCase()}`,
+                  isCoreFinalized ? "chronology-core" : "",
+                  afterCore ? "chronology-after-core" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <div className="row">
+                  <strong>{entry.title}</strong>
+                  <span className={`badge badge-chronology badge-chronology-${entry.category.toLowerCase()}`}>
+                    {chronologyCategoryLabel(entry.category, entry.source)}
+                  </span>
+                </div>
+                {entry.description ? <span>{entry.description}</span> : null}
+                <span className="meta">{formatWhen(entry.occurredAt)}</span>
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>
@@ -256,7 +290,8 @@ export function IntegrityPanel(props: { proof: CanonicalProof }) {
       </div>
       <p className="note">
         These are records PackProof can establish from its own infrastructure: receipt, digest, and
-        chronology. Historical committed evidence is immutable.
+        chronology. Historical committed evidence is immutable. Shipment observations that arrive
+        after finalization are not part of this core digest.
       </p>
       <dl className="dl">
         <div>

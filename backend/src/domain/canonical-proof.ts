@@ -1,10 +1,15 @@
 import type { Database } from "../db/database.js";
 import { listAuditEvents, type AuditEventView } from "./audit.js";
+import { buildChronology, type ChronologyEntry } from "./chronology.js";
 import { DomainError } from "./errors.js";
 import {
   listProofExternalReferences,
   type ProofExternalReferenceView,
 } from "./external-references.js";
+import {
+  getShipmentObservationsForProof,
+  type ShipmentObservationsView,
+} from "./shipment-events.js";
 import { loadTransactionView, type TransactionView } from "./transactions.js";
 import {
   CANONICAL_PROOF_SCHEMA,
@@ -131,6 +136,8 @@ export interface CanonicalProof {
     records: CanonicalExternalRecord[];
     references: ProofExternalReferenceView[];
   };
+  shipmentObservations: ShipmentObservationsView;
+  chronology: ChronologyEntry[];
 }
 
 export async function getCanonicalProof(
@@ -162,6 +169,11 @@ export async function getCanonicalProof(
   );
   const events = await listAuditEvents(db, proofId);
   const references = await listProofExternalReferences(db, proofId);
+  const shipmentObservations = await getShipmentObservationsForProof(
+    db,
+    proofId,
+    proof.transaction_id,
+  );
   const manifest = proof.manifest_id
     ? await db.query<ManifestRow>(`SELECT * FROM final_manifests WHERE proof_id = $1`, [proofId])
     : { rows: [] as ManifestRow[] };
@@ -259,6 +271,12 @@ export async function getCanonicalProof(
       records: collectExternalRecords(transaction),
       references,
     },
+    shipmentObservations,
+    chronology: buildChronology({
+      transaction,
+      events,
+      shipmentEvents: shipmentObservations.events,
+    }),
   };
 }
 

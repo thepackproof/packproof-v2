@@ -27,7 +27,7 @@ Supported: two users, two devices, one transaction, one Proof, seller, buyer, in
 
 Out of scope: Salesforce, Zendesk, live carriers, live marketplaces, returns, receiver capture, witness, analytics, billing, orgs, GraphQL, Kafka, Kubernetes, Firebase/Firestore domain storage, microservices, extra tiers, AI analysis.
 
-A provider-neutral transaction ingestion seam with a reference adapter is in scope. Real eBay/Shopify/Shippo/EasyPost connectors are not.
+A provider-neutral transaction ingestion seam with a reference adapter is in scope. Append-only shipment observations associated with a Proof are in scope. Real eBay/Shopify/Shippo/EasyPost/UPS/FedEx connectors are not.
 
 ## Required flow
 
@@ -35,7 +35,7 @@ Seller signs in → create transaction → create-or-get Proof → invite buyer 
 
 ## Commands
 
-`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`.
+`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`.
 
 ## API
 
@@ -44,8 +44,13 @@ REST only:
 - `POST /transactions`
 - `GET /transactions/:id`
 - `POST /integrations/transactions/import`
+- `POST /integrations/shipment-events/import`
 - `POST /transactions/:id/proof`
 - `GET /proofs/:id`
+- `GET /proofs/:id/shipment-events`
+- `GET /proofs/:id/chronology`
+- `GET /transactions/:id/shipment-events`
+- `POST /transactions/:id/shipment-events`
 - `POST /proofs/:id/invitations`
 - `POST /invitations/:token/accept`
 - `POST /proofs/:id/evidence/uploads`
@@ -59,11 +64,11 @@ REST only:
 
 ## Idempotent commands
 
-Transaction creation with external identifiers, Proof creation, invitation creation, invitation acceptance, participant creation, evidence upload init, evidence commit, finalization.
+Transaction creation with external identifiers, Proof creation, invitation creation, invitation acceptance, participant creation, evidence upload init, evidence commit, finalization, shipment-event ingest.
 
 ## Errors
 
-Unsuccessful requests must not leave a half-mutated Proof. Explicit codes including `PROOF_ALREADY_FINALIZED`, `PROOF_NOT_READY_FOR_FINALIZATION`, `PARTICIPANT_NOT_AUTHORIZED`, `INVITATION_EXPIRED`, `EVIDENCE_ALREADY_COMMITTED`, `INVALID_PROOF_TRANSITION`.
+Unsuccessful requests must not leave a half-mutated Proof. Explicit codes including `PROOF_ALREADY_FINALIZED`, `PROOF_NOT_READY_FOR_FINALIZATION`, `PARTICIPANT_NOT_AUTHORIZED`, `INVITATION_EXPIRED`, `EVIDENCE_ALREADY_COMMITTED`, `INVALID_PROOF_TRANSITION`, `SHIPMENT_EVENT_CONFLICT`, `SHIPMENT_EVENT_IMMUTABLE`.
 
 ## Definition of done
 
