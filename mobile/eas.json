@@ -6,8 +6,10 @@
   "build": {
     "internal-staging": {
       "distribution": "store",
+      "credentialsSource": "remote",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "keystoreName": "Play upload key pdbJYV45vI"
       },
       "env": {
         "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",

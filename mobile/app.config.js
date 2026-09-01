@@ -53,7 +53,7 @@ module.exports = {
     },
     android: {
       package: "com.thepackproof.app",
-      versionCode: 19,
+      versionCode: 20,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
