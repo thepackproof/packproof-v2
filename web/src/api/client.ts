@@ -19,6 +19,8 @@ import {
   type PackingStationResolveView,
   type EvidenceUploadView,
   type UploadTarget,
+  type EbayMarketplaceView,
+  type EbayOrderListView,
 } from "./types";
 
 export class PackProofApi {
@@ -60,6 +62,35 @@ export class PackProofApi {
 
   async listCommerceConnections(): Promise<{ connections: CommerceConnectionView[] }> {
     return this.request("/me/integration-connections?capability=commerce");
+  }
+
+  async listMarketplaces(): Promise<{ marketplaces: EbayMarketplaceView[] }> {
+    return this.request("/me/marketplaces");
+  }
+
+  async startEbayConnect(): Promise<{ authorizationUrl: string; expiresAt: string }> {
+    return this.request("/me/marketplaces/ebay/connect", { method: "POST" });
+  }
+
+  async disconnectEbay(): Promise<void> {
+    await this.request("/me/marketplaces/ebay/disconnect", { method: "POST" });
+  }
+
+  async listEbaySellerOrders(): Promise<EbayOrderListView> {
+    return this.request("/me/marketplaces/ebay/orders");
+  }
+
+  async importEbaySellerOrder(
+    orderId: string,
+    input: { createProof?: boolean } = {},
+  ): Promise<TransactionImportView> {
+    return this.request(
+      `/me/marketplaces/ebay/orders/${encodeURIComponent(orderId)}/import`,
+      {
+        method: "POST",
+        body: { createProof: input.createProof === true },
+      },
+    );
   }
 
   async syncCommerceConnection(connectionId: string): Promise<CommerceSyncView> {
@@ -281,7 +312,14 @@ export class PackProofApi {
     if (!response.ok) {
       throw await errorFromResponse(response);
     }
-    return (await response.json()) as T;
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    const text = await response.text();
+    if (!text.trim()) {
+      return undefined as T;
+    }
+    return JSON.parse(text) as T;
   }
 }
 

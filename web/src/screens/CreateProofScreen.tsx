@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MARKETPLACE_DISCLOSURE } from "@packproof/copy/errors";
 import { displayName, formatDate, moneyLabel, quantityLabel } from "@packproof/copy/format";
 import { providerDisplay, sourceLabel } from "@packproof/copy/status";
-import type { TransactionImportView, TransactionView, TransactionWriteInput } from "../api/types";
+import type { EbaySellerOrderView, TransactionImportView, TransactionView, TransactionWriteInput } from "../api/types";
 
 const EMPTY = {
   externalReference: "",
@@ -18,20 +18,26 @@ const EMPTY = {
   shipmentDate: "",
 };
 
-type Step = "choose" | "manual" | "review";
+type Step = "choose" | "ebay-list" | "manual" | "review";
 
 export function CreateProofScreen(props: {
   busy: boolean;
   error: string | null;
+  development: boolean;
+  ebayConnected: boolean;
   onCancel: () => void;
   onScan: () => void;
   onCreate: (input: TransactionWriteInput) => void;
   onImportPurchase: () => Promise<TransactionImportView>;
+  onListEbayOrders: () => Promise<{ orders: EbaySellerOrderView[]; disclosure: string }>;
+  onImportEbayOrder: (orderId: string) => Promise<TransactionImportView>;
   onConfirmImport: (transactionId: string) => void;
 }) {
   const [step, setStep] = useState<Step>("choose");
   const [form, setForm] = useState(EMPTY);
   const [imported, setImported] = useState<TransactionImportView | null>(null);
+  const [ebayOrders, setEbayOrders] = useState<EbaySellerOrderView[]>([]);
+  const [ebayDisclosure, setEbayDisclosure] = useState<string | null>(null);
   const set = (key: keyof typeof EMPTY, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -66,9 +72,25 @@ export function CreateProofScreen(props: {
           <button
             className="option-card"
             type="button"
-            disabled={props.busy}
+            disabled={props.busy || (!props.ebayConnected && !props.development)}
             aria-label="Import purchase"
             onClick={() => {
+              if (props.ebayConnected) {
+                void props
+                  .onListEbayOrders()
+                  .then((result) => {
+                    setEbayOrders(result.orders);
+                    setEbayDisclosure(result.disclosure);
+                    setStep("ebay-list");
+                  })
+                  .catch(() => {
+                    // Parent renders the API error.
+                  });
+                return;
+              }
+              if (!props.development) {
+                return;
+              }
               void props
                 .onImportPurchase()
                 .then((result) => {
@@ -86,7 +108,13 @@ export function CreateProofScreen(props: {
             <span className="option-copy">
               <strong className="card-title">Import purchase</strong>
               <span className="meta">
-                {props.busy ? "Importing…" : "From a connected marketplace"}
+                {props.busy
+                  ? "Loading…"
+                  : props.ebayConnected
+                    ? "From connected eBay account"
+                    : props.development
+                      ? "Development demo import"
+                      : "Connect eBay in Account → Stores first"}
               </span>
             </span>
           </button>
@@ -128,7 +156,11 @@ export function CreateProofScreen(props: {
               disabled={props.busy}
               onClick={() => props.onConfirmImport(imported.transaction.transactionId)}
             >
-              {props.busy ? "Creating…" : "Create PackProof"}
+              {props.busy
+                ? "Opening…"
+                : imported.proof?.proofId
+                  ? "Open existing PackProof"
+                  : "Create PackProof"}
             </button>
             <button
               className="btn btn-secondary"
@@ -141,6 +173,54 @@ export function CreateProofScreen(props: {
               Back
             </button>
           </div>
+        </section>
+      ) : null}
+
+      {step === "ebay-list" ? (
+        <section className="section stack">
+          <h2>Your eBay sales</h2>
+          {ebayDisclosure ? <p className="note">{ebayDisclosure}</p> : null}
+          {props.error ? (
+            <div className="banner banner-error" role="alert">
+              {props.error}
+            </div>
+          ) : null}
+          {ebayOrders.length === 0 ? (
+            <p className="empty">No recent eBay sales were returned for this account.</p>
+          ) : (
+            ebayOrders.map((order) => (
+              <button
+                key={order.externalOrderId}
+                className="option-card"
+                type="button"
+                disabled={props.busy}
+                onClick={() => {
+                  void props
+                    .onImportEbayOrder(order.externalOrderId)
+                    .then((result) => {
+                      setImported(result);
+                      setStep("review");
+                    })
+                    .catch(() => undefined);
+                }}
+              >
+                <span className="option-copy">
+                  <strong className="card-title">{order.title}</strong>
+                  <span className="meta">
+                    {[formatDate(order.soldAt), moneyLabel(order.total, order.currency), order.fulfillmentLabel]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                  {order.proofId ? (
+                    <span className="meta">PackProof already exists</span>
+                  ) : null}
+                </span>
+              </button>
+            ))
+          )}
+          <button className="btn btn-secondary" type="button" onClick={() => setStep("choose")}>
+            Back
+          </button>
         </section>
       ) : null}
 

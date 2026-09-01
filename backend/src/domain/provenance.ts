@@ -39,6 +39,7 @@ export interface ImportMetadata {
   importedAt: string;
   payloadSha256: string | null;
   buyer: ImportedBuyer | null;
+  providerIdentifiers?: Record<string, unknown> | null;
 }
 
 export function isProvenanceSource(value: unknown): value is ProvenanceSource {
@@ -122,6 +123,9 @@ export function writeImportMetadata(
       importedAt: importMeta.importedAt,
       payloadSha256: importMeta.payloadSha256,
       buyer: buyerMetadata(importMeta.buyer),
+      ...(importMeta.providerIdentifiers
+        ? { providerIdentifiers: importMeta.providerIdentifiers }
+        : {}),
     },
   };
 }

@@ -49,6 +49,51 @@ export function toConnectionView(row: IntegrationConnectionRow): IntegrationConn
   };
 }
 
+export async function findConnectionByExternalAccount(
+  db: Database,
+  adapterKey: string,
+  externalAccountReference: string,
+): Promise<IntegrationConnectionRow | null> {
+  const found = await db.query<IntegrationConnectionRow>(
+    `SELECT * FROM integration_connections
+      WHERE adapter_key = $1 AND external_account_reference = $2
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1`,
+    [adapterKey, externalAccountReference],
+  );
+  return found.rows[0] ?? null;
+}
+
+export async function updateConnectionCredentials(
+  db: Database,
+  clock: Clock,
+  connectionId: string,
+  input: {
+    credentialReference?: string;
+    externalAccountReference?: string | null;
+    status?: IntegrationConnectionStatus;
+  },
+): Promise<void> {
+  const current = await loadConnection(db, connectionId);
+  await db.query(
+    `UPDATE integration_connections
+        SET credential_reference = $2,
+            external_account_reference = $3,
+            status = $4,
+            updated_at = $5
+      WHERE id = $1`,
+    [
+      connectionId,
+      input.credentialReference ?? current.credential_reference,
+      input.externalAccountReference === undefined
+        ? current.external_account_reference
+        : input.externalAccountReference,
+      input.status ?? current.status,
+      clock.now().toISOString(),
+    ],
+  );
+}
+
 export async function findOwnerConnection(
   db: Database,
   ownerUserId: string,
@@ -96,6 +141,7 @@ export async function createIntegrationConnection(
   clock: Clock,
   ownerUserId: string,
   input: {
+    connectionId?: string;
     adapterKey: string;
     provider: string;
     credentialReference: string;
@@ -103,7 +149,7 @@ export async function createIntegrationConnection(
     status?: IntegrationConnectionStatus;
   },
 ): Promise<IntegrationConnectionView> {
-  const id = newId("icn");
+  const id = input.connectionId ?? newId("icn");
   const now = clock.now().toISOString();
   await db.query(
     `INSERT INTO integration_connections (

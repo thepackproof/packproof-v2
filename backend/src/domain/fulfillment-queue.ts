@@ -219,6 +219,9 @@ export function providerDisplay(adapterKey: string, provider: string): string {
   if (adapterKey === "demo-storefront" || provider === "demo-storefront") {
     return "Demo Storefront";
   }
+  if (adapterKey === "ebay" || provider === "ebay") {
+    return "eBay";
+  }
   return provider;
 }
 

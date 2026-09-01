@@ -1,4 +1,5 @@
-import type { CommerceConnectionView, CommerceSyncView } from "../api/types";
+import { formatDateTime } from "@packproof/copy/format";
+import type { CommerceConnectionView, CommerceSyncView, EbayMarketplaceView } from "../api/types";
 
 export function ConnectedStoresScreen(props: {
   connections: CommerceConnectionView[];
@@ -7,9 +8,16 @@ export function ConnectedStoresScreen(props: {
   error: string | null;
   busy: boolean;
   development: boolean;
+  ebay: EbayMarketplaceView | null;
   onConnectDemo: () => void;
+  onConnectEbay: () => void;
+  onDisconnectEbay: () => void;
+  onImportSales: () => void;
   onSync: (connectionId: string) => void;
 }) {
+  const ebayConnection = props.ebay?.connection;
+  const ebayNeedsReauth = ebayConnection?.status === "NEEDS_REAUTH";
+
   return (
     <main className="page stack">
       <div className="section-head">
@@ -20,6 +28,50 @@ export function ConnectedStoresScreen(props: {
           </p>
         </div>
       </div>
+      {props.ebay?.enabled ? (
+        <section className="section stack">
+          <h2>eBay</h2>
+          {ebayConnection ? (
+            <>
+              <p className="meta">
+                Connected as {ebayConnection.displayName || "eBay account"}
+                {ebayNeedsReauth ? " · Reconnect required" : ""}
+              </p>
+              <p className="meta">Last synchronized {formatDateTime(ebayConnection.updatedAt)}</p>
+              <p className="note">
+                Transaction information is supplied by eBay. PackProof records it but does not
+                independently verify listing contents.
+              </p>
+              <div className="btn-row">
+                <button className="btn" type="button" disabled={props.busy} onClick={props.onConnectEbay}>
+                  Reconnect
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={props.busy}
+                  onClick={props.onDisconnectEbay}
+                >
+                  Disconnect
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={props.busy || ebayNeedsReauth}
+                  onClick={props.onImportSales}
+                >
+                  Import sales
+                </button>
+              </div>
+              <p className="note">Buyer purchase import is not available yet.</p>
+            </>
+          ) : (
+            <button className="btn" type="button" disabled={props.busy} onClick={props.onConnectEbay}>
+              Connect eBay
+            </button>
+          )}
+        </section>
+      ) : null}
       {props.error ? (
         <div className="banner banner-error" role="alert">
           {props.error}

@@ -82,6 +82,18 @@ import { parseIntegrationImportRequest } from "./integrations/import-request.js"
 import { parseShipmentImportRequest } from "./integrations/shipment-import-request.js";
 import type { IntegrationCredentialStore, IntegrationCredentials } from "./integrations/credentials.js";
 import { parseReleaseIdentity, type ReleaseIdentity } from "./config.js";
+import { disabledEbayRuntime } from "./integrations/ebay/runtime.js";
+import {
+  completeEbayOAuth,
+  disconnectEbay,
+  ebayChallengeResponse,
+  getEbayMarketplaceStatus,
+  handleEbayAccountDeletion,
+  importEbaySellerOrder,
+  listEbaySellerOrders,
+  startEbayConnect,
+  type EbayRuntime,
+} from "./domain/ebay-marketplace.js";
 import { MemoryCredentialStore } from "./integrations/memory-credential-store.js";
 import {
   TRUSTED_DEMO_API_KEY,
@@ -106,6 +118,7 @@ export interface AppDependencies {
   integrations?: IntegrationAdapterRegistry;
   credentialStore?: IntegrationCredentialStore & { put?: (credentials: IntegrationCredentials) => void };
   releaseIdentity?: ReleaseIdentity;
+  ebay?: EbayRuntime;
 }
 
 function asyncRoute(
@@ -146,6 +159,7 @@ export function createApp(deps: AppDependencies): Express {
   const integrations = deps.integrations ?? createDefaultIntegrationRegistry(deps.clock);
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
   const releaseIdentity = deps.releaseIdentity ?? parseReleaseIdentity();
+  const ebay = deps.ebay ?? disabledEbayRuntime();
   app.use((req, res, next) => {
     const origin = headerOrigin(req.headers.origin);
     if (origin && corsOrigins.includes(origin)) {
@@ -236,7 +250,8 @@ export function createApp(deps: AppDependencies): Express {
       req.path === "/meta" ||
       req.path.startsWith("/auth/") ||
       req.path.startsWith("/upload/") ||
-      req.path.startsWith("/integrations/webhooks/")
+      req.path.startsWith("/integrations/webhooks/") ||
+      req.path.startsWith("/integrations/oauth/")
     ) {
       next();
       return;
@@ -249,6 +264,48 @@ export function createApp(deps: AppDependencies): Express {
       })
       .catch(next);
   });
+
+  app.get(
+    "/integrations/oauth/ebay/callback",
+    asyncRoute(async (req, res) => {
+      const result = await completeEbayOAuth(
+        deps.db,
+        deps.clock,
+        ebay,
+        credentialStore,
+        {
+          code: req.query.code,
+          state: req.query.state,
+          error: req.query.error,
+        },
+      );
+      res.redirect(302, result.redirectTo);
+    }),
+  );
+
+  app.get(
+    "/integrations/webhooks/ebay/account-deletion",
+    asyncRoute(async (req, res) => {
+      const result = ebayChallengeResponse(ebay, req.query);
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/integrations/webhooks/ebay/account-deletion",
+    asyncRoute(async (req, res) => {
+      let payload: unknown = req.body;
+      if (Buffer.isBuffer(req.body)) {
+        try {
+          payload = JSON.parse(req.body.toString("utf8") || "{}");
+        } catch {
+          throw new DomainError("INVALID_WEBHOOK", "eBay deletion notification is invalid", 400);
+        }
+      }
+      const result = await handleEbayAccountDeletion(deps.db, deps.clock, payload);
+      res.status(200).json(result);
+    }),
+  );
 
   app.post(
     "/transactions",
@@ -647,6 +704,70 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       await unlinkIdentity(deps.db, bearerUser(req), req.params.provider);
       res.status(204).end();
+    }),
+  );
+
+  app.get(
+    "/me/marketplaces",
+    asyncRoute(async (req, res) => {
+      const ebayStatus = await getEbayMarketplaceStatus(deps.db, bearerUser(req), ebay);
+      res.json({ marketplaces: [ebayStatus] });
+    }),
+  );
+
+  app.post(
+    "/me/marketplaces/ebay/connect",
+    asyncRoute(async (req, res) => {
+      const result = await startEbayConnect(deps.db, deps.clock, bearerUser(req), ebay);
+      res.status(201).json(result);
+    }),
+  );
+
+  app.post(
+    "/me/marketplaces/ebay/disconnect",
+    asyncRoute(async (req, res) => {
+      await disconnectEbay(deps.db, deps.clock, bearerUser(req));
+      res.status(204).end();
+    }),
+  );
+
+  app.get(
+    "/me/marketplaces/ebay/orders",
+    asyncRoute(async (req, res) => {
+      const result = await listEbaySellerOrders(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        ebay,
+        credentialStore,
+      );
+      res.json({
+        role: "SELLING",
+        connection: {
+          connectionId: result.connection.connectionId,
+          status: result.connection.status,
+          displayName: result.connection.externalAccountReference,
+        },
+        orders: result.orders,
+        disclosure:
+          "Transaction information was supplied by eBay. PackProof records the supplied information but does not independently verify the listing contents or transaction claims.",
+      });
+    }),
+  );
+
+  app.post(
+    "/me/marketplaces/ebay/orders/:orderId/import",
+    asyncRoute(async (req, res) => {
+      const result = await importEbaySellerOrder(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        ebay,
+        credentialStore,
+        req.params.orderId,
+        { createProof: req.body?.createProof === true },
+      );
+      res.status(result.created ? 201 : 200).json(result);
     }),
   );
 

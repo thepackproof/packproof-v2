@@ -161,6 +161,8 @@ export function providerDisplay(provider: string | null | undefined): string {
       return "Demo Carrier";
     case "easypost":
       return "EasyPost";
+    case "ebay":
+      return "eBay";
     default:
       return provider ? humanizeEnum(provider) : "";
   }

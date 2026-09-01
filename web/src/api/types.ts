@@ -457,6 +457,45 @@ export interface CommerceSyncView {
   cursor: string | null;
 }
 
+export interface EbayMarketplaceView {
+  provider: "ebay";
+  adapterKey: string;
+  enabled: boolean;
+  environment: string;
+  connection: {
+    connectionId: string;
+    status: string;
+    displayName: string | null;
+    connectedAt: string;
+    updatedAt: string;
+  } | null;
+}
+
+export interface EbaySellerOrderView {
+  externalOrderId: string;
+  title: string;
+  soldAt: string | null;
+  total: number | null;
+  currency: string | null;
+  fulfillmentStatus: string;
+  fulfillmentLabel: string;
+  buyerUsername: string | null;
+  quantity: number | null;
+  proofId: string | null;
+  transactionId: string | null;
+}
+
+export interface EbayOrderListView {
+  role: string;
+  connection: {
+    connectionId: string;
+    status: string;
+    displayName: string | null;
+  };
+  orders: EbaySellerOrderView[];
+  disclosure: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly code: string,

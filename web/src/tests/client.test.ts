@@ -175,4 +175,41 @@ describe("API client boundary", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("starts eBay OAuth through the backend and never sends a client secret", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          authorizationUrl: "https://auth.sandbox.ebay.com/oauth2/authorize?client_id=public",
+          expiresAt: "2026-09-01T17:10:00.000Z",
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    const started = await api.startEbayConnect();
+    expect(started.authorizationUrl).toContain("auth.sandbox.ebay.com");
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("secret");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/me/marketplaces/ebay/connect",
+      expect.objectContaining({ method: "POST" }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("disconnects eBay without sending tokens", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(null, { status: 204, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    await api.disconnectEbay();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/me/marketplaces/ebay/disconnect",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("secret");
+    vi.unstubAllGlobals();
+  });
 });

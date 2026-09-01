@@ -6,6 +6,7 @@ import type {
   CanonicalProof,
   CommerceConnectionView,
   CommerceSyncView,
+  EbayMarketplaceView,
   FulfillmentQueueItem,
   InvitationInboxView,
   ProofCollectionItem,
@@ -81,6 +82,31 @@ function writePath(path: string) {
   }
 }
 
+function pickEbay(listed: { marketplaces: EbayMarketplaceView[] }): EbayMarketplaceView | null {
+  return listed.marketplaces.find((item) => item.provider === "ebay") ?? null;
+}
+
+function ebayReturnError(href: string): string | null {
+  const url = new URL(href, "http://packproof.local");
+  if (url.searchParams.get("ebay") !== "error") {
+    return null;
+  }
+  return formatUserFacingError({
+    code: url.searchParams.get("code") || "EBAY_OAUTH_FAILED",
+    message: "eBay connection failed",
+  });
+}
+
+function stripEbayOAuthQuery() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("ebay")) {
+    return;
+  }
+  url.searchParams.delete("ebay");
+  url.searchParams.delete("code");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}` || "/");
+}
+
 function needsWorkspace(name: Route["name"]): boolean {
   return (
     name === "home" ||
@@ -106,11 +132,16 @@ export function App() {
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => ebayReturnError(window.location.href));
   const [queue, setQueue] = useState<FulfillmentQueueItem[]>([]);
   const [connections, setConnections] = useState<CommerceConnectionView[]>([]);
+  const [ebay, setEbay] = useState<EbayMarketplaceView | null>(null);
   const [lastSync, setLastSync] = useState<CommerceSyncView | null>(null);
   const tokenRef = useRef<string | null>(session?.token ?? null);
+
+  useEffect(() => {
+    stripEbayOAuthQuery();
+  }, []);
 
   const api = useMemo(
     () =>
@@ -153,7 +184,7 @@ export function App() {
       signOut();
       return "Session expired. Sign in again.";
     }
-    if (caught instanceof ApiError && caught.status === 403) {
+    if (caught instanceof ApiError && caught.code === "PARTICIPANT_NOT_AUTHORIZED") {
       return "This Proof is not available.";
     }
     const mapped = toUserFacingError(caught);
@@ -245,10 +276,11 @@ export function App() {
     if (route.name === "account") {
       setLoading(true);
       setError(null);
-      void Promise.all([api.listInvitations(), api.listCommerceConnections()])
-        .then(([inbox, listed]) => {
+      void Promise.all([api.listInvitations(), api.listCommerceConnections(), api.listMarketplaces()])
+        .then(([inbox, listed, marketplaces]) => {
           setInvitations(inbox.invitations);
           setConnections(listed.connections);
+          setEbay(pickEbay(marketplaces));
         })
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
@@ -279,12 +311,19 @@ export function App() {
     }
     if (route.name === "stores") {
       setLoading(true);
-      setError(null);
-      void api
-        .listCommerceConnections()
-        .then((result) => setConnections(result.connections))
+      void Promise.all([api.listCommerceConnections(), api.listMarketplaces()])
+        .then(([listed, marketplaces]) => {
+          setConnections(listed.connections);
+          setEbay(pickEbay(marketplaces));
+        })
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
+    }
+    if (route.name === "create") {
+      void api
+        .listMarketplaces()
+        .then((marketplaces) => setEbay(pickEbay(marketplaces)))
+        .catch(() => undefined);
     }
   }, [api, route, session]);
 
@@ -373,6 +412,8 @@ export function App() {
         <CreateProofScreen
           busy={busy}
           error={error}
+          development={import.meta.env.DEV}
+          ebayConnected={ebay?.connection?.status === "ACTIVE"}
           onCancel={() => go("/")}
           onScan={() => go("/station")}
           onImportPurchase={() => {
@@ -380,6 +421,28 @@ export function App() {
             setError(null);
             return api
               .importTransaction({ adapterKey: "demo-marketplace", createProof: false })
+              .catch((caught) => {
+                setError(handleError(caught));
+                throw caught;
+              })
+              .finally(() => setBusy(false));
+          }}
+          onListEbayOrders={() => {
+            setBusy(true);
+            setError(null);
+            return api
+              .listEbaySellerOrders()
+              .catch((caught) => {
+                setError(handleError(caught));
+                throw caught;
+              })
+              .finally(() => setBusy(false));
+          }}
+          onImportEbayOrder={(orderId) => {
+            setBusy(true);
+            setError(null);
+            return api
+              .importEbaySellerOrder(orderId, { createProof: false })
               .catch((caught) => {
                 setError(handleError(caught));
                 throw caught;
@@ -508,6 +571,31 @@ export function App() {
           error={error}
           busy={busy}
           development={import.meta.env.DEV}
+          ebay={ebay}
+          onConnectEbay={() => {
+            setBusy(true);
+            setError(null);
+            void api
+              .startEbayConnect()
+              .then((result) => {
+                window.location.assign(result.authorizationUrl);
+              })
+              .catch((caught) => {
+                setError(handleError(caught));
+                setBusy(false);
+              });
+          }}
+          onDisconnectEbay={() => {
+            setBusy(true);
+            setError(null);
+            void api
+              .disconnectEbay()
+              .then(() => api.listMarketplaces())
+              .then((listed) => setEbay(pickEbay(listed)))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onImportSales={() => go("/new")}
           onConnectDemo={() => {
             setBusy(true);
             setError(null);

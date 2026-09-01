@@ -53,6 +53,13 @@ export interface ImportedTransaction {
     sourceRecordId?: string | null;
     importedAt: string;
   };
+  providerIdentifiers?: {
+    orderId?: string | null;
+    legacyOrderId?: string | null;
+    lineItemIds?: string[];
+    itemIds?: string[];
+    environment?: string | null;
+  } | null;
 }
 
 export interface ParsedImportedTransaction {
@@ -74,6 +81,13 @@ export interface ParsedImportedTransaction {
     sourceRecordId: string | null;
     importedAt: string;
   };
+  providerIdentifiers: {
+    orderId: string | null;
+    legacyOrderId: string | null;
+    lineItemIds: string[];
+    itemIds: string[];
+    environment: string | null;
+  } | null;
 }
 
 const PROVIDER_MAX = 80;
@@ -149,6 +163,7 @@ export function parseImportedTransaction(input: unknown): ParsedImportedTransact
       sourceRecordId,
       importedAt,
     },
+    providerIdentifiers: parseProviderIdentifiers(record.providerIdentifiers),
   };
 }
 
@@ -173,6 +188,7 @@ export function importedPayloadFingerprint(parsed: ParsedImportedTransaction): s
         source: parsed.provenance.source,
         sourceRecordId: parsed.provenance.sourceRecordId,
       },
+      ...(parsed.providerIdentifiers ? { providerIdentifiers: parsed.providerIdentifiers } : {}),
     }),
   );
 }
@@ -231,6 +247,49 @@ function parseImportedItems(value: unknown): TransactionItemWrite[] {
       metadata: {},
     };
   });
+}
+
+function parseProviderIdentifiers(
+  value: unknown,
+): ParsedImportedTransaction["providerIdentifiers"] {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new DomainError("INVALID_IMPORTED_TRANSACTION", "providerIdentifiers must be an object", 400);
+  }
+  const record = value as Record<string, unknown>;
+  const lineItemIds = parseIdList(record.lineItemIds, "providerIdentifiers.lineItemIds");
+  const itemIds = parseIdList(record.itemIds, "providerIdentifiers.itemIds");
+  const identifiers = {
+    orderId: normalizeOptionalText(record.orderId, "providerIdentifiers.orderId"),
+    legacyOrderId: normalizeOptionalText(record.legacyOrderId, "providerIdentifiers.legacyOrderId"),
+    lineItemIds,
+    itemIds,
+    environment: normalizeOptionalText(record.environment, "providerIdentifiers.environment"),
+  };
+  if (
+    !identifiers.orderId &&
+    !identifiers.legacyOrderId &&
+    identifiers.lineItemIds.length === 0 &&
+    identifiers.itemIds.length === 0 &&
+    !identifiers.environment
+  ) {
+    return null;
+  }
+  return identifiers;
+}
+
+function parseIdList(value: unknown, field: string): string[] {
+  if (value == null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new DomainError("INVALID_IMPORTED_TRANSACTION", `${field} must be an array`, 400);
+  }
+  return value
+    .map((entry) => normalizeOptionalText(entry, field))
+    .filter((entry): entry is string => Boolean(entry));
 }
 
 function parseBuyer(value: unknown): ImportedBuyer | null {

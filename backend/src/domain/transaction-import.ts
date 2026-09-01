@@ -445,6 +445,7 @@ function buildImportMetadata(
     importedAt: previous?.importedAt || parsed.provenance.importedAt || nowIso,
     payloadSha256: ctx.fingerprint,
     buyer: parsed.buyer,
+    ...(parsed.providerIdentifiers ? { providerIdentifiers: parsed.providerIdentifiers } : {}),
   };
 }
 

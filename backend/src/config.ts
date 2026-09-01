@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import type { EbayEnvironment } from "./integrations/ebay/constants.js";
+
 export type AuthMode = "dev" | "cognito";
 
 export interface ReleaseIdentity {
@@ -29,6 +31,17 @@ export interface AppConfig {
   webOrigins: string[];
   credentialStore: "memory" | "env" | "secrets-manager";
   release: ReleaseIdentity;
+  ebay: EbayConfig;
+}
+
+export interface EbayConfig {
+  enabled: boolean;
+  environment: EbayEnvironment;
+  clientId: string | null;
+  ruName: string | null;
+  marketplaceId: string;
+  appCredentialReference: string | null;
+  deletionVerificationToken: string | null;
 }
 
 export function loadEnvFile(cwd = process.cwd()): void {
@@ -91,7 +104,50 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webOrigins: parseWebOrigins(env),
     credentialStore: parseCredentialStoreMode(env),
     release: parseReleaseIdentity(env),
+    ebay: parseEbayConfig(env),
   };
+}
+
+export function parseEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig {
+  const environment = parseEbayEnvironment(env);
+  const clientId =
+    env.PACKPROOF_EBAY_CLIENT_ID?.trim() || env.EBAY_CLIENT_ID?.trim() || null;
+  const ruName = env.PACKPROOF_EBAY_RUNAME?.trim() || env.EBAY_RUNAME?.trim() || null;
+  const marketplaceId =
+    env.PACKPROOF_EBAY_MARKETPLACE_ID?.trim() || env.EBAY_MARKETPLACE_ID?.trim() || "EBAY_US";
+  const explicitReference = env.PACKPROOF_EBAY_APP_CREDENTIAL_REFERENCE?.trim() || null;
+  const secretName = env.PACKPROOF_EBAY_CLIENT_SECRET
+    ? "PACKPROOF_EBAY_CLIENT_SECRET"
+    : env.EBAY_CLIENT_SECRET
+      ? "EBAY_CLIENT_SECRET"
+      : null;
+  return {
+    enabled: parseBooleanFlag(env.PACKPROOF_EBAY_INTEGRATION_ENABLED ?? env.EBAY_INTEGRATION_ENABLED),
+    environment,
+    clientId,
+    ruName,
+    marketplaceId,
+    appCredentialReference:
+      explicitReference ?? (secretName ? `env:${secretName}` : null),
+    deletionVerificationToken:
+      env.PACKPROOF_EBAY_DELETION_VERIFICATION_TOKEN?.trim() ||
+      env.EBAY_DELETION_VERIFICATION_TOKEN?.trim() ||
+      null,
+  };
+}
+
+export function parseEbayEnvironment(env: NodeJS.ProcessEnv = process.env): EbayEnvironment {
+  const raw = (env.PACKPROOF_EBAY_ENVIRONMENT ?? env.EBAY_ENVIRONMENT ?? "sandbox").trim().toLowerCase();
+  if (raw === "sandbox" || raw === "production") {
+    return raw;
+  }
+  throw new Error(
+    `PACKPROOF_EBAY_ENVIRONMENT must be "sandbox" or "production" (received ${JSON.stringify(raw)})`,
+  );
+}
+
+function parseBooleanFlag(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === "true" || value?.trim() === "1";
 }
 
 export function parseReleaseIdentity(env: NodeJS.ProcessEnv = process.env): ReleaseIdentity {

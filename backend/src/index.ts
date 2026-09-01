@@ -8,6 +8,7 @@ import { openDatabase } from "./db/open.js";
 import { createObjectStore } from "./s3/create-object-store.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { createCredentialStore } from "./integrations/create-credential-store.js";
+import { createEbayRuntime } from "./integrations/ebay/runtime.js";
 
 loadEnvFile(path.resolve(process.cwd()));
 
@@ -26,6 +27,10 @@ const app = createApp({
   integrations: createDefaultIntegrationRegistry(systemClock),
   credentialStore: createCredentialStore(config),
   releaseIdentity: config.release,
+  ebay: createEbayRuntime(config, {
+    publicBaseUrl: config.publicBaseUrl,
+    webOrigins: config.webOrigins,
+  }),
 });
 
 const server = app.listen(config.port, "0.0.0.0", () => {

@@ -103,6 +103,19 @@ describe("PackProof web reference client", () => {
         if (url.endsWith("/auth/dev/login")) {
           return json({ userId: "user_seller", token: "token-seller" });
         }
+        if (url.split("?")[0].endsWith("/me/marketplaces")) {
+          return json({
+            marketplaces: [
+              {
+                provider: "ebay",
+                adapterKey: "ebay",
+                enabled: false,
+                environment: "sandbox",
+                connection: null,
+              },
+            ],
+          });
+        }
         if (url.endsWith("/me") && !url.includes("/proofs")) {
           return json({
             userId: "user_seller",
@@ -376,6 +389,179 @@ describe("PackProof web reference client", () => {
     expect(String(importCall?.[1] && "body" in importCall[1] ? importCall[1].body : "")).not.toContain(
       "ebay_order_id",
     );
+  });
+
+  it("lists connected eBay sales instead of the demo marketplace import", async () => {
+    signInSession();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const path = url.split("?")[0];
+        if (path.endsWith("/me/marketplaces")) {
+          return json({
+            marketplaces: [
+              {
+                provider: "ebay",
+                adapterKey: "ebay",
+                enabled: true,
+                environment: "sandbox",
+                connection: {
+                  connectionId: "icn_ebay",
+                  status: "ACTIVE",
+                  displayName: "collin_seller",
+                  connectedAt: "2026-09-01T12:00:00.000Z",
+                  updatedAt: "2026-09-01T12:05:00.000Z",
+                },
+              },
+            ],
+          });
+        }
+        if (path.endsWith("/me/marketplaces/ebay/orders")) {
+          return json({
+            role: "SELLING",
+            connection: { connectionId: "icn_ebay", status: "ACTIVE", displayName: "collin_seller" },
+            orders: [
+              {
+                externalOrderId: "12-00007-84931",
+                title: "Nikon F3 Camera",
+                soldAt: "2026-08-31T18:12:00.000Z",
+                total: 349.99,
+                currency: "USD",
+                fulfillmentStatus: "NOT_STARTED",
+                fulfillmentLabel: "Ready to ship",
+                buyerUsername: "buyer_one",
+                quantity: 1,
+                proofId: null,
+                transactionId: null,
+              },
+            ],
+            disclosure:
+              "Transaction information was supplied by eBay. PackProof records the supplied information but does not independently verify the listing contents or transaction claims.",
+          });
+        }
+        if (path.endsWith("/me/marketplaces/ebay/orders/12-00007-84931/import") && init?.method === "POST") {
+          return json({
+            created: true,
+            identity: {
+              adapterKey: "ebay",
+              tenantKey: "marketplace:ebay:sandbox",
+              externalTransactionId: "12-00007-84931",
+              source: "MARKETPLACE_API",
+            },
+            proof: null,
+            transaction: {
+              ...canonicalProof.transaction,
+              transactionId: "txn_ebay",
+              proofId: null,
+              proofStatus: null,
+              itemTitle: "Nikon F3 Camera",
+              externalReference: "12-00007-84931",
+              provenance: {
+                source: "MARKETPLACE_API",
+                adapterKey: "ebay",
+                provider: "ebay",
+                tenantKey: "marketplace:ebay:sandbox",
+                externalTransactionId: "12-00007-84931",
+                sourceRecordId: "12-00007-84931",
+                importedAt: "2026-09-01T12:06:00.000Z",
+                payloadSha256: "aa".repeat(32),
+                buyer: { externalId: "buyer_one", displayName: "buyer_one", email: null },
+              },
+            },
+          });
+        }
+        if (path.endsWith("/transactions/txn_ebay/proof")) {
+          return json({
+            ...canonicalProof,
+            transactionId: "txn_ebay",
+            transaction: {
+              ...canonicalProof.transaction,
+              transactionId: "txn_ebay",
+              itemTitle: "Nikon F3 Camera",
+              externalReference: "12-00007-84931",
+            },
+          });
+        }
+        if (url.includes("/shipment-integrity")) {
+          return json({
+            schema: "packproof.shipment.integrity/v1",
+            status: "CORE_NOT_FINALIZED",
+            proofId: canonicalProof.proofId,
+            transactionId: "txn_ebay",
+            shippingId: null,
+            coreManifestSha256: null,
+            shipmentSupplementSha256: null,
+            eventCount: 0,
+            firstEventSha256: null,
+            latestEventSha256: null,
+            supplement: null,
+            verification: {
+              coreManifestValid: false,
+              eventContentHashesValid: true,
+              eventChainValid: true,
+              supplementValid: false,
+              linkedToFinalizedProof: false,
+              valid: false,
+            },
+          });
+        }
+        if (url.includes(`/proofs/${canonicalProof.proofId}`) && !url.includes("/attestations")) {
+          return json({
+            ...canonicalProof,
+            transactionId: "txn_ebay",
+            transaction: {
+              ...canonicalProof.transaction,
+              transactionId: "txn_ebay",
+              itemTitle: "Nikon F3 Camera",
+              externalReference: "12-00007-84931",
+            },
+          });
+        }
+        if (url.endsWith("/me/proofs")) {
+          return json({ proofs: [summary] });
+        }
+        if (url.endsWith("/invitations")) {
+          return json({ invitations: [] });
+        }
+        if (url.includes("/integration-connections")) {
+          return json({ connections: [] });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Create" }));
+    await user.click(await screen.findByRole("button", { name: "Import purchase" }));
+    expect(await screen.findByRole("heading", { name: "Your eBay sales" })).toBeInTheDocument();
+    expect(screen.getByText("Nikon F3 Camera")).toBeInTheDocument();
+    expect(screen.getByText(/Ready to ship/)).toBeInTheDocument();
+    expect(screen.queryByText("Vintage film camera")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alex Buyer")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Nikon F3 Camera/ }));
+    expect(await screen.findByRole("heading", { name: "Review imported purchase" })).toBeInTheDocument();
+    expect(screen.getByText("Nikon F3 Camera")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create PackProof" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Chronology" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("heading", { name: "Nikon F3 Camera" })).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/integrations/transactions/import"))).toBe(
+      false,
+    );
+    expect(
+      vi.mocked(fetch).mock.calls.some((call) =>
+        String(call[0]).includes("/me/marketplaces/ebay/orders/12-00007-84931/import"),
+      ),
+    ).toBe(true);
+  });
+
+  it("shows an eBay connection error after OAuth return", async () => {
+    signInSession();
+    window.history.replaceState(null, "", "/stores?ebay=error&code=EBAY_OAUTH_FAILED");
+    render(<App />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn’t connect eBay/i);
   });
 
   it("renders server shipment integrity on a finalized Proof", async () => {
@@ -715,6 +901,19 @@ describe("PackProof web reference client", () => {
           connected = true;
           return json({ connection: demoConnection }, 201);
         }
+        if (url.split("?")[0].endsWith("/me/marketplaces")) {
+          return json({
+            marketplaces: [
+              {
+                provider: "ebay",
+                adapterKey: "ebay",
+                enabled: true,
+                environment: "sandbox",
+                connection: null,
+              },
+            ],
+          });
+        }
         if (url.includes("/me/integration-connections")) {
           return json({ connections: connected ? [{ ...demoConnection, readyOrderCount: 6 }] : [] });
         }
@@ -745,8 +944,9 @@ describe("PackProof web reference client", () => {
     render(<App />);
     await user.click(await screen.findByRole("link", { name: "Stores" }));
     expect(await screen.findByRole("heading", { name: "Connected Stores" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Connect eBay" })).toBeInTheDocument();
     expect(screen.queryByText(/Connect Shopify/i)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Connect Demo Storefront" }));
+    await user.click(await screen.findByRole("button", { name: "Connect Demo Storefront" }));
     expect(await screen.findByText("Demo Store")).toBeInTheDocument();
     expect(screen.getByText(/6 orders ready/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Sync now" }));

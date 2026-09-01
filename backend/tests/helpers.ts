@@ -31,6 +31,7 @@ export async function createHarness(
     publicBaseUrl?: string;
     objectStore?: ObjectStore;
     integrations?: IntegrationAdapterRegistry;
+    ebay?: import("../src/domain/ebay-marketplace.js").EbayRuntime;
   } = {},
 ): Promise<TestHarness> {
   const resolvedClock = clock ?? systemClock;
@@ -55,6 +56,7 @@ export async function createHarness(
     devAuth: true,
     credentialStore,
     integrations: options.integrations,
+    ebay: options.ebay,
   });
 
   return {
