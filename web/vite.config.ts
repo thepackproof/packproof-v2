@@ -1,6 +1,12 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { defineConfig } from "vite";
+import { fileURLToPath } from "node:url";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { legalDocuments } from "./src/legal/documents";
+import { renderLegalHtml } from "./src/legal/render-html";
+
+const root = path.dirname(fileURLToPath(import.meta.url));
 
 const api = {
   target: "http://127.0.0.1:3000",
@@ -11,12 +17,28 @@ const api = {
   },
 };
 
+function emitLegalPages(): Plugin {
+  return {
+    name: "packproof-legal-pages",
+    closeBundle() {
+      const css = readFileSync(path.join(root, "src/legal/legal.css"), "utf8");
+      const outDir = path.join(root, "dist");
+      for (const document of legalDocuments) {
+        const dir = path.join(outDir, "new", document.kind);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(path.join(dir, "index.html"), renderLegalHtml(document, css));
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), emitLegalPages()],
+  appType: "spa",
   resolve: {
     alias: {
-      "@packproof/station": path.resolve(__dirname, "../mobile/src/packing-station"),
-      "@packproof/copy": path.resolve(__dirname, "../mobile/src/copy"),
+      "@packproof/station": path.resolve(root, "../mobile/src/packing-station"),
+      "@packproof/copy": path.resolve(root, "../mobile/src/copy"),
     },
   },
   server: {

@@ -84,8 +84,10 @@ if (-not (Test-Path (Join-Path $Dist "index.html"))) {
 }
 
 Write-Host "Uploading $Dist to s3://$($Web.WebBucketName)"
-Invoke-Aws s3 sync $Dist "s3://$($Web.WebBucketName)/" --region $Region --delete --cache-control "public,max-age=31536000,immutable" --exclude "index.html"
+Invoke-Aws s3 sync $Dist "s3://$($Web.WebBucketName)/" --region $Region --delete --cache-control "public,max-age=31536000,immutable" --exclude "index.html" --exclude "new/privacy/index.html" --exclude "new/terms/index.html"
 Invoke-Aws s3 cp (Join-Path $Dist "index.html") "s3://$($Web.WebBucketName)/index.html" --region $Region --cache-control "no-cache,no-store,must-revalidate" --content-type "text/html"
+Invoke-Aws s3 cp (Join-Path $Dist "new\privacy\index.html") "s3://$($Web.WebBucketName)/new/privacy/index.html" --region $Region --cache-control "no-cache,no-store,must-revalidate" --content-type "text/html"
+Invoke-Aws s3 cp (Join-Path $Dist "new\terms\index.html") "s3://$($Web.WebBucketName)/new/terms/index.html" --region $Region --cache-control "no-cache,no-store,must-revalidate" --content-type "text/html"
 
 Write-Host "Invalidating CloudFront $($Web.DistributionId)"
 Invoke-Aws cloudfront create-invalidation --distribution-id $Web.DistributionId --paths "/*" --region $Region | Out-Null

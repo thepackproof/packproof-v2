@@ -98,7 +98,7 @@ That command:
 
 Staging web URL: `https://dvpmnwc27i8tw.cloudfront.net`
 
-SPA routes such as `/proofs/:id` are served by CloudFront error fallback to `index.html`. The API stays on `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`. The API image must include the CORS middleware; setting `PACKPROOF_WEB_ORIGINS` on an older image has no effect.
+Public legal pages (no sign-in): `/new/privacy` and `/new/terms`. The production build emits static HTML at those paths so CloudFront and URL checkers receive the policy text without executing JavaScript. Other SPA routes such as `/proofs/:id` are served by CloudFront error fallback to `index.html`. The API stays on `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`. The API image must include the CORS middleware; setting `PACKPROOF_WEB_ORIGINS` on an older image has no effect.
 
 Do not embed Cognito secrets, database credentials, or S3 keys. The web bundle is public.
 

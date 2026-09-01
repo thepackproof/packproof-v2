@@ -29,6 +29,26 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
+  LegalRouteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: packproof-v2-staging-web-legal-routes
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Serve static Privacy and Terms HTML for unauthenticated eBay / crawler loads
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          if (uri === '/new/privacy' || uri === '/new/privacy/') {
+            request.uri = '/new/privacy/index.html';
+          } else if (uri === '/new/terms' || uri === '/new/terms/') {
+            request.uri = '/new/terms/index.html';
+          }
+          return request;
+        }
+
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -55,6 +75,9 @@ Resources:
             - HEAD
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt LegalRouteFunction.FunctionARN
         CustomErrorResponses:
           - ErrorCode: 403
             ResponsePagePath: /index.html

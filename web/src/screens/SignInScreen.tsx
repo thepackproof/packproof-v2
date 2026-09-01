@@ -4,7 +4,10 @@ import { ApiError } from "../api/types";
 import { cognitoSignIn, defaultCognitoConfig, formatCognitoError } from "../auth/cognito";
 import { defaultApiBaseUrl, defaultAuthMode, type AuthMode, type WebSession } from "../auth/session";
 
-export function SignInScreen(props: { onSignedIn: (session: WebSession) => void }) {
+export function SignInScreen(props: {
+  onSignedIn: (session: WebSession) => void;
+  onGo: (path: string) => void;
+}) {
   const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode());
   const [apiBaseUrl, setApiBaseUrl] = useState(defaultApiBaseUrl());
   const [subject, setSubject] = useState("seller-1");
@@ -132,6 +135,26 @@ export function SignInScreen(props: { onSignedIn: (session: WebSession) => void 
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
+      <nav className="auth-legal-links" aria-label="Legal">
+        <a
+          href="/new/privacy"
+          onClick={(event) => {
+            event.preventDefault();
+            props.onGo("/new/privacy");
+          }}
+        >
+          Privacy Policy
+        </a>
+        <a
+          href="/new/terms"
+          onClick={(event) => {
+            event.preventDefault();
+            props.onGo("/new/terms");
+          }}
+        >
+          Terms of Service
+        </a>
+      </nav>
     </main>
   );
 }

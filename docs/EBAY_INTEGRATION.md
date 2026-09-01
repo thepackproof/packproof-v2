@@ -94,6 +94,15 @@ Missing eBay fields are stored as null / omitted. PackProof does not invent buye
 
 `demo-marketplace` remains a reference adapter for tests and `__DEV__`. It is not the production Import purchase path. When eBay is enabled and not connected, Create shows Connect eBay.
 
+## Public legal URLs
+
+eBay’s developer portal needs publicly reachable pages. After the web stack is deployed, use:
+
+- Privacy Policy: `https://dvpmnwc27i8tw.cloudfront.net/new/privacy`
+- Terms of Service: `https://dvpmnwc27i8tw.cloudfront.net/new/terms`
+
+These routes do not require a PackProof login.
+
 ## Manual live Sandbox checklist
 
 Do this only after Client ID, Cert ID, Dev ID, and RuName are in **server** env (never in Git):

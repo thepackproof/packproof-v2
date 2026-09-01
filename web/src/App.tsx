@@ -25,6 +25,7 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { PackingStationScreen } from "./screens/PackingStationScreen";
 import { ProofsScreen } from "./screens/ProofsScreen";
 import { ProofScreen } from "./screens/ProofScreen";
+import { LegalScreen } from "./screens/LegalScreen";
 import { SignInScreen } from "./screens/SignInScreen";
 
 type Route =
@@ -37,11 +38,19 @@ type Route =
   | { name: "fulfillment" }
   | { name: "fulfillment-detail"; proofId: string }
   | { name: "station"; reference?: string }
-  | { name: "stores" };
+  | { name: "stores" }
+  | { name: "privacy" }
+  | { name: "terms" };
 
 function parseHref(href: string): Route {
   const url = new URL(href, "http://packproof.local");
-  const pathname = url.pathname;
+  const pathname = url.pathname.replace(/\/$/, "") || "/";
+  if (pathname === "/new/privacy") {
+    return { name: "privacy" };
+  }
+  if (pathname === "/new/terms") {
+    return { name: "terms" };
+  }
   if (pathname === "/new") {
     return { name: "create" };
   }
@@ -88,7 +97,11 @@ function pickEbay(listed: { marketplaces: EbayMarketplaceView[] }): EbayMarketpl
 
 function ebayReturnError(href: string): string | null {
   const url = new URL(href, "http://packproof.local");
-  if (url.searchParams.get("ebay") !== "error") {
+  const status = url.searchParams.get("ebay");
+  if (status === "declined") {
+    return "eBay authorization was declined.";
+  }
+  if (status !== "error") {
     return null;
   }
   return formatUserFacingError({
@@ -105,6 +118,10 @@ function stripEbayOAuthQuery() {
   url.searchParams.delete("ebay");
   url.searchParams.delete("code");
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}` || "/");
+}
+
+function isLegalRoute(route: Route): route is { name: "privacy" } | { name: "terms" } {
+  return route.name === "privacy" || route.name === "terms";
 }
 
 function needsWorkspace(name: Route["name"]): boolean {
@@ -244,7 +261,9 @@ export function App() {
         setProof(null);
         setShipmentIntegrity(null);
       }
-      setLoading(true);
+      if (needsWorkspace(next.name)) {
+        setLoading(true);
+      }
       setRoute(next);
     };
     window.addEventListener("popstate", onPop);
@@ -327,6 +346,10 @@ export function App() {
     }
   }, [api, route, session]);
 
+  if (isLegalRoute(route)) {
+    return <LegalScreen kind={route.name} onGo={go} />;
+  }
+
   if (!session) {
     return (
       <div className="app-shell">
@@ -337,6 +360,7 @@ export function App() {
           </span>
         </header>
         <SignInScreen
+          onGo={go}
           onSignedIn={(next) => {
             tokenRef.current = next.token;
             setSession(next);

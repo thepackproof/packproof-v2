@@ -226,6 +226,52 @@ describe("PackProof web reference client", () => {
     sessionStorage.clear();
   });
 
+  it("renders the privacy policy without a PackProof session", async () => {
+    window.history.replaceState(null, "", "/new/privacy");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Privacy Policy" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/does not sell personal data/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Last updated September 1, 2026/)).toBeInTheDocument();
+  });
+
+  it("renders terms of service from a direct URL without signing in", async () => {
+    window.history.replaceState(null, "", "/new/terms");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Terms of Service" })).toBeInTheDocument();
+    expect(screen.getAllByText(/not an adjudicator/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
+  });
+
+  it("links privacy, terms, and PackProof from the unauthenticated legal layout", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/new/privacy");
+    render(<App />);
+    await screen.findByRole("heading", { name: "Privacy Policy" });
+    await user.click(screen.getByRole("link", { name: "Terms of Service" }));
+    expect(await screen.findByRole("heading", { name: "Terms of Service" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/new/terms");
+    await user.click(screen.getByRole("link", { name: "Privacy Policy" }));
+    expect(await screen.findByRole("heading", { name: "Privacy Policy" })).toBeInTheDocument();
+    await user.click(screen.getAllByRole("link", { name: "Back to PackProof" })[0]);
+    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("shows privacy and terms links on the sign-in screen", async () => {
+    render(<App />);
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/new/privacy");
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/new/terms");
+  });
+
+  it("does not treat /new/privacy as the create flow for a signed-in user", async () => {
+    signInSession();
+    window.history.replaceState(null, "", "/new/privacy");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Privacy Policy" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).not.toBeInTheDocument();
+  });
+
   it("lets an authenticated user load Proof discovery summaries", async () => {
     signInSession();
     render(<App />);
