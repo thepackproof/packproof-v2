@@ -1,3 +1,4 @@
+import { proofStatusLabel } from "@packproof/copy/status";
 import type { ProofInvitationState, ProofStatus } from "./api/types";
 
 export function shortId(id: string): string {
@@ -35,20 +36,7 @@ export function lifecycleLabel(status: ProofStatus | string): string {
 }
 
 export function statusLabel(status: ProofStatus | string): string {
-  switch (status) {
-    case "OPEN":
-      return "Open";
-    case "AWAITING_PARTICIPANT":
-      return "Awaiting participant";
-    case "READY_FOR_EVIDENCE":
-      return "Ready for evidence";
-    case "EVIDENCE_COMMITTED":
-      return "Evidence committed";
-    case "FINALIZED":
-      return "Finalized";
-    default:
-      return status;
-  }
+  return proofStatusLabel(status);
 }
 
 export function eventLabel(eventType: string): string {

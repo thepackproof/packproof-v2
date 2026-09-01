@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { MARKETPLACE_DISCLOSURE } from "@packproof/copy/errors";
+import { displayName, formatDate, moneyLabel, quantityLabel } from "@packproof/copy/format";
+import { providerDisplay, sourceLabel } from "@packproof/copy/status";
 import type { TransactionImportView, TransactionView, TransactionWriteInput } from "../api/types";
-import { displayValue } from "../format";
 
 const EMPTY = {
   externalReference: "",
@@ -22,6 +24,7 @@ export function CreateProofScreen(props: {
   busy: boolean;
   error: string | null;
   onCancel: () => void;
+  onScan: () => void;
   onCreate: (input: TransactionWriteInput) => void;
   onImportPurchase: () => Promise<TransactionImportView>;
   onConfirmImport: (transactionId: string) => void;
@@ -35,61 +38,83 @@ export function CreateProofScreen(props: {
 
   return (
     <main className="page">
-      <h1>Create Proof</h1>
-      <p className="lede">
-        Creates a transaction, then asks the server for the one Proof bound to it. Display fields
-        are external metadata. They are not independently verified facts.
-      </p>
+      <h1>Create a PackProof</h1>
+      <p className="lede">Start from a scan, an imported purchase, or details you enter yourself.</p>
 
       {step === "choose" ? (
         <section className="section stack">
-          <p>Import a reference marketplace purchase, or enter the transaction yourself.</p>
           {props.error ? (
             <div className="banner banner-error" role="alert">
               {props.error}
             </div>
           ) : null}
-          <div className="btn-row">
-            <button
-              className="btn"
-              type="button"
-              disabled={props.busy}
-              onClick={() => {
-                void props
-                  .onImportPurchase()
-                  .then((result) => {
-                    setImported(result);
-                    setStep("review");
-                  })
-                  .catch(() => {
-                    // Parent renders the API error.
-                  });
-              }}
-            >
-              {props.busy ? "Importing…" : "Import purchase"}
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={props.busy}
-              onClick={() => setStep("manual")}
-            >
-              Enter manually
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={props.onCancel}>
-              Cancel
-            </button>
-          </div>
+          <button
+            className="option-card"
+            type="button"
+            disabled={props.busy}
+            aria-label="Scan order or label"
+            onClick={props.onScan}
+          >
+            <span className="option-icon" aria-hidden="true">
+              ⌗
+            </span>
+            <span className="option-copy">
+              <strong className="card-title">Scan order or label</strong>
+              <span className="meta">Fastest · opens Packing Station</span>
+            </span>
+          </button>
+          <button
+            className="option-card"
+            type="button"
+            disabled={props.busy}
+            aria-label="Import purchase"
+            onClick={() => {
+              void props
+                .onImportPurchase()
+                .then((result) => {
+                  setImported(result);
+                  setStep("review");
+                })
+                .catch(() => {
+                  // Parent renders the API error.
+                });
+            }}
+          >
+            <span className="option-icon" aria-hidden="true">
+              ⌂
+            </span>
+            <span className="option-copy">
+              <strong className="card-title">Import purchase</strong>
+              <span className="meta">
+                {props.busy ? "Importing…" : "From a connected marketplace"}
+              </span>
+            </span>
+          </button>
+          <button
+            className="option-card"
+            type="button"
+            disabled={props.busy}
+            aria-label="Enter manually"
+            onClick={() => setStep("manual")}
+          >
+            <span className="option-icon" aria-hidden="true">
+              ▤
+            </span>
+            <span className="option-copy">
+              <strong className="card-title">Enter manually</strong>
+              <span className="meta">For direct sales</span>
+            </span>
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={props.onCancel}>
+            Cancel
+          </button>
         </section>
       ) : null}
 
       {step === "review" && imported ? (
         <section className="section stack">
           <h2>Review imported purchase</h2>
-          <p className="note">
-            These details came from the server after the reference import. Confirm them to create
-            the Proof. PackProof recorded them; it did not independently verify the order.
-          </p>
+          <p className="note">{MARKETPLACE_DISCLOSURE}</p>
           <ImportedFacts transaction={imported.transaction} identity={imported.identity} />
           {props.error ? (
             <div className="banner banner-error" role="alert">
@@ -103,7 +128,7 @@ export function CreateProofScreen(props: {
               disabled={props.busy}
               onClick={() => props.onConfirmImport(imported.transaction.transactionId)}
             >
-              {props.busy ? "Creating…" : "Use imported purchase"}
+              {props.busy ? "Creating…" : "Create PackProof"}
             </button>
             <button
               className="btn btn-secondary"
@@ -147,14 +172,14 @@ export function CreateProofScreen(props: {
               <input value={form.itemTitle} onChange={(event) => set("itemTitle", event.target.value)} />
             </label>
             <label className="field">
-              <span>External reference</span>
+              <span>Order reference</span>
               <input
                 value={form.externalReference}
                 onChange={(event) => set("externalReference", event.target.value)}
               />
             </label>
             <label className="field">
-              <span>Transaction date</span>
+              <span>Purchase date</span>
               <input
                 value={form.transactionDate}
                 onChange={(event) => set("transactionDate", event.target.value)}
@@ -170,7 +195,7 @@ export function CreateProofScreen(props: {
               <input value={form.quantity} onChange={(event) => set("quantity", event.target.value)} />
             </label>
             <label className="field">
-              <span>Transaction value</span>
+              <span>Amount</span>
               <input
                 value={form.transactionValue}
                 onChange={(event) => set("transactionValue", event.target.value)}
@@ -204,7 +229,7 @@ export function CreateProofScreen(props: {
           ) : null}
           <div className="btn-row">
             <button className="btn" type="submit" disabled={props.busy}>
-              {props.busy ? "Creating…" : "Create Proof"}
+              {props.busy ? "Creating…" : "Create PackProof"}
             </button>
             <button
               className="btn btn-secondary"
@@ -233,34 +258,44 @@ function ImportedFacts(props: {
   const shipping = props.transaction.shipping;
   const provenance = props.transaction.provenance;
   const buyer = provenance?.buyer;
-  const rows: Array<[string, unknown]> = [
-    ["Item", props.transaction.itemTitle],
-    ["Description", props.transaction.itemDescription],
-    ["Transaction/order reference", props.transaction.externalReference],
-    ["Purchase date", props.transaction.transactionDate],
-    ["Quantity", props.transaction.quantity],
-    [
-      "Value",
-      props.transaction.transactionValue == null
-        ? null
-        : `${props.transaction.transactionValue} ${props.transaction.currency ?? ""}`.trim(),
-    ],
-    ["Buyer", buyer?.displayName ?? buyer?.email ?? buyer?.externalId],
-    ["Carrier", shipping?.carrier],
-    ["Shipping service", shipping?.service],
-    ["Tracking number", shipping?.trackingNumber],
-    ["Shipment date", shipping?.shipmentDate],
-    ["Source", provenance?.source],
-    ["Provider", provenance?.provider ?? props.identity.adapterKey],
-  ];
+  const source = sourceLabel(provenance?.source ?? props.identity.source, provenance?.provider ?? props.identity.adapterKey);
   return (
-    <dl className="dl">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{displayValue(value)}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="stack">
+      <article className="info-card">
+        <h3 className="card-title">{props.transaction.itemTitle || "Imported purchase"}</h3>
+        {props.transaction.itemDescription ? <p>{props.transaction.itemDescription}</p> : null}
+        <p className="meta">
+          {[quantityLabel(props.transaction.quantity), moneyLabel(props.transaction.transactionValue, props.transaction.currency)]
+            .filter(Boolean)
+            .join(" • ")}
+        </p>
+        {props.transaction.transactionDate ? (
+          <p className="meta">Purchased {formatDate(props.transaction.transactionDate)}</p>
+        ) : null}
+        {props.transaction.externalReference ? (
+          <p className="meta">{props.transaction.externalReference}</p>
+        ) : null}
+      </article>
+      <article className="info-card">
+        <div className="kicker">Buyer</div>
+        <p>
+          {displayName({
+            displayName: buyer?.displayName,
+            email: buyer?.email,
+            fallback: "Not provided",
+          })}
+        </p>
+      </article>
+      <article className="info-card">
+        <div className="kicker">Shipping</div>
+        <p>{[shipping?.carrier, shipping?.service].filter(Boolean).join(" ") || "Not provided"}</p>
+        {shipping?.trackingNumber ? <p className="meta">{shipping.trackingNumber}</p> : null}
+      </article>
+      <p className="meta">{source}</p>
+      <p className="visually-hidden">{provenance?.source ?? props.identity.source}</p>
+      <p className="note">
+        Recorded from {providerDisplay(provenance?.provider ?? props.identity.adapterKey) || "the connected source"}.
+      </p>
+    </div>
   );
 }

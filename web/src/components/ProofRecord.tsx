@@ -1,43 +1,74 @@
+import { CARRIER_DISCLOSURE, SOURCE_DISCLOSURE } from "@packproof/copy/errors";
+import { chronologyCategoryLabel } from "@packproof/copy/chronology";
+import {
+  formatDate,
+  moneyLabel,
+  orderReferenceLabel,
+  quantityLabel,
+  roleLabel,
+  shippingSummary,
+  trackingEnding,
+} from "@packproof/copy/format";
+import { humanProofStatus, integrityState, sourceLabel } from "@packproof/copy/status";
 import type { CanonicalProof, ShipmentIntegrityView } from "../api/types";
 import {
   attestationLabel,
-  chronologyCategoryLabel,
   displayValue,
   externalFieldLabel,
   factLabel,
   formatWhen,
-  lifecycleLabel,
-  statusLabel,
 } from "../format";
 import { CopyableId } from "./CopyableId";
 import { TrustBadge } from "./TrustBadge";
 
 export function ProofHeader(props: { proof: CanonicalProof; role?: string }) {
+  const title = props.proof.transaction.itemTitle?.trim() || "Untitled item";
+  const status = humanProofStatus({
+    proofStatus: props.proof.status,
+    latestShipmentEventType: props.proof.shipmentObservations?.latest?.eventType,
+  });
+  const integrity = integrityState({
+    proofStatus: props.proof.status,
+    committedEvidenceCount: props.proof.evidence.filter((item) => item.validationStatus === "COMMITTED").length,
+  });
+  const shipping = shippingSummary(props.proof.transaction.shipping ?? {});
   return (
     <header className="header-block">
+      <p className="kicker">Proof record</p>
+      <h1>{title}</h1>
       <div className="row">
-        <span className="badge badge-state">{lifecycleLabel(props.proof.status)}</span>
-        <TrustBadge kind="FACT" />
-        {props.role ? <span className="meta">You are the {props.role.toLowerCase()}</span> : null}
-      </div>
-      <h1>Proof record</h1>
-      <p className="lede">
-        A PackProof record of what this system received, hashed, and preserved. It does not decide
-        fraud, ownership, authenticity, or claim outcome.
-      </p>
-      <div className="row meta">
-        <CopyableId value={props.proof.proofId} label="Proof ID" />
-        <span>{statusLabel(props.proof.status)}</span>
-        <span>Created {formatWhen(props.proof.createdAt)}</span>
-        {props.proof.finalizedAt ? (
-          <span>Finalized {formatWhen(props.proof.finalizedAt)}</span>
+        <span
+          className={
+            integrity === "finalized" || integrity === "secured"
+              ? "status-badge status-badge-success"
+              : "status-badge"
+          }
+        >
+          {status}
+        </span>
+        {integrity !== "none" ? (
+          <span className="integrity-mark">
+            {integrity === "finalized" ? "Sealed record" : "Evidence secured"}
+          </span>
         ) : null}
+        {props.role ? <span className="meta">You are the {roleLabel(props.role)}</span> : null}
+      </div>
+      <div className="row meta">
+        <span>
+          {orderReferenceLabel(props.proof.transaction.externalReference) || "No order reference"}
+        </span>
+        <span>
+          {[shipping, trackingEnding(props.proof.transaction.shipping?.trackingNumber)].filter(Boolean).join(" · ") ||
+            "No shipping details"}
+        </span>
+        <span>Created {formatWhen(props.proof.createdAt)}</span>
       </div>
     </header>
   );
 }
 
 export function ProofOverview(props: { proof: CanonicalProof }) {
+  const txn = props.proof.transaction;
   const records = props.proof.external?.records ?? [];
   return (
     <section className="section">
@@ -46,19 +77,25 @@ export function ProofOverview(props: { proof: CanonicalProof }) {
         <TrustBadge kind="EXTERNAL" />
       </div>
       <p className="note">
-        Transaction and shipping details were supplied by a participant or connected source.
-        PackProof recorded them; it did not independently verify the listing, order, or shipment
-        contents.
+        Transaction and shipping details were supplied by a participant or connected source. PackProof
+        recorded them; it did not independently verify the listing, order, or shipment contents.
       </p>
-      {props.proof.transaction.provenance ? (
+      <article className="info-card" style={{ boxShadow: "none", padding: 0, border: 0 }}>
+        <p className="card-title">{txn.itemTitle || "Untitled item"}</p>
+        {txn.itemDescription ? <p>{txn.itemDescription}</p> : null}
+        <p className="meta">
+          {[quantityLabel(txn.quantity), moneyLabel(txn.transactionValue, txn.currency)].filter(Boolean).join(" • ")}
+        </p>
+        {txn.transactionDate ? <p className="meta">{formatDate(txn.transactionDate)}</p> : null}
+      </article>
+      {txn.provenance ? (
         <p className="note">
-          Imported from {props.proof.transaction.provenance.provider} (
-          {props.proof.transaction.provenance.source}). This is provenance, not a verification
-          level.
+          {sourceLabel(txn.provenance.source, txn.provenance.provider)}. This is provenance, not a
+          verification level.
         </p>
       ) : null}
       {records.length === 0 ? (
-        <p className="empty">No external transaction details were supplied.</p>
+        <p className="empty">No purchase details were supplied.</p>
       ) : (
         <dl className="dl">
           {records
@@ -71,35 +108,24 @@ export function ProofOverview(props: { proof: CanonicalProof }) {
             ))}
         </dl>
       )}
-      {props.proof.external?.references?.length ? (
-        <p className="note">
-          Bound identity{" "}
-          <code className="mono">
-            {props.proof.external.references[0].tenantKey} +{" "}
-            {props.proof.external.references[0].externalTransactionId}
-          </code>
-          . This identity mapping is not changed by later edits to the display reference.
-        </p>
-      ) : null}
     </section>
   );
 }
 
-export function ParticipantList(props: { proof: CanonicalProof }) {
+export function ParticipantList(props: { proof: CanonicalProof; currentUserId: string }) {
   return (
     <section className="section">
       <div className="section-head">
-        <h2>Participants</h2>
+        <h2>People</h2>
         <TrustBadge kind="FACT" />
       </div>
       <ul className="card-list">
         {props.proof.participants.map((participant) => (
-          <li key={participant.participantId} className="section" style={{ padding: "0.85rem 1rem" }}>
+          <li key={participant.participantId} className="info-card" style={{ boxShadow: "none" }}>
             <div className="row">
-              <strong>{participant.role.toLowerCase()}</strong>
-              <span className="meta">{participant.invitationState ?? participant.status}</span>
+              <strong>{roleLabel(participant.role)}</strong>
+              {participant.userId === props.currentUserId ? <span className="meta">You</span> : null}
             </div>
-            <CopyableId value={participant.userId} label="user ID" />
             <div className="meta">Joined {formatWhen(participant.joinedAt)}</div>
           </li>
         ))}
@@ -112,10 +138,8 @@ export function ParticipantList(props: { proof: CanonicalProof }) {
               .filter((invitation) => invitation.status === "PENDING")
               .map((invitation) => (
                 <li key={invitation.invitationId}>
-                  {invitation.inviteeUserId
-                    ? "PackProof account invited"
-                    : "Invitation pending"}{" "}
-                  · {formatWhen(invitation.createdAt)}
+                  {invitation.inviteeUserId ? "PackProof account invited" : "Invitation pending"} ·{" "}
+                  {formatWhen(invitation.createdAt)}
                 </li>
               ))}
           </ul>
@@ -134,29 +158,22 @@ export function EvidenceList(props: { proof: CanonicalProof }) {
         <TrustBadge kind="FACT" />
       </div>
       {evidence.length === 0 ? (
-        <p className="empty">
-          No evidence is committed yet. Capture remains on the mobile client. This page shows the
-          digest and timestamps after the server accepts the object.
-        </p>
+        <p className="empty">No evidence is secured yet. Record the item being packed and sealed.</p>
       ) : (
         <div className="stack">
           {evidence.map((item) => (
             <article key={item.evidenceId}>
               <div className="row">
-                <strong>{item.evidenceType.replaceAll("_", " ")}</strong>
-                <span className="badge badge-state">{item.validationStatus.toLowerCase()}</span>
+                <strong>
+                  {item.evidenceType === "FULFILLMENT_CAPTURE" || item.evidenceType === "SELLER_EVIDENCE"
+                    ? "Seller packing evidence"
+                    : item.evidenceType.replaceAll("_", " ")}
+                </strong>
+                <span className="status-badge status-badge-success">
+                  {item.validationStatus === "COMMITTED" ? "Evidence secured" : item.validationStatus.toLowerCase()}
+                </span>
               </div>
               <dl className="dl">
-                <div>
-                  <dt>Submitter</dt>
-                  <dd>
-                    {item.submittedBy ? (
-                      <CopyableId value={item.submittedBy} label="submitter" />
-                    ) : (
-                      "—"
-                    )}
-                  </dd>
-                </div>
                 <div>
                   <dt>Record created</dt>
                   <dd>{formatWhen(item.createdAt)}</dd>
@@ -172,8 +189,8 @@ export function EvidenceList(props: { proof: CanonicalProof }) {
                       <>
                         <div className="digest">{item.digest?.sha256 ?? item.sha256}</div>
                         <p className="note">
-                          SHA-256 committed when this evidence was submitted. PackProof recorded
-                          the digest; it does not judge what the media depicts.
+                          SHA-256 committed when this evidence was submitted. PackProof recorded the
+                          digest; it does not judge what the media depicts.
                         </p>
                       </>
                     ) : (
@@ -210,10 +227,7 @@ export function AttestationList(props: { proof: CanonicalProof }) {
                 <span className="meta">Participant statement</span>
               </div>
               <p>{attestationLabel(attestation.statement)}</p>
-              <div className="meta">
-                Recorded by PackProof on {formatWhen(attestation.createdAt)}
-              </div>
-              <CopyableId value={attestation.attestedBy} label="attested by" />
+              <div className="meta">Recorded by PackProof on {formatWhen(attestation.createdAt)}</div>
             </li>
           ))}
         </ul>
@@ -231,10 +245,7 @@ export function EventTimeline(props: { proof: CanonicalProof }) {
       <div className="section-head">
         <h2>Chronology</h2>
       </div>
-      <p className="note">
-        This timeline is a presentation of recorded events. Category labels name the source of the
-        information. They are not evidence levels or verification strength.
-      </p>
+      <p className="note">{SOURCE_DISCLOSURE}</p>
       {props.proof.status === "FINALIZED" && props.proof.integrity?.manifestSha256 ? (
         <p className="note chronology-frozen-note">
           Core PackProof was frozen at {formatWhen(finalizedAt)}. Later shipment observations are
@@ -290,8 +301,8 @@ export function IntegrityPanel(props: { proof: CanonicalProof }) {
       </div>
       <p className="note">
         These are records PackProof can establish from its own infrastructure: receipt, digest, and
-        chronology. Historical committed evidence is immutable. Shipment observations that arrive
-        after finalization are not part of this core digest.
+        chronology. Historical committed evidence is immutable. Shipment observations that arrive after
+        finalization are not part of this core digest.
       </p>
       <dl className="dl">
         <div>
@@ -346,8 +357,8 @@ export function ShipmentIntegrityPanel(props: { integrity: ShipmentIntegrityView
         <TrustBadge kind="FACT" />
       </div>
       <p className="note">
-        This checks that PackProof’s stored shipment observations still hash to the frozen core
-        record. It does not verify that a carrier’s real-world statement is true.
+        This checks that PackProof’s stored shipment observations still hash to the frozen core record.
+        It does not verify that a carrier’s real-world statement is true.
       </p>
       {failed ? (
         <p className="banner banner-error" role="alert">
@@ -364,15 +375,12 @@ export function ShipmentIntegrityPanel(props: { integrity: ShipmentIntegrityView
             ? "✓ Linked to finalized PackProof"
             : "Not linked to a finalized PackProof"}
         </li>
+        <li>{checks.eventChainValid ? "✓ Shipment event chain valid" : "Shipment event chain invalid"}</li>
         <li>
-          {checks.eventChainValid ? "✓ Shipment event chain valid" : "Shipment event chain invalid"}
-        </li>
-        <li>
-          {checks.supplementValid
-            ? "✓ Shipment record digest valid"
-            : "Shipment record digest invalid"}
+          {checks.supplementValid ? "✓ Shipment record digest valid" : "Shipment record digest invalid"}
         </li>
       </ul>
+      <p className="note">{CARRIER_DISCLOSURE}</p>
       <dl className="dl">
         <div>
           <dt>Shipment record SHA-256</dt>
@@ -380,5 +388,33 @@ export function ShipmentIntegrityPanel(props: { integrity: ShipmentIntegrityView
         </div>
       </dl>
     </section>
+  );
+}
+
+export function TechnicalDetails(props: { proof: CanonicalProof }) {
+  return (
+    <details className="technical-details section">
+      <summary>Technical details</summary>
+      <p className="note">Identifiers and digests for inspection. They are not needed for normal use.</p>
+      <dl className="dl">
+        <div>
+          <dt>Proof ID</dt>
+          <dd>
+            <CopyableId value={props.proof.proofId} label="Proof ID" />
+          </dd>
+        </div>
+        <div>
+          <dt>Transaction ID</dt>
+          <dd>
+            <CopyableId value={props.proof.transactionId} label="transaction ID" />
+          </dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{props.proof.status}</dd>
+        </div>
+      </dl>
+      <IntegrityPanel proof={props.proof} />
+    </details>
   );
 }

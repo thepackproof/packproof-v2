@@ -14,7 +14,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@packproof/copy/*": ["../mobile/src/copy/*"],
+      "@packproof/station/*": ["../mobile/src/packing-station/*"]
+    }
   },
-  "include": ["src", "../mobile/src/packing-station/**/*.ts"]
+  "include": ["src", "../mobile/src/packing-station/**/*.ts", "../mobile/src/copy/**/*.ts"]
 }

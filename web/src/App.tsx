@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
 import { PackProofApi } from "./api/client";
 import { ApiError } from "./api/types";
 import type {
@@ -12,18 +13,25 @@ import type {
   TransactionWriteInput,
 } from "./api/types";
 import { clearSession, loadSession, saveSession, type WebSession } from "./auth/session";
+import { AppNav, type AppRouteName } from "./components/AppNav";
+import { AccountScreen } from "./screens/AccountScreen";
+import { ActivityScreen } from "./screens/ActivityScreen";
 import { ConnectedStoresScreen } from "./screens/ConnectedStoresScreen";
 import { CreateProofScreen } from "./screens/CreateProofScreen";
 import { FulfillmentDetailScreen } from "./screens/FulfillmentDetailScreen";
 import { FulfillmentQueueScreen } from "./screens/FulfillmentQueueScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { PackingStationScreen } from "./screens/PackingStationScreen";
+import { ProofsScreen } from "./screens/ProofsScreen";
 import { ProofScreen } from "./screens/ProofScreen";
 import { SignInScreen } from "./screens/SignInScreen";
 
 type Route =
   | { name: "home" }
+  | { name: "proofs" }
   | { name: "create" }
+  | { name: "activity" }
+  | { name: "account" }
   | { name: "proof"; proofId: string }
   | { name: "fulfillment" }
   | { name: "fulfillment-detail"; proofId: string }
@@ -35,6 +43,15 @@ function parseHref(href: string): Route {
   const pathname = url.pathname;
   if (pathname === "/new") {
     return { name: "create" };
+  }
+  if (pathname === "/proofs") {
+    return { name: "proofs" };
+  }
+  if (pathname === "/activity") {
+    return { name: "activity" };
+  }
+  if (pathname === "/account") {
+    return { name: "account" };
   }
   if (pathname === "/fulfillment") {
     return { name: "fulfillment" };
@@ -62,6 +79,20 @@ function writePath(path: string) {
   if (current !== path) {
     window.history.pushState(null, "", path);
   }
+}
+
+function needsWorkspace(name: Route["name"]): boolean {
+  return (
+    name === "home" ||
+    name === "proofs" ||
+    name === "activity" ||
+    name === "account" ||
+    name === "proof" ||
+    name === "fulfillment" ||
+    name === "fulfillment-detail" ||
+    name === "station" ||
+    name === "stores"
+  );
 }
 
 export function App() {
@@ -110,14 +141,7 @@ export function App() {
       setProof(null);
       setShipmentIntegrity(null);
     }
-    if (
-      next.name === "home" ||
-      next.name === "proof" ||
-      next.name === "fulfillment" ||
-      next.name === "fulfillment-detail" ||
-      next.name === "station" ||
-      next.name === "stores"
-    ) {
+    if (needsWorkspace(next.name)) {
       setLoading(true);
     }
     writePath(path);
@@ -132,10 +156,14 @@ export function App() {
     if (caught instanceof ApiError && caught.status === 403) {
       return "This Proof is not available.";
     }
+    const mapped = toUserFacingError(caught);
+    if (mapped.title !== "Something went wrong.") {
+      return formatUserFacingError(caught);
+    }
     if (caught instanceof ApiError) {
       return caught.message;
     }
-    return caught instanceof Error ? caught.message : String(caught);
+    return caught instanceof Error ? caught.message : mapped.message;
   }
 
   const searchProofUsers = useCallback(
@@ -169,6 +197,15 @@ export function App() {
     [api, proof],
   );
 
+  function acceptInvitation(invitationId: string) {
+    setBusy(true);
+    void api
+      .acceptInvitation(invitationId)
+      .then((result) => go(`/proofs/${encodeURIComponent(result.proof.proofId)}`))
+      .catch((caught) => setError(handleError(caught)))
+      .finally(() => setBusy(false));
+  }
+
   useEffect(() => {
     const onPop = () => {
       const next = parseHref(`${window.location.pathname}${window.location.search}`);
@@ -194,13 +231,24 @@ export function App() {
     if (!session) {
       return;
     }
-    if (route.name === "home") {
+    if (route.name === "home" || route.name === "proofs" || route.name === "activity") {
       setLoading(true);
       setError(null);
       void Promise.all([api.listMyProofs(), api.listInvitations()])
         .then(([listed, inbox]) => {
           setProofs(listed.proofs);
           setInvitations(inbox.invitations);
+        })
+        .catch((caught) => setError(handleError(caught)))
+        .finally(() => setLoading(false));
+    }
+    if (route.name === "account") {
+      setLoading(true);
+      setError(null);
+      void Promise.all([api.listInvitations(), api.listCommerceConnections()])
+        .then(([inbox, listed]) => {
+          setInvitations(inbox.invitations);
+          setConnections(listed.connections);
         })
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
@@ -244,7 +292,10 @@ export function App() {
     return (
       <div className="app-shell">
         <header className="topbar">
-          <span className="brand">PackProof</span>
+          <span className="brand">
+            <img src="/packproof-logo.png" alt="" width={28} height={28} />
+            PackProof
+          </span>
         </header>
         <SignInScreen
           onSignedIn={(next) => {
@@ -257,88 +308,64 @@ export function App() {
     );
   }
 
+  const routeName: AppRouteName = route.name;
+
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <a
-          className="brand"
-          href="/"
-          onClick={(event) => {
-            event.preventDefault();
-            go("/");
-          }}
-        >
-          PackProof
-        </a>
-        <nav className="topbar-nav" aria-label="Primary">
-          <a
-            href="/"
-            aria-current={route.name === "home" ? "page" : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              go("/");
-            }}
-          >
-            Proofs
-          </a>
-          <a
-            href="/station"
-            aria-current={route.name === "station" ? "page" : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              go("/station");
-            }}
-          >
-            Station
-          </a>
-          <a
-            href="/fulfillment"
-            aria-current={
-              route.name === "fulfillment" || route.name === "fulfillment-detail" ? "page" : undefined
-            }
-            onClick={(event) => {
-              event.preventDefault();
-              go("/fulfillment");
-            }}
-          >
-            Fulfillment
-          </a>
-          <a
-            href="/stores"
-            aria-current={route.name === "stores" ? "page" : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              go("/stores");
-            }}
-          >
-            Stores
-          </a>
-        </nav>
-        <div className="topbar-meta">
-          <span>{session.displayName || session.username || session.subject}</span>
-          <button className="btn btn-secondary" type="button" onClick={signOut}>
-            Sign out
-          </button>
-        </div>
-      </header>
+      <AppNav routeName={routeName} session={session} onGo={go} onSignOut={signOut} />
 
       {route.name === "home" ? (
         <HomeScreen
+          proofs={proofs}
+          invitations={invitations}
+          displayName={session.displayName}
+          username={session.username}
+          loading={loading}
+          error={error}
+          onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
+          onCreate={() => go("/new")}
+          onOpenStation={() => go("/station")}
+          onOpenFulfillment={() => go("/fulfillment")}
+          onOpenStores={() => go("/stores")}
+          onAccept={acceptInvitation}
+        />
+      ) : null}
+
+      {route.name === "proofs" ? (
+        <ProofsScreen
           proofs={proofs}
           invitations={invitations}
           loading={loading}
           error={error}
           onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
           onCreate={() => go("/new")}
+          onAccept={acceptInvitation}
+        />
+      ) : null}
+
+      {route.name === "activity" ? (
+        <ActivityScreen
+          proofs={proofs}
+          invitations={invitations}
+          loading={loading}
+          error={error}
+          onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
+          onAccept={acceptInvitation}
+        />
+      ) : null}
+
+      {route.name === "account" ? (
+        <AccountScreen
+          displayName={session.displayName}
+          username={session.username}
+          subject={session.subject}
+          connections={connections}
+          error={error}
+          busy={busy}
+          onAcceptInvitation={acceptInvitation}
           onOpenStation={() => go("/station")}
-          onAccept={(invitationId) => {
-            setBusy(true);
-            void api
-              .acceptInvitation(invitationId)
-              .then((result) => go(`/proofs/${encodeURIComponent(result.proof.proofId)}`))
-              .catch((caught) => setError(handleError(caught)))
-              .finally(() => setBusy(false));
-          }}
+          onOpenStores={() => go("/stores")}
+          onSignOut={signOut}
         />
       ) : null}
 
@@ -347,6 +374,7 @@ export function App() {
           busy={busy}
           error={error}
           onCancel={() => go("/")}
+          onScan={() => go("/station")}
           onImportPurchase={() => {
             setBusy(true);
             setError(null);
@@ -395,7 +423,9 @@ export function App() {
 
       {route.name === "fulfillment" ? (
         <FulfillmentQueueScreen
-          items={queue.filter((item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT")}
+          items={queue.filter(
+            (item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT",
+          )}
           loading={loading}
           error={error}
           onOpen={(proofId) => go(`/fulfillment/${encodeURIComponent(proofId)}`)}
@@ -512,8 +542,13 @@ export function App() {
           loading={loading}
           error={error}
           busy={busy}
+          development={import.meta.env.DEV}
           onSearchUsers={searchProofUsers}
           onInvite={inviteProofUser}
+          onOpenStation={() => {
+            const reference = proof?.transaction.externalReference || "";
+            go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
+          }}
           onAttest={(statement) => {
             if (!proof) {
               return;

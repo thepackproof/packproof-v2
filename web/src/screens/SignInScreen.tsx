@@ -1,16 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { PackProofApi } from "../api/client";
 import { ApiError } from "../api/types";
-import {
-  cognitoSignIn,
-  defaultCognitoConfig,
-  formatCognitoError,
-} from "../auth/cognito";
+import { cognitoSignIn, defaultCognitoConfig, formatCognitoError } from "../auth/cognito";
 import { defaultApiBaseUrl, defaultAuthMode, type AuthMode, type WebSession } from "../auth/session";
 
-export function SignInScreen(props: {
-  onSignedIn: (session: WebSession) => void;
-}) {
+export function SignInScreen(props: { onSignedIn: (session: WebSession) => void }) {
   const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode());
   const [apiBaseUrl, setApiBaseUrl] = useState(defaultApiBaseUrl());
   const [subject, setSubject] = useState("seller-1");
@@ -64,11 +58,7 @@ export function SignInScreen(props: {
         subject: email.trim(),
       });
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : formatCognitoError(caught),
-      );
+      setError(caught instanceof ApiError ? caught.message : formatCognitoError(caught));
     } finally {
       setBusy(false);
     }
@@ -76,17 +66,13 @@ export function SignInScreen(props: {
 
   return (
     <main className="page page-narrow">
+      <img className="auth-logo" src="/packproof-logo.png" alt="" width={72} height={72} />
       <h1>PackProof</h1>
-      <p className="lede">
-        Sign in to discover and read canonical Proofs. This client does not own Proof state.
-      </p>
+      <p className="lede">Sign in to view and continue your PackProof records.</p>
       <form className="section stack" onSubmit={(event) => void submit(event)}>
         <label className="field">
           <span>Authentication</span>
-          <select
-            value={authMode}
-            onChange={(event) => setAuthMode(event.target.value as AuthMode)}
-          >
+          <select value={authMode} onChange={(event) => setAuthMode(event.target.value as AuthMode)}>
             <option value="dev">Development subject</option>
             <option value="cognito">PackProof account</option>
           </select>
@@ -126,14 +112,17 @@ export function SignInScreen(props: {
             </label>
           </>
         )}
-        <label className="field">
-          <span>API base URL</span>
-          <input
-            value={apiBaseUrl}
-            onChange={(event) => setApiBaseUrl(event.target.value)}
-            placeholder="Empty uses this origin (local proxy)"
-          />
-        </label>
+        <details className="dev-options">
+          <summary>Developer options</summary>
+          <label className="field">
+            <span>API base URL</span>
+            <input
+              value={apiBaseUrl}
+              onChange={(event) => setApiBaseUrl(event.target.value)}
+              placeholder="Empty uses this origin (local proxy)"
+            />
+          </label>
+        </details>
         {error ? (
           <div className="banner banner-error" role="alert">
             {error}

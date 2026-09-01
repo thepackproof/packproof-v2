@@ -16,6 +16,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@packproof/station": path.resolve(__dirname, "../mobile/src/packing-station"),
+      "@packproof/copy": path.resolve(__dirname, "../mobile/src/copy"),
     },
   },
   server: {

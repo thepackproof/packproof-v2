@@ -16,8 +16,7 @@ export function ConnectedStoresScreen(props: {
         <div>
           <h1>Connected Stores</h1>
           <p className="lede">
-            Commerce connections that can automatically create PackProofs for fulfillment-eligible
-            orders. Shopify and other live storefronts are not connected yet.
+            Commerce connections that can create PackProofs for fulfillment-eligible orders.
           </p>
         </div>
       </div>

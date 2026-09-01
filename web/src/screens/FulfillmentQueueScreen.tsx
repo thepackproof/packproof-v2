@@ -14,8 +14,7 @@ export function FulfillmentQueueScreen(props: {
         <div>
           <h1>Fulfillment</h1>
           <p className="lede">
-            Orders imported from a connected store. Pack, attest, and complete without waiting for a
-            buyer PackProof account.
+            Orders imported from a connected store. Pack, record evidence, and complete the PackProof.
           </p>
         </div>
         <span className="badge badge-state">Ready to pack {readyCount}</span>

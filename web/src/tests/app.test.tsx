@@ -119,6 +119,9 @@ describe("PackProof web reference client", () => {
         if (url.endsWith("/invitations")) {
           return json({ invitations: [invitation] });
         }
+        if (url.includes("/integration-connections")) {
+          return json({ connections: [] });
+        }
         if (url.includes("/users/search")) {
           return json({ users: [] });
         }
@@ -213,9 +216,8 @@ describe("PackProof web reference client", () => {
   it("lets an authenticated user load Proof discovery summaries", async () => {
     signInSession();
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Proofs" })).toBeInTheDocument();
-    expect(screen.getAllByText("Vintage camera").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Reference ORD-48392/)).toBeInTheDocument();
+    expect((await screen.findAllByText("Vintage camera")).length).toBeGreaterThan(0);
+    expect(screen.getByText(/ORD-48392/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pending invitations" })).toBeInTheDocument();
     expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
   });
@@ -226,12 +228,12 @@ describe("PackProof web reference client", () => {
     render(<App />);
     await user.click(await screen.findByRole("button", { name: "Open Proof" }));
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Proof record" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
     expect(screen.getAllByText("PackProof fact").length).toBeGreaterThan(0);
     expect(screen.getAllByText("User attestation").length).toBeGreaterThan(0);
     expect(screen.getAllByText("External data").length).toBeGreaterThan(0);
-    expect(screen.getByText("Vintage camera")).toBeInTheDocument();
+    expect(screen.getAllByText("Vintage camera").length).toBeGreaterThan(0);
     expect(screen.getByText("I packed the described item.")).toBeInTheDocument();
     expect(
       screen.getByText(/Participant statement recorded by PackProof/),
@@ -310,18 +312,18 @@ describe("PackProof web reference client", () => {
       "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888",
     );
     expect(digest.className).toContain("digest");
-    expect(screen.getByRole("heading", { name: "Proof record" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
   });
 
   it("accepts an invitation ID and then loads the canonical Proof", async () => {
     signInSession();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Proofs" });
-    await user.type(screen.getByLabelText("Invitation ID"), "inv_01");
-    await user.click(screen.getAllByRole("button", { name: "Accept invitation" })[1]);
+    await user.click(await screen.findByRole("link", { name: "Account" }));
+    await user.type(await screen.findByLabelText("Invitation ID"), "inv_01");
+    await user.click(screen.getByRole("button", { name: "Accept invitation" }));
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Proof record" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
     expect(screen.queryByText("secret-token")).not.toBeInTheDocument();
   });
@@ -333,7 +335,7 @@ describe("PackProof web reference client", () => {
     await user.type(screen.getByLabelText("Development subject"), "seller-1");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Proofs" })).toBeInTheDocument();
+      expect(screen.getAllByText("Vintage camera").length).toBeGreaterThan(0);
     });
   });
 
@@ -341,7 +343,7 @@ describe("PackProof web reference client", () => {
     signInSession();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Create Proof" }));
+    await user.click(await screen.findByRole("link", { name: "Create" }));
     expect(await screen.findByRole("button", { name: "Import purchase" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enter manually" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Import purchase" }));
@@ -350,9 +352,9 @@ describe("PackProof web reference client", () => {
     expect(screen.getByText("DM-WEB-1")).toBeInTheDocument();
     expect(screen.getByText("Alex Buyer")).toBeInTheDocument();
     expect(screen.getByText("MARKETPLACE_API")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Use imported purchase" }));
+    await user.click(screen.getByRole("button", { name: "Create PackProof" }));
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Proof record" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
     expect(fetch).toHaveBeenCalledWith(
       "/integrations/transactions/import",
@@ -558,7 +560,7 @@ describe("PackProof web reference client", () => {
       expect(screen.getByText("Jane Smith")).toBeInTheDocument();
     });
     expect(screen.getByText("@janesmith")).toBeInTheDocument();
-    expect(screen.getByText("You")).toBeInTheDocument();
+    expect(screen.getAllByText("You").length).toBeGreaterThan(0);
     expect(screen.getByText("Already participating")).toBeInTheDocument();
     expect(screen.getByText("Invitation pending")).toBeInTheDocument();
     expect(screen.queryByText("alex.buyer@example.com")).not.toBeInTheDocument();
