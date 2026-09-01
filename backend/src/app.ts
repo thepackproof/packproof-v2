@@ -23,6 +23,7 @@ import {
 } from "./domain/invitations.js";
 import { commitAttestation } from "./domain/attestations.js";
 import { listMyProofs } from "./domain/proof-collection.js";
+import { listLinkedIdentities, unlinkIdentity } from "./domain/external-identities.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
 import { authorizeProofAccess, getProofForUser } from "./domain/proofs.js";
 import {
@@ -154,7 +155,7 @@ export function createApp(deps: AppDependencies): Express {
         "Access-Control-Allow-Headers",
         "Authorization, Content-Type, Idempotency-Key",
       );
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, OPTIONS");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
     }
     if (req.method === "OPTIONS") {
       res.status(204).end();
@@ -630,6 +631,22 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       const result = await getProfile(deps.db, bearerUser(req));
       res.json(result);
+    }),
+  );
+
+  app.get(
+    "/me/identities",
+    asyncRoute(async (req, res) => {
+      const identities = await listLinkedIdentities(deps.db, bearerUser(req));
+      res.json({ identities });
+    }),
+  );
+
+  app.delete(
+    "/me/identities/:provider",
+    asyncRoute(async (req, res) => {
+      await unlinkIdentity(deps.db, bearerUser(req), req.params.provider);
+      res.status(204).end();
     }),
   );
 
