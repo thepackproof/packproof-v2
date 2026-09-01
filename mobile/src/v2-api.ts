@@ -385,6 +385,19 @@ export interface TransactionImportView {
   created: boolean;
 }
 
+export interface IntegrationConnectionView {
+  connectionId: string;
+  adapterKey: string;
+  provider: string;
+  providerDisplay: string;
+  externalAccountReference: string | null;
+  status: string;
+  lastSyncAt: string | null;
+  lastErrorCode: string | null;
+  retryable: boolean;
+  readyOrderCount: number;
+}
+
 export interface FulfillmentQueueItem {
   transactionId: string;
   proofId: string;
@@ -487,6 +500,13 @@ export class PackProofV2Client {
 
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
     return this.request("/me/proofs");
+  }
+
+  async listIntegrationConnections(
+    capability?: "commerce" | string,
+  ): Promise<{ connections: IntegrationConnectionView[] }> {
+    const query = capability ? `?capability=${encodeURIComponent(capability)}` : "";
+    return this.request(`/me/integration-connections${query}`);
   }
 
   async listFulfillmentQueue(

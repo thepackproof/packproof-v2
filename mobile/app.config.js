@@ -42,6 +42,10 @@ module.exports = {
     version: "0.2.0",
     orientation: "portrait",
     userInterfaceStyle: "light",
+    androidNavigationBar: {
+      backgroundColor: "#FFFFFF",
+      barStyle: "dark-content",
+    },
     icon: "./assets/icon.png",
     scheme: "packproof-v2",
     ios: {
@@ -57,7 +61,7 @@ module.exports = {
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
-        backgroundColor: "#F9FAFB",
+        backgroundColor: "#F4F6F8",
       },
       permissions: ["CAMERA", "RECORD_AUDIO"],
     },

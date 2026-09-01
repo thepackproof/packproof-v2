@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   discardLocalCapture,
   localCaptureExists,
@@ -350,10 +351,17 @@ export function PackingStationScreen(props: {
 
   const tone = toneForPhase(state.phase);
   const leaveBlocked = Boolean(state.capture) && state.phase !== "PROOF_CREATED";
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.root, { backgroundColor: tone.background }]}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={[styles.phase, { color: tone.ink }]}>{stationPhaseLabel(state)}</Text>
         {state.order ? (
           <View style={styles.identity}>
@@ -593,15 +601,15 @@ function toneForPhase(phase: StationState["phase"]): { background: string; ink: 
     case "RECORDING":
     case "FINISH_SCANNING":
     case "VERIFYING_FINISH_SCAN":
-      return { background: "#3b0008", ink: "#fff5f5", muted: "#f0b8b8" };
+      return { background: "#10222E", ink: "#F4F6F8", muted: "#9AA8B2" };
     case "PROCESSING":
-      return { background: "#1a1a1a", ink: "#f4f4f4", muted: "#b8b8b8" };
+      return { background: "#142735", ink: "#F4F6F8", muted: "#9AA8B2" };
     case "PROOF_CREATED":
-      return { background: "#0d2a1c", ink: "#f3fff6", muted: "#b7e0c5" };
+      return { background: "#0C2A1C", ink: "#F3FFF6", muted: "#B7E0C5" };
     case "RECOVERY":
-      return { background: "#2c2108", ink: "#fff8e8", muted: "#e0c88a" };
+      return { background: "#2A2414", ink: "#FFF8E8", muted: "#E0C88A" };
     default:
-      return { background: "#111111", ink: "#ffffff", muted: "#b3b3b3" };
+      return { background: "#142735", ink: "#FFFFFF", muted: "#9AA8B2" };
   }
 }
 
@@ -634,7 +642,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 24,
-    paddingTop: 64,
     gap: 18,
   },
   phase: {
@@ -658,9 +665,14 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 20,
   },
-  button: { backgroundColor: "#fff", paddingVertical: 18, paddingHorizontal: 16 },
-  buttonSecondary: { backgroundColor: "transparent", borderWidth: 2, borderColor: "#fff" },
+  button: {
+    backgroundColor: "#13A8E8",
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  buttonSecondary: { backgroundColor: "transparent", borderWidth: 2, borderColor: "#FFFFFF" },
   buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: "#111", textAlign: "center", fontSize: 20, fontWeight: "800" },
-  buttonSecondaryText: { color: "#fff" },
+  buttonText: { color: "#FFFFFF", textAlign: "center", fontSize: 20, fontWeight: "800" },
+  buttonSecondaryText: { color: "#FFFFFF" },
 });

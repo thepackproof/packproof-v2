@@ -71,7 +71,7 @@ export function BarcodeScanView(props: {
         }}
       />
       <View style={styles.frame} pointerEvents="none" />
-      <Text style={styles.copy}>{props.prompt ?? "Scan the shipping label or order barcode."}</Text>
+      {props.prompt ? <Text style={styles.copy}>{props.prompt}</Text> : null}
       <Pressable style={styles.button} onPress={props.onCancel}>
         <Text style={styles.buttonText}>Cancel</Text>
       </Pressable>
@@ -80,8 +80,8 @@ export function BarcodeScanView(props: {
 }
 
 const styles = StyleSheet.create({
-    wrap: { gap: 14, width: "100%", position: "relative" },
-  camera: { width: "100%", aspectRatio: 3 / 4, backgroundColor: "#000" },
+  wrap: { gap: 14, width: "100%", position: "relative" },
+  camera: { width: "100%", aspectRatio: 3 / 4, backgroundColor: "#000", borderRadius: 16, overflow: "hidden" },
   frame: {
     position: "absolute",
     top: 48,
@@ -89,10 +89,11 @@ const styles = StyleSheet.create({
     right: 24,
     height: 180,
     borderWidth: 3,
-    borderColor: "#fff",
+    borderColor: "#13A8E8",
+    borderRadius: 12,
   },
   fallback: { gap: 14 },
-  copy: { color: "#f4f4f4", fontSize: 18, lineHeight: 26 },
-  button: { borderWidth: 2, borderColor: "#fff", paddingVertical: 16 },
-  buttonText: { color: "#fff", textAlign: "center", fontSize: 18, fontWeight: "800" },
+  copy: { color: "#F4F6F8", fontSize: 18, lineHeight: 26 },
+  button: { borderWidth: 2, borderColor: "#FFFFFF", paddingVertical: 16, borderRadius: 12 },
+  buttonText: { color: "#FFFFFF", textAlign: "center", fontSize: 18, fontWeight: "800" },
 });
