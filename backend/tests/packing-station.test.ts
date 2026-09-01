@@ -40,6 +40,7 @@ async function commitVideo(harness: TestHarness, seller: string, proofId: string
     proofId,
     {
       contentType: "video/mp4",
+      evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey: `station-${proofId}`,
     },
   );
@@ -129,7 +130,17 @@ describe("packing station resolve", () => {
 
     const byProof = await resolve(harness, seller, resolved.body.proofId);
     expect(byProof.body.transactionId).toBe(resolved.body.transactionId);
+    expect(byTrack.body.trackingHint).toBe("Tracking ending 6677");
 
+    const wrapped = await resolve(harness, seller, "]C19400111899223344556677");
+    expect(wrapped.status).toBe(200);
+    expect(wrapped.body.transactionId).toBe(resolved.body.transactionId);
+
+    const noisy = await resolve(harness, seller, " \u00019400111899223344556677\n");
+    expect(noisy.status).toBe(200);
+    expect(noisy.body.transactionId).toBe(resolved.body.transactionId);
+
+    await commitVideo(harness, seller, resolved.body.proofId);
     await commitAttestation(harness.db, harness.clock, seller, resolved.body.proofId, {
       statement: "PACKED_DESCRIBED_ITEM",
     });

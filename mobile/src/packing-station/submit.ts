@@ -19,7 +19,7 @@ export interface StationUploadTarget {
 export interface StationSubmitApi {
   initializeEvidenceUpload(
     proofId: string,
-    input: { contentType: string; idempotencyKey: string },
+    input: { contentType: string; evidenceType?: string; idempotencyKey: string },
   ): Promise<{ evidenceId: string; upload: StationUploadTarget }>;
   commitEvidence(
     proofId: string,
@@ -85,6 +85,7 @@ export async function submitStationSession(input: {
   try {
     initialized = await input.deps.api.initializeEvidenceUpload(proofId, {
       contentType: input.capture.contentType,
+      evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey: key,
     });
     await input.deps.upload(initialized.upload, input.capture, (percent) => {
@@ -130,7 +131,7 @@ export async function submitStationSession(input: {
       proof = finalized.proof;
     } catch (error) {
       const mapped = stationErrorFromUnknown(error);
-      if (mapped.code === "PROOF_NOT_READY_FOR_FINALIZATION") {
+      if (mapped.code === "PROOF_NOT_READY_FOR_FINALIZATION" || mapped.code === "FULFILLMENT_CAPTURE_REQUIRED") {
         notify("refresh", 100);
         proof = await input.deps.api.getProof(proofId);
       } else if (mapped.code === "PROOF_ALREADY_FINALIZED") {

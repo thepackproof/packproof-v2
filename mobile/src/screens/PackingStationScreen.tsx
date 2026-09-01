@@ -18,9 +18,11 @@ import {
   restoreStationState,
   stationPhaseLabel,
 } from "../packing-station/machine";
+import { normalizeStationReference } from "../packing-station/scan";
 import { submitStationSession } from "../packing-station/submit";
 import type { StationCandidate, StationState } from "../packing-station/types";
 import { ApiError, PackProofV2Client, newIdempotencyKey, type ProofView } from "../v2-api";
+import { BarcodeScanView } from "./BarcodeScanView";
 
 const COMPLETED_HOLD_MS = 1600;
 
@@ -138,12 +140,16 @@ export function PackingStationScreen(props: {
     }
   }
 
-  async function identify(method: "REFERENCE" | "QUEUE_SELECT", reference: string, transactionId?: string) {
+  async function identify(
+    method: "SCAN" | "REFERENCE" | "QUEUE_SELECT",
+    reference: string,
+    transactionId?: string,
+  ) {
     await guarded(async () => {
       dispatch({ type: "IDENTIFY_STARTED", method, reference });
       try {
         let proof: ProofView;
-        let labels: { orderLabel: string; itemSummary: string } | undefined;
+        let labels: { orderLabel: string; itemSummary: string; trackingHint?: string | null } | undefined;
         if (transactionId) {
           proof = await props.client.createOrGetProof(transactionId);
           const selected = candidates.find((item) => item.transactionId === transactionId);
@@ -152,7 +158,11 @@ export function PackingStationScreen(props: {
             : undefined;
         } else {
           const resolved = await props.client.resolvePackingStation(reference);
-          labels = { orderLabel: resolved.orderLabel, itemSummary: resolved.itemSummary };
+          labels = {
+            orderLabel: resolved.orderLabel,
+            itemSummary: resolved.itemSummary,
+            trackingHint: resolved.trackingHint ?? null,
+          };
           proof = await props.client.createOrGetProof(resolved.transactionId);
         }
         const context = stationContextFromProof(proof, labels);
@@ -307,10 +317,13 @@ export function PackingStationScreen(props: {
           <View style={styles.identity}>
             <Text style={[styles.order, { color: tone.ink }]}>{state.order.orderLabel}</Text>
             <Text style={[styles.item, { color: tone.muted }]}>{state.order.itemSummary}</Text>
+            {state.order.trackingHint ? (
+              <Text style={[styles.item, { color: tone.muted }]}>{state.order.trackingHint}</Text>
+            ) : null}
           </View>
         ) : (
           <Text style={[styles.hint, { color: tone.muted }]}>
-            Identify an order, pack in frame, then PackProof finishes the record.
+            Scan a label, pack in frame, then PackProof finishes the record.
           </Text>
         )}
 
@@ -324,25 +337,60 @@ export function PackingStationScreen(props: {
           </Text>
         ) : null}
 
+        {state.phase === "SCANNING" ? (
+          <BarcodeScanView
+            onDecoded={(value) => {
+              dispatch({ type: "SCAN_DECODED", value });
+              void identify("SCAN", value);
+            }}
+            onCancel={() => dispatch({ type: "SCAN_CANCELLED" })}
+            onPermissionDenied={() =>
+              dispatch({
+                type: "SCAN_FAILED",
+                error: {
+                  code: "CAMERA_PERMISSION_DENIED",
+                  message: "Camera permission is required to scan labels.",
+                },
+              })
+            }
+            onUnavailable={() =>
+              dispatch({
+                type: "SCAN_FAILED",
+                error: {
+                  code: "SCANNER_UNAVAILABLE",
+                  message: "The camera scanner is unavailable. Enter a reference instead.",
+                },
+              })
+            }
+          />
+        ) : null}
+
         {state.phase === "READY" || (state.phase === "RECOVERY" && !state.capture) ? (
           <View style={styles.block}>
+            <StationButton
+              label="Scan Order / Label"
+              disabled={localBusy}
+              onPress={() => dispatch({ type: "SCAN_STARTED" })}
+            />
             <TextInput
               style={styles.input}
               value={state.referenceInput}
               onChangeText={(value) => dispatch({ type: "SET_REFERENCE", reference: value })}
-              placeholder="Order or tracking number"
+              placeholder="Enter reference"
               placeholderTextColor="#777"
               autoCapitalize="none"
               autoCorrect={false}
               onSubmitEditing={() => {
-                if (state.referenceInput.trim()) {
-                  void identify("REFERENCE", state.referenceInput);
+                const reference = normalizeStationReference(state.referenceInput);
+                if (reference) {
+                  void identify("REFERENCE", reference);
                 }
               }}
             />
             <StationButton
-              label="Identify order"
-              disabled={localBusy || !state.referenceInput.trim()}
+              label="Identify by reference"
+              disabled={localBusy || !normalizeStationReference(state.referenceInput)}
+              secondary
               onPress={() => void identify("REFERENCE", state.referenceInput)}
             />
             {candidates.length > 0 ? (
@@ -436,6 +484,7 @@ function initialStationForRestore(props: {
       alreadyFinalized: false,
       alreadyHasCommittedEvidence: false,
       captureReady: true,
+      trackingHint: null,
       blockReason: null,
     },
   });

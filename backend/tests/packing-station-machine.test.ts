@@ -146,6 +146,95 @@ describe("packing station state machine", () => {
     expect(state.order?.proofId).toBe("proof_1");
   });
 
+  it("scans from READY into identifying, then READY TO PACK, and ignores a second decode", () => {
+    let state = initialStationState();
+    state = reduceStation(state, { type: "SCAN_STARTED" });
+    expect(state.phase).toBe("SCANNING");
+    state = reduceStation(state, { type: "SCAN_DECODED", value: "4821" });
+    expect(state.phase).toBe("IDENTIFYING");
+    expect(state.identifyMethod).toBe("SCAN");
+    expect(state.referenceInput).toBe("4821");
+    const identifying = state;
+    state = reduceStation(state, { type: "SCAN_DECODED", value: "9999" });
+    expect(state).toBe(identifying);
+    state = reduceStation(state, { type: "IDENTIFY_RESOLVED", context: readyOrder, method: "SCAN" });
+    expect(state.phase).toBe("READY_TO_RECORD");
+    expect(state.order?.orderLabel).toBe("Order #4821");
+  });
+
+  it("returns to a retryable state on invalid, unauthorized, ambiguous, and finalized scans", () => {
+    let state = initialStationState();
+    state = reduceStation(state, { type: "SCAN_STARTED" });
+    state = reduceStation(state, { type: "SCAN_DECODED", value: "NOPE" });
+    state = reduceStation(state, {
+      type: "IDENTIFY_FAILED",
+      error: { code: "STATION_REFERENCE_NOT_FOUND", message: "No packing order matched that reference" },
+    });
+    expect(state.phase).toBe("RECOVERY");
+    expect(state.canRetry).toBe(true);
+    expect(state.capture).toBeNull();
+    state = reduceStation(state, { type: "SCAN_STARTED" });
+    expect(state.phase).toBe("SCANNING");
+    state = reduceStation(state, { type: "SCAN_DECODED", value: "AMBIG" });
+    state = reduceStation(state, {
+      type: "IDENTIFY_FAILED",
+      error: { code: "STATION_REFERENCE_AMBIGUOUS", message: "More than one order matched that reference" },
+    });
+    expect(state.phase).toBe("RECOVERY");
+    state = reduceStation(state, { type: "RESET" });
+    expect(state.phase).toBe("READY");
+
+    const finalized = stationContextFromProof(
+      proof("FINALIZED", {
+        evidence: [{ validationStatus: "COMMITTED" }],
+      }),
+    );
+    state = reduceStation(state, { type: "SCAN_STARTED" });
+    state = reduceStation(state, { type: "SCAN_DECODED", value: "DONE" });
+    state = reduceStation(state, { type: "IDENTIFY_RESOLVED", context: finalized, method: "SCAN" });
+    expect(state.phase).toBe("RECOVERY");
+    expect(state.error?.code).toBe("PROOF_ALREADY_FINALIZED");
+    state = reduceStation(state, { type: "RESET" });
+    expect(state.phase).toBe("READY");
+  });
+
+  it("cancels scanning, recovers from scanner failure, and still identifies by reference or queue", () => {
+    let state = initialStationState();
+    state = reduceStation(state, { type: "SCAN_STARTED" });
+    state = reduceStation(state, { type: "SCAN_CANCELLED" });
+    expect(state.phase).toBe("READY");
+
+    state = reduceStation(state, { type: "SCAN_STARTED" });
+    state = reduceStation(state, {
+      type: "SCAN_FAILED",
+      error: { code: "CAMERA_PERMISSION_DENIED", message: "Camera permission is required to scan labels." },
+    });
+    expect(state.phase).toBe("RECOVERY");
+    expect(state.canRetry).toBe(true);
+    expect(stationCanIdentify(state)).toBe(true);
+
+    state = reduceStation(state, { type: "RESET" });
+    state = reduceStation(state, { type: "SET_REFERENCE", reference: "4821" });
+    state = reduceStation(state, { type: "IDENTIFY_STARTED", method: "REFERENCE", reference: "4821" });
+    state = reduceStation(state, { type: "IDENTIFY_RESOLVED", context: readyOrder, method: "REFERENCE" });
+    expect(state.phase).toBe("READY_TO_RECORD");
+    state = reduceStation(state, { type: "RESET" });
+    state = reduceStation(state, { type: "IDENTIFY_STARTED", method: "QUEUE_SELECT" });
+    state = reduceStation(state, { type: "IDENTIFY_RESOLVED", context: readyOrder, method: "QUEUE_SELECT" });
+    expect(state.phase).toBe("READY_TO_RECORD");
+  });
+
+  it("does not start a second identify while captured video is preserved", () => {
+    let state = initialStationState();
+    state = reduceStation(state, { type: "IDENTIFY_STARTED", method: "SCAN" });
+    state = reduceStation(state, { type: "IDENTIFY_RESOLVED", context: readyOrder, method: "SCAN" });
+    state = reduceStation(state, { type: "START_RECORDING" });
+    state = reduceStation(state, { type: "CAPTURE_READY", capture });
+    const blocked = reduceStation(state, { type: "SCAN_STARTED" });
+    expect(blocked.phase).toBe("RECOVERY");
+    expect(blocked.capture?.handle).toBe(capture.handle);
+  });
+
   it("restores an interrupted upload into RECOVERY without dropping the video", () => {
     const restored = restoreStationState({
       phase: "PROCESSING",

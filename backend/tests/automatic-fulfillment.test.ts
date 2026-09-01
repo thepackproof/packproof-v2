@@ -8,7 +8,7 @@ import { acceptInvitation, createInvitation } from "../src/domain/invitations.js
 import { createTransaction } from "../src/domain/transactions.js";
 import { sha256Hex } from "../src/hash.js";
 import { DEMO_STOREFRONT_CREDENTIAL_REFERENCE } from "../src/integrations/demo-storefront.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { auth, commitProofEvidence, createHarness, login, type TestHarness } from "./helpers.js";
 
 const ELIGIBLE_ORDERS = ["DS-1001", "DS-1002", "DS-1003", "DS-1004", "DS-1009", "DS-1010"];
 const INELIGIBLE_ORDERS = ["DS-1005", "DS-1006", "DS-1007", "DS-1008"];
@@ -174,7 +174,7 @@ describe("automatic fulfillment ingestion", () => {
     ).not.toContain("email");
   });
 
-  it("lets a seller attest and finalize a merchant Proof without media, and rejects completion before attestation", async () => {
+  it("lets a seller attest a merchant Proof but refuses finalize without fulfillment capture", async () => {
     harness = await createHarness();
     const seller = await login(harness.app, "attest-seller");
     const connected = await connectDemo(harness, seller);
@@ -183,12 +183,13 @@ describe("automatic fulfillment ingestion", () => {
     const first = listed.body.items[0];
     expect(first.canComplete).toBe(false);
     expect(first.externalOrderId).toBe("DS-1001");
+    expect(first.fulfillmentCaptureCount).toBe(0);
 
     const premature = await request(harness.app)
       .post(`/proofs/${first.proofId}/finalize`)
       .set(auth(seller));
     expect(premature.status).toBe(422);
-    expect(premature.body.error.code).toBe("PROOF_NOT_READY_FOR_FINALIZATION");
+    expect(premature.body.error.code).toBe("FULFILLMENT_CAPTURE_REQUIRED");
 
     const attested = await request(harness.app)
       .post(`/proofs/${first.proofId}/attestations`)
@@ -209,21 +210,35 @@ describe("automatic fulfillment ingestion", () => {
 
     const ready = await queue(harness, seller);
     const afterAttest = ready.body.items.find((item: { proofId: string }) => item.proofId === first.proofId);
-    expect(afterAttest.canComplete).toBe(true);
+    expect(afterAttest.canComplete).toBe(false);
     expect(afterAttest.sellerPackingAttested).toBe(true);
+
+    const stillBlocked = await request(harness.app)
+      .post(`/proofs/${first.proofId}/finalize`)
+      .set(auth(seller));
+    expect(stillBlocked.status).toBe(422);
+    expect(stillBlocked.body.error.code).toBe("FULFILLMENT_CAPTURE_REQUIRED");
+
+    await commitProofEvidence(harness, seller, first.proofId, {
+      evidenceType: "FULFILLMENT_CAPTURE",
+    });
+    const afterCapture = await queue(harness, seller);
+    const completable = afterCapture.body.items.find(
+      (item: { proofId: string }) => item.proofId === first.proofId,
+    );
+    expect(completable.canComplete).toBe(true);
+    expect(completable.fulfillmentCaptureCount).toBe(1);
 
     const finalized = await request(harness.app)
       .post(`/proofs/${first.proofId}/finalize`)
       .set(auth(seller));
     expect(finalized.status).toBe(200);
     expect(finalized.body.proof.status).toBe("FINALIZED");
-    expect(finalized.body.proof.evidence).toEqual([]);
-    const evidenceRows = await harness.db.query(`SELECT id FROM evidence WHERE proof_id = $1`, [
-      first.proofId,
-    ]);
-    expect(evidenceRows.rows).toHaveLength(0);
+    expect(finalized.body.proof.evidence).toHaveLength(1);
+    expect(finalized.body.proof.evidence[0].evidenceType).toBe("FULFILLMENT_CAPTURE");
     expect(finalized.body.manifest.manifest.participationPolicy).toBe("COUNTERPARTY_OPTIONAL");
     expect(finalized.body.manifest.manifest.attestations).toHaveLength(1);
+    expect(finalized.body.manifest.manifest.evidence[0].evidenceType).toBe("FULFILLMENT_CAPTURE");
     const again = await request(harness.app).post(`/proofs/${first.proofId}/finalize`).set(auth(seller));
     expect(again.body.manifest.sha256).toBe(finalized.body.manifest.sha256);
     expect(hashCanonicalManifest(finalized.body.manifest.manifest).sha256).toBe(
@@ -239,7 +254,7 @@ describe("automatic fulfillment ingestion", () => {
     expect(completed.body.items[0].workflowState).toBe("COMPLETED");
   });
 
-  it("allows optional committed media and rejects uncommitted media on merchant finalization", async () => {
+  it("rejects uncommitted media and requires qualifying fulfillment capture, not generic seller video", async () => {
     harness = await createHarness();
     const seller = await login(harness.app, "media-seller");
     const connected = await connectDemo(harness, seller);
@@ -256,7 +271,11 @@ describe("automatic fulfillment ingestion", () => {
       harness.objectStore,
       seller,
       order.proofId,
-      { contentType: "video/mp4", idempotencyKey: `media-${order.proofId}` },
+      {
+        contentType: "video/mp4",
+        evidenceType: "FULFILLMENT_CAPTURE",
+        idempotencyKey: `media-${order.proofId}`,
+      },
     );
     const pending = await request(harness.app)
       .post(`/proofs/${order.proofId}/finalize`)
@@ -279,6 +298,7 @@ describe("automatic fulfillment ingestion", () => {
     expect(finalized.status).toBe(200);
     expect(finalized.body.proof.status).toBe("FINALIZED");
     expect(finalized.body.proof.evidence).toHaveLength(1);
+    expect(finalized.body.proof.evidence[0].evidenceType).toBe("FULFILLMENT_CAPTURE");
     expect(finalized.body.manifest.manifest.evidence).toHaveLength(1);
   });
 
@@ -391,6 +411,9 @@ describe("automatic fulfillment ingestion", () => {
       .post(`/proofs/${multi.proofId}/attestations`)
       .set(auth(seller))
       .send({ statement: "PACKED_DESCRIBED_ITEM" });
+    await commitProofEvidence(harness, seller, multi.proofId, {
+      evidenceType: "FULFILLMENT_CAPTURE",
+    });
     const finalized = await request(harness.app)
       .post(`/proofs/${multi.proofId}/finalize`)
       .set(auth(seller));

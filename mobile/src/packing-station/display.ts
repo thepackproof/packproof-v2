@@ -4,13 +4,9 @@ import type {
   StationOrderContext,
   StationProofSnapshot,
 } from "./types";
+import { normalizeStationReference } from "./scan";
 
-export function normalizeStationReference(raw: string | null | undefined): string {
-  return String(raw ?? "")
-    .trim()
-    .replace(/^#+/, "")
-    .trim();
-}
+export { formatTrackingHint, normalizeStationReference } from "./scan";
 
 export function formatOrderLabel(reference: string | null | undefined): string {
   const value = normalizeStationReference(reference);
@@ -52,7 +48,7 @@ export function proofHasBuyer(proof: StationProofSnapshot): boolean {
 
 export function stationContextFromProof(
   proof: StationProofSnapshot,
-  labels?: { orderLabel?: string; itemSummary?: string },
+  labels?: { orderLabel?: string; itemSummary?: string; trackingHint?: string | null },
 ): StationOrderContext {
   const committed = committedEvidenceCount(proof);
   const alreadyFinalized = proof.status === "FINALIZED";
@@ -65,6 +61,7 @@ export function stationContextFromProof(
     participationPolicy: proof.participationPolicy ?? null,
     orderLabel: labels?.orderLabel ?? formatOrderLabel(proof.transaction.externalReference),
     itemSummary: labels?.itemSummary ?? itemSummaryFromProof(proof),
+    trackingHint: labels?.trackingHint ?? null,
     alreadyFinalized,
     alreadyHasCommittedEvidence,
     captureReady: blockReason == null && proof.status === "READY_FOR_EVIDENCE" && committed === 0,

@@ -1,6 +1,12 @@
 import type { Database } from "../db/database.js";
 import { DomainError } from "./errors.js";
-import { blockReasonForProof, formatItemSummary, formatOrderLabel } from "./packing-station-display.js";
+import {
+  blockReasonForProof,
+  formatItemSummary,
+  formatOrderLabel,
+  formatTrackingHint,
+  normalizeStationReference,
+} from "./packing-station-display.js";
 import type { ParticipationPolicy } from "./participation.js";
 import { requireParticipationPolicy } from "./participation.js";
 import { listTransactionItems, synthesizeItemsFromLegacy } from "./transaction-items.js";
@@ -27,6 +33,7 @@ export interface PackingStationResolveView {
   participationPolicy: ParticipationPolicy | null;
   orderLabel: string;
   itemSummary: string;
+  trackingHint: string | null;
   committedEvidenceCount: number;
   captureReady: boolean;
   alreadyFinalized: boolean;
@@ -39,16 +46,11 @@ interface MatchRow {
   matched_by: StationMatchKind;
 }
 
-export function normalizeStationReference(raw: unknown): string {
-  return String(raw ?? "")
-    .trim()
-    .replace(/^#+/, "")
-    .trim();
-}
-
 export function parseStationResolveRequest(body: unknown): { reference: string } {
   const record = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
-  const reference = normalizeStationReference(record.reference ?? record.q ?? record.externalReference);
+  const reference = normalizeStationReference(
+    String(record.reference ?? record.q ?? record.externalReference ?? ""),
+  );
   if (!reference) {
     throw new DomainError(
       "STATION_REFERENCE_INVALID",
@@ -259,6 +261,7 @@ async function loadResolveView(
       : null,
     orderLabel: formatOrderLabel(orderRef),
     itemSummary,
+    trackingHint: formatTrackingHint(shipping.rows[0]?.tracking_number),
     committedEvidenceCount,
     captureReady: blockReason == null && proofStatus === "READY_FOR_EVIDENCE" && committedEvidenceCount === 0,
     alreadyFinalized,

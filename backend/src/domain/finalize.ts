@@ -26,6 +26,8 @@ import {
 import { asNullableNumber, shippingForManifest } from "./transaction-fields.js";
 import { provenanceFromIdentity, manifestProvenance } from "./provenance.js";
 import { listTransactionItems } from "./transaction-items.js";
+import { isQualifyingFulfillmentCapture } from "./evidence-types.js";
+import { evaluateFinalizeRequirements } from "./finalize-requirements.js";
 import { DEFAULT_PARTICIPATION_POLICY, requireParticipationPolicy } from "./participation.js";
 
 export interface ManifestView {
@@ -119,36 +121,11 @@ export async function finalizeProof(
       `SELECT * FROM proof_participants WHERE proof_id = $1`,
       [proofId],
     );
-    const hasSeller = participants.rows.some((row) => row.role === "SELLER");
-    const hasBuyer = participants.rows.some((row) => row.role === "BUYER");
-    if (!hasSeller) {
-      throw new DomainError(
-        "PROOF_NOT_READY_FOR_FINALIZATION",
-        "Seller must be joined",
-        422,
-      );
-    }
-    if (!merchantOptional && !hasBuyer) {
-      throw new DomainError(
-        "PROOF_NOT_READY_FOR_FINALIZATION",
-        "Seller and buyer must both be joined",
-        422,
-      );
-    }
-
     const pendingEvidence = await tx.query<EvidenceRow>(
       `SELECT * FROM evidence
         WHERE proof_id = $1 AND validation_status = 'PENDING'`,
       [proofId],
     );
-    if (pendingEvidence.rows.length > 0) {
-      throw new DomainError(
-        "PROOF_NOT_READY_FOR_FINALIZATION",
-        "Uncommitted evidence must be committed or is not ready",
-        422,
-      );
-    }
-
     const evidence = await tx.query<EvidenceRow>(
       `SELECT * FROM evidence
         WHERE proof_id = $1 AND validation_status = 'COMMITTED'
@@ -162,37 +139,23 @@ export async function finalizeProof(
     const packingAttested = attestations.rows.some(
       (row) => row.statement === "PACKED_DESCRIBED_ITEM" && row.attested_by === actorUserId,
     );
-
-    if (merchantOptional) {
-      if (proof.status !== "READY_FOR_EVIDENCE" && proof.status !== "EVIDENCE_COMMITTED") {
-        throw new DomainError(
-          "PROOF_NOT_READY_FOR_FINALIZATION",
-          "Merchant Proof is not ready for finalization",
-          422,
-        );
-      }
-      if (!packingAttested) {
-        throw new DomainError(
-          "PROOF_NOT_READY_FOR_FINALIZATION",
-          "Seller packing attestation is required",
-          422,
-        );
-      }
-    } else {
-      if (proof.status !== "EVIDENCE_COMMITTED") {
-        throw new DomainError(
-          "PROOF_NOT_READY_FOR_FINALIZATION",
-          "Required evidence is not committed",
-          422,
-        );
-      }
-      if (evidence.rows.length === 0) {
-        throw new DomainError(
-          "PROOF_NOT_READY_FOR_FINALIZATION",
-          "Required evidence is not committed",
-          422,
-        );
-      }
+    const evaluation = evaluateFinalizeRequirements({
+      participationPolicy,
+      proofStatus: proof.status,
+      hasSeller: participants.rows.some((row) => row.role === "SELLER"),
+      hasBuyer: participants.rows.some((row) => row.role === "BUYER"),
+      pendingEvidenceCount: pendingEvidence.rows.length,
+      committedEvidenceCount: evidence.rows.length,
+      committedFulfillmentCaptureCount: evidence.rows.filter((row) =>
+        isQualifyingFulfillmentCapture({
+          evidenceType: row.evidence_type,
+          validationStatus: row.validation_status,
+        }),
+      ).length,
+      packingAttested,
+    });
+    if (!evaluation.ok) {
+      throw new DomainError(evaluation.code, evaluation.message, 422);
     }
 
     const transaction = await tx.query<TransactionRow>(

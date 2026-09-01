@@ -551,11 +551,48 @@ describe("PackProof web reference client", () => {
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.includes("/me/fulfillment-queue")) {
-          const item = attested ? { ...multi, sellerPackingAttested: true, canComplete: true } : multi;
+          const item = attested
+            ? { ...multi, sellerPackingAttested: true, canComplete: false, fulfillmentCaptureCount: 0 }
+            : multi;
           if (finalized && url.includes("filter=ready")) {
             return json({ items: [fulfillmentNext], filter: "ready" });
           }
           return json({ items: finalized ? [fulfillmentNext] : [item, fulfillmentNext], filter: "all" });
+        }
+        if (url.includes("/me/packing-station/resolve") && init?.method === "POST") {
+          return json({
+            schema: "packproof.packing-station.resolve/v1",
+            reference: "DS-1001",
+            matchedBy: "EXTERNAL_ORDER_ID",
+            transactionId: multi.transactionId,
+            proofId: multi.proofId,
+            proofStatus: "READY_FOR_EVIDENCE",
+            participationPolicy: "COUNTERPARTY_OPTIONAL",
+            orderLabel: "Order #DS-1001",
+            itemSummary: "Pokémon Booster Box + 1 more",
+            trackingHint: null,
+            committedEvidenceCount: 0,
+            captureReady: true,
+            alreadyFinalized: false,
+            alreadyHasCommittedEvidence: false,
+            blockReason: null,
+          });
+        }
+        if (url.endsWith(`/transactions/${multi.transactionId}/proof`)) {
+          return json({
+            ...canonicalProof,
+            proofId: multi.proofId,
+            transactionId: multi.transactionId,
+            status: "READY_FOR_EVIDENCE",
+            participationPolicy: "COUNTERPARTY_OPTIONAL",
+            evidence: [],
+            transaction: {
+              ...canonicalProof.transaction,
+              transactionId: multi.transactionId,
+              externalReference: "DS-1001",
+              itemTitle: "Pokémon Booster Box",
+            },
+          });
         }
         if (url.includes("/attestations") && init?.method === "POST") {
           attested = true;
@@ -593,12 +630,16 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByRole("heading", { name: "Order #DS-1001" })).toBeInTheDocument();
     expect(screen.getByText("Sleeve pack")).toBeInTheDocument();
     expect(screen.getByText(/Buyer acceptance is not required/)).toBeInTheDocument();
-    expect(screen.getByText("Optional documentation")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Packing Station" })).toBeInTheDocument();
+    expect(screen.getByText(/Packing evidence is required/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Complete PackProof" })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /I attest that I packed this order as described/i }));
     expect(await screen.findByText("Packing attestation recorded")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Complete & Next" }));
-    expect(await screen.findByRole("heading", { name: "Order #DS-1002" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Complete & Next" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Open Packing Station" }));
+    expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
+    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Packing" })).toBeInTheDocument();
   });
 
   it("connects and syncs the demo storefront from Connected Stores", async () => {
@@ -727,11 +768,13 @@ describe("PackProof web reference client", () => {
     render(<App />);
     await user.click(await screen.findByRole("link", { name: "Station" }));
     expect(await screen.findByText("READY")).toBeInTheDocument();
-    expect(screen.getByText(/Identify an order/)).toBeInTheDocument();
+    expect(screen.getByText(/Scan a label/)).toBeInTheDocument();
     expect(screen.queryByText(/SHA-256|manifest|object store/i)).not.toBeInTheDocument();
 
-    await user.type(screen.getByPlaceholderText("Order or tracking number"), "NOPE");
-    await user.click(screen.getByRole("button", { name: "Identify order" }));
+    await user.click(screen.getByRole("button", { name: "Scan Order / Label" }));
+    expect(await screen.findByText("SCAN")).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "NOPE");
+    await user.click(screen.getByRole("button", { name: "Use this code" }));
     expect(await screen.findByText("No packing order matched that reference")).toBeInTheDocument();
     expect(screen.getByText("NEEDS ATTENTION")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Ready for next order" }));

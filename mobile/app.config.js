@@ -47,7 +47,7 @@ module.exports = {
     ios: {
       supportsTablet: false,
       infoPlist: {
-        NSCameraUsageDescription: "Capture seller evidence for this Proof.",
+        NSCameraUsageDescription: "Scan shipping labels and record packing evidence for this Proof.",
         NSPhotoLibraryUsageDescription: "Select captured evidence if the camera is unavailable.",
       },
     },
@@ -62,6 +62,14 @@ module.exports = {
       permissions: ["CAMERA", "RECORD_AUDIO"],
     },
     plugins: [
+      [
+        "expo-camera",
+        {
+          cameraPermission: "Scan shipping labels and record packing evidence for this Proof.",
+          microphonePermission: false,
+          recordAudioAndroid: false,
+        },
+      ],
       [
         "expo-image-picker",
         {

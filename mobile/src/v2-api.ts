@@ -397,6 +397,7 @@ export interface FulfillmentQueueItem {
   participationPolicy: string;
   evidenceCount: number;
   pendingEvidenceCount: number;
+  fulfillmentCaptureCount?: number;
   canComplete: boolean;
   workflowState: string;
 }
@@ -411,6 +412,7 @@ export interface PackingStationResolveView {
   participationPolicy: string | null;
   orderLabel: string;
   itemSummary: string;
+  trackingHint?: string | null;
   committedEvidenceCount: number;
   captureReady: boolean;
   alreadyFinalized: boolean;

@@ -10,6 +10,7 @@ export function FulfillmentDetailScreen(props: {
   onComplete: () => void;
   onCompleteAndNext: () => void;
   onOpenProof: () => void;
+  onOpenStation: () => void;
 }) {
   if (props.loading && !props.item) {
     return (
@@ -32,6 +33,8 @@ export function FulfillmentDetailScreen(props: {
     );
   }
   const item = props.item;
+  const hasCapture = (item.fulfillmentCaptureCount ?? 0) > 0;
+  const finalized = item.proofStatus === "FINALIZED" || item.workflowState === "COMPLETED";
   return (
     <main className="page stack">
       <header className="header-block">
@@ -63,10 +66,25 @@ export function FulfillmentDetailScreen(props: {
         </p>
       </section>
       <section className="section">
+        <h2>Packing evidence</h2>
+        {hasCapture ? (
+          <p className="banner banner-info">Packing evidence recorded</p>
+        ) : (
+          <>
+            <p className="note">
+              Packing evidence is required before this Proof can be finalized. Attestation alone is
+              not enough.
+            </p>
+            <button className="btn" type="button" disabled={props.busy || finalized} onClick={props.onOpenStation}>
+              Open Packing Station
+            </button>
+          </>
+        )}
+      </section>
+      <section className="section">
         <h2>Packing confirmation</h2>
         <p className="note">
-          This is a user attestation. PackProof records it. It does not independently verify the
-          pack.
+          This is a user attestation. PackProof records it. It does not replace packing evidence.
         </p>
         {item.sellerPackingAttested ? (
           <p className="banner banner-info">Packing attestation recorded</p>
@@ -75,7 +93,7 @@ export function FulfillmentDetailScreen(props: {
             <input
               type="checkbox"
               checked={false}
-              disabled={props.busy}
+              disabled={props.busy || finalized}
               onChange={() => props.onAttest()}
             />
             <span>I attest that I packed this order as described.</span>
@@ -83,14 +101,7 @@ export function FulfillmentDetailScreen(props: {
         )}
       </section>
       <section className="section">
-        <h2>Optional documentation</h2>
-        <p className="note">
-          Packing media can be added before completion. Video is not required. Use the mobile app
-          to record packing video on this same PackProof.
-        </p>
-        {item.evidenceCount > 0 ? (
-          <p className="meta">{item.evidenceCount} committed media item{item.evidenceCount === 1 ? "" : "s"}</p>
-        ) : null}
+        <h2>PackProof</h2>
         <button className="btn btn-secondary" type="button" onClick={props.onOpenProof}>
           Open full PackProof
         </button>

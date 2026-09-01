@@ -44,12 +44,19 @@ export function ProofScreen(props: {
   const packingAttested = Boolean(
     proof?.attestations?.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
   );
+  const hasFulfillmentCapture = Boolean(
+    proof?.evidence.some(
+      (row) => row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE",
+    ),
+  );
+  const merchantReady =
+    proof?.participationPolicy === "COUNTERPARTY_OPTIONAL" &&
+    proof.status !== "FINALIZED" &&
+    packingAttested &&
+    hasFulfillmentCapture;
   const canFinalize =
     role === "SELLER" &&
-    (proof?.status === "EVIDENCE_COMMITTED" ||
-      (proof?.participationPolicy === "COUNTERPARTY_OPTIONAL" &&
-        proof.status !== "FINALIZED" &&
-        packingAttested));
+    Boolean(merchantReady || (proof?.participationPolicy !== "COUNTERPARTY_OPTIONAL" && proof?.status === "EVIDENCE_COMMITTED"));
   const canInvite = Boolean(proof && role === "SELLER" && proof.status !== "FINALIZED");
   const canImportDemoCarrier = proof && role === "SELLER" && Boolean(props.onImportShipmentEvents);
   const canSyncShipment = Boolean(proof?.shipmentSync?.available && props.onSyncShipment);

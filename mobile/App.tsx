@@ -1706,6 +1706,7 @@ export default function App() {
                     try {
                       const initialized = await client.initializeEvidenceUpload(proof.proofId, {
                         contentType: localCapture.contentType,
+                        evidenceType: "FULFILLMENT_CAPTURE",
                         idempotencyKey: key,
                       });
                       await uploadCaptureFile({

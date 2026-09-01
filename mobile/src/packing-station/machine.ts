@@ -43,7 +43,7 @@ export function restoreStationState(partial: Partial<StationState> | null | unde
         } satisfies StationError),
     };
   }
-  if (next.phase === "IDENTIFYING" || next.phase === "RECORDING" || next.phase === "PROCESSING") {
+  if (next.phase === "IDENTIFYING" || next.phase === "SCANNING" || next.phase === "RECORDING" || next.phase === "PROCESSING") {
     return {
       ...next,
       phase: next.order?.captureReady ? "READY_TO_RECORD" : next.order ? "RECOVERY" : "READY",
@@ -56,6 +56,75 @@ export function reduceStation(state: StationState, event: StationEvent): Station
   switch (event.type) {
     case "SET_REFERENCE":
       return { ...state, referenceInput: event.reference };
+
+    case "SCAN_STARTED":
+      if (state.capture) {
+        return {
+          ...state,
+          error: {
+            code: "UNKNOWN",
+            message: "Finish or keep the recorded video for this order before identifying another.",
+          },
+          phase: "RECOVERY",
+          canRetry: true,
+        };
+      }
+      if (
+        state.phase !== "READY" &&
+        state.phase !== "RECOVERY" &&
+        state.phase !== "READY_TO_RECORD" &&
+        state.phase !== "SCANNING"
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "SCANNING",
+        identifyMethod: "SCAN",
+        order: null,
+        completion: null,
+        error: null,
+        canRetry: false,
+        startTrigger: null,
+        stopTrigger: null,
+        submitStep: null,
+        uploadPercent: null,
+      };
+
+    case "SCAN_CANCELLED":
+      if (state.phase !== "SCANNING") {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "READY",
+        identifyMethod: null,
+        error: null,
+        canRetry: false,
+      };
+
+    case "SCAN_DECODED": {
+      if (state.phase !== "SCANNING") {
+        return state;
+      }
+      const value = event.value.trim();
+      if (!value) {
+        return state;
+      }
+      return reduceStation(state, { type: "IDENTIFY_STARTED", method: "SCAN", reference: value });
+    }
+
+    case "SCAN_FAILED":
+      if (state.phase !== "SCANNING") {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "RECOVERY",
+        order: null,
+        error: event.error,
+        canRetry: true,
+      };
 
     case "IDENTIFY_STARTED":
       if (state.capture) {
@@ -73,7 +142,8 @@ export function reduceStation(state: StationState, event: StationEvent): Station
         state.phase !== "READY" &&
         state.phase !== "RECOVERY" &&
         state.phase !== "READY_TO_RECORD" &&
-        state.phase !== "IDENTIFYING"
+        state.phase !== "IDENTIFYING" &&
+        state.phase !== "SCANNING"
       ) {
         return state;
       }
@@ -108,7 +178,7 @@ export function reduceStation(state: StationState, event: StationEvent): Station
         phase: "RECOVERY",
         order: null,
         error: event.error,
-        canRetry: false,
+        canRetry: true,
       };
 
     case "START_RECORDING":
@@ -305,6 +375,16 @@ export function stationHasPreservedCapture(state: StationState): boolean {
 }
 
 export function stationCanIdentify(state: StationState): boolean {
+  return (
+    !state.capture &&
+    (state.phase === "READY" ||
+      state.phase === "RECOVERY" ||
+      state.phase === "READY_TO_RECORD" ||
+      state.phase === "SCANNING")
+  );
+}
+
+export function stationCanScan(state: StationState): boolean {
   return !state.capture && (state.phase === "READY" || state.phase === "RECOVERY" || state.phase === "READY_TO_RECORD");
 }
 
@@ -312,6 +392,8 @@ export function stationPhaseLabel(state: StationState): string {
   switch (state.phase) {
     case "READY":
       return "READY";
+    case "SCANNING":
+      return "SCAN";
     case "IDENTIFYING":
       return "IDENTIFYING";
     case "READY_TO_RECORD":

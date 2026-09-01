@@ -13,6 +13,8 @@ import type { ObjectStore } from "../src/s3/object-store.js";
 import { insertUser } from "../src/domain/users.js";
 import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
 import type { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
+import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
+import { sha256Hex } from "../src/hash.js";
 
 export interface TestHarness {
   db: Database;
@@ -82,4 +84,41 @@ export async function login(app: TestHarness["app"], subject: string): Promise<s
     throw new Error(`login failed: ${response.status} ${JSON.stringify(response.body)}`);
   }
   return response.body.userId as string;
+}
+
+export async function commitProofEvidence(
+  harness: TestHarness,
+  seller: string,
+  proofId: string,
+  input: {
+    evidenceType?: string;
+    contentType?: string;
+    bytes?: Buffer;
+    idempotencyKey?: string;
+  } = {},
+) {
+  const bytes = input.bytes ?? Buffer.from(`evidence-${proofId}-${input.evidenceType ?? "default"}`);
+  const contentType = input.contentType ?? "video/mp4";
+  const upload = await initializeEvidenceUpload(
+    harness.db,
+    harness.clock,
+    harness.objectStore,
+    seller,
+    proofId,
+    {
+      contentType,
+      evidenceType: input.evidenceType,
+      idempotencyKey: input.idempotencyKey ?? `evd-${proofId}-${input.evidenceType ?? "default"}`,
+    },
+  );
+  await harness.objectStore.put(upload.objectKey, bytes, contentType);
+  return commitEvidence(
+    harness.db,
+    harness.clock,
+    harness.objectStore,
+    seller,
+    proofId,
+    upload.evidenceId,
+    sha256Hex(bytes),
+  );
 }

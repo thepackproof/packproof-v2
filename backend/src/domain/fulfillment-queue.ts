@@ -6,6 +6,7 @@ import {
   synthesizeItemsFromLegacy,
   type TransactionItemView,
 } from "./transaction-items.js";
+import { evaluateFinalizeRequirements } from "./finalize-requirements.js";
 import {
   requireParticipationPolicy,
   type ParticipationPolicy,
@@ -38,6 +39,7 @@ export interface FulfillmentQueueItem {
   sellerPackingAttested: boolean;
   evidenceCount: number;
   pendingEvidenceCount: number;
+  fulfillmentCaptureCount: number;
   canComplete: boolean;
   workflowState: FulfillmentWorkflowState;
 }
@@ -65,6 +67,7 @@ interface QueueRow {
   packing_attested: boolean;
   evidence_count: string | number;
   pending_evidence_count: string | number;
+  fulfillment_capture_count: string | number;
 }
 
 export async function listFulfillmentQueue(
@@ -106,7 +109,13 @@ export async function listFulfillmentQueue(
         (
           SELECT COUNT(*) FROM evidence e
            WHERE e.proof_id = p.id AND e.validation_status = 'PENDING'
-        ) AS pending_evidence_count
+        ) AS pending_evidence_count,
+        (
+          SELECT COUNT(*) FROM evidence e
+           WHERE e.proof_id = p.id
+             AND e.validation_status = 'COMMITTED'
+             AND e.evidence_type = 'FULFILLMENT_CAPTURE'
+        ) AS fulfillment_capture_count
        FROM commerce_order_records r
        JOIN integration_connections c ON c.id = r.connection_id
        JOIN transactions t ON t.id = r.transaction_id
@@ -133,6 +142,8 @@ export async function listFulfillmentQueue(
     const packingAttested = Boolean(row.packing_attested);
     const evidenceCount = Number(row.evidence_count ?? 0);
     const pendingEvidenceCount = Number(row.pending_evidence_count ?? 0);
+    const fulfillmentCaptureCount = Number(row.fulfillment_capture_count ?? 0);
+    const participationPolicy = requireParticipationPolicy(row.participation_policy);
     const finalized = row.proof_status === "FINALIZED";
     const removed =
       row.eligibility !== "FULFILLMENT_ELIGIBLE" ||
@@ -171,11 +182,23 @@ export async function listFulfillmentQueue(
       currency: row.currency,
       orderedAt: row.ordered_at ? asRequiredIso(row.ordered_at) : null,
       proofStatus: row.proof_status,
-      participationPolicy: requireParticipationPolicy(row.participation_policy),
+      participationPolicy,
       sellerPackingAttested: packingAttested,
       evidenceCount,
       pendingEvidenceCount,
-      canComplete: !finalized && packingAttested && pendingEvidenceCount === 0,
+      fulfillmentCaptureCount,
+      canComplete:
+        !finalized &&
+        evaluateFinalizeRequirements({
+          participationPolicy,
+          proofStatus: row.proof_status,
+          hasSeller: true,
+          hasBuyer: true,
+          pendingEvidenceCount,
+          committedEvidenceCount: evidenceCount,
+          committedFulfillmentCaptureCount: fulfillmentCaptureCount,
+          packingAttested,
+        }).ok,
       workflowState,
     });
   }

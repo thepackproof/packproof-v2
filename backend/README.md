@@ -103,3 +103,9 @@ Disabled unless `PACKPROOF_S3_INTEGRATION=1` and S3 storage is configured. Uses 
 ## Web origin
 
 Browser clients listed in `PACKPROOF_WEB_ORIGINS` receive CORS headers. The first-party reference client is `web/`. Staging hosting is S3 + CloudFront via `infra/deploy-web.ps1`. See `docs/WEB_CLIENT.md`.
+
+## Migrations
+
+SQL files in `migrations/` apply in filename order at process start (`migrate()`). Staging/production must receive new files through the normal deploy path. Do not edit live rows by hand.
+
+`013_fulfillment_capture.sql` adds `evidence_type_check` (`SELLER_EVIDENCE` | `FULFILLMENT_CAPTURE`). Existing rows are preserved. It does not rewrite finalized Proofs. Merchant finalization after this migration requires committed `FULFILLMENT_CAPTURE`; already-finalized Proofs stay finalized.

@@ -527,6 +527,7 @@ h2 {
   color: #fff;
 }
 
+.station-scanning,
 .station-ready,
 .station-identifying,
 .station-ready_to_record {

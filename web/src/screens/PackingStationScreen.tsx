@@ -8,8 +8,10 @@ import {
   reduceStation,
   stationPhaseLabel,
 } from "../../../mobile/src/packing-station/machine";
+import { normalizeStationReference } from "../../../mobile/src/packing-station/scan";
 import { submitStationSession } from "../../../mobile/src/packing-station/submit";
 import type { StationCandidate } from "../../../mobile/src/packing-station/types";
+import { detectWebScanAdapter } from "../packing-station/scan-adapter";
 
 const COMPLETED_HOLD_MS = 1600;
 
@@ -18,6 +20,7 @@ export function PackingStationScreen(props: {
   userId: string;
   queue: FulfillmentQueueItem[];
   error: string | null;
+  initialReference?: string;
   onAuthExpired: () => void;
 }) {
   const [state, dispatch] = useReducer(reduceStation, undefined, initialStationState);
@@ -31,7 +34,9 @@ export function PackingStationScreen(props: {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const orderRef = useRef(state.order);
+  const bootstrapped = useRef(false);
   orderRef.current = state.order;
+  const webScan = detectWebScanAdapter();
 
   const candidates: StationCandidate[] = props.queue
     .filter((item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT")
@@ -51,6 +56,18 @@ export function PackingStationScreen(props: {
   }, [state.phase]);
 
   useEffect(() => {
+    if (bootstrapped.current) {
+      return;
+    }
+    const reference = normalizeStationReference(props.initialReference);
+    if (!reference) {
+      return;
+    }
+    bootstrapped.current = true;
+    void identify("REFERENCE", reference);
+  }, [props.initialReference]);
+
+  useEffect(() => {
     return () => stopLiveTracks();
   }, []);
 
@@ -63,13 +80,13 @@ export function PackingStationScreen(props: {
     }
   }
 
-  async function identify(method: "REFERENCE" | "QUEUE_SELECT", reference: string, transactionId?: string) {
+  async function identify(method: "SCAN" | "REFERENCE" | "QUEUE_SELECT", reference: string, transactionId?: string) {
     setLocalError(null);
     dispatch({ type: "IDENTIFY_STARTED", method, reference });
     setBusy(true);
     try {
       let proof: CanonicalProof;
-      let labels: { orderLabel: string; itemSummary: string } | undefined;
+      let labels: { orderLabel: string; itemSummary: string; trackingHint?: string | null } | undefined;
       if (transactionId) {
         proof = await props.api.createOrGetProof(transactionId);
         const selected = candidates.find((item) => item.transactionId === transactionId);
@@ -78,7 +95,11 @@ export function PackingStationScreen(props: {
           : undefined;
       } else {
         const resolved = await props.api.resolvePackingStation(reference);
-        labels = { orderLabel: resolved.orderLabel, itemSummary: resolved.itemSummary };
+        labels = {
+          orderLabel: resolved.orderLabel,
+          itemSummary: resolved.itemSummary,
+          trackingHint: resolved.trackingHint ?? null,
+        };
         proof = await props.api.createOrGetProof(resolved.transactionId);
       }
       dispatch({
@@ -241,9 +262,10 @@ export function PackingStationScreen(props: {
         <div className="station-identity">
           <p className="station-order">{state.order.orderLabel}</p>
           <p className="station-item">{state.order.itemSummary}</p>
+          {state.order.trackingHint ? <p className="station-item">{state.order.trackingHint}</p> : null}
         </div>
       ) : (
-        <p className="station-copy">Identify an order, pack in frame, then PackProof finishes the record.</p>
+        <p className="station-copy">Scan a label, pack in frame, then PackProof finishes the record.</p>
       )}
       {props.error || localError || state.error ? (
         <p className="station-error" role="alert">
@@ -264,29 +286,71 @@ export function PackingStationScreen(props: {
         autoPlay
       />
 
-      {state.phase === "READY" || (state.phase === "RECOVERY" && !state.capture) ? (
+      {state.phase === "SCANNING" ? (
         <form
           className="station-identify"
           onSubmit={(event) => {
             event.preventDefault();
-            if (state.referenceInput.trim()) {
-              void identify("REFERENCE", state.referenceInput);
+            const value = normalizeStationReference(state.referenceInput);
+            if (!value) {
+              return;
             }
+            dispatch({ type: "SCAN_DECODED", value });
+            void identify("SCAN", value);
           }}
         >
+          <p className="station-copy">
+            Scan the shipping label or order barcode
+            {webScan.kind === "KEYBOARD" ? " with a USB scanner or type the code, then press Enter." : "."}
+          </p>
           <label className="field">
-            <span className="visually-hidden">Order or tracking number</span>
+            <span className="visually-hidden">Barcode or order reference</span>
             <input
               value={state.referenceInput}
               onChange={(event) => dispatch({ type: "SET_REFERENCE", reference: event.target.value })}
-              placeholder="Order or tracking number"
+              placeholder="Scan or enter barcode"
               autoComplete="off"
+              autoFocus
             />
           </label>
-          <button className="btn station-btn" type="submit" disabled={busy || !state.referenceInput.trim()}>
-            Identify order
+          <button className="btn station-btn" type="submit" disabled={busy || !normalizeStationReference(state.referenceInput)}>
+            Use this code
+          </button>
+          <button className="btn btn-secondary station-btn" type="button" onClick={() => dispatch({ type: "SCAN_CANCELLED" })}>
+            Cancel
           </button>
         </form>
+      ) : null}
+
+      {state.phase === "READY" || (state.phase === "RECOVERY" && !state.capture) ? (
+        <div className="station-identify">
+          <button className="btn station-btn" type="button" disabled={busy} onClick={() => dispatch({ type: "SCAN_STARTED" })}>
+            Scan Order / Label
+          </button>
+          <form
+            className="station-identify"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const reference = normalizeStationReference(state.referenceInput);
+              if (reference) {
+                void identify("REFERENCE", reference);
+              }
+            }}
+          >
+            <label className="field">
+              <span className="visually-hidden">Enter reference</span>
+              <input
+                value={state.referenceInput}
+                onChange={(event) => dispatch({ type: "SET_REFERENCE", reference: event.target.value })}
+                placeholder="Enter reference"
+                autoComplete="off"
+              />
+            </label>
+            <button className="btn btn-secondary station-btn" type="submit" disabled={busy || !normalizeStationReference(state.referenceInput)}>
+              Identify by reference
+            </button>
+          </form>
+        </div>
       ) : null}
 
       {state.phase === "READY" || (state.phase === "RECOVERY" && !state.capture) ? (

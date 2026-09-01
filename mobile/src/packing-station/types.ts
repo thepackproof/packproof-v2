@@ -2,6 +2,7 @@ export const STATION_RESOLVE_SCHEMA = "packproof.packing-station.resolve/v1" as 
 
 export type StationPhase =
   | "READY"
+  | "SCANNING"
   | "IDENTIFYING"
   | "READY_TO_RECORD"
   | "RECORDING"
@@ -49,6 +50,10 @@ export type StationErrorCode =
   | "UPLOAD_FAILED"
   | "NETWORK"
   | "CAPTURE_FAILED"
+  | "CAMERA_PERMISSION_DENIED"
+  | "SCANNER_UNAVAILABLE"
+  | "SCAN_UNREADABLE"
+  | "SCAN_UNSUPPORTED"
   | "UNKNOWN";
 
 export interface StationError {
@@ -70,6 +75,7 @@ export interface StationOrderContext {
   participationPolicy: string | null;
   orderLabel: string;
   itemSummary: string;
+  trackingHint?: string | null;
   alreadyFinalized: boolean;
   alreadyHasCommittedEvidence: boolean;
   captureReady: boolean;
@@ -94,6 +100,10 @@ export interface StationState {
 
 export type StationEvent =
   | { type: "SET_REFERENCE"; reference: string }
+  | { type: "SCAN_STARTED" }
+  | { type: "SCAN_CANCELLED" }
+  | { type: "SCAN_DECODED"; value: string }
+  | { type: "SCAN_FAILED"; error: StationError }
   | { type: "IDENTIFY_STARTED"; method: IdentifyMethod; reference?: string }
   | { type: "IDENTIFY_RESOLVED"; context: StationOrderContext; method: IdentifyMethod }
   | { type: "IDENTIFY_FAILED"; error: StationError }
@@ -121,6 +131,7 @@ export interface PackingStationResolveView {
   participationPolicy: string | null;
   orderLabel: string;
   itemSummary: string;
+  trackingHint?: string | null;
   committedEvidenceCount: number;
   captureReady: boolean;
   alreadyFinalized: boolean;
@@ -134,7 +145,7 @@ export interface StationProofSnapshot {
   status: string;
   participationPolicy?: string | null;
   participants: Array<{ userId: string; role: string }>;
-  evidence: Array<{ validationStatus: string }>;
+  evidence: Array<{ validationStatus: string; evidenceType?: string }>;
   attestations?: Array<{ statement: string; attestedBy: string }>;
   transaction: {
     externalReference?: string | null;

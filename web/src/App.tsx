@@ -27,10 +27,12 @@ type Route =
   | { name: "proof"; proofId: string }
   | { name: "fulfillment" }
   | { name: "fulfillment-detail"; proofId: string }
-  | { name: "station" }
+  | { name: "station"; reference?: string }
   | { name: "stores" };
 
-function parseRoute(pathname: string): Route {
+function parseHref(href: string): Route {
+  const url = new URL(href, "http://packproof.local");
+  const pathname = url.pathname;
   if (pathname === "/new") {
     return { name: "create" };
   }
@@ -38,7 +40,8 @@ function parseRoute(pathname: string): Route {
     return { name: "fulfillment" };
   }
   if (pathname === "/station") {
-    return { name: "station" };
+    const reference = url.searchParams.get("reference")?.trim() || undefined;
+    return { name: "station", reference };
   }
   if (pathname === "/stores") {
     return { name: "stores" };
@@ -55,14 +58,17 @@ function parseRoute(pathname: string): Route {
 }
 
 function writePath(path: string) {
-  if (window.location.pathname !== path) {
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (current !== path) {
     window.history.pushState(null, "", path);
   }
 }
 
 export function App() {
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
-  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
+  const [route, setRoute] = useState<Route>(() =>
+    parseHref(`${window.location.pathname}${window.location.search}`),
+  );
   const [proofs, setProofs] = useState<ProofCollectionItem[]>([]);
   const [invitations, setInvitations] = useState<InvitationInboxView[]>([]);
   const [proof, setProof] = useState<CanonicalProof | null>(null);
@@ -98,7 +104,7 @@ export function App() {
   }
 
   function go(path: string) {
-    const next = parseRoute(path);
+    const next = parseHref(path);
     setError(null);
     if (next.name !== "proof" || proof?.proofId !== next.proofId) {
       setProof(null);
@@ -165,7 +171,7 @@ export function App() {
 
   useEffect(() => {
     const onPop = () => {
-      const next = parseRoute(window.location.pathname);
+      const next = parseHref(`${window.location.pathname}${window.location.search}`);
       if (next.name !== "proof") {
         setProof(null);
         setShipmentIntegrity(null);
@@ -382,6 +388,7 @@ export function App() {
             (item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT",
           )}
           error={error}
+          initialReference={route.reference}
           onAuthExpired={signOut}
         />
       ) : null}
@@ -455,6 +462,11 @@ export function App() {
               .finally(() => setBusy(false));
           }}
           onOpenProof={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onOpenStation={() => {
+            const current = queue.find((item) => item.proofId === route.proofId);
+            const reference = current?.externalReference || current?.externalOrderId || "";
+            go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
+          }}
         />
       ) : null}
 

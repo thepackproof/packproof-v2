@@ -262,6 +262,7 @@ export const fulfillmentItem: FulfillmentQueueItem = {
   sellerPackingAttested: false,
   evidenceCount: 0,
   pendingEvidenceCount: 0,
+  fulfillmentCaptureCount: 0,
   canComplete: false,
   workflowState: "READY_TO_PACK",
 };

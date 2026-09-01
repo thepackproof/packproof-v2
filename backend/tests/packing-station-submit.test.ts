@@ -29,7 +29,7 @@ function apiMock(sequence: StationProofSnapshot[]): StationSubmitApi & { calls: 
   return {
     calls,
     async initializeEvidenceUpload(proofId, input) {
-      calls.push(`init:${proofId}:${input.idempotencyKey}`);
+      calls.push(`init:${proofId}:${input.evidenceType ?? ""}:${input.idempotencyKey}`);
       return {
         evidenceId: "evd_1",
         upload: { method: "PUT", url: "http://example.test/upload/t", headers: {} },
@@ -100,7 +100,9 @@ describe("packing station submit", () => {
     expect(result.proof.proofId).toBe("proof_1");
     expect(result.idempotencyKey).toBe("idem_same");
     expect(upload).toHaveBeenCalledTimes(1);
-    expect(api.calls.filter((item) => item.startsWith("init:"))).toEqual(["init:proof_1:idem_same"]);
+    expect(api.calls.filter((item) => item.startsWith("init:"))).toEqual([
+      "init:proof_1:FULFILLMENT_CAPTURE:idem_same",
+    ]);
     expect(api.calls.some((item) => item.startsWith("attest:proof_1:evd_1"))).toBe(true);
     expect(api.calls).toContain("finalize:proof_1");
   });
@@ -136,7 +138,9 @@ describe("packing station submit", () => {
       idempotencyKey: "idem_retry",
       deps: { api, upload, newIdempotencyKey: () => "unused" },
     });
-    expect(api.calls.filter((item) => item.startsWith("init:"))).toEqual(["init:proof_1:idem_retry"]);
+    expect(api.calls.filter((item) => item.startsWith("init:"))).toEqual([
+      "init:proof_1:FULFILLMENT_CAPTURE:idem_retry",
+    ]);
   });
 
   it("refuses to mutate a finalized Proof and does not upload", async () => {

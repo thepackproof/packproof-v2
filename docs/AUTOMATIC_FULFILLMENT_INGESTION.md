@@ -15,14 +15,14 @@ PackProof created-or-found
         ↓
 Seller sees it in Fulfillment Queue
         ↓
-Seller packs and attests
+Seller packs with qualifying fulfillment capture
         ↓
-Optional photo / video
+Seller attests (attribution)
         ↓
 Complete PackProof
 ```
 
-The seller does not create each PackProof by hand. The seller does not wait for a buyer PackProof account. The existing web fulfillment queue can still complete a merchant Proof with the packing attestation. Packing Station Mode treats continuous packing video as the required physical evidence for that workflow; see [PACKING_STATION.md](PACKING_STATION.md).
+The seller does not create each PackProof by hand. The seller does not wait for a buyer PackProof account. A new merchant PackProof cannot finalize without qualifying physical fulfillment evidence (`FULFILLMENT_CAPTURE`) plus the required packing attestation. Attestation alone is not enough. See [PACKING_STATION.md](PACKING_STATION.md).
 
 ## Product goal
 
@@ -117,19 +117,22 @@ Imported multi-item orders persist every line. The final manifest includes `tran
 
 Do not fabricate a PackProof buyer from a marketplace customer. External buyer id and a safe display name may be stored as import context. Email, phone, and shipping address are not required and are not stored on the commerce path.
 
-## Packing attestation and optional media
+## Packing attestation and fulfillment capture
 
-The default merchant statement is the existing `PACKED_DESCRIBED_ITEM` attestation: “I attest that I packed this order as described.” It is attributable, timestamped, immutable, shown as a user attestation, and included in the merchant final manifest.
+The default merchant statement is the existing `PACKED_DESCRIBED_ITEM` attestation: “I attest that I packed this order as described.” It is attributable, timestamped, immutable, shown as a user attestation, and included in the merchant final manifest. It is not a substitute for physical fulfillment evidence.
 
 Merchant Proofs may finalize from `READY_FOR_EVIDENCE` or `EVIDENCE_COMMITTED` when:
 
 - the seller is authorized
 - participation policy is `COUNTERPARTY_OPTIONAL`
+- at least one committed `FULFILLMENT_CAPTURE` exists
 - the packing attestation exists
 - any actually-added evidence is fully committed
 - other canonical invariants pass
 
-PackProof does not invent evidence rows and does not mark nonexistent media `EVIDENCE_COMMITTED`. If the seller adds photo or video, the existing upload / SHA-256 / commit path is unchanged. Pending uncommitted media blocks finalization.
+Eligibility is decided by `evaluateFinalizeRequirements`. MIME type and filename do not qualify capture. Already-finalized Proofs are not rewritten if they were completed under an earlier policy.
+
+PackProof does not invent evidence rows and does not mark nonexistent media `EVIDENCE_COMMITTED`. Station packing video is committed as `FULFILLMENT_CAPTURE` through the existing upload / SHA-256 / commit path. Pending uncommitted media blocks finalization. Generic `SELLER_EVIDENCE` (including an unrelated `video/mp4`) does not satisfy the merchant capture requirement.
 
 ## Mutable projection vs immutable Proof
 

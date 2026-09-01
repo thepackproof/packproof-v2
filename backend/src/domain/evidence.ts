@@ -12,6 +12,7 @@ import {
   requireParticipant,
   type ProofView,
 } from "./proofs.js";
+import { parseEvidenceType } from "./evidence-types.js";
 import { asRequiredIso, type EvidenceRow } from "./types.js";
 
 export interface EvidenceUploadView {
@@ -57,7 +58,7 @@ export async function initializeEvidenceUpload(
   if (!contentType) {
     throw new DomainError("INVALID_CONTENT_TYPE", "contentType is required", 400);
   }
-  const evidenceType = (input.evidenceType ?? "SELLER_EVIDENCE").trim();
+  const evidenceType = parseEvidenceType(input.evidenceType);
 
   return db.transaction(async (tx) => {
     const proof = await loadProof(tx, proofId, true);

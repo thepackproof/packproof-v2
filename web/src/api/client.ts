@@ -192,14 +192,14 @@ export class PackProofApi {
 
   async initializeEvidenceUpload(
     proofId: string,
-    input: { contentType: string; idempotencyKey: string },
+    input: { contentType: string; evidenceType?: string; idempotencyKey: string },
   ): Promise<EvidenceUploadView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/uploads`, {
       method: "POST",
       headers: { "Idempotency-Key": input.idempotencyKey },
       body: {
         contentType: input.contentType,
-        evidenceType: "SELLER_EVIDENCE",
+        evidenceType: input.evidenceType ?? "SELLER_EVIDENCE",
       },
     });
   }
