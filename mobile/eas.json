@@ -6,9 +6,9 @@
   "build": {
     "internal-staging": {
       "distribution": "store",
-      "credentialsSource": "remote",
       "android": {
         "buildType": "app-bundle",
+        "credentialsSource": "remote",
         "keystoreName": "Play upload key pdbJYV45vI"
       },
       "env": {
