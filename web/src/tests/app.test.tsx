@@ -391,6 +391,42 @@ describe("PackProof web reference client", () => {
     );
   });
 
+  it("offers Connect eBay from Create when eBay is enabled and not connected", async () => {
+    signInSession();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.split("?")[0].endsWith("/me/marketplaces")) {
+          return json({
+            marketplaces: [
+              {
+                provider: "ebay",
+                adapterKey: "ebay",
+                enabled: true,
+                environment: "sandbox",
+                connection: null,
+              },
+            ],
+          });
+        }
+        if (url.endsWith("/me/proofs")) {
+          return json({ proofs: [summary] });
+        }
+        if (url.endsWith("/invitations")) {
+          return json({ invitations: [] });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Create" }));
+    expect(await screen.findByRole("button", { name: "Connect eBay" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import purchase" })).toBeInTheDocument();
+    expect(screen.queryByText("Vintage film camera")).not.toBeInTheDocument();
+  });
+
   it("lists connected eBay sales instead of the demo marketplace import", async () => {
     signInSession();
     vi.stubGlobal(

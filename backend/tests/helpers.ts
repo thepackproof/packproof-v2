@@ -11,6 +11,7 @@ import type { Database } from "../src/db/database.js";
 import { LocalObjectStore } from "../src/s3/local-object-store.js";
 import type { ObjectStore } from "../src/s3/object-store.js";
 import { insertUser } from "../src/domain/users.js";
+import type { MutableCredentialStore } from "../src/integrations/credentials.js";
 import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
 import type { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
 import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
@@ -21,7 +22,7 @@ export interface TestHarness {
   app: ReturnType<typeof createApp>;
   clock: Clock;
   objectStore: ObjectStore;
-  credentialStore: MemoryCredentialStore;
+  credentialStore: MutableCredentialStore;
   close: () => Promise<void>;
 }
 
@@ -32,12 +33,15 @@ export async function createHarness(
     objectStore?: ObjectStore;
     integrations?: IntegrationAdapterRegistry;
     ebay?: import("../src/domain/ebay-marketplace.js").EbayRuntime;
+    credentialStore?: MutableCredentialStore;
+    opened?: { db: Database; close: () => Promise<void> };
   } = {},
 ): Promise<TestHarness> {
   const resolvedClock = clock ?? systemClock;
   const publicBaseUrl = options.publicBaseUrl ?? "http://127.0.0.1";
   const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-v2-"));
-  const opened = await createPgliteDatabase();
+  const opened = options.opened ?? (await createPgliteDatabase());
+  const ownsDatabase = !options.opened;
   await migrate(opened.db);
   const objectStore =
     options.objectStore ??
@@ -46,7 +50,7 @@ export async function createHarness(
       publicBaseUrl,
       "test-upload-secret",
     );
-  const credentialStore = new MemoryCredentialStore();
+  const credentialStore = options.credentialStore ?? new MemoryCredentialStore();
   const app = createApp({
     db: opened.db,
     objectStore,
@@ -66,7 +70,9 @@ export async function createHarness(
     objectStore,
     credentialStore,
     close: async () => {
-      await opened.close();
+      if (ownsDatabase) {
+        await opened.close();
+      }
       await rm(dir, { recursive: true, force: true });
     },
   };

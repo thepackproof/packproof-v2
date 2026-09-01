@@ -24,10 +24,12 @@ export function CreateProofScreen(props: {
   busy: boolean;
   error: string | null;
   development: boolean;
+  ebayEnabled: boolean;
   ebayConnected: boolean;
   onCancel: () => void;
   onScan: () => void;
   onCreate: (input: TransactionWriteInput) => void;
+  onConnectEbay: () => void;
   onImportPurchase: () => Promise<TransactionImportView>;
   onListEbayOrders: () => Promise<{ orders: EbaySellerOrderView[]; disclosure: string }>;
   onImportEbayOrder: (orderId: string) => Promise<TransactionImportView>;
@@ -114,10 +116,24 @@ export function CreateProofScreen(props: {
                     ? "From connected eBay account"
                     : props.development
                       ? "Development demo import"
-                      : "Connect eBay in Account → Stores first"}
+                      : "Connect eBay first"}
               </span>
             </span>
           </button>
+          {props.ebayEnabled && !props.ebayConnected ? (
+            <button
+              className="option-card"
+              type="button"
+              disabled={props.busy}
+              aria-label="Connect eBay"
+              onClick={props.onConnectEbay}
+            >
+              <span className="option-copy">
+                <strong className="card-title">Connect eBay</strong>
+                <span className="meta">Authorize a seller account, then import a real sale</span>
+              </span>
+            </button>
+          ) : null}
           <button
             className="option-card"
             type="button"

@@ -1,21 +1,25 @@
 import type { AppConfig } from "../config.js";
-import type { IntegrationCredentialStore, IntegrationCredentials } from "./credentials.js";
+import type { IntegrationCredentials, MutableCredentialStore } from "./credentials.js";
 import { EnvCredentialStore } from "./env-credential-store.js";
 import { MemoryCredentialStore } from "./memory-credential-store.js";
 import {
   createSecretsManagerClient,
+  looksLikeSecretId,
   SecretsManagerCredentialStore,
 } from "./secrets-manager-credential-store.js";
 
-export class CompositeCredentialStore implements IntegrationCredentialStore {
+export class CompositeCredentialStore implements MutableCredentialStore {
   constructor(
     readonly memory: MemoryCredentialStore,
     private readonly env: EnvCredentialStore,
-    private readonly secrets?: IntegrationCredentialStore,
+    private readonly secrets?: MutableCredentialStore,
   ) {}
 
-  put(credentials: IntegrationCredentials): void {
+  async put(credentials: IntegrationCredentials): Promise<void> {
     this.memory.put(credentials);
+    if (this.secrets && looksLikeSecretId(credentials.credentialReference)) {
+      await this.secrets.put(credentials);
+    }
   }
 
   async getCredentials(input: {
@@ -35,6 +39,16 @@ export class CompositeCredentialStore implements IntegrationCredentialStore {
       return null;
     }
     return this.secrets.getCredentials(input);
+  }
+
+  async deleteCredentials(input: {
+    adapterKey: string;
+    credentialReference: string;
+  }): Promise<void> {
+    this.memory.deleteCredentials(input);
+    if (this.secrets && looksLikeSecretId(input.credentialReference)) {
+      await this.secrets.deleteCredentials(input);
+    }
   }
 }
 

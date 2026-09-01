@@ -59,6 +59,7 @@ export interface ImportedTransaction {
     lineItemIds?: string[];
     itemIds?: string[];
     environment?: string | null;
+    marketplaceId?: string | null;
   } | null;
 }
 
@@ -87,6 +88,7 @@ export interface ParsedImportedTransaction {
     lineItemIds: string[];
     itemIds: string[];
     environment: string | null;
+    marketplaceId: string | null;
   } | null;
 }
 
@@ -267,13 +269,15 @@ function parseProviderIdentifiers(
     lineItemIds,
     itemIds,
     environment: normalizeOptionalText(record.environment, "providerIdentifiers.environment"),
+    marketplaceId: normalizeOptionalText(record.marketplaceId, "providerIdentifiers.marketplaceId"),
   };
   if (
     !identifiers.orderId &&
     !identifiers.legacyOrderId &&
     identifiers.lineItemIds.length === 0 &&
     identifiers.itemIds.length === 0 &&
-    !identifiers.environment
+    !identifiers.environment &&
+    !identifiers.marketplaceId
   ) {
     return null;
   }

@@ -6,6 +6,7 @@ import {
   providerTemporarilyUnavailable,
 } from "../../domain/integration-errors.js";
 import type { IntegrationCredentials } from "../credentials.js";
+import { integrationCredentialReference } from "../secrets-manager-credential-store.js";
 
 export function parseEbayAppSecret(credentials: IntegrationCredentials | null): string {
   const secret =
@@ -52,6 +53,7 @@ export function parseEbayUserCredentials(credentials: IntegrationCredentials | n
   accessTokenExpiresAt: string;
   ebayUserId: string;
   ebayUsername: string | null;
+  environment: string | null;
 } {
   if (!credentials) {
     throw providerAuthFailed();
@@ -67,7 +69,21 @@ export function parseEbayUserCredentials(credentials: IntegrationCredentials | n
     accessTokenExpiresAt: credentials.material.accessTokenExpiresAt?.trim() ?? "",
     ebayUserId: credentials.material.ebayUserId?.trim() ?? "",
     ebayUsername: credentials.material.ebayUsername?.trim() || null,
+    environment: credentials.material.environment?.trim() || null,
   };
+}
+
+export function ebayUserCredentialReference(input: {
+  packproofEnvironment: string;
+  ebayEnvironment: string;
+  connectionId: string;
+}): string {
+  return integrationCredentialReference({
+    packproofEnvironment: input.packproofEnvironment,
+    adapterKey: "ebay",
+    connectionId: input.connectionId,
+    suffix: input.ebayEnvironment === "production" ? "production" : "sandbox",
+  });
 }
 
 export function mapEbayHttpError(status: number): never {

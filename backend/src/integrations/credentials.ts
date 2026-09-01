@@ -13,7 +13,11 @@ export interface IntegrationCredentialStore {
 }
 
 export interface MutableCredentialStore extends IntegrationCredentialStore {
-  put(credentials: IntegrationCredentials): void;
+  put(credentials: IntegrationCredentials): void | Promise<void>;
+  deleteCredentials(input: {
+    adapterKey: string;
+    credentialReference: string;
+  }): void | Promise<void>;
 }
 
 export function materialWithoutSecrets(material: Record<string, string>): string[] {

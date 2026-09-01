@@ -2,9 +2,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { loadConfig } from "../src/config.js";
 import type { EbayRuntime } from "../src/domain/ebay-marketplace.js";
+import { createPgliteDatabase } from "../src/db/pglite.js";
+import { CompositeCredentialStore } from "../src/integrations/create-credential-store.js";
+import { EnvCredentialStore } from "../src/integrations/env-credential-store.js";
+import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
 import { ebayDeletionChallengeResponse } from "../src/integrations/ebay/account-deletion.js";
-import { EBAY_SCOPES } from "../src/integrations/ebay/constants.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { EBAY_SCOPES, ebayApiBaseUrl, ebayAuthBaseUrl } from "../src/integrations/ebay/constants.js";
+import { ebayUserCredentialReference } from "../src/integrations/ebay/credentials.js";
+import { SecretsManagerCredentialStore } from "../src/integrations/secrets-manager-credential-store.js";
+import { auth, commitProofEvidence, createHarness, login, type TestHarness } from "./helpers.js";
+import { InMemorySecretsManagerClient } from "./fakes/in-memory-secrets-manager.js";
 import {
   EBAY_FIXTURE_ORDER_ID,
   FakeEbayClient,
@@ -13,6 +20,7 @@ import {
 function ebayRuntime(client: FakeEbayClient, enabled = true): EbayRuntime {
   return {
     enabled,
+    packproofEnvironment: "test",
     environment: "sandbox",
     clientId: "ebay-app-id",
     ruName: "PackProof-RuName-1",
@@ -27,7 +35,7 @@ function ebayRuntime(client: FakeEbayClient, enabled = true): EbayRuntime {
 
 async function connectEbay(harness: TestHarness): Promise<string> {
   const userId = await login(harness.app, "seller-1");
-  harness.credentialStore.put({
+  await harness.credentialStore.put({
     adapterKey: "ebay",
     credentialReference: "memory:ebay-app",
     material: { clientSecret: "test-cert-id" },
@@ -63,13 +71,59 @@ describe("eBay configuration", () => {
     });
     expect(JSON.stringify(config)).not.toContain("super-secret-cert");
   });
+
+  it("fails closed when enabled without required server credentials and never echoes secrets", () => {
+    expect(() =>
+      loadConfig({
+        PACKPROOF_EBAY_INTEGRATION_ENABLED: "true",
+        PACKPROOF_EBAY_CLIENT_ID: "PackProo-PackProo-SBX-example",
+        PACKPROOF_EBAY_CLIENT_SECRET: "super-secret-cert",
+      }),
+    ).toThrow(/PACKPROOF_EBAY_RUNAME/);
+    try {
+      loadConfig({
+        PACKPROOF_EBAY_INTEGRATION_ENABLED: "true",
+        PACKPROOF_EBAY_CLIENT_ID: "PackProo-PackProo-SBX-example",
+        PACKPROOF_EBAY_CLIENT_SECRET: "super-secret-cert",
+      });
+    } catch (error) {
+      expect(String(error)).not.toContain("super-secret-cert");
+    }
+    expect(() =>
+      loadConfig({
+        PACKPROOF_EBAY_INTEGRATION_ENABLED: "true",
+        PACKPROOF_EBAY_ENVIRONMENT: "production",
+        PACKPROOF_EBAY_CLIENT_ID: "PackProo-PackProo-SBX-example",
+        PACKPROOF_EBAY_CLIENT_SECRET: "super-secret-cert",
+        PACKPROOF_EBAY_RUNAME: "PackProof-RuName-1",
+      }),
+    ).toThrow(/Sandbox App ID/);
+    const enabled = loadConfig({
+      PACKPROOF_EBAY_INTEGRATION_ENABLED: "true",
+      PACKPROOF_EBAY_ENVIRONMENT: "sandbox",
+      PACKPROOF_EBAY_CLIENT_ID: "PackProo-PackProo-SBX-example",
+      PACKPROOF_EBAY_CLIENT_SECRET: "super-secret-cert",
+      PACKPROOF_EBAY_RUNAME: "PackProof-RuName-1",
+    });
+    expect(enabled.ebay.enabled).toBe(true);
+    expect(JSON.stringify(enabled)).not.toContain("super-secret-cert");
+  });
+
+  it("uses sandbox OAuth and API hosts only for the sandbox environment", () => {
+    expect(ebayAuthBaseUrl("sandbox")).toBe("https://auth.sandbox.ebay.com");
+    expect(ebayApiBaseUrl("sandbox")).toBe("https://api.sandbox.ebay.com");
+    expect(ebayAuthBaseUrl("production")).toBe("https://auth.ebay.com");
+    expect(ebayApiBaseUrl("production")).toBe("https://api.ebay.com");
+  });
 });
 
 describe("eBay seller OAuth and order import", () => {
   let harness: TestHarness;
 
   afterEach(async () => {
-    await harness?.close();
+    if (harness) {
+      await harness.close();
+    }
   });
 
   it("connects an eBay seller and lists real adapter orders without leaking tokens", async () => {
@@ -111,9 +165,12 @@ describe("eBay seller OAuth and order import", () => {
     expect(created.body.transaction.itemTitle).toBe("Nikon F3 Camera");
     expect(created.body.transaction.provenance.provider).toBe("ebay");
     expect(created.body.transaction.provenance.tenantKey).toBe("marketplace:ebay:sandbox");
-    expect(created.body.proof.proofId).toMatch(/^proof_/);
+    expect(created.body.proof.participationPolicy).toBe("COUNTERPARTY_OPTIONAL");
+    expect(created.body.proof.status).toBe("READY_FOR_EVIDENCE");
     const metadata = JSON.stringify(created.body.transaction.metadata);
     expect(metadata).toContain(EBAY_FIXTURE_ORDER_ID);
+    expect(metadata).toContain("EBAY_US");
+    expect(metadata).toContain("\"environment\":\"sandbox\"");
     expect(metadata).not.toContain("contactAddress");
     expect(metadata).not.toContain("taxAddress");
 
@@ -122,8 +179,16 @@ describe("eBay seller OAuth and order import", () => {
       .set(auth(userId))
       .send({ createProof: true });
     expect(retry.status).toBe(200);
+    expect(retry.body.created).toBe(false);
+    expect(retry.body.proofCreated).toBe(false);
     expect(retry.body.proof.proofId).toBe(created.body.proof.proofId);
     expect(retry.body.transaction.transactionId).toBe(created.body.transaction.transactionId);
+
+    const listedProofs = await request(harness.app).get("/me/proofs").set(auth(userId));
+    const ebayProofs = listedProofs.body.proofs.filter(
+      (item: { proofId: string }) => item.proofId === created.body.proof.proofId,
+    );
+    expect(ebayProofs).toHaveLength(1);
 
     const orders = await request(harness.app)
       .get("/me/marketplaces/ebay/orders")
@@ -135,7 +200,7 @@ describe("eBay seller OAuth and order import", () => {
     const client = new FakeEbayClient();
     harness = await createHarness(undefined, { ebay: ebayRuntime(client) });
     const userId = await login(harness.app, "seller-1");
-    harness.credentialStore.put({
+    await harness.credentialStore.put({
       adapterKey: "ebay",
       credentialReference: "memory:ebay-app",
       material: { clientSecret: "test-cert-id" },
@@ -166,14 +231,21 @@ describe("eBay seller OAuth and order import", () => {
     const userId = await connectEbay(harness);
     const status = await request(harness.app).get("/me/marketplaces").set(auth(userId));
     const connectionId = status.body.marketplaces[0].connection.connectionId;
+    const credentialReference = ebayUserCredentialReference({
+      packproofEnvironment: "test",
+      ebayEnvironment: "sandbox",
+      connectionId,
+    });
     const stored = await harness.credentialStore.getCredentials({
       adapterKey: "ebay",
-      credentialReference: `memory:ebay:${connectionId}`,
+      credentialReference,
     });
     expect(stored).toBeTruthy();
+    expect(stored?.material.accessToken).toBeTruthy();
+    expect(JSON.stringify(status.body)).not.toContain(stored!.material.accessToken);
     harness.credentialStore.put({
       adapterKey: "ebay",
-      credentialReference: `memory:ebay:${connectionId}`,
+      credentialReference,
       material: {
         ...stored!.material,
         accessTokenExpiresAt: "2020-01-01T00:00:00.000Z",
@@ -251,6 +323,16 @@ describe("eBay seller OAuth and order import", () => {
       .set(auth(userId))
       .send({ createProof: true });
     const proofId = imported.body.proof.proofId as string;
+    const before = await request(harness.app).get("/me/marketplaces").set(auth(userId));
+    const connectionId = before.body.marketplaces[0].connection.connectionId as string;
+    const credentialReference = ebayUserCredentialReference({
+      packproofEnvironment: "test",
+      ebayEnvironment: "sandbox",
+      connectionId,
+    });
+    expect(
+      await harness.credentialStore.getCredentials({ adapterKey: "ebay", credentialReference }),
+    ).toBeTruthy();
 
     const disconnected = await request(harness.app)
       .post("/me/marketplaces/ebay/disconnect")
@@ -259,9 +341,149 @@ describe("eBay seller OAuth and order import", () => {
 
     const status = await request(harness.app).get("/me/marketplaces").set(auth(userId));
     expect(status.body.marketplaces[0].connection).toBeNull();
+    expect(
+      await harness.credentialStore.getCredentials({ adapterKey: "ebay", credentialReference }),
+    ).toBeNull();
 
     const proof = await request(harness.app).get(`/proofs/${proofId}`).set(auth(userId));
     expect(proof.status).toBe(200);
     expect(proof.body.proofId).toBe(proofId);
+  });
+
+  it("omits missing eBay fields instead of synthesizing buyer, price, or tracking", async () => {
+    const client = new FakeEbayClient();
+    client.orders = [
+      {
+        orderId: "12-00007-84999",
+        legacyOrderId: null,
+        creationDate: null,
+        lastModifiedDate: null,
+        orderFulfillmentStatus: null,
+        orderPaymentStatus: null,
+        sellerId: null,
+        cancelState: null,
+        buyerUsername: null,
+        total: null,
+        lineItems: [],
+        shippingCarrier: null,
+        shippingService: null,
+        trackingNumber: null,
+      },
+    ];
+    harness = await createHarness(undefined, { ebay: ebayRuntime(client) });
+    const userId = await connectEbay(harness);
+    const imported = await request(harness.app)
+      .post("/me/marketplaces/ebay/orders/12-00007-84999/import")
+      .set(auth(userId))
+      .send({ createProof: true });
+    expect(imported.status).toBe(201);
+    expect(imported.body.transaction.itemTitle).toBeNull();
+    expect(imported.body.transaction.transactionValue).toBeNull();
+    expect(imported.body.transaction.currency).toBeNull();
+    expect(imported.body.transaction.shipping).toBeNull();
+    expect(imported.body.transaction.provenance.buyer).toBeNull();
+    expect(imported.body.transaction.itemTitle).not.toBe("Vintage film camera");
+  });
+
+  it("commits seller fulfillment capture on an eBay-imported Proof and finalizes once", async () => {
+    const client = new FakeEbayClient();
+    harness = await createHarness(undefined, { ebay: ebayRuntime(client) });
+    const userId = await connectEbay(harness);
+    const created = await request(harness.app)
+      .post(`/me/marketplaces/ebay/orders/${EBAY_FIXTURE_ORDER_ID}/import`)
+      .set(auth(userId))
+      .send({ createProof: true });
+    const proofId = created.body.proof.proofId as string;
+    await commitProofEvidence(harness, userId, proofId, {
+      evidenceType: "FULFILLMENT_CAPTURE",
+      contentType: "video/mp4",
+    });
+    const attested = await request(harness.app)
+      .post(`/proofs/${proofId}/attestations`)
+      .set(auth(userId))
+      .send({ statement: "PACKED_DESCRIBED_ITEM" });
+    expect(attested.status).toBe(201);
+    const finalized = await request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(userId));
+    expect(finalized.status).toBe(200);
+    expect(finalized.body.proof.status).toBe("FINALIZED");
+    const retry = await request(harness.app)
+      .post(`/me/marketplaces/ebay/orders/${EBAY_FIXTURE_ORDER_ID}/import`)
+      .set(auth(userId))
+      .send({ createProof: true });
+    expect(retry.body.proof.proofId).toBe(proofId);
+    expect(retry.body.proof.status).toBe("FINALIZED");
+  });
+});
+
+describe("eBay credential restart persistence", () => {
+  it("recovers seller credentials after reconstructing the credential store", async () => {
+    const opened = await createPgliteDatabase();
+    const secrets = new InMemorySecretsManagerClient();
+    const env = new EnvCredentialStore({
+      PACKPROOF_EBAY_CLIENT_SECRET: JSON.stringify({ clientSecret: "test-cert-id" }),
+    });
+    const client = new FakeEbayClient();
+    const runtime = ebayRuntime(client);
+    runtime.appCredentialReference = "env:PACKPROOF_EBAY_CLIENT_SECRET";
+
+    const firstStore = new CompositeCredentialStore(
+      new MemoryCredentialStore(),
+      env,
+      new SecretsManagerCredentialStore(secrets),
+    );
+    const first = await createHarness(undefined, {
+      opened,
+      credentialStore: firstStore,
+      ebay: runtime,
+    });
+    const userId = await connectEbay(first);
+    const listed = await request(first.app).get("/me/marketplaces/ebay/orders").set(auth(userId));
+    expect(listed.status).toBe(200);
+    expect(listed.body.orders[0].title).toBe("Nikon F3 Camera");
+    const serialized = JSON.stringify(listed.body);
+    expect(serialized).not.toContain("test-cert-id");
+    expect(serialized).not.toContain("access-");
+    expect(serialized).not.toContain("refresh-");
+    await first.close();
+
+    const secondStore = new CompositeCredentialStore(
+      new MemoryCredentialStore(),
+      env,
+      new SecretsManagerCredentialStore(secrets),
+    );
+    const second = await createHarness(undefined, {
+      opened,
+      credentialStore: secondStore,
+      ebay: runtime,
+    });
+    const recovered = await request(second.app).get("/me/marketplaces/ebay/orders").set(auth(userId));
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.orders).toHaveLength(2);
+    expect(JSON.stringify(recovered.body)).not.toContain("refresh-");
+
+    const status = await request(second.app).get("/me/marketplaces").set(auth(userId));
+    const connectionId = status.body.marketplaces[0].connection.connectionId as string;
+    const credentialReference = ebayUserCredentialReference({
+      packproofEnvironment: "test",
+      ebayEnvironment: "sandbox",
+      connectionId,
+    });
+    const stored = await second.credentialStore.getCredentials({
+      adapterKey: "ebay",
+      credentialReference,
+    });
+    expect(stored?.material.refreshToken).toMatch(/^refresh-/);
+    await second.credentialStore.put({
+      adapterKey: "ebay",
+      credentialReference,
+      material: {
+        ...stored!.material,
+        accessTokenExpiresAt: "2020-01-01T00:00:00.000Z",
+      },
+    });
+    const refreshed = await request(second.app).get("/me/marketplaces/ebay/orders").set(auth(userId));
+    expect(refreshed.status).toBe(200);
+    await second.close();
+    await opened.close();
   });
 });

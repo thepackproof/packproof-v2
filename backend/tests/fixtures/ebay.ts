@@ -121,13 +121,22 @@ export class FakeEbayClient implements EbayClient {
     return user;
   }
 
-  async listOrders(): Promise<{
+  async listOrders(input: {
+    environment: "sandbox" | "production";
+    accessToken: string;
+    marketplaceId: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
     orders: EbayOrder[];
     total: number;
     limit: number;
     offset: number;
   }> {
-    return { orders: this.orders, total: this.orders.length, limit: 50, offset: 0 };
+    if (!this.userFromAccess(input.accessToken)) {
+      throw providerAuthFailed();
+    }
+    return { orders: this.orders, total: this.orders.length, limit: input.limit ?? 50, offset: input.offset ?? 0 };
   }
 
   async getOrder(input: {
@@ -136,6 +145,9 @@ export class FakeEbayClient implements EbayClient {
     marketplaceId: string;
     orderId: string;
   }): Promise<EbayOrder> {
+    if (!this.userFromAccess(input.accessToken)) {
+      throw providerAuthFailed();
+    }
     const order = this.orders.find((entry) => entry.orderId === input.orderId);
     if (!order) {
       throw providerResponseInvalid();

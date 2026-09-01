@@ -6,7 +6,6 @@ import {
   createIntegrationConnection,
   findConnectionByExternalAccount,
   listOwnerConnections,
-  loadConnection,
   toConnectionView,
   updateConnectionCredentials,
   updateConnectionStatus,
@@ -25,11 +24,12 @@ import {
   integrationNotFound,
 } from "./integration-errors.js";
 import { createOAuthAttempt, consumeOAuthAttempt } from "./oauth-attempts.js";
-import type { IntegrationCredentialStore } from "../integrations/credentials.js";
+import type { IntegrationCredentialStore, MutableCredentialStore } from "../integrations/credentials.js";
 import { EBAY_ADAPTER_KEY, EBAY_PROVIDER, type EbayEnvironment } from "../integrations/ebay/constants.js";
 import { buildEbayAuthorizationUrl } from "../integrations/ebay/oauth.js";
 import {
   ebayUserCredentialMaterial,
+  ebayUserCredentialReference,
   parseEbayAppSecret,
   parseEbayUserCredentials,
 } from "../integrations/ebay/credentials.js";
@@ -42,6 +42,7 @@ import {
 
 export interface EbayRuntime {
   enabled: boolean;
+  packproofEnvironment: string;
   environment: EbayEnvironment;
   clientId: string | null;
   ruName: string | null;
@@ -71,6 +72,9 @@ export interface EbaySellerOrderView extends EbayOrderSummary {
   proofId: string | null;
   transactionId: string | null;
 }
+
+type EbayCredentialStore = IntegrationCredentialStore &
+  Partial<Pick<MutableCredentialStore, "put" | "deleteCredentials">>;
 
 function requireEnabled(runtime: EbayRuntime): asserts runtime is EbayRuntime & {
   client: EbayClient;
@@ -142,13 +146,7 @@ export async function completeEbayOAuth(
   db: Database,
   clock: Clock,
   runtime: EbayRuntime,
-  credentials: IntegrationCredentialStore & {
-    put?: (input: {
-      adapterKey: string;
-      credentialReference: string;
-      material: Record<string, string>;
-    }) => void | Promise<void>;
-  },
+  credentials: EbayCredentialStore,
   query: { code?: unknown; state?: unknown; error?: unknown },
 ): Promise<{ redirectTo: string }> {
   const returnUrl = runtime.webReturnUrl || "/";
@@ -195,7 +193,11 @@ export async function completeEbayOAuth(
     }
     const owned = await findEbayConnection(db, attempt.userId);
     const connectionId = owned?.id ?? existingOther?.id ?? newId("icn");
-    const credentialReference = `memory:ebay:${connectionId}`;
+    const credentialReference = ebayUserCredentialReference({
+      packproofEnvironment: runtime.packproofEnvironment,
+      ebayEnvironment: runtime.environment,
+      connectionId,
+    });
     if (typeof credentials.put !== "function") {
       throw new DomainError(
         "INTEGRATION_CREDENTIALS_UNAVAILABLE",
@@ -241,13 +243,7 @@ export async function listEbaySellerOrders(
   clock: Clock,
   userId: string,
   runtime: EbayRuntime,
-  credentials: IntegrationCredentialStore & {
-    put?: (input: {
-      adapterKey: string;
-      credentialReference: string;
-      material: Record<string, string>;
-    }) => void | Promise<void>;
-  },
+  credentials: EbayCredentialStore,
 ): Promise<{ orders: EbaySellerOrderView[]; connection: IntegrationConnectionView }> {
   requireEnabled(runtime);
   const connection = await requireEbayConnection(db, userId);
@@ -282,13 +278,7 @@ export async function importEbaySellerOrder(
   clock: Clock,
   userId: string,
   runtime: EbayRuntime,
-  credentials: IntegrationCredentialStore & {
-    put?: (input: {
-      adapterKey: string;
-      credentialReference: string;
-      material: Record<string, string>;
-    }) => void | Promise<void>;
-  },
+  credentials: EbayCredentialStore,
   orderIdRaw: string,
   options: { createProof?: boolean } = {},
 ): Promise<TransactionImportView> {
@@ -313,11 +303,13 @@ export async function importEbaySellerOrder(
     ebayOrderToImportedTransaction({
       order,
       environment: runtime.environment,
+      marketplaceId: runtime.marketplaceId,
       importedAt: clock.now().toISOString(),
     }),
     {
       createProof: options.createProof === true,
       adapterKey: EBAY_ADAPTER_KEY,
+      participationPolicy: "COUNTERPARTY_OPTIONAL",
     },
   );
 }
@@ -326,10 +318,17 @@ export async function disconnectEbay(
   db: Database,
   clock: Clock,
   userId: string,
+  credentials?: EbayCredentialStore,
 ): Promise<void> {
   const connection = await findEbayConnection(db, userId);
   if (!connection) {
     throw integrationNotFound();
+  }
+  if (typeof credentials?.deleteCredentials === "function") {
+    await credentials.deleteCredentials({
+      adapterKey: EBAY_ADAPTER_KEY,
+      credentialReference: connection.credential_reference,
+    });
   }
   await updateConnectionStatus(db, clock, connection.id, "DISABLED");
 }
@@ -364,6 +363,7 @@ export async function handleEbayAccountDeletion(
   db: Database,
   clock: Clock,
   body: unknown,
+  credentials?: EbayCredentialStore,
 ): Promise<{ accepted: true; connectionsDisabled: number }> {
   const parsed = parseEbayDeletionNotification(body);
   const now = clock.now().toISOString();
@@ -385,6 +385,12 @@ export async function handleEbayAccountDeletion(
     const connection = await findConnectionByExternalAccount(db, EBAY_ADAPTER_KEY, account);
     if (!connection) {
       continue;
+    }
+    if (typeof credentials?.deleteCredentials === "function") {
+      await credentials.deleteCredentials({
+        adapterKey: EBAY_ADAPTER_KEY,
+        credentialReference: connection.credential_reference,
+      });
     }
     await updateConnectionStatus(db, clock, connection.id, "DISABLED");
     await updateConnectionCredentials(db, clock, connection.id, {
@@ -425,13 +431,7 @@ async function withEbayUserToken<T>(
   db: Database,
   clock: Clock,
   runtime: EbayRuntime,
-  credentials: IntegrationCredentialStore & {
-    put?: (input: {
-      adapterKey: string;
-      credentialReference: string;
-      material: Record<string, string>;
-    }) => void | Promise<void>;
-  },
+  credentials: EbayCredentialStore,
   connection: IntegrationConnectionRow,
   fn: (accessToken: string) => Promise<T>,
 ): Promise<T> {
@@ -443,6 +443,10 @@ async function withEbayUserToken<T>(
       connectionId: connection.id,
     }),
   );
+  if (stored.environment && stored.environment !== runtime.environment) {
+    await updateConnectionStatus(db, clock, connection.id, "NEEDS_REAUTH");
+    throw integrationNeedsReauth();
+  }
   const appSecret = parseEbayAppSecret(
     await credentials.getCredentials({
       adapterKey: EBAY_ADAPTER_KEY,
@@ -482,13 +486,7 @@ async function withEbayUserToken<T>(
 async function ensureAccessToken(
   clock: Clock,
   runtime: EbayRuntime,
-  credentials: IntegrationCredentialStore & {
-    put?: (input: {
-      adapterKey: string;
-      credentialReference: string;
-      material: Record<string, string>;
-    }) => void | Promise<void>;
-  },
+  credentials: EbayCredentialStore,
   connection: IntegrationConnectionRow,
   stored: ReturnType<typeof parseEbayUserCredentials>,
   appSecret: string,
@@ -511,13 +509,7 @@ async function ensureAccessToken(
 
 async function persistUserTokens(
   clock: Clock,
-  credentials: IntegrationCredentialStore & {
-    put?: (input: {
-      adapterKey: string;
-      credentialReference: string;
-      material: Record<string, string>;
-    }) => void | Promise<void>;
-  },
+  credentials: EbayCredentialStore,
   connection: IntegrationConnectionRow,
   stored: ReturnType<typeof parseEbayUserCredentials>,
   tokens: EbayTokenSet,

@@ -28,4 +28,12 @@ export class MemoryCredentialStore implements MutableCredentialStore {
       material: { ...found.material },
     };
   }
+
+  deleteCredentials(input: { adapterKey: string; credentialReference: string }): void {
+    const found = this.records.get(input.credentialReference);
+    if (!found || found.adapterKey !== input.adapterKey) {
+      return;
+    }
+    this.records.delete(input.credentialReference);
+  }
 }

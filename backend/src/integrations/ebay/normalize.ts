@@ -25,17 +25,14 @@ export function ebayAccountReference(userId: string, username: string | null): s
 }
 
 export function summarizeEbayOrder(order: EbayOrder): EbayOrderSummary {
-  const title =
-    order.lineItems.length > 1
-      ? `${order.lineItems[0]?.title ?? "eBay order"} + ${order.lineItems.length - 1} more`
-      : (order.lineItems[0]?.title ?? "eBay order");
+  const title = order.lineItems[0]?.title?.trim() || null;
   const quantity = order.lineItems.reduce((sum, item) => sum + (item.quantity ?? 0), 0) || null;
   return {
     externalOrderId: order.orderId,
-    title,
+    title: title ?? (order.lineItems.length > 1 ? `Untitled item + ${order.lineItems.length - 1} more` : "Untitled item"),
     soldAt: order.creationDate,
     total: parseAmount(order.total?.value),
-    currency: order.total?.currency ?? "USD",
+    currency: order.total?.currency ?? null,
     fulfillmentStatus: order.orderFulfillmentStatus ?? "UNKNOWN",
     fulfillmentLabel: fulfillmentLabel(order.orderFulfillmentStatus, order.cancelState),
     buyerUsername: order.buyerUsername,
@@ -46,17 +43,21 @@ export function summarizeEbayOrder(order: EbayOrder): EbayOrderSummary {
 export function ebayOrderToImportedTransaction(input: {
   order: EbayOrder;
   environment: EbayEnvironment;
+  marketplaceId: string;
   importedAt: string;
 }): ImportedTransaction {
-  const { order, environment, importedAt } = input;
+  const { order, environment, marketplaceId, importedAt } = input;
   const summary = summarizeEbayOrder(order);
+  const extraCount = order.lineItems.length > 1 ? order.lineItems.length - 1 : 0;
   return {
     provider: "ebay",
     externalTransactionId: order.orderId,
     externalAccountReference: environment,
     externalReference: order.orderId,
     transactionDate: order.creationDate ? order.creationDate.slice(0, 10) : null,
-    itemTitle: summary.title,
+    itemTitle: extraCount > 0 && order.lineItems[0]?.title
+      ? `${order.lineItems[0].title} + ${extraCount} more`
+      : (order.lineItems[0]?.title ?? null),
     itemDescription: null,
     quantity: summary.quantity,
     transactionValue: summary.total,
@@ -93,6 +94,7 @@ export function ebayOrderToImportedTransaction(input: {
       lineItemIds: order.lineItems.map((item) => item.lineItemId).filter((id): id is string => Boolean(id)),
       itemIds: order.lineItems.map((item) => item.legacyItemId).filter((id): id is string => Boolean(id)),
       environment,
+      marketplaceId,
     },
   };
 }

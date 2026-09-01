@@ -85,7 +85,12 @@ When `PACKPROOF_CREDENTIAL_STORE=secrets-manager`, the ECS **task role** (the ap
 {
   "Sid": "TrustedIntegrationSecrets",
   "Effect": "Allow",
-  "Action": ["secretsmanager:GetSecretValue"],
+  "Action": [
+    "secretsmanager:GetSecretValue",
+    "secretsmanager:CreateSecret",
+    "secretsmanager:PutSecretValue",
+    "secretsmanager:DeleteSecret"
+  ],
   "Resource": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*"
 }
 ```

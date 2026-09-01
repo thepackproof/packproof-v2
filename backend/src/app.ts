@@ -302,7 +302,7 @@ export function createApp(deps: AppDependencies): Express {
           throw new DomainError("INVALID_WEBHOOK", "eBay deletion notification is invalid", 400);
         }
       }
-      const result = await handleEbayAccountDeletion(deps.db, deps.clock, payload);
+      const result = await handleEbayAccountDeletion(deps.db, deps.clock, payload, credentialStore);
       res.status(200).json(result);
     }),
   );
@@ -430,7 +430,7 @@ export function createApp(deps: AppDependencies): Express {
           );
         }
         const credentialReference = `memory:trusted-demo:${actor}:${transactionId}`;
-        credentialStore.put({
+        await credentialStore.put({
           adapterKey: TRUSTED_DEMO_CARRIER_ADAPTER_KEY,
           credentialReference,
           material: {
@@ -726,7 +726,7 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/me/marketplaces/ebay/disconnect",
     asyncRoute(async (req, res) => {
-      await disconnectEbay(deps.db, deps.clock, bearerUser(req));
+      await disconnectEbay(deps.db, deps.clock, bearerUser(req), credentialStore);
       res.status(204).end();
     }),
   );

@@ -121,19 +121,55 @@ export function parseEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfi
     : env.EBAY_CLIENT_SECRET
       ? "EBAY_CLIENT_SECRET"
       : null;
+  const enabled = parseBooleanFlag(env.PACKPROOF_EBAY_INTEGRATION_ENABLED ?? env.EBAY_INTEGRATION_ENABLED);
+  const appCredentialReference = explicitReference ?? (secretName ? `env:${secretName}` : null);
+  if (enabled) {
+    assertEbayEnabledConfiguration({ environment, clientId, ruName, appCredentialReference });
+  }
   return {
-    enabled: parseBooleanFlag(env.PACKPROOF_EBAY_INTEGRATION_ENABLED ?? env.EBAY_INTEGRATION_ENABLED),
+    enabled,
     environment,
     clientId,
     ruName,
     marketplaceId,
-    appCredentialReference:
-      explicitReference ?? (secretName ? `env:${secretName}` : null),
+    appCredentialReference,
     deletionVerificationToken:
       env.PACKPROOF_EBAY_DELETION_VERIFICATION_TOKEN?.trim() ||
       env.EBAY_DELETION_VERIFICATION_TOKEN?.trim() ||
       null,
   };
+}
+
+function assertEbayEnabledConfiguration(input: {
+  environment: EbayEnvironment;
+  clientId: string | null;
+  ruName: string | null;
+  appCredentialReference: string | null;
+}): void {
+  const missing: string[] = [];
+  if (!input.clientId) {
+    missing.push("PACKPROOF_EBAY_CLIENT_ID");
+  }
+  if (!input.ruName) {
+    missing.push("PACKPROOF_EBAY_RUNAME");
+  }
+  if (!input.appCredentialReference) {
+    missing.push("PACKPROOF_EBAY_CLIENT_SECRET or PACKPROOF_EBAY_APP_CREDENTIAL_REFERENCE");
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `PACKPROOF_EBAY_INTEGRATION_ENABLED requires ${missing.join(", ")}. Secret values are not included in this message.`,
+    );
+  }
+  const appId = (input.clientId ?? "").toUpperCase();
+  const sandboxKeyset = appId.includes("-SBX-") || appId.includes("_SBX_");
+  const productionKeyset = appId.includes("-PRD-") || appId.includes("_PRD_");
+  if (input.environment === "production" && sandboxKeyset) {
+    throw new Error("PACKPROOF_EBAY_ENVIRONMENT=production cannot be used with a Sandbox App ID.");
+  }
+  if (input.environment === "sandbox" && productionKeyset) {
+    throw new Error("PACKPROOF_EBAY_ENVIRONMENT=sandbox cannot be used with a Production App ID.");
+  }
 }
 
 export function parseEbayEnvironment(env: NodeJS.ProcessEnv = process.env): EbayEnvironment {

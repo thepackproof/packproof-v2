@@ -413,9 +413,23 @@ export function App() {
           busy={busy}
           error={error}
           development={import.meta.env.DEV}
+          ebayEnabled={ebay?.enabled === true}
           ebayConnected={ebay?.connection?.status === "ACTIVE"}
           onCancel={() => go("/")}
           onScan={() => go("/station")}
+          onConnectEbay={() => {
+            setBusy(true);
+            setError(null);
+            void api
+              .startEbayConnect()
+              .then((result) => {
+                window.location.assign(result.authorizationUrl);
+              })
+              .catch((caught) => {
+                setError(handleError(caught));
+                setBusy(false);
+              });
+          }}
           onImportPurchase={() => {
             setBusy(true);
             setError(null);
