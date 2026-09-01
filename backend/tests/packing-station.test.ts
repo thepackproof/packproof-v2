@@ -127,6 +127,11 @@ describe("packing station resolve", () => {
     expect(byTrack.status).toBe(200);
     expect(byTrack.body.transactionId).toBe(resolved.body.transactionId);
     expect(byTrack.body.matchedBy).toBe("TRACKING_NUMBER");
+    expect(byTrack.body.proofId).toBe(resolved.body.proofId);
+
+    const byOrderAgain = await resolve(harness, seller, "DS-1002");
+    expect(byOrderAgain.body.transactionId).toBe(byTrack.body.transactionId);
+    expect(byOrderAgain.body.proofId).toBe(byTrack.body.proofId);
 
     const byProof = await resolve(harness, seller, resolved.body.proofId);
     expect(byProof.body.transactionId).toBe(resolved.body.transactionId);

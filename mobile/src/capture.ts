@@ -25,6 +25,7 @@ export async function requestCapturePermissions(): Promise<void> {
   throw new Error("Camera permission is required to record packing evidence.");
 }
 
+/** Native camera owns the device for packing video. Finish-scan uses expo-camera after this returns. */
 export async function recordPackingEvidence(): Promise<LocalCapture | null> {
   await requestCapturePermissions();
   let result: ImagePicker.ImagePickerResult;

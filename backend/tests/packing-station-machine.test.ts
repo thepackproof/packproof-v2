@@ -3,10 +3,12 @@ import {
   initialStationState,
   reduceStation,
   restoreStationState,
+  stationCanFinishScan,
   stationCanIdentify,
   stationHasPreservedCapture,
+  stationPhaseLabel,
 } from "../../mobile/src/packing-station/machine.ts";
-import { stationContextFromProof } from "../../mobile/src/packing-station/display.ts";
+import { finishScanMatchesActive, stationContextFromProof } from "../../mobile/src/packing-station/display.ts";
 import type { StationOrderContext, StationProofSnapshot } from "../../mobile/src/packing-station/types.ts";
 
 const readyOrder: StationOrderContext = {
@@ -28,6 +30,18 @@ const capture = {
   byteSize: 2048,
   durationMs: 12_000,
 };
+
+function toRecording(options?: { capture?: boolean }) {
+  let state = initialStationState();
+  state = reduceStation(state, { type: "SCAN_STARTED" });
+  state = reduceStation(state, { type: "SCAN_DECODED", value: "4821" });
+  state = reduceStation(state, { type: "IDENTIFY_RESOLVED", context: readyOrder, method: "SCAN" });
+  state = reduceStation(state, { type: "START_RECORDING", trigger: "MANUAL" });
+  if (options?.capture) {
+    state = reduceStation(state, { type: "CAPTURE_HELD", capture, idempotencyKey: "idem_held" });
+  }
+  return state;
+}
 
 function proof(status: string, extras: Partial<StationProofSnapshot> = {}): StationProofSnapshot {
   return {
@@ -233,6 +247,184 @@ describe("packing station state machine", () => {
     const blocked = reduceStation(state, { type: "SCAN_STARTED" });
     expect(blocked.phase).toBe("RECOVERY");
     expect(blocked.capture?.handle).toBe(capture.handle);
+  });
+
+  it("rescans the same canonical transaction to finish a held capture", () => {
+    let state = toRecording({ capture: true });
+    expect(stationCanFinishScan(state)).toBe(true);
+    expect(stationPhaseLabel(state)).toBe("SCAN TO FINISH");
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    expect(state.phase).toBe("FINISH_SCANNING");
+    expect(state.capture?.handle).toBe(capture.handle);
+    expect(state.order?.transactionId).toBe("txn_1");
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "9400111899223344556677" });
+    expect(state.phase).toBe("VERIFYING_FINISH_SCAN");
+    const verifying = state;
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "duplicate" });
+    expect(state).toBe(verifying);
+    state = reduceStation(state, {
+      type: "FINISH_RESOLVED",
+      resolved: { transactionId: "txn_1", proofId: "proof_1" },
+    });
+    expect(state.phase).toBe("PROCESSING");
+    expect(state.stopTrigger).toBe("RESCAN");
+    expect(state.capture?.handle).toBe(capture.handle);
+    expect(state.order?.proofId).toBe("proof_1");
+  });
+
+  it("keeps recording when a finish scan resolves to a different transaction", () => {
+    let state = toRecording({ capture: true });
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "DS-1002" });
+    state = reduceStation(state, {
+      type: "FINISH_RESOLVED",
+      resolved: { transactionId: "txn_other", proofId: "proof_other" },
+    });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.error?.code).toBe("WRONG_PACKAGE");
+    expect(state.error?.message).toBe("Different order scanned. Finish packing the current order first.");
+    expect(state.capture?.handle).toBe(capture.handle);
+    expect(state.order?.transactionId).toBe("txn_1");
+    expect(state.stopTrigger).toBeNull();
+  });
+
+  it("matches the same transaction through a different identifier and fails closed on proof mismatch", () => {
+    expect(
+      finishScanMatchesActive(
+        { transactionId: "txn_1", proofId: "proof_1" },
+        { transactionId: "txn_1", proofId: "proof_1" },
+      ),
+    ).toBe(true);
+    expect(
+      finishScanMatchesActive(
+        { transactionId: "txn_1", proofId: "proof_1" },
+        { transactionId: "txn_1", proofId: null },
+      ),
+    ).toBe(true);
+    expect(
+      finishScanMatchesActive(
+        { transactionId: "txn_1", proofId: "proof_1" },
+        { transactionId: "txn_2", proofId: "proof_1" },
+      ),
+    ).toBe(false);
+    expect(
+      finishScanMatchesActive(
+        { transactionId: "txn_1", proofId: "proof_1" },
+        { transactionId: "txn_1", proofId: "proof_other" },
+      ),
+    ).toBe(false);
+
+    let state = toRecording({ capture: true });
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "ORDER-A" });
+    state = reduceStation(state, {
+      type: "FINISH_RESOLVED",
+      resolved: { transactionId: "txn_1", proofId: "proof_1" },
+    });
+    expect(state.phase).toBe("PROCESSING");
+
+    state = toRecording({ capture: true });
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "ORDER-A" });
+    state = reduceStation(state, {
+      type: "FINISH_RESOLVED",
+      resolved: { transactionId: "txn_1", proofId: "proof_other" },
+    });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.error?.code).toBe("WRONG_PACKAGE");
+    expect(state.capture?.handle).toBe(capture.handle);
+  });
+
+  it("returns to RECORDING with the capture intact for unknown, ambiguous, cancelled, and failed finish scans", () => {
+    let state = toRecording({ capture: true });
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "NOPE" });
+    state = reduceStation(state, {
+      type: "FINISH_SCAN_FAILED",
+      error: { code: "STATION_REFERENCE_NOT_FOUND", message: "No packing order matched that reference" },
+    });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.capture?.handle).toBe(capture.handle);
+    expect(state.order?.transactionId).toBe("txn_1");
+    expect(state.canRetry).toBe(true);
+
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "AMBIG" });
+    state = reduceStation(state, {
+      type: "FINISH_SCAN_FAILED",
+      error: { code: "STATION_REFERENCE_AMBIGUOUS", message: "More than one order matched that reference" },
+    });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.capture?.handle).toBe(capture.handle);
+
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_CANCELLED" });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.error).toBeNull();
+    expect(state.capture?.handle).toBe(capture.handle);
+
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "4821" });
+    state = reduceStation(state, {
+      type: "FINISH_SCAN_FAILED",
+      error: { code: "NETWORK", message: "Network unavailable" },
+    });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.capture?.handle).toBe(capture.handle);
+
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "AUTH_FAILED" });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.error?.code).toBe("UNAUTHENTICATED");
+    expect(state.capture?.handle).toBe(capture.handle);
+    expect(state.order?.proofId).toBe("proof_1");
+  });
+
+  it("signals a live recorder to stop after a matching finish scan without capture", () => {
+    let state = toRecording();
+    expect(stationPhaseLabel(state)).toBe("RECORDING");
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_SCAN_DECODED", value: "4821" });
+    state = reduceStation(state, {
+      type: "FINISH_RESOLVED",
+      resolved: { transactionId: "txn_1", proofId: "proof_1" },
+    });
+    expect(state.phase).toBe("RECORDING");
+    expect(state.stopTrigger).toBe("RESCAN");
+    expect(state.capture).toBeNull();
+    state = reduceStation(state, { type: "CAPTURE_READY", capture, trigger: "RESCAN" });
+    expect(state.phase).toBe("PROCESSING");
+    expect(state.stopTrigger).toBe("RESCAN");
+  });
+
+  it("uses Finished Packing as a fallback that still preserves capture", () => {
+    let state = toRecording({ capture: true });
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    state = reduceStation(state, { type: "FINISH_MANUAL" });
+    expect(state.phase).toBe("PROCESSING");
+    expect(state.stopTrigger).toBe("MANUAL");
+    expect(state.capture?.handle).toBe(capture.handle);
+  });
+
+  it("does not start a second identify while a finish scan is active", () => {
+    let state = toRecording({ capture: true });
+    state = reduceStation(state, { type: "FINISH_SCAN_STARTED" });
+    const blocked = reduceStation(state, { type: "SCAN_STARTED" });
+    expect(blocked.phase).toBe("RECOVERY");
+    expect(blocked.capture?.handle).toBe(capture.handle);
+    expect(blocked.order?.transactionId).toBe("txn_1");
+  });
+
+  it("restores an interrupted finish scan with video into RECOVERY", () => {
+    const restored = restoreStationState({
+      phase: "FINISH_SCANNING",
+      order: readyOrder,
+      capture,
+      evidenceIdempotencyKey: "idem_keep",
+    });
+    expect(restored.phase).toBe("RECOVERY");
+    expect(restored.capture?.handle).toBe(capture.handle);
+    expect(restored.canRetry).toBe(true);
   });
 
   it("restores an interrupted upload into RECOVERY without dropping the video", () => {

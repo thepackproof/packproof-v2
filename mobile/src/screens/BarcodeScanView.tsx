@@ -4,6 +4,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { STATION_BARCODE_TYPES, normalizeStationReference } from "../packing-station/scan";
 
 export function BarcodeScanView(props: {
+  prompt?: string;
+  lockKey?: string;
   onDecoded: (value: string) => void;
   onCancel: () => void;
   onPermissionDenied: () => void;
@@ -16,6 +18,10 @@ export function BarcodeScanView(props: {
   const onUnavailable = useRef(props.onUnavailable);
   onPermissionDenied.current = props.onPermissionDenied;
   onUnavailable.current = props.onUnavailable;
+
+  useEffect(() => {
+    locked.current = false;
+  }, [props.lockKey]);
 
   useEffect(() => {
     if (!permission) {
@@ -65,7 +71,7 @@ export function BarcodeScanView(props: {
         }}
       />
       <View style={styles.frame} pointerEvents="none" />
-      <Text style={styles.copy}>Scan the shipping label or order barcode.</Text>
+      <Text style={styles.copy}>{props.prompt ?? "Scan the shipping label or order barcode."}</Text>
       <Pressable style={styles.button} onPress={props.onCancel}>
         <Text style={styles.buttonText}>Cancel</Text>
       </Pressable>

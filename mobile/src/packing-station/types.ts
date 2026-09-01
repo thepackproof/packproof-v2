@@ -6,6 +6,8 @@ export type StationPhase =
   | "IDENTIFYING"
   | "READY_TO_RECORD"
   | "RECORDING"
+  | "FINISH_SCANNING"
+  | "VERIFYING_FINISH_SCAN"
   | "PROCESSING"
   | "PROOF_CREATED"
   | "RECOVERY";
@@ -54,6 +56,7 @@ export type StationErrorCode =
   | "SCANNER_UNAVAILABLE"
   | "SCAN_UNREADABLE"
   | "SCAN_UNSUPPORTED"
+  | "WRONG_PACKAGE"
   | "UNKNOWN";
 
 export interface StationError {
@@ -109,7 +112,17 @@ export type StationEvent =
   | { type: "IDENTIFY_FAILED"; error: StationError }
   | { type: "START_RECORDING"; trigger?: StartTrigger }
   | { type: "RECORDING_STARTED" }
+  | { type: "FINISH_SCAN_STARTED" }
+  | { type: "FINISH_SCAN_CANCELLED" }
+  | { type: "FINISH_SCAN_DECODED"; value: string }
+  | { type: "FINISH_SCAN_FAILED"; error: StationError }
+  | {
+      type: "FINISH_RESOLVED";
+      resolved: { transactionId: string; proofId: string | null };
+    }
+  | { type: "FINISH_MANUAL" }
   | { type: "FINISH_RECORDING"; trigger?: StopTrigger }
+  | { type: "CAPTURE_HELD"; capture: StationCaptureRef; idempotencyKey?: string | null }
   | { type: "CAPTURE_READY"; capture: StationCaptureRef; trigger?: StopTrigger }
   | { type: "CAPTURE_CANCELLED" }
   | { type: "PROCESSING_STARTED"; idempotencyKey?: string | null; submitStep?: SubmitStep }

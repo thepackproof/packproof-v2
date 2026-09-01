@@ -60,7 +60,9 @@ export function PackingStationScreen(props: {
   const [localBusy, setLocalBusy] = useState(false);
   const [heldCapture, setHeldCapture] = useState<LocalCapture | null>(props.restoredCapture);
   const stateRef = useRef(state);
+  const heldCaptureRef = useRef(heldCapture);
   stateRef.current = state;
+  heldCaptureRef.current = heldCapture;
 
   useEffect(() => {
     void loadCandidates();
@@ -198,16 +200,15 @@ export function PackingStationScreen(props: {
       }
       const key = stateRef.current.evidenceIdempotencyKey ?? newIdempotencyKey();
       dispatch({
-        type: "CAPTURE_READY",
+        type: "CAPTURE_HELD",
         capture: {
           handle: captured.uri,
           contentType: captured.contentType,
           byteSize: captured.byteSize,
           durationMs: captured.durationMs,
         },
-        trigger: "MANUAL",
+        idempotencyKey: key,
       });
-      dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
       setHeldCapture(captured);
       await props.onPersist({
         capture: captured,
@@ -218,8 +219,49 @@ export function PackingStationScreen(props: {
         itemSummary: stateRef.current.order?.itemSummary ?? null,
         stationActive: true,
       });
-      await processCapture(captured, key);
+      dispatch({ type: "FINISH_SCAN_STARTED" });
     });
+  }
+
+  async function resolveFinishScan(value: string): Promise<void> {
+    await guarded(async () => {
+      const afterDecode = reduceStation(stateRef.current, { type: "FINISH_SCAN_DECODED", value });
+      if (afterDecode.phase !== "VERIFYING_FINISH_SCAN") {
+        return;
+      }
+      dispatch({ type: "FINISH_SCAN_DECODED", value });
+      try {
+        const resolvedView = await props.client.resolvePackingStation(value);
+        const resolved = { transactionId: resolvedView.transactionId, proofId: resolvedView.proofId };
+        const next = reduceStation(afterDecode, { type: "FINISH_RESOLVED", resolved });
+        dispatch({ type: "FINISH_RESOLVED", resolved });
+        const captured = heldCaptureRef.current;
+        if (next.phase === "PROCESSING" && captured) {
+          const key = next.evidenceIdempotencyKey ?? newIdempotencyKey();
+          dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+          await processCapture(captured, key);
+        }
+      } catch (error) {
+        const mapped = stationErrorFromUnknown(error);
+        if (mapped.code === "UNAUTHENTICATED") {
+          dispatch({ type: "AUTH_FAILED", error: mapped });
+          props.onAuthExpired();
+          return;
+        }
+        dispatch({ type: "FINISH_SCAN_FAILED", error: mapped });
+      }
+    });
+  }
+
+  async function finishManually(): Promise<void> {
+    const captured = heldCaptureRef.current;
+    const next = reduceStation(stateRef.current, { type: "FINISH_MANUAL" });
+    dispatch({ type: "FINISH_MANUAL" });
+    if (next.phase === "PROCESSING" && captured) {
+      const key = next.evidenceIdempotencyKey ?? newIdempotencyKey();
+      dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+      await processCapture(captured, key);
+    }
   }
 
   async function processCapture(captured: LocalCapture, key: string): Promise<void> {
@@ -339,6 +381,8 @@ export function PackingStationScreen(props: {
 
         {state.phase === "SCANNING" ? (
           <BarcodeScanView
+            prompt="Scan the shipping label or order barcode."
+            lockKey="identify"
             onDecoded={(value) => {
               dispatch({ type: "SCAN_DECODED", value });
               void identify("SCAN", value);
@@ -410,6 +454,35 @@ export function PackingStationScreen(props: {
           </View>
         ) : null}
 
+        {state.phase === "FINISH_SCANNING" || state.phase === "VERIFYING_FINISH_SCAN" ? (
+          <BarcodeScanView
+            prompt="Scan the same shipping label to finish this pack."
+            lockKey={`finish:${state.order?.transactionId ?? "none"}`}
+            onDecoded={(value) => {
+              void resolveFinishScan(value);
+            }}
+            onCancel={() => dispatch({ type: "FINISH_SCAN_CANCELLED" })}
+            onPermissionDenied={() =>
+              dispatch({
+                type: "FINISH_SCAN_FAILED",
+                error: {
+                  code: "CAMERA_PERMISSION_DENIED",
+                  message: "Camera permission is required to scan the package. The packing video is kept.",
+                },
+              })
+            }
+            onUnavailable={() =>
+              dispatch({
+                type: "FINISH_SCAN_FAILED",
+                error: {
+                  code: "SCANNER_UNAVAILABLE",
+                  message: "The camera scanner is unavailable. Use Finished Packing. The packing video is kept.",
+                },
+              })
+            }
+          />
+        ) : null}
+
         {state.phase === "READY_TO_RECORD" ? (
           <StationButton
             label="Start Packing"
@@ -418,10 +491,35 @@ export function PackingStationScreen(props: {
           />
         ) : null}
 
-        {state.phase === "RECORDING" ? (
+        {state.phase === "RECORDING" && !state.capture ? (
           <Text style={[styles.hint, { color: tone.muted }]}>
             Keep the item, pack, seal, and label in frame. Stop when the package is sealed.
           </Text>
+        ) : null}
+
+        {state.phase === "RECORDING" && state.capture ? (
+          <View style={styles.block}>
+            <StationButton
+              label="Scan Package to Finish"
+              disabled={localBusy}
+              onPress={() => dispatch({ type: "FINISH_SCAN_STARTED" })}
+            />
+            <StationButton
+              label="Finished Packing"
+              disabled={localBusy}
+              secondary
+              onPress={() => void finishManually()}
+            />
+          </View>
+        ) : null}
+
+        {state.phase === "FINISH_SCANNING" || state.phase === "VERIFYING_FINISH_SCAN" ? (
+          <StationButton
+            label="Finished Packing"
+            disabled={localBusy}
+            secondary
+            onPress={() => void finishManually()}
+          />
         ) : null}
 
         {state.phase === "RECOVERY" && state.capture ? (
@@ -493,6 +591,8 @@ function initialStationForRestore(props: {
 function toneForPhase(phase: StationState["phase"]): { background: string; ink: string; muted: string } {
   switch (phase) {
     case "RECORDING":
+    case "FINISH_SCANNING":
+    case "VERIFYING_FINISH_SCAN":
       return { background: "#3b0008", ink: "#fff5f5", muted: "#f0b8b8" };
     case "PROCESSING":
       return { background: "#1a1a1a", ink: "#f4f4f4", muted: "#b8b8b8" };

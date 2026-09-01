@@ -1,4 +1,4 @@
-import { errorForBlockReason } from "./display";
+import { errorForBlockReason, finishScanMatchesActive, wrongPackageError } from "./display";
 import type {
   IdentifyMethod,
   StationError,
@@ -43,7 +43,14 @@ export function restoreStationState(partial: Partial<StationState> | null | unde
         } satisfies StationError),
     };
   }
-  if (next.phase === "IDENTIFYING" || next.phase === "SCANNING" || next.phase === "RECORDING" || next.phase === "PROCESSING") {
+  if (
+    next.phase === "IDENTIFYING" ||
+    next.phase === "SCANNING" ||
+    next.phase === "RECORDING" ||
+    next.phase === "FINISH_SCANNING" ||
+    next.phase === "VERIFYING_FINISH_SCAN" ||
+    next.phase === "PROCESSING"
+  ) {
     return {
       ...next,
       phase: next.order?.captureReady ? "READY_TO_RECORD" : next.order ? "RECOVERY" : "READY",
@@ -204,16 +211,154 @@ export function reduceStation(state: StationState, event: StationEvent): Station
       };
 
     case "FINISH_RECORDING":
-      if (state.phase !== "RECORDING") {
+      if (state.phase !== "RECORDING" && state.phase !== "FINISH_SCANNING") {
         return state;
       }
       return {
         ...state,
-        stopTrigger: event.trigger ?? "MANUAL",
+        stopTrigger: event.trigger ?? state.stopTrigger ?? "MANUAL",
+      };
+
+    case "CAPTURE_HELD":
+      if (
+        state.phase !== "RECORDING" &&
+        state.phase !== "FINISH_SCANNING" &&
+        state.phase !== "READY_TO_RECORD"
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "RECORDING",
+        capture: event.capture,
+        evidenceIdempotencyKey: event.idempotencyKey ?? state.evidenceIdempotencyKey,
+        error: null,
+        canRetry: false,
+      };
+
+    case "FINISH_SCAN_STARTED":
+      if (!state.order) {
+        return state;
+      }
+      if (state.phase !== "RECORDING" && state.phase !== "FINISH_SCANNING") {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "FINISH_SCANNING",
+        error: null,
+        canRetry: false,
+        referenceInput: "",
+      };
+
+    case "FINISH_SCAN_CANCELLED":
+      if (state.phase !== "FINISH_SCANNING" && state.phase !== "VERIFYING_FINISH_SCAN") {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "RECORDING",
+        error: null,
+        canRetry: false,
+      };
+
+    case "FINISH_SCAN_DECODED": {
+      if (state.phase !== "FINISH_SCANNING") {
+        return state;
+      }
+      const value = event.value.trim();
+      if (!value) {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "VERIFYING_FINISH_SCAN",
+        referenceInput: value,
+        error: null,
+        canRetry: false,
+      };
+    }
+
+    case "FINISH_SCAN_FAILED":
+      if (state.phase !== "FINISH_SCANNING" && state.phase !== "VERIFYING_FINISH_SCAN") {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "RECORDING",
+        error: event.error,
+        canRetry: true,
+      };
+
+    case "FINISH_RESOLVED": {
+      if (state.phase !== "VERIFYING_FINISH_SCAN" || !state.order) {
+        return state;
+      }
+      if (
+        !finishScanMatchesActive(
+          { transactionId: state.order.transactionId, proofId: state.order.proofId },
+          event.resolved,
+        )
+      ) {
+        return {
+          ...state,
+          phase: "RECORDING",
+          error: wrongPackageError(),
+          canRetry: true,
+        };
+      }
+      if (state.capture) {
+        return {
+          ...state,
+          phase: "PROCESSING",
+          stopTrigger: "RESCAN",
+          submitStep: null,
+          uploadPercent: 0,
+          error: null,
+          canRetry: false,
+        };
+      }
+      return {
+        ...state,
+        phase: "RECORDING",
+        stopTrigger: "RESCAN",
+        error: null,
+        canRetry: false,
+      };
+    }
+
+    case "FINISH_MANUAL":
+      if (!state.order) {
+        return state;
+      }
+      if (
+        state.phase !== "RECORDING" &&
+        state.phase !== "FINISH_SCANNING" &&
+        state.phase !== "VERIFYING_FINISH_SCAN"
+      ) {
+        return state;
+      }
+      if (state.capture) {
+        return {
+          ...state,
+          phase: "PROCESSING",
+          stopTrigger: "MANUAL",
+          submitStep: null,
+          uploadPercent: 0,
+          error: null,
+          canRetry: false,
+        };
+      }
+      return {
+        ...state,
+        phase: "RECORDING",
+        stopTrigger: "MANUAL",
+        error: null,
+        canRetry: false,
       };
 
     case "CAPTURE_READY":
-      if (state.phase !== "RECORDING" && state.phase !== "READY_TO_RECORD") {
+      if (state.phase !== "RECORDING" && state.phase !== "READY_TO_RECORD" && state.phase !== "FINISH_SCANNING") {
         return state;
       }
       return {
@@ -310,18 +455,34 @@ export function reduceStation(state: StationState, event: StationEvent): Station
         referenceInput: "",
       };
 
-    case "AUTH_FAILED":
+    case "AUTH_FAILED": {
+      const authError =
+        event.error ??
+        ({
+          code: "UNAUTHENTICATED",
+          message: "Session expired. Sign in again, then retry. Recorded video is kept.",
+        } satisfies StationError);
+      if (
+        state.phase === "RECORDING" ||
+        state.phase === "FINISH_SCANNING" ||
+        state.phase === "VERIFYING_FINISH_SCAN"
+      ) {
+        return {
+          ...state,
+          phase: "RECORDING",
+          error: authError,
+          canRetry: true,
+        };
+      }
       return {
         ...state,
         phase: "RECOVERY",
-        error:
-          event.error ??
-          ({
-            code: "UNAUTHENTICATED",
-            message: "Session expired. Sign in again, then retry. Recorded video is kept.",
-          } satisfies StationError),
+        error: authError,
         canRetry: Boolean(state.capture),
+        order: state.order,
+        capture: state.capture,
       };
+    }
 
     case "DISCARD_CAPTURE":
       return {
@@ -384,8 +545,8 @@ export function stationCanIdentify(state: StationState): boolean {
   );
 }
 
-export function stationCanScan(state: StationState): boolean {
-  return !state.capture && (state.phase === "READY" || state.phase === "RECOVERY" || state.phase === "READY_TO_RECORD");
+export function stationCanFinishScan(state: StationState): boolean {
+  return Boolean(state.order) && (state.phase === "RECORDING" || state.phase === "FINISH_SCANNING");
 }
 
 export function stationPhaseLabel(state: StationState): string {
@@ -399,7 +560,11 @@ export function stationPhaseLabel(state: StationState): string {
     case "READY_TO_RECORD":
       return "READY TO PACK";
     case "RECORDING":
-      return "RECORDING";
+      return state.capture ? "SCAN TO FINISH" : "RECORDING";
+    case "FINISH_SCANNING":
+      return "SCAN TO FINISH";
+    case "VERIFYING_FINISH_SCAN":
+      return "CONFIRMING";
     case "PROCESSING":
       return "PROCESSING";
     case "PROOF_CREATED":

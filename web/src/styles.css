@@ -534,7 +534,9 @@ h2 {
   background: #111;
 }
 
-.station-recording {
+.station-recording,
+.station-finish_scanning,
+.station-verifying_finish_scan {
   background: #3b0008;
 }
 

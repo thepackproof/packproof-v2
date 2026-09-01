@@ -116,6 +116,29 @@ export function errorForBlockReason(reason: StationBlockReason): StationError {
   }
 }
 
+export function finishScanMatchesActive(
+  active: { transactionId: string; proofId: string | null } | null | undefined,
+  resolved: { transactionId: string; proofId: string | null },
+): boolean {
+  if (!active?.transactionId || !resolved.transactionId) {
+    return false;
+  }
+  if (active.transactionId !== resolved.transactionId) {
+    return false;
+  }
+  if (active.proofId && resolved.proofId && active.proofId !== resolved.proofId) {
+    return false;
+  }
+  return true;
+}
+
+export function wrongPackageError(): StationError {
+  return {
+    code: "WRONG_PACKAGE",
+    message: "Different order scanned. Finish packing the current order first.",
+  };
+}
+
 export function stationErrorFromUnknown(error: unknown): StationError {
   if (error && typeof error === "object") {
     const candidate = error as { code?: string; message?: string; status?: number };

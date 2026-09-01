@@ -34,8 +34,13 @@ export function PackingStationScreen(props: {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const orderRef = useRef(state.order);
+  const stateRef = useRef(state);
+  const heldBlobRef = useRef<Blob | null>(null);
   const bootstrapped = useRef(false);
+  const finishingRef = useRef(false);
   orderRef.current = state.order;
+  stateRef.current = state;
+  heldBlobRef.current = heldBlob;
   const webScan = detectWebScanAdapter();
 
   const candidates: StationCandidate[] = props.queue
@@ -48,6 +53,9 @@ export function PackingStationScreen(props: {
     }));
 
   useEffect(() => {
+    if (state.phase === "PROOF_CREATED" || state.phase === "READY") {
+      finishingRef.current = false;
+    }
     if (state.phase !== "PROOF_CREATED") {
       return;
     }
@@ -70,6 +78,20 @@ export function PackingStationScreen(props: {
   useEffect(() => {
     return () => stopLiveTracks();
   }, []);
+
+  useEffect(() => {
+    if (state.phase !== "RECORDING") {
+      return;
+    }
+    if (state.stopTrigger !== "RESCAN" && state.stopTrigger !== "MANUAL") {
+      return;
+    }
+    if (state.capture || finishingRef.current) {
+      return;
+    }
+    finishingRef.current = true;
+    void finishPacking(state.stopTrigger);
+  }, [state.phase, state.stopTrigger, state.capture]);
 
   function stopLiveTracks() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -152,15 +174,56 @@ export function PackingStationScreen(props: {
       recorder.start();
       dispatch({ type: "RECORDING_STARTED" });
     } catch {
-      dispatch({ type: "CAPTURE_CANCELLED" });
       setLocalError("Camera is unavailable. Choose a packing video instead.");
       fileRef.current?.click();
     }
   }
 
-  async function finishPacking() {
+  async function resolveFinishScan(value: string) {
+    setLocalError(null);
+    const afterDecode = reduceStation(stateRef.current, { type: "FINISH_SCAN_DECODED", value });
+    if (afterDecode.phase !== "VERIFYING_FINISH_SCAN") {
+      return;
+    }
+    dispatch({ type: "FINISH_SCAN_DECODED", value });
+    setBusy(true);
+    try {
+      const resolvedView = await props.api.resolvePackingStation(value);
+      const resolved = { transactionId: resolvedView.transactionId, proofId: resolvedView.proofId };
+      const next = reduceStation(afterDecode, { type: "FINISH_RESOLVED", resolved });
+      dispatch({ type: "FINISH_RESOLVED", resolved });
+      const blob = heldBlobRef.current;
+      if (next.phase === "PROCESSING" && blob) {
+        await processHeld(blob);
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        dispatch({ type: "AUTH_FAILED" });
+        props.onAuthExpired();
+        return;
+      }
+      dispatch({ type: "FINISH_SCAN_FAILED", error: stationErrorFromUnknown(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finishManually() {
+    const next = reduceStation(stateRef.current, { type: "FINISH_MANUAL" });
+    dispatch({ type: "FINISH_MANUAL" });
+    const blob = heldBlobRef.current;
+    if (next.phase === "PROCESSING" && blob) {
+      await processHeld(blob);
+    }
+  }
+
+  async function processHeld(blob: Blob) {
+    await processVideo(blob, blob.type || "video/webm", previewUrl ?? "blob:held");
+  }
+
+  async function finishPacking(trigger: "MANUAL" | "RESCAN" = "MANUAL") {
     const recorder = recorderRef.current;
-    dispatch({ type: "FINISH_RECORDING", trigger: "MANUAL" });
+    dispatch({ type: "FINISH_RECORDING", trigger });
     const blob = await new Promise<Blob>((resolve) => {
       if (!recorder || recorder.state === "inactive") {
         resolve(new Blob(chunksRef.current, { type: "video/webm" }));
@@ -172,11 +235,32 @@ export function PackingStationScreen(props: {
       recorder.stop();
     });
     stopLiveTracks();
-    await acceptVideo(blob, blob.type || "video/webm");
+    await acceptLiveVideo(blob, blob.type || "video/webm", trigger);
   }
 
-  async function acceptVideo(blob: Blob, contentType: string) {
+  async function holdCapturedFile(file: Blob, contentType: string) {
+    if (file.size < 8) {
+      setLocalError("Recording was empty. Start packing again.");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    setHeldBlob(file);
+    dispatch({
+      type: "CAPTURE_HELD",
+      capture: {
+        handle: url,
+        contentType: contentType || "video/webm",
+        byteSize: file.size,
+        durationMs: null,
+      },
+    });
+    dispatch({ type: "FINISH_SCAN_STARTED" });
+  }
+
+  async function acceptLiveVideo(blob: Blob, contentType: string, trigger: "MANUAL" | "RESCAN") {
     if (blob.size < 8) {
+      finishingRef.current = false;
       dispatch({ type: "CAPTURE_CANCELLED" });
       setLocalError("Recording was empty. Start packing again.");
       return;
@@ -190,7 +274,7 @@ export function PackingStationScreen(props: {
       byteSize: blob.size,
       durationMs: null,
     };
-    dispatch({ type: "CAPTURE_READY", capture, trigger: "MANUAL" });
+    dispatch({ type: "CAPTURE_READY", capture, trigger });
     await processVideo(blob, contentType || "video/webm", capture.handle);
   }
 
@@ -241,6 +325,7 @@ export function PackingStationScreen(props: {
         canRetry: mapped.code !== "PROOF_ALREADY_FINALIZED",
       });
     } finally {
+      finishingRef.current = false;
       setBusy(false);
     }
   }
@@ -280,7 +365,13 @@ export function PackingStationScreen(props: {
 
       <video
         ref={videoRef}
-        className={state.phase === "RECORDING" ? "station-preview" : "visually-hidden"}
+        className={
+          state.phase === "RECORDING" ||
+          state.phase === "FINISH_SCANNING" ||
+          state.phase === "VERIFYING_FINISH_SCAN"
+            ? "station-preview"
+            : "visually-hidden"
+        }
         muted
         playsInline
         autoPlay
@@ -379,9 +470,66 @@ export function PackingStationScreen(props: {
       ) : null}
 
       {state.phase === "RECORDING" ? (
-        <button className="btn station-btn" type="button" onClick={() => void finishPacking()}>
-          Finished Packing
-        </button>
+        <div className="station-identify">
+          <button
+            className="btn station-btn"
+            type="button"
+            disabled={busy}
+            onClick={() => dispatch({ type: "FINISH_SCAN_STARTED" })}
+          >
+            Scan Package to Finish
+          </button>
+          <button className="btn btn-secondary station-btn" type="button" disabled={busy} onClick={() => void finishManually()}>
+            Finished Packing
+          </button>
+        </div>
+      ) : null}
+
+      {state.phase === "FINISH_SCANNING" || state.phase === "VERIFYING_FINISH_SCAN" ? (
+        <form
+          className="station-identify"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = normalizeStationReference(state.referenceInput);
+            if (!value || state.phase !== "FINISH_SCANNING") {
+              return;
+            }
+            void resolveFinishScan(value);
+          }}
+        >
+          <p className="station-copy">
+            Scan the same shipping label to finish this pack
+            {webScan.kind === "KEYBOARD" ? " with a USB scanner or type the code, then press Enter." : "."}
+          </p>
+          <label className="field">
+            <span className="visually-hidden">Finish barcode or order reference</span>
+            <input
+              value={state.referenceInput}
+              onChange={(event) => dispatch({ type: "SET_REFERENCE", reference: event.target.value })}
+              placeholder="Scan or enter barcode"
+              autoComplete="off"
+              autoFocus
+              disabled={busy || state.phase === "VERIFYING_FINISH_SCAN"}
+            />
+          </label>
+          <button
+            className="btn station-btn"
+            type="submit"
+            disabled={busy || state.phase !== "FINISH_SCANNING" || !normalizeStationReference(state.referenceInput)}
+          >
+            Use this code
+          </button>
+          <button
+            className="btn btn-secondary station-btn"
+            type="button"
+            onClick={() => dispatch({ type: "FINISH_SCAN_CANCELLED" })}
+          >
+            Cancel
+          </button>
+          <button className="btn btn-secondary station-btn" type="button" disabled={busy} onClick={() => void finishManually()}>
+            Finished Packing
+          </button>
+        </form>
       ) : null}
 
       {state.phase === "RECOVERY" && state.capture ? (
@@ -405,10 +553,9 @@ export function PackingStationScreen(props: {
           const file = event.target.files?.[0];
           event.target.value = "";
           if (!file) {
-            dispatch({ type: "CAPTURE_CANCELLED" });
             return;
           }
-          void acceptVideo(file, file.type || "video/mp4");
+          void holdCapturedFile(file, file.type || "video/mp4");
         }}
       />
     </main>

@@ -19,6 +19,65 @@ function json(data: unknown, status = 200) {
   });
 }
 
+function stationReadyProof(overrides: Record<string, unknown> = {}) {
+  return {
+    ...canonicalProof,
+    proofId: fulfillmentItem.proofId,
+    transactionId: fulfillmentItem.transactionId,
+    status: "READY_FOR_EVIDENCE",
+    participationPolicy: "COUNTERPARTY_OPTIONAL",
+    evidence: [],
+    attestations: [],
+    transaction: {
+      ...canonicalProof.transaction,
+      transactionId: fulfillmentItem.transactionId,
+      externalReference: "DS-1001",
+      itemTitle: "Pokémon Booster Box",
+    },
+    ...overrides,
+  };
+}
+
+function stubStationCamera() {
+  class FakeMediaRecorder {
+    static isTypeSupported() {
+      return true;
+    }
+    state = "inactive";
+    mimeType = "video/webm";
+    ondataavailable: ((event: { data: Blob }) => void) | null = null;
+    onstop: (() => void) | null = null;
+    start() {
+      this.state = "recording";
+    }
+    stop() {
+      this.state = "inactive";
+      this.ondataavailable?.({ data: new Blob([new Uint8Array(32)], { type: "video/webm" }) });
+      this.onstop?.();
+    }
+  }
+  vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    writable: true,
+    value: () => "blob:station-video",
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    writable: true,
+    value: () => undefined,
+  });
+  Object.defineProperty(navigator, "mediaDevices", {
+    configurable: true,
+    value: {
+      getUserMedia: vi.fn(async () => ({
+        getTracks: () => [{ stop: vi.fn() }],
+      })),
+    },
+  });
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+}
+
 function signInSession() {
   saveSession({
     apiBaseUrl: "",
@@ -147,6 +206,7 @@ describe("PackProof web reference client", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     sessionStorage.clear();
   });
 
@@ -785,5 +845,235 @@ describe("PackProof web reference client", () => {
     expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
     expect(screen.getByText("Pokémon Booster Box")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Packing" })).toBeInTheDocument();
+  });
+
+  it("finishes a webcam pack by USB rescan of the same order and keeps recording on a wrong barcode", async () => {
+    signInSession();
+    stubStationCamera();
+    let proofCreates = 0;
+    let uploadInits = 0;
+    let packed = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/me/fulfillment-queue")) {
+          return json({ items: [fulfillmentItem, fulfillmentNext], filter: "ready" });
+        }
+        if (url.includes("/me/packing-station/resolve") && init?.method === "POST") {
+          const body = JSON.parse(String(init.body ?? "{}")) as { reference?: string };
+          if (body.reference === "DS-1002") {
+            return json({
+              schema: "packproof.packing-station.resolve/v1",
+              reference: "DS-1002",
+              matchedBy: "EXTERNAL_ORDER_ID",
+              transactionId: fulfillmentNext.transactionId,
+              proofId: fulfillmentNext.proofId,
+              proofStatus: "READY_FOR_EVIDENCE",
+              participationPolicy: "COUNTERPARTY_OPTIONAL",
+              orderLabel: "Order #DS-1002",
+              itemSummary: "Vintage Watch",
+              committedEvidenceCount: 0,
+              captureReady: true,
+              alreadyFinalized: false,
+              alreadyHasCommittedEvidence: false,
+              blockReason: null,
+            });
+          }
+          if (body.reference === "DS-1001" || body.reference === "9400111899223344556677") {
+            return json({
+              schema: "packproof.packing-station.resolve/v1",
+              reference: body.reference,
+              matchedBy: body.reference === "DS-1001" ? "EXTERNAL_ORDER_ID" : "TRACKING_NUMBER",
+              transactionId: fulfillmentItem.transactionId,
+              proofId: fulfillmentItem.proofId,
+              proofStatus: "READY_FOR_EVIDENCE",
+              participationPolicy: "COUNTERPARTY_OPTIONAL",
+              orderLabel: "Order #DS-1001",
+              itemSummary: "Pokémon Booster Box",
+              committedEvidenceCount: 0,
+              captureReady: true,
+              alreadyFinalized: false,
+              alreadyHasCommittedEvidence: false,
+              blockReason: null,
+            });
+          }
+          return json({ error: { code: "STATION_REFERENCE_NOT_FOUND", message: "No packing order matched that reference" } }, 404);
+        }
+        if (url.endsWith(`/transactions/${fulfillmentItem.transactionId}/proof`)) {
+          proofCreates += 1;
+          return json(stationReadyProof());
+        }
+        if (url.endsWith(`/proofs/${fulfillmentItem.proofId}/evidence/uploads`) && init?.method === "POST") {
+          uploadInits += 1;
+          const body = JSON.parse(String(init.body ?? "{}")) as { evidenceType?: string };
+          expect(body.evidenceType).toBe("FULFILLMENT_CAPTURE");
+          return json({
+            evidenceId: "evd_station",
+            proofId: fulfillmentItem.proofId,
+            objectKey: "obj_station",
+            contentType: "video/webm",
+            evidenceType: "FULFILLMENT_CAPTURE",
+            validationStatus: "PENDING_UPLOAD",
+            upload: { method: "PUT", url: "/upload/t", headers: {} },
+          });
+        }
+        if (url.includes("/upload/")) {
+          return new Response(null, { status: 200 });
+        }
+        if (url.includes(`/proofs/${fulfillmentItem.proofId}/evidence/evd_station/commit`)) {
+          return json({
+            proof: stationReadyProof({
+              status: "EVIDENCE_COMMITTED",
+              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+            }),
+            sha256: "aa",
+            evidenceId: "evd_station",
+          });
+        }
+        if (url.includes("/attestations") && init?.method === "POST") {
+          return json({
+            attestation: { attestationId: "att_station", statement: "PACKED_DESCRIBED_ITEM" },
+            proof: stationReadyProof({
+              status: "EVIDENCE_COMMITTED",
+              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
+            }),
+          });
+        }
+        if (url.includes("/finalize") && init?.method === "POST") {
+          packed = true;
+          return json({
+            proof: stationReadyProof({
+              status: "FINALIZED",
+              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
+            }),
+            manifest: { manifestId: "man_station", proofId: fulfillmentItem.proofId, sha256: "aa", canonicalJson: "{}", manifest: {} },
+          });
+        }
+        if (url.endsWith(`/proofs/${fulfillmentItem.proofId}`)) {
+          return json(
+            packed
+              ? stationReadyProof({
+                  status: "FINALIZED",
+                  evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+                  attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
+                })
+              : stationReadyProof(),
+          );
+        }
+        if (url.endsWith("/me/proofs")) {
+          return json({ proofs: [summary] });
+        }
+        if (url.endsWith("/invitations")) {
+          return json({ invitations: [] });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Station" }));
+    await user.click(await screen.findByRole("button", { name: /Order #DS-1001/ }));
+    expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Start Packing" }));
+    expect(await screen.findByText("RECORDING")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scan Package to Finish" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finished Packing" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Scan Package to Finish" }));
+    expect(await screen.findByText("SCAN TO FINISH")).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "DS-1002");
+    await user.click(screen.getByRole("button", { name: "Use this code" }));
+    expect(await screen.findByText("Different order scanned. Finish packing the current order first.")).toBeInTheDocument();
+    expect(screen.getByText("RECORDING")).toBeInTheDocument();
+    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
+    expect(proofCreates).toBe(1);
+
+    await user.click(screen.getByRole("button", { name: "Scan Package to Finish" }));
+    await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "9400111899223344556677");
+    await user.click(screen.getByRole("button", { name: "Use this code" }));
+    expect(await screen.findByText("PROOF CREATED")).toBeInTheDocument();
+    expect(proofCreates).toBe(1);
+    expect(uploadInits).toBe(1);
+    expect(await screen.findByText("READY", {}, { timeout: 4000 })).toBeInTheDocument();
+  });
+
+  it("keeps Finished Packing as a secondary webcam fallback", async () => {
+    signInSession();
+    stubStationCamera();
+    let packed = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/me/fulfillment-queue")) {
+          return json({ items: [fulfillmentItem], filter: "ready" });
+        }
+        if (url.endsWith(`/transactions/${fulfillmentItem.transactionId}/proof`)) {
+          return json(stationReadyProof());
+        }
+        if (url.endsWith(`/proofs/${fulfillmentItem.proofId}/evidence/uploads`) && init?.method === "POST") {
+          return json({
+            evidenceId: "evd_manual",
+            proofId: fulfillmentItem.proofId,
+            objectKey: "obj_manual",
+            contentType: "video/webm",
+            evidenceType: "FULFILLMENT_CAPTURE",
+            validationStatus: "PENDING_UPLOAD",
+            upload: { method: "PUT", url: "/upload/t", headers: {} },
+          });
+        }
+        if (url.includes("/upload/")) {
+          return new Response(null, { status: 200 });
+        }
+        if (url.includes("/commit")) {
+          return json({
+            proof: stationReadyProof({
+              status: "EVIDENCE_COMMITTED",
+              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+            }),
+            sha256: "aa",
+            evidenceId: "evd_manual",
+          });
+        }
+        if (url.includes("/attestations") && init?.method === "POST") {
+          return json({
+            attestation: { attestationId: "att_manual", statement: "PACKED_DESCRIBED_ITEM" },
+            proof: stationReadyProof({
+              status: "EVIDENCE_COMMITTED",
+              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
+            }),
+          });
+        }
+        if (url.includes("/finalize") && init?.method === "POST") {
+          packed = true;
+          return json({
+            proof: stationReadyProof({ status: "FINALIZED" }),
+            manifest: { manifestId: "man_manual", proofId: fulfillmentItem.proofId, sha256: "aa", canonicalJson: "{}", manifest: {} },
+          });
+        }
+        if (url.endsWith(`/proofs/${fulfillmentItem.proofId}`)) {
+          return json(packed ? stationReadyProof({ status: "FINALIZED" }) : stationReadyProof());
+        }
+        if (url.endsWith("/me/proofs")) {
+          return json({ proofs: [summary] });
+        }
+        if (url.endsWith("/invitations")) {
+          return json({ invitations: [] });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Station" }));
+    await user.click(await screen.findByRole("button", { name: /Order #DS-1001/ }));
+    await user.click(await screen.findByRole("button", { name: "Start Packing" }));
+    expect(await screen.findByRole("button", { name: "Scan Package to Finish" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finished Packing" }));
+    expect(await screen.findByText("PROOF CREATED")).toBeInTheDocument();
   });
 });

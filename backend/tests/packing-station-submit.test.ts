@@ -158,6 +158,22 @@ describe("packing station submit", () => {
     expect(api.calls).toEqual([]);
   });
 
+  it("still requires a capture commit after a verified finish identity", async () => {
+    const api = apiMock([snapshot()]);
+    const upload = vi.fn(async () => undefined);
+    await submitStationSession({
+      proof: snapshot(),
+      actorUserId: "seller",
+      capture,
+      idempotencyKey: "idem_rescan",
+      deps: { api, upload, newIdempotencyKey: () => "generated" },
+    });
+    expect(api.calls.filter((item) => item.startsWith("init:"))).toEqual([
+      "init:proof_1:FULFILLMENT_CAPTURE:idem_rescan",
+    ]);
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
   it("maps authentication failure to a recoverable station error", async () => {
     const api = apiMock([snapshot()]);
     api.initializeEvidenceUpload = async () => {
