@@ -14,3 +14,5 @@ Packing Station is the persistent pack surface: identify an order, record packin
 Development mode still accepts subjects such as `seller-1` and `buyer-1`. Production-capable accounts use `PACKPROOF_AUTH_MODE=cognito` on the API and `cognito` in the client. The client talks to Cognito directly for sign-up, verification, sign-in, and password reset. It never sends a password to the PackProof API.
 
 On a physical device in Expo Go, set the API base URL to the machine LAN address, for example `http://192.168.1.10:3000`. That override is development-only. Google Play / release builds always use the compiled staging API and Cognito settings from `eas.json` profile `internal-staging` and ignore a cached localhost URL.
+
+Internal Testing identity and upload-certificate checks are in [docs/ANDROID_PLAY_RELEASE.md](../docs/ANDROID_PLAY_RELEASE.md). The Play listing is `com.packproof.mobile`.
