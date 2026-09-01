@@ -71,6 +71,8 @@ Phase 10 mobile client: `mobile/`. It issues V2 domain commands and renders retu
 
 Web reference client: `web/`. Same API, same canonical Proof. Local Vite for development. Staging hosting is S3 + CloudFront; see [WEB_CLIENT.md](WEB_CLIENT.md).
 
+Packing Station Mode is a client workflow over those commands. It does not own Proof lifecycle. See [PACKING_STATION.md](PACKING_STATION.md).
+
 ## Canonical Proof contract
 
 One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks, and portals consume the same Proof through the API authorization boundary.

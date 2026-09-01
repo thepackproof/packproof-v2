@@ -57,6 +57,10 @@ import {
   parseFulfillmentQueueFilter,
   providerDisplay,
 } from "./domain/fulfillment-queue.js";
+import {
+  parseStationResolveRequest,
+  resolvePackingStationTarget,
+} from "./domain/packing-station-resolve.js";
 import { loadCommerceSyncState, syncStateView } from "./domain/commerce-order-records.js";
 import { normalizeExternalAccountReference } from "./domain/normalized-fulfillment-order.js";
 import {
@@ -643,6 +647,15 @@ export function createApp(deps: AppDependencies): Express {
       const filter = parseFulfillmentQueueFilter(req.query.filter);
       const items = await listFulfillmentQueue(deps.db, bearerUser(req), filter);
       res.json({ items, filter });
+    }),
+  );
+
+  app.post(
+    "/me/packing-station/resolve",
+    asyncRoute(async (req, res) => {
+      const parsed = parseStationResolveRequest(req.body);
+      const result = await resolvePackingStationTarget(deps.db, bearerUser(req), parsed);
+      res.json(result);
     }),
   );
 

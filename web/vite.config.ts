@@ -1,3 +1,4 @@
+import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -12,9 +13,16 @@ const api = {
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@packproof/station": path.resolve(__dirname, "../mobile/src/packing-station"),
+    },
+  },
   server: {
     port: 5173,
+    fs: { allow: [".."] },
     proxy: {
+      "/upload": api,
       "/health": api,
       "/auth": api,
       "/me": api,

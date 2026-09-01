@@ -385,6 +385,39 @@ export interface TransactionImportView {
   created: boolean;
 }
 
+export interface FulfillmentQueueItem {
+  transactionId: string;
+  proofId: string;
+  providerDisplay: string;
+  externalOrderId: string;
+  externalReference: string | null;
+  itemSummary: string;
+  itemCount: number;
+  proofStatus: string;
+  participationPolicy: string;
+  evidenceCount: number;
+  pendingEvidenceCount: number;
+  canComplete: boolean;
+  workflowState: string;
+}
+
+export interface PackingStationResolveView {
+  schema?: string;
+  reference: string;
+  matchedBy: string;
+  transactionId: string;
+  proofId: string | null;
+  proofStatus: string | null;
+  participationPolicy: string | null;
+  orderLabel: string;
+  itemSummary: string;
+  committedEvidenceCount: number;
+  captureReady: boolean;
+  alreadyFinalized: boolean;
+  alreadyHasCommittedEvidence: boolean;
+  blockReason: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly code: string,
@@ -452,6 +485,19 @@ export class PackProofV2Client {
 
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
     return this.request("/me/proofs");
+  }
+
+  async listFulfillmentQueue(
+    filter: "ready" | "completed" | "all" = "ready",
+  ): Promise<{ items: FulfillmentQueueItem[]; filter: string }> {
+    return this.request(`/me/fulfillment-queue?filter=${encodeURIComponent(filter)}`);
+  }
+
+  async resolvePackingStation(reference: string): Promise<PackingStationResolveView> {
+    return this.request("/me/packing-station/resolve", {
+      method: "POST",
+      body: { reference },
+    });
   }
 
   async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {
@@ -589,6 +635,16 @@ export class PackProofV2Client {
   ): Promise<{ invitation: InvitationView; proof: ProofView }> {
     return this.request(`/invitations/${encodeURIComponent(token)}/accept`, {
       method: "POST",
+    });
+  }
+
+  async createAttestation(
+    proofId: string,
+    input: { statement: string; relatedEvidenceId?: string },
+  ): Promise<{ attestation: unknown; proof: ProofView }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/attestations`, {
+      method: "POST",
+      body: input,
     });
   }
 

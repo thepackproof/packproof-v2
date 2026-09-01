@@ -59,6 +59,7 @@ import {
   shouldRestoreCachedSession,
   type ResolvedRuntimeConfig,
 } from "./src/runtime-config";
+import { PackingStationScreen } from "./src/screens/PackingStationScreen";
 
 const IS_RELEASE_CLIENT = !__DEV__;
 
@@ -84,7 +85,7 @@ function currentRuntime(cached?: {
 
 const INITIAL_RUNTIME = currentRuntime();
 
-type Screen = "auth" | "home" | "proof" | "capture";
+type Screen = "auth" | "home" | "proof" | "capture" | "station";
 type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset";
 type CreateMode = "menu" | "manual" | "review";
 type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
@@ -274,7 +275,7 @@ export default function App() {
         if (!restored) {
           return;
         }
-        setScreen("home");
+        setScreen(next.stationActive ? "station" : "home");
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           const compiled = currentRuntime();
@@ -396,6 +397,8 @@ export default function App() {
   }): Promise<ProfileView> {
     tokenRef.current = input.token;
     const profile = await client.getMe();
+    const previous = sessionRef.current;
+    const sameUser = previous?.userId === profile.userId;
     const next: CachedClientState = {
       apiBaseUrl: apiBaseUrl.trim(),
       authMode,
@@ -411,14 +414,20 @@ export default function App() {
       cognitoUserPoolId: authMode === "cognito" ? cognitoPoolId.trim() : null,
       cognitoClientId: authMode === "cognito" ? cognitoClientId.trim() : null,
       cognitoRegion: authMode === "cognito" ? cognitoRegion.trim() : null,
-      proofId: null,
-      transactionId: null,
-      invitationToken: null,
-      captureUri: null,
-      evidenceIdempotencyKey: null,
-      evidenceContentType: null,
-      captureByteSize: null,
-      captureDurationMs: null,
+      proofId: sameUser ? previous?.proofId ?? null : null,
+      transactionId: sameUser ? previous?.transactionId ?? null : null,
+      invitationToken: sameUser ? previous?.invitationToken ?? null : null,
+      captureUri: sameUser ? previous?.captureUri ?? null : null,
+      evidenceIdempotencyKey: sameUser ? previous?.evidenceIdempotencyKey ?? null : null,
+      evidenceContentType: sameUser ? previous?.evidenceContentType ?? null : null,
+      captureByteSize: sameUser ? previous?.captureByteSize ?? null : null,
+      captureDurationMs: sameUser ? previous?.captureDurationMs ?? null : null,
+      stationActive: sameUser ? previous?.stationActive === true : false,
+      stationPhase: sameUser ? previous?.stationPhase ?? null : null,
+      stationProofId: sameUser ? previous?.stationProofId ?? null : null,
+      stationTransactionId: sameUser ? previous?.stationTransactionId ?? null : null,
+      stationOrderLabel: sameUser ? previous?.stationOrderLabel ?? null : null,
+      stationItemSummary: sameUser ? previous?.stationItemSummary ?? null : null,
     };
     await persist(next);
     await applyProfile(profile);
@@ -426,18 +435,20 @@ export default function App() {
     setPendingInvites(inbox.invitations);
     const collection = await client.listMyProofs();
     setProofCollection(collection.proofs);
-    setProof(null);
-    setTransactionDetail(null);
-    setLocalCapture(null);
-    setCaptureStatus("idle");
-    setUploadPercent(null);
-    setCreateForm(EMPTY_FORM);
-    setCreateMode("menu");
-    setImportReview(null);
-    setEditForm(EMPTY_FORM);
-    setManifest(null);
-    setSearchResults([]);
-    setInviteOpen(false);
+    if (!sameUser) {
+      setProof(null);
+      setTransactionDetail(null);
+      setLocalCapture(null);
+      setCaptureStatus("idle");
+      setUploadPercent(null);
+      setCreateForm(EMPTY_FORM);
+      setCreateMode("menu");
+      setImportReview(null);
+      setEditForm(EMPTY_FORM);
+      setManifest(null);
+      setSearchResults([]);
+      setInviteOpen(false);
+    }
     return profile;
   }
 
@@ -571,7 +582,55 @@ export default function App() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="dark" />
+      <StatusBar style={screen === "station" ? "light" : "dark"} />
+      {screen === "station" && session ? (
+        <PackingStationScreen
+          client={client}
+          apiBaseUrl={apiBaseUrl.trim()}
+          userId={session.userId}
+          restoredCapture={localCapture}
+          restoredKey={session.evidenceIdempotencyKey}
+          restoredProofId={session.stationProofId}
+          restoredTransactionId={session.stationTransactionId}
+          restoredOrderLabel={session.stationOrderLabel}
+          restoredItemSummary={session.stationItemSummary}
+          onPersist={async (next) => {
+            const current = sessionRef.current;
+            if (!current) {
+              return;
+            }
+            setLocalCapture(next.capture);
+            await persist({
+              ...current,
+              captureUri: next.capture?.uri ?? null,
+              evidenceIdempotencyKey: next.evidenceIdempotencyKey,
+              evidenceContentType: next.capture?.contentType ?? null,
+              captureByteSize: next.capture?.byteSize ?? null,
+              captureDurationMs: next.capture?.durationMs ?? null,
+              proofId: next.proofId ?? current.proofId,
+              transactionId: next.transactionId ?? current.transactionId,
+              stationActive: next.stationActive,
+              stationPhase: next.stationActive ? "active" : null,
+              stationProofId: next.proofId,
+              stationTransactionId: next.transactionId,
+              stationOrderLabel: next.orderLabel,
+              stationItemSummary: next.itemSummary,
+            });
+          }}
+          onEnsureAuth={ensureFreshCognitoToken}
+          onAuthExpired={() => {
+            setError("Session expired. Sign in again.");
+            setAuthPane("signIn");
+            setScreen("auth");
+          }}
+          onLeave={() => {
+            setError(null);
+            setScreen("home");
+            void refreshProofCollection();
+          }}
+        />
+      ) : null}
+      {screen !== "station" ? (
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>PackProof V2</Text>
         <Text style={styles.subtitle}>Thin client. Server owns Proof state.</Text>
@@ -702,7 +761,7 @@ export default function App() {
                           accessExpiresAt: tokens.expiresAt,
                         });
                       }
-                      setScreen("home");
+                      setScreen(sessionRef.current?.stationActive ? "station" : "home");
                     })
                   }
                 />
@@ -899,6 +958,14 @@ export default function App() {
 
         {screen === "home" && session ? (
           <View style={styles.card}>
+            <Action
+              label="Packing Station"
+              disabled={busy}
+              onPress={() => {
+                setError(null);
+                setScreen("station");
+              }}
+            />
             <Text style={styles.heading}>Account</Text>
             <Text>Signed in as {session.username ?? session.subject}</Text>
             <Text>{session.displayName ?? ""}</Text>
@@ -1677,6 +1744,7 @@ export default function App() {
           </View>
         ) : null}
       </ScrollView>
+      ) : null}
     </View>
   );
 }

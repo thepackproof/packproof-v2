@@ -17,6 +17,7 @@ import { CreateProofScreen } from "./screens/CreateProofScreen";
 import { FulfillmentDetailScreen } from "./screens/FulfillmentDetailScreen";
 import { FulfillmentQueueScreen } from "./screens/FulfillmentQueueScreen";
 import { HomeScreen } from "./screens/HomeScreen";
+import { PackingStationScreen } from "./screens/PackingStationScreen";
 import { ProofScreen } from "./screens/ProofScreen";
 import { SignInScreen } from "./screens/SignInScreen";
 
@@ -26,6 +27,7 @@ type Route =
   | { name: "proof"; proofId: string }
   | { name: "fulfillment" }
   | { name: "fulfillment-detail"; proofId: string }
+  | { name: "station" }
   | { name: "stores" };
 
 function parseRoute(pathname: string): Route {
@@ -34,6 +36,9 @@ function parseRoute(pathname: string): Route {
   }
   if (pathname === "/fulfillment") {
     return { name: "fulfillment" };
+  }
+  if (pathname === "/station") {
+    return { name: "station" };
   }
   if (pathname === "/stores") {
     return { name: "stores" };
@@ -104,6 +109,7 @@ export function App() {
       next.name === "proof" ||
       next.name === "fulfillment" ||
       next.name === "fulfillment-detail" ||
+      next.name === "station" ||
       next.name === "stores"
     ) {
       setLoading(true);
@@ -208,7 +214,7 @@ export function App() {
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
-    if (route.name === "fulfillment" || route.name === "fulfillment-detail") {
+    if (route.name === "fulfillment" || route.name === "fulfillment-detail" || route.name === "station") {
       setLoading(true);
       setError(null);
       void api
@@ -270,6 +276,16 @@ export function App() {
             Proofs
           </a>
           <a
+            href="/station"
+            aria-current={route.name === "station" ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              go("/station");
+            }}
+          >
+            Station
+          </a>
+          <a
             href="/fulfillment"
             aria-current={
               route.name === "fulfillment" || route.name === "fulfillment-detail" ? "page" : undefined
@@ -308,6 +324,7 @@ export function App() {
           error={error}
           onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
           onCreate={() => go("/new")}
+          onOpenStation={() => go("/station")}
           onAccept={(invitationId) => {
             setBusy(true);
             void api
@@ -354,6 +371,18 @@ export function App() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+        />
+      ) : null}
+
+      {route.name === "station" ? (
+        <PackingStationScreen
+          api={api}
+          userId={session.userId}
+          queue={queue.filter(
+            (item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT",
+          )}
+          error={error}
+          onAuthExpired={signOut}
         />
       ) : null}
 

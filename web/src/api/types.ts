@@ -409,6 +409,39 @@ export interface CommerceConnectionView {
   readyOrderCount: number;
 }
 
+export interface PackingStationResolveView {
+  schema?: string;
+  reference: string;
+  matchedBy: string;
+  transactionId: string;
+  proofId: string | null;
+  proofStatus: string | null;
+  participationPolicy: string | null;
+  orderLabel: string;
+  itemSummary: string;
+  committedEvidenceCount: number;
+  captureReady: boolean;
+  alreadyFinalized: boolean;
+  alreadyHasCommittedEvidence: boolean;
+  blockReason: string | null;
+}
+
+export interface UploadTarget {
+  method: "PUT";
+  url: string;
+  headers: Record<string, string>;
+}
+
+export interface EvidenceUploadView {
+  evidenceId: string;
+  proofId: string;
+  objectKey: string;
+  contentType: string;
+  evidenceType: string;
+  validationStatus: string;
+  upload: UploadTarget;
+}
+
 export interface CommerceSyncView {
   connectionId: string;
   adapterKey: string;

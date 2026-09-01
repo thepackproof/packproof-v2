@@ -516,6 +516,99 @@ h2 {
   border: 0;
 }
 
+.station {
+  min-height: calc(100vh - 4.5rem);
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 1.25rem;
+  padding: 3rem 1.5rem 4rem;
+  background: #111;
+  color: #fff;
+}
+
+.station-ready,
+.station-identifying,
+.station-ready_to_record {
+  background: #111;
+}
+
+.station-recording {
+  background: #3b0008;
+}
+
+.station-processing {
+  background: #1a1a1a;
+}
+
+.station-proof_created {
+  background: #0d2a1c;
+}
+
+.station-recovery {
+  background: #2c2108;
+}
+
+.station-phase {
+  margin: 0;
+  font-size: clamp(2.8rem, 9vw, 5rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 0.95;
+}
+
+.station-order {
+  margin: 0;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  font-weight: 700;
+}
+
+.station-item {
+  margin: 0.25rem 0 0;
+  font-size: clamp(1.3rem, 3.5vw, 1.8rem);
+  color: #d8d8d8;
+}
+
+.station-copy,
+.station-fallback-label {
+  margin: 0;
+  color: #c8c8c8;
+  font-size: 1.15rem;
+  max-width: 36rem;
+}
+
+.station-error {
+  margin: 0;
+  color: #ffd0d0;
+  font-size: 1.05rem;
+}
+
+.station-identify,
+.station-fallback,
+.station-identity {
+  display: grid;
+  gap: 0.75rem;
+  width: min(36rem, 100%);
+}
+
+.station-identify input {
+  font-size: 1.25rem;
+  padding: 0.9rem 1rem;
+}
+
+.station-btn {
+  min-height: 3.4rem;
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+
+.station-preview {
+  width: min(42rem, 100%);
+  border-radius: 12px;
+  background: #000;
+  aspect-ratio: 4 / 3;
+}
+
 @media (max-width: 720px) {
   .topbar,
   .page {

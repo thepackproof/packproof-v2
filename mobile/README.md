@@ -2,6 +2,8 @@
 
 Thin Expo client over the V2 API. It does not own Proof lifecycle state.
 
+Packing Station is the persistent pack surface: identify an order, record packing video with the existing capture path, submit through the canonical evidence commands, then return to READY. Proof details and invitations stay on the home/Proof screens.
+
 ## Run
 
 1. Start the API. For local development use `PACKPROOF_AUTH_MODE=dev` and `PACKPROOF_DEV_AUTH=true`.

@@ -16,6 +16,9 @@ import {
   type CommerceConnectionView,
   type CommerceSyncView,
   type FulfillmentQueueItem,
+  type PackingStationResolveView,
+  type EvidenceUploadView,
+  type UploadTarget,
 } from "./types";
 
 export class PackProofApi {
@@ -46,6 +49,13 @@ export class PackProofApi {
     filter: "ready" | "completed" | "all" = "ready",
   ): Promise<{ items: FulfillmentQueueItem[]; filter: string }> {
     return this.request(`/me/fulfillment-queue?filter=${encodeURIComponent(filter)}`);
+  }
+
+  async resolvePackingStation(reference: string): Promise<PackingStationResolveView> {
+    return this.request("/me/packing-station/resolve", {
+      method: "POST",
+      body: { reference },
+    });
   }
 
   async listCommerceConnections(): Promise<{ connections: CommerceConnectionView[] }> {
@@ -180,6 +190,49 @@ export class PackProofApi {
     return { invitation: publicInvitation(result.invitation), proof: result.proof };
   }
 
+  async initializeEvidenceUpload(
+    proofId: string,
+    input: { contentType: string; idempotencyKey: string },
+  ): Promise<EvidenceUploadView> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/uploads`, {
+      method: "POST",
+      headers: { "Idempotency-Key": input.idempotencyKey },
+      body: {
+        contentType: input.contentType,
+        evidenceType: "SELLER_EVIDENCE",
+      },
+    });
+  }
+
+  async uploadObject(
+    target: UploadTarget,
+    body: Blob,
+    contentType: string,
+  ): Promise<void> {
+    const url = resolveUploadUrl(this.options.baseUrl, target.url);
+    const response = await fetch(url, {
+      method: target.method,
+      headers: {
+        ...target.headers,
+        "Content-Type": contentType,
+      },
+      body,
+    });
+    if (!response.ok) {
+      throw await errorFromResponse(response);
+    }
+  }
+
+  async commitEvidence(
+    proofId: string,
+    evidenceId: string,
+  ): Promise<{ proof: CanonicalProof; sha256: string; evidenceId: string }> {
+    return this.request(
+      `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}/commit`,
+      { method: "POST", body: {} },
+    );
+  }
+
   async createAttestation(
     proofId: string,
     input: { statement: string; relatedEvidenceId?: string },
@@ -206,9 +259,10 @@ export class PackProofApi {
       method?: string;
       body?: unknown;
       auth?: boolean;
+      headers?: Record<string, string>;
     } = {},
   ): Promise<T> {
-    const headers: Record<string, string> = { Accept: "application/json" };
+    const headers: Record<string, string> = { Accept: "application/json", ...(init.headers ?? {}) };
     if (init.body !== undefined) {
       headers["Content-Type"] = "application/json";
     }
@@ -242,6 +296,17 @@ function publicInvitation(invitation: InvitationView & { token?: string }): Invi
     acceptedAt: invitation.acceptedAt,
     expiresAt: invitation.expiresAt,
   };
+}
+
+export function resolveUploadUrl(baseUrl: string, targetUrl: string): string {
+  if (!baseUrl) {
+    return targetUrl;
+  }
+  const target = new URL(targetUrl, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  if (target.pathname.startsWith("/upload/")) {
+    return joinUrl(baseUrl, `${target.pathname}${target.search}`);
+  }
+  return target.toString();
 }
 
 export function joinUrl(baseUrl: string, path: string): string {

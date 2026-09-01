@@ -25,6 +25,12 @@ export interface CachedClientState {
   evidenceContentType: string | null;
   captureByteSize: number | null;
   captureDurationMs: number | null;
+  stationActive: boolean;
+  stationPhase: string | null;
+  stationProofId: string | null;
+  stationTransactionId: string | null;
+  stationOrderLabel: string | null;
+  stationItemSummary: string | null;
 }
 
 export async function loadCachedState(): Promise<CachedClientState | null> {
@@ -60,6 +66,12 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
       evidenceContentType: parsed.evidenceContentType ?? null,
       captureByteSize: parsed.captureByteSize ?? null,
       captureDurationMs: parsed.captureDurationMs ?? null,
+      stationActive: parsed.stationActive === true,
+      stationPhase: parsed.stationPhase ?? null,
+      stationProofId: parsed.stationProofId ?? null,
+      stationTransactionId: parsed.stationTransactionId ?? null,
+      stationOrderLabel: parsed.stationOrderLabel ?? null,
+      stationItemSummary: parsed.stationItemSummary ?? null,
     };
   } catch {
     return null;

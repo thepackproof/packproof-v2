@@ -650,4 +650,97 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByText(/10 orders discovered/)).toBeInTheDocument();
     expect(screen.queryByText(/icn_/)).not.toBeInTheDocument();
   });
+
+  it("identifies an imported order in Packing Station and recovers from a bad reference", async () => {
+    signInSession();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/me/fulfillment-queue")) {
+          return json({ items: [fulfillmentItem, fulfillmentNext], filter: "ready" });
+        }
+        if (url.includes("/me/packing-station/resolve") && init?.method === "POST") {
+          const body = JSON.parse(String(init.body ?? "{}")) as { reference?: string };
+          if (body.reference?.toUpperCase() === "DS-1001" || body.reference === "#DS-1001") {
+            return json({
+              schema: "packproof.packing-station.resolve/v1",
+              reference: "DS-1001",
+              matchedBy: "EXTERNAL_ORDER_ID",
+              transactionId: fulfillmentItem.transactionId,
+              proofId: fulfillmentItem.proofId,
+              proofStatus: "READY_FOR_EVIDENCE",
+              participationPolicy: "COUNTERPARTY_OPTIONAL",
+              orderLabel: "Order #DS-1001",
+              itemSummary: "Pokémon Booster Box",
+              committedEvidenceCount: 0,
+              captureReady: true,
+              alreadyFinalized: false,
+              alreadyHasCommittedEvidence: false,
+              blockReason: null,
+            });
+          }
+          return json({ error: { code: "STATION_REFERENCE_NOT_FOUND", message: "No packing order matched that reference" } }, 404);
+        }
+        if (url.endsWith(`/transactions/${fulfillmentItem.transactionId}/proof`)) {
+          return json({
+            ...canonicalProof,
+            proofId: fulfillmentItem.proofId,
+            transactionId: fulfillmentItem.transactionId,
+            status: "READY_FOR_EVIDENCE",
+            participationPolicy: "COUNTERPARTY_OPTIONAL",
+            evidence: [],
+            transaction: {
+              ...canonicalProof.transaction,
+              transactionId: fulfillmentItem.transactionId,
+              externalReference: "DS-1001",
+              itemTitle: "Pokémon Booster Box",
+            },
+          });
+        }
+        if (url.endsWith(`/transactions/${fulfillmentNext.transactionId}/proof`)) {
+          return json({
+            ...canonicalProof,
+            proofId: fulfillmentNext.proofId,
+            transactionId: fulfillmentNext.transactionId,
+            status: "READY_FOR_EVIDENCE",
+            participationPolicy: "COUNTERPARTY_OPTIONAL",
+            evidence: [],
+            transaction: {
+              ...canonicalProof.transaction,
+              transactionId: fulfillmentNext.transactionId,
+              externalReference: "DS-1002",
+              itemTitle: "Vintage Watch",
+            },
+          });
+        }
+        if (url.endsWith("/me/proofs")) {
+          return json({ proofs: [summary] });
+        }
+        if (url.endsWith("/invitations")) {
+          return json({ invitations: [] });
+        }
+        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Station" }));
+    expect(await screen.findByText("READY")).toBeInTheDocument();
+    expect(screen.getByText(/Identify an order/)).toBeInTheDocument();
+    expect(screen.queryByText(/SHA-256|manifest|object store/i)).not.toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("Order or tracking number"), "NOPE");
+    await user.click(screen.getByRole("button", { name: "Identify order" }));
+    expect(await screen.findByText("No packing order matched that reference")).toBeInTheDocument();
+    expect(screen.getByText("NEEDS ATTENTION")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ready for next order" }));
+    expect(await screen.findByText("READY")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Order #DS-1001/ }));
+    expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
+    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
+    expect(screen.getByText("Pokémon Booster Box")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Packing" })).toBeInTheDocument();
+  });
 });

@@ -22,7 +22,7 @@ Optional photo / video
 Complete PackProof
 ```
 
-The seller does not create each PackProof by hand. The seller does not wait for a buyer PackProof account. Video is optional.
+The seller does not create each PackProof by hand. The seller does not wait for a buyer PackProof account. The existing web fulfillment queue can still complete a merchant Proof with the packing attestation. Packing Station Mode treats continuous packing video as the required physical evidence for that workflow; see [PACKING_STATION.md](PACKING_STATION.md).
 
 ## Product goal
 

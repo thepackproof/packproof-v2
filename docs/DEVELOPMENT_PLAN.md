@@ -37,7 +37,7 @@ The beta-ready invitation path is account search. Invitees do not handle invitat
 
 ## Commands
 
-`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `searchUsers()`, `searchUsersForProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`, `getShipmentIntegrity()`, `executeTrustedShipmentSync()`, `executeCommerceFulfillmentSync()`.
+`createTransaction()`, `importTransaction()`, `createOrGetProof()`, `getProof()`, `searchUsers()`, `searchUsersForProof()`, `createInvitation()`, `acceptInvitation()`, `initializeEvidenceUpload()`, `commitEvidence()`, `verifyEvidenceHash()`, `finalizeProof()`, `getManifest()`, `importShipmentEvents()`, `getShipmentIntegrity()`, `executeTrustedShipmentSync()`, `executeCommerceFulfillmentSync()`, `resolvePackingStation()`.
 
 ## API
 
@@ -51,6 +51,7 @@ REST only:
 - `GET /health`
 - `GET /meta`
 - `GET /me/fulfillment-queue`
+- `POST /me/packing-station/resolve`
 - `GET /me/integration-connections`
 - `POST /me/commerce-connections/:connectionId/sync`
 - `GET /proofs/:id`

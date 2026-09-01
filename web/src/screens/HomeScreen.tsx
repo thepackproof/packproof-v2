@@ -12,6 +12,7 @@ export function HomeScreen(props: {
   error: string | null;
   onOpenProof: (proofId: string) => void;
   onCreate: () => void;
+  onOpenStation: () => void;
   onAccept: (invitationId: string) => void;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -38,9 +39,14 @@ export function HomeScreen(props: {
             Discovery from the server. Opening a row loads the full canonical Proof.
           </p>
         </div>
-        <button className="btn" type="button" onClick={props.onCreate}>
-          Create Proof
-        </button>
+        <div className="btn-row">
+          <button className="btn" type="button" onClick={props.onOpenStation}>
+            Packing Station
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={props.onCreate}>
+            Create Proof
+          </button>
+        </div>
       </div>
 
       {props.error ? (
