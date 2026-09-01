@@ -43,6 +43,20 @@ export class PackProofApi {
     return this.request("/me");
   }
 
+  async updateProfile(input: { username?: string; displayName?: string }): Promise<ProfileView> {
+    const body: { username?: string; displayName?: string } = {};
+    if (input.username !== undefined) {
+      body.username = input.username;
+    }
+    if (input.displayName !== undefined) {
+      body.displayName = input.displayName;
+    }
+    return this.request("/me/profile", {
+      method: "PATCH",
+      body,
+    });
+  }
+
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
     return this.request("/me/proofs");
   }

@@ -57,7 +57,7 @@ module.exports = {
     },
     android: {
       package: "com.packproof.mobile",
-      versionCode: 21,
+      versionCode: 23,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
@@ -83,12 +83,14 @@ module.exports = {
         },
       ],
       "expo-asset",
+      "expo-font",
       [
         "expo-build-properties",
         {
           android: {
-            compileSdkVersion: 35,
-            targetSdkVersion: 35,
+            compileSdkVersion: 36,
+            targetSdkVersion: 36,
+            buildToolsVersion: "36.0.0",
           },
         },
       ],

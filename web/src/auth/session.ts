@@ -22,6 +22,14 @@ export function defaultAuthMode(): AuthMode {
   return import.meta.env.VITE_PACKPROOF_AUTH_MODE === "cognito" ? "cognito" : "dev";
 }
 
+export function isDevAuthAvailable(): boolean {
+  return defaultAuthMode() === "dev";
+}
+
+export function isProfileComplete(session: Pick<WebSession, "username" | "displayName">): boolean {
+  return Boolean(session.username && session.displayName);
+}
+
 export function loadSession(): WebSession | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);

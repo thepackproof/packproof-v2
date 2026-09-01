@@ -176,6 +176,34 @@ describe("API client boundary", () => {
     vi.unstubAllGlobals();
   });
 
+  it("updates profile through the authenticated profile endpoint", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          userId: "user_1",
+          username: "newuser",
+          displayName: "New User",
+          status: "ACTIVE",
+          createdAt: "2026-09-01T12:00:00.000Z",
+          updatedAt: "2026-09-01T12:05:00.000Z",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    const updated = await api.updateProfile({ username: "newuser", displayName: "New User" });
+    expect(updated.username).toBe("newuser");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/me/profile",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ username: "newuser", displayName: "New User" }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
   it("starts eBay OAuth through the backend and never sends a client secret", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(

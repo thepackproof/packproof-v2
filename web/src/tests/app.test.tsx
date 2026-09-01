@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
-import { saveSession } from "../auth/session";
+import { isDevAuthAvailable, saveSession } from "../auth/session";
 import {
   canonicalProof,
   demoConnection,
@@ -100,6 +100,15 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.includes("cognito-idp")) {
+          return json({
+            AuthenticationResult: {
+              AccessToken: "token-seller",
+              RefreshToken: null,
+              ExpiresIn: 3600,
+            },
+          });
+        }
         if (url.endsWith("/auth/dev/login")) {
           return json({ userId: "user_seller", token: "token-seller" });
         }
@@ -387,11 +396,19 @@ describe("PackProof web reference client", () => {
     expect(screen.queryByText("secret-token")).not.toBeInTheDocument();
   });
 
-  it("can sign in through the development subject flow", async () => {
+  it("can sign in through the PackProof account form", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.clear(screen.getByLabelText("Development subject"));
-    await user.type(screen.getByLabelText("Development subject"), "seller-1");
+    expect(screen.queryByLabelText("Development subject")).not.toBeInTheDocument();
+    if (isDevAuthAvailable()) {
+      await user.click(screen.getByText("Developer options"));
+      await user.click(screen.getByLabelText("Use development subject"));
+      await user.clear(screen.getByLabelText("Development subject"));
+      await user.type(screen.getByLabelText("Development subject"), "seller-1");
+    } else {
+      await user.type(screen.getByLabelText("Email"), "seller@example.com");
+      await user.type(screen.getByLabelText("Password"), "SecretPass1");
+    }
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => {
       expect(screen.getAllByText("Vintage camera").length).toBeGreaterThan(0);

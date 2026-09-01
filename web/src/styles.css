@@ -164,6 +164,98 @@ button {
   text-decoration: underline;
 }
 
+.auth-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+  padding: 0.28rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.auth-switch [role="tab"] {
+  border: 0;
+  background: transparent;
+  color: var(--slate);
+  border-radius: 9px;
+  padding: 0.55rem 0.75rem;
+  font-weight: 700;
+}
+
+.auth-switch [role="tab"][aria-selected="true"] {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.auth-alt {
+  margin: 0;
+  text-align: center;
+  color: var(--slate);
+  font-size: 0.92rem;
+}
+
+.auth-legal-note {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.auth-legal-note a {
+  color: var(--blue);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.auth-legal-note a:hover {
+  text-decoration: underline;
+}
+
+.link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--blue);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.field-help,
+.field-error {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.field-help {
+  color: var(--slate);
+}
+
+.field-error {
+  color: var(--danger);
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.field-check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.35rem 0 0.75rem;
+  color: var(--navy);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.field-check input {
+  width: auto;
+}
+
 h1,
 h2,
 h3 {
@@ -531,7 +623,8 @@ h2 {
   gap: 0.3rem;
 }
 
-.field span {
+.field span,
+.field label {
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--navy);

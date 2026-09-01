@@ -13,7 +13,7 @@ import type {
   ShipmentIntegrityView,
   TransactionWriteInput,
 } from "./api/types";
-import { clearSession, loadSession, saveSession, type WebSession } from "./auth/session";
+import { clearSession, isProfileComplete, loadSession, saveSession, type WebSession } from "./auth/session";
 import { AppNav, type AppRouteName } from "./components/AppNav";
 import { AccountScreen } from "./screens/AccountScreen";
 import { ActivityScreen } from "./screens/ActivityScreen";
@@ -26,6 +26,7 @@ import { PackingStationScreen } from "./screens/PackingStationScreen";
 import { ProofsScreen } from "./screens/ProofsScreen";
 import { ProofScreen } from "./screens/ProofScreen";
 import { LegalScreen } from "./screens/LegalScreen";
+import { ProfileSetupScreen } from "./screens/ProfileSetupScreen";
 import { SignInScreen } from "./screens/SignInScreen";
 
 type Route =
@@ -278,7 +279,7 @@ export function App() {
   }, [session]);
 
   useEffect(() => {
-    if (!session) {
+    if (!session || !isProfileComplete(session)) {
       return;
     }
     if (route.name === "home" || route.name === "proofs" || route.name === "activity") {
@@ -365,6 +366,31 @@ export function App() {
             tokenRef.current = next.token;
             setSession(next);
             go("/");
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (!isProfileComplete(session)) {
+    return (
+      <div className="app-shell">
+        <header className="topbar">
+          <span className="brand">
+            <img src="/packproof-logo.png" alt="" width={28} height={28} />
+            PackProof
+          </span>
+        </header>
+        <ProfileSetupScreen
+          session={session}
+          onGo={go}
+          onSignOut={signOut}
+          onCompleted={(profile) => {
+            setSession({
+              ...session,
+              username: profile.username,
+              displayName: profile.displayName,
+            });
           }}
         />
       </div>
