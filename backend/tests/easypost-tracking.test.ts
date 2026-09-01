@@ -557,11 +557,15 @@ describe("staging IAM and EasyPost secrets", () => {
     const taskRole = staging.split("TaskRole:")[1]?.split("InfrastructureRole:")[0] ?? "";
     const executionRole = staging.split("TaskExecutionRole:")[1]?.split("TaskRole:")[0] ?? "";
     expect(taskRole).toMatch(/secretsmanager:GetSecretValue/);
+    expect(taskRole).toMatch(/secretsmanager:CreateSecret/);
+    expect(taskRole).toMatch(/secretsmanager:PutSecretValue/);
+    expect(taskRole).toMatch(/secretsmanager:DeleteSecret/);
     expect(taskRole).toMatch(/packproof\/staging\/integrations\/\*/);
     expect(taskRole).not.toMatch(/packproof\/production/);
     expect(taskRole).not.toMatch(/Resource: "\*"/);
     expect(executionRole).toMatch(/Database\.MasterUserSecret\.SecretArn/);
     expect(executionRole).not.toMatch(/packproof\/staging\/integrations/);
+    expect(executionRole).not.toMatch(/secretsmanager:CreateSecret/);
 
     expect(api).toMatch(/TaskRoleArn: !Ref TaskRoleArn/);
     expect(api).toMatch(/ExecutionRoleArn: !Ref TaskExecutionRoleArn/);
@@ -577,6 +581,9 @@ describe("staging IAM and EasyPost secrets", () => {
     expect(deploy).toMatch(/runningNewImage/);
     expect(deploy).toMatch(/ecs describe-tasks --cluster \$Outputs\.ClusterName --tasks \$arns/);
     expect(deploy).toMatch(/--task-role-arn/);
+    expect(deploy).toMatch(/\[switch\]\$EnableEbay/);
+    expect(deploy).toMatch(/PACKPROOF_EBAY_APP_CREDENTIAL_REFERENCE/);
+    expect(deploy).not.toMatch(/PACKPROOF_EBAY_CLIENT_SECRET/);
     expect(dockerfile).toMatch(/public\.ecr\.aws\/docker\/library\/node:22-alpine/);
     expect(dockerfile).not.toMatch(/^FROM node:/m);
     expect(deploy).not.toMatch(/EZTK/);

@@ -115,7 +115,7 @@ Raw EasyPost error bodies are not returned to clients. Operators may mark a conn
 1. Create secret name `packproof/staging/integrations/easypost` (or use the full ARN).
 2. SecretString JSON as above. Never put the value in git, CloudFormation outputs, ECS environment variables, or clients.
 3. `integration_connections.credential_reference` = `packproof/staging/integrations/easypost` (or `arn:aws:secretsmanager:…`).
-4. ECS **task role** `packproof-v2-staging-task` has `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*`.
+4. ECS **task role** `packproof-v2-staging-task` has `secretsmanager:GetSecretValue`, `CreateSecret`, `PutSecretValue`, and `DeleteSecret` on `arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*`.
 5. The task **execution** role only reads the RDS master-user secret for injected `PACKPROOF_DB_USER` / `PACKPROOF_DB_PASSWORD`. Application SDK calls do not use the execution role.
 6. Set `PACKPROOF_CREDENTIAL_STORE=secrets-manager` on the running API task. `infra/api-service.yaml` is the contract. The documented apply path is `infra/deploy.ps1`, which updates the Express Mode service through the ECS CLI and must inject that variable on the container. Default `PACKPROOF_CREDENTIAL_STORE` is `env`; omitting it means the task role can read Secrets Manager but the process will not.
 

@@ -57,7 +57,7 @@ No UI/capture/upload states.
 - S3 + CloudFront for the staging web reference client (separate origin; CORS via `PACKPROOF_WEB_ORIGINS`)
 - KMS only if signing is introduced later
 - SQS only for genuine async jobs (none in this slice)
-- Secrets Manager for trusted integration credentials. The ECS **task role** (application AWS SDK) may call `secretsmanager:GetSecretValue` on `packproof/staging/integrations/*`. The task execution role is only for image pull, logs, and injected RDS credentials.
+- Secrets Manager for trusted integration credentials. The ECS **task role** (application AWS SDK) may call `secretsmanager:GetSecretValue`, `CreateSecret`, `PutSecretValue`, and `DeleteSecret` on `packproof/staging/integrations/*`. The task execution role is only for image pull, logs, and injected RDS credentials.
 
 Do not use DynamoDB or Firebase as canonical Proof storage. Do not put Proof transitions on Lambda.
 

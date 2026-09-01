@@ -70,7 +70,7 @@ Implementations:
 
 - `MemoryCredentialStore` — tests and in-process seeds
 - `EnvCredentialStore` — `credential_reference` `env:VAR_NAME` reads that process env var (JSON object or a bare API key)
-- `SecretsManagerCredentialStore` — `credential_reference` is a secret ARN, `sm:name`, or `packproof/...` name. The ECS **task role** (not the execution role) must allow `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*`. Staging EasyPost uses `packproof/staging/integrations/easypost`. No static AWS keys in source.
+- `SecretsManagerCredentialStore` — `credential_reference` is a secret ARN, `sm:name`, or `packproof/...` name. The ECS **task role** (not the execution role) must allow `secretsmanager:GetSecretValue`, `CreateSecret`, `PutSecretValue`, and `DeleteSecret` on `arn:aws:secretsmanager:REGION:ACCOUNT:secret:packproof/staging/integrations/*`. Staging EasyPost uses `packproof/staging/integrations/easypost`. No static AWS keys in source.
 
 `PACKPROOF_CREDENTIAL_STORE=memory|env|secrets-manager` (default `env`). The composite store still consults memory first so development seeding works.
 

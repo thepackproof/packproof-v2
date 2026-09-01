@@ -14,9 +14,13 @@ The API process uses the AWS SDK inside the container (S3 evidence, Secrets Mana
 
 The **task execution role** (`packproof-v2-staging-execution`) is for the ECS agent: image pull, CloudWatch logs, and injecting the RDS username/password from Secrets Manager into the task definition. It must not be used as the application credential role for EasyPost.
 
-Staging integration secrets are readable only by the task role:
+Staging integration secrets are readable and writable only by the task role, on this namespace:
 
 `arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:packproof/staging/integrations/*`
+
+Allowed actions: `GetSecretValue`, `CreateSecret`, `PutSecretValue`, `DeleteSecret`. That covers the existing EasyPost secret, the eBay app secret `packproof/staging/integrations/ebay/app`, and per-connection eBay user tokens `packproof/staging/integrations/ebay/sandbox/<connectionId>`. The execution role must not use this namespace.
+
+Optional Sandbox eBay enablement is a `deploy.ps1` switch (`-EnableEbay`). It sets `PACKPROOF_EBAY_*` environment variables except the Cert ID. The application secret is resolved at runtime from `PACKPROOF_EBAY_APP_CREDENTIAL_REFERENCE` (Secrets Manager), never from ECS plaintext.
 
 Secret **values** are never CloudFormation outputs. `DatabaseSecretArn` is an ARN, not a password.
 

@@ -6,13 +6,35 @@ param(
   [string]$ApiStack = "packproof-v2-staging-api",
   [string]$EcrName = "packproof-v2-staging-api",
   [string]$ImageTag = (Get-Date -Format "yyyyMMddHHmmss"),
-  [string]$WebOrigins = ""
+  [string]$WebOrigins = "",
+  [switch]$EnableEbay,
+  [string]$EbayEnvironment = "sandbox",
+  [string]$EbayClientId = "",
+  [string]$EbayRuName = "",
+  [string]$EbayAppCredentialReference = "",
+  [string]$PublicUrl = ""
 )
 
 $ErrorActionPreference = "Continue"
 $Aws = "$env:LOCALAPPDATA\Programs\Amazon\AWSCLIV2\aws.exe"
 if (-not (Test-Path $Aws)) {
   $Aws = "aws"
+}
+
+if ($EnableEbay) {
+  $missingEbay = @()
+  if (-not $EbayClientId.Trim()) {
+    $missingEbay += "EbayClientId"
+  }
+  if (-not $EbayRuName.Trim()) {
+    $missingEbay += "EbayRuName"
+  }
+  if (-not $EbayAppCredentialReference.Trim()) {
+    $missingEbay += "EbayAppCredentialReference"
+  }
+  if ($missingEbay.Count -gt 0) {
+    throw "EnableEbay requires $($missingEbay -join ', ')"
+  }
 }
 
 function Invoke-Aws {
@@ -193,6 +215,18 @@ $container = @{
 }
 if ($WebOrigins.Trim()) {
   $container.environment += @{ name = "PACKPROOF_WEB_ORIGINS"; value = $WebOrigins.Trim() }
+}
+if ($EnableEbay) {
+  $ebayEnvironment = if ($EbayEnvironment.Trim()) { $EbayEnvironment.Trim() } else { "sandbox" }
+  $container.environment += @{ name = "PACKPROOF_EBAY_INTEGRATION_ENABLED"; value = "true" }
+  $container.environment += @{ name = "PACKPROOF_EBAY_ENVIRONMENT"; value = $ebayEnvironment }
+  $container.environment += @{ name = "PACKPROOF_EBAY_CLIENT_ID"; value = $EbayClientId.Trim() }
+  $container.environment += @{ name = "PACKPROOF_EBAY_RUNAME"; value = $EbayRuName.Trim() }
+  $container.environment += @{ name = "PACKPROOF_EBAY_APP_CREDENTIAL_REFERENCE"; value = $EbayAppCredentialReference.Trim() }
+  $container.environment += @{ name = "PACKPROOF_EBAY_MARKETPLACE_ID"; value = "EBAY_US" }
+}
+if ($PublicUrl.Trim()) {
+  $container.environment += @{ name = "PACKPROOF_PUBLIC_URL"; value = $PublicUrl.Trim() }
 }
 $network = @{
   subnets = @($Outputs.PublicSubnetA, $Outputs.PublicSubnetB)
