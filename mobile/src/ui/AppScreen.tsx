@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "../theme/tokens";
 
@@ -12,6 +21,8 @@ export function AppScreen(props: {
   background?: string;
   bottomInset?: boolean;
   extraBottom?: number;
+  contentOffsetY?: number;
+  onScrollOffset?: (offset: number) => void;
   style?: StyleProp<ViewStyle>;
 }) {
   const insets = useSafeAreaInsets();
@@ -27,12 +38,19 @@ export function AppScreen(props: {
     return <View style={[styles.root, { backgroundColor: background }, props.style, contentStyle]}>{props.children}</View>;
   }
 
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    props.onScrollOffset?.(event.nativeEvent.contentOffset.y);
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: background }, props.style]}>
       <ScrollView
         contentContainerStyle={contentStyle}
+        contentOffset={props.contentOffsetY ? { x: 0, y: props.contentOffsetY } : undefined}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        scrollEventThrottle={16}
+        onScroll={props.onScrollOffset ? handleScroll : undefined}
         refreshControl={
           props.onRefresh ? (
             <RefreshControl refreshing={Boolean(props.refreshing)} onRefresh={props.onRefresh} tintColor={colors.navy} />

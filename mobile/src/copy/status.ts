@@ -11,16 +11,16 @@ export type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading"
 export type IntegrityState = "none" | "secured" | "finalized";
 
 const PROOF_STATUS_LABELS: Record<string, string> = {
-  OPEN: "Getting started",
+  OPEN: "In progress",
   AWAITING_PARTICIPANT: "Waiting for buyer",
-  READY_FOR_EVIDENCE: "Ready to capture",
-  EVIDENCE_COMMITTED: "Evidence secured",
+  READY_FOR_EVIDENCE: "Packing evidence needed",
+  EVIDENCE_COMMITTED: "Ready to finalize",
   FINALIZED: "Completed",
 };
 
 export function proofStatusLabel(status: string | null | undefined): string {
   if (!status) {
-    return "Getting started";
+    return "In progress";
   }
   return PROOF_STATUS_LABELS[status] ?? humanizeEnum(status);
 }
@@ -88,6 +88,7 @@ export function humanProofStatus(input: {
   hasLocalCapture?: boolean;
   captureBelongsToProof?: boolean;
   latestShipmentEventType?: string | null;
+  hasShipping?: boolean;
 }): string {
   if (input.proofStatus === "FINALIZED") {
     const shipment = shipmentStatusLabel(input.latestShipmentEventType);
@@ -101,6 +102,9 @@ export function humanProofStatus(input: {
     if (capture) {
       return capture;
     }
+  }
+  if (input.proofStatus === "EVIDENCE_COMMITTED" && input.hasShipping) {
+    return "Awaiting shipment";
   }
   return proofStatusLabel(input.proofStatus);
 }

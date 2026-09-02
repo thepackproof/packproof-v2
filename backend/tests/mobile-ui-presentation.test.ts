@@ -1,24 +1,45 @@
 import { describe, expect, it } from "vitest";
 import { toUserFacingError, isNetworkFailure, OFFLINE_CAPTURE_MESSAGE } from "../../mobile/src/copy/errors.ts";
 import { formatDate, greetingForHour, proofIdLabel, shortenId, trackingEnding } from "../../mobile/src/copy/format.ts";
-import { deriveNextAction, fieldsLocked, canCaptureEvidence } from "../../mobile/src/copy/next-action.ts";
+import {
+  deriveNextAction,
+  fieldsLocked,
+  canCaptureEvidence,
+  shouldShowRequiredAction,
+  isCompletedAction,
+} from "../../mobile/src/copy/next-action.ts";
 import {
   awaitingEvidenceCount,
+  filterProofLibrary,
   homeSummaryLine,
+  invitationCardModel,
+  proofLibraryGroup,
   selectAttention,
   toProofCardModel,
 } from "../../mobile/src/copy/presentation.ts";
 import { humanProofStatus, proofStatusLabel, shipmentStatusLabel } from "../../mobile/src/copy/status.ts";
-import { isShipmentAfterFinalization } from "../../mobile/src/copy/chronology.ts";
+import { chronologyCategoryLabel, isShipmentAfterFinalization } from "../../mobile/src/copy/chronology.ts";
+import { resolveBackRoute } from "../../mobile/src/app/navigation.ts";
 
-function proof(partial: Partial<{ proofId: string; role: string; status: string; itemTitle: string; carrier: string }>) {
+function proof(
+  partial: Partial<{
+    proofId: string;
+    role: string;
+    status: string;
+    itemTitle: string;
+    carrier: string;
+    transactionValue: number;
+    currency: string;
+    updatedAt: string;
+  }>,
+) {
   return {
     proofId: partial.proofId ?? "proof_01M1ES5F7N0",
     transactionId: "txn_1",
     role: partial.role ?? "SELLER",
     status: partial.status ?? "READY_FOR_EVIDENCE",
     createdAt: "2026-08-29T15:25:06.837Z",
-    updatedAt: "2026-08-30T15:25:06.837Z",
+    updatedAt: partial.updatedAt ?? "2026-08-30T15:25:06.837Z",
     finalizedAt: partial.status === "FINALIZED" ? "2026-08-29T16:00:00.000Z" : null,
     transaction: {
       externalReference: "DM-01M1ES5",
@@ -26,21 +47,25 @@ function proof(partial: Partial<{ proofId: string; role: string; status: string;
       transactionDate: "2026-08-20",
       carrier: partial.carrier ?? "UPS Ground",
       trackingNumber: "1Z999AA10123456784",
+      transactionValue: partial.transactionValue ?? 250.5,
+      currency: partial.currency ?? "USD",
     },
   };
 }
 
 describe("mobile UI status translation", () => {
   it("maps backend Proof statuses to human labels", () => {
-    expect(proofStatusLabel("OPEN")).toBe("Getting started");
-    expect(proofStatusLabel("READY_FOR_EVIDENCE")).toBe("Ready to capture");
-    expect(proofStatusLabel("EVIDENCE_COMMITTED")).toBe("Evidence secured");
+    expect(proofStatusLabel("OPEN")).toBe("In progress");
+    expect(proofStatusLabel("AWAITING_PARTICIPANT")).toBe("Waiting for buyer");
+    expect(proofStatusLabel("READY_FOR_EVIDENCE")).toBe("Packing evidence needed");
+    expect(proofStatusLabel("EVIDENCE_COMMITTED")).toBe("Ready to finalize");
     expect(proofStatusLabel("FINALIZED")).toBe("Completed");
   });
 
-  it("does not show raw role+status as the primary label", () => {
+  it("does not show raw backend enums in ordinary labels", () => {
+    expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).not.toContain("READY_FOR_EVIDENCE");
     expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).not.toContain("BUYER");
-    expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).toBe("Ready to capture");
+    expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).toBe("Packing evidence needed");
   });
 
   it("overlays local capture and shipment states", () => {
@@ -59,6 +84,12 @@ describe("mobile UI status translation", () => {
       }),
     ).toBe("In transit");
     expect(shipmentStatusLabel("CARRIER_ACCEPTED")).toBe("Package accepted");
+    expect(
+      humanProofStatus({
+        proofStatus: "EVIDENCE_COMMITTED",
+        hasShipping: true,
+      }),
+    ).toBe("Awaiting shipment");
   });
 });
 
@@ -74,9 +105,55 @@ describe("mobile UI next-action CTA", () => {
     offline: false,
   };
 
-  it("asks a seller to start capture when the Proof is ready", () => {
-    expect(deriveNextAction(base).label).toBe("Start evidence capture");
+  it("asks a seller to record packing video when the Proof is ready for evidence", () => {
+    const action = deriveNextAction(base);
+    expect(action.key).toBe("start_capture");
+    expect(action.label).toBe("Record packing video");
+    expect(shouldShowRequiredAction(action)).toBe(true);
     expect(canCaptureEvidence(base)).toBe(true);
+  });
+
+  it("does not require a buyer before capture when the backend already allows evidence", () => {
+    const optional = deriveNextAction({
+      ...base,
+      participationPolicy: "COUNTERPARTY_OPTIONAL",
+    });
+    expect(optional.key).toBe("start_capture");
+    expect(canCaptureEvidence(base)).toBe(true);
+
+    const requiredButReady = deriveNextAction({
+      ...base,
+      participationPolicy: "COUNTERPARTY_REQUIRED",
+    });
+    expect(requiredButReady.key).toBe("start_capture");
+  });
+
+  it("asks to add a buyer only when the backend still requires a counterparty", () => {
+    const action = deriveNextAction({
+      ...base,
+      proofStatus: "AWAITING_PARTICIPANT",
+      participationPolicy: "COUNTERPARTY_REQUIRED",
+    });
+    expect(action.key).toBe("add_participant");
+    expect(action.label).toBe("Add buyer");
+    expect(shouldShowRequiredAction(action)).toBe(true);
+  });
+
+  it("does not invent a buyer or purchase-details gate for optional participation", () => {
+    const action = deriveNextAction({
+      ...base,
+      proofStatus: "OPEN",
+      participationPolicy: "COUNTERPARTY_OPTIONAL",
+    });
+    expect(action.key).toBe("none");
+    expect(shouldShowRequiredAction(action)).toBe(false);
+    expect(canCaptureEvidence({ ...base, proofStatus: "OPEN" })).toBe(false);
+  });
+
+  it("does not show a required-action card for a buyer who only needs to view the record", () => {
+    const action = deriveNextAction({ ...base, role: "BUYER" });
+    expect(action.key).toBe("view_record");
+    expect(shouldShowRequiredAction(action)).toBe(false);
   });
 
   it("asks to review a local recording before claiming it is secured", () => {
@@ -123,25 +200,78 @@ describe("mobile UI next-action CTA", () => {
       committedEvidenceCount: 1,
     });
     expect(action.key).toBe("finalize");
-    expect(action.label).toBe("Finalize PackProof");
+    expect(action.label).toBe("Finalize Proof");
   });
 
-  it("locks the record after finalization", () => {
+  it("locks the record after finalization and shows a completion state instead of a next step", () => {
     const action = deriveNextAction({ ...base, proofStatus: "FINALIZED", committedEvidenceCount: 1 });
     expect(action.key).toBe("completed");
+    expect(isCompletedAction(action)).toBe(true);
+    expect(shouldShowRequiredAction(action)).toBe(false);
     expect(fieldsLocked("FINALIZED")).toBe(true);
     expect(fieldsLocked("READY_FOR_EVIDENCE")).toBe(false);
   });
 });
 
-describe("mobile UI proof cards and home attention", () => {
+describe("mobile UI proof cards and library", () => {
   it("shows human-readable card fields instead of raw IDs", () => {
     const card = toProofCardModel(proof({}));
     expect(card.title).toBe("Vintage film camera");
-    expect(card.statusLabel).toBe("Ready to capture");
+    expect(card.statusLabel).toBe("Packing evidence needed");
+    expect(card.priceLabel).toContain("250.50");
     expect(card.shipping).toContain("UPS");
     expect(card.orderRef).toContain("Order #");
     expect(card.proofId.startsWith("proof_")).toBe(true);
+  });
+
+  it("groups In Progress vs Completed from backend status", () => {
+    expect(proofLibraryGroup("READY_FOR_EVIDENCE")).toBe("in_progress");
+    expect(proofLibraryGroup("OPEN")).toBe("in_progress");
+    expect(proofLibraryGroup("FINALIZED")).toBe("completed");
+  });
+
+  it("searches title, order, tracking, and sorts by date or price", () => {
+    const camera = proof({ itemTitle: "Vintage film camera", transactionValue: 250.5, updatedAt: "2026-08-30T15:00:00.000Z" });
+    const watch = proof({
+      proofId: "proof_watch",
+      itemTitle: "Rolex Submariner",
+      transactionValue: 8450,
+      updatedAt: "2026-08-20T15:00:00.000Z",
+    });
+    const found = filterProofLibrary([camera, watch], { view: "in_progress", query: "rolex" });
+    expect(found).toHaveLength(1);
+    expect(found[0]?.transaction.itemTitle).toBe("Rolex Submariner");
+
+    const byOrder = filterProofLibrary([camera, watch], { view: "in_progress", query: "DM-01" });
+    expect(byOrder).toHaveLength(2);
+
+    const newest = filterProofLibrary([camera, watch], { view: "in_progress", sort: "newest" });
+    expect(newest[0]?.proofId).toBe(camera.proofId);
+
+    const oldest = filterProofLibrary([camera, watch], { view: "in_progress", sort: "oldest" });
+    expect(oldest[0]?.proofId).toBe(watch.proofId);
+
+    const high = filterProofLibrary([camera, watch], { view: "in_progress", sort: "price_high" });
+    expect(high[0]?.transaction.itemTitle).toBe("Rolex Submariner");
+
+    const sellers = filterProofLibrary([camera, { ...watch, role: "BUYER" }], {
+      view: "in_progress",
+      role: "seller",
+    });
+    expect(sellers).toHaveLength(1);
+    expect(sellers[0]?.role).toBe("SELLER");
+  });
+
+  it("renders invitation cards as in-progress library items", () => {
+    const card = invitationCardModel({
+      invitationId: "inv_1",
+      createdAt: "2026-08-31T12:00:00.000Z",
+      transaction: { itemTitle: "Sealed carton", externalReference: "INV-1" },
+      inviter: { displayName: "Nora", username: "nora" },
+    });
+    expect(card.title).toBe("Sealed carton");
+    expect(card.statusLabel).toBe("Invitation received");
+    expect(card.statusLabel).not.toContain("READY");
   });
 
   it("summarizes what needs attention", () => {
@@ -152,7 +282,30 @@ describe("mobile UI proof cards and home attention", () => {
     );
     const attention = selectAttention({ proofs: items, invitations: [] });
     expect(attention?.title).toBe("Vintage film camera");
-    expect(attention?.cta).toBe("Start evidence capture");
+    expect(attention?.cta).toBe("Record packing video");
+  });
+});
+
+describe("Proof Record provenance and navigation", () => {
+  it("keeps commerce, carrier, PackProof, evidence, and integrity labels", () => {
+    expect(chronologyCategoryLabel("COMMERCE", "MARKETPLACE_API", "ebay", "TRANSACTION_IMPORTED")).toBe("Commerce event");
+    expect(chronologyCategoryLabel("SHIPMENT", "SHIPPING_PROVIDER_API", "ups", "IN_TRANSIT")).toBe("Carrier observation");
+    expect(chronologyCategoryLabel("SHIPMENT", "SHIPPING_PROVIDER_API", "easypost", "IN_TRANSIT")).toBe(
+      "Carrier observation via EasyPost",
+    );
+    expect(chronologyCategoryLabel("PROOF", "PACKPROOF", null, "PROOF_CREATED")).toBe("PackProof event");
+    expect(chronologyCategoryLabel("PROOF", "PACKPROOF", null, "EVIDENCE_COMMITTED")).toBe("Evidence event");
+    expect(chronologyCategoryLabel("PROOF", "PACKPROOF", null, "PROOF_FINALIZED")).toBe("Integrity event");
+    expect(chronologyCategoryLabel("COMMERCE", "MARKETPLACE_API", "ebay", "EVIDENCE_COMMITTED")).toBe("Commerce event");
+  });
+
+  it("returns from temporary flows without restoring a tab bar", () => {
+    expect(resolveBackRoute("capture")).toBe("proof");
+    expect(resolveBackRoute("event")).toBe("proof");
+    expect(resolveBackRoute("scan")).toBe("create");
+    expect(resolveBackRoute("proof")).toBe("home");
+    expect(resolveBackRoute("account")).toBe("home");
+    expect(resolveBackRoute("create")).toBe("home");
   });
 });
 

@@ -14,8 +14,8 @@ export function CompletionScreen() {
         detail={proof ? proofIdLabel(proof.proofId) : undefined}
         actionLabel="View Proof"
         onAction={() => app.go("proof")}
-        secondaryLabel="Home"
-        onSecondary={() => app.setTab("home")}
+        secondaryLabel="My Proofs"
+        onSecondary={() => app.go("home")}
       />
     </AppScreen>
   );

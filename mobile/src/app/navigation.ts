@@ -1,15 +1,17 @@
-export type TabId = "home" | "proofs" | "create" | "activity" | "account";
+export type ProofsLibraryView = "in_progress" | "completed";
 
-export type ProofDetailTab = "overview" | "evidence" | "shipping" | "history";
+export type ProofsSort = "newest" | "oldest" | "price_high" | "price_low";
 
-export type ProofsFilter = "active" | "completed" | "invitations";
+export type ProofsRoleFilter = "all" | "seller" | "buyer";
 
 export type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset";
 
 export type AppRouteName =
   | "boot"
   | "auth"
-  | "tabs"
+  | "home"
+  | "create"
+  | "account"
   | "proof"
   | "capture"
   | "scan"
@@ -27,11 +29,55 @@ export type AppRouteName =
 
 export interface AppRoute {
   name: AppRouteName;
-  tab?: TabId;
 }
 
-export function showsTabBar(route: AppRoute): boolean {
-  return route.name === "tabs";
+export interface ProofsLibraryState {
+  view: ProofsLibraryView;
+  query: string;
+  sort: ProofsSort;
+  role: ProofsRoleFilter;
+  carrier: string | null;
+  scrollOffset: number;
+}
+
+export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
+  view: "in_progress",
+  query: "",
+  sort: "newest",
+  role: "all",
+  carrier: null,
+  scrollOffset: 0,
+};
+
+/** @deprecated Use home. Kept so older session restore paths can be remapped. */
+export function normalizeRouteName(name: string): AppRouteName {
+  if (name === "tabs") {
+    return "home";
+  }
+  return name as AppRouteName;
+}
+
+export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
+  switch (routeName) {
+    case "capture":
+    case "finalize":
+    case "invite":
+    case "editPurchase":
+    case "editShipping":
+    case "event":
+    case "complete":
+      return "proof";
+    case "scan":
+    case "manual":
+    case "review":
+      return "create";
+    default:
+      return "home";
+  }
+}
+
+export function showsTabBar(): boolean {
+  return false;
 }
 
 export function isDarkRoute(route: AppRoute): boolean {

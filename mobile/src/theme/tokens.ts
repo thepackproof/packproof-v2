@@ -16,6 +16,8 @@ export const colors = {
   navyMuted: "#1E3A4C",
   blueSoft: "#E8F6FC",
   greenSoft: "#E7F9EF",
+  purpleSoft: "#EEE8F8",
+  warningSoft: "#FFF6E8",
   scanBg: "#0E1A22",
   scanInk: "#F4F6F8",
   scanMuted: "#9AA8B2",
@@ -62,6 +64,7 @@ export const sizes = {
   logoLg: 72,
   tabBar: 56,
   avatar: 40,
+  createFab: 76,
 } as const;
 
 export const shadows = {
@@ -93,4 +96,6 @@ export const sourceColors = {
   COMMERCE: colors.blue,
   SHIPMENT: "#5B7380",
   PARTICIPANT: colors.slate,
+  EVIDENCE: "#0B6F99",
+  INTEGRITY: "#0A8A4B",
 } as const;

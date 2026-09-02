@@ -44,12 +44,17 @@ export function TimelineEvent(props: {
   last?: boolean;
   onPress: () => void;
 }) {
+  const source = props.event.sourceLabel.toLowerCase();
   const color =
-    props.event.category === "COMMERCE"
-      ? sourceColors.COMMERCE
-      : props.event.category === "SHIPMENT"
-        ? sourceColors.SHIPMENT
-        : sourceColors.PROOF;
+    source.includes("integrity")
+      ? sourceColors.INTEGRITY
+      : source.includes("evidence")
+        ? sourceColors.EVIDENCE
+        : props.event.category === "COMMERCE"
+          ? sourceColors.COMMERCE
+          : props.event.category === "SHIPMENT"
+            ? sourceColors.SHIPMENT
+            : sourceColors.PROOF;
   return (
     <Pressable
       onPress={props.onPress}
@@ -70,7 +75,9 @@ export function TimelineEvent(props: {
       <View style={styles.body}>
         <Text style={styles.title}>{props.event.title}</Text>
         {props.event.description ? <Text style={styles.meta}>{props.event.description}</Text> : null}
-        <Text style={styles.time}>{props.event.timeLabel}</Text>
+        <Text style={styles.time}>
+          {[props.event.dateLabel, props.event.timeLabel].filter(Boolean).join(" • ")}
+        </Text>
         {props.event.afterFinalization ? (
           <Text style={styles.after}>Recorded after finalization. Did not change the sealed record.</Text>
         ) : null}

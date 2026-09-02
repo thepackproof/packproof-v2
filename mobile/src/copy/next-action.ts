@@ -15,11 +15,24 @@ export type NextActionKey =
   | "view_record"
   | "none";
 
+const REQUIRED_ACTION_KEYS = new Set<NextActionKey>([
+  "start_capture",
+  "review_recording",
+  "uploading",
+  "securing",
+  "retry_upload",
+  "offline_held",
+  "finalize",
+  "add_participant",
+  "getting_started",
+]);
+
 export type NextActionKind = "primary" | "secondary" | "success" | "progress" | "locked";
 
 export interface NextActionInput {
   role: string | null | undefined;
   proofStatus: string | null | undefined;
+  participationPolicy?: string | null;
   committedEvidenceCount: number;
   pendingEvidenceCount?: number;
   captureStatus: LocalCaptureStatus;
@@ -46,8 +59,8 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (status === "FINALIZED") {
     return {
       key: "completed",
-      label: "Proof completed",
-      hint: "This record is sealed. Later carrier observations do not change the finalized evidence.",
+      label: "PackProof finalized",
+      hint: "Evidence record secured. Later carrier observations do not change the sealed record.",
       kind: "success",
       enabled: false,
     };
@@ -97,8 +110,8 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (seller && status === "READY_FOR_EVIDENCE" && !committed) {
     return {
       key: "start_capture",
-      label: "Start evidence capture",
-      hint: "Record the item being packed and sealed.",
+      label: "Record packing video",
+      hint: "Record the item being packed and the package being sealed.",
       kind: "primary",
       enabled: true,
     };
@@ -107,7 +120,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (seller && committed && status !== "FINALIZED") {
     return {
       key: "finalize",
-      label: "Finalize PackProof",
+      label: "Finalize Proof",
       hint: "Review the record, then seal it. This cannot be undone.",
       kind: "primary",
       enabled: true,
@@ -115,15 +128,22 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   }
 
   if (seller && (status === "OPEN" || status === "AWAITING_PARTICIPANT")) {
+    const requiresCounterparty = (input.participationPolicy ?? "COUNTERPARTY_REQUIRED") !== "COUNTERPARTY_OPTIONAL";
+    if (requiresCounterparty) {
+      return {
+        key: "add_participant",
+        label: "Add buyer",
+        hint: "Invite the buyer to this Proof. Joining records participation; it does not confirm the item.",
+        kind: "primary",
+        enabled: true,
+      };
+    }
     return {
-      key: status === "OPEN" ? "getting_started" : "add_participant",
-      label: status === "OPEN" ? "Continue setup" : "Add a participant",
-      hint:
-        status === "OPEN"
-          ? "Add purchase details, then invite the buyer if needed."
-          : "Invite the buyer to this PackProof. Joining records participation; it does not confirm the item.",
-      kind: "primary",
-      enabled: true,
+      key: "none",
+      label: "",
+      hint: "",
+      kind: "secondary",
+      enabled: false,
     };
   }
 
@@ -162,4 +182,15 @@ export function canCaptureEvidence(input: {
 
 export function fieldsLocked(proofStatus: string | null | undefined): boolean {
   return proofStatus === "FINALIZED";
+}
+
+export function shouldShowRequiredAction(action: NextAction | null | undefined): boolean {
+  if (!action) {
+    return false;
+  }
+  return REQUIRED_ACTION_KEYS.has(action.key);
+}
+
+export function isCompletedAction(action: NextAction | null | undefined): boolean {
+  return action?.key === "completed";
 }

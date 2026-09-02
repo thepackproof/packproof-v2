@@ -53,7 +53,17 @@ import { resolveRuntimeConfig, shouldRestoreCachedSession, type ResolvedRuntimeC
 import { EMPTY_FORM, formFromTransaction, parseContextForm, type ContextForm } from "../copy/forms";
 import { formatUserFacingError, isNetworkFailure, toUserFacingError, type UserFacingError } from "../copy/errors";
 import type { LocalCaptureStatus } from "../copy/status";
-import type { AppRoute, AppRouteName, AuthPane, ProofDetailTab, ProofsFilter, TabId } from "./navigation";
+import {
+  DEFAULT_PROOFS_LIBRARY,
+  resolveBackRoute,
+  type AppRoute,
+  type AppRouteName,
+  type AuthPane,
+  type ProofsLibraryState,
+  type ProofsRoleFilter,
+  type ProofsSort,
+  type ProofsLibraryView,
+} from "./navigation";
 
 const IS_RELEASE_CLIENT = !__DEV__;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -101,9 +111,7 @@ export interface PackProofContextValue {
   error: string | null;
   errorDetail: UserFacingError | null;
   route: AppRoute;
-  tab: TabId;
-  proofDetailTab: ProofDetailTab;
-  proofsFilter: ProofsFilter;
+  proofsLibrary: ProofsLibraryState;
   session: CachedClientState | null;
   proof: ProofView | null;
   transactionDetail: TransactionView | null;
@@ -147,11 +155,14 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  setTab: (tab: TabId) => void;
-  go: (name: AppRouteName, extras?: Partial<AppRoute>) => void;
+  go: (name: AppRouteName) => void;
   goBack: () => void;
-  setProofDetailTab: (tab: ProofDetailTab) => void;
-  setProofsFilter: (filter: ProofsFilter) => void;
+  setProofsView: (view: ProofsLibraryView) => void;
+  setProofsQuery: (query: string) => void;
+  setProofsSort: (sort: ProofsSort) => void;
+  setProofsRoleFilter: (role: ProofsRoleFilter) => void;
+  setProofsCarrierFilter: (carrier: string | null) => void;
+  setProofsScrollOffset: (offset: number) => void;
   setError: (value: string | null) => void;
   setAuthPane: (pane: AuthPane) => void;
   setAuthMode: (mode: AuthMode) => void;
@@ -223,9 +234,7 @@ const PackProofContext = createContext<PackProofContextValue | null>(null);
 export function PackProofProvider(props: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
-  const [tab, setTabState] = useState<TabId>("home");
-  const [proofDetailTab, setProofDetailTab] = useState<ProofDetailTab>("overview");
-  const [proofsFilter, setProofsFilter] = useState<ProofsFilter>("active");
+  const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(DEFAULT_PROOFS_LIBRARY);
   const [authPane, setAuthPane] = useState<AuthPane>("signIn");
   const [apiBaseUrl, setApiBaseUrl] = useState(INITIAL_RUNTIME.apiBaseUrl);
   const [authMode, setAuthMode] = useState<AuthMode>(INITIAL_RUNTIME.authMode);
@@ -272,8 +281,6 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const tokenRef = useRef<string | null>(null);
   const sessionRef = useRef<CachedClientState | null>(null);
   const searchGeneration = useRef(0);
-  const tabRef = useRef<TabId>("home");
-
   const client = useMemo(
     () =>
       new PackProofV2Client({
@@ -283,52 +290,22 @@ export function PackProofProvider(props: { children: ReactNode }) {
     [apiBaseUrl],
   );
 
-  const go = useCallback((name: AppRouteName, extras?: Partial<AppRoute>) => {
+  const go = useCallback((name: AppRouteName) => {
     setError(null);
-    if (name === "tabs" && extras?.tab) {
-      tabRef.current = extras.tab;
-      setTabState(extras.tab);
-    }
     if (name === "scan") {
       setScanPhase("camera");
       setScanResult(null);
       setScanInput("");
     }
     if (name === "proof") {
-      setProofDetailTab("overview");
       setTechnicalOpen(false);
       setConfirmFinalize(false);
     }
-    setRoute({ name, tab: extras?.tab ?? tabRef.current });
+    setRoute({ name });
   }, []);
 
-  const setTab = useCallback(
-    (next: TabId) => {
-      tabRef.current = next;
-      setTabState(next);
-      go("tabs", { tab: next });
-    },
-    [go],
-  );
-
   const goBack = useCallback(() => {
-    if (route.name === "capture" || route.name === "finalize" || route.name === "invite" || route.name === "editPurchase" || route.name === "editShipping" || route.name === "event") {
-      go("proof");
-      return;
-    }
-    if (route.name === "complete") {
-      go("proof");
-      return;
-    }
-    if (route.name === "scan" || route.name === "manual" || route.name === "review") {
-      go("tabs", { tab: "create" });
-      return;
-    }
-    if (route.name === "invitation" || route.name === "dev" || route.name === "station" || route.name === "proof") {
-      go("tabs", { tab: tabRef.current });
-      return;
-    }
-    go("tabs", { tab: "home" });
+    go(resolveBackRoute(route.name));
   }, [go, route.name]);
 
   useEffect(() => {
@@ -714,7 +691,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             go("auth");
             return;
           }
-          go(next.stationActive ? "station" : "tabs", { tab: "home" });
+          go(next.stationActive ? "station" : "home");
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
             const compiled = currentRuntime();
@@ -733,7 +710,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           if (isNetworkFailure(err)) {
             setOffline(true);
           }
-          go("tabs", { tab: "home" });
+          go("home");
         }
       } finally {
         setHydrated(true);
@@ -777,9 +754,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     error,
     errorDetail,
     route,
-    tab,
-    proofDetailTab,
-    proofsFilter,
+    proofsLibrary,
     session,
     proof,
     transactionDetail,
@@ -823,11 +798,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
     confirmFinalize,
     client,
     role,
-    setTab,
     go,
     goBack,
-    setProofDetailTab,
-    setProofsFilter,
+    setProofsView: (view) => setProofsLibrary((current) => ({ ...current, view })),
+    setProofsQuery: (query) => setProofsLibrary((current) => ({ ...current, query })),
+    setProofsSort: (sort) => setProofsLibrary((current) => ({ ...current, sort })),
+    setProofsRoleFilter: (role) => setProofsLibrary((current) => ({ ...current, role })),
+    setProofsCarrierFilter: (carrier) => setProofsLibrary((current) => ({ ...current, carrier })),
+    setProofsScrollOffset: (scrollOffset) => setProofsLibrary((current) => ({ ...current, scrollOffset })),
     setError,
     setAuthPane,
     setAuthMode,
@@ -870,7 +848,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             accessExpiresAt: tokens.expiresAt,
           });
         }
-        go(sessionRef.current?.stationActive ? "station" : "tabs", { tab: "home" });
+        go(sessionRef.current?.stationActive ? "station" : "home");
       }),
     createAccount: async () =>
       run(async () => {

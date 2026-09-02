@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { displayName } from "../copy/format";
 import { providerDisplay } from "../copy/status";
@@ -22,8 +22,8 @@ export function AccountScreen() {
   }
 
   return (
-    <AppScreen extraBottom={24} bottomInset={false}>
-      <AppHeader showLogo title="Account" />
+    <AppScreen extraBottom={24}>
+      <AppHeader title="Account" onBack={app.goBack} />
       <OfflineBanner visible={app.offline} />
       {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
       <InfoCard>
@@ -59,15 +59,6 @@ export function AccountScreen() {
       </Text>
 
       {__DEV__ ? <Button label="Developer tools" onPress={() => app.go("dev")} variant="tertiary" /> : null}
-
-      <SectionHeader title="Advanced options" />
-      <FormField label="Invitation ID" value={app.invitationInput} onChangeText={app.setInvitationInput} />
-      <Button
-        label="Join with invitation ID"
-        onPress={() => void app.acceptInvite(app.invitationInput.trim())}
-        variant="secondary"
-        disabled={app.busy || !app.invitationInput.trim()}
-      />
 
       <Button label="Sign out" onPress={() => void app.signOut()} variant="destructive" disabled={app.busy} />
     </AppScreen>

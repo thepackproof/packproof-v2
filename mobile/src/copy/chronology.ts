@@ -26,7 +26,12 @@ export type TimelineIcon =
   | "truck"
   | "event";
 
-export function chronologyCategoryLabel(category: ChronologyCategory, source?: string, provider?: string | null): string {
+export function chronologyCategoryLabel(
+  category: ChronologyCategory,
+  source?: string,
+  provider?: string | null,
+  eventType?: string,
+): string {
   if (category === "COMMERCE") {
     return "Commerce event";
   }
@@ -39,7 +44,29 @@ export function chronologyCategoryLabel(category: ChronologyCategory, source?: s
     }
     return "Carrier observation";
   }
+  const type = (eventType ?? "").toUpperCase();
+  if (type.includes("FINALIZE") || type.includes("MANIFEST") || type.includes("INTEGRITY")) {
+    return "Integrity event";
+  }
+  if (type.includes("EVIDENCE") || type.includes("CAPTURE") || type.includes("ATTEST")) {
+    return "Evidence event";
+  }
   return "PackProof event";
+}
+
+export function humanChronologyTitle(eventType: string, fallbackTitle: string): string {
+  switch (eventType.toUpperCase()) {
+    case "EVIDENCE_COMMITTED":
+      return "Packing video recorded";
+    case "PROOF_FINALIZED":
+      return "Proof finalized";
+    case "PARTICIPANT_JOINED":
+      return "Buyer joined";
+    case "PARTICIPANT_INVITED":
+      return "Buyer invited";
+    default:
+      return fallbackTitle;
+  }
 }
 
 export function timelineIconFor(eventType: string, category: ChronologyCategory): TimelineIcon {

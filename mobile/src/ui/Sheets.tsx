@@ -56,6 +56,7 @@ export function TechnicalDetailsSheet(props: {
   visible: boolean;
   onClose: () => void;
   rows: Array<{ label: string; value: string }>;
+  rawRows?: Array<{ label: string; value: string }>;
 }) {
   return (
     <BottomSheet visible={props.visible} title="Technical details" onClose={props.onClose}>
@@ -66,9 +67,21 @@ export function TechnicalDetailsSheet(props: {
           <Text selectable style={styles.techValue}>{row.value || "—"}</Text>
         </View>
       ))}
+      {props.rawRows && props.rawRows.length > 0 ? (
+        <>
+          <Text style={styles.rawTitle}>Advanced / raw</Text>
+          {props.rawRows.map((row) => (
+            <View key={row.label} style={styles.techRow}>
+              <Text style={styles.techLabel}>{row.label}</Text>
+              <Text selectable style={styles.techValue}>{row.value || "—"}</Text>
+            </View>
+          ))}
+        </>
+      ) : null}
     </BottomSheet>
   );
 }
+
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.overlay },
@@ -96,4 +109,5 @@ const styles = StyleSheet.create({
   techRow: { gap: 4, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   techLabel: { ...typography.caption, color: colors.slate },
   techValue: { ...typography.secondary, color: colors.navy },
+  rawTitle: { ...typography.secondaryStrong, color: colors.navy, marginTop: spacing.md },
 });

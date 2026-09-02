@@ -16,7 +16,7 @@ export function EventDetailScreen() {
     return (
       <AppScreen>
         <AppHeader title="Event" onBack={app.goBack} />
-        <Text style={styles.meta}>Select an event from Proof history.</Text>
+        <Text style={styles.meta}>Select an event from the Proof record.</Text>
       </AppScreen>
     );
   }
@@ -24,9 +24,9 @@ export function EventDetailScreen() {
     <AppScreen extraBottom={24}>
       <AppHeader title={event.title} onBack={app.goBack} />
       <InfoCard>
-        <Text style={styles.body}>{event.description || chronologyCategoryLabel(event.category, event.source, event.provider)}</Text>
+        <Text style={styles.body}>{event.description || chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)}</Text>
         <Text style={styles.meta}>{formatDateTime(event.occurredAt)}</Text>
-        <SourceBadge category={event.category} label={chronologyCategoryLabel(event.category, event.source, event.provider)} />
+        <SourceBadge category={event.category} label={chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)} />
       </InfoCard>
       <InfoCard>
         <Row label="Source" value={event.source} />

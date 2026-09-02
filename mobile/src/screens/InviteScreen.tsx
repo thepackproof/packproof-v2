@@ -13,8 +13,8 @@ export function InviteScreen() {
   const proof = app.proof;
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title="Invite someone" onBack={app.goBack} />
-      <Text style={styles.body}>Search by PackProof username. Joining records participation; it does not confirm the item.</Text>
+      <AppHeader title="Add buyer" onBack={app.goBack} />
+      <Text style={styles.body}>Search PackProof username. Joining records participation; it does not confirm the item.</Text>
       {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
       <FormField label="Search PackProof username" value={app.searchQuery} onChangeText={app.setSearchQuery} />
       {app.searchStatus === "loading" ? <Text style={styles.meta}>Searching…</Text> : null}

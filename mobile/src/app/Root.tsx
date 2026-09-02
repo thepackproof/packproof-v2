@@ -4,12 +4,9 @@ import { usePackProof } from "./PackProofProvider";
 import { isDarkRoute } from "./navigation";
 import { colors, typography } from "../theme/tokens";
 import { Logo } from "../ui/Logo";
-import { TabBar } from "../ui/TabBar";
 import { AuthScreen } from "../screens/AuthScreen";
-import { HomeScreen } from "../screens/HomeScreen";
-import { ProofsScreen } from "../screens/ProofsScreen";
+import { MyProofsScreen } from "../screens/MyProofsScreen";
 import { CreateScreen } from "../screens/CreateScreen";
-import { ActivityScreen } from "../screens/ActivityScreen";
 import { AccountScreen } from "../screens/AccountScreen";
 import { ProofDetailScreen } from "../screens/ProofDetailScreen";
 import { CaptureScreen } from "../screens/CaptureScreen";
@@ -71,7 +68,7 @@ export function Root() {
           }}
           onLeave={() => {
             app.setError(null);
-            app.setTab("home");
+            app.go("home");
             void app.syncWorkspace();
           }}
         />
@@ -80,19 +77,12 @@ export function Root() {
   }
 
   let body = null;
-  if (app.route.name === "tabs") {
-    body = (
-      <View style={styles.shell}>
-        <View style={styles.page}>
-          {app.tab === "home" ? <HomeScreen /> : null}
-          {app.tab === "proofs" ? <ProofsScreen /> : null}
-          {app.tab === "create" ? <CreateScreen /> : null}
-          {app.tab === "activity" ? <ActivityScreen /> : null}
-          {app.tab === "account" ? <AccountScreen /> : null}
-        </View>
-        <TabBar active={app.tab} onChange={app.setTab} />
-      </View>
-    );
+  if (app.route.name === "home") {
+    body = <MyProofsScreen />;
+  } else if (app.route.name === "create") {
+    body = <CreateScreen />;
+  } else if (app.route.name === "account") {
+    body = <AccountScreen />;
   } else if (app.route.name === "proof") {
     body = <ProofDetailScreen />;
   } else if (app.route.name === "capture") {
@@ -132,6 +122,4 @@ export function Root() {
 const styles = StyleSheet.create({
   splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background, gap: 12 },
   splashTitle: { ...typography.pageTitle, color: colors.navy },
-  shell: { flex: 1, backgroundColor: colors.background },
-  page: { flex: 1 },
 });

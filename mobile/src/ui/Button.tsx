@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, radii, sizes, spacing, typography } from "../theme/tokens";
 
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "success" | "destructive";
@@ -10,6 +11,7 @@ export function Button(props: {
   disabled?: boolean;
   loading?: boolean;
   variant?: ButtonVariant;
+  icon?: keyof typeof Ionicons.glyphMap;
   accessibilityHint?: string;
 }) {
   const variant = props.variant ?? "primary";
@@ -36,15 +38,24 @@ export function Button(props: {
       {props.loading ? (
         <ActivityIndicator color={variant === "secondary" || variant === "tertiary" ? colors.navy : colors.white} />
       ) : (
-        <Text
-          style={[
-            styles.label,
-            variant === "secondary" || variant === "tertiary" ? styles.labelDark : null,
-            variant === "destructive" ? styles.labelDestructive : null,
-          ]}
-        >
-          {props.label}
-        </Text>
+        <View style={styles.labelRow}>
+          {props.icon ? (
+            <Ionicons
+              name={props.icon}
+              size={18}
+              color={variant === "secondary" || variant === "tertiary" ? colors.navy : colors.white}
+            />
+          ) : null}
+          <Text
+            style={[
+              styles.label,
+              variant === "secondary" || variant === "tertiary" ? styles.labelDark : null,
+              variant === "destructive" ? styles.labelDestructive : null,
+            ]}
+          >
+            {props.label}
+          </Text>
+        </View>
       )}
     </Pressable>
   );
@@ -94,6 +105,7 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.85 },
+  labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   label: { ...typography.button, color: colors.white, textAlign: "center" },
   labelDark: { color: colors.navy },
   labelDestructive: { color: colors.danger },

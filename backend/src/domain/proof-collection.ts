@@ -1,5 +1,6 @@
 import type { Database } from "../db/database.js";
 import { PROOF_SUMMARY_SCHEMA } from "./trust.js";
+import { asNullableNumber } from "./transaction-fields.js";
 import { asIso, asRequiredIso, type ParticipantRole, type ProofStatus } from "./types.js";
 
 export const PROOF_COLLECTION_LIMIT = 100;
@@ -19,6 +20,9 @@ export interface ProofCollectionItem {
     transactionDate: string | null;
     carrier: string | null;
     trackingNumber: string | null;
+    service: string | null;
+    transactionValue: number | null;
+    currency: string | null;
   };
 }
 
@@ -35,6 +39,9 @@ interface CollectionRow {
   transaction_date: string | null;
   carrier: string | null;
   tracking_number: string | null;
+  service: string | null;
+  transaction_value: string | number | null;
+  currency: string | null;
 }
 
 export async function listMyProofs(
@@ -54,7 +61,10 @@ export async function listMyProofs(
         t.item_title,
         t.transaction_date,
         s.carrier,
-        s.tracking_number
+        s.tracking_number,
+        s.service,
+        t.transaction_value,
+        t.currency
        FROM proof_participants pp
        JOIN proofs p ON p.id = pp.proof_id
        JOIN transactions t ON t.id = p.transaction_id
@@ -83,6 +93,9 @@ export async function listMyProofs(
       transactionDate: row.transaction_date,
       carrier: row.carrier,
       trackingNumber: row.tracking_number,
+      service: row.service,
+      transactionValue: asNullableNumber(row.transaction_value),
+      currency: row.currency,
     },
   }));
 }

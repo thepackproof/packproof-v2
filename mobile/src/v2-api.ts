@@ -346,6 +346,9 @@ export interface ProofCollectionItem {
     transactionDate: string | null;
     carrier: string | null;
     trackingNumber: string | null;
+    service?: string | null;
+    transactionValue?: number | null;
+    currency?: string | null;
   };
 }
 

@@ -7,12 +7,17 @@ export function SourceBadge(props: {
   category: ChronologyCategory;
   label: string;
 }) {
+  const label = props.label.toLowerCase();
   const color =
-    props.category === "COMMERCE"
-      ? sourceColors.COMMERCE
-      : props.category === "SHIPMENT"
-        ? sourceColors.SHIPMENT
-        : sourceColors.PROOF;
+    label.includes("integrity")
+      ? sourceColors.INTEGRITY
+      : label.includes("evidence")
+        ? sourceColors.EVIDENCE
+        : props.category === "COMMERCE"
+          ? sourceColors.COMMERCE
+          : props.category === "SHIPMENT"
+            ? sourceColors.SHIPMENT
+            : sourceColors.PROOF;
   return (
     <View style={[styles.badge, { borderColor: color }]}>
       <View style={[styles.dot, { backgroundColor: color }]} />

@@ -13,6 +13,10 @@ import {
   type LocalCaptureStatus,
 } from "./status";
 
+export type ProofLibraryView = "in_progress" | "completed";
+export type ProofLibrarySort = "newest" | "oldest" | "price_high" | "price_low";
+export type ProofRoleFilter = "all" | "seller" | "buyer";
+
 export interface ProofSummaryLike {
   proofId: string;
   role: string;
@@ -26,6 +30,9 @@ export interface ProofSummaryLike {
     transactionDate: string | null;
     carrier: string | null;
     trackingNumber: string | null;
+    transactionValue?: number | null;
+    currency?: string | null;
+    service?: string | null;
   };
 }
 
@@ -35,9 +42,11 @@ export interface ProofCardModel {
   orderRef: string;
   roleLabel: string;
   statusLabel: string;
+  priceLabel: string;
   shipping: string;
   dateLabel: string;
   integrity: IntegrityState;
+  thumbnailUri: string | null;
 }
 
 export interface AttentionModel {
@@ -71,6 +80,7 @@ export function toProofCardModel(
     hasLocalCapture?: boolean;
     captureProofId?: string | null;
     latestShipmentEventType?: string | null;
+    thumbnailUri?: string | null;
   },
 ): ProofCardModel {
   const belongs = extras?.captureProofId === item.proofId;
@@ -85,18 +95,119 @@ export function toProofCardModel(
       hasLocalCapture: extras?.hasLocalCapture,
       captureBelongsToProof: belongs,
       latestShipmentEventType: extras?.latestShipmentEventType,
+      hasShipping: Boolean(item.transaction.carrier || item.transaction.trackingNumber),
     }),
+    priceLabel: moneyLabel(item.transaction.transactionValue, item.transaction.currency),
     shipping: shippingSummary({
       carrier: item.transaction.carrier,
+      service: item.transaction.service,
       trackingNumber: item.transaction.trackingNumber,
     }),
     dateLabel: formatDate(item.finalizedAt ?? item.updatedAt ?? item.createdAt),
     integrity: integrityState({ proofStatus: item.status }),
+    thumbnailUri: extras?.thumbnailUri ?? null,
   };
 }
 
 export function isActiveProof(status: string): boolean {
   return status !== "FINALIZED";
+}
+
+export function proofLibraryGroup(status: string): ProofLibraryView {
+  return status === "FINALIZED" ? "completed" : "in_progress";
+}
+
+export function proofSearchHaystack(item: ProofSummaryLike): string {
+  return [
+    proofTitle(item),
+    item.transaction.externalReference,
+    item.transaction.carrier,
+    item.transaction.service,
+    item.transaction.trackingNumber,
+    item.role,
+    extrasParticipantText(item),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function extrasParticipantText(item: ProofSummaryLike): string {
+  return "participantText" in item && typeof item.participantText === "string" ? item.participantText : "";
+}
+
+export function matchesProofSearch(item: ProofSummaryLike, query: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+  return proofSearchHaystack(item).includes(normalized);
+}
+
+export function sortProofLibrary<T extends ProofSummaryLike>(items: T[], sort: ProofLibrarySort): T[] {
+  const copy = [...items];
+  copy.sort((left, right) => {
+    if (sort === "price_high" || sort === "price_low") {
+      const leftPrice = left.transaction.transactionValue ?? Number.NEGATIVE_INFINITY;
+      const rightPrice = right.transaction.transactionValue ?? Number.NEGATIVE_INFINITY;
+      const delta = sort === "price_high" ? rightPrice - leftPrice : leftPrice - rightPrice;
+      if (delta !== 0) {
+        return delta;
+      }
+    }
+    const leftTime = Date.parse(left.updatedAt || left.createdAt);
+    const rightTime = Date.parse(right.updatedAt || right.createdAt);
+    return sort === "oldest" ? leftTime - rightTime : rightTime - leftTime;
+  });
+  return copy;
+}
+
+export function filterProofLibrary<T extends ProofSummaryLike>(
+  items: T[],
+  input: {
+    view: ProofLibraryView;
+    query?: string;
+    sort?: ProofLibrarySort;
+    role?: ProofRoleFilter;
+    carrier?: string | null;
+    source?: string | null;
+  },
+): T[] {
+  const filtered = items.filter((item) => {
+    if (proofLibraryGroup(item.status) !== input.view) {
+      return false;
+    }
+    if (input.role === "seller" && item.role !== "SELLER") {
+      return false;
+    }
+    if (input.role === "buyer" && item.role !== "BUYER") {
+      return false;
+    }
+    if (input.carrier && item.transaction.carrier !== input.carrier) {
+      return false;
+    }
+    if (input.source) {
+      const provider = "provider" in item.transaction ? String(item.transaction.provider ?? "") : "";
+      if (provider.toLowerCase() !== input.source.toLowerCase()) {
+        return false;
+      }
+    }
+    return matchesProofSearch(item, input.query ?? "");
+  });
+  return sortProofLibrary(filtered, input.sort ?? "newest");
+}
+
+export function uniqueCarriers(items: Array<{ transaction: { carrier?: string | null } }>): string[] {
+  return [...new Set(items.map((item) => item.transaction.carrier).filter((value): value is string => Boolean(value)))].sort();
+}
+
+export function marketplaceImportAvailable(
+  connections: Array<{ status?: string | null; readyOrderCount?: number | null }>,
+): boolean {
+  return connections.some((connection) => {
+    const status = (connection.status ?? "").toUpperCase();
+    return status === "CONNECTED" || status === "READY" || status === "ACTIVE" || (connection.readyOrderCount ?? 0) > 0;
+  });
 }
 
 export function awaitingEvidenceCount(
@@ -253,9 +364,30 @@ export function purchaseLine(input: {
   return [qty, money].filter(Boolean).join(" • ");
 }
 
+export function invitationCardModel(invite: {
+  invitationId: string;
+  createdAt?: string;
+  transaction: { itemTitle?: string | null; externalReference?: string | null };
+  inviter?: { displayName?: string | null; username?: string | null };
+}): ProofCardModel {
+  return {
+    proofId: invite.invitationId,
+    title: invite.transaction.itemTitle?.trim() || "PackProof invitation",
+    orderRef: orderReferenceLabel(invite.transaction.externalReference),
+    roleLabel: "Buyer",
+    statusLabel: "Invitation received",
+    priceLabel: "",
+    shipping: invite.inviter?.displayName || invite.inviter?.username ? `From ${invite.inviter.displayName || `@${invite.inviter.username}`}` : "",
+    dateLabel: formatDate(invite.createdAt),
+    integrity: "none",
+    thumbnailUri: null,
+  };
+}
+
 export function nextActionForProof(input: {
   role: string | null | undefined;
   status: string;
+  participationPolicy?: string | null;
   committedEvidenceCount: number;
   captureStatus: LocalCaptureStatus;
   hasLocalCapture: boolean;
@@ -266,6 +398,7 @@ export function nextActionForProof(input: {
   return deriveNextAction({
     role: input.role,
     proofStatus: input.status,
+    participationPolicy: input.participationPolicy,
     committedEvidenceCount: input.committedEvidenceCount,
     captureStatus: input.captureStatus,
     hasLocalCapture: input.hasLocalCapture,

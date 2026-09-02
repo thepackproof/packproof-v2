@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { ProofCardModel } from "../copy/presentation";
 import { colors, radii, shadows, spacing, typography } from "../theme/tokens";
-import { IntegrityMark, StatusBadge, statusTone } from "./StatusBadge";
+import { StatusBadge, statusTone } from "./StatusBadge";
 
 export function ProofCard(props: {
   model: ProofCardModel;
@@ -17,24 +17,36 @@ export function ProofCard(props: {
       accessibilityLabel={`${props.model.title}. ${props.model.statusLabel}`}
       style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
     >
-      <View style={styles.top}>
-        <Text style={styles.title}>{props.model.title}</Text>
-        <IntegrityMark state={props.model.integrity} />
-      </View>
-      {props.model.orderRef ? <Text style={styles.meta}>{props.model.orderRef}</Text> : null}
-      <View style={styles.row}>
+      {props.model.thumbnailUri ? (
+        <Image source={{ uri: props.model.thumbnailUri }} style={styles.thumb} />
+      ) : (
+        <View style={styles.thumbFallback} accessibilityElementsHidden>
+          <Ionicons name="cube-outline" size={22} color={colors.slate} />
+        </View>
+      )}
+      <View style={styles.copy}>
+        <Text style={styles.title} numberOfLines={2}>
+          {props.model.title}
+        </Text>
+        {props.model.priceLabel ? <Text style={styles.price}>{props.model.priceLabel}</Text> : null}
         <StatusBadge label={props.model.statusLabel} tone={statusTone(props.model.statusLabel)} />
-        {props.model.roleLabel ? <Text style={styles.role}>{props.model.roleLabel}</Text> : null}
+        <View style={styles.metaRow}>
+          {props.model.shipping ? (
+            <>
+              <Ionicons name="car-outline" size={12} color={colors.slate} />
+              <Text style={styles.meta}>{props.model.shipping}</Text>
+            </>
+          ) : null}
+          {props.model.shipping && props.model.dateLabel ? <Text style={styles.meta}>•</Text> : null}
+          {props.model.dateLabel ? (
+            <>
+              <Ionicons name="calendar-outline" size={12} color={colors.slate} />
+              <Text style={styles.meta}>{props.model.dateLabel}</Text>
+            </>
+          ) : null}
+        </View>
       </View>
-      <View style={styles.bottom}>
-        <Text style={styles.meta}>{[props.model.shipping, props.model.dateLabel].filter(Boolean).join(" · ")}</Text>
-        {props.cta ? (
-          <View style={styles.cta}>
-            <Text style={styles.ctaText}>{props.cta}</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.blue} />
-          </View>
-        ) : null}
-      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </Pressable>
   );
 }
@@ -42,12 +54,12 @@ export function ProofCard(props: {
 export function InfoCard(props: { children: ReactNode; onPress?: () => void }) {
   if (props.onPress) {
     return (
-      <Pressable onPress={props.onPress} style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}>
+      <Pressable onPress={props.onPress} style={({ pressed }) => [styles.info, pressed ? styles.pressed : null]}>
         {props.children}
       </Pressable>
     );
   }
-  return <View style={styles.card}>{props.children}</View>;
+  return <View style={styles.info}>{props.children}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -57,16 +69,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radii.lg,
     padding: spacing.lg,
+    gap: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    ...shadows.card,
+  },
+  info: {
+    backgroundColor: colors.white,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
     gap: spacing.sm,
     ...shadows.card,
   },
   pressed: { opacity: 0.92 },
-  top: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.sm },
-  title: { ...typography.cardTitle, color: colors.navy, flex: 1 },
-  meta: { ...typography.secondary, color: colors.slate },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
-  role: { ...typography.caption, color: colors.slate },
-  bottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
-  cta: { flexDirection: "row", alignItems: "center", gap: 4 },
-  ctaText: { ...typography.secondaryStrong, color: colors.blue },
+  thumb: { width: 56, height: 56, borderRadius: radii.md, backgroundColor: colors.background },
+  thumbFallback: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  copy: { flex: 1, gap: 6 },
+  title: { ...typography.cardTitle, color: colors.navy },
+  price: { ...typography.bodyStrong, color: colors.navy },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" },
+  meta: { ...typography.caption, color: colors.slate },
 });

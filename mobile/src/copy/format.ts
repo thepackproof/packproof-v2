@@ -43,9 +43,26 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   const date = formatDate(value);
   const time = formatTime(value);
   if (date && time) {
+    return `${date} at ${time}`;
+  }
+  return date || time;
+}
+
+export function formatDateTimeCompact(value: string | Date | null | undefined): string {
+  const date = formatDate(value);
+  const time = formatTime(value);
+  if (date && time) {
     return `${date} • ${time}`;
   }
   return date || time;
+}
+
+export function youRoleLabel(input: { role: string | null | undefined; isCurrentUser: boolean }): string {
+  const role = roleLabel(input.role);
+  if (input.isCurrentUser && role) {
+    return `You • ${role}`;
+  }
+  return role;
 }
 
 export function greetingForHour(hour: number): string {
