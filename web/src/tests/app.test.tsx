@@ -288,9 +288,10 @@ describe("PackProof web reference client", () => {
   it("lets an authenticated user load Proof discovery summaries", async () => {
     signInSession();
     render(<App />);
+    expect(await screen.findByRole("heading", { name: "My Proofs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Vintage camera")).length).toBeGreaterThan(0);
-    expect(screen.getByText(/ORD-48392/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Pending invitations" })).toBeInTheDocument();
+    expect(screen.getByText("Invitation received")).toBeInTheDocument();
+    expect(screen.getByText(/UPS/)).toBeInTheDocument();
     expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
   });
 
@@ -298,7 +299,7 @@ describe("PackProof web reference client", () => {
     signInSession();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Open Proof" }));
+    await user.click(await screen.findByRole("button", { name: /Vintage camera\. Packing evidence needed/i }));
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
@@ -312,7 +313,7 @@ describe("PackProof web reference client", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("8af291d4deadbeefcafebabef00d000011112222333344445555666677778888"))
       .toBeInTheDocument();
-    const history = screen.getByRole("heading", { name: "Chronology" }).closest("section");
+    const history = screen.getByRole("heading", { name: "Proof record" }).closest("section");
     expect(history).toBeTruthy();
     const events = within(history as HTMLElement).getAllByRole("listitem");
     expect(events[0]).toHaveTextContent("Proof created");
@@ -391,7 +392,7 @@ describe("PackProof web reference client", () => {
     signInSession();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Account" }));
+    await user.click(await screen.findByRole("button", { name: "Account" }));
     await user.type(await screen.findByLabelText("Invitation ID"), "inv_01");
     await user.click(screen.getByRole("button", { name: "Accept invitation" }));
     await waitFor(() => {
@@ -423,7 +424,7 @@ describe("PackProof web reference client", () => {
     signInSession();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Create" }));
+    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
     expect(await screen.findByRole("button", { name: "Import purchase" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enter manually" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Import purchase" }));
@@ -488,7 +489,7 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Create" }));
+    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
     expect(await screen.findByRole("button", { name: "Connect eBay" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import purchase" })).toBeInTheDocument();
     expect(screen.queryByText("Vintage film camera")).not.toBeInTheDocument();
@@ -635,7 +636,7 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Create" }));
+    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
     await user.click(await screen.findByRole("button", { name: "Import purchase" }));
     expect(await screen.findByRole("heading", { name: "Your eBay sales" })).toBeInTheDocument();
     expect(screen.getByText("Nikon F3 Camera")).toBeInTheDocument();
@@ -647,7 +648,7 @@ describe("PackProof web reference client", () => {
     expect(screen.getByText("Nikon F3 Camera")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Create PackProof" }));
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Chronology" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Proof record" })).toBeInTheDocument();
     });
     expect(screen.getByRole("heading", { name: "Nikon F3 Camera" })).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/integrations/transactions/import"))).toBe(
@@ -970,7 +971,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Fulfillment" }));
+    await user.click(await screen.findByRole("button", { name: "Account" }));
+    await user.click(await screen.findByRole("button", { name: "Fulfillment" }));
     expect(await screen.findByRole("heading", { name: "Fulfillment" })).toBeInTheDocument();
     expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
     expect(screen.getByText("Pokémon Booster Box + 1 more")).toBeInTheDocument();
@@ -1045,7 +1047,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Stores" }));
+    await user.click(await screen.findByRole("button", { name: "Account" }));
+    await user.click(await screen.findByRole("button", { name: "Connected stores" }));
     expect(await screen.findByRole("heading", { name: "Connected Stores" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Connect eBay" })).toBeInTheDocument();
     expect(screen.queryByText(/Connect Shopify/i)).not.toBeInTheDocument();
@@ -1103,7 +1106,7 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Account" }));
+    await user.click(await screen.findByRole("button", { name: "Account" }));
     expect(await screen.findByRole("heading", { name: "Connected Accounts" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect Google" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect Meta" })).toBeInTheDocument();
@@ -1197,7 +1200,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Station" }));
+    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
+    await user.click(await screen.findByRole("button", { name: "Scan order or label" }));
     expect(await screen.findByText("READY")).toBeInTheDocument();
     expect(screen.getByText(/Scan a label/)).toBeInTheDocument();
     expect(screen.queryByText(/SHA-256|manifest|object store/i)).not.toBeInTheDocument();
@@ -1345,7 +1349,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Station" }));
+    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
+    await user.click(await screen.findByRole("button", { name: "Scan order or label" }));
     await user.click(await screen.findByRole("button", { name: /Order #DS-1001/ }));
     expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start Packing" }));
@@ -1440,7 +1445,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Station" }));
+    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
+    await user.click(await screen.findByRole("button", { name: "Scan order or label" }));
     await user.click(await screen.findByRole("button", { name: /Order #DS-1001/ }));
     await user.click(await screen.findByRole("button", { name: "Start Packing" }));
     expect(await screen.findByRole("button", { name: "Scan Package to Finish" })).toBeInTheDocument();
@@ -1549,11 +1555,11 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Create" }));
+    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
     await user.click(await screen.findByRole("button", { name: "Grading submission" }));
-    await user.clear(screen.getByLabelText("Number of items"));
-    await user.type(screen.getByLabelText("Number of items"), "2");
-    await user.click(screen.getByRole("button", { name: "Create grading submission" }));
+    await user.clear(screen.getByLabelText("Item count"));
+    await user.type(screen.getByLabelText("Item count"), "2");
+    await user.click(screen.getByRole("button", { name: "Create grading Proof" }));
     expect(await screen.findByText("Document item 1 of 2")).toBeInTheDocument();
     expect(screen.getByText("Item 1")).toBeInTheDocument();
     expect(screen.getByText("You are the Originator")).toBeInTheDocument();
@@ -1750,6 +1756,7 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Proof actions" }));
     await user.click(await screen.findByRole("button", { name: "Share viewing link" }));
     await waitFor(() => {
       expect(screen.getByText(/Viewing link copied/)).toBeInTheDocument();

@@ -24,10 +24,12 @@ Session tokens are stored in `sessionStorage` for the tab only. A `401` clears t
 
 ## Discovery and retrieval
 
-- Home calls `GET /me/proofs` and `GET /invitations`. Summaries are not treated as full Proofs.
+- Home is **My Proofs**: In Progress / Completed, search, filter, and a create button. Invitations appear in In Progress. Avatar opens Account.
+- Create, Packing Station, Fulfillment, and Connected Stores are reached from Create or Account, matching the Android client.
+- Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations.
 - **Packing Station** (`/station`) is a persistent pack surface: scan or identify an order, record packing video as `FULFILLMENT_CAPTURE`, rescan the same canonical transaction to finish (USB/keyboard wedge), submit through the canonical evidence commands, then return to READY. Finished Packing remains a secondary fallback. Browser camera barcodes are not used; live camera barcodes are on mobile. See [PACKING_STATION.md](PACKING_STATION.md).
 - **Fulfillment** (`/fulfillment`) is the seller packing queue from `GET /me/fulfillment-queue`. Opening a row shows transaction context. Packing evidence is required before complete; attestation is attribution. Orders without capture link into Packing Station.
-- **Stores** (`/stores`) lists commerce connections that can sync fulfillment-eligible orders. In development, Connect Demo Storefront and Sync now call server-owned reference routes. Connect Shopify from Account → Connected Accounts; synced shops then appear here. Production/Cognito mode does not show a fake Connect Shopify control on this screen.
+- **Stores** (`/stores`) lists commerce connections that can sync fulfillment-eligible orders. Open it from Account → Connected stores. In development, Connect Demo Storefront and Sync now call server-owned reference routes. Connect Shopify from Account → Connected Accounts; synced shops then appear here. Production/Cognito mode does not show a fake Connect Shopify control on this screen.
 - **Account** (`/account`) lists canonical connected accounts (`GET /me/connected-accounts`): eBay, Shopify, Google, and Meta/Facebook. Connect opens the official provider OAuth page; the API callback returns to `/account`. See [CONNECTED_ACCOUNTS.md](CONNECTED_ACCOUNTS.md).
 - Create Proof can import a reference marketplace purchase (`POST /integrations/transactions/import`) or enter the transaction manually. The review screen renders the server transaction. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md).
 - Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations.

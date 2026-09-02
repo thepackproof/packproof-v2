@@ -39,6 +39,7 @@ export default defineConfig({
     alias: {
       "@packproof/station": path.resolve(root, "../mobile/src/packing-station"),
       "@packproof/copy": path.resolve(root, "../mobile/src/copy"),
+      "@packproof/theme": path.resolve(root, "../mobile/src/theme"),
     },
   },
   server: {

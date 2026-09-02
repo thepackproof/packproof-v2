@@ -17,7 +17,8 @@ import type {
   TransactionWriteInput,
 } from "./api/types";
 import { clearSession, isProfileComplete, loadSession, saveSession, type WebSession } from "./auth/session";
-import { AppNav, type AppRouteName } from "./components/AppNav";
+import { AppNav } from "./components/AppNav";
+import { ThemeProvider } from "./theme/ThemeProvider";
 import { AccountScreen } from "./screens/AccountScreen";
 import { ActivityScreen } from "./screens/ActivityScreen";
 import { ConnectedStoresScreen } from "./screens/ConnectedStoresScreen";
@@ -26,7 +27,6 @@ import { FulfillmentDetailScreen } from "./screens/FulfillmentDetailScreen";
 import { FulfillmentQueueScreen } from "./screens/FulfillmentQueueScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { PackingStationScreen } from "./screens/PackingStationScreen";
-import { ProofsScreen } from "./screens/ProofsScreen";
 import { ProofScreen } from "./screens/ProofScreen";
 import { PublicProofScreen } from "./screens/PublicProofScreen";
 import { LegalScreen } from "./screens/LegalScreen";
@@ -188,7 +188,7 @@ function needsWorkspace(name: Route["name"]): boolean {
   );
 }
 
-export function App() {
+function PackProofApp() {
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -212,6 +212,8 @@ export function App() {
   );
   const [ebay, setEbay] = useState<EbayMarketplaceView | null>(null);
   const [lastSync, setLastSync] = useState<CommerceSyncView | null>(null);
+  const [displayNameInput, setDisplayNameInput] = useState(() => loadSession()?.displayName ?? "");
+  const [usernameInput, setUsernameInput] = useState(() => loadSession()?.username ?? "");
   const tokenRef = useRef<string | null>(session?.token ?? null);
 
   useEffect(() => {
@@ -347,6 +349,8 @@ export function App() {
     tokenRef.current = session?.token ?? null;
     if (session) {
       saveSession(session);
+      setDisplayNameInput(session.displayName ?? "");
+      setUsernameInput(session.username ?? "");
     }
   }, [session]);
 
@@ -485,40 +489,29 @@ export function App() {
     );
   }
 
-  const routeName: AppRouteName = route.name;
+  const showLibraryChrome = route.name === "home" || route.name === "proofs";
+  const libraryProps = {
+    proofs,
+    invitations,
+    loading,
+    error,
+    onOpenProof: (proofId: string) => go(`/proofs/${encodeURIComponent(proofId)}`),
+    onCreate: () => go("/new"),
+    onAccept: acceptInvitation,
+  };
 
   return (
     <div className="app-shell">
-      <AppNav routeName={routeName} session={session} onGo={go} onSignOut={signOut} />
-
-      {route.name === "home" ? (
-        <HomeScreen
-          proofs={proofs}
-          invitations={invitations}
-          displayName={session.displayName}
-          username={session.username}
-          loading={loading}
-          error={error}
-          onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
-          onCreate={() => go("/new")}
-          onOpenStation={() => go("/station")}
-          onOpenFulfillment={() => go("/fulfillment")}
-          onOpenStores={() => go("/stores")}
-          onAccept={acceptInvitation}
+      {showLibraryChrome ? (
+        <AppNav
+          session={session}
+          invitationCount={invitations.length}
+          onGoHome={() => go("/")}
+          onOpenAccount={() => go("/account")}
         />
       ) : null}
 
-      {route.name === "proofs" ? (
-        <ProofsScreen
-          proofs={proofs}
-          invitations={invitations}
-          loading={loading}
-          error={error}
-          onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
-          onCreate={() => go("/new")}
-          onAccept={acceptInvitation}
-        />
-      ) : null}
+      {route.name === "home" || route.name === "proofs" ? <HomeScreen {...libraryProps} /> : null}
 
       {route.name === "activity" ? (
         <ActivityScreen
@@ -542,9 +535,35 @@ export function App() {
           connectedNotice={connectedNotice}
           error={error}
           busy={busy}
+          displayNameInput={displayNameInput}
+          usernameInput={usernameInput}
+          onDisplayNameChange={setDisplayNameInput}
+          onUsernameChange={setUsernameInput}
+          onSaveProfile={() => {
+            setBusy(true);
+            setError(null);
+            void api
+              .updateProfile({
+                displayName: displayNameInput.trim() || undefined,
+                username: session.username ? undefined : usernameInput.trim() || undefined,
+              })
+              .then((profile) => {
+                setSession({
+                  ...session,
+                  username: profile.username,
+                  displayName: profile.displayName,
+                });
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
           onAcceptInvitation={acceptInvitation}
           onOpenStation={() => go("/station")}
           onOpenStores={() => go("/stores")}
+          onOpenFulfillment={() => go("/fulfillment")}
+          onOpenPrivacy={() => go("/new/privacy")}
+          onOpenTerms={() => go("/new/terms")}
+          onBack={() => go("/")}
           onConnectAccount={(provider, extra) => {
             setBusy(true);
             setError(null);
@@ -688,6 +707,7 @@ export function App() {
           error={error}
           initialReference={route.reference}
           onAuthExpired={signOut}
+          onLeave={() => go("/")}
         />
       ) : null}
 
@@ -698,6 +718,7 @@ export function App() {
           )}
           loading={loading}
           error={error}
+          onBack={() => go("/account")}
           onOpen={(proofId) => go(`/fulfillment/${encodeURIComponent(proofId)}`)}
         />
       ) : null}
@@ -779,6 +800,7 @@ export function App() {
           busy={busy}
           development={import.meta.env.DEV}
           ebay={ebay}
+          onBack={() => go("/account")}
           onConnectEbay={() => {
             setBusy(true);
             setError(null);
@@ -839,6 +861,7 @@ export function App() {
           busy={busy}
           development={import.meta.env.DEV}
           shareNotice={shareNotice}
+          onBack={() => go("/")}
           onSearchUsers={searchProofUsers}
           onInvite={inviteProofUser}
           onOpenStation={() => {
@@ -1002,5 +1025,13 @@ export function App() {
         />
       ) : null}
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ThemeProvider>
+      <PackProofApp />
+    </ThemeProvider>
   );
 }

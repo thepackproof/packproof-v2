@@ -244,9 +244,7 @@ export function EventTimeline(props: { proof: CanonicalProof }) {
   let sawCoreFinalized = false;
   return (
     <section className="section">
-      <div className="section-head">
-        <h2>Chronology</h2>
-      </div>
+      <h2>Proof record</h2>
       <p className="note">{SOURCE_DISCLOSURE}</p>
       {props.proof.status === "FINALIZED" && props.proof.integrity?.manifestSha256 ? (
         <p className="note chronology-frozen-note">

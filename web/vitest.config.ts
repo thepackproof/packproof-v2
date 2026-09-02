@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       "@packproof/station": path.resolve(__dirname, "../mobile/src/packing-station"),
       "@packproof/copy": path.resolve(__dirname, "../mobile/src/copy"),
+      "@packproof/theme": path.resolve(__dirname, "../mobile/src/theme"),
     },
   },
   test: {

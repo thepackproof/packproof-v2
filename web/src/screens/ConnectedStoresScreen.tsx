@@ -1,5 +1,6 @@
 import { formatDateTime } from "@packproof/copy/format";
 import type { CommerceConnectionView, CommerceSyncView, EbayMarketplaceView } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 
 export function ConnectedStoresScreen(props: {
   connections: CommerceConnectionView[];
@@ -14,20 +15,17 @@ export function ConnectedStoresScreen(props: {
   onDisconnectEbay: () => void;
   onImportSales: () => void;
   onSync: (connectionId: string) => void;
+  onBack?: () => void;
 }) {
   const ebayConnection = props.ebay?.connection;
   const ebayNeedsReauth = ebayConnection?.status === "NEEDS_REAUTH";
 
   return (
     <main className="page stack">
-      <div className="section-head">
-        <div>
-          <h1>Connected Stores</h1>
-          <p className="lede">
-            Commerce connections that can create PackProofs for fulfillment-eligible orders.
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Connected Stores" onBack={props.onBack} />
+      <p className="lede">
+        Commerce connections that can create PackProofs for fulfillment-eligible orders.
+      </p>
       {props.ebay?.enabled ? (
         <section className="section stack">
           <h2>eBay</h2>

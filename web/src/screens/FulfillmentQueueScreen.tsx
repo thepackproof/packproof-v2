@@ -1,4 +1,5 @@
 import type { FulfillmentQueueItem } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 import { formatMoney } from "../format";
 
 export function FulfillmentQueueScreen(props: {
@@ -6,17 +7,16 @@ export function FulfillmentQueueScreen(props: {
   loading: boolean;
   error: string | null;
   onOpen: (proofId: string) => void;
+  onBack?: () => void;
 }) {
   const readyCount = props.items.length;
   return (
     <main className="page">
+      <PageHeader title="Fulfillment" onBack={props.onBack} />
       <div className="section-head">
-        <div>
-          <h1>Fulfillment</h1>
-          <p className="lede">
-            Orders imported from a connected store. Pack, record evidence, and complete the PackProof.
-          </p>
-        </div>
+        <p className="lede">
+          Orders imported from a connected store. Pack, record evidence, and complete the PackProof.
+        </p>
         <span className="badge badge-state">Ready to pack {readyCount}</span>
       </div>
       {props.error ? (

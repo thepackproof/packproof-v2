@@ -6,34 +6,30 @@ import {
   isGradingWorkflow,
   nextActionNeedsCapture,
   observationProgressLabel,
+  participantFacingRole,
   workflowActionFor,
 } from "@packproof/copy/custody";
+import { moneyLabel, orderReferenceLabel, quantityLabel, shippingSummary } from "@packproof/copy/format";
+import { humanProofStatus } from "@packproof/copy/status";
 import type { CanonicalProof, PublicProfileView, ShipmentIntegrityView } from "../api/types";
 import { ContinuityCompare } from "../components/ContinuityCompare";
+import { IconMore } from "../components/Icons";
+import { PageHeader } from "../components/PageHeader";
 import {
   AttestationList,
   EventTimeline,
   EvidenceList,
   ParticipantList,
-  ProofHeader,
   ProofOverview,
   ShipmentIntegrityPanel,
   TechnicalDetails,
 } from "../components/ProofRecord";
+import { StatusBadge } from "../components/StatusBadge";
 import { invitationStateLabel, profileInitials } from "../format";
 import { GradingCapturePanel } from "./GradingCapturePanel";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN_LENGTH = 2;
-
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "evidence", label: "Evidence" },
-  { id: "shipping", label: "Shipping" },
-  { id: "history", label: "History" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
 
 export function ProofScreen(props: {
   proof: CanonicalProof | null;
@@ -63,13 +59,14 @@ export function ProofScreen(props: {
   ) => Promise<void>;
   onCommitCapture?: (files: Array<{ slot: string; file: File }>) => Promise<Array<{ slot: string; evidenceId: string }>>;
   onLoadEvidence?: (evidenceId: string) => Promise<Blob>;
+  onBack?: () => void;
   onImportShipmentEvents?: (throughEventType?: string) => void;
   onSyncShipment?: () => void;
   onConnectTrustedDemo?: () => void;
   onSearchUsers: (query: string) => Promise<PublicProfileView[]>;
 }) {
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [tab, setTab] = useState<TabId>("overview");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PublicProfileView[]>([]);
   const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "empty" | "ready" | "error">(
@@ -222,27 +219,85 @@ export function ProofScreen(props: {
     }
     if (localAction.key === "add_participant" || localAction.key === "getting_started") {
       setInviteOpen(true);
-      setTab("overview");
     }
   }
 
+  const summaryLine = [
+    moneyLabel(proof.transaction.transactionValue, proof.transaction.currency),
+    quantityLabel(proof.transaction.quantity),
+    shippingSummary(proof.transaction.shipping ?? {}),
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
   return (
     <main className="page stack">
-      <ProofHeader proof={proof} role={role} />
+      <PageHeader
+        title={proof.transaction.itemTitle?.trim() || "PackProof"}
+        onBack={props.onBack}
+        right={
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Proof actions"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <IconMore />
+          </button>
+        }
+      />
+      {menuOpen ? (
+        <div className="action-sheet" role="menu">
+          {props.onShare ? (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={props.busy}
+              onClick={() => {
+                setMenuOpen(false);
+                props.onShare?.();
+              }}
+            >
+              Share viewing link
+            </button>
+          ) : null}
+          {canInvite ? (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                setInviteOpen(true);
+              }}
+            >
+              {grading ? "Add receiving participant" : "Add participant"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="header-block">
+        {summaryLine ? <p className="meta">{summaryLine}</p> : null}
+        {proof.transaction.externalReference ? (
+          <p className="meta">{orderReferenceLabel(proof.transaction.externalReference)}</p>
+        ) : null}
+        <div className="row">
+          <StatusBadge
+            label={humanProofStatus({
+              proofStatus: proof.status,
+              latestShipmentEventType: proof.shipmentObservations?.latest?.eventType,
+              hasShipping: Boolean(proof.transaction.shipping?.carrier || proof.transaction.shipping?.trackingNumber),
+            })}
+          />
+          {role ? <span className="meta">You are the {participantFacingRole(proof.workflowType, role)}</span> : null}
+        </div>
+      </div>
       {props.error ? (
         <div className="banner banner-error" role="alert">
           {props.error}
         </div>
       ) : null}
       {props.shareNotice ? <p className="note">{props.shareNotice}</p> : null}
-
-      <div className="btn-row">
-        {props.onShare ? (
-          <button className="btn btn-secondary" type="button" disabled={props.busy} onClick={props.onShare}>
-            Share viewing link
-          </button>
-        ) : null}
-      </div>
 
       {actionTitle || actionHint ? (
         <section className="section">
@@ -307,28 +362,9 @@ export function ProofScreen(props: {
 
       <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
 
-      <div className="proof-tabs" role="tablist" aria-label="Proof sections">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="tab"
-            role="tab"
-            aria-selected={tab === item.id}
-            onClick={() => {
-              setTab(item.id);
-              document.getElementById(`proof-panel-${item.id}`)?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <EventTimeline proof={proof} />
 
-      <div id="proof-panel-overview">
+      <div>
           <ProofOverview proof={proof} />
           <ParticipantList proof={proof} currentUserId={props.currentUserId} />
           {canInvite ? (
@@ -438,12 +474,12 @@ export function ProofScreen(props: {
           ) : null}
       </div>
 
-      <div id="proof-panel-evidence" className="stack">
+      <div className="stack">
           <EvidenceList proof={proof} />
           <AttestationList proof={proof} />
       </div>
 
-      <div id="proof-panel-shipping" className="stack">
+      <div className="stack">
           {proof.status === "FINALIZED" ? (
             <ShipmentIntegrityPanel integrity={props.shipmentIntegrity} />
           ) : (
@@ -524,10 +560,6 @@ export function ProofScreen(props: {
               </button>
             </section>
           ) : null}
-      </div>
-
-      <div id="proof-panel-history">
-        <EventTimeline proof={proof} />
       </div>
 
       <TechnicalDetails proof={proof} />

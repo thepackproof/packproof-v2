@@ -22,6 +22,7 @@ export function PackingStationScreen(props: {
   error: string | null;
   initialReference?: string;
   onAuthExpired: () => void;
+  onLeave?: () => void;
 }) {
   const [state, dispatch] = useReducer(reduceStation, undefined, initialStationState);
   const [heldBlob, setHeldBlob] = useState<Blob | null>(null);
@@ -541,6 +542,12 @@ export function PackingStationScreen(props: {
       {state.phase === "RECOVERY" && !state.capture ? (
         <button className="btn btn-secondary station-btn" type="button" onClick={() => dispatch({ type: "RESET" })}>
           Ready for next order
+        </button>
+      ) : null}
+
+      {props.onLeave ? (
+        <button className="btn btn-secondary station-btn" type="button" disabled={busy && state.phase === "PROCESSING"} onClick={props.onLeave}>
+          Leave station
         </button>
       ) : null}
 

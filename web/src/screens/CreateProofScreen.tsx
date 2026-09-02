@@ -3,6 +3,7 @@ import { MARKETPLACE_DISCLOSURE } from "@packproof/copy/errors";
 import { displayName, formatDate, moneyLabel, quantityLabel } from "@packproof/copy/format";
 import { providerDisplay, sourceLabel } from "@packproof/copy/status";
 import type { EbaySellerOrderView, TransactionImportView, TransactionView, TransactionWriteInput } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 
 const EMPTY = {
   externalReference: "",
@@ -49,7 +50,7 @@ export function CreateProofScreen(props: {
 
   return (
     <main className="page">
-      <h1>Create a PackProof</h1>
+      <PageHeader title="Create a Proof" onBack={props.onCancel} />
       <p className="lede">Start from a scan, an imported purchase, or details you enter yourself.</p>
 
       {step === "choose" ? (
@@ -176,7 +177,7 @@ export function CreateProofScreen(props: {
       {step === "grading" ? (
         <section className="section stack">
           <h2>Grading submission</h2>
-          <p className="lede">How many items are you sending?</p>
+          <p className="lede">How many items are in this submission?</p>
           {props.error ? (
             <div className="banner banner-error" role="alert">
               {props.error}
@@ -190,9 +191,10 @@ export function CreateProofScreen(props: {
               autoComplete="off"
             />
           </label>
-          <label className="field">
-            <span>Number of items</span>
+          <label className="field" htmlFor="grading-item-count">
+            <span>Item count</span>
             <input
+              id="grading-item-count"
               type="number"
               min={1}
               max={50}
@@ -213,7 +215,7 @@ export function CreateProofScreen(props: {
                 });
               }}
             >
-              {props.busy ? "Creating…" : "Create grading submission"}
+              {props.busy ? "Creating…" : "Create grading Proof"}
             </button>
             <button className="btn btn-secondary" type="button" onClick={() => setStep("choose")}>
               Back
