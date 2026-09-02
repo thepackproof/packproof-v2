@@ -65,7 +65,7 @@ export const privacyPolicy: LegalDocument = {
       title: "2. Scope",
       paragraphs: [
         "This policy covers personal information and related operational data processed when you create a PackProof account, authenticate, connect an external identity or marketplace, import transaction metadata, capture or upload evidence, attest, finalize a Proof, or otherwise use the service.",
-        "It also covers information we receive from third-party providers you authorize (for example, eBay when you connect a seller account) and from infrastructure providers that host PackProof.",
+        "It also covers information we receive from third-party providers you authorize (for example, eBay or Shopify when you connect a seller or shop account, or Google and Meta/Facebook when you link those identities) and from infrastructure providers that host PackProof.",
         "This policy does not govern the privacy practices of marketplaces, carriers, identity providers, or other third parties. Those services have their own policies.",
       ],
     },
@@ -106,6 +106,8 @@ export const privacyPolicy: LegalDocument = {
       paragraphs: [
         "If you connect a marketplace such as eBay, PackProof stores a connection record for your PackProof user. That record may include the provider, adapter, environment (sandbox or production), connection status, and a provider account reference such as an eBay user id or username.",
         "Connecting eBay uses OAuth. PackProof requests access needed to complete seller authorization, read seller fulfillment orders, and read limited commerce identity information used to establish the connection. PackProof treats eBay as a connected marketplace, not as a PackProof sign-in identity.",
+        "If you connect a Shopify shop, PackProof stores the shop identity and requests official Admin API access to read orders and fulfillments used to create PackProofs. One PackProof user may connect more than one shop.",
+        "If you connect Google or Meta/Facebook from Account, PackProof stores only the official identity the provider returns (such as a subject, name, or public profile). Those connections are not Amazon Cognito sign-in and do not replace PackProof authentication. PackProof does not import Facebook Marketplace listings or transactions because Facebook does not offer an official public Marketplace API for that purpose.",
         "You can disconnect a marketplace connection from PackProof. Disconnecting deletes stored OAuth credentials for that connection and disables the connection. It does not delete Proofs or evidence already created from imported orders.",
       ],
     },
@@ -258,7 +260,7 @@ export const privacyPolicy: LegalDocument = {
       id: "disconnect",
       title: "21. Disconnecting marketplace integrations",
       paragraphs: [
-        "You may disconnect a marketplace connection such as eBay from PackProof. When you do, PackProof deletes stored OAuth credentials for that connection and disables the connection so PackProof can no longer call that provider on your behalf.",
+        "You may disconnect a marketplace connection such as eBay from PackProof. When you do, PackProof deletes stored OAuth credentials for that connection and disables the connection so PackProof can no longer call that provider on your behalf. The same disconnect control applies to Shopify shops and to Google or Meta/Facebook identity links.",
         "Imported transactions, Proofs, evidence, attestations, manifests, and audit events that already exist are not deleted by disconnecting a marketplace.",
       ],
     },
@@ -305,6 +307,9 @@ export const privacyPolicy: LegalDocument = {
       bullets: [
         "Amazon Web Services, including Cognito, compute, database, object storage, content delivery, secrets, and logging",
         "eBay, when you choose to connect an eBay account",
+        "Shopify, when you choose to connect a shop",
+        "Google, when you choose to link a Google identity (this is not Cognito sign-in)",
+        "Meta/Facebook, when you choose to link a Facebook identity (this is not Cognito sign-in and is not Facebook Marketplace import)",
         "EasyPost, when a staging or test tracking adapter is configured for shipment observations",
       ],
       closingParagraphs: [

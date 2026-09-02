@@ -240,4 +240,69 @@ describe("API client boundary", () => {
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("secret");
     vi.unstubAllGlobals();
   });
+
+  it("lists and disconnects connected accounts without sending tokens", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/me/connected-accounts") && (init?.method ?? "GET") === "GET") {
+        return new Response(
+          JSON.stringify({
+            accounts: [
+              {
+                id: "cac_google",
+                provider: "google",
+                providerDisplay: "Google",
+                externalAccountId: "sub-1",
+                externalAccountName: "Collin",
+                status: "CONNECTED",
+                scopes: ["openid"],
+                expiresAt: null,
+                capabilities: {
+                  identity: true,
+                  transactions: false,
+                  fulfillment: false,
+                  shipping: false,
+                  webhooks: false,
+                },
+                limitations: [],
+                createdAt: "2026-09-02T12:00:00.000Z",
+                updatedAt: "2026-09-02T12:00:00.000Z",
+                disconnectedAt: null,
+              },
+            ],
+            providers: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/me/connected-accounts/google/connect") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?client_id=public",
+            expiresAt: "2026-09-02T15:00:00.000Z",
+            provider: "google",
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/me/connected-accounts/cac_google") && init?.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify({ error: { code: "NOT_FOUND" } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const api = new PackProofApi({ baseUrl: "", getToken: () => "token" });
+    const listed = await api.listConnectedAccounts();
+    expect(listed.accounts[0]?.provider).toBe("google");
+    expect(JSON.stringify(listed)).not.toMatch(/access_token|refresh_token/i);
+    const started = await api.startConnectedAccountConnect("google");
+    expect(started.authorizationUrl).toContain("accounts.google.com");
+    await api.disconnectConnectedAccount("cac_google");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/me/connected-accounts/cac_google",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("secret");
+    vi.unstubAllGlobals();
+  });
 });

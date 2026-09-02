@@ -18,8 +18,9 @@
     "baseUrl": ".",
     "paths": {
       "@packproof/copy/*": ["../mobile/src/copy/*"],
-      "@packproof/station/*": ["../mobile/src/packing-station/*"]
+      "@packproof/station/*": ["../mobile/src/packing-station/*"],
+      "@packproof/theme/*": ["../mobile/src/theme/*"]
     }
   },
-  "include": ["src", "../mobile/src/packing-station/**/*.ts", "../mobile/src/copy/**/*.ts"]
+  "include": ["src", "../mobile/src/packing-station/**/*.ts", "../mobile/src/copy/**/*.ts", "../mobile/src/theme/**/*.ts"]
 }

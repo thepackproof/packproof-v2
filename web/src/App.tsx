@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
+import { captureEvidenceType } from "@packproof/copy/custody";
 import { PackProofApi } from "./api/client";
 import { ApiError } from "./api/types";
 import type {
   CanonicalProof,
   CommerceConnectionView,
   CommerceSyncView,
+  ConnectedAccountProviderCatalogView,
+  ConnectedAccountView,
   EbayMarketplaceView,
   FulfillmentQueueItem,
   InvitationInboxView,
@@ -14,34 +17,48 @@ import type {
   TransactionWriteInput,
 } from "./api/types";
 import { clearSession, isProfileComplete, loadSession, saveSession, type WebSession } from "./auth/session";
-import { AppNav, type AppRouteName } from "./components/AppNav";
+import { AppNav } from "./components/AppNav";
+import { ThemeProvider } from "./theme/ThemeProvider";
 import { AccountScreen } from "./screens/AccountScreen";
 import { ActivityScreen } from "./screens/ActivityScreen";
+import { CompletionScreen } from "./screens/CompletionScreen";
 import { ConnectedStoresScreen } from "./screens/ConnectedStoresScreen";
 import { CreateProofScreen } from "./screens/CreateProofScreen";
+import { EventDetailScreen } from "./screens/EventDetailScreen";
+import { FinalizeScreen } from "./screens/FinalizeScreen";
 import { FulfillmentDetailScreen } from "./screens/FulfillmentDetailScreen";
 import { FulfillmentQueueScreen } from "./screens/FulfillmentQueueScreen";
 import { HomeScreen } from "./screens/HomeScreen";
+import { InvitationReviewScreen } from "./screens/InvitationReviewScreen";
+import { InviteScreen } from "./screens/InviteScreen";
 import { PackingStationScreen } from "./screens/PackingStationScreen";
-import { ProofsScreen } from "./screens/ProofsScreen";
 import { ProofScreen } from "./screens/ProofScreen";
+import { PublicProofScreen } from "./screens/PublicProofScreen";
 import { LegalScreen } from "./screens/LegalScreen";
 import { ProfileSetupScreen } from "./screens/ProfileSetupScreen";
+import { ScanCreateScreen } from "./screens/ScanCreateScreen";
 import { SignInScreen } from "./screens/SignInScreen";
 
 type Route =
   | { name: "home" }
   | { name: "proofs" }
   | { name: "create" }
+  | { name: "scan" }
   | { name: "activity" }
   | { name: "account" }
   | { name: "proof"; proofId: string }
+  | { name: "invite"; proofId: string }
+  | { name: "finalize"; proofId: string }
+  | { name: "complete"; proofId: string }
+  | { name: "event"; proofId: string; eventId: string }
+  | { name: "invitation"; invitationId: string }
   | { name: "fulfillment" }
   | { name: "fulfillment-detail"; proofId: string }
   | { name: "station"; reference?: string }
   | { name: "stores" }
   | { name: "privacy" }
-  | { name: "terms" };
+  | { name: "terms" }
+  | { name: "public"; token: string };
 
 function parseHref(href: string): Route {
   const url = new URL(href, "http://packproof.local");
@@ -51,6 +68,9 @@ function parseHref(href: string): Route {
   }
   if (pathname === "/new/terms") {
     return { name: "terms" };
+  }
+  if (pathname === "/new/scan") {
+    return { name: "scan" };
   }
   if (pathname === "/new") {
     return { name: "create" };
@@ -74,15 +94,53 @@ function parseHref(href: string): Route {
   if (pathname === "/stores") {
     return { name: "stores" };
   }
+  const shared = pathname.match(/^\/p\/([^/]+)$/);
+  if (shared?.[1]) {
+    return { name: "public", token: decodeURIComponent(shared[1]) };
+  }
+  const invitation = pathname.match(/^\/invitations\/([^/]+)$/);
+  if (invitation?.[1]) {
+    return { name: "invitation", invitationId: decodeURIComponent(invitation[1]) };
+  }
   const fulfillment = pathname.match(/^\/fulfillment\/([^/]+)$/);
   if (fulfillment?.[1]) {
     return { name: "fulfillment-detail", proofId: decodeURIComponent(fulfillment[1]) };
+  }
+  const invite = pathname.match(/^\/proofs\/([^/]+)\/invite$/);
+  if (invite?.[1]) {
+    return { name: "invite", proofId: decodeURIComponent(invite[1]) };
+  }
+  const finalize = pathname.match(/^\/proofs\/([^/]+)\/finalize$/);
+  if (finalize?.[1]) {
+    return { name: "finalize", proofId: decodeURIComponent(finalize[1]) };
+  }
+  const complete = pathname.match(/^\/proofs\/([^/]+)\/complete$/);
+  if (complete?.[1]) {
+    return { name: "complete", proofId: decodeURIComponent(complete[1]) };
+  }
+  const event = pathname.match(/^\/proofs\/([^/]+)\/events\/([^/]+)$/);
+  if (event?.[1] && event[2]) {
+    return { name: "event", proofId: decodeURIComponent(event[1]), eventId: decodeURIComponent(event[2]) };
   }
   const proof = pathname.match(/^\/proofs\/([^/]+)$/);
   if (proof?.[1]) {
     return { name: "proof", proofId: decodeURIComponent(proof[1]) };
   }
   return { name: "home" };
+}
+
+function routeProofId(route: Route): string | null {
+  switch (route.name) {
+    case "proof":
+    case "invite":
+    case "finalize":
+    case "complete":
+    case "event":
+    case "fulfillment-detail":
+      return route.proofId;
+    default:
+      return null;
+  }
 }
 
 function writePath(path: string) {
@@ -96,33 +154,73 @@ function pickEbay(listed: { marketplaces: EbayMarketplaceView[] }): EbayMarketpl
   return listed.marketplaces.find((item) => item.provider === "ebay") ?? null;
 }
 
-function ebayReturnError(href: string): string | null {
+function oauthReturnError(href: string): string | null {
   const url = new URL(href, "http://packproof.local");
-  const status = url.searchParams.get("ebay");
-  if (status === "declined") {
+  if (url.searchParams.get("ebay") === "declined") {
     return "eBay authorization was declined.";
   }
-  if (status !== "error") {
+  const failed =
+    url.searchParams.get("connected") === "error" || url.searchParams.get("ebay") === "error";
+  if (!failed) {
     return null;
   }
   return formatUserFacingError({
-    code: url.searchParams.get("code") || "EBAY_OAUTH_FAILED",
-    message: "eBay connection failed",
+    code: url.searchParams.get("code") || "CONNECTED_ACCOUNT_AUTH_ERROR",
+    message: "Connection failed",
   });
 }
 
-function stripEbayOAuthQuery() {
+function oauthReturnNotice(href: string): string | null {
+  const url = new URL(href, "http://packproof.local");
+  const connected = url.searchParams.get("connected");
+  if (connected && connected !== "error") {
+    const provider = url.searchParams.get("provider") || connected;
+    return `${providerDisplayName(provider)} is connected.`;
+  }
+  if (url.searchParams.get("ebay") === "connected") {
+    return "eBay is connected.";
+  }
+  return null;
+}
+
+function providerDisplayName(provider: string): string {
+  switch (provider.toLowerCase()) {
+    case "ebay":
+      return "eBay";
+    case "shopify":
+      return "Shopify";
+    case "google":
+      return "Google";
+    case "facebook":
+    case "meta":
+      return "Meta";
+    default:
+      return provider;
+  }
+}
+
+function stripOAuthReturnQuery() {
   const url = new URL(window.location.href);
-  if (!url.searchParams.has("ebay")) {
+  if (
+    !url.searchParams.has("ebay") &&
+    !url.searchParams.has("connected") &&
+    !url.searchParams.has("provider")
+  ) {
     return;
   }
   url.searchParams.delete("ebay");
+  url.searchParams.delete("connected");
+  url.searchParams.delete("provider");
   url.searchParams.delete("code");
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}` || "/");
 }
 
 function isLegalRoute(route: Route): route is { name: "privacy" } | { name: "terms" } {
   return route.name === "privacy" || route.name === "terms";
+}
+
+function isPublicRoute(route: Route): route is { name: "public"; token: string } {
+  return route.name === "public";
 }
 
 function needsWorkspace(name: Route["name"]): boolean {
@@ -132,6 +230,12 @@ function needsWorkspace(name: Route["name"]): boolean {
     name === "activity" ||
     name === "account" ||
     name === "proof" ||
+    name === "invite" ||
+    name === "finalize" ||
+    name === "complete" ||
+    name === "event" ||
+    name === "invitation" ||
+    name === "scan" ||
     name === "fulfillment" ||
     name === "fulfillment-detail" ||
     name === "station" ||
@@ -139,7 +243,11 @@ function needsWorkspace(name: Route["name"]): boolean {
   );
 }
 
-export function App() {
+function needsProof(name: Route["name"]): boolean {
+  return name === "proof" || name === "invite" || name === "finalize" || name === "complete" || name === "event";
+}
+
+function PackProofApp() {
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -150,15 +258,26 @@ export function App() {
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(() => ebayReturnError(window.location.href));
+  const [error, setError] = useState<string | null>(() => oauthReturnError(window.location.href));
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [connectedNotice, setConnectedNotice] = useState<string | null>(() =>
+    oauthReturnNotice(window.location.href),
+  );
   const [queue, setQueue] = useState<FulfillmentQueueItem[]>([]);
   const [connections, setConnections] = useState<CommerceConnectionView[]>([]);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountView[]>([]);
+  const [connectedProviders, setConnectedProviders] = useState<ConnectedAccountProviderCatalogView[]>(
+    [],
+  );
   const [ebay, setEbay] = useState<EbayMarketplaceView | null>(null);
   const [lastSync, setLastSync] = useState<CommerceSyncView | null>(null);
+  const [displayNameInput, setDisplayNameInput] = useState(() => loadSession()?.displayName ?? "");
+  const [usernameInput, setUsernameInput] = useState(() => loadSession()?.username ?? "");
   const tokenRef = useRef<string | null>(session?.token ?? null);
+  const proofIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    stripEbayOAuthQuery();
+    stripOAuthReturnQuery();
   }, []);
 
   const api = useMemo(
@@ -170,6 +289,16 @@ export function App() {
     [session?.apiBaseUrl],
   );
 
+  const loadProofEvidence = useCallback(
+    async (evidenceId: string) => {
+      if (!proof) {
+        throw new Error("Proof is not available.");
+      }
+      return api.getEvidenceBlob(proof.proofId, evidenceId);
+    },
+    [api, proof],
+  );
+
   function signOut() {
     tokenRef.current = null;
     clearSession();
@@ -178,6 +307,11 @@ export function App() {
     setInvitations([]);
     setProof(null);
     setShipmentIntegrity(null);
+    proofIdRef.current = null;
+    setConnections([]);
+    setConnectedAccounts([]);
+    setConnectedProviders([]);
+    setConnectedNotice(null);
     setError(null);
     writePath("/");
     setRoute({ name: "home" });
@@ -186,9 +320,12 @@ export function App() {
   function go(path: string) {
     const next = parseHref(path);
     setError(null);
-    if (next.name !== "proof" || proof?.proofId !== next.proofId) {
+    setShareNotice(null);
+    const nextId = routeProofId(next);
+    if (!nextId || nextId !== proofIdRef.current) {
       setProof(null);
       setShipmentIntegrity(null);
+      proofIdRef.current = null;
     }
     if (needsWorkspace(next.name)) {
       setLoading(true);
@@ -258,9 +395,11 @@ export function App() {
   useEffect(() => {
     const onPop = () => {
       const next = parseHref(`${window.location.pathname}${window.location.search}`);
-      if (next.name !== "proof") {
+      const nextId = routeProofId(next);
+      if (!nextId || nextId !== proofIdRef.current) {
         setProof(null);
         setShipmentIntegrity(null);
+        proofIdRef.current = null;
       }
       if (needsWorkspace(next.name)) {
         setLoading(true);
@@ -275,6 +414,8 @@ export function App() {
     tokenRef.current = session?.token ?? null;
     if (session) {
       saveSession(session);
+      setDisplayNameInput(session.displayName ?? "");
+      setUsernameInput(session.username ?? "");
     }
   }, [session]);
 
@@ -295,28 +436,48 @@ export function App() {
     }
     if (route.name === "account") {
       setLoading(true);
-      setError(null);
-      void Promise.all([api.listInvitations(), api.listCommerceConnections(), api.listMarketplaces()])
-        .then(([inbox, listed, marketplaces]) => {
+      void Promise.all([
+        api.listInvitations(),
+        api.listCommerceConnections(),
+        api.listMarketplaces(),
+        api.listConnectedAccounts(),
+      ])
+        .then(([inbox, listed, marketplaces, connected]) => {
           setInvitations(inbox.invitations);
           setConnections(listed.connections);
           setEbay(pickEbay(marketplaces));
+          setConnectedAccounts(connected.accounts);
+          setConnectedProviders(connected.providers);
         })
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
-    if (route.name === "proof") {
+    if (needsProof(route.name)) {
+      const proofId = routeProofId(route);
+      if (proofId && proofIdRef.current !== proofId) {
+        setLoading(true);
+        setError(null);
+        setProof(null);
+        setShipmentIntegrity(null);
+        void api
+          .getProof(proofId)
+          .then(async (loaded) => {
+            proofIdRef.current = loaded.proofId;
+            setProof(loaded);
+            const integrity = await api.getShipmentIntegrity(loaded.proofId);
+            setShipmentIntegrity(integrity);
+          })
+          .catch((caught) => setError(handleError(caught)))
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    }
+    if (route.name === "invitation") {
       setLoading(true);
-      setError(null);
-      setProof(null);
-      setShipmentIntegrity(null);
       void api
-        .getProof(route.proofId)
-        .then(async (loaded) => {
-          setProof(loaded);
-          const integrity = await api.getShipmentIntegrity(loaded.proofId);
-          setShipmentIntegrity(integrity);
-        })
+        .listInvitations()
+        .then((inbox) => setInvitations(inbox.invitations))
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
@@ -349,6 +510,16 @@ export function App() {
 
   if (isLegalRoute(route)) {
     return <LegalScreen kind={route.name} onGo={go} />;
+  }
+
+  if (isPublicRoute(route)) {
+    return (
+      <PublicProofScreen
+        token={route.token}
+        load={(token) => api.getPublicProof(token)}
+        onSignIn={() => go("/")}
+      />
+    );
   }
 
   if (!session) {
@@ -397,40 +568,30 @@ export function App() {
     );
   }
 
-  const routeName: AppRouteName = route.name;
+  const showLibraryChrome = route.name === "home" || route.name === "proofs";
+  const libraryProps = {
+    proofs,
+    invitations,
+    loading,
+    error,
+    onOpenProof: (proofId: string) => go(`/proofs/${encodeURIComponent(proofId)}`),
+    onCreate: () => go("/new"),
+    onOpenInvitation: (invite: InvitationInboxView) =>
+      go(`/invitations/${encodeURIComponent(invite.invitationId)}`),
+  };
 
   return (
     <div className="app-shell">
-      <AppNav routeName={routeName} session={session} onGo={go} onSignOut={signOut} />
-
-      {route.name === "home" ? (
-        <HomeScreen
-          proofs={proofs}
-          invitations={invitations}
-          displayName={session.displayName}
-          username={session.username}
-          loading={loading}
-          error={error}
-          onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
-          onCreate={() => go("/new")}
-          onOpenStation={() => go("/station")}
-          onOpenFulfillment={() => go("/fulfillment")}
-          onOpenStores={() => go("/stores")}
-          onAccept={acceptInvitation}
+      {showLibraryChrome ? (
+        <AppNav
+          session={session}
+          invitationCount={invitations.length}
+          onGoHome={() => go("/")}
+          onOpenAccount={() => go("/account")}
         />
       ) : null}
 
-      {route.name === "proofs" ? (
-        <ProofsScreen
-          proofs={proofs}
-          invitations={invitations}
-          loading={loading}
-          error={error}
-          onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
-          onCreate={() => go("/new")}
-          onAccept={acceptInvitation}
-        />
-      ) : null}
+      {route.name === "home" || route.name === "proofs" ? <HomeScreen {...libraryProps} /> : null}
 
       {route.name === "activity" ? (
         <ActivityScreen
@@ -439,7 +600,7 @@ export function App() {
           loading={loading}
           error={error}
           onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
-          onAccept={acceptInvitation}
+          onAccept={(invitationId) => go(`/invitations/${encodeURIComponent(invitationId)}`)}
         />
       ) : null}
 
@@ -449,11 +610,78 @@ export function App() {
           username={session.username}
           subject={session.subject}
           connections={connections}
+          connectedAccounts={connectedAccounts}
+          connectedProviders={connectedProviders}
+          connectedNotice={connectedNotice}
           error={error}
           busy={busy}
-          onAcceptInvitation={acceptInvitation}
+          displayNameInput={displayNameInput}
+          usernameInput={usernameInput}
+          onDisplayNameChange={setDisplayNameInput}
+          onUsernameChange={setUsernameInput}
+          onSaveProfile={() => {
+            setBusy(true);
+            setError(null);
+            void api
+              .updateProfile({
+                displayName: displayNameInput.trim() || undefined,
+                username: session.username ? undefined : usernameInput.trim() || undefined,
+              })
+              .then((profile) => {
+                setSession({
+                  ...session,
+                  username: profile.username,
+                  displayName: profile.displayName,
+                });
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
           onOpenStation={() => go("/station")}
           onOpenStores={() => go("/stores")}
+          onOpenFulfillment={() => go("/fulfillment")}
+          onOpenPrivacy={() => go("/new/privacy")}
+          onOpenTerms={() => go("/new/terms")}
+          onBack={() => go("/")}
+          onConnectAccount={(provider, extra) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .startConnectedAccountConnect(provider, extra)
+              .then((result) => {
+                window.location.assign(result.authorizationUrl);
+              })
+              .catch((caught) => {
+                setError(handleError(caught));
+                setBusy(false);
+              });
+          }}
+          onReauthorizeAccount={(accountId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .reauthorizeConnectedAccount(accountId)
+              .then((result) => {
+                window.location.assign(result.authorizationUrl);
+              })
+              .catch((caught) => {
+                setError(handleError(caught));
+                setBusy(false);
+              });
+          }}
+          onDisconnectAccount={(accountId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .disconnectConnectedAccount(accountId)
+              .then(() => api.listConnectedAccounts())
+              .then((listed) => {
+                setConnectedAccounts(listed.accounts);
+                setConnectedProviders(listed.providers);
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
           onSignOut={signOut}
         />
       ) : null}
@@ -463,23 +691,11 @@ export function App() {
           busy={busy}
           error={error}
           development={import.meta.env.DEV}
-          ebayEnabled={ebay?.enabled === true}
           ebayConnected={ebay?.connection?.status === "ACTIVE"}
           onCancel={() => go("/")}
-          onScan={() => go("/station")}
-          onConnectEbay={() => {
-            setBusy(true);
-            setError(null);
-            void api
-              .startEbayConnect()
-              .then((result) => {
-                window.location.assign(result.authorizationUrl);
-              })
-              .catch((caught) => {
-                setError(handleError(caught));
-                setBusy(false);
-              });
-          }}
+          onScan={() => go("/new/scan")}
+          onOpenAccount={() => go("/account")}
+          onAcceptInvitation={acceptInvitation}
           onImportPurchase={() => {
             setBusy(true);
             setError(null);
@@ -532,6 +748,62 @@ export function App() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+          onCreateGrading={(input) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .createProof({
+                workflowType: "GRADING_SUBMISSION",
+                itemCount: input.itemCount,
+                itemTitle: input.itemTitle,
+              })
+              .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+        />
+      ) : null}
+
+      {route.name === "scan" ? (
+        <ScanCreateScreen
+          busy={busy}
+          error={error}
+          onBack={() => go("/new")}
+          onIdentify={(reference) => {
+            setBusy(true);
+            setError(null);
+            return api.resolvePackingStation(reference).catch((caught) => {
+              if (
+                caught instanceof ApiError &&
+                (caught.code === "STATION_REFERENCE_NOT_FOUND" || caught.code === "TRANSACTION_NOT_FOUND")
+              ) {
+                throw caught;
+              }
+              setError(handleError(caught));
+              throw caught;
+            }).finally(() => setBusy(false));
+          }}
+          onContinue={(transactionId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .createOrGetProof(transactionId)
+              .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onImport={() => go("/new")}
+          onManual={() => go("/new")}
+        />
+      ) : null}
+
+      {route.name === "invitation" ? (
+        <InvitationReviewScreen
+          invite={invitations.find((item) => item.invitationId === route.invitationId) ?? null}
+          busy={busy}
+          error={error}
+          onBack={() => go("/")}
+          onReview={() => acceptInvitation(route.invitationId)}
         />
       ) : null}
 
@@ -545,6 +817,7 @@ export function App() {
           error={error}
           initialReference={route.reference}
           onAuthExpired={signOut}
+          onLeave={() => go("/")}
         />
       ) : null}
 
@@ -555,6 +828,7 @@ export function App() {
           )}
           loading={loading}
           error={error}
+          onBack={() => go("/account")}
           onOpen={(proofId) => go(`/fulfillment/${encodeURIComponent(proofId)}`)}
         />
       ) : null}
@@ -636,6 +910,7 @@ export function App() {
           busy={busy}
           development={import.meta.env.DEV}
           ebay={ebay}
+          onBack={() => go("/account")}
           onConnectEbay={() => {
             setBusy(true);
             setError(null);
@@ -688,44 +963,97 @@ export function App() {
 
       {route.name === "proof" ? (
         <ProofScreen
-          proof={route.name === "proof" && proof?.proofId === route.proofId ? proof : null}
+          proof={proof?.proofId === route.proofId ? proof : null}
           shipmentIntegrity={shipmentIntegrity}
           currentUserId={session.userId}
           loading={loading}
           error={error}
           busy={busy}
           development={import.meta.env.DEV}
-          onSearchUsers={searchProofUsers}
-          onInvite={inviteProofUser}
+          shareNotice={shareNotice}
+          onBack={() => go("/")}
+          onOpenInvite={() => go(`/proofs/${encodeURIComponent(route.proofId)}/invite`)}
+          onOpenFinalize={() => go(`/proofs/${encodeURIComponent(route.proofId)}/finalize`)}
+          onOpenEvent={(event) =>
+            go(`/proofs/${encodeURIComponent(route.proofId)}/events/${encodeURIComponent(event.id)}`)
+          }
           onOpenStation={() => {
             const reference = proof?.transaction.externalReference || "";
             go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
           }}
-          onAttest={(statement) => {
+          onShare={() => {
             if (!proof) {
               return;
             }
             setBusy(true);
+            setError(null);
+            setShareNotice(null);
             void api
-              .createAttestation(proof.proofId, { statement })
-              .then((result) => setProof(result.proof))
-              .catch((caught) => setError(handleError(caught)))
-              .finally(() => setBusy(false));
-          }}
-          onFinalize={() => {
-            if (!proof) {
-              return;
-            }
-            setBusy(true);
-            void api
-              .finalizeProof(proof.proofId)
-              .then(async (result) => {
-                setProof(result.proof);
-                setShipmentIntegrity(await api.getShipmentIntegrity(result.proof.proofId));
+              .createAccessLink(proof.proofId, { scope: "SUMMARY" })
+              .then(async (link) => {
+                const url = link.url || `${window.location.origin}/p/${link.token ?? ""}`;
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setShareNotice("Viewing link copied. Anyone with the link can see live status. They cannot change the Proof.");
+                } catch {
+                  setShareNotice(url);
+                }
               })
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+          onWorkflowAction={async (action, body = {}) => {
+            if (!proof) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            try {
+              const result = await api.runProofAction(proof.proofId, action, {
+                ...body,
+                idempotencyKey: crypto.randomUUID(),
+              });
+              setProof(result.proof);
+            } catch (caught) {
+              setError(handleError(caught));
+              throw caught;
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onCommitCapture={async (files) => {
+            if (!proof) {
+              return [];
+            }
+            setBusy(true);
+            setError(null);
+            try {
+              const evidenceType = captureEvidenceType({
+                workflowType: proof.workflowType,
+                captureRecipe: proof.nextAction?.captureRecipe,
+                nextActionType: proof.nextAction?.type,
+              });
+              const committed: Array<{ slot: string; evidenceId: string }> = [];
+              for (const row of files) {
+                const contentType = row.file.type || "application/octet-stream";
+                const initialized = await api.initializeEvidenceUpload(proof.proofId, {
+                  contentType,
+                  evidenceType,
+                  idempotencyKey: crypto.randomUUID(),
+                });
+                await api.uploadObject(initialized.upload, row.file, contentType);
+                await api.commitEvidence(proof.proofId, initialized.evidenceId);
+                committed.push({ slot: row.slot, evidenceId: initialized.evidenceId });
+              }
+              return committed;
+            } catch (caught) {
+              setError(handleError(caught));
+              throw caught;
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onLoadEvidence={loadProofEvidence}
           onImportShipmentEvents={(throughEventType) => {
             if (!proof) {
               return;
@@ -784,6 +1112,71 @@ export function App() {
           }
         />
       ) : null}
+
+      {route.name === "invite" ? (
+        <InviteScreen
+          proof={proof?.proofId === route.proofId ? proof : null}
+          busy={busy}
+          error={error}
+          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onSearchUsers={searchProofUsers}
+          onInvite={inviteProofUser}
+          onShare={() => {
+            const title = proof?.transaction.itemTitle ?? "a PackProof";
+            void navigator.clipboard.writeText(
+              `You’ve been invited to a PackProof for ${title}. Open PackProof to review and join.`,
+            );
+          }}
+        />
+      ) : null}
+
+      {route.name === "finalize" ? (
+        <FinalizeScreen
+          proof={proof?.proofId === route.proofId ? proof : null}
+          busy={busy}
+          error={error}
+          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onFinalize={() => {
+            if (!proof) {
+              return;
+            }
+            setBusy(true);
+            void api
+              .finalizeProof(proof.proofId)
+              .then(async (result) => {
+                proofIdRef.current = result.proof.proofId;
+                setProof(result.proof);
+                setShipmentIntegrity(await api.getShipmentIntegrity(result.proof.proofId));
+                go(`/proofs/${encodeURIComponent(result.proof.proofId)}/complete`);
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+        />
+      ) : null}
+
+      {route.name === "complete" ? (
+        <CompletionScreen
+          proofId={route.proofId}
+          onViewProof={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onGoHome={() => go("/")}
+        />
+      ) : null}
+
+      {route.name === "event" ? (
+        <EventDetailScreen
+          event={proof?.chronology?.find((entry) => entry.id === route.eventId) ?? null}
+          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ThemeProvider>
+      <PackProofApp />
+    </ThemeProvider>
   );
 }

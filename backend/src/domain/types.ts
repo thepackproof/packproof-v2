@@ -21,6 +21,7 @@ export interface ProofRow {
   manifest_id: string | null;
   version: number;
   participation_policy?: string;
+  workflow_type?: string;
 }
 
 export interface ParticipantRow {

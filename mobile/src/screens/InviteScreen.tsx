@@ -1,5 +1,6 @@
 import { Share, StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
+import { inviteParticipantHint, inviteParticipantTitle } from "../copy/custody";
 import { invitationStateLabel } from "../copy/status";
 import { spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -17,9 +18,9 @@ export function InviteScreen() {
   const proof = app.proof;
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title="Add buyer" onBack={app.goBack} />
+      <AppHeader title={inviteParticipantTitle(proof?.workflowType)} onBack={app.goBack} />
       <Text style={[styles.body, { color: colors.textSecondary }]}>
-        Search PackProof username. Joining records participation; it does not confirm the item.
+        {inviteParticipantHint(proof?.workflowType)}
       </Text>
       <ErrorBanner message={app.error} />
       <FormField label="Search PackProof username" value={app.searchQuery} onChangeText={app.setSearchQuery} />

@@ -9,6 +9,11 @@ import { createObjectStore } from "./s3/create-object-store.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { createCredentialStore } from "./integrations/create-credential-store.js";
 import { createEbayRuntime } from "./integrations/ebay/runtime.js";
+import {
+  createFacebookRuntime,
+  createGoogleRuntime,
+  createShopifyRuntime,
+} from "./integrations/connected-accounts/from-config.js";
 
 loadEnvFile(path.resolve(process.cwd()));
 
@@ -31,6 +36,9 @@ const app = createApp({
     publicBaseUrl: config.publicBaseUrl,
     webOrigins: config.webOrigins,
   }),
+  shopify: createShopifyRuntime(config),
+  google: createGoogleRuntime(config),
+  facebook: createFacebookRuntime(config),
 });
 
 const server = app.listen(config.port, "0.0.0.0", () => {

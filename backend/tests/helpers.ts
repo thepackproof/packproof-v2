@@ -34,6 +34,9 @@ export async function createHarness(
     objectStore?: ObjectStore;
     integrations?: IntegrationAdapterRegistry;
     ebay?: import("../src/domain/ebay-marketplace.js").EbayRuntime;
+    shopify?: import("../src/integrations/connected-accounts/providers/shopify.js").ShopifyOAuthRuntime;
+    google?: import("../src/integrations/connected-accounts/providers/google.js").GoogleOAuthRuntime;
+    facebook?: import("../src/integrations/connected-accounts/providers/facebook.js").FacebookOAuthRuntime;
     credentialStore?: MutableCredentialStore;
     opened?: { db: Database; close: () => Promise<void> };
   } = {},
@@ -62,6 +65,9 @@ export async function createHarness(
     credentialStore,
     integrations: options.integrations,
     ebay: options.ebay,
+    shopify: options.shopify,
+    google: options.google,
+    facebook: options.facebook,
   });
 
   return {

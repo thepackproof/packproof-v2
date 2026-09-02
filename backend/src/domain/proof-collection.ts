@@ -11,6 +11,7 @@ export interface ProofCollectionItem {
   transactionId: string;
   role: ParticipantRole;
   status: ProofStatus | string;
+  workflowType?: string;
   createdAt: string;
   updatedAt: string;
   finalizedAt: string | null;
@@ -31,6 +32,7 @@ interface CollectionRow {
   transaction_id: string;
   role: ParticipantRole;
   status: ProofStatus;
+  workflow_type?: string;
   created_at: Date | string;
   updated_at: Date | string;
   finalized_at: Date | string | null;
@@ -54,6 +56,7 @@ export async function listMyProofs(
         p.transaction_id,
         pp.role,
         p.status,
+        p.workflow_type,
         p.created_at,
         p.updated_at,
         p.finalized_at,
@@ -84,6 +87,7 @@ export async function listMyProofs(
     transactionId: row.transaction_id,
     role: row.role,
     status: row.status,
+    workflowType: row.workflow_type ?? "COMMERCE_SALE",
     createdAt: asRequiredIso(row.created_at),
     updatedAt: asRequiredIso(row.updated_at),
     finalizedAt: asIso(row.finalized_at),

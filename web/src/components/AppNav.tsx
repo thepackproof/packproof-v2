@@ -1,4 +1,5 @@
 import type { WebSession } from "../auth/session";
+import { AvatarButton } from "./AvatarButton";
 
 export type AppRouteName =
   | "home"
@@ -12,57 +13,31 @@ export type AppRouteName =
   | "station"
   | "stores";
 
-const LINKS: Array<{ href: string; label: string; match: AppRouteName[] }> = [
-  { href: "/", label: "Home", match: ["home"] },
-  { href: "/proofs", label: "Proofs", match: ["proofs", "proof"] },
-  { href: "/new", label: "Create", match: ["create"] },
-  { href: "/activity", label: "Activity", match: ["activity"] },
-  { href: "/fulfillment", label: "Fulfillment", match: ["fulfillment", "fulfillment-detail"] },
-  { href: "/station", label: "Station", match: ["station"] },
-  { href: "/stores", label: "Stores", match: ["stores"] },
-  { href: "/account", label: "Account", match: ["account"] },
-];
-
 export function AppNav(props: {
-  routeName: AppRouteName;
   session: WebSession;
-  onGo: (path: string) => void;
-  onSignOut: () => void;
+  invitationCount: number;
+  onGoHome: () => void;
+  onOpenAccount: () => void;
 }) {
   return (
-    <header className="topbar">
+    <header className="topbar topbar-library">
       <a
         className="brand"
         href="/"
         onClick={(event) => {
           event.preventDefault();
-          props.onGo("/");
+          props.onGoHome();
         }}
       >
-        <img src="/packproof-logo.png" alt="" width={28} height={28} />
+        <img src="/packproof-logo.png" alt="" width={32} height={32} />
         PackProof
       </a>
-      <nav className="topbar-nav" aria-label="Primary">
-        {LINKS.map((link) => (
-          <a
-            key={link.href}
-            href={link.href}
-            aria-current={link.match.includes(props.routeName) ? "page" : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              props.onGo(link.href);
-            }}
-          >
-            {link.label}
-          </a>
-        ))}
-      </nav>
-      <div className="topbar-meta">
-        <span>{props.session.displayName || props.session.username || props.session.subject}</span>
-        <button className="btn btn-secondary" type="button" onClick={props.onSignOut}>
-          Sign out
-        </button>
-      </div>
+      <AvatarButton
+        displayName={props.session.displayName}
+        username={props.session.username}
+        notify={props.invitationCount > 0}
+        onPress={props.onOpenAccount}
+      />
     </header>
   );
 }

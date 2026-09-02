@@ -1,6 +1,6 @@
 # eBay marketplace integration
 
-PackProof treats eBay as a **connected marketplace**, not a PackProof sign-in identity.
+PackProof treats eBay as a **connected marketplace**, not a PackProof sign-in identity. Account linking for eBay, Shopify, Google, and Meta is summarized in [CONNECTED_ACCOUNTS.md](CONNECTED_ACCOUNTS.md).
 
 ## What this slice does
 

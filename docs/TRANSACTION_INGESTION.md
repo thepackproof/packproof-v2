@@ -2,7 +2,7 @@
 
 PackProof can populate an existing V2 transaction from an external purchase or shipping system. This is an **ingestion boundary**, not a new Proof lifecycle.
 
-No live Shopify connector is supported yet. eBay seller OAuth and order import is documented in [EBAY_INTEGRATION.md](EBAY_INTEGRATION.md). This repository still ships a provider-neutral contract, a domain import service, and a **reference** adapter (`demo-marketplace`) for tests and local development.
+No live Amazon/Etsy/WooCommerce/Walmart connectors are supported yet. eBay seller OAuth and order import is documented in [EBAY_INTEGRATION.md](EBAY_INTEGRATION.md). Shopify shop OAuth plus Admin order/fulfillment read is documented in [CONNECTED_ACCOUNTS.md](CONNECTED_ACCOUNTS.md). This repository still ships a provider-neutral contract, a domain import service, and a **reference** adapter (`demo-marketplace`) for tests and local development.
 
 ## Shape
 

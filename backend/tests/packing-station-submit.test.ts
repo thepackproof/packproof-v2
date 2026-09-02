@@ -143,6 +143,39 @@ describe("packing station submit", () => {
     ]);
   });
 
+  it("recovers an idempotent retry without receiving fresh upload authority", async () => {
+    const recovered = snapshot({
+      status: "EVIDENCE_COMMITTED",
+      participationPolicy: "COUNTERPARTY_REQUIRED",
+      evidence: [{ evidenceId: "evd_committed", validationStatus: "COMMITTED" }],
+    });
+    const api = apiMock([snapshot()]);
+    api.initializeEvidenceUpload = async () => {
+      throw {
+        code: "EVIDENCE_ALREADY_COMMITTED",
+        message: "Committed evidence cannot receive another upload authorization",
+      };
+    };
+    api.getProof = async (proofId) => {
+      api.calls.push(`get:${proofId}`);
+      return recovered;
+    };
+    const upload = vi.fn(async () => undefined);
+
+    const result = await submitStationSession({
+      proof: snapshot(),
+      actorUserId: "seller",
+      capture,
+      idempotencyKey: "idem_committed",
+      deps: { api, upload, newIdempotencyKey: () => "unused" },
+    });
+
+    expect(result.evidenceId).toBe("evd_committed");
+    expect(result.completion).toBe("EVIDENCE_COMMITTED");
+    expect(upload).not.toHaveBeenCalled();
+    expect(api.calls.some((item) => item.startsWith("commit:"))).toBe(false);
+  });
+
   it("refuses to mutate a finalized Proof and does not upload", async () => {
     const api = apiMock([snapshot({ status: "FINALIZED" })]);
     const upload = vi.fn();

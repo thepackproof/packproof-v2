@@ -84,4 +84,10 @@ export interface EbayClient {
     marketplaceId: string;
     orderId: string;
   }): Promise<EbayOrder>;
+  revokeUserToken?(input: {
+    environment: EbayEnvironment;
+    clientId: string;
+    clientSecret: string;
+    token: string;
+  }): Promise<void>;
 }

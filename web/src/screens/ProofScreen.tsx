@@ -1,30 +1,31 @@
-import { useEffect, useRef, useState } from "react";
-import { FINALIZE_DISCLOSURE } from "@packproof/copy/errors";
+import { useState } from "react";
 import { deriveNextAction } from "@packproof/copy/next-action";
-import type { CanonicalProof, PublicProfileView, ShipmentIntegrityView } from "../api/types";
+import {
+  assetItemLabel,
+  inviteParticipantTitle,
+  isGradingWorkflow,
+  nextActionNeedsCapture,
+  observationProgressLabel,
+  participantFacingRole,
+  workflowActionFor,
+} from "@packproof/copy/custody";
+import { moneyLabel, orderReferenceLabel, quantityLabel, shippingSummary } from "@packproof/copy/format";
+import { humanProofStatus } from "@packproof/copy/status";
+import type { CanonicalProof, ChronologyEntry, ShipmentIntegrityView } from "../api/types";
+import { ContinuityCompare } from "../components/ContinuityCompare";
+import { IconMore } from "../components/Icons";
+import { PageHeader } from "../components/PageHeader";
 import {
   AttestationList,
   EventTimeline,
   EvidenceList,
   ParticipantList,
-  ProofHeader,
   ProofOverview,
   ShipmentIntegrityPanel,
   TechnicalDetails,
 } from "../components/ProofRecord";
-import { invitationStateLabel, profileInitials } from "../format";
-
-const SEARCH_DEBOUNCE_MS = 300;
-const SEARCH_MIN_LENGTH = 2;
-
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "evidence", label: "Evidence" },
-  { id: "shipping", label: "Shipping" },
-  { id: "history", label: "History" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
+import { StatusBadge } from "../components/StatusBadge";
+import { GradingCapturePanel } from "./GradingCapturePanel";
 
 export function ProofScreen(props: {
   proof: CanonicalProof | null;
@@ -34,28 +35,38 @@ export function ProofScreen(props: {
   error: string | null;
   busy: boolean;
   development?: boolean;
-  onInvite: (input: { inviteeUserId: string }) => Promise<void>;
-  onAttest: (statement: string) => void;
-  onFinalize: () => void;
+  shareNotice?: string | null;
+  onOpenInvite?: () => void;
+  onOpenFinalize?: () => void;
+  onOpenEvent?: (event: ChronologyEntry) => void;
   onOpenStation?: () => void;
+  onShare?: () => void;
+  onWorkflowAction?: (
+    action:
+      | "document"
+      | "pack"
+      | "handoff"
+      | "receive"
+      | "compare"
+      | "output"
+      | "return-pack"
+      | "final-receipt",
+    body?: Record<string, unknown>,
+  ) => Promise<void>;
+  onCommitCapture?: (files: Array<{ slot: string; file: File }>) => Promise<Array<{ slot: string; evidenceId: string }>>;
+  onLoadEvidence?: (evidenceId: string) => Promise<Blob>;
+  onBack?: () => void;
   onImportShipmentEvents?: (throughEventType?: string) => void;
   onSyncShipment?: () => void;
   onConnectTrustedDemo?: () => void;
-  onSearchUsers: (query: string) => Promise<PublicProfileView[]>;
 }) {
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [tab, setTab] = useState<TabId>("overview");
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<PublicProfileView[]>([]);
-  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "empty" | "ready" | "error">(
-    "idle",
-  );
-  const searchGeneration = useRef(0);
+  const [menuOpen, setMenuOpen] = useState(false);
   const proof = props.proof;
   const role = proof?.participants.find((participant) => participant.userId === props.currentUserId)
     ?.role;
+  const grading = isGradingWorkflow(proof?.workflowType);
   const committed = proof?.evidence.filter((item) => item.validationStatus === "COMMITTED").length ?? 0;
-  const action = proof
+  const localAction = proof
     ? deriveNextAction({
         role,
         proofStatus: proof.status,
@@ -67,26 +78,12 @@ export function ProofScreen(props: {
         offline: false,
       })
     : null;
-  const canAttest = proof && proof.status !== "FINALIZED" && Boolean(role);
-  const packingAttested = Boolean(
-    proof?.attestations?.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
-  );
-  const hasFulfillmentCapture = Boolean(
-    proof?.evidence.some(
-      (row) => row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE",
-    ),
-  );
-  const merchantReady =
-    proof?.participationPolicy === "COUNTERPARTY_OPTIONAL" &&
-    proof.status !== "FINALIZED" &&
-    packingAttested &&
-    hasFulfillmentCapture;
-  const canFinalize =
-    role === "SELLER" &&
-    Boolean(
-      merchantReady ||
-        (proof?.participationPolicy !== "COUNTERPARTY_OPTIONAL" && proof?.status === "EVIDENCE_COMMITTED"),
-    );
+  const serverAction = proof?.nextAction ?? null;
+  const actionTitle = serverAction?.title || localAction?.label || "";
+  const actionHint = serverAction?.hint || localAction?.hint || "";
+  const actionEnabled = grading
+    ? Boolean(serverAction && serverAction.type !== "WAIT_FOR_RECEIPT" && serverAction.type !== "COMPLETE")
+    : Boolean(localAction?.enabled && localAction.label);
   const canInvite = Boolean(proof && role === "SELLER" && proof.status !== "FINALIZED");
   const canImportDemoCarrier =
     Boolean(props.development) && proof && role === "SELLER" && Boolean(props.onImportShipmentEvents);
@@ -97,39 +94,6 @@ export function ProofScreen(props: {
     role === "SELLER" &&
     !proof.shipmentSync?.available &&
     Boolean(props.onConnectTrustedDemo);
-
-  useEffect(() => {
-    if (!canInvite || !inviteOpen) {
-      return;
-    }
-    const normalized = query.trim().replace(/^@+/, "").trim();
-    if (normalized.length < SEARCH_MIN_LENGTH) {
-      searchGeneration.current += 1;
-      setResults([]);
-      setSearchStatus("idle");
-      return;
-    }
-    const generation = ++searchGeneration.current;
-    setSearchStatus("loading");
-    const handle = window.setTimeout(() => {
-      void props
-        .onSearchUsers(query.trim())
-        .then((users) => {
-          if (generation !== searchGeneration.current) {
-            return;
-          }
-          setResults(users);
-          setSearchStatus(users.length > 0 ? "ready" : "empty");
-        })
-        .catch(() => {
-          if (generation !== searchGeneration.current) {
-            return;
-          }
-          setSearchStatus("error");
-        });
-    }, SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(handle);
-  }, [canInvite, inviteOpen, query, props.onSearchUsers]);
 
   if (props.loading && !proof) {
     return (
@@ -158,185 +122,193 @@ export function ProofScreen(props: {
   }
 
   function handlePrimary() {
-    if (!action) {
+    if (grading && serverAction) {
+      if (serverAction.type === "FINALIZE") {
+        props.onOpenFinalize?.();
+        return;
+      }
+      if (nextActionNeedsCapture(serverAction.type)) {
+        return;
+      }
+      const actionName = workflowActionFor(serverAction.type);
+      if (actionName) {
+        void props.onWorkflowAction?.(actionName, {
+          assetId: serverAction.assetId,
+          transferId: serverAction.transferId,
+          recipe: serverAction.captureRecipe,
+        });
+      }
       return;
     }
-    if (action.key === "start_capture" || action.key === "review_recording" || action.key === "retry_upload") {
+    if (!localAction) {
+      return;
+    }
+    if (localAction.key === "start_capture" || localAction.key === "review_recording" || localAction.key === "retry_upload") {
       props.onOpenStation?.();
       return;
     }
-    if (action.key === "finalize") {
-      props.onFinalize();
+    if (localAction.key === "finalize") {
+      props.onOpenFinalize?.();
       return;
     }
-    if (action.key === "add_participant" || action.key === "getting_started") {
-      setInviteOpen(true);
-      setTab("overview");
+    if (localAction.key === "add_participant") {
+      props.onOpenInvite?.();
     }
   }
 
+  const summaryLine = [
+    moneyLabel(proof.transaction.transactionValue, proof.transaction.currency),
+    quantityLabel(proof.transaction.quantity),
+    shippingSummary(proof.transaction.shipping ?? {}),
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
   return (
     <main className="page stack">
-      <ProofHeader proof={proof} role={role} />
+      <PageHeader
+        title={proof.transaction.itemTitle?.trim() || "PackProof"}
+        onBack={props.onBack}
+        right={
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Proof actions"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <IconMore />
+          </button>
+        }
+      />
+      {menuOpen ? (
+        <div className="action-sheet" role="menu">
+          {props.onShare ? (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={props.busy}
+              onClick={() => {
+                setMenuOpen(false);
+                props.onShare?.();
+              }}
+            >
+              Share viewing link
+            </button>
+          ) : null}
+          {canInvite ? (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                props.onOpenInvite?.();
+              }}
+            >
+              {inviteParticipantTitle(proof.workflowType)}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="header-block">
+        {summaryLine ? <p className="meta">{summaryLine}</p> : null}
+        {proof.transaction.externalReference ? (
+          <p className="meta">{orderReferenceLabel(proof.transaction.externalReference)}</p>
+        ) : null}
+        <div className="row">
+          <StatusBadge
+            label={humanProofStatus({
+              proofStatus: proof.status,
+              latestShipmentEventType: proof.shipmentObservations?.latest?.eventType,
+              hasShipping: Boolean(proof.transaction.shipping?.carrier || proof.transaction.shipping?.trackingNumber),
+            })}
+          />
+          {role ? <span className="meta">You are the {participantFacingRole(proof.workflowType, role)}</span> : null}
+        </div>
+      </div>
       {props.error ? (
         <div className="banner banner-error" role="alert">
           {props.error}
         </div>
       ) : null}
+      {props.shareNotice ? <p className="note">{props.shareNotice}</p> : null}
 
-      {action && (action.hint || action.label) ? (
+      {actionTitle || actionHint ? (
         <section className="section">
           <p className="kicker">Next step</p>
-          <p>{action.hint || action.label}</p>
-          {action.enabled && action.label ? (
+          <p className="card-title">{actionTitle}</p>
+          {actionHint ? <p>{actionHint}</p> : null}
+          {grading && nextActionNeedsCapture(serverAction?.type) ? (
+            <GradingCapturePanel
+              recipe={serverAction?.captureRecipe}
+              busy={props.busy}
+              onCommit={async (files) => {
+                const committedSlots = await props.onCommitCapture?.(files);
+                const actionName = workflowActionFor(serverAction?.type);
+                if (!actionName || !committedSlots) {
+                  return;
+                }
+                await props.onWorkflowAction?.(actionName, {
+                  assetId: serverAction?.assetId,
+                  transferId: serverAction?.transferId,
+                  recipe: serverAction?.captureRecipe,
+                  evidence: committedSlots,
+                });
+              }}
+            />
+          ) : actionEnabled ? (
             <div className="btn-row" style={{ marginTop: "0.75rem" }}>
               <button className="btn" type="button" disabled={props.busy} onClick={handlePrimary}>
-                {action.label}
+                {actionTitle}
               </button>
             </div>
-          ) : action.kind === "success" ? (
-            <p className="integrity-mark">{action.label}</p>
+          ) : localAction?.kind === "success" ? (
+            <p className="integrity-mark">{actionTitle}</p>
           ) : null}
         </section>
       ) : null}
 
-      <div className="proof-tabs" role="tablist" aria-label="Proof sections">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="tab"
-            role="tab"
-            aria-selected={tab === item.id}
-            onClick={() => {
-              setTab(item.id);
-              document.getElementById(`proof-panel-${item.id}`)?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      {proof.assets && proof.assets.length > 0 ? (
+        <section className="section">
+          <h2>Items</h2>
+          <ul className="card-list">
+            {proof.assets.map((asset) => (
+              <li key={asset.assetId}>
+                <div className="card-title">{assetItemLabel(asset)}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
-      <div id="proof-panel-overview">
+      {proof.observations && proof.observations.length > 0 ? (
+        <section className="section">
+          <h2>Progress</h2>
+          <ul className="card-list">
+            {proof.observations.map((observation) => (
+              <li key={observation.observationId}>
+                <div className="card-title">{observation.label || observationProgressLabel(observation.type)}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
+
+      <EventTimeline proof={proof} onSelect={props.onOpenEvent} />
+
+      <div>
           <ProofOverview proof={proof} />
           <ParticipantList proof={proof} currentUserId={props.currentUserId} />
-          {canInvite ? (
-            <section className="section stack">
-              <h2>Add a participant</h2>
-              {!inviteOpen ? (
-                <button className="btn" type="button" onClick={() => setInviteOpen(true)}>
-                  Add participant
-                </button>
-              ) : (
-                <>
-                  <p className="note">
-                    Search PackProof accounts by username or name. Invitation links are not required.
-                  </p>
-                  <label className="field">
-                    <span>Search by username or name</span>
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      autoComplete="off"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                    />
-                  </label>
-                  {searchStatus === "loading" ? <p className="empty">Searching…</p> : null}
-                  {searchStatus === "empty" ? <p className="empty">No PackProof users match that search.</p> : null}
-                  {searchStatus === "error" ? (
-                    <p className="empty" role="alert">
-                      Search failed. Edit the query to try again.
-                    </p>
-                  ) : null}
-                  <ul className="card-list">
-                    {results.map((user) => {
-                      const state = user.invitationState ?? "NONE";
-                      const canSend = state === "NONE" && !props.busy;
-                      return (
-                        <li key={user.userId} className="user-search-row">
-                          <span className="avatar-placeholder" aria-hidden="true">
-                            {profileInitials(user.displayName, user.username)}
-                          </span>
-                          <div className="user-search-copy">
-                            <strong>{user.displayName || user.username}</strong>
-                            <div className="meta">@{user.username}</div>
-                          </div>
-                          {canSend ? (
-                            <button
-                              className="btn"
-                              type="button"
-                              onClick={() => {
-                                void props.onInvite({ inviteeUserId: user.userId }).then(() => {
-                                  setResults((current) =>
-                                    current.map((row) =>
-                                      row.userId === user.userId ? { ...row, invitationState: "INVITED" } : row,
-                                    ),
-                                  );
-                                });
-                              }}
-                            >
-                              Invite
-                            </button>
-                          ) : (
-                            <span className="meta">{invitationStateLabel(state)}</span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              )}
-            </section>
-          ) : null}
-          {canAttest ? (
-            <section className="section">
-              <h2>Record a statement</h2>
-              <p className="note">
-                This submits your statement to the Proof. PackProof records it. It does not endorse
-                whether the statement is true.
-              </p>
-              <div className="btn-row">
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={props.busy}
-                  onClick={() => props.onAttest("PACKED_DESCRIBED_ITEM")}
-                >
-                  I packed the described item
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={props.busy}
-                  onClick={() => props.onAttest("RECEIVED_PACKAGE")}
-                >
-                  I received this package
-                </button>
-              </div>
-            </section>
-          ) : null}
-          {canFinalize ? (
-            <section className="section">
-              <h2>Complete the Proof</h2>
-              <p className="note">{FINALIZE_DISCLOSURE}</p>
-              <button className="btn" type="button" disabled={props.busy} onClick={props.onFinalize}>
-                Finalize PackProof
-              </button>
-            </section>
-          ) : null}
       </div>
 
-      <div id="proof-panel-evidence" className="stack">
+      <div className="stack">
           <EvidenceList proof={proof} />
           <AttestationList proof={proof} />
       </div>
 
-      <div id="proof-panel-shipping" className="stack">
+      <div className="stack">
           {proof.status === "FINALIZED" ? (
             <ShipmentIntegrityPanel integrity={props.shipmentIntegrity} />
           ) : (
@@ -417,10 +389,6 @@ export function ProofScreen(props: {
               </button>
             </section>
           ) : null}
-      </div>
-
-      <div id="proof-panel-history">
-        <EventTimeline proof={proof} />
       </div>
 
       <TechnicalDetails proof={proof} />

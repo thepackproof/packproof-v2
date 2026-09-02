@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import {
+  CopyObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -14,7 +15,11 @@ import { sha256Hex } from "../src/hash.js";
 import { AwsS3ObjectStore } from "../src/s3/aws-s3-object-store.js";
 import { createObjectStore } from "../src/s3/create-object-store.js";
 import { LocalObjectStore } from "../src/s3/local-object-store.js";
-import { assertSafeObjectKey, evidenceObjectKey } from "../src/s3/object-key.js";
+import {
+  assertSafeObjectKey,
+  committedEvidenceObjectKey,
+  evidenceObjectKey,
+} from "../src/s3/object-key.js";
 import { loadConfig } from "../src/config.js";
 
 describe("object key rules", () => {
@@ -22,6 +27,10 @@ describe("object key rules", () => {
     expect(evidenceObjectKey("proof_01ABC", "evd_01DEF")).toBe(
       "evidence/proof_01ABC/evd_01DEF/object",
     );
+    expect(committedEvidenceObjectKey(
+      "evidence/proof_01ABC/evd_01DEF/object",
+      "a".repeat(64),
+    )).toBe(`evidence/proof_01ABC/evd_01DEF/committed/sha256-${"a".repeat(64)}`);
     expect(() => evidenceObjectKey("../etc", "evd_01DEF")).toThrowError(DomainError);
     expect(() => assertSafeObjectKey("evidence/../secret")).toThrowError(DomainError);
     expect(() => assertSafeObjectKey("/absolute/key")).toThrowError(DomainError);
@@ -50,6 +59,11 @@ describe("LocalObjectStore", () => {
       byteSize: body.byteLength,
       contentType: "video/mp4",
     });
+    const committed = await store.commitUpload(key);
+    expect(committed?.key).toBe(
+      `evidence/proof_1/evd_1/committed/sha256-${sha256Hex(body)}`,
+    );
+    expect((await store.get(committed!.key))?.body.equals(body)).toBe(true);
 
     const target = await store.createUploadTarget({ key, contentType: "video/mp4" });
     expect(target.method).toBe("PUT");
@@ -77,7 +91,11 @@ describe("AwsS3ObjectStore", () => {
               $metadata: { httpStatusCode: 404 },
             });
           }
-          return { ContentLength: stored.body.byteLength, ContentType: stored.contentType };
+          return {
+            ContentLength: stored.body.byteLength,
+            ContentType: stored.contentType,
+            ETag: `"${sha256Hex(stored.body)}"`,
+          };
         }
         if (command instanceof GetObjectCommand) {
           const stored = objects.get(command.input.Key ?? "");
@@ -102,6 +120,24 @@ describe("AwsS3ObjectStore", () => {
           });
           return {};
         }
+        if (command instanceof CopyObjectCommand) {
+          const source = decodeURIComponent(command.input.CopySource ?? "").replace(
+            /^packproof-test\//,
+            "",
+          );
+          const stored = objects.get(source);
+          if (!stored) {
+            throw Object.assign(new Error("missing"), {
+              name: "NoSuchKey",
+              $metadata: { httpStatusCode: 404 },
+            });
+          }
+          objects.set(command.input.Key ?? "", {
+            body: Buffer.from(stored.body),
+            contentType: stored.contentType,
+          });
+          return {};
+        }
         throw new Error(`unexpected command ${command?.constructor?.name}`);
       },
     } as unknown as S3Client;
@@ -122,6 +158,14 @@ describe("AwsS3ObjectStore", () => {
       byteSize: 8,
       contentType: "video/mp4",
     });
+    const committed = await store.commitUpload(key);
+    expect(committed).toMatchObject({
+      key: `evidence/proof_01A/evd_01B/committed/sha256-${sha256Hex(Buffer.from("s3-bytes"))}`,
+      sha256: sha256Hex(Buffer.from("s3-bytes")),
+      byteSize: 8,
+      contentType: "video/mp4",
+    });
+    expect(objects.get(committed!.key)?.body.toString()).toBe("s3-bytes");
 
     const target = await store.createUploadTarget({ key, contentType: "video/mp4" });
     expect(target.method).toBe("PUT");

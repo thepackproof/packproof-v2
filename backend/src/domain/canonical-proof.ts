@@ -35,6 +35,14 @@ import {
   requireParticipationPolicy,
   type ParticipationPolicy,
 } from "./participation.js";
+import { loadCustodyBundle } from "./custody.js";
+import { isQualifyingFulfillmentCapture } from "./evidence-types.js";
+import type { ProofAssetView } from "./assets.js";
+import type { ObservationView } from "./observations.js";
+import type { TransferView } from "./transfers.js";
+import type { ContinuityView } from "./continuity.js";
+import type { AssetExternalRefView } from "./asset-bindings.js";
+import type { NextAction } from "./workflow.js";
 
 export interface CanonicalParticipant {
   participantId: string;
@@ -149,11 +157,24 @@ export interface CanonicalProof {
   shipmentObservations: ShipmentObservationsView;
   shipmentSync: ShipmentSyncAvailability;
   chronology: ChronologyEntry[];
+  workflowType: string;
+  workflowStage: string;
+  custodyOutcome: string | null;
+  nextAction: NextAction | null;
+  assets: ProofAssetView[];
+  observations: ObservationView[];
+  transfers: TransferView[];
+  continuityObservations: ContinuityView[];
+  transactionContext: TransactionView;
+  shippingContext: TransactionView["shipping"];
+  externalBindings: Array<ProofExternalReferenceView | AssetExternalRefView>;
+  auditEvents: AuditEventView[];
 }
 
 export async function getCanonicalProof(
   db: Database,
   proofId: string,
+  actorUserId?: string | null,
 ): Promise<CanonicalProof> {
   const proofResult = await db.query<ProofRow>(`SELECT * FROM proofs WHERE id = $1`, [proofId]);
   const proof = proofResult.rows[0];
@@ -222,6 +243,20 @@ export async function getCanonicalProof(
       },
     }),
   );
+  const actorRole =
+    actorUserId == null
+      ? null
+      : participantViews.find((row) => row.userId === actorUserId)?.role ?? null;
+  const custody = await loadCustodyBundle(db, proof, actorRole, {
+    committedEvidenceCount: evidenceViews.filter((row) => row.validationStatus === "COMMITTED").length,
+    packingAttested: attestations.rows.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
+    fulfillmentCaptureCount: evidence.rows.filter((row) =>
+      isQualifyingFulfillmentCapture({
+        evidenceType: row.evidence_type,
+        validationStatus: row.validation_status,
+      }),
+    ).length,
+  });
 
   return {
     schema: CANONICAL_PROOF_SCHEMA,
@@ -294,6 +329,18 @@ export async function getCanonicalProof(
       events,
       shipmentEvents: shipmentObservations.events,
     }),
+    workflowType: custody.workflowType,
+    workflowStage: custody.policy.workflowStage,
+    custodyOutcome: custody.policy.custodyOutcome,
+    nextAction: custody.policy.nextAction,
+    assets: custody.assets,
+    observations: custody.observations,
+    transfers: custody.transfers,
+    continuityObservations: custody.continuity,
+    transactionContext: transaction,
+    shippingContext: transaction.shipping,
+    externalBindings: [...references, ...custody.bindings],
+    auditEvents: events,
   };
 }
 

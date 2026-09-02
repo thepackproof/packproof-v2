@@ -55,6 +55,7 @@ The contract includes:
 - **Shipment sync availability** — whether an ACTIVE trusted integration connection is bound (`connectionId`, `adapterKey`, `provider`, `status`). Never includes credential references or secrets. EasyPost Tracker observations, when present, are shipment events (`provider = easypost`); they are not core Proof facts.
 - **Chronology** — presentation read model over audit + shipment observations (`PROOF` / `COMMERCE` / `SHIPMENT`). Not lifecycle state and not evidence tiers
 - **Integrity** — recorded evidence digests and finalized manifest digest
+- **Custody (additive)** — `workflowType`, server-derived `workflowStage` / `nextAction`, assets, observations, transfers, continuity summaries. Present for `GRADING_SUBMISSION` and omitted from commerce manifests unless custody rows exist. See [CUSTODY_WORKFLOW.md](CUSTODY_WORKFLOW.md).
 - **Shipment integrity supplement** — a separate recomputed read (`GET /proofs/:id/shipment-integrity`, schema `packproof.shipment.integrity/v1`). It associates current shipment-event hashes with the frozen core manifest. It is not a second Proof, not a new lifecycle status, and not part of the core manifest.
 - **Facts / external** — explicit trust classification
 

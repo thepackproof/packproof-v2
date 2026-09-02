@@ -65,6 +65,7 @@ export class FakeEbayClient implements EbayClient {
   orders = fixtureEbayOrders();
   refreshFail = false;
   tokenSeq = 0;
+  revoked = 0;
 
   constructor() {
     this.codes.set("valid-ebay-code", {
@@ -153,6 +154,10 @@ export class FakeEbayClient implements EbayClient {
       throw providerResponseInvalid();
     }
     return order;
+  }
+
+  async revokeUserToken(): Promise<void> {
+    this.revoked += 1;
   }
 
   private issueTokens(user: EbayUserIdentity): EbayTokenSet {

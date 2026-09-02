@@ -222,6 +222,15 @@ export function providerDisplay(adapterKey: string, provider: string): string {
   if (adapterKey === "ebay" || provider === "ebay") {
     return "eBay";
   }
+  if (adapterKey === "shopify" || provider === "shopify") {
+    return "Shopify";
+  }
+  if (adapterKey === "google" || provider === "google") {
+    return "Google";
+  }
+  if (adapterKey === "facebook" || provider === "facebook") {
+    return "Meta";
+  }
   return provider;
 }
 

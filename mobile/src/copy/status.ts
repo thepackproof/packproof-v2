@@ -179,8 +179,30 @@ export function providerDisplay(provider: string | null | undefined): string {
       return "EasyPost";
     case "ebay":
       return "eBay";
+    case "shopify":
+      return "Shopify";
+    case "google":
+      return "Google";
+    case "facebook":
+    case "meta":
+      return "Meta";
     default:
       return provider ? humanizeEnum(provider) : "";
+  }
+}
+
+export function connectedAccountStatusLabel(status: string | null | undefined): string {
+  switch ((status ?? "").toUpperCase()) {
+    case "CONNECTED":
+      return "Connected";
+    case "NEEDS_REAUTH":
+      return "Reconnect required";
+    case "ERROR":
+      return "Needs attention";
+    case "DISCONNECTED":
+      return "Disconnected";
+    default:
+      return status ? humanizeEnum(status) : "";
   }
 }
 

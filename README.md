@@ -42,3 +42,5 @@ Staging API: `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`.
 - [Packing Station](docs/PACKING_STATION.md)
 - [Shipment observations](docs/SHIPMENT_EVENTS.md)
 - [Web reference client](docs/WEB_CLIENT.md)
+- [Custody workflow](docs/CUSTODY_WORKFLOW.md) (including guest Proof viewing)
+- [Connected accounts](docs/CONNECTED_ACCOUNTS.md)

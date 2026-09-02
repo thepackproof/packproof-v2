@@ -8,11 +8,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppState } from "react-native";
+import { AppState, Linking } from "react-native";
 import {
   PackProofV2Client,
   newIdempotencyKey,
   type ChronologyEntry,
+  type ConnectedAccountProviderCatalogView,
+  type ConnectedAccountView,
   type IntegrationConnectionView,
   type InvitationInboxView,
   type ManifestView,
@@ -20,6 +22,7 @@ import {
   type ProfileView,
   type ProofCollectionItem,
   type ProofView,
+  type ProofWorkflowAction,
   type PublicProfileView,
   type ShipmentIntegrityView,
   type TransactionImportView,
@@ -47,6 +50,12 @@ import {
   uploadCaptureFile,
   type LocalCapture,
 } from "../capture";
+import {
+  captureEvidenceType,
+  isGradingWorkflow,
+  nextActionNeedsCapture,
+  workflowActionFor,
+} from "../copy/custody";
 import { clearCachedState, loadCachedState, saveCachedState, type CachedClientState } from "../session";
 import { resolveRuntimeConfig, shouldRestoreCachedSession, type ResolvedRuntimeConfig } from "../runtime-config";
 import { EMPTY_FORM, formFromTransaction, parseContextForm, type ContextForm } from "../copy/forms";
@@ -137,6 +146,8 @@ export interface PackProofContextValue {
   scanInput: string;
   scanPhase: "camera" | "reference" | "found" | "missing";
   connections: IntegrationConnectionView[];
+  connectedAccounts: ConnectedAccountView[];
+  connectedProviders: ConnectedAccountProviderCatalogView[];
   authPane: AuthPane;
   authMode: AuthMode;
   apiBaseUrl: string;
@@ -208,6 +219,12 @@ export interface PackProofContextValue {
   importPurchase: () => Promise<void>;
   confirmImportedPurchase: () => Promise<void>;
   createManualProof: () => Promise<void>;
+  createGradingProof: (itemCount: number) => Promise<void>;
+  shareProofLink: () => Promise<void>;
+  runWorkflowAction: (action: ProofWorkflowAction, body?: Record<string, unknown>) => Promise<void>;
+  commitGradingCapture: (
+    slots: Array<{ slot: string; uri: string; contentType: string }>,
+  ) => Promise<void>;
   identifyReference: (reference: string) => Promise<void>;
   continueFromScan: () => Promise<void>;
   savePurchaseDetails: () => Promise<void>;
@@ -223,6 +240,10 @@ export interface PackProofContextValue {
   syncShipment: () => Promise<void>;
   connectTrustedDemo: () => Promise<void>;
   loadConnections: () => Promise<void>;
+  loadConnectedAccounts: () => Promise<void>;
+  connectConnectedAccount: (provider: string, extra?: { shop?: string }) => Promise<void>;
+  reauthorizeConnectedAccount: (accountId: string) => Promise<void>;
+  disconnectConnectedAccount: (accountId: string) => Promise<void>;
   ensureAuth: () => Promise<void>;
   persistStation: (next: {
     capture: LocalCapture | null;
@@ -278,6 +299,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [scanInput, setScanInput] = useState("");
   const [scanPhase, setScanPhase] = useState<"camera" | "reference" | "found" | "missing">("camera");
   const [connections, setConnections] = useState<IntegrationConnectionView[]>([]);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountView[]>([]);
+  const [connectedProviders, setConnectedProviders] = useState<ConnectedAccountProviderCatalogView[]>(
+    [],
+  );
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -562,6 +587,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
       await ensureFreshCognitoToken();
       await refreshProofCollection();
       await refreshPendingInvites();
+      try {
+        const connected = await client.listConnectedAccounts();
+        setConnectedAccounts(connected.accounts);
+        setConnectedProviders(connected.providers);
+      } catch {
+        // Connected-account routes require the matching API image.
+      }
       setOffline(false);
     } catch (err) {
       if (isNetworkFailure(err)) {
@@ -784,6 +816,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     scanInput,
     scanPhase,
     connections,
+    connectedAccounts,
+    connectedProviders,
     authPane,
     authMode,
     apiBaseUrl,
@@ -918,6 +952,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await clearCachedState();
         setSession(null);
         setProof(null);
+        setConnections([]);
+        setConnectedAccounts([]);
+        setConnectedProviders([]);
         setTransactionDetail(null);
         setLocalCapture(null);
         setCaptureStatus("idle");
@@ -1012,6 +1049,96 @@ export function PackProofProvider(props: { children: ReactNode }) {
           }
           throw err;
         }
+      }),
+    createGradingProof: async (itemCount: number) =>
+      run(async () => {
+        if (!sessionRef.current) {
+          return;
+        }
+        const created = await client.createProof({
+          workflowType: "GRADING_SUBMISSION",
+          itemCount,
+          itemTitle: "Grading submission",
+        });
+        await persist({
+          ...sessionRef.current,
+          proofId: created.proofId,
+          transactionId: created.transactionId,
+        });
+        await refreshProofCollection();
+        await refreshProof(created.proofId);
+        go("proof");
+      }),
+    shareProofLink: async () =>
+      run(async () => {
+        if (!proof) {
+          return;
+        }
+        const link = await client.createAccessLink(proof.proofId, { scope: "SUMMARY" });
+        const url = link.url?.trim();
+        if (!url) {
+          throw new Error("Viewing link is unavailable.");
+        }
+        const { Share } = await import("react-native");
+        await Share.share({
+          message: `View this PackProof: ${url}`,
+          url,
+        });
+      }),
+    runWorkflowAction: async (action: ProofWorkflowAction, body: Record<string, unknown> = {}) =>
+      run(async () => {
+        if (!proof) {
+          return;
+        }
+        const result = await client.runProofAction(proof.proofId, action, {
+          ...body,
+          idempotencyKey: newIdempotencyKey(),
+        });
+        await refreshProof(result.proof.proofId);
+      }),
+    commitGradingCapture: async (slots: Array<{ slot: string; uri: string; contentType: string }>) =>
+      run(async () => {
+        if (!proof || slots.length === 0) {
+          return;
+        }
+        const serverAction = proof.nextAction;
+        const evidenceType = captureEvidenceType({
+          workflowType: proof.workflowType,
+          captureRecipe: serverAction?.captureRecipe,
+          nextActionType: serverAction?.type,
+        });
+        const committed: Array<{ slot: string; evidenceId: string }> = [];
+        for (const row of slots) {
+          const available = await localCaptureExists(row.uri);
+          if (!available) {
+            throw new Error("A captured photo is no longer available. Capture again.");
+          }
+          const initialized = await client.initializeEvidenceUpload(proof.proofId, {
+            contentType: row.contentType,
+            evidenceType,
+            idempotencyKey: newIdempotencyKey(),
+          });
+          await uploadCaptureFile({
+            baseUrl: apiBaseUrl.trim(),
+            target: initialized.upload,
+            fileUri: row.uri,
+            contentType: row.contentType,
+          });
+          const result = await client.commitEvidence(proof.proofId, initialized.evidenceId);
+          committed.push({ slot: row.slot, evidenceId: result.evidenceId });
+        }
+        const actionName = workflowActionFor(serverAction?.type);
+        if (actionName && nextActionNeedsCapture(serverAction?.type)) {
+          await client.runProofAction(proof.proofId, actionName, {
+            assetId: serverAction?.assetId,
+            transferId: serverAction?.transferId,
+            recipe: serverAction?.captureRecipe,
+            evidence: committed,
+            idempotencyKey: newIdempotencyKey(),
+          });
+        }
+        void haptic("success");
+        await refreshProof(proof.proofId);
       }),
     identifyReference: async (reference: string) =>
       run(async () => {
@@ -1121,10 +1248,16 @@ export function PackProofProvider(props: { children: ReactNode }) {
           await persistCapture(localCapture, key);
           setCaptureStatus("preparing");
           setUploadPercent(null);
+          const evidenceType = captureEvidenceType({
+            workflowType: proof.workflowType,
+            captureRecipe: proof.nextAction?.captureRecipe,
+            nextActionType: proof.nextAction?.type,
+          });
+          const serverAction = proof.nextAction;
           try {
             const initialized = await client.initializeEvidenceUpload(proof.proofId, {
               contentType: localCapture.contentType,
-              evidenceType: "FULFILLMENT_CAPTURE",
+              evidenceType,
               idempotencyKey: key,
             });
             setCaptureStatus("uploading");
@@ -1137,7 +1270,23 @@ export function PackProofProvider(props: { children: ReactNode }) {
               onProgress: setUploadPercent,
             });
             setCaptureStatus("uploaded");
-            await client.commitEvidence(proof.proofId, initialized.evidenceId);
+            const committedEvidence = await client.commitEvidence(proof.proofId, initialized.evidenceId);
+            if (
+              isGradingWorkflow(proof.workflowType) &&
+              serverAction &&
+              nextActionNeedsCapture(serverAction.type)
+            ) {
+              const actionName = workflowActionFor(serverAction.type);
+              if (actionName) {
+                await client.runProofAction(proof.proofId, actionName, {
+                  assetId: serverAction.assetId,
+                  transferId: serverAction.transferId,
+                  recipe: serverAction.captureRecipe,
+                  evidence: [{ slot: "PACKING_VIDEO", evidenceId: committedEvidence.evidenceId }],
+                  idempotencyKey: newIdempotencyKey(),
+                });
+              }
+            }
             setCaptureStatus("committed");
             void haptic("success");
             await discardLocalCapture(localCapture.uri);
@@ -1233,6 +1382,29 @@ export function PackProofProvider(props: { children: ReactNode }) {
       run(async () => {
         const result = await client.listIntegrationConnections();
         setConnections(result.connections);
+      }),
+    loadConnectedAccounts: async () =>
+      run(async () => {
+        const result = await client.listConnectedAccounts();
+        setConnectedAccounts(result.accounts);
+        setConnectedProviders(result.providers);
+      }),
+    connectConnectedAccount: async (provider, extra) =>
+      run(async () => {
+        const started = await client.startConnectedAccountConnect(provider, extra);
+        await Linking.openURL(started.authorizationUrl);
+      }),
+    reauthorizeConnectedAccount: async (accountId) =>
+      run(async () => {
+        const started = await client.reauthorizeConnectedAccount(accountId);
+        await Linking.openURL(started.authorizationUrl);
+      }),
+    disconnectConnectedAccount: async (accountId) =>
+      run(async () => {
+        await client.disconnectConnectedAccount(accountId);
+        const result = await client.listConnectedAccounts();
+        setConnectedAccounts(result.accounts);
+        setConnectedProviders(result.providers);
       }),
     ensureAuth: ensureFreshCognitoToken,
     persistStation: async (next) => {

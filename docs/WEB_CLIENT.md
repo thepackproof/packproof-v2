@@ -24,15 +24,20 @@ Session tokens are stored in `sessionStorage` for the tab only. A `401` clears t
 
 ## Discovery and retrieval
 
-- Home calls `GET /me/proofs` and `GET /invitations`. Summaries are not treated as full Proofs.
+- Home is **My Proofs**: In Progress / Completed, search, filter, and a create button. Invitations appear in In Progress and open a review screen before join. Avatar opens Account.
+- Create matches the Android flow: scan an order reference, import a purchase, enter details manually, or start a grading submission. Scan (`/new/scan`) identifies an order and create-or-returns the Proof. It does not open Packing Station. Invitation ID join is a collapsed fallback on Create.
+- Packing Station, Fulfillment, and Connected Stores are reached from Account, matching the Android packing tools and marketplace surfaces.
+- Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations. Invite, finalize, and event detail are dedicated screens. Finalize confirms, then shows the completion screen.
 - **Packing Station** (`/station`) is a persistent pack surface: scan or identify an order, record packing video as `FULFILLMENT_CAPTURE`, rescan the same canonical transaction to finish (USB/keyboard wedge), submit through the canonical evidence commands, then return to READY. Finished Packing remains a secondary fallback. Browser camera barcodes are not used; live camera barcodes are on mobile. See [PACKING_STATION.md](PACKING_STATION.md).
 - **Fulfillment** (`/fulfillment`) is the seller packing queue from `GET /me/fulfillment-queue`. Opening a row shows transaction context. Packing evidence is required before complete; attestation is attribution. Orders without capture link into Packing Station.
-- **Stores** (`/stores`) lists commerce connections. In development, Connect Demo Storefront and Sync now call server-owned reference routes. Production/Cognito mode does not show a fake Connect Shopify control.
+- **Stores** (`/stores`) lists commerce connections that can sync fulfillment-eligible orders. Open it from Account → Connected stores. In development, Connect Demo Storefront and Sync now call server-owned reference routes. Connect Shopify from Account → Connected Accounts; synced shops then appear here. Production/Cognito mode does not show a fake Connect Shopify control on this screen.
+- **Account** (`/account`) lists canonical connected accounts (`GET /me/connected-accounts`): eBay, Shopify, Google, and Meta/Facebook. Connect opens the official provider OAuth page; the API callback returns to `/account`. See [CONNECTED_ACCOUNTS.md](CONNECTED_ACCOUNTS.md).
 - Create Proof can import a reference marketplace purchase (`POST /integrations/transactions/import`) or enter the transaction manually. The review screen renders the server transaction. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md).
-- Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations.
+- **Guest viewing** (`/p/:token`) calls unauthenticated `GET /public/proofs/:token` and renders live status only. It is not a workspace and cannot mutate the Proof. Participants create links with `POST /proofs/:id/access-links`.
+- **Grading submission** on Create calls `POST /proofs` with `workflowType: GRADING_SUBMISSION`. The Proof page prefers server `nextAction` and shows Item N / Documented / Packed / Handed off / Received. Commerce packing stays `FULFILLMENT_CAPTURE` via Packing Station.
 - Cached `proofId` values in the URL are shortcuts only.
-- Invitations addressed to the signed-in account appear in discovery (`GET /invitations`). Accepting uses the invitation id. Tokens from create/accept responses are discarded by the API client.
-- Sellers add a participant by searching PackProof usernames or display names (`GET /proofs/:id/users/search`) and inviting the selected `userId`. Relationship state (You / Already participating / Invitation pending / Invite) comes from the server. Raw invite tokens are not shown. An invitation-ID accept control remains as a collapsed fallback.
+- Invitations addressed to the signed-in account appear in discovery (`GET /invitations`). Opening an invitation reviews it, then accept uses the invitation id. Tokens from create/accept responses are discarded by the API client.
+- Sellers add a participant from the Proof overflow menu, which opens the invite screen. Search uses PackProof usernames (`GET /proofs/:id/users/search`). Relationship state (You / Already participating / Invitation pending / Invite) comes from the server. Raw invite tokens are not shown. An invitation-ID join control remains as a collapsed fallback on Create.
 
 ## Trust vocabulary
 
@@ -69,7 +74,7 @@ npm run typecheck
 npm run dev
 ```
 
-Vite proxies API paths (`/me`, `/proofs`, `/dev`, and the other API prefixes) to `http://127.0.0.1:3000`. Document navigations (`Accept: text/html`) are not proxied, so `/proofs/:id` remains the SPA route. JSON fetches still go to the API. Leave `VITE_PACKPROOF_API_BASE_URL` empty for that proxy. Cross-origin deployments set `PACKPROOF_WEB_ORIGINS` on the API.
+Vite proxies API paths (`/me`, `/proofs`, `/dev`, `/oauth`, and the other API prefixes) to `http://127.0.0.1:3000`. Document navigations (`Accept: text/html`) are not proxied, so `/proofs/:id` remains the SPA route. JSON fetches still go to the API. Leave `VITE_PACKPROOF_API_BASE_URL` empty for that proxy. Cross-origin deployments set `PACKPROOF_WEB_ORIGINS` on the API.
 
 ## Commands
 

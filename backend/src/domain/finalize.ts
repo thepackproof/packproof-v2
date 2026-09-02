@@ -29,6 +29,12 @@ import { listTransactionItems } from "./transaction-items.js";
 import { isQualifyingFulfillmentCapture } from "./evidence-types.js";
 import { evaluateFinalizeRequirements } from "./finalize-requirements.js";
 import { DEFAULT_PARTICIPATION_POLICY, requireParticipationPolicy } from "./participation.js";
+import { listObservations } from "./observations.js";
+import { listProofAssets } from "./assets.js";
+import { listTransfers } from "./transfers.js";
+import { listContinuityEvaluations } from "./continuity.js";
+import { listAssetBindings } from "./asset-bindings.js";
+import { custodyOutcomeFor, requireWorkflowType } from "./workflow.js";
 
 export interface ManifestView {
   manifestId: string;
@@ -139,8 +145,11 @@ export async function finalizeProof(
     const packingAttested = attestations.rows.some(
       (row) => row.statement === "PACKED_DESCRIBED_ITEM" && row.attested_by === actorUserId,
     );
+    const observations = await listObservations(tx, proofId);
+    const workflowType = requireWorkflowType(proof.workflow_type);
     const evaluation = evaluateFinalizeRequirements({
       participationPolicy,
+      workflowType,
       proofStatus: proof.status,
       hasSeller: participants.rows.some((row) => row.role === "SELLER"),
       hasBuyer: participants.rows.some((row) => row.role === "BUYER"),
@@ -153,6 +162,14 @@ export async function finalizeProof(
         }),
       ).length,
       packingAttested,
+      packed: observations.some((row) => row.type === "PACKED"),
+      released: observations.some((row) => row.type === "RELEASED"),
+      received: observations.some((row) => row.type === "RECEIVED"),
+      intakeCaptured: observations.some((row) => row.type === "INTAKE_CAPTURE"),
+      compared: (await listContinuityEvaluations(tx, proofId)).length > 0,
+      processOutput: observations.some((row) => row.type === "PROCESS_OUTPUT"),
+      returnPacked: observations.some((row) => row.type === "RETURN_PACKED"),
+      finalReceipt: observations.some((row) => row.type === "FINAL_RECEIPT"),
     });
     if (!evaluation.ok) {
       throw new DomainError(evaluation.code, evaluation.message, 422);
@@ -254,6 +271,66 @@ export async function finalizeProof(
         relatedEvidenceId: row.related_evidence_id,
         createdAt: asRequiredIso(row.created_at),
         sha256: row.sha256,
+      }));
+    }
+
+    if (workflowType !== "COMMERCE_SALE" || observations.length > 0) {
+      const assets = await listProofAssets(tx, proofId);
+      const transfers = await listTransfers(tx, proofId);
+      const continuity = await listContinuityEvaluations(tx, proofId);
+      const bindings = await listAssetBindings(tx, proofId);
+      payload.workflowType = workflowType;
+      payload.custodyOutcome = custodyOutcomeFor({
+        workflowType,
+        proofStatus: "FINALIZED",
+        released: observations.some((row) => row.type === "RELEASED"),
+        received: observations.some((row) => row.type === "RECEIVED"),
+        finalReceipt: observations.some((row) => row.type === "FINAL_RECEIPT"),
+      });
+      payload.assets = assets.map((asset) => ({
+        assetId: asset.assetId,
+        assetInstanceId: asset.assetInstanceId,
+        assetType: asset.assetType,
+        catalogDescriptor: asset.catalogDescriptor,
+        labelIndex: asset.labelIndex,
+        createdAt: asset.createdAt,
+      }));
+      payload.observations = observations.map((observation) => ({
+        observationId: observation.observationId,
+        type: observation.type,
+        occurredAt: observation.occurredAt,
+        serverRecordedAt: observation.serverRecordedAt,
+        actorParticipantId: observation.actorParticipantId,
+        assetIds: observation.assetIds,
+        evidence: observation.evidence,
+      }));
+      payload.transfers = transfers.map((transfer) => ({
+        transferId: transfer.transferId,
+        fromObservationId: transfer.fromObservationId,
+        toObservationId: transfer.toObservationId,
+        transferType: transfer.transferType,
+        status: transfer.status,
+        carrierContext: transfer.carrierContext,
+      }));
+      payload.continuityObservations = continuity.map((row) => ({
+        evaluationId: row.evaluationId,
+        fromObservationId: row.fromObservationId,
+        toObservationId: row.toObservationId,
+        algorithmVersion: row.algorithmVersion,
+        result: row.result,
+        summary: row.summary,
+        evidencePairs: row.evidencePairs,
+        createdAt: row.createdAt,
+      }));
+      payload.externalBindings = bindings.map((row) => ({
+        bindingId: row.bindingId,
+        assetId: row.assetId,
+        transferId: row.transferId,
+        tenantKey: row.tenantKey,
+        externalId: row.externalId,
+        scope: row.scope,
+        source: row.source,
+        createdAt: row.createdAt,
       }));
     }
 

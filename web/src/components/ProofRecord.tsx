@@ -5,12 +5,12 @@ import {
   moneyLabel,
   orderReferenceLabel,
   quantityLabel,
-  roleLabel,
   shippingSummary,
   trackingEnding,
 } from "@packproof/copy/format";
+import { participantFacingRole } from "@packproof/copy/custody";
 import { humanProofStatus, integrityState, sourceLabel } from "@packproof/copy/status";
-import type { CanonicalProof, ShipmentIntegrityView } from "../api/types";
+import type { CanonicalProof, ChronologyEntry, ShipmentIntegrityView } from "../api/types";
 import {
   attestationLabel,
   displayValue,
@@ -51,7 +51,9 @@ export function ProofHeader(props: { proof: CanonicalProof; role?: string }) {
             {integrity === "finalized" ? "Sealed record" : "Evidence secured"}
           </span>
         ) : null}
-        {props.role ? <span className="meta">You are the {roleLabel(props.role)}</span> : null}
+        {props.role ? (
+          <span className="meta">You are the {participantFacingRole(props.proof.workflowType, props.role)}</span>
+        ) : null}
       </div>
       <div className="row meta">
         <span>
@@ -123,7 +125,7 @@ export function ParticipantList(props: { proof: CanonicalProof; currentUserId: s
         {props.proof.participants.map((participant) => (
           <li key={participant.participantId} className="info-card" style={{ boxShadow: "none" }}>
             <div className="row">
-              <strong>{roleLabel(participant.role)}</strong>
+              <strong>{participantFacingRole(props.proof.workflowType, participant.role)}</strong>
               {participant.userId === props.currentUserId ? <span className="meta">You</span> : null}
             </div>
             <div className="meta">Joined {formatWhen(participant.joinedAt)}</div>
@@ -236,15 +238,16 @@ export function AttestationList(props: { proof: CanonicalProof }) {
   );
 }
 
-export function EventTimeline(props: { proof: CanonicalProof }) {
+export function EventTimeline(props: {
+  proof: CanonicalProof;
+  onSelect?: (entry: ChronologyEntry) => void;
+}) {
   const entries = props.proof.chronology ?? [];
   const finalizedAt = props.proof.finalizedAt;
   let sawCoreFinalized = false;
   return (
     <section className="section">
-      <div className="section-head">
-        <h2>Chronology</h2>
-      </div>
+      <h2>Proof record</h2>
       <p className="note">{SOURCE_DISCLOSURE}</p>
       {props.proof.status === "FINALIZED" && props.proof.integrity?.manifestSha256 ? (
         <p className="note chronology-frozen-note">
@@ -263,17 +266,15 @@ export function EventTimeline(props: { proof: CanonicalProof }) {
               sawCoreFinalized = true;
             }
             const afterCore = sawCoreFinalized && !isCoreFinalized && entry.category === "SHIPMENT";
-            return (
-              <li
-                key={entry.id}
-                className={[
-                  `chronology-${entry.category.toLowerCase()}`,
-                  isCoreFinalized ? "chronology-core" : "",
-                  afterCore ? "chronology-after-core" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
+            const className = [
+              `chronology-${entry.category.toLowerCase()}`,
+              isCoreFinalized ? "chronology-core" : "",
+              afterCore ? "chronology-after-core" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const body = (
+              <>
                 <div className="row">
                   <strong>{entry.title}</strong>
                   <span className={`badge badge-chronology badge-chronology-${entry.category.toLowerCase()}`}>
@@ -282,6 +283,17 @@ export function EventTimeline(props: { proof: CanonicalProof }) {
                 </div>
                 {entry.description ? <span>{entry.description}</span> : null}
                 <span className="meta">{formatWhen(entry.occurredAt)}</span>
+              </>
+            );
+            return (
+              <li key={entry.id} className={className}>
+                {props.onSelect ? (
+                  <button type="button" className="timeline-event" onClick={() => props.onSelect?.(entry)}>
+                    {body}
+                  </button>
+                ) : (
+                  body
+                )}
               </li>
             );
           })}

@@ -7,6 +7,7 @@ import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
 import {
   assertNotFinalized,
+  authorizeProofAccess,
   getProofView,
   loadProof,
   requireParticipant,
@@ -14,6 +15,7 @@ import {
 } from "./proofs.js";
 import { parseEvidenceType } from "./evidence-types.js";
 import { asRequiredIso, type EvidenceRow } from "./types.js";
+import { requireWorkflowType, rolesAllowedToSubmitEvidence } from "./workflow.js";
 
 export interface EvidenceUploadView {
   evidenceId: string;
@@ -63,7 +65,18 @@ export async function initializeEvidenceUpload(
   return db.transaction(async (tx) => {
     const proof = await loadProof(tx, proofId, true);
     assertNotFinalized(proof);
-    await requireParticipant(tx, proofId, actorUserId, "SELLER");
+    const participant = await requireParticipant(tx, proofId, actorUserId);
+    const allowed = rolesAllowedToSubmitEvidence(
+      requireWorkflowType(proof.workflow_type),
+      evidenceType,
+    );
+    if (!allowed.includes(participant.role as "SELLER" | "BUYER")) {
+      throw new DomainError(
+        "PARTICIPANT_NOT_AUTHORIZED",
+        "Not authorized to submit evidence on this Proof",
+        403,
+      );
+    }
 
     if (proof.status !== "READY_FOR_EVIDENCE" && proof.status !== "EVIDENCE_COMMITTED") {
       throw new DomainError(
@@ -80,11 +93,11 @@ export async function initializeEvidenceUpload(
     if (existing.rows[0]) {
       const row = existing.rows[0];
       if (row.validation_status === "COMMITTED") {
-        const upload = await objectStore.createUploadTarget({
-          key: row.object_key,
-          contentType: row.content_type,
-        });
-        return toUploadView(row, upload);
+        throw new DomainError(
+          "EVIDENCE_ALREADY_COMMITTED",
+          "Committed evidence cannot receive another upload authorization",
+          409,
+        );
       }
       const upload = await objectStore.createUploadTarget({
         key: row.object_key,
@@ -121,6 +134,13 @@ export async function initializeEvidenceUpload(
           [proofId, input.idempotencyKey],
         );
         if (raced.rows[0]) {
+          if (raced.rows[0].validation_status === "COMMITTED") {
+            throw new DomainError(
+              "EVIDENCE_ALREADY_COMMITTED",
+              "Committed evidence cannot receive another upload authorization",
+              409,
+            );
+          }
           const upload = await objectStore.createUploadTarget({
             key: raced.rows[0].object_key,
             contentType: raced.rows[0].content_type,
@@ -184,22 +204,22 @@ export async function commitEvidence(
     return prepared.committed;
   }
 
-  const digest = await objectStore.digest(prepared.objectKey);
-  if (!digest) {
+  const committedObject = await objectStore.commitUpload(prepared.objectKey);
+  if (!committedObject) {
     throw new DomainError(
       "EVIDENCE_OBJECT_MISSING",
       "Uploaded object was not found",
       409,
     );
   }
-  if (!contentTypesCompatible(digest.contentType, prepared.contentType)) {
+  if (!contentTypesCompatible(committedObject.contentType, prepared.contentType)) {
     throw new DomainError(
       "EVIDENCE_METADATA_MISMATCH",
       "Uploaded object content type does not match the pending evidence record",
       422,
     );
   }
-  if (clientSha256 && clientSha256.toLowerCase() !== digest.sha256) {
+  if (clientSha256 && clientSha256.toLowerCase() !== committedObject.sha256) {
     throw new DomainError(
       "EVIDENCE_HASH_MISMATCH",
       "Client hash does not match independently computed SHA-256",
@@ -216,12 +236,19 @@ export async function commitEvidence(
     const now = clock.now().toISOString();
     await tx.query(
       `UPDATE evidence
-          SET sha256 = $2,
-              byte_size = $3,
-              committed_at = $4,
+          SET object_key = $2,
+              sha256 = $3,
+              byte_size = $4,
+              committed_at = $5,
               validation_status = 'COMMITTED'
         WHERE id = $1 AND committed_at IS NULL`,
-      [evidenceId, digest.sha256, digest.byteSize, now],
+      [
+        evidenceId,
+        committedObject.key,
+        committedObject.sha256,
+        committedObject.byteSize,
+        now,
+      ],
     );
 
     if (current.proofStatus === "READY_FOR_EVIDENCE") {
@@ -237,15 +264,20 @@ export async function commitEvidence(
       proofId,
       actorUserId,
       eventType: "EVIDENCE_COMMITTED",
-      eventData: { evidenceId, sha256: digest.sha256, byteSize: digest.byteSize },
+      eventData: {
+        evidenceId,
+        sha256: committedObject.sha256,
+        byteSize: committedObject.byteSize,
+        objectKey: committedObject.key,
+      },
       at: clock.now(),
     });
 
     return {
       evidenceId,
       proofId,
-      sha256: digest.sha256,
-      byteSize: digest.byteSize,
+      sha256: committedObject.sha256,
+      byteSize: committedObject.byteSize,
       validationStatus: "COMMITTED",
       committedAt: now,
       proof: await getProofView(tx, proofId),
@@ -263,7 +295,7 @@ async function loadEvidenceForCommit(
   | { committed: null; objectKey: string; contentType: string; proofStatus: string }
 > {
   const proof = await loadProof(tx, proofId, true);
-  await requireParticipant(tx, proofId, actorUserId, "SELLER");
+  const participant = await requireParticipant(tx, proofId, actorUserId);
 
   const found = await tx.query<EvidenceRow>(
     `SELECT * FROM evidence WHERE id = $1 AND proof_id = $2 FOR UPDATE`,
@@ -273,10 +305,14 @@ async function loadEvidenceForCommit(
   if (!evidence) {
     throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence not found", 404);
   }
-  if (evidence.submitted_by !== actorUserId) {
+  const allowed = rolesAllowedToSubmitEvidence(
+    requireWorkflowType(proof.workflow_type),
+    evidence.evidence_type,
+  );
+  if (!allowed.includes(participant.role as "SELLER" | "BUYER") || evidence.submitted_by !== actorUserId) {
     throw new DomainError(
       "PARTICIPANT_NOT_AUTHORIZED",
-      "Only the submitting seller can commit this evidence",
+      "Only the submitting participant can commit this evidence",
       403,
     );
   }
@@ -323,4 +359,31 @@ function contentTypesCompatible(stored: string, expected: string): boolean {
 
 function mediaType(value: string): string {
   return value.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+export async function readCommittedEvidence(
+  db: Database,
+  objectStore: ObjectStore,
+  actorUserId: string,
+  proofId: string,
+  evidenceId: string,
+): Promise<{ body: Buffer; contentType: string; evidenceId: string }> {
+  await authorizeProofAccess(db, proofId, actorUserId);
+  const found = await db.query<EvidenceRow>(
+    `SELECT * FROM evidence WHERE id = $1 AND proof_id = $2`,
+    [evidenceId, proofId],
+  );
+  const row = found.rows[0];
+  if (!row || row.validation_status !== "COMMITTED") {
+    throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence not found", 404);
+  }
+  const stored = await objectStore.get(row.object_key);
+  if (!stored) {
+    throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence is not available", 404);
+  }
+  return {
+    body: stored.body,
+    contentType: stored.contentType || row.content_type,
+    evidenceId: row.id,
+  };
 }

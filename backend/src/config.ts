@@ -32,6 +32,9 @@ export interface AppConfig {
   credentialStore: "memory" | "env" | "secrets-manager";
   release: ReleaseIdentity;
   ebay: EbayConfig;
+  shopify: ShopifyOAuthConfig;
+  google: GoogleOAuthConfig;
+  facebook: FacebookOAuthConfig;
 }
 
 export interface EbayConfig {
@@ -42,6 +45,24 @@ export interface EbayConfig {
   marketplaceId: string;
   appCredentialReference: string | null;
   deletionVerificationToken: string | null;
+}
+
+export interface ShopifyOAuthConfig {
+  enabled: boolean;
+  clientId: string | null;
+  appCredentialReference: string | null;
+}
+
+export interface GoogleOAuthConfig {
+  enabled: boolean;
+  clientId: string | null;
+  appCredentialReference: string | null;
+}
+
+export interface FacebookOAuthConfig {
+  enabled: boolean;
+  appId: string | null;
+  appCredentialReference: string | null;
 }
 
 export function loadEnvFile(cwd = process.cwd()): void {
@@ -105,6 +126,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     credentialStore: parseCredentialStoreMode(env),
     release: parseReleaseIdentity(env),
     ebay: parseEbayConfig(env),
+    shopify: parseShopifyConfig(env),
+    google: parseGoogleConfig(env),
+    facebook: parseFacebookConfig(env),
   };
 }
 
@@ -180,6 +204,88 @@ export function parseEbayEnvironment(env: NodeJS.ProcessEnv = process.env): Ebay
   throw new Error(
     `PACKPROOF_EBAY_ENVIRONMENT must be "sandbox" or "production" (received ${JSON.stringify(raw)})`,
   );
+}
+
+export function parseFacebookConfig(env: NodeJS.ProcessEnv = process.env): FacebookOAuthConfig {
+  const enabled = parseBooleanFlag(
+    env.PACKPROOF_FACEBOOK_INTEGRATION_ENABLED ?? env.PACKPROOF_META_INTEGRATION_ENABLED,
+  );
+  const appId =
+    env.PACKPROOF_FACEBOOK_APP_ID?.trim() || env.PACKPROOF_META_APP_ID?.trim() || null;
+  const secretName = env.PACKPROOF_FACEBOOK_APP_SECRET
+    ? "PACKPROOF_FACEBOOK_APP_SECRET"
+    : env.PACKPROOF_META_APP_SECRET
+      ? "PACKPROOF_META_APP_SECRET"
+      : null;
+  const appCredentialReference =
+    env.PACKPROOF_FACEBOOK_APP_CREDENTIAL_REFERENCE?.trim() ||
+    (secretName ? `env:${secretName}` : null);
+  if (enabled) {
+    const missing: string[] = [];
+    if (!appId) {
+      missing.push("PACKPROOF_FACEBOOK_APP_ID");
+    }
+    if (!appCredentialReference) {
+      missing.push("PACKPROOF_FACEBOOK_APP_SECRET");
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `PACKPROOF_FACEBOOK_INTEGRATION_ENABLED requires ${missing.join(", ")}. Secret values are not included in this message.`,
+      );
+    }
+  }
+  return { enabled, appId, appCredentialReference };
+}
+
+export function parseGoogleConfig(env: NodeJS.ProcessEnv = process.env): GoogleOAuthConfig {
+  const enabled = parseBooleanFlag(env.PACKPROOF_GOOGLE_INTEGRATION_ENABLED);
+  const clientId = env.PACKPROOF_GOOGLE_CLIENT_ID?.trim() || null;
+  const secretName = env.PACKPROOF_GOOGLE_CLIENT_SECRET ? "PACKPROOF_GOOGLE_CLIENT_SECRET" : null;
+  const appCredentialReference =
+    env.PACKPROOF_GOOGLE_APP_CREDENTIAL_REFERENCE?.trim() ||
+    (secretName ? `env:${secretName}` : null);
+  if (enabled) {
+    const missing: string[] = [];
+    if (!clientId) {
+      missing.push("PACKPROOF_GOOGLE_CLIENT_ID");
+    }
+    if (!appCredentialReference) {
+      missing.push("PACKPROOF_GOOGLE_CLIENT_SECRET");
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `PACKPROOF_GOOGLE_INTEGRATION_ENABLED requires ${missing.join(", ")}. Secret values are not included in this message.`,
+      );
+    }
+  }
+  return { enabled, clientId, appCredentialReference };
+}
+
+export function parseShopifyConfig(env: NodeJS.ProcessEnv = process.env): ShopifyOAuthConfig {
+  const enabled = parseBooleanFlag(env.PACKPROOF_SHOPIFY_INTEGRATION_ENABLED);
+  const clientId = env.PACKPROOF_SHOPIFY_CLIENT_ID?.trim() || env.SHOPIFY_CLIENT_ID?.trim() || null;
+  const explicitReference = env.PACKPROOF_SHOPIFY_APP_CREDENTIAL_REFERENCE?.trim() || null;
+  const secretName = env.PACKPROOF_SHOPIFY_CLIENT_SECRET
+    ? "PACKPROOF_SHOPIFY_CLIENT_SECRET"
+    : env.SHOPIFY_CLIENT_SECRET
+      ? "SHOPIFY_CLIENT_SECRET"
+      : null;
+  const appCredentialReference = explicitReference ?? (secretName ? `env:${secretName}` : null);
+  if (enabled) {
+    const missing: string[] = [];
+    if (!clientId) {
+      missing.push("PACKPROOF_SHOPIFY_CLIENT_ID");
+    }
+    if (!appCredentialReference) {
+      missing.push("PACKPROOF_SHOPIFY_CLIENT_SECRET or PACKPROOF_SHOPIFY_APP_CREDENTIAL_REFERENCE");
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `PACKPROOF_SHOPIFY_INTEGRATION_ENABLED requires ${missing.join(", ")}. Secret values are not included in this message.`,
+      );
+    }
+  }
+  return { enabled, clientId, appCredentialReference };
 }
 
 function parseBooleanFlag(value: string | undefined): boolean {

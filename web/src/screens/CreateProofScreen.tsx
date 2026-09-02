@@ -3,6 +3,7 @@ import { MARKETPLACE_DISCLOSURE } from "@packproof/copy/errors";
 import { displayName, formatDate, moneyLabel, quantityLabel } from "@packproof/copy/format";
 import { providerDisplay, sourceLabel } from "@packproof/copy/status";
 import type { EbaySellerOrderView, TransactionImportView, TransactionView, TransactionWriteInput } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 
 const EMPTY = {
   externalReference: "",
@@ -18,18 +19,19 @@ const EMPTY = {
   shipmentDate: "",
 };
 
-type Step = "choose" | "ebay-list" | "manual" | "review";
+type Step = "choose" | "ebay-list" | "manual" | "review" | "grading";
 
 export function CreateProofScreen(props: {
   busy: boolean;
   error: string | null;
   development: boolean;
-  ebayEnabled: boolean;
   ebayConnected: boolean;
   onCancel: () => void;
   onScan: () => void;
+  onOpenAccount: () => void;
+  onAcceptInvitation: (invitationId: string) => void;
   onCreate: (input: TransactionWriteInput) => void;
-  onConnectEbay: () => void;
+  onCreateGrading: (input: { itemCount: number; itemTitle: string }) => void;
   onImportPurchase: () => Promise<TransactionImportView>;
   onListEbayOrders: () => Promise<{ orders: EbaySellerOrderView[]; disclosure: string }>;
   onImportEbayOrder: (orderId: string) => Promise<TransactionImportView>;
@@ -40,15 +42,17 @@ export function CreateProofScreen(props: {
   const [imported, setImported] = useState<TransactionImportView | null>(null);
   const [ebayOrders, setEbayOrders] = useState<EbaySellerOrderView[]>([]);
   const [ebayDisclosure, setEbayDisclosure] = useState<string | null>(null);
+  const [itemCount, setItemCount] = useState("1");
+  const [gradingTitle, setGradingTitle] = useState("Grading submission");
+  const [showInviteId, setShowInviteId] = useState(false);
+  const [invitationId, setInvitationId] = useState("");
   const set = (key: keyof typeof EMPTY, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
   return (
     <main className="page">
-      <h1>Create a PackProof</h1>
-      <p className="lede">Start from a scan, an imported purchase, or details you enter yourself.</p>
-
+      <PageHeader title="Create a Proof" onBack={props.onCancel} />
       {step === "choose" ? (
         <section className="section stack">
           {props.error ? (
@@ -68,13 +72,13 @@ export function CreateProofScreen(props: {
             </span>
             <span className="option-copy">
               <strong className="card-title">Scan order or label</strong>
-              <span className="meta">Fastest · opens Packing Station</span>
+              <span className="meta">Fastest</span>
             </span>
           </button>
           <button
             className="option-card"
             type="button"
-            disabled={props.busy || (!props.ebayConnected && !props.development)}
+            disabled={props.busy}
             aria-label="Import purchase"
             onClick={() => {
               if (props.ebayConnected) {
@@ -91,6 +95,7 @@ export function CreateProofScreen(props: {
                 return;
               }
               if (!props.development) {
+                props.onOpenAccount();
                 return;
               }
               void props
@@ -113,27 +118,13 @@ export function CreateProofScreen(props: {
                 {props.busy
                   ? "Loading…"
                   : props.ebayConnected
-                    ? "From connected eBay account"
+                    ? "From a connected marketplace"
                     : props.development
-                      ? "Development demo import"
-                      : "Connect eBay first"}
+                      ? "From a connected marketplace"
+                      : "Connect a marketplace in Account first"}
               </span>
             </span>
           </button>
-          {props.ebayEnabled && !props.ebayConnected ? (
-            <button
-              className="option-card"
-              type="button"
-              disabled={props.busy}
-              aria-label="Connect eBay"
-              onClick={props.onConnectEbay}
-            >
-              <span className="option-copy">
-                <strong className="card-title">Connect eBay</strong>
-                <span className="meta">Authorize a seller account, then import a real sale</span>
-              </span>
-            </button>
-          ) : null}
           <button
             className="option-card"
             type="button"
@@ -149,9 +140,102 @@ export function CreateProofScreen(props: {
               <span className="meta">For direct sales</span>
             </span>
           </button>
-          <button className="btn btn-secondary" type="button" onClick={props.onCancel}>
-            Cancel
+          <button
+            className="option-card"
+            type="button"
+            disabled={props.busy}
+            aria-label="Grading submission"
+            onClick={() => setStep("grading")}
+          >
+            <span className="option-icon" aria-hidden="true">
+              ▣
+            </span>
+            <span className="option-copy">
+              <strong className="card-title">Grading submission</strong>
+              <span className="meta">Document items, hand off, and track receipt</span>
+            </span>
           </button>
+          <p className="note">
+            Invite a buyer by PackProof username from the Proof after it's created. Pending invitations appear in My
+            Proofs.
+          </p>
+          <button className="btn btn-tertiary" type="button" onClick={() => setShowInviteId((value) => !value)}>
+            {showInviteId ? "Hide invitation ID" : "I have an invitation ID"}
+          </button>
+          {showInviteId ? (
+            <div className="info-card stack">
+              <p className="note">
+                Use this only if you were given an invitation ID. Ordinary collaboration uses PackProof usernames.
+              </p>
+              <label className="field" htmlFor="create-invitation-id">
+                <span>Invitation ID</span>
+                <input
+                  id="create-invitation-id"
+                  value={invitationId}
+                  onChange={(event) => setInvitationId(event.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={props.busy || !invitationId.trim()}
+                onClick={() => props.onAcceptInvitation(invitationId.trim())}
+              >
+                Join Proof
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {step === "grading" ? (
+        <section className="section stack">
+          <h2>Grading submission</h2>
+          <p className="lede">How many items are in this submission?</p>
+          {props.error ? (
+            <div className="banner banner-error" role="alert">
+              {props.error}
+            </div>
+          ) : null}
+          <label className="field">
+            <span>Title</span>
+            <input
+              value={gradingTitle}
+              onChange={(event) => setGradingTitle(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label className="field" htmlFor="grading-item-count">
+            <span>Item count</span>
+            <input
+              id="grading-item-count"
+              type="number"
+              min={1}
+              max={50}
+              value={itemCount}
+              onChange={(event) => setItemCount(event.target.value)}
+            />
+          </label>
+          <div className="btn-row">
+            <button
+              className="btn"
+              type="button"
+              disabled={props.busy}
+              onClick={() => {
+                const count = Math.max(1, Math.min(50, Number.parseInt(itemCount, 10) || 1));
+                props.onCreateGrading({
+                  itemCount: count,
+                  itemTitle: gradingTitle.trim() || "Grading submission",
+                });
+              }}
+            >
+              {props.busy ? "Creating…" : "Create grading Proof"}
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={() => setStep("choose")}>
+              Back
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -177,6 +261,29 @@ export function CreateProofScreen(props: {
                 : imported.proof?.proofId
                   ? "Open existing PackProof"
                   : "Create PackProof"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => {
+                const txn = imported.transaction;
+                setForm({
+                  externalReference: txn.externalReference ?? "",
+                  transactionDate: txn.transactionDate ?? "",
+                  itemTitle: txn.itemTitle ?? "",
+                  itemDescription: txn.itemDescription ?? "",
+                  quantity: txn.quantity == null ? "" : String(txn.quantity),
+                  transactionValue: txn.transactionValue == null ? "" : String(txn.transactionValue),
+                  currency: txn.currency ?? "",
+                  carrier: txn.shipping?.carrier ?? "",
+                  service: txn.shipping?.service ?? "",
+                  trackingNumber: txn.shipping?.trackingNumber ?? "",
+                  shipmentDate: txn.shipping?.shipmentDate ?? "",
+                });
+                setStep("manual");
+              }}
+            >
+              Edit details
             </button>
             <button
               className="btn btn-secondary"

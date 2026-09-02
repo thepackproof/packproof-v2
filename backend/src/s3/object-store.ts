@@ -15,10 +15,15 @@ export interface ObjectDigest {
   contentType: string;
 }
 
+export interface CommittedObject extends ObjectDigest {
+  key: string;
+}
+
 export interface ObjectStore {
   put(key: string, body: Buffer, contentType: string): Promise<void>;
   get(key: string): Promise<StoredObject | null>;
   digest(key: string): Promise<ObjectDigest | null>;
+  commitUpload(key: string): Promise<CommittedObject | null>;
   createUploadTarget(input: {
     key: string;
     contentType: string;

@@ -1,6 +1,7 @@
 import type {
   CanonicalProof,
   CommerceConnectionView,
+  ConnectedAccountsListView,
   FulfillmentQueueItem,
   InvitationInboxView,
   ProofCollectionItem,
@@ -301,4 +302,62 @@ export const demoConnection: CommerceConnectionView = {
   lastErrorCode: null,
   retryable: null,
   readyOrderCount: 7,
+};
+
+const identityOnly = {
+  identity: true,
+  transactions: false,
+  fulfillment: false,
+  shipping: false,
+  webhooks: false,
+};
+
+const commerceCaps = {
+  identity: true,
+  transactions: true,
+  fulfillment: true,
+  shipping: false,
+  webhooks: true,
+};
+
+export const emptyConnectedAccounts: ConnectedAccountsListView = {
+  accounts: [],
+  providers: [
+    {
+      provider: "ebay",
+      providerDisplay: "eBay",
+      enabled: false,
+      capabilities: commerceCaps,
+      limitations: [],
+      multipleAccounts: false,
+      requiresShop: false,
+    },
+    {
+      provider: "shopify",
+      providerDisplay: "Shopify",
+      enabled: true,
+      capabilities: commerceCaps,
+      limitations: [],
+      multipleAccounts: true,
+      requiresShop: true,
+    },
+    {
+      provider: "google",
+      providerDisplay: "Google",
+      enabled: true,
+      capabilities: identityOnly,
+      limitations: ["Identity only. This is not Cognito sign-in."],
+      multipleAccounts: false,
+      requiresShop: false,
+    },
+    {
+      provider: "facebook",
+      providerDisplay: "Meta",
+      enabled: true,
+      capabilities: identityOnly,
+      limitations: ["Facebook Marketplace has no official public API."],
+      multipleAccounts: false,
+      requiresShop: false,
+    },
+  ],
 };

@@ -281,7 +281,74 @@ export interface ProofView {
     provider: string | null;
     status: string | null;
   };
+  workflowType?: string;
+  workflowStage?: string;
+  custodyOutcome?: string | null;
+  nextAction?: {
+    type: string;
+    title: string;
+    hint: string;
+    assetId?: string;
+    captureRecipe?: string;
+    transferId?: string;
+    actorRole?: string;
+  } | null;
+  assets?: Array<{
+    assetId: string;
+    assetInstanceId: string;
+    assetType: string;
+    label: string;
+    labelIndex: number;
+    catalogDescriptor?: Record<string, unknown>;
+  }>;
+  observations?: Array<{
+    observationId: string;
+    type: string;
+    label: string;
+    occurredAt: string;
+    assetIds: string[];
+    evidence: Array<{ evidenceId: string; slot: string }>;
+  }>;
+  transfers?: Array<{
+    transferId: string;
+    status: string;
+    transferType: string;
+    intervalNote: string | null;
+    toObservationId: string | null;
+  }>;
+  continuityObservations?: Array<{
+    evaluationId: string;
+    result: string;
+    summary: string;
+    algorithmVersion: string;
+    evidencePairs: Array<{
+      slot: string;
+      originEvidenceId: string | null;
+      receivedEvidenceId: string | null;
+    }>;
+  }>;
 }
+
+export interface AccessLinkView {
+  accessLinkId: string;
+  proofId: string;
+  scope: string;
+  url?: string;
+  token?: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+export type ProofWorkflowAction =
+  | "document"
+  | "pack"
+  | "handoff"
+  | "receive"
+  | "compare"
+  | "output"
+  | "return-pack"
+  | "final-receipt";
 
 export interface InvitationView {
   invitationId: string;
@@ -401,6 +468,45 @@ export interface IntegrationConnectionView {
   readyOrderCount: number;
 }
 
+export interface ProviderCapabilities {
+  identity: boolean;
+  transactions: boolean;
+  fulfillment: boolean;
+  shipping: boolean;
+  webhooks: boolean;
+}
+
+export interface ConnectedAccountView {
+  id: string;
+  provider: string;
+  providerDisplay: string;
+  externalAccountId: string;
+  externalAccountName: string | null;
+  status: string;
+  scopes: string[];
+  expiresAt: string | null;
+  capabilities: ProviderCapabilities;
+  limitations: string[];
+  createdAt: string;
+  updatedAt: string;
+  disconnectedAt: string | null;
+}
+
+export interface ConnectedAccountProviderCatalogView {
+  provider: string;
+  providerDisplay: string;
+  enabled: boolean;
+  capabilities: ProviderCapabilities;
+  limitations: string[];
+  multipleAccounts: boolean;
+  requiresShop: boolean;
+}
+
+export interface ConnectedAccountsListView {
+  accounts: ConnectedAccountView[];
+  providers: ConnectedAccountProviderCatalogView[];
+}
+
 export interface FulfillmentQueueItem {
   transactionId: string;
   proofId: string;
@@ -510,6 +616,35 @@ export class PackProofV2Client {
   ): Promise<{ connections: IntegrationConnectionView[] }> {
     const query = capability ? `?capability=${encodeURIComponent(capability)}` : "";
     return this.request(`/me/integration-connections${query}`);
+  }
+
+  async listConnectedAccounts(): Promise<ConnectedAccountsListView> {
+    return this.request("/me/connected-accounts");
+  }
+
+  async startConnectedAccountConnect(
+    provider: string,
+    input: { shop?: string } = {},
+  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+    return this.request(`/me/connected-accounts/${encodeURIComponent(provider)}/connect`, {
+      method: "POST",
+      body: input.shop ? { shop: input.shop } : {},
+    });
+  }
+
+  async reauthorizeConnectedAccount(
+    accountId: string,
+  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+    return this.request(`/me/connected-accounts/${encodeURIComponent(accountId)}/reauthorize`, {
+      method: "POST",
+      body: {},
+    });
+  }
+
+  async disconnectConnectedAccount(accountId: string): Promise<void> {
+    await this.request(`/me/connected-accounts/${encodeURIComponent(accountId)}`, {
+      method: "DELETE",
+    });
   }
 
   async listFulfillmentQueue(
@@ -627,6 +762,38 @@ export class PackProofV2Client {
     });
   }
 
+  async createProof(input: {
+    workflowType?: string;
+    itemCount?: number;
+    itemTitle?: string;
+  }): Promise<ProofView> {
+    return this.request("/proofs", {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  async createAccessLink(
+    proofId: string,
+    input: { scope?: string } = {},
+  ): Promise<AccessLinkView> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/access-links`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  async runProofAction(
+    proofId: string,
+    action: ProofWorkflowAction,
+    body: Record<string, unknown> = {},
+  ): Promise<{ proof: ProofView }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/actions/${action}`, {
+      method: "POST",
+      body,
+    });
+  }
+
   async createOrGetProof(transactionId: string): Promise<ProofView> {
     return this.request(`/transactions/${encodeURIComponent(transactionId)}/proof`, {
       method: "POST",
@@ -635,6 +802,13 @@ export class PackProofV2Client {
 
   async getProof(proofId: string): Promise<ProofView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}`);
+  }
+
+  evidenceContentUrl(proofId: string, evidenceId: string): string {
+    return joinUrl(
+      this.options.baseUrl,
+      `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`,
+    );
   }
 
   async getShipmentIntegrity(proofId: string): Promise<ShipmentIntegrityView> {
@@ -732,11 +906,19 @@ export class PackProofV2Client {
     idempotencyKey: string;
     evidenceType?: string;
   }): Promise<ProofView> {
-    const initialized = await this.initializeEvidenceUpload(input.proofId, {
-      contentType: input.contentType,
-      evidenceType: input.evidenceType ?? "FULFILLMENT_CAPTURE",
-      idempotencyKey: input.idempotencyKey,
-    });
+    let initialized: EvidenceUploadView;
+    try {
+      initialized = await this.initializeEvidenceUpload(input.proofId, {
+        contentType: input.contentType,
+        evidenceType: input.evidenceType ?? "FULFILLMENT_CAPTURE",
+        idempotencyKey: input.idempotencyKey,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "EVIDENCE_ALREADY_COMMITTED") {
+        return this.getProof(input.proofId);
+      }
+      throw error;
+    }
     await this.uploadObject(initialized.upload, input.bytes, input.contentType);
     const committed = await this.commitEvidence(input.proofId, initialized.evidenceId);
     return this.getProof(committed.proof.proofId);

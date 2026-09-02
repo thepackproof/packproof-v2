@@ -174,7 +174,15 @@ describe("packing station resolve", () => {
     expect(committed.proof.proofId).toBe(first.body.proofId);
     expect(committed.proof.status).toBe("EVIDENCE_COMMITTED");
 
-    const retry = await commitVideo(harness, seller, first.body.proofId);
+    const retry = await commitEvidence(
+      harness.db,
+      harness.clock,
+      harness.objectStore,
+      seller,
+      first.body.proofId,
+      committed.evidenceId,
+      committed.sha256,
+    );
     expect(retry.evidenceId).toBe(committed.evidenceId);
     expect(retry.sha256).toBe(committed.sha256);
 

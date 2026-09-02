@@ -38,7 +38,7 @@ Cognito is an authentication adapter only. Proofs continue to reference PackProo
 `PACKPROOF_OBJECT_STORAGE` selects the adapter explicitly:
 
 - `local` — files under `PGLITE_DIR/objects` and `PUT /upload/:token`. Default. No AWS required.
-- `s3` — private bucket. The API issues a time-limited presigned PUT for one object key. The client uploads bytes directly to S3. `commitEvidence` independently verifies existence, size, content type, and SHA-256 before changing Proof state.
+- `s3` — private bucket. The API issues a time-limited presigned PUT for one staging key. The client uploads bytes directly to S3. `commitEvidence` hashes an ETag-locked snapshot, promotes it to a server-only content-addressed key, and stores that committed key with the independently verified size, content type, and SHA-256. A still-valid staging PUT cannot alter the object referenced by the Proof.
 
 `npm test` uses the local adapter and in-memory fakes. It does not require AWS or network access.
 
@@ -73,7 +73,7 @@ Allow only the API runtime role to manage evidence objects:
 
 Keep the bucket private. Do not grant public `s3:GetObject`. Presigned URLs are the only client upload path and expire.
 
-Object keys are generated server-side as `evidence/<proofId>/<evidenceId>/object`. Clients cannot choose bucket paths.
+Upload keys are generated server-side as `evidence/<proofId>/<evidenceId>/object`. Committed objects use `evidence/<proofId>/<evidenceId>/committed/sha256-<digest>`. Clients cannot choose bucket paths and never receive PUT authorization for committed keys. Retrying initialization after commitment returns `EVIDENCE_ALREADY_COMMITTED`; clients recover by fetching the canonical Proof.
 
 ## Trusted integration credentials
 
@@ -114,3 +114,7 @@ Browser clients listed in `PACKPROOF_WEB_ORIGINS` receive CORS headers. The firs
 SQL files in `migrations/` apply in filename order at process start (`migrate()`). Staging/production must receive new files through the normal deploy path. Do not edit live rows by hand.
 
 `013_fulfillment_capture.sql` adds `evidence_type_check` (`SELLER_EVIDENCE` | `FULFILLMENT_CAPTURE`). Existing rows are preserved. It does not rewrite finalized Proofs. Merchant finalization after this migration requires committed `FULFILLMENT_CAPTURE`; already-finalized Proofs stay finalized.
+
+`016_custody_workflow.sql` adds `workflow_type`, custody tables, and extends `evidence_type_check` with `ASSET_CAPTURE`, `PACKING_CAPTURE`, `RECEIPT_CAPTURE`. See [docs/CUSTODY_WORKFLOW.md](../docs/CUSTODY_WORKFLOW.md).
+
+`017_connected_accounts.sql` adds `connected_accounts` and account-scoped `account_audit_events`. OAuth tokens are not stored in those tables. See [docs/CONNECTED_ACCOUNTS.md](../docs/CONNECTED_ACCOUNTS.md).

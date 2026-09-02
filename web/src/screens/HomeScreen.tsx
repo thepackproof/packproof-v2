@@ -1,50 +1,126 @@
+import { useMemo, useState } from "react";
 import {
-  awaitingEvidenceCount,
-  homeSummaryLine,
-  isActiveProof,
-  readyToFinalizeCount,
-  selectAttention,
+  filterProofLibrary,
+  invitationCardModel,
+  toProofCardModel,
+  uniqueCarriers,
+  type ProofLibrarySort,
+  type ProofLibraryView,
+  type ProofRoleFilter,
 } from "@packproof/copy/presentation";
-import { displayName, firstName, greetingNow } from "@packproof/copy/format";
 import type { InvitationInboxView, ProofCollectionItem } from "../api/types";
-import { ProofSummaryCard } from "../components/ProofSummaryCard";
+import { CreateFab } from "../components/CreateFab";
+import { IconCheck, IconFilter, IconSearch, IconTime } from "../components/Icons";
+import { ProofCard } from "../components/ProofCard";
+import { SegmentedTabs } from "../components/SegmentedTabs";
 
 export function HomeScreen(props: {
   proofs: ProofCollectionItem[];
   invitations: InvitationInboxView[];
-  displayName: string | null;
-  username: string | null;
   loading: boolean;
   error: string | null;
   onOpenProof: (proofId: string) => void;
   onCreate: () => void;
-  onOpenStation: () => void;
-  onOpenFulfillment: () => void;
-  onOpenStores: () => void;
-  onAccept: (invitationId: string) => void;
+  onOpenInvitation: (invite: InvitationInboxView) => void;
 }) {
-  const name = firstName(
-    displayName({ displayName: props.displayName, username: props.username, fallback: "" }),
+  const [view, setView] = useState<ProofLibraryView>("in_progress");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ProofLibrarySort>("newest");
+  const [role, setRole] = useState<ProofRoleFilter>("all");
+  const [carrier, setCarrier] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const carriers = useMemo(() => uniqueCarriers(props.proofs), [props.proofs]);
+  const proofs = useMemo(
+    () => filterProofLibrary(props.proofs, { view, query, sort, role, carrier }),
+    [props.proofs, view, query, sort, role, carrier],
   );
-  const active = props.proofs.filter((item) => isActiveProof(item.status));
-  const completed = props.proofs.filter((item) => item.status === "FINALIZED");
-  const attention = selectAttention({
-    proofs: props.proofs,
-    invitations: props.invitations,
-  });
-  const recent = [...active, ...completed].slice(0, 5);
-  const summary = homeSummaryLine({
-    activeCount: active.length,
-    awaitingEvidenceCount: awaitingEvidenceCount(props.proofs),
-    readyToFinalizeCount: readyToFinalizeCount(props.proofs),
-    invitationCount: props.invitations.length,
-  });
+  const invitations =
+    view === "in_progress" && role === "all" && !carrier
+      ? props.invitations.filter((invite) => {
+          const needle = query.trim().toLowerCase();
+          if (!needle) {
+            return true;
+          }
+          return [invite.transaction.itemTitle, invite.inviter.displayName, invite.inviter.username]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(needle);
+        })
+      : [];
+  const empty = !props.loading && proofs.length === 0 && invitations.length === 0;
 
   return (
-    <main className="page">
-      <h1 className="visually-hidden">Home</h1>
-      <p className="greeting">{name ? `${greetingNow()}, ${name}` : greetingNow()}</p>
-      <p className="summary-line">{summary}</p>
+    <main className="page library-page">
+      <h1 className="page-title">My Proofs</h1>
+      <SegmentedTabs
+        label="Proof library"
+        selected={view}
+        onSelect={setView}
+        options={[
+          { id: "in_progress", label: "In Progress", icon: <IconTime /> },
+          { id: "completed", label: "Completed", icon: <IconCheck /> },
+        ]}
+      />
+      <div className="search-row">
+        <label className="search-field">
+          <IconSearch />
+          <span className="visually-hidden">Search proofs</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search proofs..."
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        </label>
+        <button
+          type="button"
+          className="filter-btn"
+          aria-label="Filter and sort"
+          aria-expanded={filterOpen}
+          onClick={() => setFilterOpen((open) => !open)}
+        >
+          <IconFilter />
+        </button>
+      </div>
+      {filterOpen ? (
+        <section className="filter-sheet" aria-label="Sort and filter">
+          <p className="filter-label">Sort</p>
+          <ChipRow
+            options={[
+              { id: "newest", label: "Newest first" },
+              { id: "oldest", label: "Oldest first" },
+              { id: "price_high", label: "Price high to low" },
+              { id: "price_low", label: "Price low to high" },
+            ]}
+            selected={sort}
+            onSelect={setSort}
+          />
+          <p className="filter-label">Role</p>
+          <ChipRow
+            options={[
+              { id: "all", label: "All" },
+              { id: "seller", label: "Seller" },
+              { id: "buyer", label: "Buyer" },
+            ]}
+            selected={role}
+            onSelect={setRole}
+          />
+          {carriers.length > 0 ? (
+            <>
+              <p className="filter-label">Carrier</p>
+              <ChipRow
+                options={[{ id: "", label: "All" }, ...carriers.map((item) => ({ id: item, label: item }))]}
+                selected={carrier ?? ""}
+                onSelect={(value) => setCarrier(value || null)}
+              />
+            </>
+          ) : null}
+        </section>
+      ) : null}
 
       {props.error ? (
         <div className="banner banner-error" role="alert">
@@ -52,110 +128,67 @@ export function HomeScreen(props: {
         </div>
       ) : null}
 
-      {attention ? (
-        <article className="attention-card">
-          <div className="kicker">{attention.kind === "invitation" ? "Needs attention" : "Continue"}</div>
-          <h2 className="card-title">{attention.title}</h2>
-          <div className="row">
-            <span className="status-badge">{attention.statusLabel}</span>
-            {attention.shipping ? <span className="meta">{attention.shipping}</span> : null}
-          </div>
-          {attention.kind === "invitation" && attention.invitationId ? (
-            <button className="btn" type="button" onClick={() => props.onAccept(attention.invitationId as string)}>
-              {attention.cta}
-            </button>
-          ) : attention.proofId ? (
-            <button className="btn" type="button" onClick={() => props.onOpenProof(attention.proofId as string)}>
-              {attention.cta}
-            </button>
-          ) : null}
-        </article>
-      ) : props.loading ? (
+      {props.loading && proofs.length === 0 && invitations.length === 0 ? (
         <p className="empty">Loading PackProofs…</p>
-      ) : (
-        <div className="empty-card empty">
-          <p>No Proofs to show yet.</p>
-          <p>Your active PackProof records will appear here.</p>
-          <button className="btn" type="button" onClick={props.onCreate}>
-            Create PackProof
-          </button>
-        </div>
-      )}
+      ) : null}
 
-      <div className="ops-grid" style={{ marginTop: "1.25rem" }}>
-        <button className="option-card" type="button" onClick={props.onCreate}>
-          <span className="option-icon" aria-hidden="true">+</span>
-          <span className="option-copy">
-            <strong className="card-title">Create PackProof</strong>
-            <span className="meta">Import a purchase or enter details</span>
-          </span>
-        </button>
-        <button className="option-card" type="button" onClick={props.onOpenFulfillment}>
-          <span className="option-icon" aria-hidden="true">▣</span>
-          <span className="option-copy">
-            <strong className="card-title">Fulfillment</strong>
-            <span className="meta">Pack imported store orders</span>
-          </span>
-        </button>
-        <button className="option-card" type="button" onClick={props.onOpenStation}>
-          <span className="option-icon" aria-hidden="true">▭</span>
-          <span className="option-copy">
-            <strong className="card-title">Packing Station</strong>
-            <span className="meta">Scan, pack, and seal evidence</span>
-          </span>
-        </button>
-        <button className="option-card" type="button" onClick={props.onOpenStores}>
-          <span className="option-icon" aria-hidden="true">⌂</span>
-          <span className="option-copy">
-            <strong className="card-title">Connected stores</strong>
-            <span className="meta">Marketplace connections</span>
-          </span>
-        </button>
+      <div className="card-list">
+        {invitations.map((invite) => (
+          <ProofCard
+            key={invite.invitationId}
+            model={invitationCardModel(invite)}
+            onPress={() => props.onOpenInvitation(invite)}
+          />
+        ))}
+        {proofs.map((item) => (
+          <ProofCard
+            key={item.proofId}
+            model={toProofCardModel(item)}
+            onPress={() => props.onOpenProof(item.proofId)}
+          />
+        ))}
       </div>
 
-      <section className="section" style={{ marginTop: "1.25rem" }}>
-        <div className="section-head">
-          <h2>Recent Proofs</h2>
+      {empty ? (
+        <div className="empty-card empty-state">
+          <p className="card-title">{view === "completed" ? "No completed Proofs" : "No Proofs in progress"}</p>
+          <p>
+            {view === "completed"
+              ? "Finalized Proofs will appear here."
+              : "Create a Proof to start a record, or review an invitation."}
+          </p>
+          {view === "in_progress" ? (
+            <button className="btn" type="button" onClick={props.onCreate}>
+              Create a Proof
+            </button>
+          ) : null}
+          <p className="visually-hidden">No Proofs to show yet.</p>
         </div>
-        {recent.length === 0 ? (
-          <p className="meta">Finalized and in-progress records will show here.</p>
-        ) : (
-          <div className="card-list">
-            {recent.map((item) => (
-              <ProofSummaryCard key={item.proofId} item={item} onOpen={props.onOpenProof} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {props.invitations.length > 0 ? (
-        <section className="section" aria-labelledby="pending-invites">
-          <h2 id="pending-invites">Pending invitations</h2>
-          <div className="card-list">
-            {props.invitations.map((invitation) => (
-              <article key={invitation.invitationId} className="invite-card">
-                <div className="kicker">You’ve been invited to a PackProof</div>
-                <div className="summary-title">
-                  {invitation.transaction.itemTitle || "PackProof invitation"}
-                </div>
-                <div className="meta">
-                  {invitation.inviter.username
-                    ? `@${invitation.inviter.username}`
-                    : invitation.inviter.displayName || "A participant"}{" "}
-                  invited you
-                </div>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => props.onAccept(invitation.invitationId)}
-                >
-                  Review
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
       ) : null}
+
+      <CreateFab onPress={props.onCreate} />
     </main>
+  );
+}
+
+function ChipRow<T extends string>(props: {
+  options: Array<{ id: T; label: string }>;
+  selected: T;
+  onSelect: (id: T) => void;
+}) {
+  return (
+    <div className="chip-row">
+      {props.options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          className="chip"
+          aria-pressed={props.selected === option.id}
+          onClick={() => props.onSelect(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }

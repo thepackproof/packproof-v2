@@ -24,6 +24,10 @@ import {
   integrationNotFound,
 } from "./integration-errors.js";
 import { createOAuthAttempt, consumeOAuthAttempt } from "./oauth-attempts.js";
+import {
+  markConnectedAccountDisconnected,
+  upsertConnectedAccountFromMarketplace,
+} from "./connected-accounts.js";
 import type { IntegrationCredentialStore, MutableCredentialStore } from "../integrations/credentials.js";
 import { EBAY_ADAPTER_KEY, EBAY_PROVIDER, type EbayEnvironment } from "../integrations/ebay/constants.js";
 import { buildEbayAuthorizationUrl } from "../integrations/ebay/oauth.js";
@@ -231,6 +235,22 @@ export async function completeEbayOAuth(
         status: "ACTIVE",
       });
     }
+    const expiry = tokenExpiry(clock, tokens);
+    await upsertConnectedAccountFromMarketplace(db, clock, {
+      id: connectionId,
+      userId: attempt.userId,
+      provider: "ebay",
+      externalAccountId: accountRef,
+      externalAccountName: identity.username,
+      credentialReference,
+      scopes: (expiry.scope ?? "").split(/\s+/).filter(Boolean),
+      expiresAt: expiry.accessTokenExpiresAt,
+      providerMetadata: {
+        ebayUserId: identity.userId,
+        ebayUsername: identity.username,
+        environment: runtime.environment,
+      },
+    });
     return { redirectTo: withQuery(returnUrl, { ebay: "connected" }) };
   } catch (error) {
     const code = error instanceof DomainError ? error.code : "EBAY_OAUTH_FAILED";
@@ -331,6 +351,7 @@ export async function disconnectEbay(
     });
   }
   await updateConnectionStatus(db, clock, connection.id, "DISABLED");
+  await markConnectedAccountDisconnected(db, clock, connection.id, userId);
 }
 
 export function ebayChallengeResponse(
@@ -397,6 +418,7 @@ export async function handleEbayAccountDeletion(
       externalAccountReference: `deleted-${connection.id.slice(-8).toLowerCase()}`,
       status: "DISABLED",
     });
+    await markConnectedAccountDisconnected(db, clock, connection.id, connection.owner_user_id);
     connectionsDisabled += 1;
   }
   return { accepted: true, connectionsDisabled };

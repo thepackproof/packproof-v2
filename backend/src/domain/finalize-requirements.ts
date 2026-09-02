@@ -1,7 +1,9 @@
 import type { ParticipationPolicy } from "./participation.js";
+import type { WorkflowType } from "./workflow.js";
 
 export interface FinalizeRequirementInput {
   participationPolicy: ParticipationPolicy;
+  workflowType?: WorkflowType | string;
   proofStatus: string;
   hasSeller: boolean;
   hasBuyer: boolean;
@@ -9,6 +11,14 @@ export interface FinalizeRequirementInput {
   committedEvidenceCount: number;
   committedFulfillmentCaptureCount: number;
   packingAttested: boolean;
+  packed?: boolean;
+  released?: boolean;
+  received?: boolean;
+  intakeCaptured?: boolean;
+  compared?: boolean;
+  processOutput?: boolean;
+  returnPacked?: boolean;
+  finalReceipt?: boolean;
 }
 
 export type FinalizeEvaluation =
@@ -31,6 +41,10 @@ export function evaluateFinalizeRequirements(
       code: "PROOF_NOT_READY_FOR_FINALIZATION",
       message: "Uncommitted evidence must be committed or is not ready",
     };
+  }
+
+  if (input.workflowType === "GRADING_SUBMISSION") {
+    return evaluateGradingFinalize(input);
   }
 
   const merchantOptional = input.participationPolicy === "COUNTERPARTY_OPTIONAL";
@@ -85,6 +99,34 @@ function evaluatePeerFinalize(input: FinalizeRequirementInput): FinalizeEvaluati
       ok: false,
       code: "PROOF_NOT_READY_FOR_FINALIZATION",
       message: "Required evidence is not committed",
+    };
+  }
+  return { ok: true };
+}
+
+function evaluateGradingFinalize(input: FinalizeRequirementInput): FinalizeEvaluation {
+  if (!input.packed || !input.released) {
+    return {
+      ok: false,
+      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      message: "Document, pack, and hand off items before finalizing",
+    };
+  }
+  if (input.received && !input.finalReceipt) {
+    return {
+      ok: false,
+      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      message: "Record final receipt before finalizing",
+    };
+  }
+  if (
+    input.received &&
+    (!input.intakeCaptured || !input.compared || !input.processOutput || !input.returnPacked)
+  ) {
+    return {
+      ok: false,
+      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      message: "Complete receipt capture, comparison, processing output, and return packing before finalizing",
     };
   }
   return { ok: true };

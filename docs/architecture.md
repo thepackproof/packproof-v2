@@ -24,6 +24,7 @@ Clients (mobile, web reference client, API tests)
  ├── Participants
  ├── Invitations
  ├── Evidence
+ ├── Custody (assets, observations, transfers; see CUSTODY_WORKFLOW.md)
  ├── Shipment observations
  ├── Shipment integrity (recomputed read)
  ├── Finalization
@@ -38,6 +39,8 @@ state           (S3 in AWS; local adapter in dev/test)
 ```
 
 Canonical domain state lives in PostgreSQL. Evidence bytes live in the object store. Clients cache nothing as truth.
+
+Evidence upload authorization applies only to a staging object. Commitment hashes a storage-identity-locked snapshot and promotes it to a separate, server-only, content-addressed key before PostgreSQL records the digest and committed key. Previously issued client PUT URLs can therefore change only unreferenced staging bytes. Committed evidence rows reject all updates and deletes at the database layer.
 
 ## Identity
 
@@ -83,6 +86,6 @@ Packing Station Mode is a client workflow over those commands. Merchant finaliza
 
 One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks, and portals consume the same Proof through the API authorization boundary.
 
-See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md). Account search and account-targeted invitations are described in [USER_SEARCH_AND_INVITATIONS.md](USER_SEARCH_AND_INVITATIONS.md).
+See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md). Account search and account-targeted invitations are described in [USER_SEARCH_AND_INVITATIONS.md](USER_SEARCH_AND_INVITATIONS.md). Custody assets, observations, transfers, `nextAction`, and guest viewing links are described in [CUSTODY_WORKFLOW.md](CUSTODY_WORKFLOW.md).
 
-Provider-neutral purchase import (reference adapter plus the first live marketplace connector) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Automatic fulfillment ingestion and the seller packing queue are described in [AUTOMATIC_FULFILLMENT_INGESTION.md](AUTOMATIC_FULFILLMENT_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). The trusted carrier runtime is described in [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md). EasyPost Tracker test/staging tracking is described in [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md). eBay seller OAuth and Sell Fulfillment order import is described in [EBAY_INTEGRATION.md](EBAY_INTEGRATION.md). Live Shopify and direct UPS/FedEx/USPS/Shippo APIs are not implemented. EasyPost is not a production-supported carrier rollout.
+Provider-neutral purchase import (reference adapter plus the first live marketplace connector) is described in [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md). Automatic fulfillment ingestion and the seller packing queue are described in [AUTOMATIC_FULFILLMENT_INGESTION.md](AUTOMATIC_FULFILLMENT_INGESTION.md). Append-only shipment observations and the recomputed shipment integrity supplement are described in [SHIPMENT_EVENTS.md](SHIPMENT_EVENTS.md). The trusted carrier runtime is described in [TRUSTED_SHIPMENT_INTEGRATIONS.md](TRUSTED_SHIPMENT_INTEGRATIONS.md). EasyPost Tracker test/staging tracking is described in [EASYPOST_TRACKING_INTEGRATION.md](EASYPOST_TRACKING_INTEGRATION.md). eBay seller OAuth and Sell Fulfillment order import is described in [EBAY_INTEGRATION.md](EBAY_INTEGRATION.md). Connected accounts (eBay, Shopify, Google, Meta/Facebook) are described in [CONNECTED_ACCOUNTS.md](CONNECTED_ACCOUNTS.md). Direct UPS/FedEx/USPS/Shippo APIs are not implemented. EasyPost is not a production-supported carrier rollout.

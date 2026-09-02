@@ -189,6 +189,52 @@ export interface CanonicalProof {
     provider: string | null;
     status: string | null;
   };
+  workflowType?: string;
+  workflowStage?: string;
+  custodyOutcome?: string | null;
+  nextAction?: {
+    type: string;
+    title: string;
+    hint: string;
+    assetId?: string;
+    captureRecipe?: string;
+    transferId?: string;
+    actorRole?: string;
+  } | null;
+  assets?: Array<{
+    assetId: string;
+    assetInstanceId: string;
+    assetType: string;
+    label: string;
+    labelIndex: number;
+    catalogDescriptor?: Record<string, unknown>;
+  }>;
+  observations?: Array<{
+    observationId: string;
+    type: string;
+    label: string;
+    occurredAt: string;
+    assetIds: string[];
+    evidence: Array<{ evidenceId: string; slot: string }>;
+  }>;
+  transfers?: Array<{
+    transferId: string;
+    status: string;
+    transferType: string;
+    intervalNote: string | null;
+    toObservationId: string | null;
+  }>;
+  continuityObservations?: Array<{
+    evaluationId: string;
+    result: string;
+    summary: string;
+    algorithmVersion: string;
+    evidencePairs: Array<{
+      slot: string;
+      originEvidenceId: string | null;
+      receivedEvidenceId: string | null;
+    }>;
+  }>;
 }
 
 export interface ProofCollectionItem {
@@ -497,6 +543,75 @@ export interface EbayOrderListView {
   };
   orders: EbaySellerOrderView[];
   disclosure: string;
+}
+
+export interface PublicProofView {
+  schema?: "packproof.proof.public/v1" | string;
+  proofId: string;
+  status: string;
+  workflowType: string;
+  workflowStage: string;
+  nextAction: { type: string; title: string; hint: string } | null;
+  scope: string;
+  join: {
+    eligible: boolean;
+    requiresAuthentication: boolean;
+    message: string;
+  };
+  assets?: Array<{ label: string; assetType: string }>;
+  observations?: Array<{ label: string; occurredAt: string }>;
+  transfers?: Array<{ status: string; intervalNote: string | null }>;
+  continuity?: Array<{ result: string; summary: string }>;
+}
+
+export interface AccessLinkView {
+  accessLinkId: string;
+  proofId: string;
+  scope: string;
+  url?: string;
+  token?: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface ProviderCapabilities {
+  identity: boolean;
+  transactions: boolean;
+  fulfillment: boolean;
+  shipping: boolean;
+  webhooks: boolean;
+}
+
+export interface ConnectedAccountView {
+  id: string;
+  provider: string;
+  providerDisplay: string;
+  externalAccountId: string;
+  externalAccountName: string | null;
+  status: string;
+  scopes: string[];
+  expiresAt: string | null;
+  capabilities: ProviderCapabilities;
+  limitations: string[];
+  createdAt: string;
+  updatedAt: string;
+  disconnectedAt: string | null;
+}
+
+export interface ConnectedAccountProviderCatalogView {
+  provider: string;
+  providerDisplay: string;
+  enabled: boolean;
+  capabilities: ProviderCapabilities;
+  limitations: string[];
+  multipleAccounts: boolean;
+  requiresShop: boolean;
+}
+
+export interface ConnectedAccountsListView {
+  accounts: ConnectedAccountView[];
+  providers: ConnectedAccountProviderCatalogView[];
 }
 
 export class ApiError extends Error {

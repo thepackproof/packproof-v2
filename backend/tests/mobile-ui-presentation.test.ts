@@ -20,6 +20,16 @@ import {
 import { humanProofStatus, proofStatusLabel, shipmentStatusLabel } from "../../mobile/src/copy/status.ts";
 import { chronologyCategoryLabel, isShipmentAfterFinalization } from "../../mobile/src/copy/chronology.ts";
 import { resolveBackRoute } from "../../mobile/src/app/navigation.ts";
+import {
+  assetItemLabel,
+  captureEvidenceType,
+  comparisonPairs,
+  continuityResultLabel,
+  inviteParticipantHint,
+  inviteParticipantTitle,
+  observationProgressLabel,
+  participantFacingRole,
+} from "../../mobile/src/copy/custody.ts";
 
 function proof(
   partial: Partial<{
@@ -357,5 +367,61 @@ describe("mobile UI dates, IDs, and errors", () => {
     expect(
       isShipmentAfterFinalization("2026-09-01T15:31:00.000Z", "2026-09-01T15:32:00.000Z", "SHIPMENT"),
     ).toBe(false);
+  });
+});
+
+describe("mobile custody presentation copy", () => {
+  it("maps grading roles to originator and receiving participant", () => {
+    expect(participantFacingRole("GRADING_SUBMISSION", "SELLER")).toBe("Originator");
+    expect(participantFacingRole("GRADING_SUBMISSION", "BUYER")).toBe("Receiving participant");
+    expect(participantFacingRole("COMMERCE_SALE", "SELLER")).toBe("Seller");
+    expect(participantFacingRole("COMMERCE_SALE", "BUYER")).toBe("Buyer");
+  });
+
+  it("labels assets and observation progress for grading UI", () => {
+    expect(assetItemLabel({ labelIndex: 2 })).toBe("Item 2");
+    expect(assetItemLabel({ label: "Card A" })).toBe("Card A");
+    expect(observationProgressLabel("ORIGIN_CAPTURE")).toBe("Documented");
+    expect(observationProgressLabel("RELEASED")).toBe("Handed off");
+  });
+
+  it("preserves commerce fulfillment capture even with packing recipe", () => {
+    expect(
+      captureEvidenceType({
+        workflowType: undefined,
+        captureRecipe: "PACKING_STANDARD_V1",
+        nextActionType: "PACK_ITEMS",
+      }),
+    ).toBe("FULFILLMENT_CAPTURE");
+    expect(
+      captureEvidenceType({
+        workflowType: "GRADING_SUBMISSION",
+        captureRecipe: "PACKING_STANDARD_V1",
+        nextActionType: "PACK_ITEMS",
+      }),
+    ).toBe("PACKING_CAPTURE");
+  });
+
+  it("uses receiving-participant invite copy only for grading", () => {
+    expect(inviteParticipantTitle("COMMERCE_SALE")).toBe("Add buyer");
+    expect(inviteParticipantTitle("GRADING_SUBMISSION")).toBe("Add receiving participant");
+    expect(inviteParticipantHint("GRADING_SUBMISSION")).toContain("receiving participant");
+    expect(inviteParticipantHint("COMMERCE_SALE")).not.toContain("receiving participant");
+  });
+
+  it("pairs origin and receipt captures for side-by-side compare", () => {
+    const pairs = comparisonPairs({
+      continuity: [
+        {
+          evidencePairs: [
+            { slot: "FRONT", originEvidenceId: "evd_o_f", receivedEvidenceId: "evd_r_f" },
+            { slot: "BACK", originEvidenceId: "evd_o_b", receivedEvidenceId: "evd_r_b" },
+          ],
+        },
+      ],
+    });
+    expect(pairs.map((row) => row.slot)).toEqual(["FRONT", "BACK"]);
+    expect(continuityResultLabel("MATERIAL_DIFFERENCE")).toBe("Material difference");
+    expect(continuityResultLabel("CONSISTENT")).toBe("Consistent");
   });
 });

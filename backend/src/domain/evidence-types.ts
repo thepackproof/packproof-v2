@@ -1,6 +1,12 @@
 import { DomainError } from "./errors.js";
 
-export const EVIDENCE_TYPES = ["SELLER_EVIDENCE", "FULFILLMENT_CAPTURE"] as const;
+export const EVIDENCE_TYPES = [
+  "SELLER_EVIDENCE",
+  "FULFILLMENT_CAPTURE",
+  "ASSET_CAPTURE",
+  "PACKING_CAPTURE",
+  "RECEIPT_CAPTURE",
+] as const;
 
 export type EvidenceType = (typeof EVIDENCE_TYPES)[number];
 
@@ -21,7 +27,7 @@ export function parseEvidenceType(value: unknown): EvidenceType {
   if (!isEvidenceType(value)) {
     throw new DomainError(
       "INVALID_EVIDENCE_TYPE",
-      "evidenceType must be SELLER_EVIDENCE or FULFILLMENT_CAPTURE",
+      "evidenceType must be SELLER_EVIDENCE, FULFILLMENT_CAPTURE, ASSET_CAPTURE, PACKING_CAPTURE, or RECEIPT_CAPTURE",
       400,
     );
   }
