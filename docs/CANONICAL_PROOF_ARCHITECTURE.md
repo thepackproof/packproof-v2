@@ -95,7 +95,7 @@ Clients cannot be trusted to prevent duplicates. An explicit, auditable rebind i
 
 `transactions.external_reference` remains `EXTERNAL` metadata. The reserved tenant `packproof:transaction` is the identity slot established from that field when a Proof is first bound. Integration tenants (for example `marketplace:demo-marketplace` or `storefront:demo-storefront:demo-store-001`) are bound from imported purchases. Commerce tenants include a stable store/account identity so two stores may share an order number. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md) and [AUTOMATIC_FULFILLMENT_INGESTION.md](AUTOMATIC_FULFILLMENT_INGESTION.md). This repository does not yet expose API-key marketplace onboarding or live provider connectors.
 
-Participation policy is not an evidence tier. Manual Proofs stay `COUNTERPARTY_REQUIRED`. Auto-generated commerce Proofs are `COUNTERPARTY_OPTIONAL` so the seller can fulfill without a PackProof buyer. The policy is immutable after Proof creation.
+Participation policy is not an evidence tier. Ordinary seller-created Proofs default to `COUNTERPARTY_OPTIONAL` so the seller can capture packing evidence and finalize without a PackProof buyer. `COUNTERPARTY_REQUIRED` remains available when an API or integration request sets it explicitly; existing stored Proofs keep the policy written at creation. The policy is immutable after Proof creation. Viewing a Proof is not participation; a future viewer grant must not be implemented by adding a participant row.
 
 ## Surfaces
 

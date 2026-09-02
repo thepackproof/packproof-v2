@@ -81,7 +81,8 @@ describe("PackProof V2 API workflow", () => {
       .set(auth(seller));
     expect(proof1.status).toBe(200);
     expect(proof2.body.proofId).toBe(proof1.body.proofId);
-    expect(proof1.body.status).toBe("OPEN");
+    expect(proof1.body.status).toBe("READY_FOR_EVIDENCE");
+    expect(proof1.body.participationPolicy).toBe("COUNTERPARTY_OPTIONAL");
     const proofId = proof1.body.proofId as string;
 
     const invite1 = await request(harness.app)
@@ -100,7 +101,7 @@ describe("PackProof V2 API workflow", () => {
       .post(`/proofs/${proofId}/finalize`)
       .set(auth(seller));
     expect(premature.status).toBe(422);
-    expect(premature.body.error.code).toBe("PROOF_NOT_READY_FOR_FINALIZATION");
+    expect(premature.body.error.code).toBe("FULFILLMENT_CAPTURE_REQUIRED");
 
     const accept1 = await request(harness.app)
       .post(`/invitations/${token}/accept`)
@@ -120,12 +121,12 @@ describe("PackProof V2 API workflow", () => {
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "seller-capture-1")
-      .send({ contentType: "video/mp4", evidenceType: "SELLER_EVIDENCE" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
     const upload2 = await request(harness.app)
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "seller-capture-1")
-      .send({ contentType: "video/mp4", evidenceType: "SELLER_EVIDENCE" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
     expect(upload1.status).toBe(201);
     expect(upload2.body.evidenceId).toBe(upload1.body.evidenceId);
     const evidenceId = upload1.body.evidenceId as string;
@@ -161,6 +162,12 @@ describe("PackProof V2 API workflow", () => {
     expect(commit1.status).toBe(200);
     expect(commit2.body.sha256).toBe(commit1.body.sha256);
     expect(commit1.body.proof.status).toBe("EVIDENCE_COMMITTED");
+
+    const attested = await request(harness.app)
+      .post(`/proofs/${proofId}/attestations`)
+      .set(auth(seller))
+      .send({ statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: evidenceId });
+    expect(attested.status).toBe(201);
 
     const finalized1 = await request(harness.app)
       .post(`/proofs/${proofId}/finalize`)

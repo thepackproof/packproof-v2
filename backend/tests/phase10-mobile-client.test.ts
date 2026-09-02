@@ -95,7 +95,8 @@ describe("Phase 10 mobile V2 API client", () => {
     const sellerAfterRestart = resume(ctx.baseUrl, ctx.sellerToken.value);
     const proofAfterRestart = await sellerAfterRestart.getProof(proof1.proofId);
     expect(proofAfterRestart.proofId).toBe(proof1.proofId);
-    expect(proofAfterRestart.status).toBe("OPEN");
+    expect(proofAfterRestart.status).toBe("READY_FOR_EVIDENCE");
+    expect(proofAfterRestart.participationPolicy).toBe("COUNTERPARTY_OPTIONAL");
 
     const leftAndReturned = await sellerAfterRestart.getProof(proof1.proofId);
     expect(leftAndReturned.proofId).toBe(proof1.proofId);
@@ -105,7 +106,7 @@ describe("Phase 10 mobile V2 API client", () => {
     expect(invite2.invitation.invitationId).toBe(invite1.invitation.invitationId);
 
     await expect(ctx.seller.finalizeProof(proof1.proofId)).rejects.toMatchObject({
-      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      code: "FULFILLMENT_CAPTURE_REQUIRED",
     } satisfies Partial<ApiError>);
 
     const accept1 = await ctx.buyer.acceptInvitation(invite1.invitation.token);
@@ -124,17 +125,24 @@ describe("Phase 10 mobile V2 API client", () => {
       proofId: proof1.proofId,
       bytes,
       contentType: "image/jpeg",
+      evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey,
     });
     const afterUpload2 = await ctx.seller.submitEvidence({
       proofId: proof1.proofId,
       bytes,
       contentType: "image/jpeg",
+      evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey,
     });
     expect(afterUpload2.evidence).toHaveLength(1);
     expect(afterUpload1.evidence[0]?.evidenceId).toBe(afterUpload2.evidence[0]?.evidenceId);
     expect(afterUpload2.status).toBe("EVIDENCE_COMMITTED");
+
+    await ctx.seller.createAttestation(proof1.proofId, {
+      statement: "PACKED_DESCRIBED_ITEM",
+      relatedEvidenceId: afterUpload2.evidence[0]?.evidenceId,
+    });
 
     const finalized1 = await ctx.seller.finalizeProof(proof1.proofId);
     const finalized2 = await ctx.seller.finalizeProof(proof1.proofId);
@@ -214,11 +222,16 @@ describe("Phase 10 mobile V2 API client", () => {
     );
 
     const bytes = new Uint8Array(Buffer.from("ctx-client-evidence"));
-    await ctx.seller.submitEvidence({
+    const submitted = await ctx.seller.submitEvidence({
       proofId: proof.proofId,
       bytes,
       contentType: "image/jpeg",
+      evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey: "ctx-capture",
+    });
+    await ctx.seller.createAttestation(proof.proofId, {
+      statement: "PACKED_DESCRIBED_ITEM",
+      relatedEvidenceId: submitted.evidence[0]?.evidenceId,
     });
     const finalized = await ctx.seller.finalizeProof(proof.proofId);
     const manifest = finalized.manifest.manifest as {

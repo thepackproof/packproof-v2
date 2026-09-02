@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import { commitAttestation } from "../src/domain/attestations.js";
 import { createOrGetProof } from "../src/domain/create-proof.js";
 import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
 import { finalizeProof, getManifest } from "../src/domain/finalize.js";
@@ -84,7 +85,7 @@ describe("S3 evidence transport boundary", () => {
       store,
       seller,
       proof.proofId,
-      { contentType: "video/mp4", idempotencyKey: "s3-same" },
+      { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: "s3-same" },
     );
     const renewed = await initializeEvidenceUpload(
       harness.db,
@@ -92,7 +93,7 @@ describe("S3 evidence transport boundary", () => {
       store,
       seller,
       proof.proofId,
-      { contentType: "video/mp4", idempotencyKey: "s3-same" },
+      { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: "s3-same" },
     );
     expect(renewed.evidenceId).toBe(first.evidenceId);
     expect(renewed.objectKey).toBe(first.objectKey);
@@ -188,6 +189,10 @@ describe("S3 evidence transport boundary", () => {
     expect(shipping.shipping?.carrier).toBe("UPS");
     expect(shipping.shipping?.trackingNumber).toBe("1ZS3");
 
+    await commitAttestation(harness.db, harness.clock, seller, proof.proofId, {
+      statement: "PACKED_DESCRIBED_ITEM",
+      relatedEvidenceId: first.evidenceId,
+    });
     const finalized = await finalizeProof(harness.db, harness.clock, seller, proof.proofId);
     const finalizedAgain = await finalizeProof(harness.db, harness.clock, seller, proof.proofId);
     expect(finalizedAgain.manifest.sha256).toBe(finalized.manifest.sha256);

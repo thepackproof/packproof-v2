@@ -76,6 +76,8 @@ REST only:
 
 `OPEN` | `AWAITING_PARTICIPANT` | `READY_FOR_EVIDENCE` | `EVIDENCE_COMMITTED` | `FINALIZED`
 
+Ordinary seller-created Proofs default to `COUNTERPARTY_OPTIONAL` and enter `READY_FOR_EVIDENCE` immediately. `OPEN` and `AWAITING_PARTICIPANT` remain for explicitly requested `COUNTERPARTY_REQUIRED` Proofs.
+
 ## Idempotent commands
 
 Transaction creation with external identifiers, Proof creation, invitation creation, invitation acceptance, participant creation, evidence upload init, evidence commit, finalization, shipment-event ingest.

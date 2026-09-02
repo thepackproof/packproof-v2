@@ -79,7 +79,7 @@ describe("evidence capture API boundary", () => {
     await ctx.buyer.acceptInvitation(invite.invitation.token);
 
     await expect(ctx.seller.finalizeProof(proof.proofId)).rejects.toMatchObject({
-      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      code: "FULFILLMENT_CAPTURE_REQUIRED",
     } satisfies Partial<ApiError>);
 
     const before = await ctx.seller.getProof(proof.proofId);
@@ -88,10 +88,12 @@ describe("evidence capture API boundary", () => {
 
     const initialized = await ctx.seller.initializeEvidenceUpload(proof.proofId, {
       contentType: "video/mp4",
+      evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey: "local-only-1",
     });
     const retryInit = await ctx.seller.initializeEvidenceUpload(proof.proofId, {
       contentType: "video/mp4",
+      evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey: "local-only-1",
     });
     expect(retryInit.evidenceId).toBe(initialized.evidenceId);
@@ -128,6 +130,11 @@ describe("evidence capture API boundary", () => {
     const afterCommit = await ctx.seller.getProof(proof.proofId);
     expect(afterCommit.status).toBe("EVIDENCE_COMMITTED");
     expect(afterCommit.evidence).toHaveLength(1);
+
+    await ctx.seller.createAttestation(proof.proofId, {
+      statement: "PACKED_DESCRIBED_ITEM",
+      relatedEvidenceId: committed.evidenceId,
+    });
 
     const finalized = await ctx.seller.finalizeProof(proof.proofId);
     expect(finalized.proof.status).toBe("FINALIZED");

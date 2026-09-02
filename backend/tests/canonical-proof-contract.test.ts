@@ -52,7 +52,7 @@ async function commitSellerEvidence(
     harness.objectStore,
     seller,
     proofId,
-    { contentType: "video/mp4", idempotencyKey: `canon-${proofId}` },
+    { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: `canon-${proofId}` },
   );
   await harness.objectStore.put(upload.objectKey, bytes, "video/mp4");
   return commitEvidence(

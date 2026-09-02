@@ -258,6 +258,8 @@ export async function createInvitation(
       throw error;
     }
 
+    // COUNTERPARTY_REQUIRED proofs start OPEN. Optional proofs are already
+    // READY_FOR_EVIDENCE and must not be moved into AWAITING_PARTICIPANT.
     if (proof.status === "OPEN") {
       await tx.query(
         `UPDATE proofs SET status = 'AWAITING_PARTICIPANT', updated_at = $2 WHERE id = $1`,

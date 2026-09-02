@@ -101,7 +101,9 @@ describe("merchant fulfillment capture finalization", () => {
     const txn = await createTransaction(harness.db, harness.clock, seller, {
       itemTitle: "P2P camera",
     });
-    const proof = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId);
+    const proof = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId, {
+      participationPolicy: "COUNTERPARTY_REQUIRED",
+    });
     const invite = await createInvitation(harness.db, harness.clock, seller, proof.proofId, {
       inviteeUserId: buyer,
     });

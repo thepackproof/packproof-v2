@@ -436,7 +436,9 @@ describe("automatic fulfillment ingestion", () => {
       itemTitle: "Manual camera",
       quantity: 1,
     });
-    const proof = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId);
+    const proof = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId, {
+      participationPolicy: "COUNTERPARTY_REQUIRED",
+    });
     expect(proof.status).toBe("OPEN");
     expect(proof.participationPolicy).toBe("COUNTERPARTY_REQUIRED");
     const invite = await createInvitation(harness.db, harness.clock, seller, proof.proofId, {

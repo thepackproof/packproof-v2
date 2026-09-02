@@ -112,8 +112,9 @@ Imported multi-item orders persist every line. The final manifest includes `tran
 
 | Flow | Policy | Effect |
 | --- | --- | --- |
-| Manual / P2P | `COUNTERPARTY_REQUIRED` | Existing behavior. Invite moves `OPEN` → `AWAITING_PARTICIPANT`. Accept → `READY_FOR_EVIDENCE`. Finalize still needs seller, buyer, and committed evidence. |
-| Auto commerce | `COUNTERPARTY_OPTIONAL` | Seller is joined immediately. Status is `READY_FOR_EVIDENCE` without inventing a buyer. Seller may pack and finalize. A PackProof buyer may still be invited later under existing invitation rules. |
+| Ordinary seller create (default) | `COUNTERPARTY_OPTIONAL` | Seller is joined immediately. Status is `READY_FOR_EVIDENCE` without a buyer. Seller may capture evidence and finalize. A PackProof buyer may still be invited later. |
+| Explicit P2P | `COUNTERPARTY_REQUIRED` | Requested via `createOrGetProof` / `POST /transactions/:id/proof` body `{ participationPolicy: "COUNTERPARTY_REQUIRED" }`. Invite moves `OPEN` → `AWAITING_PARTICIPANT`. Accept → `READY_FOR_EVIDENCE`. Finalize still needs seller, buyer, and committed evidence. |
+| Auto commerce | `COUNTERPARTY_OPTIONAL` | Same optional-counterparty rules as ordinary seller create. |
 
 Do not fabricate a PackProof buyer from a marketplace customer. External buyer id and a safe display name may be stored as import context. Email, phone, and shipping address are not required and are not stored on the commerce path.
 

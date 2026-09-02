@@ -5,11 +5,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { createOrGetProof } from "../src/domain/create-proof.js";
-import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
 import { acceptInvitation, createInvitation } from "../src/domain/invitations.js";
 import { getShipmentIntegrity } from "../src/domain/shipment-integrity.js";
 import { createTransaction } from "../src/domain/transactions.js";
-import { sha256Hex } from "../src/hash.js";
 import { createEasyPostTrackerClient, type EasyPostHttp } from "../src/integrations/easypost/client.js";
 import { parseEasyPostCredentials } from "../src/integrations/easypost/credentials.js";
 import {
@@ -20,7 +18,7 @@ import { mapEasyPostStatus, normalizeEasyPostTracker } from "../src/integrations
 import { EASYPOST_TRACKER_ADAPTER_KEY } from "../src/integrations/easypost/adapter.js";
 import { secretIdFromReference } from "../src/integrations/secrets-manager-credential-store.js";
 import { createDefaultIntegrationRegistry } from "../src/integrations/registry.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { auth, commitFulfillmentAndAttest, createHarness, login, type TestHarness } from "./helpers.js";
 import {
   DELIVERED,
   FAILURE,
@@ -125,25 +123,10 @@ async function finalizeProof(harness: TestHarness, seller: string, buyer: string
     inviteeIdentifier: "buyer@example.com",
   });
   await acceptInvitation(harness.db, harness.clock, buyer, invite.invitation.token);
-  const upload = await initializeEvidenceUpload(
-    harness.db,
-    harness.clock,
-    harness.objectStore,
-    seller,
-    proofId,
-    { contentType: "video/mp4", idempotencyKey: `ep-${proofId}` },
-  );
-  const bytes = Buffer.from(`easypost-evidence-${proofId}`);
-  await harness.objectStore.put(upload.objectKey, bytes, "video/mp4");
-  await commitEvidence(
-    harness.db,
-    harness.clock,
-    harness.objectStore,
-    seller,
-    proofId,
-    upload.evidenceId,
-    sha256Hex(bytes),
-  );
+  await commitFulfillmentAndAttest(harness, seller, proofId, {
+    bytes: Buffer.from(`easypost-evidence-${proofId}`),
+    idempotencyKey: `ep-${proofId}`,
+  });
   return request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));
 }
 

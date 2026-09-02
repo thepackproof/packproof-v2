@@ -29,7 +29,7 @@ FINALIZABLE PACKPROOF
 
 Already-finalized Proofs stay finalized. The new rule applies to new finalization attempts only. Historical merchant Proofs without capture are not rewritten.
 
-P2P (`COUNTERPARTY_REQUIRED`) still requires a joined buyer and any committed evidence. That path is unchanged.
+P2P (`COUNTERPARTY_REQUIRED`) still requires a joined buyer and any committed evidence. That path is unchanged and is no longer the ordinary create default; it must be requested explicitly.
 
 ## Evidence semantics
 

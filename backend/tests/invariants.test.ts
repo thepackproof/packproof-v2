@@ -8,7 +8,7 @@ import {
 import { finalizeProof } from "../src/domain/finalize.js";
 import { acceptInvitation, createInvitation } from "../src/domain/invitations.js";
 import { createTransaction } from "../src/domain/transactions.js";
-import { createHarness, createUser, type TestHarness } from "./helpers.js";
+import { commitFulfillmentAndAttest, createHarness, createUser, type TestHarness } from "./helpers.js";
 
 describe("PackProof V2 domain invariants", () => {
   let harness: TestHarness;
@@ -76,7 +76,8 @@ describe("PackProof V2 domain invariants", () => {
     );
     expect(invite2.invitation.invitationId).toBe(invite1.invitation.invitationId);
     expect(invite2.invitation.token).toBe(invite1.invitation.token);
-    expect(invite2.proof.status).toBe("AWAITING_PARTICIPANT");
+    expect(invite2.proof.status).toBe("READY_FOR_EVIDENCE");
+    expect(invite2.proof.participationPolicy).toBe("COUNTERPARTY_OPTIONAL");
 
     const accept1 = await acceptInvitation(
       harness.db,
@@ -107,7 +108,7 @@ describe("PackProof V2 domain invariants", () => {
     await expect(
       finalizeProof(harness.db, harness.clock, seller, proof.proofId),
     ).rejects.toMatchObject({
-      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      code: "FULFILLMENT_CAPTURE_REQUIRED",
     } satisfies Partial<DomainError>);
 
     const invite = await createInvitation(
@@ -121,7 +122,7 @@ describe("PackProof V2 domain invariants", () => {
 
     await expect(
       finalizeProof(harness.db, harness.clock, seller, proof.proofId),
-    ).rejects.toMatchObject({ code: "PROOF_NOT_READY_FOR_FINALIZATION" });
+    ).rejects.toMatchObject({ code: "FULFILLMENT_CAPTURE_REQUIRED" });
 
     const upload = await initializeEvidenceUpload(
       harness.db,
@@ -193,27 +194,10 @@ describe("PackProof V2 domain invariants", () => {
       "buyer@example.com",
     );
     await acceptInvitation(harness.db, harness.clock, buyer, invite.invitation.token);
-    const upload = await initializeEvidenceUpload(
-      harness.db,
-      harness.clock,
-      harness.objectStore,
-      seller,
-      proof.proofId,
-      { contentType: "video/mp4", idempotencyKey: "capture-1" },
-    );
-    await harness.objectStore.put(
-      upload.objectKey,
-      Buffer.from("final-bytes"),
-      "video/mp4",
-    );
-    await commitEvidence(
-      harness.db,
-      harness.clock,
-      harness.objectStore,
-      seller,
-      proof.proofId,
-      upload.evidenceId,
-    );
+    await commitFulfillmentAndAttest(harness, seller, proof.proofId, {
+      bytes: Buffer.from("final-bytes"),
+      idempotencyKey: "capture-1",
+    });
 
     const first = await finalizeProof(harness.db, harness.clock, seller, proof.proofId);
     const second = await finalizeProof(harness.db, harness.clock, seller, proof.proofId);

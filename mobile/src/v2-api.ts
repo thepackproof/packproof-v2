@@ -730,9 +730,11 @@ export class PackProofV2Client {
     bytes: Uint8Array;
     contentType: string;
     idempotencyKey: string;
+    evidenceType?: string;
   }): Promise<ProofView> {
     const initialized = await this.initializeEvidenceUpload(input.proofId, {
       contentType: input.contentType,
+      evidenceType: input.evidenceType ?? "FULFILLMENT_CAPTURE",
       idempotencyKey: input.idempotencyKey,
     });
     await this.uploadObject(initialized.upload, input.bytes, input.contentType);

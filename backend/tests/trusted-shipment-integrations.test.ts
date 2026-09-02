@@ -22,7 +22,7 @@ import {
   TRUSTED_DEMO_WEBHOOK_SECRET,
   signTrustedDemoWebhook,
 } from "../src/integrations/trusted-demo-carrier.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { auth, commitFulfillmentAndAttest, createHarness, login, type TestHarness } from "./helpers.js";
 
 const SAMPLE_IMPORT = {
   provider: "demo-marketplace",
@@ -87,7 +87,10 @@ async function finalizeWithBuyer(
     inviteeIdentifier: "buyer@example.com",
   });
   await acceptInvitation(harness.db, harness.clock, buyer, invite.invitation.token);
-  await commitSellerEvidence(harness, seller, proofId, Buffer.from(`trust-evidence-${proofId}`));
+  await commitFulfillmentAndAttest(harness, seller, proofId, {
+    bytes: Buffer.from(`trust-evidence-${proofId}`),
+    idempotencyKey: `trust-${proofId}`,
+  });
   return request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));
 }
 

@@ -45,9 +45,15 @@ Domain tables use PackProof user ids (`user_01…`). External auth subjects map 
 
 ## Proof states
 
+Ordinary Proofs default to `COUNTERPARTY_OPTIONAL` and start at `READY_FOR_EVIDENCE`:
+
+`READY_FOR_EVIDENCE` → `EVIDENCE_COMMITTED` → `FINALIZED`
+
+`COUNTERPARTY_REQUIRED` Proofs, when explicitly requested, still use:
+
 `OPEN` → `AWAITING_PARTICIPANT` → `READY_FOR_EVIDENCE` → `EVIDENCE_COMMITTED` → `FINALIZED`
 
-No UI/capture/upload states.
+No UI/capture/upload states. Buyer participation is optional on the ordinary path. It remains required only when the stored policy is `COUNTERPARTY_REQUIRED`.
 
 ## AWS target (not required to run locally)
 

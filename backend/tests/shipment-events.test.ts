@@ -20,7 +20,7 @@ import { sha256Hex } from "../src/hash.js";
 import { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
 import type { ShipmentObservationAdapter } from "../src/integrations/shipment-adapter.js";
 import { DEMO_CARRIER_TIMELINE_TYPES } from "../src/integrations/demo-carrier.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { auth, commitFulfillmentAndAttest, createHarness, login, type TestHarness } from "./helpers.js";
 
 const SAMPLE_IMPORT = {
   provider: "demo-marketplace",
@@ -85,7 +85,10 @@ async function finalizeWithBuyer(
     inviteeIdentifier: "buyer@example.com",
   });
   await acceptInvitation(harness.db, harness.clock, buyer, invite.invitation.token);
-  await commitSellerEvidence(harness, seller, proofId, Buffer.from(`ship-evidence-${proofId}`));
+  await commitFulfillmentAndAttest(harness, seller, proofId, {
+    bytes: Buffer.from(`ship-evidence-${proofId}`),
+    idempotencyKey: `ship-${proofId}`,
+  });
   return request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));
 }
 

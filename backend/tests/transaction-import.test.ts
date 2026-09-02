@@ -5,12 +5,10 @@ import { DomainError } from "../src/domain/errors.js";
 import { bindProofExternalReference } from "../src/domain/external-references.js";
 import { importNormalizedTransaction } from "../src/domain/transaction-import.js";
 import { createTransaction } from "../src/domain/transactions.js";
-import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
 import { hashCanonicalManifest } from "../src/domain/finalize.js";
 import { acceptInvitation, createInvitation } from "../src/domain/invitations.js";
-import { sha256Hex } from "../src/hash.js";
 import type { ImportedTransaction } from "../src/domain/imported-transaction.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { auth, commitFulfillmentAndAttest, createHarness, login, type TestHarness } from "./helpers.js";
 
 const SAMPLE: ImportedTransaction = {
   provider: "demo-marketplace",
@@ -49,25 +47,10 @@ async function finalizeWithBuyer(
     inviteeIdentifier: "buyer@example.com",
   });
   await acceptInvitation(harness.db, harness.clock, buyer, invite.invitation.token);
-  const bytes = Buffer.from(`import-evidence-${proofId}`);
-  const upload = await initializeEvidenceUpload(
-    harness.db,
-    harness.clock,
-    harness.objectStore,
-    seller,
-    proofId,
-    { contentType: "video/mp4", idempotencyKey: `import-${proofId}` },
-  );
-  await harness.objectStore.put(upload.objectKey, bytes, "video/mp4");
-  await commitEvidence(
-    harness.db,
-    harness.clock,
-    harness.objectStore,
-    seller,
-    proofId,
-    upload.evidenceId,
-    sha256Hex(bytes),
-  );
+  await commitFulfillmentAndAttest(harness, seller, proofId, {
+    bytes: Buffer.from(`import-evidence-${proofId}`),
+    idempotencyKey: `import-${proofId}`,
+  });
   return request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));
 }
 
@@ -125,7 +108,8 @@ describe("transaction ingestion from external integrations", () => {
     });
     expect(first.proof?.proofId).toBeTruthy();
     expect(first.transaction.proofId).toBe(first.proof?.proofId);
-    expect(first.proof?.status).toBe("OPEN");
+    expect(first.proof?.status).toBe("READY_FOR_EVIDENCE");
+    expect(first.proof?.participationPolicy).toBe("COUNTERPARTY_OPTIONAL");
     expect(first.proof?.external.references).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

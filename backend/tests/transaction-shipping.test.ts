@@ -274,13 +274,17 @@ describe("transaction and shipping context", () => {
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "seller-capture-1")
-      .send({ contentType: "video/mp4", evidenceType: "SELLER_EVIDENCE" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
     const uploadUrl = new URL(upload.body.upload.url as string);
     await request(harness.app).put(uploadUrl.pathname).set("Content-Type", "video/mp4").send(bytes);
     await request(harness.app)
       .post(`/proofs/${proofId}/evidence/${upload.body.evidenceId}/commit`)
       .set(auth(seller))
       .send({ sha256: sha256Hex(bytes) });
+    await request(harness.app)
+      .post(`/proofs/${proofId}/attestations`)
+      .set(auth(seller))
+      .send({ statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: upload.body.evidenceId });
 
     const finalized1 = await request(harness.app)
       .post(`/proofs/${proofId}/finalize`)

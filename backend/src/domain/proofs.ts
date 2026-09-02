@@ -30,6 +30,11 @@ export async function requireParticipant(
   return authorizeProofAccess(db, proofId, userId, role);
 }
 
+/**
+ * Current authenticated reads still authorize through proof_participants.
+ * That is contributor access, not a viewer grant. Do not add a participant
+ * row merely so someone can look at a Proof.
+ */
 export async function authorizeProofAccess(
   db: Database,
   proofId: string,

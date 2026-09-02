@@ -198,7 +198,9 @@ describe("packing station resolve", () => {
       externalReference: "P2P-22",
       itemTitle: "Sealed carton",
     });
-    const proof = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId);
+    const proof = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId, {
+      participationPolicy: "COUNTERPARTY_REQUIRED",
+    });
     const pending = await resolve(harness, seller, "P2P-22");
     expect(pending.body.proofId).toBe(proof.proofId);
     expect(pending.body.blockReason).toBe("NEEDS_PARTICIPANT");

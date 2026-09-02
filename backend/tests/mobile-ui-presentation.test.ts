@@ -148,6 +148,25 @@ describe("mobile UI next-action CTA", () => {
     expect(action.key).toBe("none");
     expect(shouldShowRequiredAction(action)).toBe(false);
     expect(canCaptureEvidence({ ...base, proofStatus: "OPEN" })).toBe(false);
+
+    const unspecified = deriveNextAction({
+      ...base,
+      proofStatus: "OPEN",
+    });
+    expect(unspecified.key).toBe("none");
+    expect(shouldShowRequiredAction(unspecified)).toBe(false);
+  });
+
+  it("shows Record packing video for READY_FOR_EVIDENCE even when no buyer exists", () => {
+    const action = deriveNextAction({
+      ...base,
+      proofStatus: "READY_FOR_EVIDENCE",
+      participationPolicy: "COUNTERPARTY_OPTIONAL",
+    });
+    expect(action.key).toBe("start_capture");
+    expect(action.label).toBe("Record packing video");
+    expect(shouldShowRequiredAction(action)).toBe(true);
+    expect(action.key).not.toBe("add_participant");
   });
 
   it("does not show a required-action card for a buyer who only needs to view the record", () => {

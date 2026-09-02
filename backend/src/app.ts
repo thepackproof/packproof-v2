@@ -9,6 +9,7 @@ import type { AuthenticationAdapter } from "./auth/adapter.js";
 import type { Clock } from "./clock.js";
 import type { Database } from "./db/database.js";
 import { createOrGetProof } from "./domain/create-proof.js";
+import { requireParticipationPolicy } from "./domain/participation.js";
 import { DomainError, errorCodeFromSql } from "./domain/errors.js";
 import {
   commitEvidence,
@@ -645,6 +646,9 @@ export function createApp(deps: AppDependencies): Express {
         deps.clock,
         bearerUser(req),
         req.params.id,
+        {
+          participationPolicy: requireParticipationPolicy(req.body?.participationPolicy),
+        },
       );
       res.json(result);
     }),

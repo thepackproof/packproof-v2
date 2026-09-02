@@ -128,7 +128,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   }
 
   if (seller && (status === "OPEN" || status === "AWAITING_PARTICIPANT")) {
-    const requiresCounterparty = (input.participationPolicy ?? "COUNTERPARTY_REQUIRED") !== "COUNTERPARTY_OPTIONAL";
+    const requiresCounterparty = input.participationPolicy === "COUNTERPARTY_REQUIRED";
     if (requiresCounterparty) {
       return {
         key: "add_participant",

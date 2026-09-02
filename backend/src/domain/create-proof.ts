@@ -70,6 +70,8 @@ export async function createOrGetProof(
       options.participationPolicy,
       DEFAULT_PARTICIPATION_POLICY,
     );
+    // Optional-counterparty Proofs skip AWAITING_PARTICIPANT. REQUIRED proofs
+    // still start OPEN and move to AWAITING_PARTICIPANT on invite.
     const initialStatus =
       participationPolicy === "COUNTERPARTY_OPTIONAL" ? "READY_FOR_EVIDENCE" : "OPEN";
     try {

@@ -14,6 +14,7 @@ import { insertUser } from "../src/domain/users.js";
 import type { MutableCredentialStore } from "../src/integrations/credentials.js";
 import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
 import type { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
+import { commitAttestation } from "../src/domain/attestations.js";
 import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
 import { sha256Hex } from "../src/hash.js";
 
@@ -129,4 +130,25 @@ export async function commitProofEvidence(
     upload.evidenceId,
     sha256Hex(bytes),
   );
+}
+
+export async function commitFulfillmentAndAttest(
+  harness: TestHarness,
+  seller: string,
+  proofId: string,
+  input: {
+    bytes?: Buffer;
+    idempotencyKey?: string;
+  } = {},
+) {
+  const committed = await commitProofEvidence(harness, seller, proofId, {
+    evidenceType: "FULFILLMENT_CAPTURE",
+    bytes: input.bytes,
+    idempotencyKey: input.idempotencyKey,
+  });
+  await commitAttestation(harness.db, harness.clock, seller, proofId, {
+    statement: "PACKED_DESCRIBED_ITEM",
+    relatedEvidenceId: committed.evidenceId,
+  });
+  return committed;
 }

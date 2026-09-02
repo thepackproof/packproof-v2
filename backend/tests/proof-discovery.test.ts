@@ -59,7 +59,7 @@ async function commitAndFinalize(harness: TestHarness, seller: string, proofId: 
     .post(`/proofs/${proofId}/evidence/uploads`)
     .set(auth(seller))
     .set("Idempotency-Key", `discovery-${proofId}`)
-    .send({ contentType: "video/mp4" });
+    .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
   expect(upload.status).toBe(201);
   await request(harness.app)
     .put(new URL(upload.body.upload.url as string).pathname)
@@ -70,6 +70,10 @@ async function commitAndFinalize(harness: TestHarness, seller: string, proofId: 
     .post(`/proofs/${proofId}/evidence/${upload.body.evidenceId}/commit`)
     .set(auth(seller))
     .send({ sha256: expected });
+  await request(harness.app)
+    .post(`/proofs/${proofId}/attestations`)
+    .set(auth(seller))
+    .send({ statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: upload.body.evidenceId });
   const finalized = await request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));
   expect(finalized.status).toBe(200);
   return { expected, finalized: finalized.body };
@@ -101,7 +105,7 @@ describe("authenticated Proof discovery", () => {
       proofId: created.proof.proofId,
       transactionId: created.txn.transactionId,
       role: "SELLER",
-      status: "OPEN",
+      status: "READY_FOR_EVIDENCE",
       transaction: {
         externalReference: "ORD-ACTIVE-1",
         itemTitle: "Active camera",

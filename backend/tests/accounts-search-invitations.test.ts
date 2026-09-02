@@ -449,7 +449,7 @@ describe("direct account invitations", () => {
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "rel-evidence")
-      .send({ contentType: "video/mp4" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
     const bytes = Buffer.from("relationship-evidence");
     await request(harness.app)
       .put(new URL(upload.body.upload.url as string).pathname)
@@ -459,6 +459,10 @@ describe("direct account invitations", () => {
       .post(`/proofs/${proofId}/evidence/${upload.body.evidenceId}/commit`)
       .set(auth(seller))
       .send({ sha256: sha256Hex(bytes) });
+    await request(harness.app)
+      .post(`/proofs/${proofId}/attestations`)
+      .set(auth(seller))
+      .send({ statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: upload.body.evidenceId });
     await request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));
 
     const finalizedSearch = await request(harness.app)
@@ -506,7 +510,7 @@ describe("account-phase evidence and manifest regression", () => {
       .post(`/proofs/${proof.body.proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "account-phase-evidence")
-      .send({ contentType: "video/mp4" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
     const bytes = Buffer.from("account-phase-evidence-bytes");
     await request(harness.app)
       .put(new URL(upload.body.upload.url as string).pathname)
@@ -517,6 +521,10 @@ describe("account-phase evidence and manifest regression", () => {
       .post(`/proofs/${proof.body.proofId}/evidence/${upload.body.evidenceId}/commit`)
       .set(auth(seller))
       .send({ sha256: expected });
+    await request(harness.app)
+      .post(`/proofs/${proof.body.proofId}/attestations`)
+      .set(auth(seller))
+      .send({ statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: upload.body.evidenceId });
     const finalized = await request(harness.app)
       .post(`/proofs/${proof.body.proofId}/finalize`)
       .set(auth(seller));
