@@ -13,6 +13,7 @@ export interface PublicProofView {
   status: string;
   workflowType: string;
   workflowStage: string;
+  custodyOutcome: string | null;
   nextAction: { type: string; title: string; hint: string } | null;
   scope: string;
   join: {
@@ -85,6 +86,7 @@ export async function projectPublicProof(
     status: proof.status,
     workflowType: custody.workflowType,
     workflowStage: custody.policy.workflowStage,
+    custodyOutcome: custody.policy.custodyOutcome,
     nextAction: custody.policy.nextAction
       ? {
           type: custody.policy.nextAction.type,

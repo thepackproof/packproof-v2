@@ -176,6 +176,19 @@ describe("PackProof V2 domain invariants", () => {
     await expect(mutation).rejects.toSatisfy((error: unknown) => {
       return errorCodeFromSql(error) === "EVIDENCE_ALREADY_COMMITTED";
     });
+    await expect(
+      harness.db.query(`UPDATE evidence SET content_type = $2 WHERE id = $1`, [
+        upload.evidenceId,
+        "image/jpeg",
+      ]),
+    ).rejects.toSatisfy((error: unknown) => {
+      return errorCodeFromSql(error) === "EVIDENCE_ALREADY_COMMITTED";
+    });
+    await expect(
+      harness.db.query(`DELETE FROM evidence WHERE id = $1`, [upload.evidenceId]),
+    ).rejects.toSatisfy((error: unknown) => {
+      return errorCodeFromSql(error) === "EVIDENCE_ALREADY_COMMITTED";
+    });
   });
 
   it("finalization is idempotent and finalized proofs cannot mutate", async () => {

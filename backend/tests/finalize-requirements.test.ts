@@ -63,6 +63,37 @@ describe("evaluateFinalizeRequirements", () => {
       }),
     ).toEqual({ ok: true });
   });
+
+  it("distinguishes origin-only grading closure from a complete observed round trip", () => {
+    const gradingBase = {
+      ...merchantBase,
+      workflowType: "GRADING_SUBMISSION" as const,
+      packed: true,
+      released: true,
+    };
+    expect(evaluateFinalizeRequirements(gradingBase)).toEqual({ ok: true });
+    const incompleteReturn = evaluateFinalizeRequirements({
+      ...gradingBase,
+      received: true,
+      intakeCaptured: true,
+      compared: true,
+      processOutput: false,
+      returnPacked: true,
+      finalReceipt: true,
+    });
+    expect(incompleteReturn.ok).toBe(false);
+    expect(
+      evaluateFinalizeRequirements({
+        ...gradingBase,
+        received: true,
+        intakeCaptured: true,
+        compared: true,
+        processOutput: true,
+        returnPacked: true,
+        finalReceipt: true,
+      }),
+    ).toEqual({ ok: true });
+  });
 });
 
 describe("evidence purpose", () => {

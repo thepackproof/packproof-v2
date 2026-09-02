@@ -159,6 +159,7 @@ export interface CanonicalProof {
   chronology: ChronologyEntry[];
   workflowType: string;
   workflowStage: string;
+  custodyOutcome: string | null;
   nextAction: NextAction | null;
   assets: ProofAssetView[];
   observations: ObservationView[];
@@ -330,6 +331,7 @@ export async function getCanonicalProof(
     }),
     workflowType: custody.workflowType,
     workflowStage: custody.policy.workflowStage,
+    custodyOutcome: custody.policy.custodyOutcome,
     nextAction: custody.policy.nextAction,
     assets: custody.assets,
     observations: custody.observations,

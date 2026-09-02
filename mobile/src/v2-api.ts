@@ -283,6 +283,7 @@ export interface ProofView {
   };
   workflowType?: string;
   workflowStage?: string;
+  custodyOutcome?: string | null;
   nextAction?: {
     type: string;
     title: string;
@@ -905,11 +906,19 @@ export class PackProofV2Client {
     idempotencyKey: string;
     evidenceType?: string;
   }): Promise<ProofView> {
-    const initialized = await this.initializeEvidenceUpload(input.proofId, {
-      contentType: input.contentType,
-      evidenceType: input.evidenceType ?? "FULFILLMENT_CAPTURE",
-      idempotencyKey: input.idempotencyKey,
-    });
+    let initialized: EvidenceUploadView;
+    try {
+      initialized = await this.initializeEvidenceUpload(input.proofId, {
+        contentType: input.contentType,
+        evidenceType: input.evidenceType ?? "FULFILLMENT_CAPTURE",
+        idempotencyKey: input.idempotencyKey,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "EVIDENCE_ALREADY_COMMITTED") {
+        return this.getProof(input.proofId);
+      }
+      throw error;
+    }
     await this.uploadObject(initialized.upload, input.bytes, input.contentType);
     const committed = await this.commitEvidence(input.proofId, initialized.evidenceId);
     return this.getProof(committed.proof.proofId);

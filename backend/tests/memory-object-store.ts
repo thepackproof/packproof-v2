@@ -1,7 +1,13 @@
 import { DomainError } from "../src/domain/errors.js";
 import { sha256Hex } from "../src/hash.js";
-import { assertSafeObjectKey } from "../src/s3/object-key.js";
-import type { ObjectDigest, ObjectStore, StoredObject, UploadTarget } from "../src/s3/object-store.js";
+import { assertSafeObjectKey, committedEvidenceObjectKey } from "../src/s3/object-key.js";
+import type {
+  CommittedObject,
+  ObjectDigest,
+  ObjectStore,
+  StoredObject,
+  UploadTarget,
+} from "../src/s3/object-store.js";
 
 export class MemoryObjectStore implements ObjectStore {
   private readonly objects = new Map<string, StoredObject>();
@@ -29,6 +35,25 @@ export class MemoryObjectStore implements ObjectStore {
     }
     return {
       sha256: sha256Hex(stored.body),
+      byteSize: stored.body.byteLength,
+      contentType: stored.contentType,
+    };
+  }
+
+  async commitUpload(key: string): Promise<CommittedObject | null> {
+    const stored = await this.get(key);
+    if (!stored) {
+      return null;
+    }
+    const sha256 = sha256Hex(stored.body);
+    const committedKey = committedEvidenceObjectKey(key, sha256);
+    this.objects.set(committedKey, {
+      body: Buffer.from(stored.body),
+      contentType: stored.contentType,
+    });
+    return {
+      key: committedKey,
+      sha256,
       byteSize: stored.body.byteLength,
       contentType: stored.contentType,
     };

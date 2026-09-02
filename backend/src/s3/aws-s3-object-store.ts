@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -7,8 +8,14 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DomainError } from "../domain/errors.js";
 import { sha256HexFromStream } from "../hash.js";
-import { assertSafeObjectKey } from "./object-key.js";
-import type { ObjectDigest, ObjectStore, StoredObject, UploadTarget } from "./object-store.js";
+import { assertSafeObjectKey, committedEvidenceObjectKey } from "./object-key.js";
+import type {
+  CommittedObject,
+  ObjectDigest,
+  ObjectStore,
+  StoredObject,
+  UploadTarget,
+} from "./object-store.js";
 
 export interface AwsS3ObjectStoreOptions {
   region: string;
@@ -119,6 +126,92 @@ export class AwsS3ObjectStore implements ObjectStore {
     }
   }
 
+  async commitUpload(key: string): Promise<CommittedObject | null> {
+    const sourceKey = assertSafeObjectKey(key);
+    let expectedSize: number | undefined;
+    let contentType = "application/octet-stream";
+    let entityTag: string | undefined;
+    try {
+      const head = await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: sourceKey }),
+      );
+      expectedSize = head.ContentLength;
+      contentType = head.ContentType ?? contentType;
+      entityTag = head.ETag;
+    } catch (error) {
+      if (isMissingS3Object(error)) {
+        return null;
+      }
+      throw error;
+    }
+    if (!entityTag) {
+      throw new DomainError(
+        "EVIDENCE_OBJECT_SNAPSHOT_UNAVAILABLE",
+        "Uploaded object cannot be committed without a stable storage identity",
+        409,
+      );
+    }
+
+    let hashed: { sha256: string; byteSize: number };
+    try {
+      const result = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: sourceKey,
+          IfMatch: entityTag,
+        }),
+      );
+      if (!result.Body) {
+        return null;
+      }
+      hashed = await sha256HexFromStream(result.Body as AsyncIterable<Uint8Array>);
+      contentType = result.ContentType ?? contentType;
+    } catch (error) {
+      if (isS3PreconditionFailure(error)) {
+        throw uploadChangedError();
+      }
+      if (isMissingS3Object(error)) {
+        return null;
+      }
+      throw error;
+    }
+    if (expectedSize != null && hashed.byteSize !== expectedSize) {
+      throw new DomainError(
+        "EVIDENCE_OBJECT_INCOMPLETE",
+        "Uploaded object size does not match stored metadata",
+        409,
+      );
+    }
+
+    const committedKey = committedEvidenceObjectKey(sourceKey, hashed.sha256);
+    try {
+      await this.client.send(
+        new CopyObjectCommand({
+          Bucket: this.bucket,
+          Key: committedKey,
+          CopySource: copySource(this.bucket, sourceKey),
+          CopySourceIfMatch: entityTag,
+          MetadataDirective: "COPY",
+        }),
+      );
+    } catch (error) {
+      if (isS3PreconditionFailure(error)) {
+        throw uploadChangedError();
+      }
+      if (isMissingS3Object(error)) {
+        return null;
+      }
+      throw error;
+    }
+
+    return {
+      key: committedKey,
+      sha256: hashed.sha256,
+      byteSize: hashed.byteSize,
+      contentType,
+    };
+  }
+
   async createUploadTarget(input: {
     key: string;
     contentType: string;
@@ -166,4 +259,24 @@ export function isMissingS3Object(error: unknown): boolean {
     candidate.name === "NotFoundException" ||
     candidate.$metadata?.httpStatusCode === 404
   );
+}
+
+function isS3PreconditionFailure(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return candidate.name === "PreconditionFailed" || candidate.$metadata?.httpStatusCode === 412;
+}
+
+function uploadChangedError(): DomainError {
+  return new DomainError(
+    "EVIDENCE_UPLOAD_CHANGED",
+    "Uploaded object changed while it was being committed; retry the commit",
+    409,
+  );
+}
+
+function copySource(bucket: string, key: string): string {
+  return `${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }

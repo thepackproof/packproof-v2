@@ -61,7 +61,7 @@ export async function documentAssets(
     captureRecipe: recipe.id,
     idempotencyKey: idempotencyOf(input),
   });
-  return { proof: await getProofView(db, proofId) };
+  return { proof: await getProofView(db, proofId, actorUserId) };
 }
 
 export async function completePacking(
@@ -91,7 +91,7 @@ export async function completePacking(
     captureRecipe: recipe.id,
     idempotencyKey: idempotencyOf(input),
   });
-  return { proof: await getProofView(db, proofId) };
+  return { proof: await getProofView(db, proofId, actorUserId) };
 }
 
 export async function handoffAssets(
@@ -134,7 +134,7 @@ export async function handoffAssets(
       carrierContext: input.shipping ?? {},
       idempotencyKey: key ? `${key}:transfer` : key,
     });
-    return { proof: await getProofView(tx, proofId) };
+    return { proof: await getProofView(tx, proofId, actorUserId) };
   });
 }
 
@@ -198,7 +198,7 @@ export async function receiveAssets(
         idempotencyKey: key ? `${key}:intake` : null,
       });
     }
-    return { proof: await getProofView(tx, proofId) };
+    return { proof: await getProofView(tx, proofId, actorUserId) };
   });
 }
 
@@ -222,7 +222,7 @@ export async function documentProcessingOutput(
     occurredAt: input.occurredAt,
     idempotencyKey: idempotencyOf(input),
   });
-  return { proof: await getProofView(db, proofId) };
+  return { proof: await getProofView(db, proofId, actorUserId) };
 }
 
 export async function completeReturnPacking(
@@ -251,7 +251,7 @@ export async function completeReturnPacking(
     captureRecipe: recipe.id,
     idempotencyKey: idempotencyOf(input),
   });
-  return { proof: await getProofView(db, proofId) };
+  return { proof: await getProofView(db, proofId, actorUserId) };
 }
 
 export async function completeFinalReceipt(
@@ -274,7 +274,7 @@ export async function completeFinalReceipt(
     occurredAt: input.occurredAt,
     idempotencyKey: idempotencyOf(input),
   });
-  return { proof: await getProofView(db, proofId) };
+  return { proof: await getProofView(db, proofId, actorUserId) };
 }
 
 export async function compareObservations(
@@ -297,7 +297,7 @@ export async function compareObservations(
     idempotencyKey: idempotencyOf(input),
     algorithmVersion: typeof input.algorithmVersion === "string" ? input.algorithmVersion : undefined,
   });
-  return { proof: await getProofView(db, proofId) };
+  return { proof: await getProofView(db, proofId, actorUserId) };
 }
 
 function unique(values: string[]): string[] {

@@ -184,6 +184,31 @@ describe("S3 evidence transport boundary", () => {
       1,
     );
 
+    await expect(
+      initializeEvidenceUpload(
+        harness.db,
+        harness.clock,
+        store,
+        seller,
+        proof.proofId,
+        { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: "s3-same" },
+      ),
+    ).rejects.toMatchObject({ code: "EVIDENCE_ALREADY_COMMITTED" });
+
+    const storedRow = await harness.db.query<{ object_key: string }>(
+      `SELECT object_key FROM evidence WHERE id = $1`,
+      [first.evidenceId],
+    );
+    const committedObjectKey = storedRow.rows[0]!.object_key;
+    expect(committedObjectKey).not.toBe(first.objectKey);
+    expect(committedObjectKey).toContain(`/committed/sha256-${committed.sha256}`);
+
+    // A presigned PUT issued before commit may still be valid. It can now only
+    // replace the staging object, never the immutable object referenced by the Proof.
+    await store.put(first.objectKey, Buffer.from("late-replacement"), "video/mp4");
+    expect((await store.get(first.objectKey))?.body.toString()).toBe("late-replacement");
+    expect((await store.get(committedObjectKey))?.body.equals(bytes)).toBe(true);
+
     const shipping = await getTransaction(harness.db, seller, txn.transactionId);
     expect(shipping.itemTitle).toBe("S3 camera");
     expect(shipping.shipping?.carrier).toBe("UPS");
@@ -205,7 +230,7 @@ describe("S3 evidence transport boundary", () => {
     };
     expect(manifest.evidence).toHaveLength(1);
     expect(manifest.evidence[0]?.sha256).toBe(committed.sha256);
-    expect(manifest.evidence[0]?.objectKey).toBe(first.objectKey);
+    expect(manifest.evidence[0]?.objectKey).toBe(committedObjectKey);
     expect(JSON.stringify(manifest)).not.toContain("https://");
     expect(manifest.transaction.itemTitle).toBe("S3 camera");
     expect(manifest.shipping.trackingNumber).toBe("1ZS3");

@@ -14,6 +14,10 @@ export interface FinalizeRequirementInput {
   packed?: boolean;
   released?: boolean;
   received?: boolean;
+  intakeCaptured?: boolean;
+  compared?: boolean;
+  processOutput?: boolean;
+  returnPacked?: boolean;
   finalReceipt?: boolean;
 }
 
@@ -113,6 +117,16 @@ function evaluateGradingFinalize(input: FinalizeRequirementInput): FinalizeEvalu
       ok: false,
       code: "PROOF_NOT_READY_FOR_FINALIZATION",
       message: "Record final receipt before finalizing",
+    };
+  }
+  if (
+    input.received &&
+    (!input.intakeCaptured || !input.compared || !input.processOutput || !input.returnPacked)
+  ) {
+    return {
+      ok: false,
+      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      message: "Complete receipt capture, comparison, processing output, and return packing before finalizing",
     };
   }
   return { ok: true };

@@ -18,6 +18,8 @@ import type { EbayRuntime } from "../src/domain/ebay-marketplace.js";
 import type { ShopifyOAuthRuntime } from "../src/integrations/connected-accounts/providers/shopify.js";
 import type { GoogleOAuthRuntime } from "../src/integrations/connected-accounts/providers/google.js";
 import type { FacebookOAuthRuntime } from "../src/integrations/connected-accounts/providers/facebook.js";
+import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
+import type { IntegrationCredentials } from "../src/integrations/credentials.js";
 
 const SECRETS = [
   "test-cert-id",
@@ -169,6 +171,7 @@ describe("connected accounts", () => {
     shopify?: FakeShopifyClient;
     googleFetch?: ReturnType<typeof googleScriptedFetch>;
     facebookFetch?: ReturnType<typeof facebookScriptedFetch>;
+    credentialStore?: MemoryCredentialStore;
   } = {}) {
     const shopifyClient = options.shopify ?? new FakeShopifyClient();
     harness = await createHarness(undefined, {
@@ -177,6 +180,7 @@ describe("connected accounts", () => {
       google: googleRuntime(options.googleFetch ?? googleScriptedFetch()),
       facebook: facebookRuntime(options.facebookFetch ?? facebookScriptedFetch()),
       integrations: createDefaultIntegrationRegistry(systemClock, { shopifyClient }),
+      credentialStore: options.credentialStore,
     });
     await seedAppSecrets(harness);
     return { shopifyClient };
@@ -472,6 +476,35 @@ describe("connected accounts", () => {
       expect(listed.body.accounts).toEqual([]);
       const audits = await listAccountAudit(harness.db, userId);
       expect(audits.some((row) => row.eventType === "CONNECTED_ACCOUNT_AUTH_ERROR")).toBe(true);
+    });
+
+    it("does not create a CONNECTED row when credential persistence fails", async () => {
+      class FailingUserCredentialStore extends MemoryCredentialStore {
+        override put(credentials: IntegrationCredentials): void {
+          if (!credentials.credentialReference.startsWith("memory:")) {
+            throw new Error("credential store unavailable");
+          }
+          super.put(credentials);
+        }
+      }
+
+      await boot({ credentialStore: new FailingUserCredentialStore() });
+      const userId = await login(harness.app, "seller-credential-failure");
+      const started = await request(harness.app)
+        .post("/me/connected-accounts/google/connect")
+        .set(auth(userId));
+      const callback = await request(harness.app).get("/oauth/google/callback").query({
+        code: "valid-google-code",
+        state: new URL(started.body.authorizationUrl).searchParams.get("state"),
+      });
+
+      expect(callback.status).toBe(302);
+      expect(callback.headers.location).toContain("connected=error");
+      const rows = await harness.db.query<{ status: string; credential_reference: string }>(
+        `SELECT status, credential_reference FROM connected_accounts WHERE user_id = $1`,
+        [userId],
+      );
+      expect(rows.rows).toEqual([]);
     });
   });
 

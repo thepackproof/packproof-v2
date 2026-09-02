@@ -3,8 +3,14 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DomainError } from "../domain/errors.js";
 import { sha256Hex } from "../hash.js";
-import { assertSafeObjectKey } from "./object-key.js";
-import type { ObjectDigest, ObjectStore, StoredObject, UploadTarget } from "./object-store.js";
+import { assertSafeObjectKey, committedEvidenceObjectKey } from "./object-key.js";
+import type {
+  CommittedObject,
+  ObjectDigest,
+  ObjectStore,
+  StoredObject,
+  UploadTarget,
+} from "./object-store.js";
 
 export class LocalObjectStore implements ObjectStore {
   constructor(
@@ -40,6 +46,22 @@ export class LocalObjectStore implements ObjectStore {
     }
     return {
       sha256: sha256Hex(stored.body),
+      byteSize: stored.body.byteLength,
+      contentType: stored.contentType,
+    };
+  }
+
+  async commitUpload(key: string): Promise<CommittedObject | null> {
+    const stored = await this.get(key);
+    if (!stored) {
+      return null;
+    }
+    const sha256 = sha256Hex(stored.body);
+    const committedKey = committedEvidenceObjectKey(key, sha256);
+    await this.put(committedKey, stored.body, stored.contentType);
+    return {
+      key: committedKey,
+      sha256,
       byteSize: stored.body.byteLength,
       contentType: stored.contentType,
     };

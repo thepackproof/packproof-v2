@@ -161,6 +161,17 @@ export async function updateAssetCatalog(
         WHERE id = $1`,
       [assetId, JSON.stringify(descriptor), now],
     );
+    await appendAudit(tx, {
+      proofId,
+      actorUserId,
+      eventType: "ASSET_CATALOG_UPDATED",
+      eventData: {
+        assetId,
+        before: asDescriptor(found.rows[0].catalog_descriptor),
+        after: descriptor,
+      },
+      at: clock.now(),
+    });
     return getProofAsset(tx, proofId, assetId);
   });
 }

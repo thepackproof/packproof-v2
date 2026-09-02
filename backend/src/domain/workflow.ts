@@ -56,12 +56,21 @@ export const WORKFLOW_STAGES = [
   "IN_TRANSIT",
   "AWAITING_RECEIPT_CAPTURE",
   "AWAITING_COMPARE",
+  "AWAITING_PROCESS_OUTPUT",
   "AWAITING_RETURN",
   "AWAITING_FINAL_RECEIPT",
   "READY_TO_FINALIZE",
   "COMPLETE",
 ] as const;
 export type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
+
+export const CUSTODY_OUTCOMES = [
+  "IN_PROGRESS",
+  "TRANSFER_UNOBSERVED",
+  "ORIGIN_RECORD_FINALIZED",
+  "ROUND_TRIP_COMPLETE",
+] as const;
+export type CustodyOutcome = (typeof CUSTODY_OUTCOMES)[number];
 
 export interface NextAction {
   type: NextActionType;
@@ -79,6 +88,7 @@ export interface WorkflowPolicyView {
   nextAction: NextAction | null;
   canFinalize: boolean;
   validObservationTypes: ObservationType[];
+  custodyOutcome: CustodyOutcome | null;
 }
 
 export interface WorkflowFacts {
@@ -159,13 +169,13 @@ export function requireContinuityResult(value: unknown): ContinuityResult {
 }
 
 export function evaluateWorkflowPolicy(facts: WorkflowFacts): WorkflowPolicyView {
-  if (facts.workflowType === "GRADING_SUBMISSION") {
-    return evaluateGradingPolicy(facts);
-  }
-  return evaluateCommercePolicy(facts);
+  const policy = facts.workflowType === "GRADING_SUBMISSION"
+    ? evaluateGradingPolicy(facts)
+    : evaluateCommercePolicy(facts);
+  return { ...policy, custodyOutcome: custodyOutcomeFor(facts) };
 }
 
-function evaluateCommercePolicy(facts: WorkflowFacts): WorkflowPolicyView {
+function evaluateCommercePolicy(facts: WorkflowFacts): Omit<WorkflowPolicyView, "custodyOutcome"> {
   const validObservationTypes: ObservationType[] = ["PACKED", "RELEASED", "RECEIVED"];
   if (facts.proofStatus === "FINALIZED") {
     return {
@@ -230,7 +240,7 @@ function evaluateCommercePolicy(facts: WorkflowFacts): WorkflowPolicyView {
   };
 }
 
-function evaluateGradingPolicy(facts: WorkflowFacts): WorkflowPolicyView {
+function evaluateGradingPolicy(facts: WorkflowFacts): Omit<WorkflowPolicyView, "custodyOutcome"> {
   const validObservationTypes: ObservationType[] = [...OBSERVATION_TYPES];
   if (facts.proofStatus === "FINALIZED") {
     return {
@@ -361,6 +371,21 @@ function evaluateGradingPolicy(facts: WorkflowFacts): WorkflowPolicyView {
     };
   }
 
+  if (!facts.processOutput) {
+    return {
+      workflowType: "GRADING_SUBMISSION",
+      workflowStage: "AWAITING_PROCESS_OUTPUT",
+      nextAction: {
+        type: "DOCUMENT_OUTPUT",
+        title: "Document processing output",
+        hint: "Record the grading or processing result before return packing.",
+        actorRole: "BUYER",
+      },
+      canFinalize: false,
+      validObservationTypes,
+    };
+  }
+
   if (!facts.returnPacked && facts.actorRole === "BUYER") {
     return {
       workflowType: "GRADING_SUBMISSION",
@@ -404,6 +429,30 @@ function evaluateGradingPolicy(facts: WorkflowFacts): WorkflowPolicyView {
     canFinalize: facts.actorRole === "SELLER",
     validObservationTypes,
   };
+}
+
+export function custodyOutcomeFor(input: {
+  workflowType: WorkflowType;
+  proofStatus: string;
+  released: boolean;
+  received: boolean;
+  finalReceipt: boolean;
+}): CustodyOutcome | null {
+  if (input.workflowType !== "GRADING_SUBMISSION") {
+    return null;
+  }
+  if (input.proofStatus === "FINALIZED") {
+    return input.received && input.finalReceipt
+      ? "ROUND_TRIP_COMPLETE"
+      : "ORIGIN_RECORD_FINALIZED";
+  }
+  if (input.received && input.finalReceipt) {
+    return "ROUND_TRIP_COMPLETE";
+  }
+  if (input.released && !input.received) {
+    return "TRANSFER_UNOBSERVED";
+  }
+  return "IN_PROGRESS";
 }
 
 export function nextUndocumentedAsset(

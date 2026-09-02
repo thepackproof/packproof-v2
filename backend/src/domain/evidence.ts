@@ -93,11 +93,11 @@ export async function initializeEvidenceUpload(
     if (existing.rows[0]) {
       const row = existing.rows[0];
       if (row.validation_status === "COMMITTED") {
-        const upload = await objectStore.createUploadTarget({
-          key: row.object_key,
-          contentType: row.content_type,
-        });
-        return toUploadView(row, upload);
+        throw new DomainError(
+          "EVIDENCE_ALREADY_COMMITTED",
+          "Committed evidence cannot receive another upload authorization",
+          409,
+        );
       }
       const upload = await objectStore.createUploadTarget({
         key: row.object_key,
@@ -134,6 +134,13 @@ export async function initializeEvidenceUpload(
           [proofId, input.idempotencyKey],
         );
         if (raced.rows[0]) {
+          if (raced.rows[0].validation_status === "COMMITTED") {
+            throw new DomainError(
+              "EVIDENCE_ALREADY_COMMITTED",
+              "Committed evidence cannot receive another upload authorization",
+              409,
+            );
+          }
           const upload = await objectStore.createUploadTarget({
             key: raced.rows[0].object_key,
             contentType: raced.rows[0].content_type,
@@ -197,22 +204,22 @@ export async function commitEvidence(
     return prepared.committed;
   }
 
-  const digest = await objectStore.digest(prepared.objectKey);
-  if (!digest) {
+  const committedObject = await objectStore.commitUpload(prepared.objectKey);
+  if (!committedObject) {
     throw new DomainError(
       "EVIDENCE_OBJECT_MISSING",
       "Uploaded object was not found",
       409,
     );
   }
-  if (!contentTypesCompatible(digest.contentType, prepared.contentType)) {
+  if (!contentTypesCompatible(committedObject.contentType, prepared.contentType)) {
     throw new DomainError(
       "EVIDENCE_METADATA_MISMATCH",
       "Uploaded object content type does not match the pending evidence record",
       422,
     );
   }
-  if (clientSha256 && clientSha256.toLowerCase() !== digest.sha256) {
+  if (clientSha256 && clientSha256.toLowerCase() !== committedObject.sha256) {
     throw new DomainError(
       "EVIDENCE_HASH_MISMATCH",
       "Client hash does not match independently computed SHA-256",
@@ -229,12 +236,19 @@ export async function commitEvidence(
     const now = clock.now().toISOString();
     await tx.query(
       `UPDATE evidence
-          SET sha256 = $2,
-              byte_size = $3,
-              committed_at = $4,
+          SET object_key = $2,
+              sha256 = $3,
+              byte_size = $4,
+              committed_at = $5,
               validation_status = 'COMMITTED'
         WHERE id = $1 AND committed_at IS NULL`,
-      [evidenceId, digest.sha256, digest.byteSize, now],
+      [
+        evidenceId,
+        committedObject.key,
+        committedObject.sha256,
+        committedObject.byteSize,
+        now,
+      ],
     );
 
     if (current.proofStatus === "READY_FOR_EVIDENCE") {
@@ -250,15 +264,20 @@ export async function commitEvidence(
       proofId,
       actorUserId,
       eventType: "EVIDENCE_COMMITTED",
-      eventData: { evidenceId, sha256: digest.sha256, byteSize: digest.byteSize },
+      eventData: {
+        evidenceId,
+        sha256: committedObject.sha256,
+        byteSize: committedObject.byteSize,
+        objectKey: committedObject.key,
+      },
       at: clock.now(),
     });
 
     return {
       evidenceId,
       proofId,
-      sha256: digest.sha256,
-      byteSize: digest.byteSize,
+      sha256: committedObject.sha256,
+      byteSize: committedObject.byteSize,
       validationStatus: "COMMITTED",
       committedAt: now,
       proof: await getProofView(tx, proofId),

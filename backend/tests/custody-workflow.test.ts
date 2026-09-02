@@ -8,6 +8,7 @@ import { evaluateWorkflowPolicy } from "../src/domain/workflow.js";
 import { retentionPolicyFor } from "../src/domain/retention.js";
 import { hashCanonicalManifest } from "../src/domain/finalize.js";
 import { auth, commitProofEvidence, createHarness, login, type TestHarness } from "./helpers.js";
+import { errorCodeFromSql } from "../src/domain/errors.js";
 
 async function commitSlot(
   harness: TestHarness,
@@ -83,6 +84,13 @@ describe("grading custody vertical slice", () => {
     const proofId = created.body.proofId as string;
     const assetA = created.body.assets[0].assetId as string;
     const assetB = created.body.assets[1].assetId as string;
+
+    const catalog = await request(harness.app)
+      .patch(`/proofs/${proofId}/assets/${assetA}`)
+      .set(auth(originator))
+      .send({ catalogDescriptor: { set: "Base", card: "Charizard" } });
+    expect(catalog.status).toBe(200);
+    expect(catalog.body.asset.catalogDescriptor.card).toBe("Charizard");
 
     const identicalBind = await bindAssetExternalRef(harness.db, harness.clock, originator, proofId, {
       scope: "ASSET",
@@ -316,6 +324,7 @@ describe("grading custody vertical slice", () => {
       .set(auth(receiver))
       .send({ idempotencyKey: "cmp-1" });
     expect(compared.status).toBe(200);
+    expect(compared.body.proof.nextAction.type).toBe("DOCUMENT_OUTPUT");
     expect(compared.body.proof.continuityObservations[0].result).toMatch(/CONSISTENT|INCONCLUSIVE/);
     expect(compared.body.proof.continuityObservations[0].summary).not.toMatch(/swapped|stolen|fraud/i);
     const pairs = compared.body.proof.continuityObservations[0].evidencePairs as Array<{
@@ -347,6 +356,13 @@ describe("grading custody vertical slice", () => {
     expect(material.body.proof.continuityObservations).toHaveLength(2);
     expect(material.body.proof.evidence[0].sha256).toBe(firstFront.sha256);
 
+    const output = await request(harness.app)
+      .post(`/proofs/${proofId}/actions/output`)
+      .set(auth(receiver))
+      .send({ idempotencyKey: "output-1" });
+    expect(output.status).toBe(200);
+    expect(output.body.proof.nextAction.type).toBe("RETURN_PACK");
+
     const returnPack = await request(harness.app)
       .post(`/proofs/${proofId}/actions/return-pack`)
       .set(auth(receiver))
@@ -363,6 +379,16 @@ describe("grading custody vertical slice", () => {
     expect(finalized.status).toBe(200);
     const manifest = finalized.body.manifest.manifest as Record<string, unknown>;
     expect(manifest.workflowType).toBe("GRADING_SUBMISSION");
+    expect(manifest.custodyOutcome).toBe("ROUND_TRIP_COMPLETE");
+    expect(finalized.body.proof.custodyOutcome).toBe("ROUND_TRIP_COMPLETE");
+    await expect(
+      harness.db.query(
+        `UPDATE proof_assets SET catalog_descriptor = $2::jsonb WHERE id = $1`,
+        [assetA, JSON.stringify({ changed: "after-finalize" })],
+      ),
+    ).rejects.toSatisfy(
+      (error: unknown) => errorCodeFromSql(error) === "PROOF_ALREADY_FINALIZED",
+    );
     expect(Array.isArray(manifest.assets)).toBe(true);
     expect(Array.isArray(manifest.observations)).toBe(true);
     expect(Array.isArray(manifest.transfers)).toBe(true);
@@ -414,6 +440,8 @@ describe("grading custody vertical slice", () => {
     expect(proof.body.nextAction.type).toBe("WAIT_FOR_RECEIPT");
     const finalized = await request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(originator));
     expect(finalized.status).toBe(200);
+    expect(finalized.body.proof.custodyOutcome).toBe("ORIGIN_RECORD_FINALIZED");
+    expect(finalized.body.manifest.manifest.custodyOutcome).toBe("ORIGIN_RECORD_FINALIZED");
   });
 
   it("does not change COMMERCE_SALE create-or-get or seller-only evidence", async () => {

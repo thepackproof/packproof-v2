@@ -81,7 +81,9 @@ export async function submitStationSession(input: {
   };
 
   notify("upload", 0);
-  let initialized;
+  let initialized: Awaited<ReturnType<StationSubmitApi["initializeEvidenceUpload"]>> | null = null;
+  let evidenceId: string | null = null;
+  let proof: StationProofSnapshot | null = null;
   try {
     initialized = await input.deps.api.initializeEvidenceUpload(proofId, {
       contentType: input.capture.contentType,
@@ -92,16 +94,44 @@ export async function submitStationSession(input: {
       notify("upload", percent);
     });
   } catch (error) {
-    throw mapSubmitError(error, "UPLOAD_FAILED", "Upload failed. The packing video is still on this device.");
+    const mapped = stationErrorFromUnknown(error);
+    if (mapped.code === "EVIDENCE_ALREADY_COMMITTED") {
+      notify("refresh", 100);
+      proof = await input.deps.api.getProof(proofId);
+      evidenceId = proof.evidence.find(
+        (item) => item.validationStatus === "COMMITTED" && item.evidenceId,
+      )?.evidenceId ?? null;
+      if (!evidenceId) {
+        throw mapSubmitError(
+          error,
+          "NETWORK",
+          "Packing evidence was committed, but recovery could not identify it.",
+        );
+      }
+    } else {
+      throw mapSubmitError(error, "UPLOAD_FAILED", "Upload failed. The packing video is still on this device.");
+    }
   }
 
-  notify("commit", 100);
-  let proof: StationProofSnapshot;
-  try {
-    const committed = await input.deps.api.commitEvidence(proofId, initialized.evidenceId);
-    proof = committed.proof;
-  } catch (error) {
-    throw mapSubmitError(error, "NETWORK", "Evidence was not committed. The packing video is still on this device.");
+  if (initialized) {
+    evidenceId = initialized.evidenceId;
+  }
+
+  if (!proof && initialized) {
+    notify("commit", 100);
+    try {
+      const committed = await input.deps.api.commitEvidence(proofId, initialized.evidenceId);
+      proof = committed.proof;
+    } catch (error) {
+      throw mapSubmitError(error, "NETWORK", "Evidence was not committed. The packing video is still on this device.");
+    }
+  }
+
+  if (!proof || !evidenceId) {
+    throw {
+      code: "NETWORK",
+      message: "Packing evidence recovery did not return a committed record.",
+    } satisfies StationError;
   }
 
   const optional = proof.participationPolicy === "COUNTERPARTY_OPTIONAL";
@@ -110,7 +140,7 @@ export async function submitStationSession(input: {
     try {
       const attested = await input.deps.api.createAttestation(proofId, {
         statement: "PACKED_DESCRIBED_ITEM",
-        relatedEvidenceId: initialized.evidenceId,
+        relatedEvidenceId: evidenceId,
       });
       proof = attested.proof;
     } catch (error) {
@@ -149,7 +179,7 @@ export async function submitStationSession(input: {
     proof,
     completion: proof.status === "FINALIZED" ? "FINALIZED" : "EVIDENCE_COMMITTED",
     idempotencyKey: key,
-    evidenceId: initialized.evidenceId,
+    evidenceId,
   };
 }
 

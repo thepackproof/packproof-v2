@@ -191,6 +191,7 @@ export interface CanonicalProof {
   };
   workflowType?: string;
   workflowStage?: string;
+  custodyOutcome?: string | null;
   nextAction?: {
     type: string;
     title: string;

@@ -34,7 +34,7 @@ import { listProofAssets } from "./assets.js";
 import { listTransfers } from "./transfers.js";
 import { listContinuityEvaluations } from "./continuity.js";
 import { listAssetBindings } from "./asset-bindings.js";
-import { requireWorkflowType } from "./workflow.js";
+import { custodyOutcomeFor, requireWorkflowType } from "./workflow.js";
 
 export interface ManifestView {
   manifestId: string;
@@ -165,6 +165,10 @@ export async function finalizeProof(
       packed: observations.some((row) => row.type === "PACKED"),
       released: observations.some((row) => row.type === "RELEASED"),
       received: observations.some((row) => row.type === "RECEIVED"),
+      intakeCaptured: observations.some((row) => row.type === "INTAKE_CAPTURE"),
+      compared: (await listContinuityEvaluations(tx, proofId)).length > 0,
+      processOutput: observations.some((row) => row.type === "PROCESS_OUTPUT"),
+      returnPacked: observations.some((row) => row.type === "RETURN_PACKED"),
       finalReceipt: observations.some((row) => row.type === "FINAL_RECEIPT"),
     });
     if (!evaluation.ok) {
@@ -276,6 +280,13 @@ export async function finalizeProof(
       const continuity = await listContinuityEvaluations(tx, proofId);
       const bindings = await listAssetBindings(tx, proofId);
       payload.workflowType = workflowType;
+      payload.custodyOutcome = custodyOutcomeFor({
+        workflowType,
+        proofStatus: "FINALIZED",
+        released: observations.some((row) => row.type === "RELEASED"),
+        received: observations.some((row) => row.type === "RECEIVED"),
+        finalReceipt: observations.some((row) => row.type === "FINAL_RECEIPT"),
+      });
       payload.assets = assets.map((asset) => ({
         assetId: asset.assetId,
         assetInstanceId: asset.assetInstanceId,

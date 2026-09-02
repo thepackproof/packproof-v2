@@ -1,5 +1,6 @@
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
+import { newId } from "../ids.js";
 import { DomainError } from "./errors.js";
 import { appendAccountAudit } from "./account-audit.js";
 import {
@@ -205,22 +206,11 @@ export async function completeConnectedAccountOAuth(
         : existingOther?.userId === attempt.userId
           ? existingOther.id
           : undefined;
-    const accountId = reauthorizeId;
-    const upserted = await upsertConnectedAccount(db, clock, {
-      id: accountId,
-      userId: attempt.userId,
-      provider: providerId,
-      externalAccountId: identity.externalAccountId,
-      externalAccountName: identity.externalAccountName,
-      scopes: tokens.scopes,
-      credentialReference: "pending",
-      expiresAt: tokens.expiresAt,
-      providerMetadata: identity.metadata,
-    });
+    const accountId = reauthorizeId ?? newId("cac");
     const finalReference = connectedAccountCredentialReference({
       packproofEnvironment: service.packproofEnvironment,
       provider: providerId,
-      accountId: upserted.record.id,
+      accountId,
     });
     if (typeof service.credentials.put !== "function") {
       throw new DomainError(
@@ -234,13 +224,31 @@ export async function completeConnectedAccountOAuth(
       credentialReference: finalReference,
       material: tokenMaterial(tokens),
     });
-    const record = await updateConnectedAccount(db, clock, upserted.record.id, {
-      credentialReference: finalReference,
-      status: "CONNECTED",
-      scopes: tokens.scopes,
-      expiresAt: tokens.expiresAt,
-      providerMetadata: identity.metadata,
-    });
+    let upserted: Awaited<ReturnType<typeof upsertConnectedAccount>>;
+    try {
+      upserted = await upsertConnectedAccount(db, clock, {
+        id: accountId,
+        userId: attempt.userId,
+        provider: providerId,
+        externalAccountId: identity.externalAccountId,
+        externalAccountName: identity.externalAccountName,
+        scopes: tokens.scopes,
+        credentialReference: finalReference,
+        expiresAt: tokens.expiresAt,
+        providerMetadata: identity.metadata,
+      });
+    } catch (error) {
+      if (!reauthorizeId && typeof service.credentials.deleteCredentials === "function") {
+        await Promise.resolve(
+          service.credentials.deleteCredentials({
+            adapterKey: providerId,
+            credentialReference: finalReference,
+          }),
+        ).catch(() => undefined);
+      }
+      throw error;
+    }
+    const record = upserted.record;
     await syncCommerceConnection(db, clock, record);
     const reauthorized = Boolean(reauthorizeId);
     await appendAccountAudit(db, {

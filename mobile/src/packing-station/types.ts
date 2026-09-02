@@ -158,7 +158,7 @@ export interface StationProofSnapshot {
   status: string;
   participationPolicy?: string | null;
   participants: Array<{ userId: string; role: string }>;
-  evidence: Array<{ validationStatus: string; evidenceType?: string }>;
+  evidence: Array<{ evidenceId?: string; validationStatus: string; evidenceType?: string }>;
   attestations?: Array<{ statement: string; attestedBy: string }>;
   transaction: {
     externalReference?: string | null;

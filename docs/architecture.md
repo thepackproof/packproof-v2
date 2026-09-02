@@ -40,6 +40,8 @@ state           (S3 in AWS; local adapter in dev/test)
 
 Canonical domain state lives in PostgreSQL. Evidence bytes live in the object store. Clients cache nothing as truth.
 
+Evidence upload authorization applies only to a staging object. Commitment hashes a storage-identity-locked snapshot and promotes it to a separate, server-only, content-addressed key before PostgreSQL records the digest and committed key. Previously issued client PUT URLs can therefore change only unreferenced staging bytes. Committed evidence rows reject all updates and deletes at the database layer.
+
 ## Identity
 
 Domain tables use PackProof user ids (`user_01…`). External auth subjects map through `auth_identities`. Proof tables never store Firebase, Cognito, Google, or Apple identifiers.
