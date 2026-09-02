@@ -1,19 +1,24 @@
 import { StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
-import { colors, spacing, typography } from "../theme/tokens";
+import { spacing, typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
+import { ErrorBanner } from "../ui/EmptyState";
 
 export function DevToolsScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const proof = app.proof;
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Developer tools" onBack={app.goBack} />
-      <Text style={styles.note}>These controls are hidden in production builds. They do not change Proof ownership rules.</Text>
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <Text style={[styles.note, { color: colors.textSecondary }]}>
+        These controls are hidden in production builds. They do not change Proof ownership rules.
+      </Text>
+      <ErrorBanner message={app.error} />
       <Button label="Refresh from server" onPress={() => void app.syncWorkspace()} disabled={app.busy} variant="secondary" />
       {app.session?.proofId ? (
         <Button
@@ -31,7 +36,7 @@ export function DevToolsScreen() {
       />
       {proof && app.role === "SELLER" ? (
         <View style={styles.block}>
-          <Text style={styles.heading}>Demo shipment observations</Text>
+          <Text style={[styles.heading, { color: colors.textPrimary }]}>Demo shipment observations</Text>
           {(
             [
               ["LABEL_CREATED", "Import label created"],
@@ -52,10 +57,10 @@ export function DevToolsScreen() {
       ) : null}
       {proof ? (
         <View style={styles.block}>
-          <Text style={styles.heading}>Raw state</Text>
-          <Text selectable style={styles.mono}>{`proofId ${proof.proofId}`}</Text>
-          <Text selectable style={styles.mono}>{`status ${proof.status}`}</Text>
-          <Text selectable style={styles.mono}>{`capture ${app.captureStatus}`}</Text>
+          <Text style={[styles.heading, { color: colors.textPrimary }]}>Raw state</Text>
+          <Text selectable style={[styles.mono, { color: colors.textPrimary }]}>{`proofId ${proof.proofId}`}</Text>
+          <Text selectable style={[styles.mono, { color: colors.textPrimary }]}>{`status ${proof.status}`}</Text>
+          <Text selectable style={[styles.mono, { color: colors.textPrimary }]}>{`capture ${app.captureStatus}`}</Text>
         </View>
       ) : null}
     </AppScreen>
@@ -63,9 +68,8 @@ export function DevToolsScreen() {
 }
 
 const styles = StyleSheet.create({
-  note: { ...typography.secondary, color: colors.slate },
-  error: { ...typography.secondary, color: colors.danger },
-  heading: { ...typography.sectionTitle, color: colors.navy },
+  note: { ...typography.secondary },
+  heading: { ...typography.sectionTitle },
   block: { gap: spacing.sm },
-  mono: { ...typography.caption, color: colors.navy },
+  mono: { ...typography.caption },
 });

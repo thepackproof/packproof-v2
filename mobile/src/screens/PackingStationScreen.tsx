@@ -609,7 +609,7 @@ function toneForPhase(phase: StationState["phase"]): { background: string; ink: 
     case "RECOVERY":
       return { background: "#2A2414", ink: "#FFF8E8", muted: "#E0C88A" };
     default:
-      return { background: "#142735", ink: "#FFFFFF", muted: "#9AA8B2" };
+      return { background: "#0B1220", ink: "#F3F7FC", muted: "#9FB0C6" };
   }
 }
 
@@ -659,9 +659,9 @@ const styles = StyleSheet.create({
   fallbackLabel: { fontSize: 14, fontWeight: "700", letterSpacing: 0.6 },
   input: {
     borderWidth: 2,
-    borderColor: "#888",
-    backgroundColor: "#fff",
-    color: "#111",
+    borderColor: "#24354D",
+    backgroundColor: "#16243A",
+    color: "#F3F7FC",
     padding: 16,
     fontSize: 20,
   },

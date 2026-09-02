@@ -10,7 +10,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, spacing } from "../theme/tokens";
+import { spacing } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 
 export function AppScreen(props: {
   children: ReactNode;
@@ -26,8 +27,10 @@ export function AppScreen(props: {
   style?: StyleProp<ViewStyle>;
 }) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const background = props.background ?? colors.background;
-  const paddingBottom = (props.bottomInset === false ? spacing.lg : Math.max(insets.bottom, spacing.lg)) + (props.extraBottom ?? 0);
+  const paddingBottom =
+    (props.bottomInset === false ? spacing.lg : Math.max(insets.bottom, spacing.lg)) + (props.extraBottom ?? 0);
   const contentStyle = [
     styles.content,
     props.padded === false ? null : styles.padded,
@@ -53,7 +56,13 @@ export function AppScreen(props: {
         onScroll={props.onScrollOffset ? handleScroll : undefined}
         refreshControl={
           props.onRefresh ? (
-            <RefreshControl refreshing={Boolean(props.refreshing)} onRefresh={props.onRefresh} tintColor={colors.navy} />
+            <RefreshControl
+              refreshing={Boolean(props.refreshing)}
+              onRefresh={props.onRefresh}
+              tintColor={colors.textPrimary}
+              colors={[colors.accent]}
+              progressBackgroundColor={colors.surface}
+            />
           ) : undefined
         }
       >

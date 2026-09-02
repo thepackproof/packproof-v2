@@ -1,23 +1,26 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { MARKETPLACE_DISCLOSURE } from "../copy/errors";
 import { displayName, formatDate, moneyLabel, quantityLabel } from "../copy/format";
 import { providerDisplay } from "../copy/status";
-import { colors, spacing, typography } from "../theme/tokens";
+import { typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { InfoCard } from "../ui/ProofCard";
 import { SourceBadge } from "../ui/SourceBadge";
+import { ErrorBanner } from "../ui/EmptyState";
 
 export function PurchaseReviewScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const imported = app.importReview;
   if (!imported) {
     return (
       <AppScreen>
         <AppHeader title="Review purchase" onBack={app.goBack} />
-        <Text style={styles.body}>No imported purchase to review.</Text>
+        <Text style={[styles.body, { color: colors.textPrimary }]}>No imported purchase to review.</Text>
       </AppScreen>
     );
   }
@@ -27,28 +30,36 @@ export function PurchaseReviewScreen() {
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Review purchase" onBack={app.goBack} />
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <ErrorBanner message={app.error} />
       <InfoCard>
-        <Text style={styles.title}>{txn.itemTitle || "Imported purchase"}</Text>
-        {txn.itemDescription ? <Text style={styles.body}>{txn.itemDescription}</Text> : null}
-        <Text style={styles.meta}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{txn.itemTitle || "Imported purchase"}</Text>
+        {txn.itemDescription ? <Text style={[styles.body, { color: colors.textPrimary }]}>{txn.itemDescription}</Text> : null}
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>
           {[quantityLabel(txn.quantity), moneyLabel(txn.transactionValue, txn.currency)].filter(Boolean).join(" • ")}
         </Text>
-        {txn.transactionDate ? <Text style={styles.meta}>Purchased {formatDate(txn.transactionDate)}</Text> : null}
+        {txn.transactionDate ? (
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>Purchased {formatDate(txn.transactionDate)}</Text>
+        ) : null}
       </InfoCard>
       <InfoCard>
-        <Text style={styles.label}>Buyer</Text>
-        <Text style={styles.body}>{displayName({ displayName: buyer?.displayName, email: buyer?.email, fallback: "Not provided" })}</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Buyer</Text>
+        <Text style={[styles.body, { color: colors.textPrimary }]}>
+          {displayName({ displayName: buyer?.displayName, email: buyer?.email, fallback: "Not provided" })}
+        </Text>
       </InfoCard>
       <InfoCard>
-        <Text style={styles.label}>Shipping</Text>
-        <Text style={styles.body}>{[txn.shipping?.carrier, txn.shipping?.service].filter(Boolean).join(" ") || "Not provided"}</Text>
-        {txn.shipping?.trackingNumber ? <Text style={styles.meta}>{txn.shipping.trackingNumber}</Text> : null}
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Shipping</Text>
+        <Text style={[styles.body, { color: colors.textPrimary }]}>
+          {[txn.shipping?.carrier, txn.shipping?.service].filter(Boolean).join(" ") || "Not provided"}
+        </Text>
+        {txn.shipping?.trackingNumber ? (
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{txn.shipping.trackingNumber}</Text>
+        ) : null}
       </InfoCard>
       <SourceBadge category="COMMERCE" label={`Imported from ${providerDisplay(txn.provenance?.provider ?? imported.identity.adapterKey)}`} />
-      <Text style={styles.disclosure}>{MARKETPLACE_DISCLOSURE}</Text>
+      <Text style={[styles.disclosure, { color: colors.textSecondary }]}>{MARKETPLACE_DISCLOSURE}</Text>
       {existing ? (
-        <Text style={styles.meta}>A PackProof already exists for this order.</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>A PackProof already exists for this order.</Text>
       ) : null}
       <Button
         label={existing ? "Open existing Proof" : "Create PackProof"}
@@ -81,10 +92,9 @@ export function PurchaseReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.cardTitle, color: colors.navy },
-  label: { ...typography.caption, color: colors.slate },
-  body: { ...typography.body, color: colors.navy },
-  meta: { ...typography.secondary, color: colors.slate },
-  disclosure: { ...typography.secondary, color: colors.slate },
-  error: { ...typography.secondary, color: colors.danger },
+  title: { ...typography.cardTitle },
+  label: { ...typography.caption },
+  body: { ...typography.body },
+  meta: { ...typography.secondary },
+  disclosure: { ...typography.secondary },
 });

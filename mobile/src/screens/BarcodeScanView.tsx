@@ -2,6 +2,8 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { STATION_BARCODE_TYPES, normalizeStationReference } from "../packing-station/scan";
+import { useTheme } from "../theme/ThemeProvider";
+import { PulseOpacity } from "../ui/motion";
 
 export function BarcodeScanView(props: {
   prompt?: string;
@@ -11,6 +13,7 @@ export function BarcodeScanView(props: {
   onPermissionDenied: () => void;
   onUnavailable: () => void;
 }) {
+  const { colors } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const locked = useRef(false);
   const denied = useRef(false);
@@ -44,9 +47,16 @@ export function BarcodeScanView(props: {
   if (!permission?.granted) {
     return (
       <View style={styles.fallback}>
-        <Text style={styles.copy}>Allow camera access to scan a shipping label or order barcode.</Text>
-        <Pressable style={styles.button} onPress={props.onCancel}>
-          <Text style={styles.buttonText}>Cancel</Text>
+        <Text style={[styles.copy, { color: colors.scanText }]}>
+          Allow camera access to scan a shipping label or order barcode.
+        </Text>
+        <Pressable
+          style={[styles.button, { borderColor: colors.scanText }]}
+          onPress={props.onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={[styles.buttonText, { color: colors.scanText }]}>Cancel</Text>
         </Pressable>
       </View>
     );
@@ -54,33 +64,41 @@ export function BarcodeScanView(props: {
 
   return (
     <View style={styles.wrap}>
-      <CameraView
-        style={styles.camera}
-        facing="back"
-        barcodeScannerSettings={{ barcodeTypes: [...STATION_BARCODE_TYPES] }}
-        onBarcodeScanned={({ data }) => {
-          if (locked.current) {
-            return;
-          }
-          const value = normalizeStationReference(data);
-          if (!value) {
-            return;
-          }
-          locked.current = true;
-          props.onDecoded(value);
-        }}
-      />
-      <View style={styles.frame} pointerEvents="none" />
-      {props.prompt ? <Text style={styles.copy}>{props.prompt}</Text> : null}
-      <Pressable style={styles.button} onPress={props.onCancel}>
-        <Text style={styles.buttonText}>Cancel</Text>
+      <View style={styles.cameraWrap}>
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: [...STATION_BARCODE_TYPES] }}
+          onBarcodeScanned={({ data }) => {
+            if (locked.current) {
+              return;
+            }
+            const value = normalizeStationReference(data);
+            if (!value) {
+              return;
+            }
+            locked.current = true;
+            props.onDecoded(value);
+          }}
+        />
+        <PulseOpacity active style={[styles.frame, { borderColor: colors.accent }]} />
+      </View>
+      {props.prompt ? <Text style={[styles.copy, { color: colors.scanText }]}>{props.prompt}</Text> : null}
+      <Pressable
+        style={[styles.button, { borderColor: colors.scanText }]}
+        onPress={props.onCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+      >
+        <Text style={[styles.buttonText, { color: colors.scanText }]}>Cancel</Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 14, width: "100%", position: "relative" },
+  wrap: { gap: 14, width: "100%" },
+  cameraWrap: { width: "100%", position: "relative" },
   camera: { width: "100%", aspectRatio: 3 / 4, backgroundColor: "#000", borderRadius: 16, overflow: "hidden" },
   frame: {
     position: "absolute",
@@ -89,11 +107,10 @@ const styles = StyleSheet.create({
     right: 24,
     height: 180,
     borderWidth: 3,
-    borderColor: "#13A8E8",
     borderRadius: 12,
   },
   fallback: { gap: 14 },
-  copy: { color: "#F4F6F8", fontSize: 18, lineHeight: 26 },
-  button: { borderWidth: 2, borderColor: "#FFFFFF", paddingVertical: 16, borderRadius: 12 },
-  buttonText: { color: "#FFFFFF", textAlign: "center", fontSize: 18, fontWeight: "800" },
+  copy: { fontSize: 18, lineHeight: 26 },
+  button: { borderWidth: 2, paddingVertical: 16, borderRadius: 12, minHeight: 48, justifyContent: "center" },
+  buttonText: { textAlign: "center", fontSize: 18, fontWeight: "800" },
 });

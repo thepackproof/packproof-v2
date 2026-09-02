@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, typography } from "../theme/tokens";
+import { spacing, typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { IconButton } from "./Button";
 import { Logo } from "./Logo";
 
@@ -13,12 +14,13 @@ export function AppHeader(props: {
   backLabel?: string;
   right?: ReactNode;
 }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
         {props.onBack ? (
           <IconButton label={props.backLabel ?? "Back"} onPress={props.onBack}>
-            <Ionicons name="chevron-back" size={24} color={colors.navy} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </IconButton>
         ) : props.showLogo ? (
           <Logo size={32} />
@@ -26,22 +28,25 @@ export function AppHeader(props: {
           <View style={styles.spacer} />
         )}
         <View style={styles.center}>
-          {props.showLogo && !props.onBack ? <Text style={styles.brand}>PackProof</Text> : null}
-          {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
+          {props.showLogo && !props.onBack ? (
+            <Text style={[styles.brand, { color: colors.textSecondary }]}>PackProof</Text>
+          ) : null}
+          {props.title ? <Text style={[styles.title, { color: colors.textPrimary }]}>{props.title}</Text> : null}
         </View>
         <View style={styles.right}>{props.right ?? <View style={styles.spacer} />}</View>
       </View>
-      {props.subtitle ? <Text style={styles.subtitle}>{props.subtitle}</Text> : null}
+      {props.subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{props.subtitle}</Text> : null}
     </View>
   );
 }
 
 export function SectionHeader(props: { title: string; actionLabel?: string; onAction?: () => void }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{props.title}</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{props.title}</Text>
       {props.onAction && props.actionLabel ? (
-        <Text onPress={props.onAction} style={styles.action} accessibilityRole="button">
+        <Text onPress={props.onAction} style={[styles.action, { color: colors.accent }]} accessibilityRole="button">
           {props.actionLabel}
         </Text>
       ) : null}
@@ -55,15 +60,15 @@ const styles = StyleSheet.create({
   center: { flex: 1, paddingHorizontal: spacing.sm },
   right: { minWidth: 48, alignItems: "flex-end" },
   spacer: { width: 48, height: 48 },
-  brand: { ...typography.secondaryStrong, color: colors.slate },
-  title: { ...typography.sectionTitle, color: colors.navy },
-  subtitle: { ...typography.secondary, color: colors.slate },
+  brand: { ...typography.secondaryStrong },
+  title: { ...typography.sectionTitle },
+  subtitle: { ...typography.secondary },
   section: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: spacing.sm,
   },
-  sectionTitle: { ...typography.sectionTitle, color: colors.navy },
-  action: { ...typography.secondaryStrong, color: colors.blue },
+  sectionTitle: { ...typography.sectionTitle },
+  action: { ...typography.secondaryStrong },
 });

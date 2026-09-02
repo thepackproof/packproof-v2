@@ -2,25 +2,28 @@ import { StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import { fieldsLocked } from "../copy/next-action";
-import { colors, spacing, typography } from "../theme/tokens";
+import { typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
+import { ErrorBanner } from "../ui/EmptyState";
 
 export function EditPurchaseScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const locked = fieldsLocked(app.proof?.status);
   const form = app.editForm;
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Purchase details" onBack={app.goBack} />
       {locked ? (
-        <Text style={styles.lock}>
-          <Ionicons name="lock-closed" size={14} color={colors.green} /> Included in finalized PackProof
+        <Text style={[styles.lock, { color: colors.textSecondary }]}>
+          <Ionicons name="lock-closed" size={14} color={colors.success} /> Included in finalized PackProof
         </Text>
       ) : null}
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <ErrorBanner message={app.error} />
       <FormField label="Item" value={form.itemTitle} onChangeText={(value) => app.setEditForm({ ...form, itemTitle: value })} editable={!locked} autoCapitalize="sentences" />
       <FormField label="Description" value={form.itemDescription} onChangeText={(value) => app.setEditForm({ ...form, itemDescription: value })} multiline editable={!locked} autoCapitalize="sentences" />
       <FormField label="Quantity" value={form.quantity} onChangeText={(value) => app.setEditForm({ ...form, quantity: value })} keyboardType="number-pad" editable={!locked} />
@@ -35,17 +38,18 @@ export function EditPurchaseScreen() {
 
 export function EditShippingScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const locked = fieldsLocked(app.proof?.status);
   const form = app.editForm;
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Shipping details" onBack={app.goBack} />
       {locked ? (
-        <Text style={styles.lock}>
+        <Text style={[styles.lock, { color: colors.textSecondary }]}>
           Core shipping details are included in the finalized PackProof. Later carrier observations can still be appended.
         </Text>
       ) : null}
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <ErrorBanner message={app.error} />
       <FormField label="Carrier" value={form.carrier} onChangeText={(value) => app.setEditForm({ ...form, carrier: value })} editable={!locked} autoCapitalize="words" />
       <FormField label="Service" value={form.service} onChangeText={(value) => app.setEditForm({ ...form, service: value })} editable={!locked} autoCapitalize="words" />
       <FormField label="Tracking number" value={form.trackingNumber} onChangeText={(value) => app.setEditForm({ ...form, trackingNumber: value })} editable={!locked} />
@@ -56,6 +60,5 @@ export function EditShippingScreen() {
 }
 
 const styles = StyleSheet.create({
-  lock: { ...typography.secondary, color: colors.slate },
-  error: { ...typography.secondary, color: colors.danger },
+  lock: { ...typography.secondary },
 });

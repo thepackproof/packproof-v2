@@ -1,16 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import { marketplaceImportAvailable } from "../copy/presentation";
-import { colors, radii, shadows, spacing, typography } from "../theme/tokens";
+import { radii, spacing, typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
+import { ErrorBanner } from "../ui/EmptyState";
+import { PressableScale } from "../ui/motion";
 
 export function CreateScreen() {
   const app = usePackProof();
+  const { colors, shadows } = useTheme();
+  const [showInviteId, setShowInviteId] = useState(false);
   useEffect(() => {
     void app.loadConnections().catch(() => undefined);
   }, []);
@@ -19,7 +24,7 @@ export function CreateScreen() {
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Create a Proof" onBack={app.goBack} />
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <ErrorBanner message={app.error} />
       <View style={styles.list}>
         <CreateOption
           title="Scan order or label"
@@ -64,14 +69,28 @@ export function CreateScreen() {
           disabled={app.busy}
         />
       </View>
-      <Text style={styles.joinLabel}>Have an invitation ID?</Text>
-      <FormField label="Invitation ID" value={app.invitationInput} onChangeText={app.setInvitationInput} />
+      <Text style={[styles.hint, { color: colors.textSecondary }]}>
+        Invite a buyer by PackProof username from the Proof after it’s created. Pending invitations appear in My Proofs.
+      </Text>
       <Button
-        label="Join Proof"
-        variant="secondary"
-        disabled={app.busy || !app.invitationInput.trim()}
-        onPress={() => void app.acceptInvite(app.invitationInput.trim())}
+        label={showInviteId ? "Hide invitation ID" : "I have an invitation ID"}
+        variant="tertiary"
+        onPress={() => setShowInviteId((value) => !value)}
       />
+      {showInviteId ? (
+        <View style={[styles.fallback, { borderColor: colors.border, backgroundColor: colors.surface, ...shadows.card }]}>
+          <Text style={[styles.fallbackCopy, { color: colors.textSecondary }]}>
+            Use this only if you were given an invitation ID. Ordinary collaboration uses PackProof usernames.
+          </Text>
+          <FormField label="Invitation ID" value={app.invitationInput} onChangeText={app.setInvitationInput} />
+          <Button
+            label="Join Proof"
+            variant="secondary"
+            disabled={app.busy || !app.invitationInput.trim()}
+            onPress={() => void app.acceptInvite(app.invitationInput.trim())}
+          />
+        </View>
+      ) : null}
     </AppScreen>
   );
 }
@@ -83,52 +102,56 @@ function CreateOption(props: {
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const { colors, shadows } = useTheme();
   return (
-    <Pressable
+    <PressableScale
       onPress={props.onPress}
       disabled={props.disabled}
       accessibilityRole="button"
-      accessibilityLabel={props.title}
-      style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
+      accessibilityLabel={`${props.title}. ${props.detail}`}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          ...shadows.card,
+        },
+      ]}
     >
-      <View style={styles.icon}>
-        <Ionicons name={props.icon} size={26} color={colors.navy} />
+      <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
+        <Ionicons name={props.icon} size={26} color={colors.textPrimary} />
       </View>
       <View style={styles.copy}>
-        <Text style={styles.title}>{props.title}</Text>
-        <Text style={styles.detail}>{props.detail}</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{props.title}</Text>
+        <Text style={[styles.detail, { color: colors.textSecondary }]}>{props.detail}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.slate} />
-    </Pressable>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
   list: { gap: spacing.md },
   card: {
-    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.lg,
     padding: spacing.lg,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     minHeight: 88,
-    ...shadows.card,
   },
-  pressed: { opacity: 0.92 },
   icon: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: colors.blueSoft,
     alignItems: "center",
     justifyContent: "center",
   },
   copy: { flex: 1, gap: 4 },
-  title: { ...typography.cardTitle, color: colors.navy },
-  detail: { ...typography.secondary, color: colors.slate },
-  error: { ...typography.secondary, color: colors.danger },
-  joinLabel: { ...typography.secondaryStrong, color: colors.navy, marginTop: spacing.md },
+  title: { ...typography.cardTitle },
+  detail: { ...typography.secondary },
+  hint: { ...typography.secondary },
+  fallback: { gap: spacing.md, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg },
+  fallbackCopy: { ...typography.secondary },
 });

@@ -1,8 +1,11 @@
-import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
-import { isDarkRoute } from "./navigation";
-import { colors, typography } from "../theme/tokens";
+import { isImmersiveRoute } from "./navigation";
+import { typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
+import { applySystemBars } from "../theme/system-bars";
 import { Logo } from "../ui/Logo";
 import { AuthScreen } from "../screens/AuthScreen";
 import { MyProofsScreen } from "../screens/MyProofsScreen";
@@ -24,14 +27,28 @@ import { PackingStationScreen } from "../screens/PackingStationScreen";
 
 export function Root() {
   const app = usePackProof();
-  const dark = isDarkRoute(app.route);
+  const theme = useTheme();
+  const immersive = isImmersiveRoute(app.route);
+  const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
 
-  if (!app.hydrated || app.route.name === "boot") {
+  useEffect(() => {
+    void applySystemBars({
+      scheme: theme.scheme,
+      immersive: !ready || immersive,
+      background: theme.colors.background,
+      scanBackground: theme.colors.scanBackground,
+    });
+  }, [immersive, ready, theme.colors.background, theme.colors.scanBackground, theme.scheme]);
+
+  const statusStyle = immersive || theme.scheme === "dark" || !ready ? "light" : "dark";
+
+  if (!ready) {
     return (
-      <View style={styles.splash}>
-        <StatusBar style="dark" />
+      <View style={[styles.splash, { backgroundColor: theme.colors.background }]}>
+        <StatusBar style={theme.scheme === "dark" ? "light" : "dark"} />
         <Logo size={72} />
-        <Text style={styles.splashTitle}>PackProof</Text>
+        <Text style={[styles.splashTitle, { color: theme.colors.textPrimary }]}>PackProof</Text>
+        <Text style={[styles.splashCopy, { color: theme.colors.textSecondary }]}>Loading PackProof</Text>
       </View>
     );
   }
@@ -39,7 +56,7 @@ export function Root() {
   if (app.route.name === "auth" || !app.session) {
     return (
       <>
-        <StatusBar style="dark" />
+        <StatusBar style={statusStyle} />
         <AuthScreen />
       </>
     );
@@ -113,13 +130,14 @@ export function Root() {
 
   return (
     <>
-      <StatusBar style={dark ? "light" : "dark"} />
+      <StatusBar style={statusStyle} />
       {body}
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background, gap: 12 },
-  splashTitle: { ...typography.pageTitle, color: colors.navy },
+  splash: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  splashTitle: { ...typography.pageTitle },
+  splashCopy: { ...typography.secondary },
 });

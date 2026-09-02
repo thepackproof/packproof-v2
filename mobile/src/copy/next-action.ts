@@ -66,6 +66,16 @@ export function deriveNextAction(input: NextActionInput): NextAction {
     };
   }
 
+  if (seller && local && input.captureStatus === "preparing") {
+    return {
+      key: "uploading",
+      label: "Preparing…",
+      hint: "PackProof is preparing this recording for upload. It is not secured yet.",
+      kind: "progress",
+      enabled: false,
+    };
+  }
+
   if (seller && local && input.captureStatus === "uploading") {
     const percent = input.uploadPercent != null ? ` • ${input.uploadPercent}%` : "";
     return {
@@ -82,6 +92,16 @@ export function deriveNextAction(input: NextActionInput): NextAction {
       key: "securing",
       label: "Securing evidence…",
       hint: "PackProof is confirming this recording. It is not secured until the server confirms.",
+      kind: "progress",
+      enabled: false,
+    };
+  }
+
+  if (seller && local && input.captureStatus === "committed") {
+    return {
+      key: "securing",
+      label: "Committed",
+      hint: "This recording is now part of the Proof record.",
       kind: "progress",
       enabled: false,
     };

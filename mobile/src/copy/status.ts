@@ -6,7 +6,15 @@ export type ProofStatusValue =
   | "FINALIZED"
   | string;
 
-export type LocalCaptureStatus = "idle" | "capturing" | "captured" | "uploading" | "uploaded" | "retry";
+export type LocalCaptureStatus =
+  | "idle"
+  | "capturing"
+  | "captured"
+  | "preparing"
+  | "uploading"
+  | "uploaded"
+  | "committed"
+  | "retry";
 
 export type IntegrityState = "none" | "secured" | "finalized";
 
@@ -38,10 +46,14 @@ export function captureStatusLabel(status: LocalCaptureStatus): string {
       return "Recording";
     case "captured":
       return "Recording ready";
+    case "preparing":
+      return "Preparing";
     case "uploading":
       return "Uploading evidence";
     case "uploaded":
       return "Securing evidence";
+    case "committed":
+      return "Committed";
     case "retry":
       return "Waiting to upload";
     default:

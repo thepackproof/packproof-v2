@@ -145,6 +145,39 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
   },
 };
 
+export function isInternalErrorText(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes("exception") ||
+    normalized.includes("stack trace") ||
+    normalized.includes("postgres") ||
+    normalized.includes("sqlite") ||
+    normalized.includes("cognito") ||
+    normalized.includes("amazonaws") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("enotfound") ||
+    normalized.includes("internal server") ||
+    normalized.includes("sqlstate") ||
+    normalized.includes("at object.") ||
+    /\bsql\b/.test(normalized)
+  );
+}
+
+export function isAuthenticationFailure(error: unknown): boolean {
+  if (error && typeof error === "object" && "status" in error && (error.status === 401 || error.status === 403)) {
+    return true;
+  }
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    return (
+      error.code === "UNAUTHENTICATED" ||
+      error.code === "NotAuthorizedException" ||
+      error.code === "UserNotFoundException" ||
+      error.code === "PasswordResetRequiredException"
+    );
+  }
+  return false;
+}
+
 export function isNetworkFailure(error: unknown): boolean {
   if (!error) {
     return false;
@@ -201,10 +234,13 @@ export function toUserFacingError(error: unknown): UserFacingError {
       code,
     };
   }
+  const safeMessage = isInternalErrorText(fallbackMessage)
+    ? "Try again. If this continues, use Account for support details."
+    : fallbackMessage;
   if (code !== "UNKNOWN" && code !== "HTTP_ERROR") {
     return {
       title: "Something went wrong.",
-      message: fallbackMessage,
+      message: safeMessage,
       action: "none",
       technical,
       code,
@@ -212,7 +248,7 @@ export function toUserFacingError(error: unknown): UserFacingError {
   }
   return {
     title: "Something went wrong.",
-    message: fallbackMessage,
+    message: safeMessage,
     action: "none",
     technical,
     code,

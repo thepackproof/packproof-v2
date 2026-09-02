@@ -1,20 +1,29 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, shadows, sizes } from "../theme/tokens";
+import { sizes } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
+import { motion } from "../theme/motion";
+import { haptic } from "../theme/haptics";
+import { PressableScale } from "./motion";
 
 export function CreateFab(props: { onPress: () => void }) {
   const insets = useSafeAreaInsets();
+  const { colors, shadows } = useTheme();
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: Math.max(insets.bottom, 16) + 8 }]}>
-      <Pressable
-        onPress={props.onPress}
+      <PressableScale
+        onPress={() => {
+          void haptic("light");
+          props.onPress();
+        }}
         accessibilityRole="button"
         accessibilityLabel="Create a new Proof"
-        style={({ pressed }) => [styles.fab, shadows.create, pressed ? styles.pressed : null]}
+        scaleTo={motion.fabPressScale}
+        style={[styles.fab, shadows.create, { backgroundColor: colors.fab }]}
       >
-        <Ionicons name="add" size={36} color={colors.white} />
-      </Pressable>
+        <Ionicons name="add" size={36} color={colors.textOnPrimary} />
+      </PressableScale>
     </View>
   );
 }
@@ -30,9 +39,7 @@ const styles = StyleSheet.create({
     width: sizes.createFab,
     height: sizes.createFab,
     borderRadius: sizes.createFab / 2,
-    backgroundColor: colors.blue,
     alignItems: "center",
     justifyContent: "center",
   },
-  pressed: { opacity: 0.88 },
 });

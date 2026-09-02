@@ -1,10 +1,9 @@
-import { StyleSheet, Text } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
-import { colors, spacing, typography } from "../theme/tokens";
 import { AppHeader, SectionHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
+import { ErrorBanner } from "../ui/EmptyState";
 
 export function ManualCreateScreen() {
   const app = usePackProof();
@@ -13,7 +12,7 @@ export function ManualCreateScreen() {
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Enter manually" onBack={app.goBack} />
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <ErrorBanner message={app.error} />
       <SectionHeader title="Purchase details" />
       <FormField label="Item" value={form.itemTitle} onChangeText={(value) => setForm({ ...form, itemTitle: value })} autoCapitalize="sentences" />
       <FormField label="Description" value={form.itemDescription} onChangeText={(value) => setForm({ ...form, itemDescription: value })} multiline autoCapitalize="sentences" />
@@ -31,7 +30,3 @@ export function ManualCreateScreen() {
     </AppScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  error: { ...typography.secondary, color: colors.danger },
-});

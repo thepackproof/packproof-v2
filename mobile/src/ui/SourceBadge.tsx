@@ -1,25 +1,27 @@
 import { StyleSheet, Text, View } from "react-native";
-import { colors, radii, spacing, typography } from "../theme/tokens";
-import { sourceColors } from "../theme/tokens";
+import { radii, spacing, typography } from "../theme/tokens";
+import { sourceColor } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import type { ChronologyCategory } from "../copy/chronology";
 
 export function SourceBadge(props: {
   category: ChronologyCategory;
   label: string;
 }) {
+  const { colors } = useTheme();
   const label = props.label.toLowerCase();
   const color =
     label.includes("integrity")
-      ? sourceColors.INTEGRITY
+      ? sourceColor(colors, "INTEGRITY")
       : label.includes("evidence")
-        ? sourceColors.EVIDENCE
+        ? sourceColor(colors, "EVIDENCE")
         : props.category === "COMMERCE"
-          ? sourceColors.COMMERCE
+          ? sourceColor(colors, "COMMERCE")
           : props.category === "SHIPMENT"
-            ? sourceColors.SHIPMENT
-            : sourceColors.PROOF;
+            ? sourceColor(colors, "SHIPMENT")
+            : sourceColor(colors, "PROOF");
   return (
-    <View style={[styles.badge, { borderColor: color }]}>
+    <View style={[styles.badge, { borderColor: color, backgroundColor: colors.surface }]}>
       <View style={[styles.dot, { backgroundColor: color }]} />
       <Text style={[styles.label, { color }]}>{props.label}</Text>
     </View>
@@ -36,7 +38,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    backgroundColor: colors.white,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
   label: { ...typography.caption },

@@ -10,7 +10,6 @@ import {
 } from "react";
 import { AppState } from "react-native";
 import {
-  ApiError,
   PackProofV2Client,
   newIdempotencyKey,
   type ChronologyEntry,
@@ -51,7 +50,14 @@ import {
 import { clearCachedState, loadCachedState, saveCachedState, type CachedClientState } from "../session";
 import { resolveRuntimeConfig, shouldRestoreCachedSession, type ResolvedRuntimeConfig } from "../runtime-config";
 import { EMPTY_FORM, formFromTransaction, parseContextForm, type ContextForm } from "../copy/forms";
-import { formatUserFacingError, isNetworkFailure, toUserFacingError, type UserFacingError } from "../copy/errors";
+import {
+  formatUserFacingError,
+  isAuthenticationFailure,
+  isNetworkFailure,
+  toUserFacingError,
+  type UserFacingError,
+} from "../copy/errors";
+import { haptic } from "../theme/haptics";
 import type { LocalCaptureStatus } from "../copy/status";
 import {
   DEFAULT_PROOFS_LIBRARY,
@@ -281,6 +287,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const tokenRef = useRef<string | null>(null);
   const sessionRef = useRef<CachedClientState | null>(null);
   const searchGeneration = useRef(0);
+  const captureSubmitLock = useRef(false);
   const client = useMemo(
     () =>
       new PackProofV2Client({
@@ -606,13 +613,16 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if (isNetworkFailure(err)) {
         setOffline(true);
       }
-      if (err instanceof ApiError && err.status === 401) {
+      if (isAuthenticationFailure(err)) {
         setAuthPane("signIn");
         go("auth");
       }
       const mapped = presentError(err);
       setErrorDetail(mapped);
       setError(mapped.message ? `${mapped.title} ${mapped.message}`.trim() : mapped.title);
+      if (!isNetworkFailure(err)) {
+        void haptic("error");
+      }
     } finally {
       setBusy(false);
     }
@@ -693,7 +703,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           }
           go(next.stationActive ? "station" : "home");
         } catch (err) {
-          if (err instanceof ApiError && err.status === 401) {
+          if (isAuthenticationFailure(err)) {
             const compiled = currentRuntime();
             tokenRef.current = null;
             sessionRef.current = null;
@@ -882,8 +892,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setNewPassword("");
         setAuthPane("signIn");
       }),
-    signOut: async () =>
-      run(async () => {
+    signOut: async () => {
+      setBusy(true);
+      setError(null);
+      setErrorDetail(null);
+      try {
         const current = sessionRef.current;
         if (current?.authMode === "cognito" && current.token && current.cognitoClientId) {
           await cognitoGlobalSignOut(
@@ -895,6 +908,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
             current.token,
           );
         }
+      } catch {
+        // Local sign-out still proceeds if remote revoke fails.
+      }
+      try {
         await discardLocalCapture(sessionRef.current?.captureUri);
         tokenRef.current = null;
         sessionRef.current = null;
@@ -916,7 +933,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
         applyResolvedRuntime(currentRuntime());
         setAuthPane("signIn");
         go("auth");
-      }),
+      } finally {
+        setBusy(false);
+      }
+    },
     saveProfile: async () =>
       run(async () => {
         const updated = await client.updateProfile(
@@ -1061,6 +1081,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           setCaptureStatus(localCapture ? "captured" : "idle");
           return;
         }
+        void haptic("medium");
         if (localCapture && localCapture.uri !== captured.uri) {
           await discardLocalCapture(localCapture.uri);
         }
@@ -1080,47 +1101,60 @@ export function PackProofProvider(props: { children: ReactNode }) {
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);
       }),
-    submitCapture: async () =>
-      run(async () => {
-        if (!localCapture || !proof || !sessionRef.current) {
-          return;
-        }
-        const available = await localCaptureExists(localCapture.uri);
-        if (!available) {
-          await persistCapture(null, null);
-          setCaptureStatus("idle");
-          throw new Error("Captured video is no longer available. Record packing evidence again.");
-        }
-        const key = sessionRef.current.evidenceIdempotencyKey ?? newIdempotencyKey();
-        await persistCapture(localCapture, key);
-        setCaptureStatus("uploading");
-        setUploadPercent(0);
-        try {
-          const initialized = await client.initializeEvidenceUpload(proof.proofId, {
-            contentType: localCapture.contentType,
-            evidenceType: "FULFILLMENT_CAPTURE",
-            idempotencyKey: key,
-          });
-          await uploadCaptureFile({
-            baseUrl: apiBaseUrl.trim(),
-            target: initialized.upload,
-            fileUri: localCapture.uri,
-            contentType: localCapture.contentType,
-            onProgress: setUploadPercent,
-          });
-          setCaptureStatus("uploaded");
-          await client.commitEvidence(proof.proofId, initialized.evidenceId);
-          await discardLocalCapture(localCapture.uri);
-          await persistCapture(null, null);
-          setCaptureStatus("idle");
+    submitCapture: async () => {
+      if (captureSubmitLock.current) {
+        return;
+      }
+      captureSubmitLock.current = true;
+      try {
+        await run(async () => {
+          if (!localCapture || !proof || !sessionRef.current) {
+            return;
+          }
+          const available = await localCaptureExists(localCapture.uri);
+          if (!available) {
+            await persistCapture(null, null);
+            setCaptureStatus("idle");
+            throw new Error("Captured video is no longer available. Record packing evidence again.");
+          }
+          const key = sessionRef.current.evidenceIdempotencyKey ?? newIdempotencyKey();
+          await persistCapture(localCapture, key);
+          setCaptureStatus("preparing");
           setUploadPercent(null);
-          await refreshProof(proof.proofId);
-          go("proof");
-        } catch (err) {
-          setCaptureStatus("retry");
-          throw err;
-        }
-      }),
+          try {
+            const initialized = await client.initializeEvidenceUpload(proof.proofId, {
+              contentType: localCapture.contentType,
+              evidenceType: "FULFILLMENT_CAPTURE",
+              idempotencyKey: key,
+            });
+            setCaptureStatus("uploading");
+            setUploadPercent(0);
+            await uploadCaptureFile({
+              baseUrl: apiBaseUrl.trim(),
+              target: initialized.upload,
+              fileUri: localCapture.uri,
+              contentType: localCapture.contentType,
+              onProgress: setUploadPercent,
+            });
+            setCaptureStatus("uploaded");
+            await client.commitEvidence(proof.proofId, initialized.evidenceId);
+            setCaptureStatus("committed");
+            void haptic("success");
+            await discardLocalCapture(localCapture.uri);
+            await persistCapture(null, null);
+            setUploadPercent(null);
+            await refreshProof(proof.proofId);
+            setCaptureStatus("idle");
+            go("proof");
+          } catch (err) {
+            setCaptureStatus("retry");
+            throw err;
+          }
+        });
+      } finally {
+        captureSubmitLock.current = false;
+      }
+    },
     finalizeProof: async () =>
       run(async () => {
         if (!proof) {

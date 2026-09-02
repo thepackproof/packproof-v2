@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from "react-native";
-import { colors, radii, spacing, typography } from "../theme/tokens";
+import { radii, spacing, typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 
 export function FormField(props: {
   label: string;
@@ -13,9 +14,11 @@ export function FormField(props: {
   editable?: boolean;
   accessibilityHint?: string;
 }) {
+  const { colors } = useTheme();
+  const locked = props.editable === false;
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{props.label}</Text>
+      <Text style={[styles.label, { color: colors.textPrimary }]}>{props.label}</Text>
       <TextInput
         value={props.value}
         onChangeText={props.onChangeText}
@@ -29,7 +32,16 @@ export function FormField(props: {
         editable={props.editable}
         accessibilityLabel={props.label}
         accessibilityHint={props.accessibilityHint}
-        style={[styles.input, props.multiline ? styles.multiline : null, props.editable === false ? styles.locked : null]}
+        accessibilityState={{ disabled: locked }}
+        style={[
+          styles.input,
+          {
+            borderColor: colors.border,
+            backgroundColor: locked ? colors.disabledBackground : colors.inputBackground,
+            color: locked ? colors.disabledText : colors.textPrimary,
+          },
+          props.multiline ? styles.multiline : null,
+        ]}
       />
     </View>
   );
@@ -37,18 +49,14 @@ export function FormField(props: {
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
-  label: { ...typography.secondaryStrong, color: colors.navy },
+  label: { ...typography.secondaryStrong },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
     borderRadius: radii.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    color: colors.navy,
     ...typography.body,
   },
   multiline: { minHeight: 96, textAlignVertical: "top" },
-  locked: { backgroundColor: colors.background, color: colors.slate },
 });

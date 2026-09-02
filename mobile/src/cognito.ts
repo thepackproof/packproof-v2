@@ -244,22 +244,29 @@ export function formatCognitoError(error: unknown): string {
       case "ExpiredCodeException":
         return "That verification code has expired. Request a new code.";
       case "NotAuthorizedException":
+        if (/refresh token/i.test(error.message)) {
+          return "Your session expired. Sign in again.";
+        }
         return "Incorrect email or password.";
       case "UserNotFoundException":
         return "No PackProof account matches that email.";
       case "UsernameExistsException":
         return "An account already exists for that email.";
       case "InvalidPasswordException":
-        return error.message || "Password does not meet the account requirements.";
+        return "Password does not meet the account requirements.";
       case "LimitExceededException":
+      case "TooManyRequestsException":
+      case "TooManyFailedAttemptsException":
         return "Too many attempts. Wait a moment and try again.";
       case "TimeoutError":
       case "AbortError":
         return "Could not reach the account service. Check the device network and try again.";
       case "InvalidParameterException":
-        return error.message || "Check the account details and try again.";
+        return "Check the account details and try again.";
+      case "PasswordResetRequiredException":
+        return "Reset your password before signing in.";
       default:
-        return error.message;
+        return "We couldn’t complete that account step. Try again.";
     }
   }
   if (error instanceof Error) {

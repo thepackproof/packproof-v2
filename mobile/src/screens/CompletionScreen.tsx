@@ -1,11 +1,16 @@
+import { useEffect } from "react";
 import { usePackProof } from "../app/PackProofProvider";
 import { proofIdLabel } from "../copy/format";
+import { haptic } from "../theme/haptics";
 import { AppScreen } from "../ui/AppScreen";
 import { SuccessState } from "../ui/SuccessState";
 
 export function CompletionScreen() {
   const app = usePackProof();
   const proof = app.proof;
+  useEffect(() => {
+    void haptic("success");
+  }, []);
   return (
     <AppScreen scroll={false} extraBottom={24}>
       <SuccessState

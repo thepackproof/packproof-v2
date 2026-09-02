@@ -41,9 +41,14 @@ module.exports = {
     owner: "packproof-llc",
     version: "0.2.0",
     orientation: "portrait",
-    userInterfaceStyle: "light",
+    userInterfaceStyle: "automatic",
+    androidStatusBar: {
+      backgroundColor: "#F4F6F8",
+      barStyle: "dark-content",
+      translucent: false,
+    },
     androidNavigationBar: {
-      backgroundColor: "#FFFFFF",
+      backgroundColor: "#F4F6F8",
       barStyle: "dark-content",
     },
     icon: "./assets/icon.png",

@@ -1,24 +1,40 @@
 import { Share, StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { invitationStateLabel } from "../copy/status";
-import { colors, spacing, typography } from "../theme/tokens";
+import { spacing, typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { ParticipantRow } from "../ui/ParticipantRow";
+import { ErrorBanner } from "../ui/EmptyState";
+import { SkeletonBlock } from "../ui/Skeleton";
 
 export function InviteScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const proof = app.proof;
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Add buyer" onBack={app.goBack} />
-      <Text style={styles.body}>Search PackProof username. Joining records participation; it does not confirm the item.</Text>
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <Text style={[styles.body, { color: colors.textSecondary }]}>
+        Search PackProof username. Joining records participation; it does not confirm the item.
+      </Text>
+      <ErrorBanner message={app.error} />
       <FormField label="Search PackProof username" value={app.searchQuery} onChangeText={app.setSearchQuery} />
-      {app.searchStatus === "loading" ? <Text style={styles.meta}>Searching…</Text> : null}
-      {app.searchStatus === "empty" ? <Text style={styles.meta}>No PackProof users match that search.</Text> : null}
+      {app.searchStatus === "idle" ? (
+        <Text style={[styles.meta, { color: colors.textMuted }]}>Enter at least two characters to find a PackProof user.</Text>
+      ) : null}
+      {app.searchStatus === "loading" ? (
+        <View style={styles.loading} accessibilityLabel="Searching">
+          <SkeletonBlock height={48} />
+          <SkeletonBlock height={48} />
+        </View>
+      ) : null}
+      {app.searchStatus === "empty" ? (
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>No PackProof users match that search.</Text>
+      ) : null}
       {app.searchResults.map((user) => {
         const state = user.invitationState ?? "NONE";
         return (
@@ -27,9 +43,9 @@ export function InviteScreen() {
               <ParticipantRow name={user.displayName || user.username} username={user.username} role="" />
             </View>
             {state === "NONE" ? (
-              <Button label="Invite" onPress={() => void app.inviteUser(user.userId)} disabled={app.busy} />
+              <Button label="Invite" onPress={() => void app.inviteUser(user.userId)} disabled={app.busy} haptic="light" />
             ) : (
-              <Text style={styles.meta}>{invitationStateLabel(state)}</Text>
+              <Text style={[styles.meta, { color: colors.textSecondary }]}>{invitationStateLabel(state)}</Text>
             )}
           </View>
         );
@@ -49,9 +65,9 @@ export function InviteScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { ...typography.body, color: colors.slate },
-  meta: { ...typography.secondary, color: colors.slate },
-  error: { ...typography.secondary, color: colors.danger },
+  body: { ...typography.body },
+  meta: { ...typography.secondary },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   flex: { flex: 1 },
+  loading: { gap: spacing.sm },
 });

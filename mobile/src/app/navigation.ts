@@ -80,6 +80,11 @@ export function showsTabBar(): boolean {
   return false;
 }
 
-export function isDarkRoute(route: AppRoute): boolean {
+export function isImmersiveRoute(route: AppRoute): boolean {
   return route.name === "station" || route.name === "scan" || route.name === "capture";
+}
+
+/** @deprecated Use isImmersiveRoute. */
+export function isDarkRoute(route: AppRoute): boolean {
+  return isImmersiveRoute(route);
 }

@@ -8,17 +8,22 @@ import {
   toProofCardModel,
   uniqueCarriers,
 } from "../copy/presentation";
-import { colors, radii, spacing, typography } from "../theme/tokens";
+import { radii, spacing, typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppScreen } from "../ui/AppScreen";
 import { AvatarButton } from "../ui/AvatarButton";
 import { BottomSheet } from "../ui/Sheets";
 import { CreateFab } from "../ui/CreateFab";
-import { EmptyState, OfflineBanner } from "../ui/EmptyState";
+import { EmptyState, ErrorBanner, OfflineBanner } from "../ui/EmptyState";
 import { Logo } from "../ui/Logo";
 import { ProofCard } from "../ui/ProofCard";
+import { ProofCardSkeleton } from "../ui/Skeleton";
+import { SegmentedTabs } from "../ui/SegmentedTabs";
+import { FadeSlideIn } from "../ui/motion";
 
 export function MyProofsScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const [filterOpen, setFilterOpen] = useState(false);
   const library = app.proofsLibrary;
 
@@ -52,9 +57,10 @@ export function MyProofsScreen() {
             .includes(query);
         })
       : [];
+  const showSkeleton = app.busy && proofs.length === 0 && invitations.length === 0 && !app.error;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <AppScreen
         onRefresh={() => void app.syncWorkspace()}
         refreshing={app.busy}
@@ -66,7 +72,7 @@ export function MyProofsScreen() {
         <View style={styles.topBar}>
           <View style={styles.brand}>
             <Logo size={32} />
-            <Text style={styles.brandName}>PackProof</Text>
+            <Text style={[styles.brandName, { color: colors.textPrimary }]}>PackProof</Text>
           </View>
           <AvatarButton
             displayName={app.session?.displayName}
@@ -75,67 +81,75 @@ export function MyProofsScreen() {
             onPress={() => app.go("account")}
           />
         </View>
-        <Text style={styles.pageTitle}>My Proofs</Text>
-        <View style={styles.tabs} accessibilityRole="tablist">
-          <LibraryTab
-            label="In Progress"
-            icon="time-outline"
-            selected={library.view === "in_progress"}
-            onPress={() => app.setProofsView("in_progress")}
-          />
-          <LibraryTab
-            label="Completed"
-            icon="checkmark-outline"
-            selected={library.view === "completed"}
-            onPress={() => app.setProofsView("completed")}
-          />
-        </View>
+        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Proofs</Text>
+        <SegmentedTabs
+          options={[
+            { id: "in_progress", label: "In Progress", icon: "time-outline" },
+            { id: "completed", label: "Completed", icon: "checkmark-outline" },
+          ]}
+          selected={library.view}
+          onSelect={app.setProofsView}
+        />
         <View style={styles.searchRow}>
-          <View style={styles.search}>
-            <Ionicons name="search-outline" size={18} color={colors.slate} />
+          <View
+            style={[
+              styles.search,
+              { borderColor: colors.border, backgroundColor: colors.inputBackground },
+            ]}
+          >
+            <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
             <TextInput
               value={library.query}
               onChangeText={app.setProofsQuery}
               placeholder="Search proofs..."
               placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.textPrimary }]}
               autoCapitalize="none"
               autoCorrect={false}
+              accessibilityLabel="Search proofs"
             />
           </View>
           <Pressable
             onPress={() => setFilterOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="Filter and sort"
-            style={styles.filterBtn}
+            style={[styles.filterBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
           >
-            <Ionicons name="options-outline" size={20} color={colors.navy} />
+            <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
           </Pressable>
         </View>
         <OfflineBanner visible={app.offline} />
-        {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+        <ErrorBanner message={app.error} />
 
-        {library.view === "in_progress" && invitations.map((invite) => (
-          <ProofCard
-            key={invite.invitationId}
-            model={invitationCardModel(invite)}
-            onPress={() => app.openInvitation(invite)}
-          />
+        {showSkeleton ? (
+          <>
+            <ProofCardSkeleton />
+            <ProofCardSkeleton />
+            <ProofCardSkeleton />
+          </>
+        ) : null}
+
+        {library.view === "in_progress" &&
+          invitations.map((invite, index) => (
+            <FadeSlideIn key={invite.invitationId} index={index}>
+              <ProofCard model={invitationCardModel(invite)} onPress={() => app.openInvitation(invite)} />
+            </FadeSlideIn>
+          ))}
+
+        {proofs.map((item, index) => (
+          <FadeSlideIn key={item.proofId} index={invitations.length + index}>
+            <ProofCard
+              model={toProofCardModel(item, {
+                captureStatus: app.captureStatus,
+                hasLocalCapture: Boolean(app.localCapture),
+                captureProofId: app.session?.proofId,
+              })}
+              onPress={() => void app.run(async () => app.openProof(item.proofId))}
+            />
+          </FadeSlideIn>
         ))}
 
-        {proofs.map((item) => (
-          <ProofCard
-            key={item.proofId}
-            model={toProofCardModel(item, {
-              captureStatus: app.captureStatus,
-              hasLocalCapture: Boolean(app.localCapture),
-              captureProofId: app.session?.proofId,
-            })}
-            onPress={() => void app.run(async () => app.openProof(item.proofId))}
-          />
-        ))}
-
-        {proofs.length === 0 && invitations.length === 0 ? (
+        {!showSkeleton && proofs.length === 0 && invitations.length === 0 ? (
           <EmptyState
             title={library.view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
             body={
@@ -151,7 +165,7 @@ export function MyProofsScreen() {
       </AppScreen>
       <CreateFab onPress={() => app.go("create")} />
       <BottomSheet visible={filterOpen} title="Sort and filter" onClose={() => setFilterOpen(false)}>
-        <Text style={styles.sheetLabel}>Sort</Text>
+        <Text style={[styles.sheetLabel, { color: colors.textPrimary }]}>Sort</Text>
         <ChipRow
           options={[
             { id: "newest", label: "Newest first" },
@@ -162,7 +176,7 @@ export function MyProofsScreen() {
           selected={library.sort}
           onSelect={app.setProofsSort}
         />
-        <Text style={styles.sheetLabel}>Role</Text>
+        <Text style={[styles.sheetLabel, { color: colors.textPrimary }]}>Role</Text>
         <ChipRow
           options={[
             { id: "all", label: "All" },
@@ -174,7 +188,7 @@ export function MyProofsScreen() {
         />
         {carriers.length > 0 ? (
           <>
-            <Text style={styles.sheetLabel}>Carrier</Text>
+            <Text style={[styles.sheetLabel, { color: colors.textPrimary }]}>Carrier</Text>
             <ChipRow
               options={[{ id: "", label: "All" }, ...carriers.map((carrier) => ({ id: carrier, label: carrier }))]}
               selected={library.carrier ?? ""}
@@ -187,30 +201,12 @@ export function MyProofsScreen() {
   );
 }
 
-function LibraryTab(props: {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={props.onPress}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: props.selected }}
-      style={[styles.tab, props.selected ? styles.tabActive : null]}
-    >
-      <Ionicons name={props.icon} size={16} color={props.selected ? colors.white : colors.navy} />
-      <Text style={[styles.tabLabel, props.selected ? styles.tabLabelActive : null]}>{props.label}</Text>
-    </Pressable>
-  );
-}
-
 function ChipRow<T extends string>(props: {
   options: Array<{ id: T; label: string }>;
   selected: T;
   onSelect: (id: T) => void;
 }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.chips}>
       {props.options.map((option) => {
@@ -219,9 +215,19 @@ function ChipRow<T extends string>(props: {
           <Pressable
             key={option.id}
             onPress={() => props.onSelect(option.id)}
-            style={[styles.chip, selected ? styles.chipActive : null]}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            style={[
+              styles.chip,
+              {
+                borderColor: selected ? colors.primary : colors.border,
+                backgroundColor: selected ? colors.primary : colors.surface,
+              },
+            ]}
           >
-            <Text style={[styles.chipLabel, selected ? styles.chipLabelActive : null]}>{option.label}</Text>
+            <Text style={[styles.chipLabel, { color: selected ? colors.textOnPrimary : colors.textPrimary }]}>
+              {option.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -230,63 +236,40 @@ function ChipRow<T extends string>(props: {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1 },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  brandName: { ...typography.sectionTitle, color: colors.navy },
-  pageTitle: { ...typography.pageTitle, color: colors.navy },
-  tabs: { flexDirection: "row", gap: spacing.sm },
-  tab: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  tabActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  tabLabel: { ...typography.secondaryStrong, color: colors.navy },
-  tabLabelActive: { color: colors.white },
+  brandName: { ...typography.sectionTitle },
+  pageTitle: { ...typography.pageTitle },
   searchRow: { flexDirection: "row", gap: spacing.sm, alignItems: "center" },
   search: {
     flex: 1,
     minHeight: 48,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
     paddingHorizontal: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  searchInput: { flex: 1, ...typography.body, color: colors.navy, paddingVertical: spacing.sm },
+  searchInput: { flex: 1, ...typography.body, paddingVertical: spacing.sm },
   filterBtn: {
     width: 48,
     height: 48,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
   },
-  error: { ...typography.secondary, color: colors.danger },
-  sheetLabel: { ...typography.secondaryStrong, color: colors.navy, marginTop: spacing.sm },
+  sheetLabel: { ...typography.secondaryStrong, marginTop: spacing.sm },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
+    minHeight: 40,
+    justifyContent: "center",
   },
-  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  chipLabel: { ...typography.secondaryStrong, color: colors.navy },
-  chipLabelActive: { color: colors.white },
+  chipLabel: { ...typography.secondaryStrong },
 });

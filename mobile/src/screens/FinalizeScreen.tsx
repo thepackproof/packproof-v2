@@ -2,15 +2,18 @@ import { StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { FINALIZE_DISCLOSURE } from "../copy/errors";
 import { displayName, orderReferenceLabel, shippingSummary } from "../copy/format";
-import { colors, spacing, typography } from "../theme/tokens";
+import { typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { ConfirmationSheet } from "../ui/Sheets";
 import { InfoCard } from "../ui/ProofCard";
+import { ErrorBanner } from "../ui/EmptyState";
 
 export function FinalizeScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const proof = app.proof;
   const txn = app.transactionDetail ?? proof?.transaction;
   const buyer = proof?.participants.find((p) => p.role === "BUYER");
@@ -20,7 +23,7 @@ export function FinalizeScreen() {
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Finalize PackProof" onBack={app.goBack} />
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
+      <ErrorBanner message={app.error} />
       <InfoCard>
         <Row label="Order" value={orderReferenceLabel(txn.externalReference) || "No order reference"} />
         <Row label="Item" value={txn.itemTitle || "Untitled item"} />
@@ -29,10 +32,13 @@ export function FinalizeScreen() {
           value={buyer ? displayName({ fallback: "Buyer joined" }) : "No buyer on this record yet"}
         />
         <Row label="Shipping" value={shippingSummary(txn.shipping ?? {}) || "No shipping details"} />
-        <Row label="Evidence" value={(proof.evidence ?? []).some((item) => item.validationStatus === "COMMITTED") ? "Evidence secured" : "Not secured"} />
+        <Row
+          label="Evidence"
+          value={(proof.evidence ?? []).some((item) => item.validationStatus === "COMMITTED") ? "Evidence secured" : "Not secured"}
+        />
       </InfoCard>
-      <Text style={styles.note}>{FINALIZE_DISCLOSURE}</Text>
-      <Button label="Finalize PackProof" onPress={() => app.setConfirmFinalize(true)} disabled={app.busy} />
+      <Text style={[styles.note, { color: colors.textSecondary }]}>{FINALIZE_DISCLOSURE}</Text>
+      <Button label="Finalize PackProof" onPress={() => app.setConfirmFinalize(true)} disabled={app.busy} haptic="medium" />
       <ConfirmationSheet
         visible={app.confirmFinalize}
         title="Finalize PackProof"
@@ -47,17 +53,17 @@ export function FinalizeScreen() {
 }
 
 function Row(props: { label: string; value: string }) {
+  const { colors } = useTheme();
   return (
     <View style={{ gap: 2 }}>
-      <Text style={styles.label}>{props.label}</Text>
-      <Text style={styles.value}>{props.value}</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{props.label}</Text>
+      <Text style={[styles.value, { color: colors.textPrimary }]}>{props.value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  label: { ...typography.caption, color: colors.slate },
-  value: { ...typography.bodyStrong, color: colors.navy },
-  note: { ...typography.secondary, color: colors.slate },
-  error: { ...typography.secondary, color: colors.danger },
+  label: { ...typography.caption },
+  value: { ...typography.bodyStrong },
+  note: { ...typography.secondary },
 });

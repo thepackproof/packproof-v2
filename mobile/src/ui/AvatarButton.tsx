@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, typography } from "../theme/tokens";
+import { typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { profileInitials } from "../copy/format";
 
 export function AvatarButton(props: {
@@ -8,17 +9,25 @@ export function AvatarButton(props: {
   notify?: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={props.onPress}
       accessibilityRole="button"
-      accessibilityLabel="Account"
+      accessibilityLabel={props.notify ? "Account, pending invitations" : "Account"}
       style={styles.wrap}
     >
-      <View style={styles.avatar}>
-        <Text style={styles.initials}>{profileInitials(props.displayName, props.username)}</Text>
+      <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+        <Text style={[styles.initials, { color: colors.textOnPrimary }]}>
+          {profileInitials(props.displayName, props.username)}
+        </Text>
       </View>
-      {props.notify ? <View style={styles.dot} accessibilityLabel="You have pending invitations" /> : null}
+      {props.notify ? (
+        <View
+          style={[styles.dot, { backgroundColor: colors.accent, borderColor: colors.background }]}
+          accessibilityLabel="You have pending invitations"
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -29,11 +38,10 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.navy,
     alignItems: "center",
     justifyContent: "center",
   },
-  initials: { ...typography.secondaryStrong, color: colors.white },
+  initials: { ...typography.secondaryStrong },
   dot: {
     position: "absolute",
     top: 6,
@@ -41,8 +49,6 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.blue,
     borderWidth: 2,
-    borderColor: colors.background,
   },
 });

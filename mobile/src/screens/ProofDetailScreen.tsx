@@ -2,10 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
-import {
-  CARRIER_DISCLOSURE,
-  SOURCE_DISCLOSURE,
-} from "../copy/errors";
+import { CARRIER_DISCLOSURE, SOURCE_DISCLOSURE } from "../copy/errors";
 import {
   chronologyCategoryLabel,
   humanChronologyTitle,
@@ -24,18 +21,21 @@ import {
 } from "../copy/format";
 import { deriveNextAction, fieldsLocked, isCompletedAction, shouldShowRequiredAction } from "../copy/next-action";
 import { humanProofStatus, proofStatusLabel } from "../copy/status";
-import { colors, spacing, typography } from "../theme/tokens";
+import { spacing, typography } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button, IconButton } from "../ui/Button";
 import { BottomSheet, TechnicalDetailsSheet } from "../ui/Sheets";
-import { OfflineBanner } from "../ui/EmptyState";
+import { ErrorBanner, OfflineBanner } from "../ui/EmptyState";
 import { InfoCard } from "../ui/ProofCard";
 import { StatusBadge, statusTone } from "../ui/StatusBadge";
 import { Timeline } from "../ui/Timeline";
+import { ProofRecordSkeleton } from "../ui/Skeleton";
 
 export function ProofDetailScreen() {
   const app = usePackProof();
+  const { colors } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const proof = app.proof;
   const txn = app.transactionDetail ?? proof?.transaction;
@@ -43,7 +43,7 @@ export function ProofDetailScreen() {
     return (
       <AppScreen>
         <AppHeader title="Proof" onBack={app.goBack} />
-        <Text style={styles.meta}>Loading PackProof…</Text>
+        <ProofRecordSkeleton />
       </AppScreen>
     );
   }
@@ -147,29 +147,38 @@ export function ProofDetailScreen() {
   ];
 
   return (
-    <AppScreen extraBottom={24} onRefresh={() => void app.run(async () => app.refreshProof(proof.proofId).then(() => undefined))} refreshing={app.busy}>
+    <AppScreen
+      extraBottom={24}
+      onRefresh={() => void app.run(async () => app.refreshProof(proof.proofId).then(() => undefined))}
+      refreshing={app.busy}
+    >
       <AppHeader
         title={txn.itemTitle || "PackProof"}
         onBack={app.goBack}
         right={
           <IconButton label="Proof actions" onPress={() => setMenuOpen(true)}>
-            <Ionicons name="ellipsis-horizontal" size={22} color={colors.navy} />
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
           </IconButton>
         }
       />
-      {app.error ? <Text style={styles.error}>{app.error}</Text> : null}
-      <OfflineBanner visible={app.offline} message={app.offline && app.localCapture ? "Offline. Your recording is still on this device." : undefined} />
+      <ErrorBanner message={app.error} />
+      <OfflineBanner
+        visible={app.offline}
+        message={app.offline && app.localCapture ? "Offline. Your recording is still on this device." : undefined}
+      />
 
       <View style={styles.headerBlock}>
-        {summaryLine ? <Text style={styles.meta}>{summaryLine}</Text> : null}
-        {txn.externalReference ? <Text style={styles.meta}>{orderReferenceLabel(txn.externalReference)}</Text> : null}
+        {summaryLine ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{summaryLine}</Text> : null}
+        {txn.externalReference ? (
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{orderReferenceLabel(txn.externalReference)}</Text>
+        ) : null}
         <StatusBadge label={statusLabel} tone={statusTone(statusLabel)} />
       </View>
 
       {shouldShowRequiredAction(action) ? (
         <InfoCard>
-          <Text style={styles.kicker}>Next step</Text>
-          <Text style={styles.body}>{action.hint || action.label}</Text>
+          <Text style={[styles.kicker, { color: colors.accent }]}>Next step</Text>
+          <Text style={[styles.body, { color: colors.textPrimary }]}>{action.hint || action.label}</Text>
           {action.enabled && action.label ? (
             <Button
               label={action.label}
@@ -178,21 +187,21 @@ export function ProofDetailScreen() {
               icon={action.key === "start_capture" || action.key === "review_recording" ? "videocam-outline" : undefined}
             />
           ) : action.kind === "progress" ? (
-            <Text style={styles.progress}>{action.label}</Text>
+            <Text style={[styles.progress, { color: colors.accent }]}>{action.label}</Text>
           ) : null}
         </InfoCard>
       ) : isCompletedAction(action) ? (
         <InfoCard>
           <View style={styles.row}>
-            <Ionicons name="lock-closed" size={16} color={colors.green} />
-            <Text style={styles.success}>PackProof finalized</Text>
+            <Ionicons name="lock-closed" size={16} color={colors.success} />
+            <Text style={[styles.success, { color: colors.success }]}>PackProof finalized</Text>
           </View>
-          <Text style={styles.meta}>Evidence record secured</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>Evidence record secured</Text>
         </InfoCard>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Proof record</Text>
-      <Text style={styles.note}>{SOURCE_DISCLOSURE}</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Proof record</Text>
+      <Text style={[styles.note, { color: colors.textSecondary }]}>{SOURCE_DISCLOSURE}</Text>
       <Timeline
         events={events}
         emptyLabel="This Proof record will fill in as events are recorded."
@@ -202,17 +211,17 @@ export function ProofDetailScreen() {
           app.go("event");
         }}
       />
-      <Text style={styles.note}>{CARRIER_DISCLOSURE}</Text>
+      <Text style={[styles.note, { color: colors.textSecondary }]}>{CARRIER_DISCLOSURE}</Text>
 
       <Pressable
         onPress={() => app.setTechnicalOpen(true)}
         accessibilityRole="button"
         accessibilityLabel="Technical details"
-        style={styles.techRow}
+        style={[styles.techRow, { borderTopColor: colors.divider }]}
       >
-        <Ionicons name="information-circle-outline" size={20} color={colors.blue} />
-        <Text style={styles.techLabel}>Technical details</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.navy} />
+        <Ionicons name="information-circle-outline" size={20} color={colors.accent} />
+        <Text style={[styles.techLabel, { color: colors.textPrimary }]}>Technical details</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
       </Pressable>
 
       <BottomSheet visible={menuOpen} title="Proof actions" onClose={() => setMenuOpen(false)}>
@@ -280,21 +289,19 @@ export function ProofDetailScreen() {
 const styles = StyleSheet.create({
   headerBlock: { gap: spacing.sm },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
-  kicker: { ...typography.caption, color: colors.blue },
-  sectionTitle: { ...typography.sectionTitle, color: colors.navy },
-  body: { ...typography.bodyStrong, color: colors.navy },
-  meta: { ...typography.secondary, color: colors.slate },
-  note: { ...typography.caption, color: colors.slate },
-  error: { ...typography.secondary, color: colors.danger },
-  progress: { ...typography.bodyStrong, color: colors.blue },
-  success: { ...typography.secondaryStrong, color: colors.green },
+  kicker: { ...typography.caption },
+  sectionTitle: { ...typography.sectionTitle },
+  body: { ...typography.bodyStrong },
+  meta: { ...typography.secondary },
+  note: { ...typography.caption },
+  progress: { ...typography.bodyStrong },
+  success: { ...typography.secondaryStrong },
   techRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     paddingVertical: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
-  techLabel: { ...typography.bodyStrong, color: colors.navy, flex: 1 },
+  techLabel: { ...typography.bodyStrong, flex: 1 },
 });
