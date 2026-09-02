@@ -15,13 +15,20 @@ import {
   requireParticipationPolicy,
   type ParticipationPolicy,
 } from "./participation.js";
+import { createProofAssets } from "./assets.js";
+import { createTransaction } from "./transactions.js";
+import { DEFAULT_WORKFLOW_TYPE, requireWorkflowType, type WorkflowType } from "./workflow.js";
 
 export async function createOrGetProof(
   db: Database,
   clock: Clock,
   actorUserId: string,
   transactionId: string,
-  options: { participationPolicy?: ParticipationPolicy } = {},
+  options: {
+    participationPolicy?: ParticipationPolicy;
+    workflowType?: WorkflowType;
+    assetCount?: number;
+  } = {},
 ): Promise<ProofView> {
   return db.transaction(async (tx) => {
     const transaction = await tx.query<TransactionRow>(
@@ -70,6 +77,7 @@ export async function createOrGetProof(
       options.participationPolicy,
       DEFAULT_PARTICIPATION_POLICY,
     );
+    const workflowType = requireWorkflowType(options.workflowType, DEFAULT_WORKFLOW_TYPE);
     // Optional-counterparty Proofs skip AWAITING_PARTICIPANT. REQUIRED proofs
     // still start OPEN and move to AWAITING_PARTICIPANT on invite.
     const initialStatus =
@@ -77,9 +85,9 @@ export async function createOrGetProof(
     try {
       await tx.query(
         `INSERT INTO proofs (
-           id, transaction_id, status, participation_policy, created_at, updated_at, version
-         ) VALUES ($1, $2, $3, $4, $5, $5, 1)`,
-        [proofId, transactionId, initialStatus, participationPolicy, now],
+           id, transaction_id, status, participation_policy, workflow_type, created_at, updated_at, version
+         ) VALUES ($1, $2, $3, $4, $5, $6, $6, 1)`,
+        [proofId, transactionId, initialStatus, participationPolicy, workflowType, now],
       );
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -120,7 +128,7 @@ export async function createOrGetProof(
       proofId,
       actorUserId,
       eventType: "PROOF_CREATED",
-      eventData: { transactionId },
+      eventData: { transactionId, workflowType },
       at: clock.now(),
     });
     await appendAudit(tx, {
@@ -140,7 +148,41 @@ export async function createOrGetProof(
     );
     await ensureIntegrationExternalReferences(tx, clock, actorUserId, proofId, transactionId);
     await ensureImportAuditEvents(tx, clock, actorUserId, proofId, transactionId);
-    return getProofView(tx, proofId);
+    if (workflowType === "GRADING_SUBMISSION") {
+      await createProofAssets(tx, clock, actorUserId, proofId, {
+        count: options.assetCount ?? 1,
+      });
+    }
+    return getProofView(tx, proofId, actorUserId);
+  });
+}
+
+export async function createProof(
+  db: Database,
+  clock: Clock,
+  actorUserId: string,
+  input: {
+    workflowType?: unknown;
+    itemCount?: unknown;
+    participationPolicy?: ParticipationPolicy;
+    transaction?: unknown;
+  } = {},
+): Promise<ProofView> {
+  const workflowType = requireWorkflowType(input.workflowType);
+  const itemCount =
+    input.itemCount == null || input.itemCount === "" ? (workflowType === "GRADING_SUBMISSION" ? 1 : 0) : Number(input.itemCount);
+  const transactionInput =
+    input.transaction && typeof input.transaction === "object"
+      ? (input.transaction as Record<string, unknown>)
+      : {};
+  if (workflowType === "GRADING_SUBMISSION" && !transactionInput.itemTitle) {
+    transactionInput.itemTitle = "Grading submission";
+  }
+  const transaction = await createTransaction(db, clock, actorUserId, transactionInput);
+  return createOrGetProof(db, clock, actorUserId, transaction.transactionId, {
+    participationPolicy: input.participationPolicy,
+    workflowType,
+    assetCount: workflowType === "GRADING_SUBMISSION" ? itemCount : undefined,
   });
 }
 

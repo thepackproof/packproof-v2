@@ -1,18 +1,25 @@
 import { useState } from "react";
 import { displayName } from "@packproof/copy/format";
 import { providerDisplay } from "@packproof/copy/status";
-import type { CommerceConnectionView } from "../api/types";
+import type { CommerceConnectionView, ConnectedAccountProviderCatalogView, ConnectedAccountView } from "../api/types";
+import { ConnectedAccountsPanel } from "./ConnectedAccountsPanel";
 
 export function AccountScreen(props: {
   displayName: string | null;
   username: string | null;
   subject: string;
   connections: CommerceConnectionView[];
+  connectedAccounts: ConnectedAccountView[];
+  connectedProviders: ConnectedAccountProviderCatalogView[];
+  connectedNotice: string | null;
   error: string | null;
   busy: boolean;
   onAcceptInvitation: (invitationId: string) => void;
   onOpenStation: () => void;
   onOpenStores: () => void;
+  onConnectAccount: (provider: string, extra?: { shop?: string }) => void;
+  onReauthorizeAccount: (accountId: string) => void;
+  onDisconnectAccount: (accountId: string) => void;
   onSignOut: () => void;
 }) {
   const [invitationRef, setInvitationRef] = useState("");
@@ -35,6 +42,16 @@ export function AccountScreen(props: {
         <h2 className="card-title">{name}</h2>
         <p className="meta">{props.username ? `@${props.username}` : "Username not set"}</p>
       </section>
+
+      <ConnectedAccountsPanel
+        accounts={props.connectedAccounts}
+        providers={props.connectedProviders}
+        notice={props.connectedNotice}
+        busy={props.busy}
+        onConnect={props.onConnectAccount}
+        onReauthorize={props.onReauthorizeAccount}
+        onDisconnect={props.onDisconnectAccount}
+      />
 
       <section className="section stack">
         <h2>Connected marketplaces</h2>

@@ -1,0 +1,66 @@
+import type { Database } from "../db/database.js";
+import { DomainError } from "./errors.js";
+import type { ParticipantRow, ProofRow } from "./types.js";
+
+export async function loadProof(
+  db: Database,
+  proofId: string,
+  forUpdate = false,
+): Promise<ProofRow> {
+  const sql = forUpdate
+    ? `SELECT * FROM proofs WHERE id = $1 FOR UPDATE`
+    : `SELECT * FROM proofs WHERE id = $1`;
+  const result = await db.query<ProofRow>(sql, [proofId]);
+  const row = result.rows[0];
+  if (!row) {
+    throw new DomainError("PROOF_NOT_FOUND", "Proof not found", 404);
+  }
+  return row;
+}
+
+export async function requireParticipant(
+  db: Database,
+  proofId: string,
+  userId: string,
+  role?: "SELLER" | "BUYER",
+): Promise<ParticipantRow> {
+  return authorizeProofAccess(db, proofId, userId, role);
+}
+
+/**
+ * Current authenticated reads still authorize through proof_participants.
+ * That is contributor access, not a viewer grant. Do not add a participant
+ * row merely so someone can look at a Proof.
+ */
+export async function authorizeProofAccess(
+  db: Database,
+  proofId: string,
+  userId: string,
+  role?: "SELLER" | "BUYER",
+): Promise<ParticipantRow> {
+  const result = await db.query<ParticipantRow>(
+    role
+      ? `SELECT * FROM proof_participants WHERE proof_id = $1 AND user_id = $2 AND role = $3`
+      : `SELECT * FROM proof_participants WHERE proof_id = $1 AND user_id = $2`,
+    role ? [proofId, userId, role] : [proofId, userId],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new DomainError(
+      "PARTICIPANT_NOT_AUTHORIZED",
+      "Not a participant of this Proof",
+      403,
+    );
+  }
+  return row;
+}
+
+export function assertNotFinalized(proof: ProofRow): void {
+  if (proof.status === "FINALIZED") {
+    throw new DomainError(
+      "PROOF_ALREADY_FINALIZED",
+      "Finalized Proofs cannot mutate",
+      409,
+    );
+  }
+}

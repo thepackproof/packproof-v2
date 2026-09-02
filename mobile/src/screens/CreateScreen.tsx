@@ -16,6 +16,8 @@ export function CreateScreen() {
   const app = usePackProof();
   const { colors, shadows } = useTheme();
   const [showInviteId, setShowInviteId] = useState(false);
+  const [showGrading, setShowGrading] = useState(false);
+  const [gradingItemCount, setGradingItemCount] = useState("1");
   useEffect(() => {
     void app.loadConnections().catch(() => undefined);
   }, []);
@@ -68,9 +70,38 @@ export function CreateScreen() {
           }}
           disabled={app.busy}
         />
+        <CreateOption
+          title="Grading submission"
+          detail="Document items for grading custody"
+          icon="albums-outline"
+          onPress={() => setShowGrading((value) => !value)}
+          disabled={app.busy}
+        />
       </View>
+      {showGrading ? (
+        <View style={[styles.fallback, { borderColor: colors.border, backgroundColor: colors.surface, ...shadows.card }]}>
+          <Text style={[styles.fallbackCopy, { color: colors.textSecondary }]}>
+            How many items are in this submission?
+          </Text>
+          <FormField
+            label="Item count"
+            value={gradingItemCount}
+            onChangeText={setGradingItemCount}
+            keyboardType="number-pad"
+          />
+          <Button
+            label="Create grading Proof"
+            loading={app.busy}
+            onPress={() => {
+              const parsed = Number.parseInt(gradingItemCount.trim(), 10);
+              const itemCount = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+              void app.createGradingProof(itemCount);
+            }}
+          />
+        </View>
+      ) : null}
       <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Invite a buyer by PackProof username from the Proof after it’s created. Pending invitations appear in My Proofs.
+        Invite a buyer by PackProof username from the Proof after it's created. Pending invitations appear in My Proofs.
       </Text>
       <Button
         label={showInviteId ? "Hide invitation ID" : "I have an invitation ID"}

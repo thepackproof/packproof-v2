@@ -8,14 +8,36 @@ import express, {
 import type { AuthenticationAdapter } from "./auth/adapter.js";
 import type { Clock } from "./clock.js";
 import type { Database } from "./db/database.js";
-import { createOrGetProof } from "./domain/create-proof.js";
+import { createOrGetProof, createProof } from "./domain/create-proof.js";
 import { requireParticipationPolicy } from "./domain/participation.js";
+import { requireWorkflowType } from "./domain/workflow.js";
 import { DomainError, errorCodeFromSql } from "./domain/errors.js";
 import {
   commitEvidence,
   initializeEvidenceUpload,
+  readCommittedEvidence,
 } from "./domain/evidence.js";
 import { finalizeProof, getManifest } from "./domain/finalize.js";
+import { createProofAssets, listProofAssets, updateAssetCatalog } from "./domain/assets.js";
+import { bindAssetExternalRef } from "./domain/asset-bindings.js";
+import {
+  compareObservations,
+  completeFinalReceipt,
+  completePacking,
+  completeReturnPacking,
+  documentAssets,
+  documentProcessingOutput,
+  handoffAssets,
+  receiveAssets,
+} from "./domain/orchestration.js";
+import {
+  assertPublicProofRateLimit,
+  createAccessLink,
+  listAccessLinks,
+  revokeAccessLink,
+} from "./domain/access-links.js";
+import { getPublicProof } from "./domain/public-proof.js";
+import { listCaptureRecipes } from "./domain/capture-recipes.js";
 import {
   acceptInvitation,
   createInvitation,
@@ -107,6 +129,30 @@ import {
   easypostCredentialReferenceAllowed,
 } from "./integrations/easypost/adapter.js";
 import { EASYPOST_PROVIDER } from "./integrations/easypost/normalize.js";
+import {
+  completeConnectedAccountOAuth,
+  disconnectConnectedAccount,
+  handleShopifyAppUninstalled,
+  listConnectedAccounts,
+  reauthorizeConnectedAccount,
+  startConnectedAccountConnect,
+  type ConnectedAccountService,
+} from "./domain/connected-accounts.js";
+import { createConnectedAccountRegistry } from "./integrations/connected-accounts/runtime.js";
+import {
+  disabledShopifyRuntime,
+  type ShopifyOAuthRuntime,
+} from "./integrations/connected-accounts/providers/shopify.js";
+import {
+  disabledGoogleRuntime,
+  type GoogleOAuthRuntime,
+} from "./integrations/connected-accounts/providers/google.js";
+import {
+  disabledFacebookRuntime,
+  type FacebookOAuthRuntime,
+} from "./integrations/connected-accounts/providers/facebook.js";
+import { parseAppClientSecret } from "./integrations/connected-accounts/app-secret.js";
+import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 
 export interface AppDependencies {
   db: Database;
@@ -120,6 +166,9 @@ export interface AppDependencies {
   credentialStore?: IntegrationCredentialStore & { put?: (credentials: IntegrationCredentials) => void };
   releaseIdentity?: ReleaseIdentity;
   ebay?: EbayRuntime;
+  shopify?: ShopifyOAuthRuntime;
+  google?: GoogleOAuthRuntime;
+  facebook?: FacebookOAuthRuntime;
 }
 
 function asyncRoute(
@@ -161,6 +210,23 @@ export function createApp(deps: AppDependencies): Express {
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
   const releaseIdentity = deps.releaseIdentity ?? parseReleaseIdentity();
   const ebay = deps.ebay ?? disabledEbayRuntime();
+  const shopify = deps.shopify ?? disabledShopifyRuntime();
+  const google = deps.google ?? disabledGoogleRuntime();
+  const facebook = deps.facebook ?? disabledFacebookRuntime();
+  const connectedAccounts: ConnectedAccountService = {
+    registry: createConnectedAccountRegistry({
+      ebay,
+      shopify,
+      google,
+      facebook,
+      credentials: credentialStore,
+    }),
+    credentials: credentialStore,
+    packproofEnvironment: releaseIdentity.environment,
+    webReturnUrl: corsOrigins[0]
+      ? `${corsOrigins[0].replace(/\/$/, "")}/account`
+      : "/account",
+  };
   app.use((req, res, next) => {
     const origin = headerOrigin(req.headers.origin);
     if (origin && corsOrigins.includes(origin)) {
@@ -199,6 +265,15 @@ export function createApp(deps: AppDependencies): Express {
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
   });
+
+  app.get(
+    "/public/proofs/:token",
+    asyncRoute(async (req, res) => {
+      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
+      const result = await getPublicProof(deps.db, deps.clock, req.params.token);
+      res.json(result);
+    }),
+  );
 
   app.get("/meta", (_req, res) => {
     res.json({
@@ -251,8 +326,10 @@ export function createApp(deps: AppDependencies): Express {
       req.path === "/meta" ||
       req.path.startsWith("/auth/") ||
       req.path.startsWith("/upload/") ||
+      req.path.startsWith("/public/") ||
       req.path.startsWith("/integrations/webhooks/") ||
-      req.path.startsWith("/integrations/oauth/")
+      req.path.startsWith("/integrations/oauth/") ||
+      req.path.startsWith("/oauth/")
     ) {
       next();
       return;
@@ -281,6 +358,69 @@ export function createApp(deps: AppDependencies): Express {
         },
       );
       res.redirect(302, result.redirectTo);
+    }),
+  );
+
+  app.get(
+    "/oauth/:provider/callback",
+    asyncRoute(async (req, res) => {
+      if (req.params.provider === "ebay") {
+        const result = await completeEbayOAuth(
+          deps.db,
+          deps.clock,
+          ebay,
+          credentialStore,
+          {
+            code: req.query.code,
+            state: req.query.state,
+            error: req.query.error,
+          },
+        );
+        res.redirect(302, result.redirectTo);
+        return;
+      }
+      const result = await completeConnectedAccountOAuth(
+        deps.db,
+        deps.clock,
+        connectedAccounts,
+        req.params.provider,
+        {
+          code: req.query.code,
+          state: req.query.state,
+          error: req.query.error,
+          shop: req.query.shop,
+        },
+      );
+      res.redirect(302, result.redirectTo);
+    }),
+  );
+
+  app.post(
+    "/integrations/webhooks/shopify",
+    asyncRoute(async (req, res) => {
+      if (!shopify.enabled || !shopify.appCredentialReference) {
+        throw new DomainError("CONNECTED_ACCOUNT_PROVIDER_DISABLED", "Shopify is not enabled", 403);
+      }
+      const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body ?? ""), "utf8");
+      const secret = parseAppClientSecret(
+        await credentialStore.getCredentials({
+          adapterKey: "shopify",
+          credentialReference: shopify.appCredentialReference,
+        }),
+      );
+      verifyShopifyWebhookHmac({
+        secret,
+        rawBody,
+        header: req.header("X-Shopify-Hmac-Sha256"),
+      });
+      const topic = String(req.header("X-Shopify-Topic") ?? "").toLowerCase();
+      if (topic !== "app/uninstalled") {
+        res.status(200).json({ accepted: true });
+        return;
+      }
+      const shop = String(req.header("X-Shopify-Shop-Domain") ?? "");
+      const result = await handleShopifyAppUninstalled(deps.db, deps.clock, shop, connectedAccounts);
+      res.status(200).json(result);
     }),
   );
 
@@ -648,9 +788,27 @@ export function createApp(deps: AppDependencies): Express {
         req.params.id,
         {
           participationPolicy: requireParticipationPolicy(req.body?.participationPolicy),
+          workflowType: requireWorkflowType(req.body?.workflowType),
+          assetCount:
+            req.body?.itemCount == null || req.body?.itemCount === ""
+              ? undefined
+              : Number(req.body.itemCount),
         },
       );
       res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs",
+    asyncRoute(async (req, res) => {
+      const result = await createProof(deps.db, deps.clock, bearerUser(req), {
+        workflowType: req.body?.workflowType,
+        itemCount: req.body?.itemCount ?? req.body?.assetCount,
+        participationPolicy: req.body?.participationPolicy,
+        transaction: req.body?.transaction ?? req.body,
+      });
+      res.status(201).json(result);
     }),
   );
 
@@ -659,6 +817,190 @@ export function createApp(deps: AppDependencies): Express {
     asyncRoute(async (req, res) => {
       const result = await getProofForUser(deps.db, bearerUser(req), req.params.id);
       res.json(result);
+    }),
+  );
+
+  app.get(
+    "/capture-recipes",
+    asyncRoute(async (req, res) => {
+      bearerUser(req);
+      res.json({ recipes: listCaptureRecipes() });
+    }),
+  );
+
+  app.get(
+    "/proofs/:id/assets",
+    asyncRoute(async (req, res) => {
+      await authorizeProofAccess(deps.db, req.params.id, bearerUser(req));
+      const assets = await listProofAssets(deps.db, req.params.id);
+      res.json({ assets });
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/assets",
+    asyncRoute(async (req, res) => {
+      const assets = await createProofAssets(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        {
+          count: req.body?.count ?? req.body?.itemCount,
+          assetType: req.body?.assetType,
+          catalogDescriptor: req.body?.catalogDescriptor,
+        },
+      );
+      res.status(201).json({ assets });
+    }),
+  );
+
+  app.patch(
+    "/proofs/:id/assets/:assetId",
+    asyncRoute(async (req, res) => {
+      const asset = await updateAssetCatalog(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.params.assetId,
+        req.body?.catalogDescriptor ?? req.body,
+      );
+      res.json({ asset });
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/assets/:assetId/bindings",
+    asyncRoute(async (req, res) => {
+      const binding = await bindAssetExternalRef(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        {
+          scope: req.body?.scope ?? "ASSET",
+          tenantKey: req.body?.tenantKey,
+          externalId: req.body?.externalId,
+          assetId: req.params.assetId,
+          source: req.body?.source,
+        },
+      );
+      res.status(201).json({ binding });
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/document",
+    asyncRoute(async (req, res) => {
+      const result = await documentAssets(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/pack",
+    asyncRoute(async (req, res) => {
+      const result = await completePacking(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/handoff",
+    asyncRoute(async (req, res) => {
+      const result = await handoffAssets(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/receive",
+    asyncRoute(async (req, res) => {
+      const result = await receiveAssets(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/compare",
+    asyncRoute(async (req, res) => {
+      const result = await compareObservations(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/output",
+    asyncRoute(async (req, res) => {
+      const result = await documentProcessingOutput(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/return-pack",
+    asyncRoute(async (req, res) => {
+      const result = await completeReturnPacking(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/actions/final-receipt",
+    asyncRoute(async (req, res) => {
+      const result = await completeFinalReceipt(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
+      res.json(result);
+    }),
+  );
+
+  app.get(
+    "/proofs/:id/access-links",
+    asyncRoute(async (req, res) => {
+      const links = await listAccessLinks(deps.db, bearerUser(req), req.params.id);
+      res.json({ accessLinks: links });
+    }),
+  );
+
+  app.post(
+    "/proofs/:id/access-links",
+    asyncRoute(async (req, res) => {
+      const webBase =
+        (deps.corsOrigins ?? []).find((origin) => origin.startsWith("http")) ??
+        deps.publicBaseUrl;
+      const created = await createAccessLink(deps.db, deps.clock, bearerUser(req), req.params.id, {
+        scope: req.body?.scope,
+        expiresAt: req.body?.expiresAt,
+        recipientHint: req.body?.recipientHint,
+        publicWebBaseUrl: webBase,
+      });
+      res.status(201).json(created);
+    }),
+  );
+
+  app.delete(
+    "/proofs/:id/access-links/:linkId",
+    asyncRoute(async (req, res) => {
+      await revokeAccessLink(deps.db, deps.clock, bearerUser(req), req.params.id, req.params.linkId);
+      res.status(204).end();
     }),
   );
 
@@ -707,6 +1049,59 @@ export function createApp(deps: AppDependencies): Express {
     "/me/identities/:provider",
     asyncRoute(async (req, res) => {
       await unlinkIdentity(deps.db, bearerUser(req), req.params.provider);
+      res.status(204).end();
+    }),
+  );
+
+  app.get(
+    "/me/connected-accounts",
+    asyncRoute(async (req, res) => {
+      const result = await listConnectedAccounts(deps.db, bearerUser(req), connectedAccounts);
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/me/connected-accounts/:provider/connect",
+    asyncRoute(async (req, res) => {
+      const result = await startConnectedAccountConnect(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.provider,
+        connectedAccounts,
+        typeof req.body === "object" && req.body && !Array.isArray(req.body)
+          ? (req.body as Record<string, unknown>)
+          : {},
+      );
+      res.status(201).json(result);
+    }),
+  );
+
+  app.post(
+    "/me/connected-accounts/:id/reauthorize",
+    asyncRoute(async (req, res) => {
+      const result = await reauthorizeConnectedAccount(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        connectedAccounts,
+      );
+      res.status(201).json(result);
+    }),
+  );
+
+  app.delete(
+    "/me/connected-accounts/:id",
+    asyncRoute(async (req, res) => {
+      await disconnectConnectedAccount(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        connectedAccounts,
+      );
       res.status(204).end();
     }),
   );
@@ -941,6 +1336,22 @@ export function createApp(deps: AppDependencies): Express {
         },
       );
       res.status(201).json(result);
+    }),
+  );
+
+  app.get(
+    "/proofs/:id/evidence/:evidenceId",
+    asyncRoute(async (req, res) => {
+      const result = await readCommittedEvidence(
+        deps.db,
+        deps.objectStore,
+        bearerUser(req),
+        req.params.id,
+        req.params.evidenceId,
+      );
+      res.setHeader("Content-Type", result.contentType);
+      res.setHeader("Cache-Control", "private, max-age=60");
+      res.send(result.body);
     }),
   );
 

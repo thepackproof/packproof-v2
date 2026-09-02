@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
+import { captureEvidenceType } from "@packproof/copy/custody";
 import { PackProofApi } from "./api/client";
 import { ApiError } from "./api/types";
 import type {
   CanonicalProof,
   CommerceConnectionView,
   CommerceSyncView,
+  ConnectedAccountProviderCatalogView,
+  ConnectedAccountView,
   EbayMarketplaceView,
   FulfillmentQueueItem,
   InvitationInboxView,
@@ -25,6 +28,7 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { PackingStationScreen } from "./screens/PackingStationScreen";
 import { ProofsScreen } from "./screens/ProofsScreen";
 import { ProofScreen } from "./screens/ProofScreen";
+import { PublicProofScreen } from "./screens/PublicProofScreen";
 import { LegalScreen } from "./screens/LegalScreen";
 import { ProfileSetupScreen } from "./screens/ProfileSetupScreen";
 import { SignInScreen } from "./screens/SignInScreen";
@@ -41,7 +45,8 @@ type Route =
   | { name: "station"; reference?: string }
   | { name: "stores" }
   | { name: "privacy" }
-  | { name: "terms" };
+  | { name: "terms" }
+  | { name: "public"; token: string };
 
 function parseHref(href: string): Route {
   const url = new URL(href, "http://packproof.local");
@@ -74,6 +79,10 @@ function parseHref(href: string): Route {
   if (pathname === "/stores") {
     return { name: "stores" };
   }
+  const shared = pathname.match(/^\/p\/([^/]+)$/);
+  if (shared?.[1]) {
+    return { name: "public", token: decodeURIComponent(shared[1]) };
+  }
   const fulfillment = pathname.match(/^\/fulfillment\/([^/]+)$/);
   if (fulfillment?.[1]) {
     return { name: "fulfillment-detail", proofId: decodeURIComponent(fulfillment[1]) };
@@ -96,33 +105,73 @@ function pickEbay(listed: { marketplaces: EbayMarketplaceView[] }): EbayMarketpl
   return listed.marketplaces.find((item) => item.provider === "ebay") ?? null;
 }
 
-function ebayReturnError(href: string): string | null {
+function oauthReturnError(href: string): string | null {
   const url = new URL(href, "http://packproof.local");
-  const status = url.searchParams.get("ebay");
-  if (status === "declined") {
+  if (url.searchParams.get("ebay") === "declined") {
     return "eBay authorization was declined.";
   }
-  if (status !== "error") {
+  const failed =
+    url.searchParams.get("connected") === "error" || url.searchParams.get("ebay") === "error";
+  if (!failed) {
     return null;
   }
   return formatUserFacingError({
-    code: url.searchParams.get("code") || "EBAY_OAUTH_FAILED",
-    message: "eBay connection failed",
+    code: url.searchParams.get("code") || "CONNECTED_ACCOUNT_AUTH_ERROR",
+    message: "Connection failed",
   });
 }
 
-function stripEbayOAuthQuery() {
+function oauthReturnNotice(href: string): string | null {
+  const url = new URL(href, "http://packproof.local");
+  const connected = url.searchParams.get("connected");
+  if (connected && connected !== "error") {
+    const provider = url.searchParams.get("provider") || connected;
+    return `${providerDisplayName(provider)} is connected.`;
+  }
+  if (url.searchParams.get("ebay") === "connected") {
+    return "eBay is connected.";
+  }
+  return null;
+}
+
+function providerDisplayName(provider: string): string {
+  switch (provider.toLowerCase()) {
+    case "ebay":
+      return "eBay";
+    case "shopify":
+      return "Shopify";
+    case "google":
+      return "Google";
+    case "facebook":
+    case "meta":
+      return "Meta";
+    default:
+      return provider;
+  }
+}
+
+function stripOAuthReturnQuery() {
   const url = new URL(window.location.href);
-  if (!url.searchParams.has("ebay")) {
+  if (
+    !url.searchParams.has("ebay") &&
+    !url.searchParams.has("connected") &&
+    !url.searchParams.has("provider")
+  ) {
     return;
   }
   url.searchParams.delete("ebay");
+  url.searchParams.delete("connected");
+  url.searchParams.delete("provider");
   url.searchParams.delete("code");
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}` || "/");
 }
 
 function isLegalRoute(route: Route): route is { name: "privacy" } | { name: "terms" } {
   return route.name === "privacy" || route.name === "terms";
+}
+
+function isPublicRoute(route: Route): route is { name: "public"; token: string } {
+  return route.name === "public";
 }
 
 function needsWorkspace(name: Route["name"]): boolean {
@@ -150,15 +199,23 @@ export function App() {
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(() => ebayReturnError(window.location.href));
+  const [error, setError] = useState<string | null>(() => oauthReturnError(window.location.href));
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [connectedNotice, setConnectedNotice] = useState<string | null>(() =>
+    oauthReturnNotice(window.location.href),
+  );
   const [queue, setQueue] = useState<FulfillmentQueueItem[]>([]);
   const [connections, setConnections] = useState<CommerceConnectionView[]>([]);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountView[]>([]);
+  const [connectedProviders, setConnectedProviders] = useState<ConnectedAccountProviderCatalogView[]>(
+    [],
+  );
   const [ebay, setEbay] = useState<EbayMarketplaceView | null>(null);
   const [lastSync, setLastSync] = useState<CommerceSyncView | null>(null);
   const tokenRef = useRef<string | null>(session?.token ?? null);
 
   useEffect(() => {
-    stripEbayOAuthQuery();
+    stripOAuthReturnQuery();
   }, []);
 
   const api = useMemo(
@@ -170,6 +227,16 @@ export function App() {
     [session?.apiBaseUrl],
   );
 
+  const loadProofEvidence = useCallback(
+    async (evidenceId: string) => {
+      if (!proof) {
+        throw new Error("Proof is not available.");
+      }
+      return api.getEvidenceBlob(proof.proofId, evidenceId);
+    },
+    [api, proof],
+  );
+
   function signOut() {
     tokenRef.current = null;
     clearSession();
@@ -178,6 +245,10 @@ export function App() {
     setInvitations([]);
     setProof(null);
     setShipmentIntegrity(null);
+    setConnections([]);
+    setConnectedAccounts([]);
+    setConnectedProviders([]);
+    setConnectedNotice(null);
     setError(null);
     writePath("/");
     setRoute({ name: "home" });
@@ -186,6 +257,7 @@ export function App() {
   function go(path: string) {
     const next = parseHref(path);
     setError(null);
+    setShareNotice(null);
     if (next.name !== "proof" || proof?.proofId !== next.proofId) {
       setProof(null);
       setShipmentIntegrity(null);
@@ -295,12 +367,18 @@ export function App() {
     }
     if (route.name === "account") {
       setLoading(true);
-      setError(null);
-      void Promise.all([api.listInvitations(), api.listCommerceConnections(), api.listMarketplaces()])
-        .then(([inbox, listed, marketplaces]) => {
+      void Promise.all([
+        api.listInvitations(),
+        api.listCommerceConnections(),
+        api.listMarketplaces(),
+        api.listConnectedAccounts(),
+      ])
+        .then(([inbox, listed, marketplaces, connected]) => {
           setInvitations(inbox.invitations);
           setConnections(listed.connections);
           setEbay(pickEbay(marketplaces));
+          setConnectedAccounts(connected.accounts);
+          setConnectedProviders(connected.providers);
         })
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
@@ -349,6 +427,16 @@ export function App() {
 
   if (isLegalRoute(route)) {
     return <LegalScreen kind={route.name} onGo={go} />;
+  }
+
+  if (isPublicRoute(route)) {
+    return (
+      <PublicProofScreen
+        token={route.token}
+        load={(token) => api.getPublicProof(token)}
+        onSignIn={() => go("/")}
+      />
+    );
   }
 
   if (!session) {
@@ -449,11 +537,53 @@ export function App() {
           username={session.username}
           subject={session.subject}
           connections={connections}
+          connectedAccounts={connectedAccounts}
+          connectedProviders={connectedProviders}
+          connectedNotice={connectedNotice}
           error={error}
           busy={busy}
           onAcceptInvitation={acceptInvitation}
           onOpenStation={() => go("/station")}
           onOpenStores={() => go("/stores")}
+          onConnectAccount={(provider, extra) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .startConnectedAccountConnect(provider, extra)
+              .then((result) => {
+                window.location.assign(result.authorizationUrl);
+              })
+              .catch((caught) => {
+                setError(handleError(caught));
+                setBusy(false);
+              });
+          }}
+          onReauthorizeAccount={(accountId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .reauthorizeConnectedAccount(accountId)
+              .then((result) => {
+                window.location.assign(result.authorizationUrl);
+              })
+              .catch((caught) => {
+                setError(handleError(caught));
+                setBusy(false);
+              });
+          }}
+          onDisconnectAccount={(accountId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .disconnectConnectedAccount(accountId)
+              .then(() => api.listConnectedAccounts())
+              .then((listed) => {
+                setConnectedAccounts(listed.accounts);
+                setConnectedProviders(listed.providers);
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
           onSignOut={signOut}
         />
       ) : null}
@@ -528,6 +658,19 @@ export function App() {
             void api
               .createTransaction(input)
               .then((txn) => api.createOrGetProof(txn.transactionId))
+              .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onCreateGrading={(input) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .createProof({
+                workflowType: "GRADING_SUBMISSION",
+                itemCount: input.itemCount,
+                itemTitle: input.itemTitle,
+              })
               .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
@@ -695,12 +838,86 @@ export function App() {
           error={error}
           busy={busy}
           development={import.meta.env.DEV}
+          shareNotice={shareNotice}
           onSearchUsers={searchProofUsers}
           onInvite={inviteProofUser}
           onOpenStation={() => {
             const reference = proof?.transaction.externalReference || "";
             go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
           }}
+          onShare={() => {
+            if (!proof) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            setShareNotice(null);
+            void api
+              .createAccessLink(proof.proofId, { scope: "SUMMARY" })
+              .then(async (link) => {
+                const url = link.url || `${window.location.origin}/p/${link.token ?? ""}`;
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setShareNotice("Viewing link copied. Anyone with the link can see live status. They cannot change the Proof.");
+                } catch {
+                  setShareNotice(url);
+                }
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onWorkflowAction={async (action, body = {}) => {
+            if (!proof) {
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            try {
+              const result = await api.runProofAction(proof.proofId, action, {
+                ...body,
+                idempotencyKey: crypto.randomUUID(),
+              });
+              setProof(result.proof);
+            } catch (caught) {
+              setError(handleError(caught));
+              throw caught;
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onCommitCapture={async (files) => {
+            if (!proof) {
+              return [];
+            }
+            setBusy(true);
+            setError(null);
+            try {
+              const evidenceType = captureEvidenceType({
+                workflowType: proof.workflowType,
+                captureRecipe: proof.nextAction?.captureRecipe,
+                nextActionType: proof.nextAction?.type,
+              });
+              const committed: Array<{ slot: string; evidenceId: string }> = [];
+              for (const row of files) {
+                const contentType = row.file.type || "application/octet-stream";
+                const initialized = await api.initializeEvidenceUpload(proof.proofId, {
+                  contentType,
+                  evidenceType,
+                  idempotencyKey: crypto.randomUUID(),
+                });
+                await api.uploadObject(initialized.upload, row.file, contentType);
+                await api.commitEvidence(proof.proofId, initialized.evidenceId);
+                committed.push({ slot: row.slot, evidenceId: initialized.evidenceId });
+              }
+              return committed;
+            } catch (caught) {
+              setError(handleError(caught));
+              throw caught;
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onLoadEvidence={loadProofEvidence}
           onAttest={(statement) => {
             if (!proof) {
               return;

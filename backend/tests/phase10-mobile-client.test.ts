@@ -2,6 +2,7 @@ import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { ApiError, PackProofV2Client } from "../../mobile/src/v2-api.ts";
+import { captureEvidenceType } from "../../mobile/src/copy/custody.ts";
 import { createHarness, type TestHarness } from "./helpers.js";
 
 async function freePort(): Promise<number> {
@@ -289,5 +290,42 @@ describe("Phase 10 mobile V2 API client", () => {
     const proof = await ctx.seller.getProof(first.proof!.proofId);
     expect(proof.shipmentObservations?.events).toHaveLength(1);
     expect(proof.chronology?.some((entry) => entry.eventType === "LABEL_CREATED")).toBe(true);
+  });
+
+  it("creates a grading submission Proof through createProof", async () => {
+    const ctx = await startClientServer();
+    close = ctx.close;
+    const sellerLogin = await ctx.seller.login("grading-mobile-seller");
+    ctx.sellerToken.value = sellerLogin.token;
+
+    const created = await ctx.seller.createProof({
+      workflowType: "GRADING_SUBMISSION",
+      itemCount: 2,
+      itemTitle: "Grading submission",
+    });
+    expect(created.workflowType).toBe("GRADING_SUBMISSION");
+    expect(created.assets).toHaveLength(2);
+    expect(created.nextAction?.type).toBe("CAPTURE_ASSET");
+    expect(created.nextAction?.title).toContain("Document item 1 of 2");
+
+    const link = await ctx.seller.createAccessLink(created.proofId, { scope: "SUMMARY" });
+    expect(link.url).toMatch(/\/p\//);
+  });
+
+  it("keeps commerce capture as FULFILLMENT_CAPTURE via captureEvidenceType", () => {
+    expect(
+      captureEvidenceType({
+        workflowType: "COMMERCE_SALE",
+        captureRecipe: "PACKING_STANDARD_V1",
+        nextActionType: "PACK_ITEMS",
+      }),
+    ).toBe("FULFILLMENT_CAPTURE");
+    expect(
+      captureEvidenceType({
+        workflowType: "GRADING_SUBMISSION",
+        captureRecipe: "CARD_STANDARD_V1",
+        nextActionType: "CAPTURE_ASSET",
+      }),
+    ).toBe("ASSET_CAPTURE");
   });
 });

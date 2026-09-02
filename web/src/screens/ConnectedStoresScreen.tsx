@@ -94,7 +94,7 @@ export function ConnectedStoresScreen(props: {
               Connect Demo Storefront
             </button>
           ) : (
-            <p className="note">Live storefront connections will appear here after the Shopify slice.</p>
+            <p className="note">Connect Shopify from Connected Accounts. Synced shops appear here.</p>
           )}
         </section>
       ) : (

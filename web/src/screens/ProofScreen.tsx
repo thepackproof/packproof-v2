@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { FINALIZE_DISCLOSURE } from "@packproof/copy/errors";
 import { deriveNextAction } from "@packproof/copy/next-action";
+import {
+  assetItemLabel,
+  isGradingWorkflow,
+  nextActionNeedsCapture,
+  observationProgressLabel,
+  workflowActionFor,
+} from "@packproof/copy/custody";
 import type { CanonicalProof, PublicProfileView, ShipmentIntegrityView } from "../api/types";
+import { ContinuityCompare } from "../components/ContinuityCompare";
 import {
   AttestationList,
   EventTimeline,
@@ -13,6 +21,7 @@ import {
   TechnicalDetails,
 } from "../components/ProofRecord";
 import { invitationStateLabel, profileInitials } from "../format";
+import { GradingCapturePanel } from "./GradingCapturePanel";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN_LENGTH = 2;
@@ -34,10 +43,26 @@ export function ProofScreen(props: {
   error: string | null;
   busy: boolean;
   development?: boolean;
+  shareNotice?: string | null;
   onInvite: (input: { inviteeUserId: string }) => Promise<void>;
   onAttest: (statement: string) => void;
   onFinalize: () => void;
   onOpenStation?: () => void;
+  onShare?: () => void;
+  onWorkflowAction?: (
+    action:
+      | "document"
+      | "pack"
+      | "handoff"
+      | "receive"
+      | "compare"
+      | "output"
+      | "return-pack"
+      | "final-receipt",
+    body?: Record<string, unknown>,
+  ) => Promise<void>;
+  onCommitCapture?: (files: Array<{ slot: string; file: File }>) => Promise<Array<{ slot: string; evidenceId: string }>>;
+  onLoadEvidence?: (evidenceId: string) => Promise<Blob>;
   onImportShipmentEvents?: (throughEventType?: string) => void;
   onSyncShipment?: () => void;
   onConnectTrustedDemo?: () => void;
@@ -54,8 +79,9 @@ export function ProofScreen(props: {
   const proof = props.proof;
   const role = proof?.participants.find((participant) => participant.userId === props.currentUserId)
     ?.role;
+  const grading = isGradingWorkflow(proof?.workflowType);
   const committed = proof?.evidence.filter((item) => item.validationStatus === "COMMITTED").length ?? 0;
-  const action = proof
+  const localAction = proof
     ? deriveNextAction({
         role,
         proofStatus: proof.status,
@@ -67,7 +93,13 @@ export function ProofScreen(props: {
         offline: false,
       })
     : null;
-  const canAttest = proof && proof.status !== "FINALIZED" && Boolean(role);
+  const serverAction = proof?.nextAction ?? null;
+  const actionTitle = serverAction?.title || localAction?.label || "";
+  const actionHint = serverAction?.hint || localAction?.hint || "";
+  const actionEnabled = grading
+    ? Boolean(serverAction && serverAction.type !== "WAIT_FOR_RECEIPT" && serverAction.type !== "COMPLETE")
+    : Boolean(localAction?.enabled && localAction.label);
+  const canAttest = !grading && proof && proof.status !== "FINALIZED" && Boolean(role);
   const packingAttested = Boolean(
     proof?.attestations?.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
   );
@@ -82,6 +114,7 @@ export function ProofScreen(props: {
     packingAttested &&
     hasFulfillmentCapture;
   const canFinalize =
+    !grading &&
     role === "SELLER" &&
     Boolean(
       merchantReady ||
@@ -158,18 +191,36 @@ export function ProofScreen(props: {
   }
 
   function handlePrimary() {
-    if (!action) {
+    if (grading && serverAction) {
+      if (serverAction.type === "FINALIZE") {
+        props.onFinalize();
+        return;
+      }
+      if (nextActionNeedsCapture(serverAction.type)) {
+        return;
+      }
+      const actionName = workflowActionFor(serverAction.type);
+      if (actionName) {
+        void props.onWorkflowAction?.(actionName, {
+          assetId: serverAction.assetId,
+          transferId: serverAction.transferId,
+          recipe: serverAction.captureRecipe,
+        });
+      }
       return;
     }
-    if (action.key === "start_capture" || action.key === "review_recording" || action.key === "retry_upload") {
+    if (!localAction) {
+      return;
+    }
+    if (localAction.key === "start_capture" || localAction.key === "review_recording" || localAction.key === "retry_upload") {
       props.onOpenStation?.();
       return;
     }
-    if (action.key === "finalize") {
+    if (localAction.key === "finalize") {
       props.onFinalize();
       return;
     }
-    if (action.key === "add_participant" || action.key === "getting_started") {
+    if (localAction.key === "add_participant" || localAction.key === "getting_started") {
       setInviteOpen(true);
       setTab("overview");
     }
@@ -183,22 +234,78 @@ export function ProofScreen(props: {
           {props.error}
         </div>
       ) : null}
+      {props.shareNotice ? <p className="note">{props.shareNotice}</p> : null}
 
-      {action && (action.hint || action.label) ? (
+      <div className="btn-row">
+        {props.onShare ? (
+          <button className="btn btn-secondary" type="button" disabled={props.busy} onClick={props.onShare}>
+            Share viewing link
+          </button>
+        ) : null}
+      </div>
+
+      {actionTitle || actionHint ? (
         <section className="section">
           <p className="kicker">Next step</p>
-          <p>{action.hint || action.label}</p>
-          {action.enabled && action.label ? (
+          <p className="card-title">{actionTitle}</p>
+          {actionHint ? <p>{actionHint}</p> : null}
+          {grading && nextActionNeedsCapture(serverAction?.type) ? (
+            <GradingCapturePanel
+              recipe={serverAction?.captureRecipe}
+              busy={props.busy}
+              onCommit={async (files) => {
+                const committedSlots = await props.onCommitCapture?.(files);
+                const actionName = workflowActionFor(serverAction?.type);
+                if (!actionName || !committedSlots) {
+                  return;
+                }
+                await props.onWorkflowAction?.(actionName, {
+                  assetId: serverAction?.assetId,
+                  transferId: serverAction?.transferId,
+                  recipe: serverAction?.captureRecipe,
+                  evidence: committedSlots,
+                });
+              }}
+            />
+          ) : actionEnabled ? (
             <div className="btn-row" style={{ marginTop: "0.75rem" }}>
               <button className="btn" type="button" disabled={props.busy} onClick={handlePrimary}>
-                {action.label}
+                {actionTitle}
               </button>
             </div>
-          ) : action.kind === "success" ? (
-            <p className="integrity-mark">{action.label}</p>
+          ) : localAction?.kind === "success" ? (
+            <p className="integrity-mark">{actionTitle}</p>
           ) : null}
         </section>
       ) : null}
+
+      {proof.assets && proof.assets.length > 0 ? (
+        <section className="section">
+          <h2>Items</h2>
+          <ul className="card-list">
+            {proof.assets.map((asset) => (
+              <li key={asset.assetId}>
+                <div className="card-title">{assetItemLabel(asset)}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {proof.observations && proof.observations.length > 0 ? (
+        <section className="section">
+          <h2>Progress</h2>
+          <ul className="card-list">
+            {proof.observations.map((observation) => (
+              <li key={observation.observationId}>
+                <div className="card-title">{observation.label || observationProgressLabel(observation.type)}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
 
       <div className="proof-tabs" role="tablist" aria-label="Proof sections">
         {TABS.map((item) => (
@@ -226,10 +333,10 @@ export function ProofScreen(props: {
           <ParticipantList proof={proof} currentUserId={props.currentUserId} />
           {canInvite ? (
             <section className="section stack">
-              <h2>Add a participant</h2>
+              <h2>{grading ? "Add a receiving participant" : "Add a participant"}</h2>
               {!inviteOpen ? (
                 <button className="btn" type="button" onClick={() => setInviteOpen(true)}>
-                  Add participant
+                  {grading ? "Add receiving participant" : "Add participant"}
                 </button>
               ) : (
                 <>

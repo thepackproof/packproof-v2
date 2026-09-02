@@ -111,21 +111,33 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
     title: "eBay isn’t enabled yet.",
     message: "This PackProof environment has not turned on eBay connections.",
   },
+  CONNECTED_ACCOUNT_PROVIDER_DISABLED: {
+    title: "That connection isn’t enabled yet.",
+    message: "This PackProof environment has not turned on that provider.",
+  },
+  CONNECTED_ACCOUNT_ALREADY_LINKED: {
+    title: "That account is already connected.",
+    message: "Sign in to the PackProof account that already connected it, or disconnect it there first.",
+  },
+  CONNECTED_ACCOUNT_AUTH_ERROR: {
+    title: "We couldn’t finish that connection.",
+    message: "Start Connect again from Account. PackProof did not save credentials from this attempt.",
+  },
   MARKETPLACE_ALREADY_CONNECTED: {
     title: "That eBay account is already connected.",
     message: "Sign in to the PackProof account that already connected this eBay user, or disconnect it there first.",
   },
   OAUTH_STATE_INVALID: {
-    title: "The eBay sign-in expired.",
-    message: "Start Connect eBay again from PackProof.",
+    title: "The connection sign-in expired.",
+    message: "Start Connect again from Account.",
   },
   OAUTH_STATE_EXPIRED: {
-    title: "The eBay sign-in expired.",
-    message: "Start Connect eBay again from PackProof.",
+    title: "The connection sign-in expired.",
+    message: "Start Connect again from Account.",
   },
   OAUTH_STATE_REUSED: {
-    title: "The eBay sign-in expired.",
-    message: "Start Connect eBay again from PackProof.",
+    title: "The connection sign-in expired.",
+    message: "Start Connect again from Account.",
   },
   EBAY_OAUTH_FAILED: {
     title: "We couldn’t connect eBay.",
@@ -137,11 +149,11 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
   },
   INTEGRATION_NOT_FOUND: {
     title: "No connected account was found.",
-    message: "Connect eBay from Account → Stores, then import a sale.",
+    message: "Connect the account from Account, then continue.",
   },
   PROVIDER_AUTH_FAILED: {
     title: "The connected service rejected the saved credentials.",
-    message: "Reconnect the account from Connected Stores.",
+    message: "Reconnect the account from Connected Accounts.",
   },
 };
 

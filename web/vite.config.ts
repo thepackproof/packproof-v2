@@ -55,6 +55,8 @@ export default defineConfig({
       "/integrations": api,
       "/invitations": api,
       "/users": api,
+      "/public": api,
+      "/oauth": api,
     },
   },
 });

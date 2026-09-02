@@ -114,3 +114,7 @@ Browser clients listed in `PACKPROOF_WEB_ORIGINS` receive CORS headers. The firs
 SQL files in `migrations/` apply in filename order at process start (`migrate()`). Staging/production must receive new files through the normal deploy path. Do not edit live rows by hand.
 
 `013_fulfillment_capture.sql` adds `evidence_type_check` (`SELLER_EVIDENCE` | `FULFILLMENT_CAPTURE`). Existing rows are preserved. It does not rewrite finalized Proofs. Merchant finalization after this migration requires committed `FULFILLMENT_CAPTURE`; already-finalized Proofs stay finalized.
+
+`016_custody_workflow.sql` adds `workflow_type`, custody tables, and extends `evidence_type_check` with `ASSET_CAPTURE`, `PACKING_CAPTURE`, `RECEIPT_CAPTURE`. See [docs/CUSTODY_WORKFLOW.md](../docs/CUSTODY_WORKFLOW.md).
+
+`017_connected_accounts.sql` adds `connected_accounts` and account-scoped `account_audit_events`. OAuth tokens are not stored in those tables. See [docs/CONNECTED_ACCOUNTS.md](../docs/CONNECTED_ACCOUNTS.md).

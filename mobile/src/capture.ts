@@ -26,6 +26,31 @@ export async function requestCapturePermissions(): Promise<void> {
 }
 
 /** Native camera owns the device for packing video. Finish-scan uses expo-camera after this returns. */
+export async function captureGradingPhoto(): Promise<{ uri: string; contentType: string } | null> {
+  await requestCapturePermissions();
+  let result: ImagePicker.ImagePickerResult;
+  try {
+    result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      cameraType: ImagePicker.CameraType.back,
+      allowsEditing: false,
+      quality: 0.92,
+    });
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? `Photo capture failed: ${error.message}` : "Camera is unavailable.",
+    );
+  }
+  if (result.canceled || !result.assets[0]?.uri) {
+    return null;
+  }
+  const asset = result.assets[0];
+  return {
+    uri: asset.uri,
+    contentType: asset.mimeType ?? "image/jpeg",
+  };
+}
+
 export async function recordPackingEvidence(): Promise<LocalCapture | null> {
   await requestCapturePermissions();
   let result: ImagePicker.ImagePickerResult;

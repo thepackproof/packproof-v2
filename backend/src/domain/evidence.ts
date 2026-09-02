@@ -7,6 +7,7 @@ import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
 import {
   assertNotFinalized,
+  authorizeProofAccess,
   getProofView,
   loadProof,
   requireParticipant,
@@ -14,6 +15,7 @@ import {
 } from "./proofs.js";
 import { parseEvidenceType } from "./evidence-types.js";
 import { asRequiredIso, type EvidenceRow } from "./types.js";
+import { requireWorkflowType, rolesAllowedToSubmitEvidence } from "./workflow.js";
 
 export interface EvidenceUploadView {
   evidenceId: string;
@@ -63,7 +65,18 @@ export async function initializeEvidenceUpload(
   return db.transaction(async (tx) => {
     const proof = await loadProof(tx, proofId, true);
     assertNotFinalized(proof);
-    await requireParticipant(tx, proofId, actorUserId, "SELLER");
+    const participant = await requireParticipant(tx, proofId, actorUserId);
+    const allowed = rolesAllowedToSubmitEvidence(
+      requireWorkflowType(proof.workflow_type),
+      evidenceType,
+    );
+    if (!allowed.includes(participant.role as "SELLER" | "BUYER")) {
+      throw new DomainError(
+        "PARTICIPANT_NOT_AUTHORIZED",
+        "Not authorized to submit evidence on this Proof",
+        403,
+      );
+    }
 
     if (proof.status !== "READY_FOR_EVIDENCE" && proof.status !== "EVIDENCE_COMMITTED") {
       throw new DomainError(
@@ -263,7 +276,7 @@ async function loadEvidenceForCommit(
   | { committed: null; objectKey: string; contentType: string; proofStatus: string }
 > {
   const proof = await loadProof(tx, proofId, true);
-  await requireParticipant(tx, proofId, actorUserId, "SELLER");
+  const participant = await requireParticipant(tx, proofId, actorUserId);
 
   const found = await tx.query<EvidenceRow>(
     `SELECT * FROM evidence WHERE id = $1 AND proof_id = $2 FOR UPDATE`,
@@ -273,10 +286,14 @@ async function loadEvidenceForCommit(
   if (!evidence) {
     throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence not found", 404);
   }
-  if (evidence.submitted_by !== actorUserId) {
+  const allowed = rolesAllowedToSubmitEvidence(
+    requireWorkflowType(proof.workflow_type),
+    evidence.evidence_type,
+  );
+  if (!allowed.includes(participant.role as "SELLER" | "BUYER") || evidence.submitted_by !== actorUserId) {
     throw new DomainError(
       "PARTICIPANT_NOT_AUTHORIZED",
-      "Only the submitting seller can commit this evidence",
+      "Only the submitting participant can commit this evidence",
       403,
     );
   }
@@ -323,4 +340,31 @@ function contentTypesCompatible(stored: string, expected: string): boolean {
 
 function mediaType(value: string): string {
   return value.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+export async function readCommittedEvidence(
+  db: Database,
+  objectStore: ObjectStore,
+  actorUserId: string,
+  proofId: string,
+  evidenceId: string,
+): Promise<{ body: Buffer; contentType: string; evidenceId: string }> {
+  await authorizeProofAccess(db, proofId, actorUserId);
+  const found = await db.query<EvidenceRow>(
+    `SELECT * FROM evidence WHERE id = $1 AND proof_id = $2`,
+    [evidenceId, proofId],
+  );
+  const row = found.rows[0];
+  if (!row || row.validation_status !== "COMMITTED") {
+    throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence not found", 404);
+  }
+  const stored = await objectStore.get(row.object_key);
+  if (!stored) {
+    throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence is not available", 404);
+  }
+  return {
+    body: stored.body,
+    contentType: stored.contentType || row.content_type,
+    evidenceId: row.id,
+  };
 }

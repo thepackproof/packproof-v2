@@ -2,6 +2,18 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
+import { captureGradingPhoto } from "../capture";
+import { ContinuityCompare } from "../ui/ContinuityCompare";
+import {
+  assetItemLabel,
+  captureSlots,
+  inviteParticipantTitle,
+  isGradingWorkflow,
+  nextActionNeedsCapture,
+  observationProgressLabel,
+  participantFacingRole,
+  workflowActionFor,
+} from "../copy/custody";
 import { CARRIER_DISCLOSURE, SOURCE_DISCLOSURE } from "../copy/errors";
 import {
   chronologyCategoryLabel,
@@ -17,7 +29,6 @@ import {
   orderReferenceLabel,
   quantityLabel,
   shippingSummary,
-  youRoleLabel,
 } from "../copy/format";
 import { deriveNextAction, fieldsLocked, isCompletedAction, shouldShowRequiredAction } from "../copy/next-action";
 import { humanProofStatus, proofStatusLabel } from "../copy/status";
@@ -33,10 +44,13 @@ import { StatusBadge, statusTone } from "../ui/StatusBadge";
 import { Timeline } from "../ui/Timeline";
 import { ProofRecordSkeleton } from "../ui/Skeleton";
 
+type SlotCapture = { uri: string; contentType: string };
+
 export function ProofDetailScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [slotCaptures, setSlotCaptures] = useState<Record<string, SlotCapture>>({});
   const proof = app.proof;
   const txn = app.transactionDetail ?? proof?.transaction;
   if (!proof || !txn || !app.session) {
@@ -48,10 +62,11 @@ export function ProofDetailScreen() {
     );
   }
 
+  const grading = isGradingWorkflow(proof.workflowType);
   const committed = (proof.evidence ?? []).filter((item) => item.validationStatus === "COMMITTED");
   const pending = (proof.evidence ?? []).filter((item) => item.validationStatus === "PENDING");
   const captureBelongs = app.session.proofId === proof.proofId;
-  const action = deriveNextAction({
+  const localAction = deriveNextAction({
     role: app.role,
     proofStatus: proof.status,
     participationPolicy: proof.participationPolicy,
@@ -63,6 +78,28 @@ export function ProofDetailScreen() {
     uploadPercent: app.uploadPercent,
     offline: app.offline,
   });
+  const serverAction = proof.nextAction ?? null;
+  const actionTitle = serverAction?.title || localAction.label || "";
+  const actionHint = serverAction?.hint || localAction.hint || "";
+  const showActionCard = grading
+    ? Boolean(serverAction && serverAction.type !== "COMPLETE")
+    : shouldShowRequiredAction(localAction) || Boolean(serverAction?.title || serverAction?.hint);
+  const actionEnabled = grading
+    ? Boolean(
+        serverAction &&
+          serverAction.type !== "WAIT_FOR_RECEIPT" &&
+          serverAction.type !== "COMPLETE" &&
+          !nextActionNeedsCapture(serverAction.type),
+      )
+    : Boolean(localAction.enabled && localAction.label);
+  const captureRecipe = serverAction?.captureRecipe;
+  const imageSlots = grading && nextActionNeedsCapture(serverAction?.type) ? captureSlots(captureRecipe) : [];
+  const usesVideoCapture =
+    grading &&
+    nextActionNeedsCapture(serverAction?.type) &&
+    captureRecipe === "PACKING_STANDARD_V1";
+  const usesImageCapture = grading && imageSlots.length > 0 && !usesVideoCapture;
+  const slotsReady = imageSlots.filter((slot) => slot.required).every((slot) => Boolean(slotCaptures[slot.slot]));
   const latestShipment = proof.shipmentObservations?.latest?.eventType ?? null;
   const statusLabel = humanProofStatus({
     proofStatus: proof.status,
@@ -75,7 +112,9 @@ export function ProofDetailScreen() {
   const seller = proof.participants.find((p) => p.role === "SELLER");
   const buyer = proof.participants.find((p) => p.role === "BUYER");
   const locked = fieldsLocked(proof.status);
-  const canEdit = !locked && app.role === "SELLER";
+  const canEdit = !locked && app.role === "SELLER" && !grading;
+  const roleLabel = participantFacingRole(proof.workflowType, app.role);
+  const yourRole = roleLabel ? (app.role ? `You • ${roleLabel}` : roleLabel) : "";
   const events = (proof.chronology ?? []).map((entry) => ({
     id: entry.id,
     title: humanChronologyTitle(entry.eventType, entry.title),
@@ -98,8 +137,48 @@ export function ProofDetailScreen() {
     .filter(Boolean)
     .join(" • ");
 
+  async function captureSlot(slot: string) {
+    const captured = await captureGradingPhoto();
+    if (!captured) {
+      return;
+    }
+    setSlotCaptures((current) => ({ ...current, [slot]: captured }));
+  }
+
+  async function submitImageCapture() {
+    const payload = imageSlots
+      .map((slot) => {
+        const row = slotCaptures[slot.slot];
+        return row ? { slot: slot.slot, uri: row.uri, contentType: row.contentType } : null;
+      })
+      .filter((row): row is { slot: string; uri: string; contentType: string } => Boolean(row));
+    await app.commitGradingCapture(payload);
+    setSlotCaptures({});
+  }
+
   function handlePrimary() {
-    switch (action.key) {
+    if (grading && serverAction) {
+      if (serverAction.type === "FINALIZE") {
+        app.go("finalize");
+        return;
+      }
+      if (nextActionNeedsCapture(serverAction.type)) {
+        if (usesVideoCapture) {
+          app.go("capture");
+        }
+        return;
+      }
+      const actionName = workflowActionFor(serverAction.type);
+      if (actionName) {
+        void app.runWorkflowAction(actionName, {
+          assetId: serverAction.assetId,
+          transferId: serverAction.transferId,
+          recipe: serverAction.captureRecipe,
+        });
+      }
+      return;
+    }
+    switch (localAction.key) {
       case "start_capture":
       case "review_recording":
       case "retry_upload":
@@ -119,9 +198,49 @@ export function ProofDetailScreen() {
     }
   }
 
+  const primaryLabel = grading ? serverAction?.title || "" : localAction.label;
+
+  function renderPrimaryButton() {
+    if (grading) {
+      if (usesImageCapture) {
+        return null;
+      }
+      if (usesVideoCapture) {
+        return (
+          <Button
+            label={primaryLabel || "Record packing"}
+            onPress={handlePrimary}
+            loading={app.busy}
+            icon="videocam-outline"
+          />
+        );
+      }
+      if (serverAction?.type === "WAIT_FOR_RECEIPT") {
+        return null;
+      }
+      if (actionEnabled && primaryLabel) {
+        return <Button label={primaryLabel} onPress={handlePrimary} loading={app.busy} />;
+      }
+      return null;
+    }
+    if (localAction.enabled && localAction.label) {
+      return (
+        <Button
+          label={localAction.label}
+          onPress={handlePrimary}
+          loading={app.busy}
+          icon={localAction.key === "start_capture" || localAction.key === "review_recording" ? "videocam-outline" : undefined}
+        />
+      );
+    }
+    if (localAction.kind === "progress") {
+      return <Text style={[styles.progress, { color: colors.accent }]}>{localAction.label}</Text>;
+    }
+    return null;
+  }
   const humanRows = [
     { label: "State", value: proofStatusLabel(proof.status) },
-    { label: "Your role", value: youRoleLabel({ role: app.role, isCurrentUser: true }) },
+    { label: "Your role", value: yourRole },
     { label: "Created", value: formatDateTime(proof.createdAt) },
     { label: "Updated", value: formatDateTime(proof.updatedAt) },
     { label: "Finalized", value: formatDateTime(proof.finalizedAt) },
@@ -131,6 +250,8 @@ export function ProofDetailScreen() {
     { label: "Proof ID", value: proof.proofId },
     { label: "Transaction ID", value: proof.transactionId },
     { label: "Internal state", value: proof.status },
+    { label: "Workflow type", value: proof.workflowType ?? "" },
+    { label: "Workflow stage", value: proof.workflowStage ?? "" },
     { label: "Created (raw)", value: proof.createdAt },
     { label: "Updated (raw)", value: proof.updatedAt },
     { label: "Finalized (raw)", value: proof.finalizedAt ?? "" },
@@ -175,22 +296,38 @@ export function ProofDetailScreen() {
         <StatusBadge label={statusLabel} tone={statusTone(statusLabel)} />
       </View>
 
-      {shouldShowRequiredAction(action) ? (
+      {showActionCard && (actionTitle || actionHint) ? (
         <InfoCard>
           <Text style={[styles.kicker, { color: colors.accent }]}>Next step</Text>
-          <Text style={[styles.body, { color: colors.textPrimary }]}>{action.hint || action.label}</Text>
-          {action.enabled && action.label ? (
-            <Button
-              label={action.label}
-              onPress={handlePrimary}
-              loading={app.busy}
-              icon={action.key === "start_capture" || action.key === "review_recording" ? "videocam-outline" : undefined}
-            />
-          ) : action.kind === "progress" ? (
-            <Text style={[styles.progress, { color: colors.accent }]}>{action.label}</Text>
-          ) : null}
+          <Text style={[styles.body, { color: colors.textPrimary }]}>{actionHint || actionTitle}</Text>
+          {usesImageCapture ? (
+            <View style={styles.slotList}>
+              {imageSlots.map((slot) => (
+                <View key={slot.slot} style={styles.slotRow}>
+                  <Text style={[styles.meta, { color: colors.textSecondary, flex: 1 }]}>{slot.prompt}</Text>
+                  {slotCaptures[slot.slot] ? (
+                    <Text style={[styles.meta, { color: colors.success }]}>Captured</Text>
+                  ) : null}
+                  <Button
+                    label={slotCaptures[slot.slot] ? "Retake" : "Capture"}
+                    variant="secondary"
+                    disabled={app.busy}
+                    onPress={() => void app.run(() => captureSlot(slot.slot))}
+                  />
+                </View>
+              ))}
+              <Button
+                label="Save capture"
+                onPress={() => void submitImageCapture()}
+                loading={app.busy}
+                disabled={!slotsReady}
+              />
+            </View>
+          ) : (
+            renderPrimaryButton()
+          )}
         </InfoCard>
-      ) : isCompletedAction(action) ? (
+      ) : !grading && isCompletedAction(localAction) ? (
         <InfoCard>
           <View style={styles.row}>
             <Ionicons name="lock-closed" size={16} color={colors.success} />
@@ -199,6 +336,38 @@ export function ProofDetailScreen() {
           <Text style={[styles.meta, { color: colors.textSecondary }]}>Evidence record secured</Text>
         </InfoCard>
       ) : null}
+
+      {proof.assets && proof.assets.length > 0 ? (
+        <>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Items</Text>
+          <InfoCard>
+            {proof.assets.map((asset) => (
+              <Text key={asset.assetId} style={[styles.body, { color: colors.textPrimary }]}>
+                {assetItemLabel(asset)}
+              </Text>
+            ))}
+          </InfoCard>
+        </>
+      ) : null}
+
+      {proof.observations && proof.observations.length > 0 ? (
+        <>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Progress</Text>
+          <InfoCard>
+            {proof.observations.map((observation) => (
+              <Text key={observation.observationId} style={[styles.body, { color: colors.textPrimary }]}>
+                {observation.label || observationProgressLabel(observation.type)}
+              </Text>
+            ))}
+          </InfoCard>
+        </>
+      ) : null}
+
+      <ContinuityCompare
+        proof={proof}
+        token={app.session?.token ?? null}
+        contentUrl={(evidenceId) => app.client.evidenceContentUrl(proof.proofId, evidenceId)}
+      />
 
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Proof record</Text>
       <Text style={[styles.note, { color: colors.textSecondary }]}>{SOURCE_DISCLOSURE}</Text>
@@ -225,9 +394,18 @@ export function ProofDetailScreen() {
       </Pressable>
 
       <BottomSheet visible={menuOpen} title="Proof actions" onClose={() => setMenuOpen(false)}>
-        {canEdit && !buyer ? (
+        <Button
+          label="Share viewing link"
+          variant="secondary"
+          loading={app.busy}
+          onPress={() => {
+            setMenuOpen(false);
+            void app.shareProofLink();
+          }}
+        />
+        {app.role === "SELLER" && !buyer && proof.status !== "FINALIZED" ? (
           <Button
-            label="Add buyer"
+            label={inviteParticipantTitle(proof.workflowType)}
             variant="secondary"
             onPress={() => {
               setMenuOpen(false);
@@ -296,6 +474,8 @@ const styles = StyleSheet.create({
   note: { ...typography.caption },
   progress: { ...typography.bodyStrong },
   success: { ...typography.secondaryStrong },
+  slotList: { gap: spacing.sm },
+  slotRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
   techRow: {
     flexDirection: "row",
     alignItems: "center",

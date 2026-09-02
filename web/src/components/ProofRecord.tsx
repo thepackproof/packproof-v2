@@ -5,10 +5,10 @@ import {
   moneyLabel,
   orderReferenceLabel,
   quantityLabel,
-  roleLabel,
   shippingSummary,
   trackingEnding,
 } from "@packproof/copy/format";
+import { participantFacingRole } from "@packproof/copy/custody";
 import { humanProofStatus, integrityState, sourceLabel } from "@packproof/copy/status";
 import type { CanonicalProof, ShipmentIntegrityView } from "../api/types";
 import {
@@ -51,7 +51,9 @@ export function ProofHeader(props: { proof: CanonicalProof; role?: string }) {
             {integrity === "finalized" ? "Sealed record" : "Evidence secured"}
           </span>
         ) : null}
-        {props.role ? <span className="meta">You are the {roleLabel(props.role)}</span> : null}
+        {props.role ? (
+          <span className="meta">You are the {participantFacingRole(props.proof.workflowType, props.role)}</span>
+        ) : null}
       </div>
       <div className="row meta">
         <span>
@@ -123,7 +125,7 @@ export function ParticipantList(props: { proof: CanonicalProof; currentUserId: s
         {props.proof.participants.map((participant) => (
           <li key={participant.participantId} className="info-card" style={{ boxShadow: "none" }}>
             <div className="row">
-              <strong>{roleLabel(participant.role)}</strong>
+              <strong>{participantFacingRole(props.proof.workflowType, participant.role)}</strong>
               {participant.userId === props.currentUserId ? <span className="meta">You</span> : null}
             </div>
             <div className="meta">Joined {formatWhen(participant.joinedAt)}</div>

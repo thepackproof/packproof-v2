@@ -18,7 +18,7 @@ const EMPTY = {
   shipmentDate: "",
 };
 
-type Step = "choose" | "ebay-list" | "manual" | "review";
+type Step = "choose" | "ebay-list" | "manual" | "review" | "grading";
 
 export function CreateProofScreen(props: {
   busy: boolean;
@@ -29,6 +29,7 @@ export function CreateProofScreen(props: {
   onCancel: () => void;
   onScan: () => void;
   onCreate: (input: TransactionWriteInput) => void;
+  onCreateGrading: (input: { itemCount: number; itemTitle: string }) => void;
   onConnectEbay: () => void;
   onImportPurchase: () => Promise<TransactionImportView>;
   onListEbayOrders: () => Promise<{ orders: EbaySellerOrderView[]; disclosure: string }>;
@@ -40,6 +41,8 @@ export function CreateProofScreen(props: {
   const [imported, setImported] = useState<TransactionImportView | null>(null);
   const [ebayOrders, setEbayOrders] = useState<EbaySellerOrderView[]>([]);
   const [ebayDisclosure, setEbayDisclosure] = useState<string | null>(null);
+  const [itemCount, setItemCount] = useState("1");
+  const [gradingTitle, setGradingTitle] = useState("Grading submission");
   const set = (key: keyof typeof EMPTY, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -149,9 +152,73 @@ export function CreateProofScreen(props: {
               <span className="meta">For direct sales</span>
             </span>
           </button>
+          <button
+            className="option-card"
+            type="button"
+            disabled={props.busy}
+            aria-label="Grading submission"
+            onClick={() => setStep("grading")}
+          >
+            <span className="option-icon" aria-hidden="true">
+              ▣
+            </span>
+            <span className="option-copy">
+              <strong className="card-title">Grading submission</strong>
+              <span className="meta">Document items, hand off, and track receipt</span>
+            </span>
+          </button>
           <button className="btn btn-secondary" type="button" onClick={props.onCancel}>
             Cancel
           </button>
+        </section>
+      ) : null}
+
+      {step === "grading" ? (
+        <section className="section stack">
+          <h2>Grading submission</h2>
+          <p className="lede">How many items are you sending?</p>
+          {props.error ? (
+            <div className="banner banner-error" role="alert">
+              {props.error}
+            </div>
+          ) : null}
+          <label className="field">
+            <span>Title</span>
+            <input
+              value={gradingTitle}
+              onChange={(event) => setGradingTitle(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label className="field">
+            <span>Number of items</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={itemCount}
+              onChange={(event) => setItemCount(event.target.value)}
+            />
+          </label>
+          <div className="btn-row">
+            <button
+              className="btn"
+              type="button"
+              disabled={props.busy}
+              onClick={() => {
+                const count = Math.max(1, Math.min(50, Number.parseInt(itemCount, 10) || 1));
+                props.onCreateGrading({
+                  itemCount: count,
+                  itemTitle: gradingTitle.trim() || "Grading submission",
+                });
+              }}
+            >
+              {props.busy ? "Creating…" : "Create grading submission"}
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={() => setStep("choose")}>
+              Back
+            </button>
+          </div>
         </section>
       ) : null}
 

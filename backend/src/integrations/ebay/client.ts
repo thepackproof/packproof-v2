@@ -70,7 +70,24 @@ export function createHttpEbayClient(fetchImpl: typeof fetch = fetch): EbayClien
       }
       return order;
     },
+    async revokeUserToken(input) {
+      const response = await fetchImpl(ebayTokenRevokeUrl(input.environment), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: basicAuthHeader(input.clientId, input.clientSecret),
+        },
+        body: new URLSearchParams({ token: input.token }).toString(),
+      });
+      if (!response.ok && response.status !== 400) {
+        mapEbayHttpError(response.status);
+      }
+    },
   };
+}
+
+function ebayTokenRevokeUrl(environment: EbayEnvironment): string {
+  return `${ebayApiBaseUrl(environment)}/identity/v1/oauth2/revoke`;
 }
 
 async function tokenRequest(

@@ -21,6 +21,9 @@ import {
   type UploadTarget,
   type EbayMarketplaceView,
   type EbayOrderListView,
+  type PublicProofView,
+  type AccessLinkView,
+  type ConnectedAccountsListView,
 } from "./types";
 
 export class PackProofApi {
@@ -80,6 +83,35 @@ export class PackProofApi {
 
   async listMarketplaces(): Promise<{ marketplaces: EbayMarketplaceView[] }> {
     return this.request("/me/marketplaces");
+  }
+
+  async listConnectedAccounts(): Promise<ConnectedAccountsListView> {
+    return this.request("/me/connected-accounts");
+  }
+
+  async startConnectedAccountConnect(
+    provider: string,
+    input: { shop?: string } = {},
+  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+    return this.request(`/me/connected-accounts/${encodeURIComponent(provider)}/connect`, {
+      method: "POST",
+      body: input.shop ? { shop: input.shop } : {},
+    });
+  }
+
+  async reauthorizeConnectedAccount(
+    accountId: string,
+  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+    return this.request(`/me/connected-accounts/${encodeURIComponent(accountId)}/reauthorize`, {
+      method: "POST",
+      body: {},
+    });
+  }
+
+  async disconnectConnectedAccount(accountId: string): Promise<void> {
+    await this.request(`/me/connected-accounts/${encodeURIComponent(accountId)}`, {
+      method: "DELETE",
+    });
   }
 
   async startEbayConnect(): Promise<{ authorizationUrl: string; expiresAt: string }> {
@@ -209,6 +241,50 @@ export class PackProofApi {
     });
   }
 
+  async createProof(input: {
+    workflowType?: string;
+    itemCount?: number;
+    itemTitle?: string;
+  }): Promise<CanonicalProof> {
+    return this.request("/proofs", {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  async createAccessLink(
+    proofId: string,
+    input: { scope?: string } = {},
+  ): Promise<AccessLinkView> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/access-links`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  async getPublicProof(token: string): Promise<PublicProofView> {
+    return this.request(`/public/proofs/${encodeURIComponent(token)}`, { auth: false });
+  }
+
+  async runProofAction(
+    proofId: string,
+    action:
+      | "document"
+      | "pack"
+      | "handoff"
+      | "receive"
+      | "compare"
+      | "output"
+      | "return-pack"
+      | "final-receipt",
+    body: Record<string, unknown> = {},
+  ): Promise<{ proof: CanonicalProof }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/actions/${action}`, {
+      method: "POST",
+      body,
+    });
+  }
+
   async createInvitation(
     proofId: string,
     input: { inviteeIdentifier?: string; inviteeUserId?: string },
@@ -247,6 +323,24 @@ export class PackProofApi {
         evidenceType: input.evidenceType ?? "SELLER_EVIDENCE",
       },
     });
+  }
+
+  async getEvidenceBlob(proofId: string, evidenceId: string): Promise<Blob> {
+    const token = this.options.getToken();
+    if (!token) {
+      throw new ApiError("UNAUTHENTICATED", "Missing bearer token", 401);
+    }
+    const response = await fetch(
+      joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`),
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    if (!response.ok) {
+      throw await errorFromResponse(response);
+    }
+    return response.blob();
   }
 
   async uploadObject(
