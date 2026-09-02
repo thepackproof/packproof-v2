@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { FINALIZE_DISCLOSURE } from "@packproof/copy/errors";
+import { useState } from "react";
 import { deriveNextAction } from "@packproof/copy/next-action";
 import {
   assetItemLabel,
+  inviteParticipantTitle,
   isGradingWorkflow,
   nextActionNeedsCapture,
   observationProgressLabel,
@@ -11,7 +11,7 @@ import {
 } from "@packproof/copy/custody";
 import { moneyLabel, orderReferenceLabel, quantityLabel, shippingSummary } from "@packproof/copy/format";
 import { humanProofStatus } from "@packproof/copy/status";
-import type { CanonicalProof, PublicProfileView, ShipmentIntegrityView } from "../api/types";
+import type { CanonicalProof, ChronologyEntry, ShipmentIntegrityView } from "../api/types";
 import { ContinuityCompare } from "../components/ContinuityCompare";
 import { IconMore } from "../components/Icons";
 import { PageHeader } from "../components/PageHeader";
@@ -25,11 +25,7 @@ import {
   TechnicalDetails,
 } from "../components/ProofRecord";
 import { StatusBadge } from "../components/StatusBadge";
-import { invitationStateLabel, profileInitials } from "../format";
 import { GradingCapturePanel } from "./GradingCapturePanel";
-
-const SEARCH_DEBOUNCE_MS = 300;
-const SEARCH_MIN_LENGTH = 2;
 
 export function ProofScreen(props: {
   proof: CanonicalProof | null;
@@ -40,9 +36,9 @@ export function ProofScreen(props: {
   busy: boolean;
   development?: boolean;
   shareNotice?: string | null;
-  onInvite: (input: { inviteeUserId: string }) => Promise<void>;
-  onAttest: (statement: string) => void;
-  onFinalize: () => void;
+  onOpenInvite?: () => void;
+  onOpenFinalize?: () => void;
+  onOpenEvent?: (event: ChronologyEntry) => void;
   onOpenStation?: () => void;
   onShare?: () => void;
   onWorkflowAction?: (
@@ -63,16 +59,8 @@ export function ProofScreen(props: {
   onImportShipmentEvents?: (throughEventType?: string) => void;
   onSyncShipment?: () => void;
   onConnectTrustedDemo?: () => void;
-  onSearchUsers: (query: string) => Promise<PublicProfileView[]>;
 }) {
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<PublicProfileView[]>([]);
-  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "empty" | "ready" | "error">(
-    "idle",
-  );
-  const searchGeneration = useRef(0);
   const proof = props.proof;
   const role = proof?.participants.find((participant) => participant.userId === props.currentUserId)
     ?.role;
@@ -96,27 +84,6 @@ export function ProofScreen(props: {
   const actionEnabled = grading
     ? Boolean(serverAction && serverAction.type !== "WAIT_FOR_RECEIPT" && serverAction.type !== "COMPLETE")
     : Boolean(localAction?.enabled && localAction.label);
-  const canAttest = !grading && proof && proof.status !== "FINALIZED" && Boolean(role);
-  const packingAttested = Boolean(
-    proof?.attestations?.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
-  );
-  const hasFulfillmentCapture = Boolean(
-    proof?.evidence.some(
-      (row) => row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE",
-    ),
-  );
-  const merchantReady =
-    proof?.participationPolicy === "COUNTERPARTY_OPTIONAL" &&
-    proof.status !== "FINALIZED" &&
-    packingAttested &&
-    hasFulfillmentCapture;
-  const canFinalize =
-    !grading &&
-    role === "SELLER" &&
-    Boolean(
-      merchantReady ||
-        (proof?.participationPolicy !== "COUNTERPARTY_OPTIONAL" && proof?.status === "EVIDENCE_COMMITTED"),
-    );
   const canInvite = Boolean(proof && role === "SELLER" && proof.status !== "FINALIZED");
   const canImportDemoCarrier =
     Boolean(props.development) && proof && role === "SELLER" && Boolean(props.onImportShipmentEvents);
@@ -127,39 +94,6 @@ export function ProofScreen(props: {
     role === "SELLER" &&
     !proof.shipmentSync?.available &&
     Boolean(props.onConnectTrustedDemo);
-
-  useEffect(() => {
-    if (!canInvite || !inviteOpen) {
-      return;
-    }
-    const normalized = query.trim().replace(/^@+/, "").trim();
-    if (normalized.length < SEARCH_MIN_LENGTH) {
-      searchGeneration.current += 1;
-      setResults([]);
-      setSearchStatus("idle");
-      return;
-    }
-    const generation = ++searchGeneration.current;
-    setSearchStatus("loading");
-    const handle = window.setTimeout(() => {
-      void props
-        .onSearchUsers(query.trim())
-        .then((users) => {
-          if (generation !== searchGeneration.current) {
-            return;
-          }
-          setResults(users);
-          setSearchStatus(users.length > 0 ? "ready" : "empty");
-        })
-        .catch(() => {
-          if (generation !== searchGeneration.current) {
-            return;
-          }
-          setSearchStatus("error");
-        });
-    }, SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(handle);
-  }, [canInvite, inviteOpen, query, props.onSearchUsers]);
 
   if (props.loading && !proof) {
     return (
@@ -190,7 +124,7 @@ export function ProofScreen(props: {
   function handlePrimary() {
     if (grading && serverAction) {
       if (serverAction.type === "FINALIZE") {
-        props.onFinalize();
+        props.onOpenFinalize?.();
         return;
       }
       if (nextActionNeedsCapture(serverAction.type)) {
@@ -214,11 +148,11 @@ export function ProofScreen(props: {
       return;
     }
     if (localAction.key === "finalize") {
-      props.onFinalize();
+      props.onOpenFinalize?.();
       return;
     }
-    if (localAction.key === "add_participant" || localAction.key === "getting_started") {
-      setInviteOpen(true);
+    if (localAction.key === "add_participant") {
+      props.onOpenInvite?.();
     }
   }
 
@@ -268,10 +202,10 @@ export function ProofScreen(props: {
               type="button"
               onClick={() => {
                 setMenuOpen(false);
-                setInviteOpen(true);
+                props.onOpenInvite?.();
               }}
             >
-              {grading ? "Add receiving participant" : "Add participant"}
+              {inviteParticipantTitle(proof.workflowType)}
             </button>
           ) : null}
         </div>
@@ -362,116 +296,11 @@ export function ProofScreen(props: {
 
       <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
 
-      <EventTimeline proof={proof} />
+      <EventTimeline proof={proof} onSelect={props.onOpenEvent} />
 
       <div>
           <ProofOverview proof={proof} />
           <ParticipantList proof={proof} currentUserId={props.currentUserId} />
-          {canInvite ? (
-            <section className="section stack">
-              <h2>{grading ? "Add a receiving participant" : "Add a participant"}</h2>
-              {!inviteOpen ? (
-                <button className="btn" type="button" onClick={() => setInviteOpen(true)}>
-                  {grading ? "Add receiving participant" : "Add participant"}
-                </button>
-              ) : (
-                <>
-                  <p className="note">
-                    Search PackProof accounts by username or name. Invitation links are not required.
-                  </p>
-                  <label className="field">
-                    <span>Search by username or name</span>
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      autoComplete="off"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                    />
-                  </label>
-                  {searchStatus === "loading" ? <p className="empty">Searching…</p> : null}
-                  {searchStatus === "empty" ? <p className="empty">No PackProof users match that search.</p> : null}
-                  {searchStatus === "error" ? (
-                    <p className="empty" role="alert">
-                      Search failed. Edit the query to try again.
-                    </p>
-                  ) : null}
-                  <ul className="card-list">
-                    {results.map((user) => {
-                      const state = user.invitationState ?? "NONE";
-                      const canSend = state === "NONE" && !props.busy;
-                      return (
-                        <li key={user.userId} className="user-search-row">
-                          <span className="avatar-placeholder" aria-hidden="true">
-                            {profileInitials(user.displayName, user.username)}
-                          </span>
-                          <div className="user-search-copy">
-                            <strong>{user.displayName || user.username}</strong>
-                            <div className="meta">@{user.username}</div>
-                          </div>
-                          {canSend ? (
-                            <button
-                              className="btn"
-                              type="button"
-                              onClick={() => {
-                                void props.onInvite({ inviteeUserId: user.userId }).then(() => {
-                                  setResults((current) =>
-                                    current.map((row) =>
-                                      row.userId === user.userId ? { ...row, invitationState: "INVITED" } : row,
-                                    ),
-                                  );
-                                });
-                              }}
-                            >
-                              Invite
-                            </button>
-                          ) : (
-                            <span className="meta">{invitationStateLabel(state)}</span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              )}
-            </section>
-          ) : null}
-          {canAttest ? (
-            <section className="section">
-              <h2>Record a statement</h2>
-              <p className="note">
-                This submits your statement to the Proof. PackProof records it. It does not endorse
-                whether the statement is true.
-              </p>
-              <div className="btn-row">
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={props.busy}
-                  onClick={() => props.onAttest("PACKED_DESCRIBED_ITEM")}
-                >
-                  I packed the described item
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={props.busy}
-                  onClick={() => props.onAttest("RECEIVED_PACKAGE")}
-                >
-                  I received this package
-                </button>
-              </div>
-            </section>
-          ) : null}
-          {canFinalize ? (
-            <section className="section">
-              <h2>Complete the Proof</h2>
-              <p className="note">{FINALIZE_DISCLOSURE}</p>
-              <button className="btn" type="button" disabled={props.busy} onClick={props.onFinalize}>
-                Finalize PackProof
-              </button>
-            </section>
-          ) : null}
       </div>
 
       <div className="stack">

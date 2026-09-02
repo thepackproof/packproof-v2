@@ -21,25 +21,37 @@ import { AppNav } from "./components/AppNav";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { AccountScreen } from "./screens/AccountScreen";
 import { ActivityScreen } from "./screens/ActivityScreen";
+import { CompletionScreen } from "./screens/CompletionScreen";
 import { ConnectedStoresScreen } from "./screens/ConnectedStoresScreen";
 import { CreateProofScreen } from "./screens/CreateProofScreen";
+import { EventDetailScreen } from "./screens/EventDetailScreen";
+import { FinalizeScreen } from "./screens/FinalizeScreen";
 import { FulfillmentDetailScreen } from "./screens/FulfillmentDetailScreen";
 import { FulfillmentQueueScreen } from "./screens/FulfillmentQueueScreen";
 import { HomeScreen } from "./screens/HomeScreen";
+import { InvitationReviewScreen } from "./screens/InvitationReviewScreen";
+import { InviteScreen } from "./screens/InviteScreen";
 import { PackingStationScreen } from "./screens/PackingStationScreen";
 import { ProofScreen } from "./screens/ProofScreen";
 import { PublicProofScreen } from "./screens/PublicProofScreen";
 import { LegalScreen } from "./screens/LegalScreen";
 import { ProfileSetupScreen } from "./screens/ProfileSetupScreen";
+import { ScanCreateScreen } from "./screens/ScanCreateScreen";
 import { SignInScreen } from "./screens/SignInScreen";
 
 type Route =
   | { name: "home" }
   | { name: "proofs" }
   | { name: "create" }
+  | { name: "scan" }
   | { name: "activity" }
   | { name: "account" }
   | { name: "proof"; proofId: string }
+  | { name: "invite"; proofId: string }
+  | { name: "finalize"; proofId: string }
+  | { name: "complete"; proofId: string }
+  | { name: "event"; proofId: string; eventId: string }
+  | { name: "invitation"; invitationId: string }
   | { name: "fulfillment" }
   | { name: "fulfillment-detail"; proofId: string }
   | { name: "station"; reference?: string }
@@ -56,6 +68,9 @@ function parseHref(href: string): Route {
   }
   if (pathname === "/new/terms") {
     return { name: "terms" };
+  }
+  if (pathname === "/new/scan") {
+    return { name: "scan" };
   }
   if (pathname === "/new") {
     return { name: "create" };
@@ -83,15 +98,49 @@ function parseHref(href: string): Route {
   if (shared?.[1]) {
     return { name: "public", token: decodeURIComponent(shared[1]) };
   }
+  const invitation = pathname.match(/^\/invitations\/([^/]+)$/);
+  if (invitation?.[1]) {
+    return { name: "invitation", invitationId: decodeURIComponent(invitation[1]) };
+  }
   const fulfillment = pathname.match(/^\/fulfillment\/([^/]+)$/);
   if (fulfillment?.[1]) {
     return { name: "fulfillment-detail", proofId: decodeURIComponent(fulfillment[1]) };
+  }
+  const invite = pathname.match(/^\/proofs\/([^/]+)\/invite$/);
+  if (invite?.[1]) {
+    return { name: "invite", proofId: decodeURIComponent(invite[1]) };
+  }
+  const finalize = pathname.match(/^\/proofs\/([^/]+)\/finalize$/);
+  if (finalize?.[1]) {
+    return { name: "finalize", proofId: decodeURIComponent(finalize[1]) };
+  }
+  const complete = pathname.match(/^\/proofs\/([^/]+)\/complete$/);
+  if (complete?.[1]) {
+    return { name: "complete", proofId: decodeURIComponent(complete[1]) };
+  }
+  const event = pathname.match(/^\/proofs\/([^/]+)\/events\/([^/]+)$/);
+  if (event?.[1] && event[2]) {
+    return { name: "event", proofId: decodeURIComponent(event[1]), eventId: decodeURIComponent(event[2]) };
   }
   const proof = pathname.match(/^\/proofs\/([^/]+)$/);
   if (proof?.[1]) {
     return { name: "proof", proofId: decodeURIComponent(proof[1]) };
   }
   return { name: "home" };
+}
+
+function routeProofId(route: Route): string | null {
+  switch (route.name) {
+    case "proof":
+    case "invite":
+    case "finalize":
+    case "complete":
+    case "event":
+    case "fulfillment-detail":
+      return route.proofId;
+    default:
+      return null;
+  }
 }
 
 function writePath(path: string) {
@@ -181,11 +230,21 @@ function needsWorkspace(name: Route["name"]): boolean {
     name === "activity" ||
     name === "account" ||
     name === "proof" ||
+    name === "invite" ||
+    name === "finalize" ||
+    name === "complete" ||
+    name === "event" ||
+    name === "invitation" ||
+    name === "scan" ||
     name === "fulfillment" ||
     name === "fulfillment-detail" ||
     name === "station" ||
     name === "stores"
   );
+}
+
+function needsProof(name: Route["name"]): boolean {
+  return name === "proof" || name === "invite" || name === "finalize" || name === "complete" || name === "event";
 }
 
 function PackProofApp() {
@@ -215,6 +274,7 @@ function PackProofApp() {
   const [displayNameInput, setDisplayNameInput] = useState(() => loadSession()?.displayName ?? "");
   const [usernameInput, setUsernameInput] = useState(() => loadSession()?.username ?? "");
   const tokenRef = useRef<string | null>(session?.token ?? null);
+  const proofIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     stripOAuthReturnQuery();
@@ -247,6 +307,7 @@ function PackProofApp() {
     setInvitations([]);
     setProof(null);
     setShipmentIntegrity(null);
+    proofIdRef.current = null;
     setConnections([]);
     setConnectedAccounts([]);
     setConnectedProviders([]);
@@ -260,9 +321,11 @@ function PackProofApp() {
     const next = parseHref(path);
     setError(null);
     setShareNotice(null);
-    if (next.name !== "proof" || proof?.proofId !== next.proofId) {
+    const nextId = routeProofId(next);
+    if (!nextId || nextId !== proofIdRef.current) {
       setProof(null);
       setShipmentIntegrity(null);
+      proofIdRef.current = null;
     }
     if (needsWorkspace(next.name)) {
       setLoading(true);
@@ -332,9 +395,11 @@ function PackProofApp() {
   useEffect(() => {
     const onPop = () => {
       const next = parseHref(`${window.location.pathname}${window.location.search}`);
-      if (next.name !== "proof") {
+      const nextId = routeProofId(next);
+      if (!nextId || nextId !== proofIdRef.current) {
         setProof(null);
         setShipmentIntegrity(null);
+        proofIdRef.current = null;
       }
       if (needsWorkspace(next.name)) {
         setLoading(true);
@@ -387,18 +452,32 @@ function PackProofApp() {
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
-    if (route.name === "proof") {
+    if (needsProof(route.name)) {
+      const proofId = routeProofId(route);
+      if (proofId && proofIdRef.current !== proofId) {
+        setLoading(true);
+        setError(null);
+        setProof(null);
+        setShipmentIntegrity(null);
+        void api
+          .getProof(proofId)
+          .then(async (loaded) => {
+            proofIdRef.current = loaded.proofId;
+            setProof(loaded);
+            const integrity = await api.getShipmentIntegrity(loaded.proofId);
+            setShipmentIntegrity(integrity);
+          })
+          .catch((caught) => setError(handleError(caught)))
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    }
+    if (route.name === "invitation") {
       setLoading(true);
-      setError(null);
-      setProof(null);
-      setShipmentIntegrity(null);
       void api
-        .getProof(route.proofId)
-        .then(async (loaded) => {
-          setProof(loaded);
-          const integrity = await api.getShipmentIntegrity(loaded.proofId);
-          setShipmentIntegrity(integrity);
-        })
+        .listInvitations()
+        .then((inbox) => setInvitations(inbox.invitations))
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
@@ -497,7 +576,8 @@ function PackProofApp() {
     error,
     onOpenProof: (proofId: string) => go(`/proofs/${encodeURIComponent(proofId)}`),
     onCreate: () => go("/new"),
-    onAccept: acceptInvitation,
+    onOpenInvitation: (invite: InvitationInboxView) =>
+      go(`/invitations/${encodeURIComponent(invite.invitationId)}`),
   };
 
   return (
@@ -520,7 +600,7 @@ function PackProofApp() {
           loading={loading}
           error={error}
           onOpenProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}`)}
-          onAccept={acceptInvitation}
+          onAccept={(invitationId) => go(`/invitations/${encodeURIComponent(invitationId)}`)}
         />
       ) : null}
 
@@ -557,7 +637,6 @@ function PackProofApp() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
-          onAcceptInvitation={acceptInvitation}
           onOpenStation={() => go("/station")}
           onOpenStores={() => go("/stores")}
           onOpenFulfillment={() => go("/fulfillment")}
@@ -612,23 +691,11 @@ function PackProofApp() {
           busy={busy}
           error={error}
           development={import.meta.env.DEV}
-          ebayEnabled={ebay?.enabled === true}
           ebayConnected={ebay?.connection?.status === "ACTIVE"}
           onCancel={() => go("/")}
-          onScan={() => go("/station")}
-          onConnectEbay={() => {
-            setBusy(true);
-            setError(null);
-            void api
-              .startEbayConnect()
-              .then((result) => {
-                window.location.assign(result.authorizationUrl);
-              })
-              .catch((caught) => {
-                setError(handleError(caught));
-                setBusy(false);
-              });
-          }}
+          onScan={() => go("/new/scan")}
+          onOpenAccount={() => go("/account")}
+          onAcceptInvitation={acceptInvitation}
           onImportPurchase={() => {
             setBusy(true);
             setError(null);
@@ -694,6 +761,49 @@ function PackProofApp() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+        />
+      ) : null}
+
+      {route.name === "scan" ? (
+        <ScanCreateScreen
+          busy={busy}
+          error={error}
+          onBack={() => go("/new")}
+          onIdentify={(reference) => {
+            setBusy(true);
+            setError(null);
+            return api.resolvePackingStation(reference).catch((caught) => {
+              if (
+                caught instanceof ApiError &&
+                (caught.code === "STATION_REFERENCE_NOT_FOUND" || caught.code === "TRANSACTION_NOT_FOUND")
+              ) {
+                throw caught;
+              }
+              setError(handleError(caught));
+              throw caught;
+            }).finally(() => setBusy(false));
+          }}
+          onContinue={(transactionId) => {
+            setBusy(true);
+            setError(null);
+            void api
+              .createOrGetProof(transactionId)
+              .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+          onImport={() => go("/new")}
+          onManual={() => go("/new")}
+        />
+      ) : null}
+
+      {route.name === "invitation" ? (
+        <InvitationReviewScreen
+          invite={invitations.find((item) => item.invitationId === route.invitationId) ?? null}
+          busy={busy}
+          error={error}
+          onBack={() => go("/")}
+          onReview={() => acceptInvitation(route.invitationId)}
         />
       ) : null}
 
@@ -853,7 +963,7 @@ function PackProofApp() {
 
       {route.name === "proof" ? (
         <ProofScreen
-          proof={route.name === "proof" && proof?.proofId === route.proofId ? proof : null}
+          proof={proof?.proofId === route.proofId ? proof : null}
           shipmentIntegrity={shipmentIntegrity}
           currentUserId={session.userId}
           loading={loading}
@@ -862,8 +972,11 @@ function PackProofApp() {
           development={import.meta.env.DEV}
           shareNotice={shareNotice}
           onBack={() => go("/")}
-          onSearchUsers={searchProofUsers}
-          onInvite={inviteProofUser}
+          onOpenInvite={() => go(`/proofs/${encodeURIComponent(route.proofId)}/invite`)}
+          onOpenFinalize={() => go(`/proofs/${encodeURIComponent(route.proofId)}/finalize`)}
+          onOpenEvent={(event) =>
+            go(`/proofs/${encodeURIComponent(route.proofId)}/events/${encodeURIComponent(event.id)}`)
+          }
           onOpenStation={() => {
             const reference = proof?.transaction.externalReference || "";
             go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
@@ -941,31 +1054,6 @@ function PackProofApp() {
             }
           }}
           onLoadEvidence={loadProofEvidence}
-          onAttest={(statement) => {
-            if (!proof) {
-              return;
-            }
-            setBusy(true);
-            void api
-              .createAttestation(proof.proofId, { statement })
-              .then((result) => setProof(result.proof))
-              .catch((caught) => setError(handleError(caught)))
-              .finally(() => setBusy(false));
-          }}
-          onFinalize={() => {
-            if (!proof) {
-              return;
-            }
-            setBusy(true);
-            void api
-              .finalizeProof(proof.proofId)
-              .then(async (result) => {
-                setProof(result.proof);
-                setShipmentIntegrity(await api.getShipmentIntegrity(result.proof.proofId));
-              })
-              .catch((caught) => setError(handleError(caught)))
-              .finally(() => setBusy(false));
-          }}
           onImportShipmentEvents={(throughEventType) => {
             if (!proof) {
               return;
@@ -1022,6 +1110,63 @@ function PackProofApp() {
                 }
               : undefined
           }
+        />
+      ) : null}
+
+      {route.name === "invite" ? (
+        <InviteScreen
+          proof={proof?.proofId === route.proofId ? proof : null}
+          busy={busy}
+          error={error}
+          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onSearchUsers={searchProofUsers}
+          onInvite={inviteProofUser}
+          onShare={() => {
+            const title = proof?.transaction.itemTitle ?? "a PackProof";
+            void navigator.clipboard.writeText(
+              `You’ve been invited to a PackProof for ${title}. Open PackProof to review and join.`,
+            );
+          }}
+        />
+      ) : null}
+
+      {route.name === "finalize" ? (
+        <FinalizeScreen
+          proof={proof?.proofId === route.proofId ? proof : null}
+          busy={busy}
+          error={error}
+          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onFinalize={() => {
+            if (!proof) {
+              return;
+            }
+            setBusy(true);
+            void api
+              .finalizeProof(proof.proofId)
+              .then(async (result) => {
+                proofIdRef.current = result.proof.proofId;
+                setProof(result.proof);
+                setShipmentIntegrity(await api.getShipmentIntegrity(result.proof.proofId));
+                go(`/proofs/${encodeURIComponent(result.proof.proofId)}/complete`);
+              })
+              .catch((caught) => setError(handleError(caught)))
+              .finally(() => setBusy(false));
+          }}
+        />
+      ) : null}
+
+      {route.name === "complete" ? (
+        <CompletionScreen
+          proofId={route.proofId}
+          onViewProof={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onGoHome={() => go("/")}
+        />
+      ) : null}
+
+      {route.name === "event" ? (
+        <EventDetailScreen
+          event={proof?.chronology?.find((entry) => entry.id === route.eventId) ?? null}
+          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
         />
       ) : null}
     </div>

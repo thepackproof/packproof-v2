@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { displayName } from "@packproof/copy/format";
 import { ACCOUNT_DELETION_COPY } from "@packproof/copy/legal";
 import { providerDisplay } from "@packproof/copy/status";
@@ -29,7 +28,6 @@ export function AccountScreen(props: {
   onDisplayNameChange: (value: string) => void;
   onUsernameChange: (value: string) => void;
   onSaveProfile: () => void;
-  onAcceptInvitation: (invitationId: string) => void;
   onOpenStation: () => void;
   onOpenStores: () => void;
   onOpenFulfillment: () => void;
@@ -42,7 +40,6 @@ export function AccountScreen(props: {
   onSignOut: () => void;
 }) {
   const theme = useTheme();
-  const [invitationRef, setInvitationRef] = useState("");
   const name = displayName({
     displayName: props.displayName,
     username: props.username,
@@ -178,35 +175,6 @@ export function AccountScreen(props: {
         <button className="btn btn-secondary" type="button" onClick={props.onOpenPrivacy}>
           Open Privacy Policy
         </button>
-      </section>
-
-      <section className="section stack">
-        <h2>Advanced options</h2>
-        <p className="note">Use this only if someone sent you an invitation ID.</p>
-        <form
-          className="invite-accept"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const value = invitationRef.trim();
-            if (value) {
-              props.onAcceptInvitation(value);
-              setInvitationRef("");
-            }
-          }}
-        >
-          <label className="field" htmlFor="invitation-id">
-            <span>Invitation ID</span>
-            <input
-              id="invitation-id"
-              value={invitationRef}
-              onChange={(event) => setInvitationRef(event.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <button className="btn" type="submit" disabled={props.busy || !invitationRef.trim()}>
-            Accept invitation
-          </button>
-        </form>
       </section>
 
       <button className="btn btn-danger" type="button" onClick={props.onSignOut}>

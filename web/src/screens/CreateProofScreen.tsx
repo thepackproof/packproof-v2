@@ -25,13 +25,13 @@ export function CreateProofScreen(props: {
   busy: boolean;
   error: string | null;
   development: boolean;
-  ebayEnabled: boolean;
   ebayConnected: boolean;
   onCancel: () => void;
   onScan: () => void;
+  onOpenAccount: () => void;
+  onAcceptInvitation: (invitationId: string) => void;
   onCreate: (input: TransactionWriteInput) => void;
   onCreateGrading: (input: { itemCount: number; itemTitle: string }) => void;
-  onConnectEbay: () => void;
   onImportPurchase: () => Promise<TransactionImportView>;
   onListEbayOrders: () => Promise<{ orders: EbaySellerOrderView[]; disclosure: string }>;
   onImportEbayOrder: (orderId: string) => Promise<TransactionImportView>;
@@ -44,6 +44,8 @@ export function CreateProofScreen(props: {
   const [ebayDisclosure, setEbayDisclosure] = useState<string | null>(null);
   const [itemCount, setItemCount] = useState("1");
   const [gradingTitle, setGradingTitle] = useState("Grading submission");
+  const [showInviteId, setShowInviteId] = useState(false);
+  const [invitationId, setInvitationId] = useState("");
   const set = (key: keyof typeof EMPTY, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -51,8 +53,6 @@ export function CreateProofScreen(props: {
   return (
     <main className="page">
       <PageHeader title="Create a Proof" onBack={props.onCancel} />
-      <p className="lede">Start from a scan, an imported purchase, or details you enter yourself.</p>
-
       {step === "choose" ? (
         <section className="section stack">
           {props.error ? (
@@ -72,13 +72,13 @@ export function CreateProofScreen(props: {
             </span>
             <span className="option-copy">
               <strong className="card-title">Scan order or label</strong>
-              <span className="meta">Fastest · opens Packing Station</span>
+              <span className="meta">Fastest</span>
             </span>
           </button>
           <button
             className="option-card"
             type="button"
-            disabled={props.busy || (!props.ebayConnected && !props.development)}
+            disabled={props.busy}
             aria-label="Import purchase"
             onClick={() => {
               if (props.ebayConnected) {
@@ -95,6 +95,7 @@ export function CreateProofScreen(props: {
                 return;
               }
               if (!props.development) {
+                props.onOpenAccount();
                 return;
               }
               void props
@@ -117,27 +118,13 @@ export function CreateProofScreen(props: {
                 {props.busy
                   ? "Loading…"
                   : props.ebayConnected
-                    ? "From connected eBay account"
+                    ? "From a connected marketplace"
                     : props.development
-                      ? "Development demo import"
-                      : "Connect eBay first"}
+                      ? "From a connected marketplace"
+                      : "Connect a marketplace in Account first"}
               </span>
             </span>
           </button>
-          {props.ebayEnabled && !props.ebayConnected ? (
-            <button
-              className="option-card"
-              type="button"
-              disabled={props.busy}
-              aria-label="Connect eBay"
-              onClick={props.onConnectEbay}
-            >
-              <span className="option-copy">
-                <strong className="card-title">Connect eBay</strong>
-                <span className="meta">Authorize a seller account, then import a real sale</span>
-              </span>
-            </button>
-          ) : null}
           <button
             className="option-card"
             type="button"
@@ -168,9 +155,37 @@ export function CreateProofScreen(props: {
               <span className="meta">Document items, hand off, and track receipt</span>
             </span>
           </button>
-          <button className="btn btn-secondary" type="button" onClick={props.onCancel}>
-            Cancel
+          <p className="note">
+            Invite a buyer by PackProof username from the Proof after it's created. Pending invitations appear in My
+            Proofs.
+          </p>
+          <button className="btn btn-tertiary" type="button" onClick={() => setShowInviteId((value) => !value)}>
+            {showInviteId ? "Hide invitation ID" : "I have an invitation ID"}
           </button>
+          {showInviteId ? (
+            <div className="info-card stack">
+              <p className="note">
+                Use this only if you were given an invitation ID. Ordinary collaboration uses PackProof usernames.
+              </p>
+              <label className="field" htmlFor="create-invitation-id">
+                <span>Invitation ID</span>
+                <input
+                  id="create-invitation-id"
+                  value={invitationId}
+                  onChange={(event) => setInvitationId(event.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={props.busy || !invitationId.trim()}
+                onClick={() => props.onAcceptInvitation(invitationId.trim())}
+              >
+                Join Proof
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -246,6 +261,29 @@ export function CreateProofScreen(props: {
                 : imported.proof?.proofId
                   ? "Open existing PackProof"
                   : "Create PackProof"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => {
+                const txn = imported.transaction;
+                setForm({
+                  externalReference: txn.externalReference ?? "",
+                  transactionDate: txn.transactionDate ?? "",
+                  itemTitle: txn.itemTitle ?? "",
+                  itemDescription: txn.itemDescription ?? "",
+                  quantity: txn.quantity == null ? "" : String(txn.quantity),
+                  transactionValue: txn.transactionValue == null ? "" : String(txn.transactionValue),
+                  currency: txn.currency ?? "",
+                  carrier: txn.shipping?.carrier ?? "",
+                  service: txn.shipping?.service ?? "",
+                  trackingNumber: txn.shipping?.trackingNumber ?? "",
+                  shipmentDate: txn.shipping?.shipmentDate ?? "",
+                });
+                setStep("manual");
+              }}
+            >
+              Edit details
             </button>
             <button
               className="btn btn-secondary"

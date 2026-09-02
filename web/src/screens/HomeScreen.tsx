@@ -21,7 +21,7 @@ export function HomeScreen(props: {
   error: string | null;
   onOpenProof: (proofId: string) => void;
   onCreate: () => void;
-  onAccept: (invitationId: string) => void;
+  onOpenInvitation: (invite: InvitationInboxView) => void;
 }) {
   const [view, setView] = useState<ProofLibraryView>("in_progress");
   const [query, setQuery] = useState("");
@@ -137,7 +137,7 @@ export function HomeScreen(props: {
           <ProofCard
             key={invite.invitationId}
             model={invitationCardModel(invite)}
-            onPress={() => props.onAccept(invite.invitationId)}
+            onPress={() => props.onOpenInvitation(invite)}
           />
         ))}
         {proofs.map((item) => (
