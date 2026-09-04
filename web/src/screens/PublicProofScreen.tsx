@@ -23,6 +23,9 @@ type TrackerView = {
   milestones: TrackerMilestone[];
 };
 
+type EmailPreference = "IMPORTANT" | "ALL" | "FINAL_ONLY";
+type RecipientSubscription = { email: string; preference: EmailPreference };
+
 export function PublicProofScreen(props: {
   token: string;
   load: (token: string) => Promise<PublicProofView>;
@@ -30,6 +33,9 @@ export function PublicProofScreen(props: {
 }) {
   const [proof, setProof] = useState<PublicProofView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [emailSubscription, setEmailSubscription] = useState<RecipientSubscription | null>(null);
+  const [emailStatus, setEmailStatus] = useState<string | null>(null);
+  const [emailBusy, setEmailBusy] = useState(false);
   const tracker = useMemo(
     () => (proof as (PublicProofView & { tracker?: TrackerView }) | null)?.tracker ?? null,
     [proof],
@@ -71,6 +77,57 @@ export function PublicProofScreen(props: {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [props.token, props.load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEmailSubscription(null);
+    setEmailStatus(null);
+    void fetch(recipientApiUrl(props.token), { method: "GET", headers: { Accept: "application/json" } })
+      .then(async (response) => {
+        if (!response.ok || cancelled) return;
+        const payload = (await response.json()) as { subscription?: RecipientSubscription };
+        if (!cancelled && payload.subscription) setEmailSubscription(payload.subscription);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [props.token]);
+
+  const updateEmailPreference = async (preference: EmailPreference) => {
+    setEmailBusy(true);
+    setEmailStatus(null);
+    try {
+      const response = await fetch(recipientApiUrl(props.token), {
+        method: "PATCH",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ preference }),
+      });
+      if (!response.ok) throw new Error("Unable to update email preferences.");
+      const payload = (await response.json()) as { subscription: RecipientSubscription };
+      setEmailSubscription(payload.subscription);
+      setEmailStatus("Email preferences updated.");
+    } catch (caught) {
+      setEmailStatus(caught instanceof Error ? caught.message : "Unable to update email preferences.");
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
+  const unsubscribeEmail = async () => {
+    setEmailBusy(true);
+    setEmailStatus(null);
+    try {
+      const response = await fetch(recipientApiUrl(props.token), { method: "DELETE" });
+      if (!response.ok) throw new Error("Unable to stop email updates.");
+      setEmailSubscription(null);
+      setEmailStatus("Email updates stopped. This secure Proof link will continue to work.");
+    } catch (caught) {
+      setEmailStatus(caught instanceof Error ? caught.message : "Unable to stop email updates.");
+    } finally {
+      setEmailBusy(false);
+    }
+  };
 
   return (
     <div className="app-shell">
@@ -182,6 +239,26 @@ export function PublicProofScreen(props: {
               </section>
             ))}
 
+            {emailSubscription ? (
+              <section className="section stack" aria-label="Email updates">
+                <div>
+                  <h2>Email updates</h2>
+                  <p className="note">Updates are being sent to {emailSubscription.email}. Choose how often PackProof should email you.</p>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <PreferenceButton label="Important" value="IMPORTANT" selected={emailSubscription.preference} busy={emailBusy} onSelect={updateEmailPreference} />
+                  <PreferenceButton label="All milestones" value="ALL" selected={emailSubscription.preference} busy={emailBusy} onSelect={updateEmailPreference} />
+                  <PreferenceButton label="Finalization only" value="FINAL_ONLY" selected={emailSubscription.preference} busy={emailBusy} onSelect={updateEmailPreference} />
+                </div>
+                <button className="btn btn-secondary" type="button" disabled={emailBusy} onClick={() => void unsubscribeEmail()}>
+                  Stop email updates
+                </button>
+                {emailStatus ? <p className="meta" role="status">{emailStatus}</p> : null}
+              </section>
+            ) : emailStatus ? (
+              <section className="section"><p className="note" role="status">{emailStatus}</p></section>
+            ) : null}
+
             {proof.join.eligible ? (
               <section className="section stack">
                 <p className="note">{proof.join.message}</p>
@@ -198,6 +275,33 @@ export function PublicProofScreen(props: {
       </main>
     </div>
   );
+}
+
+function PreferenceButton(props: {
+  label: string;
+  value: EmailPreference;
+  selected: EmailPreference;
+  busy: boolean;
+  onSelect: (value: EmailPreference) => Promise<void>;
+}) {
+  return (
+    <button
+      className={props.selected === props.value ? "btn" : "btn btn-secondary"}
+      type="button"
+      disabled={props.busy}
+      aria-pressed={props.selected === props.value}
+      onClick={() => void props.onSelect(props.value)}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+function recipientApiUrl(token: string): string {
+  const path = `/public/proofs/${encodeURIComponent(token)}/email-subscription`;
+  const base = import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
+  if (!base) return path;
+  return new URL(path.replace(/^\//, ""), base.endsWith("/") ? base : `${base}/`).toString();
 }
 
 function Detail(props: { label: string; value: string }) {
