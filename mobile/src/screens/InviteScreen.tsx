@@ -159,7 +159,7 @@ export function InviteScreen() {
 const styles = StyleSheet.create({
   body: { ...typography.body },
   meta: { ...typography.secondary },
-  sectionTitle: { ...typography.heading3 },
+  sectionTitle: { ...typography.sectionTitle },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   flex: { flex: 1 },
   loading: { gap: spacing.sm },
