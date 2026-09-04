@@ -1,0 +1,127 @@
+name: Deploy staging parity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "web/**"
+      - "infra/**"
+      - ".github/workflows/deploy-staging.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: packproof-staging-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: API + web staging parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AWS_REGION: us-east-1
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_ACCESS_KEY_ID_SECRET: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN_SECRET: ${{ secrets.AWS_SESSION_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Configure AWS with OIDC role
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS with repository credentials
+        if: ${{ env.AWS_ROLE_ARN == '' && env.AWS_ACCESS_KEY_ID_SECRET != '' && env.AWS_SECRET_ACCESS_KEY_SECRET != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID_SECRET }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY_SECRET }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN_SECRET }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Require AWS deployment authentication
+        shell: pwsh
+        run: |
+          try {
+            $identity = aws sts get-caller-identity --output json | ConvertFrom-Json
+          } catch {
+            throw "AWS deployment authentication is not configured. Set repository variable AWS_DEPLOY_ROLE_ARN for GitHub OIDC, or repository secrets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+          }
+          if ($LASTEXITCODE -ne 0 -or -not $identity.Account) {
+            throw "AWS deployment authentication is not configured. Set repository variable AWS_DEPLOY_ROLE_ARN for GitHub OIDC, or repository secrets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+          }
+          Write-Host "Deploying to AWS account $($identity.Account)"
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Deploy current commit to staging API and web
+        shell: pwsh
+        run: ./infra/deploy-staging-current.ps1 -Region $env:AWS_REGION
+
+      - name: Verify exact API and web release
+        shell: pwsh
+        run: |
+          function AwsJson([string[]]$Args) {
+            $raw = & aws @Args
+            if ($LASTEXITCODE -ne 0) { throw "aws $($Args -join ' ') failed" }
+            return ($raw | ConvertFrom-Json)
+          }
+
+          $foundation = AwsJson @("cloudformation", "describe-stacks", "--stack-name", "packproof-v2-staging", "--region", $env:AWS_REGION, "--output", "json")
+          $cluster = ($foundation.Stacks[0].Outputs | Where-Object OutputKey -eq "ClusterName").OutputValue
+          $service = AwsJson @("ecs", "describe-services", "--cluster", $cluster, "--services", "packproof-v2-staging-api", "--region", $env:AWS_REGION, "--output", "json")
+          $serviceArn = $service.services[0].serviceArn
+          $express = AwsJson @("ecs", "describe-express-gateway-service", "--service-arn", $serviceArn, "--region", $env:AWS_REGION, "--output", "json")
+          $endpoint = $express.service.activeConfigurations[0].ingressPaths[0].endpoint
+          $apiUrl = $endpoint.TrimEnd("/")
+          if ($apiUrl -notmatch "^https?://") { $apiUrl = "https://$apiUrl" }
+
+          $webStack = AwsJson @("cloudformation", "describe-stacks", "--stack-name", "packproof-v2-staging-web", "--region", $env:AWS_REGION, "--output", "json")
+          $webUrl = (($webStack.Stacks[0].Outputs | Where-Object OutputKey -eq "WebUrl").OutputValue).TrimEnd("/")
+
+          $meta = Invoke-RestMethod -Uri "$apiUrl/meta" -Method Get
+          if ($meta.commit -ne $env:GITHUB_SHA) {
+            throw "API parity check failed: /meta reports $($meta.commit), expected $env:GITHUB_SHA"
+          }
+          if ($meta.environment -ne "staging") {
+            throw "API parity check failed: /meta environment is $($meta.environment)"
+          }
+
+          $index = (Invoke-WebRequest -Uri "$webUrl/" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache" }).Content
+          $match = [regex]::Match($index, 'src="([^"]*\/assets\/[^\"]+\.js)"')
+          if (-not $match.Success) {
+            throw "Web parity check failed: could not find the Vite JavaScript bundle in index.html"
+          }
+          $assetPath = $match.Groups[1].Value
+          if (-not $assetPath.StartsWith("/")) { $assetPath = "/$assetPath" }
+          $bundle = (Invoke-WebRequest -Uri "$webUrl$assetPath" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache" }).Content
+          if ($bundle -notlike '*Email live Proof*' -or $bundle -notlike '*All tracker milestones*') {
+            throw "Web parity check failed: live bundle does not contain the RC1 tracker sharing UI"
+          }
+
+          "### PackProof staging parity" >> $env:GITHUB_STEP_SUMMARY
+          "- Commit: ``$env:GITHUB_SHA``" >> $env:GITHUB_STEP_SUMMARY
+          "- API: $apiUrl" >> $env:GITHUB_STEP_SUMMARY
+          "- Web: $webUrl" >> $env:GITHUB_STEP_SUMMARY
+          "- API /meta exact commit: verified" >> $env:GITHUB_STEP_SUMMARY
+          "- Web RC1 tracker bundle: verified" >> $env:GITHUB_STEP_SUMMARY
