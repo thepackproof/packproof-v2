@@ -189,6 +189,19 @@ Resources:
       LogGroupName: /ecs/packproof-production-api
       RetentionInDays: 90
 
+  NotificationSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: packproof/production/notifications/runtime
+      Description: PackProof live Proof tracker signing secret and SMTP credential slots.
+      GenerateSecretString:
+        SecretStringTemplate: '{"smtpUsername":"","smtpPassword":""}'
+        GenerateStringKey: trackerLinkSecret
+        PasswordLength: 64
+        ExcludePunctuation: true
+
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -203,13 +216,15 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Policies:
-        - PolicyName: packproof-production-db-secret-read
+        - PolicyName: packproof-production-runtime-secret-read
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
-                Resource: !GetAtt Database.MasterUserSecret.SecretArn
+                Resource:
+                  - !GetAtt Database.MasterUserSecret.SecretArn
+                  - !Ref NotificationSecret
 
   TaskRole:
     Type: AWS::IAM::Role
@@ -321,6 +336,9 @@ Outputs:
     Value: !GetAtt Database.Endpoint.Port
   DatabaseSecretArn:
     Value: !GetAtt Database.MasterUserSecret.SecretArn
+  NotificationSecretArn:
+    Description: Secret containing trackerLinkSecret and SMTP credential slots.
+    Value: !Ref NotificationSecret
   ClusterName:
     Value: !Ref Cluster
   TaskRoleArn:
