@@ -84,8 +84,11 @@ export function PublicProofScreen(props: {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <div>
             <p className="kicker">Live Proof tracker</p>
-            <h1 style={{ marginBottom: 4 }}>{tracker?.reference ? `Order ${tracker.reference}` : "Transaction Proof"}</h1>
-            {tracker?.itemTitle ? <p className="meta" style={{ marginTop: 0 }}>{tracker.itemTitle}</p> : null}
+            <h1 style={{ marginBottom: 4 }}>View Proof</h1>
+            <p className="meta" style={{ marginTop: 0 }}>
+              {tracker?.reference ? `Order ${tracker.reference}` : "Transaction Proof"}
+              {tracker?.itemTitle ? ` · ${tracker.itemTitle}` : ""}
+            </p>
           </div>
           {proof ? (
             <span
