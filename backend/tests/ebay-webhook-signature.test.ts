@@ -18,7 +18,7 @@ function signedFixture(kid: string, payload: unknown) {
 }
 
 function ebayVerificationFetch(publicKeyPem: string, calls: string[]): typeof fetch {
-  return (async (input: URL | RequestInfo) => {
+  return (async (input: Parameters<typeof fetch>[0]) => {
     const url = String(input);
     calls.push(url);
     if (url.includes("/identity/v1/oauth2/token")) {
