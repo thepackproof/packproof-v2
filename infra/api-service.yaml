@@ -1,7 +1,23 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: PackProof V2 staging API on ECS Express Mode / Fargate.
+Description: PackProof V2 API on ECS Express Mode / Fargate.
 
 Parameters:
+  EnvironmentName:
+    Type: String
+    Default: staging
+    AllowedPattern: "^[a-z0-9-]+$"
+    Description: PackProof environment identity exposed by GET /meta and used for credential namespaces.
+  ServiceName:
+    Type: String
+    Default: packproof-v2-staging-api
+  MinTaskCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+  MaxTaskCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
   ClusterName:
     Type: String
   ImageUri:
@@ -46,11 +62,17 @@ Parameters:
     Default: ""
     Description: Image tag for GET /meta. Not a secret.
 
+Rules:
+  ScalingRangeIsValid:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref MaxTaskCount, 0]]
+        AssertDescription: MaxTaskCount must be at least one.
+
 Resources:
   ExpressService:
     Type: AWS::ECS::ExpressGatewayService
     Properties:
-      ServiceName: packproof-v2-staging-api
+      ServiceName: !Ref ServiceName
       Cluster: !Ref ClusterName
       Cpu: "256"
       Memory: "512"
@@ -63,8 +85,8 @@ Resources:
           - !Ref PublicSubnetA
           - !Ref PublicSubnetB
       ScalingTarget:
-        MinTaskCount: 1
-        MaxTaskCount: 1
+        MinTaskCount: !Ref MinTaskCount
+        MaxTaskCount: !Ref MaxTaskCount
       PrimaryContainer:
         Image: !Ref ImageUri
         ContainerPort: 3000
@@ -105,7 +127,7 @@ Resources:
           - Name: PACKPROOF_CREDENTIAL_STORE
             Value: secrets-manager
           - Name: PACKPROOF_ENVIRONMENT
-            Value: staging
+            Value: !Ref EnvironmentName
           - Name: PACKPROOF_RELEASE_SHA
             Value: !Ref ReleaseSha
           - Name: PACKPROOF_RELEASE_IMAGE
@@ -119,7 +141,10 @@ Resources:
 Outputs:
   ServiceArn:
     Value: !GetAtt ExpressService.ServiceArn
+  Endpoint:
+    Value: !GetAtt ExpressService.Endpoint
   StagingEndpoint:
+    Description: Backward-compatible output name; use Endpoint for new deployments.
     Value: !GetAtt ExpressService.Endpoint
   LoadBalancerArn:
     Value: !GetAtt ExpressService.ECSManagedResourceArns.IngressPath.LoadBalancerArn
