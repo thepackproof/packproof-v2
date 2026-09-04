@@ -233,7 +233,6 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                   - s3:GetObjectVersion
-                  - s3:HeadObject
                 Resource: !Sub "arn:aws:s3:::${EvidenceBucket}/evidence/*"
               - Sid: ReadEvidenceBucketMetadata
                 Effect: Allow
