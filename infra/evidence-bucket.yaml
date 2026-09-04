@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: PackProof durable evidence storage baseline with versioning and S3 Object Lock.
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Globally unique S3 bucket name for PackProof evidence.
+  MinimumObjectLockDays:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    Description: Minimum governance-mode retention applied to every evidence object version. This is a tamper-resistance floor, not an application deletion policy.
+
+Resources:
+  EvidenceBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: !Ref MinimumObjectLockDays
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: system
+          Value: packproof
+        - Key: data-classification
+          Value: evidence
+        - Key: durability
+          Value: versioned-object-lock
+
+  EvidenceBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EvidenceBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt EvidenceBucket.Arn
+              - !Sub "${EvidenceBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+          - Sid: DenyPublicObjectAcls
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:PutObjectAcl
+              - s3:PutBucketAcl
+            Resource:
+              - !GetAtt EvidenceBucket.Arn
+              - !Sub "${EvidenceBucket.Arn}/*"
+
+Outputs:
+  BucketName:
+    Value: !Ref EvidenceBucket
+  BucketArn:
+    Value: !GetAtt EvidenceBucket.Arn
+  MinimumObjectLockDays:
+    Value: !Ref MinimumObjectLockDays
