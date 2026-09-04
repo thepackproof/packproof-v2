@@ -26,6 +26,19 @@ import {
   type ConnectedAccountsListView,
 } from "./types";
 
+export type ProofEmailPreference = "IMPORTANT" | "ALL" | "FINAL_ONLY";
+
+export interface ProofEmailSubscriptionView {
+  subscriptionId: string;
+  proofId: string;
+  email: string;
+  preference: ProofEmailPreference;
+  scope: string;
+  createdAt: string;
+  revokedAt: string | null;
+  viewUrl: string;
+}
+
 export class PackProofApi {
   constructor(
     private readonly options: {
@@ -260,6 +273,42 @@ export class PackProofApi {
       method: "POST",
       body: input,
     });
+  }
+
+  async createProofEmailSubscription(
+    proofId: string,
+    input: {
+      email: string;
+      preference?: ProofEmailPreference;
+      scope?: "STATUS_ONLY" | "SUMMARY" | "EVIDENCE_VIEW";
+    },
+  ): Promise<{
+    subscription: ProofEmailSubscriptionView;
+    emailDeliveryConfigured: boolean;
+    delivery: { sent: number; failed: number };
+  }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/email-subscriptions`, {
+      method: "POST",
+      body: {
+        email: input.email,
+        preference: input.preference ?? "IMPORTANT",
+        scope: input.scope ?? "SUMMARY",
+      },
+    });
+  }
+
+  async listProofEmailSubscriptions(proofId: string): Promise<{
+    subscriptions: ProofEmailSubscriptionView[];
+    emailDeliveryConfigured: boolean;
+  }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/email-subscriptions`);
+  }
+
+  async revokeProofEmailSubscription(proofId: string, subscriptionId: string): Promise<void> {
+    await this.request(
+      `/proofs/${encodeURIComponent(proofId)}/email-subscriptions/${encodeURIComponent(subscriptionId)}`,
+      { method: "DELETE" },
+    );
   }
 
   async getPublicProof(token: string): Promise<PublicProofView> {
