@@ -1,3 +1,4 @@
+import { withRequestTimeout } from "./timeout";
 import {
   ApiError,
   type CanonicalProof,
@@ -43,7 +44,7 @@ export class PackProofApi {
   constructor(
     private readonly options: {
       baseUrl: string;
-      getToken: () => string | null;
+      getToken: () => string | null | Promise<string | null>;
     },
   ) {}
 
@@ -375,21 +376,24 @@ export class PackProofApi {
   }
 
   async getEvidenceBlob(proofId: string, evidenceId: string): Promise<Blob> {
-    const token = this.options.getToken();
+    const token = await this.options.getToken();
     if (!token) {
       throw new ApiError("UNAUTHENTICATED", "Missing bearer token", 401);
     }
-    const response = await fetch(
-      joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`),
-      {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
-    return response.blob();
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(
+        joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`),
+        {
+          method: "GET",
+          signal,
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!response.ok) {
+        throw await errorFromResponse(response);
+      }
+      return response.blob();
+    }, 120_000);
   }
 
   async uploadObject(
@@ -398,17 +402,20 @@ export class PackProofApi {
     contentType: string,
   ): Promise<void> {
     const url = resolveUploadUrl(this.options.baseUrl, target.url);
-    const response = await fetch(url, {
-      method: target.method,
-      headers: {
-        ...target.headers,
-        "Content-Type": contentType,
-      },
-      body,
-    });
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(url, {
+        method: target.method,
+        signal,
+        headers: {
+          ...target.headers,
+          "Content-Type": contentType,
+        },
+        body,
+      });
+      if (!response.ok) {
+        throw await errorFromResponse(response);
+      }
+    }, 10 * 60_000);
   }
 
   async commitEvidence(
@@ -437,6 +444,10 @@ export class PackProofApi {
     });
   }
 
+  async getProofPackage(proofId: string): Promise<unknown> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/package`);
+  }
+
   async getManifest(proofId: string): Promise<ManifestView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/manifest`);
   }
@@ -455,28 +466,31 @@ export class PackProofApi {
       headers["Content-Type"] = "application/json";
     }
     if (init.auth !== false) {
-      const token = this.options.getToken();
+      const token = await this.options.getToken();
       if (!token) {
         throw new ApiError("UNAUTHENTICATED", "Missing bearer token", 401);
       }
       headers.Authorization = `Bearer ${token}`;
     }
-    const response = await fetch(joinUrl(this.options.baseUrl, path), {
-      method: init.method ?? "GET",
-      headers,
-      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(joinUrl(this.options.baseUrl, path), {
+        method: init.method ?? "GET",
+        headers,
+        signal,
+        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+      });
+      if (!response.ok) {
+        throw await errorFromResponse(response);
+      }
+      if (response.status === 204) {
+        return undefined as T;
+      }
+      const text = await response.text();
+      if (!text.trim()) {
+        return undefined as T;
+      }
+      return JSON.parse(text) as T;
     });
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
-    if (response.status === 204) {
-      return undefined as T;
-    }
-    const text = await response.text();
-    if (!text.trim()) {
-      return undefined as T;
-    }
-    return JSON.parse(text) as T;
   }
 }
 

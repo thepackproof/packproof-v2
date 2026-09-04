@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import {
   filterProofLibrary,
+  filterProofInvitations,
   invitationCardModel,
   toProofCardModel,
   uniqueCarriers,
@@ -43,20 +44,11 @@ export function MyProofsScreen() {
       }),
     [app.proofCollection, library],
   );
-  const invitations =
-    library.view === "in_progress" && !library.role && !library.carrier
-      ? app.pendingInvites.filter((invite) => {
-          const query = library.query.trim().toLowerCase();
-          if (!query) {
-            return true;
-          }
-          return [invite.transaction.itemTitle, invite.inviter.displayName, invite.inviter.username]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase()
-            .includes(query);
-        })
-      : [];
+  const invitations = filterProofInvitations(app.pendingInvites, library);
+  const filtered = Boolean(library.query.trim() || library.role !== "all" || library.carrier);
+  const clearFilters = () => {
+    app.setProofsQuery(""); app.setProofsRoleFilter("all"); app.setProofsCarrierFilter(null);
+  };
   const showSkeleton = app.busy && proofs.length === 0 && invitations.length === 0 && !app.error;
 
   return (
@@ -82,6 +74,7 @@ export function MyProofsScreen() {
           />
         </View>
         <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Proofs</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>Your evidence, connected to every order.</Text>
         <SegmentedTabs
           options={[
             { id: "in_progress", label: "In Progress", icon: "time-outline" },
@@ -112,13 +105,22 @@ export function MyProofsScreen() {
           <Pressable
             onPress={() => setFilterOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="Filter and sort"
+            accessibilityLabel={filtered ? "Filter and sort, filters active" : "Filter and sort"}
             style={[styles.filterBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
           >
-            <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="options-outline" size={20} color={filtered ? colors.primary : colors.textPrimary} />
+            {filtered ? <View style={[styles.filterDot, { backgroundColor: colors.primary }]} /> : null}
           </Pressable>
         </View>
-        <OfflineBanner visible={app.offline} />
+        {!showSkeleton ? <View style={styles.results}>
+          <Text style={[typography.caption, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">
+            {proofs.length} {proofs.length === 1 ? "Proof" : "Proofs"}{invitations.length ? ` · ${invitations.length} ${invitations.length === 1 ? "invitation" : "invitations"}` : ""}
+          </Text>
+          {filtered ? <Pressable onPress={clearFilters} accessibilityRole="button" hitSlop={8}>
+            <Text style={[typography.secondaryStrong, { color: colors.primary }]}>Clear filters</Text>
+          </Pressable> : null}
+        </View> : null}
+        <OfflineBanner visible={app.offline} message="You’re offline. Your saved recording is safe. Reconnect to refresh your Proofs." />
         <ErrorBanner message={app.error} />
 
         {showSkeleton ? (
@@ -149,16 +151,16 @@ export function MyProofsScreen() {
           </FadeSlideIn>
         ))}
 
-        {!showSkeleton && proofs.length === 0 && invitations.length === 0 ? (
+        {!showSkeleton && !app.error && proofs.length === 0 && invitations.length === 0 ? (
           <EmptyState
-            title={library.view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
+            title={filtered ? "No matching Proofs" : library.view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
             body={
-              library.view === "completed"
+              filtered ? "Try a different search or clear your filters to see your Proofs." : library.view === "completed"
                 ? "Finalized Proofs will appear here."
                 : "Create a Proof to start a record, or review an invitation."
             }
-            actionLabel={library.view === "in_progress" ? "Create a Proof" : undefined}
-            onAction={library.view === "in_progress" ? () => app.go("create") : undefined}
+            actionLabel={filtered ? "Reset search and filters" : library.view === "in_progress" ? "Create a Proof" : undefined}
+            onAction={filtered ? clearFilters : library.view === "in_progress" ? () => app.go("create") : undefined}
             icon={library.view === "completed" ? "checkmark-circle-outline" : "cube-outline"}
           />
         ) : null}
@@ -237,6 +239,8 @@ function ChipRow<T extends string>(props: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  results: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 32 },
+  filterDot: { position: "absolute", top: 8, right: 8, width: 6, height: 6, borderRadius: 3 },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   brandName: { ...typography.sectionTitle },

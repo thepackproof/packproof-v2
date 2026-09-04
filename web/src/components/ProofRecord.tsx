@@ -19,6 +19,7 @@ import {
   formatWhen,
 } from "../format";
 import { CopyableId } from "./CopyableId";
+import { EvidenceViewer } from "./EvidenceViewer";
 import { TrustBadge } from "./TrustBadge";
 
 export function ProofHeader(props: { proof: CanonicalProof; role?: string }) {
@@ -151,7 +152,7 @@ export function ParticipantList(props: { proof: CanonicalProof; currentUserId: s
   );
 }
 
-export function EvidenceList(props: { proof: CanonicalProof }) {
+export function EvidenceList(props: { proof: CanonicalProof; loadEvidence?: (evidenceId: string) => Promise<Blob> }) {
   const evidence = props.proof.evidence;
   return (
     <section className="section">
@@ -164,7 +165,7 @@ export function EvidenceList(props: { proof: CanonicalProof }) {
       ) : (
         <div className="stack">
           {evidence.map((item) => (
-            <article key={item.evidenceId}>
+            <article key={item.evidenceId} className="evidence-card">
               <div className="row">
                 <strong>
                   {item.evidenceType === "FULFILLMENT_CAPTURE" || item.evidenceType === "SELLER_EVIDENCE"
@@ -175,6 +176,11 @@ export function EvidenceList(props: { proof: CanonicalProof }) {
                   {item.validationStatus === "COMMITTED" ? "Evidence secured" : item.validationStatus.toLowerCase()}
                 </span>
               </div>
+              {item.validationStatus === "COMMITTED" && props.loadEvidence ? (
+                <EvidenceViewer key={item.evidenceId} evidenceId={item.evidenceId} contentType={item.contentType} load={props.loadEvidence} />
+              ) : null}
+              <details className="evidence-details">
+                <summary>Record details and integrity</summary>
               <dl className="dl">
                 <div>
                   <dt>Record created</dt>
@@ -201,6 +207,7 @@ export function EvidenceList(props: { proof: CanonicalProof }) {
                   </dd>
                 </div>
               </dl>
+              </details>
             </article>
           ))}
         </div>

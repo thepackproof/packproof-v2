@@ -1,3 +1,5 @@
+import { withRequestTimeout } from "../api/timeout";
+
 export interface CognitoConfig {
   userPoolId: string;
   clientId: string;
@@ -46,24 +48,27 @@ async function cognitoCall<T>(
   action: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const response = await fetch(endpoint(config.region), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-amz-json-1.1",
-      "X-Amz-Target": `AWSCognitoIdentityProviderService.${action}`,
-    },
-    body: JSON.stringify(body),
+  return withRequestTimeout(async (signal) => {
+    const response = await fetch(endpoint(config.region), {
+      method: "POST",
+      signal,
+      headers: {
+        "Content-Type": "application/x-amz-json-1.1",
+        "X-Amz-Target": `AWSCognitoIdentityProviderService.${action}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      __type?: string;
+      message?: string;
+      Message?: string;
+    };
+    if (!response.ok) {
+      const type = (payload.__type ?? "CognitoError").split("#").pop() ?? "CognitoError";
+      throw new CognitoAuthError(type, payload.message ?? payload.Message ?? type);
+    }
+    return payload as T;
   });
-  const payload = (await response.json().catch(() => ({}))) as {
-    __type?: string;
-    message?: string;
-    Message?: string;
-  };
-  if (!response.ok) {
-    const type = (payload.__type ?? "CognitoError").split("#").pop() ?? "CognitoError";
-    throw new CognitoAuthError(type, payload.message ?? payload.Message ?? type);
-  }
-  return payload as T;
 }
 
 export async function cognitoSignIn(

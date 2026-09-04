@@ -93,6 +93,11 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
     message: "Your recording is still safely stored on this device.",
     action: "retry",
   },
+  REQUEST_TIMEOUT: {
+    title: "The connection is taking too long.",
+    message: "Try again when your connection improves. Recordings on this device are kept.",
+    action: "retry",
+  },
   NETWORK: {
     title: "You’re offline.",
     message: "Your recording is safely stored on this device. PackProof will continue when you’re connected.",
