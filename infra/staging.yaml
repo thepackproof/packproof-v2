@@ -234,7 +234,6 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                  - s3:HeadObject
                 Resource: !Sub "arn:aws:s3:::${EvidenceBucket}/evidence/*"
         - PolicyName: packproof-v2-staging-integration-secrets
           PolicyDocument:
