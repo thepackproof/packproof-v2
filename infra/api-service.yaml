@@ -1,7 +1,23 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: PackProof V2 staging API on ECS Express Mode / Fargate.
+Description: PackProof V2 API on ECS Express Mode / Fargate.
 
 Parameters:
+  EnvironmentName:
+    Type: String
+    Default: staging
+    AllowedPattern: "^[a-z0-9-]+$"
+    Description: PackProof environment identity exposed by GET /meta and used for credential namespaces.
+  ServiceName:
+    Type: String
+    Default: packproof-v2-staging-api
+  MinTaskCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+  MaxTaskCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
   ClusterName:
     Type: String
   ImageUri:
@@ -25,6 +41,20 @@ Parameters:
     Type: String
   DatabaseSecretArn:
     Type: String
+  NotificationSecretArn:
+    Type: String
+    Default: ""
+    Description: Optional Secrets Manager ARN with trackerLinkSecret, smtpUsername, and smtpPassword keys.
+  SmtpHost:
+    Type: String
+    Default: email-smtp.us-east-1.amazonaws.com
+  SmtpPort:
+    Type: String
+    Default: "465"
+  EmailFrom:
+    Type: String
+    Default: ""
+    Description: Verified sender address. Empty keeps SMTP email delivery disabled.
   LogGroupName:
     Type: String
   EvidenceBucket:
@@ -46,11 +76,20 @@ Parameters:
     Default: ""
     Description: Image tag for GET /meta. Not a secret.
 
+Conditions:
+  HasNotificationSecret: !Not [!Equals [!Ref NotificationSecretArn, ""]]
+
+Rules:
+  ScalingRangeIsValid:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref MaxTaskCount, 0]]
+        AssertDescription: MaxTaskCount must be at least one.
+
 Resources:
   ExpressService:
     Type: AWS::ECS::ExpressGatewayService
     Properties:
-      ServiceName: packproof-v2-staging-api
+      ServiceName: !Ref ServiceName
       Cluster: !Ref ClusterName
       Cpu: "256"
       Memory: "512"
@@ -63,8 +102,8 @@ Resources:
           - !Ref PublicSubnetA
           - !Ref PublicSubnetB
       ScalingTarget:
-        MinTaskCount: 1
-        MaxTaskCount: 1
+        MinTaskCount: !Ref MinTaskCount
+        MaxTaskCount: !Ref MaxTaskCount
       PrimaryContainer:
         Image: !Ref ImageUri
         ContainerPort: 3000
@@ -105,21 +144,45 @@ Resources:
           - Name: PACKPROOF_CREDENTIAL_STORE
             Value: secrets-manager
           - Name: PACKPROOF_ENVIRONMENT
-            Value: staging
+            Value: !Ref EnvironmentName
           - Name: PACKPROOF_RELEASE_SHA
             Value: !Ref ReleaseSha
           - Name: PACKPROOF_RELEASE_IMAGE
             Value: !Ref ReleaseImage
+          - Name: PACKPROOF_SMTP_HOST
+            Value: !Ref SmtpHost
+          - Name: PACKPROOF_SMTP_PORT
+            Value: !Ref SmtpPort
+          - Name: PACKPROOF_EMAIL_FROM
+            Value: !Ref EmailFrom
         Secrets:
           - Name: PACKPROOF_DB_USER
             ValueFrom: !Sub "${DatabaseSecretArn}:username::"
           - Name: PACKPROOF_DB_PASSWORD
             ValueFrom: !Sub "${DatabaseSecretArn}:password::"
+          - !If
+            - HasNotificationSecret
+            - Name: PACKPROOF_TRACKER_LINK_SECRET
+              ValueFrom: !Sub "${NotificationSecretArn}:trackerLinkSecret::"
+            - !Ref AWS::NoValue
+          - !If
+            - HasNotificationSecret
+            - Name: PACKPROOF_SMTP_USERNAME
+              ValueFrom: !Sub "${NotificationSecretArn}:smtpUsername::"
+            - !Ref AWS::NoValue
+          - !If
+            - HasNotificationSecret
+            - Name: PACKPROOF_SMTP_PASSWORD
+              ValueFrom: !Sub "${NotificationSecretArn}:smtpPassword::"
+            - !Ref AWS::NoValue
 
 Outputs:
   ServiceArn:
     Value: !GetAtt ExpressService.ServiceArn
+  Endpoint:
+    Value: !GetAtt ExpressService.Endpoint
   StagingEndpoint:
+    Description: Backward-compatible output name; use Endpoint for new deployments.
     Value: !GetAtt ExpressService.Endpoint
   LoadBalancerArn:
     Value: !GetAtt ExpressService.ECSManagedResourceArns.IngressPath.LoadBalancerArn

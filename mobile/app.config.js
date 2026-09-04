@@ -62,7 +62,7 @@ module.exports = {
     },
     android: {
       package: "com.packproof.mobile",
-      versionCode: 26,
+      versionCode: 27,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",

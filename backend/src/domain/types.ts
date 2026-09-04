@@ -22,6 +22,7 @@ export interface ProofRow {
   version: number;
   participation_policy?: string;
   workflow_type?: string;
+  workflow_version?: number;
 }
 
 export interface ParticipantRow {
@@ -92,6 +93,10 @@ export interface ManifestRow {
   canonical_json: string;
   sha256: string;
   created_at: Date | string;
+  signature_algorithm?: string | null;
+  signature_base64?: string | null;
+  signing_key_id?: string | null;
+  signed_at?: Date | string | null;
 }
 
 export type AttestationStatement = "PACKED_DESCRIBED_ITEM" | "RECEIVED_PACKAGE";

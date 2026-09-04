@@ -1,34 +1,36 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: PackProof V2 staging RDS PostgreSQL, IAM, VPC, and ECS cluster. The API image is deployed onto this foundation.
+Description: PackProof production foundation with multi-AZ PostgreSQL, retained backups, least-privilege evidence access, logging, and baseline alarms.
 
 Parameters:
   EvidenceBucket:
     Type: String
-    Default: packproof-v2-evidence-staging-20260829-a7f3
+    Description: Existing PackProof evidence bucket created with infra/evidence-bucket.yaml.
   CognitoUserPoolId:
     Type: String
-    Default: us-east-1_GdgTeYaOO
   CognitoClientId:
     Type: String
-    Default: 34pnucunllka2jcs8hsq762m5e
+  DatabaseInstanceClass:
+    Type: String
+    Default: db.t4g.small
+  BackupRetentionDays:
+    Type: Number
+    Default: 35
+    MinValue: 7
+    MaxValue: 35
 
 Resources:
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.20.0.0/16
+      CidrBlock: 10.30.0.0/16
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: packproof-v2-staging-vpc
+          Value: packproof-production-vpc
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: packproof-v2-staging-igw
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -40,53 +42,50 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.20.0.0/24
+      CidrBlock: 10.30.0.0/24
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: packproof-v2-staging-public-a
+          Value: packproof-production-public-a
 
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.20.1.0/24
+      CidrBlock: 10.30.1.0/24
       AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: packproof-v2-staging-public-b
+          Value: packproof-production-public-b
 
-  IsolatedSubnetA:
+  DatabaseSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.20.10.0/24
+      CidrBlock: 10.30.10.0/24
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: packproof-v2-staging-isolated-a
+          Value: packproof-production-db-a
 
-  IsolatedSubnetB:
+  DatabaseSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.20.11.0/24
+      CidrBlock: 10.30.11.0/24
       AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: packproof-v2-staging-isolated-b
+          Value: packproof-production-db-b
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref Vpc
-      Tags:
-        - Key: Name
-          Value: packproof-v2-staging-public-rt
 
   PublicDefaultRoute:
     Type: AWS::EC2::Route
@@ -108,35 +107,28 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
 
-  IsolatedRouteTable:
+  DatabaseRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref Vpc
-      Tags:
-        - Key: Name
-          Value: packproof-v2-staging-isolated-rt
 
-  IsolatedSubnetARoute:
+  DatabaseSubnetARoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref IsolatedSubnetA
-      RouteTableId: !Ref IsolatedRouteTable
+      SubnetId: !Ref DatabaseSubnetA
+      RouteTableId: !Ref DatabaseRouteTable
 
-  IsolatedSubnetBRoute:
+  DatabaseSubnetBRoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref IsolatedSubnetB
-      RouteTableId: !Ref IsolatedRouteTable
+      SubnetId: !Ref DatabaseSubnetB
+      RouteTableId: !Ref DatabaseRouteTable
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: packproof-v2-staging-db-sg
-      GroupDescription: PackProof V2 staging PostgreSQL; no public Internet access
+      GroupDescription: PackProof production PostgreSQL; VPC-only ingress
       VpcId: !Ref Vpc
-      Tags:
-        - Key: Name
-          Value: packproof-v2-staging-db-sg
 
   DatabaseFromVpc:
     Type: AWS::EC2::SecurityGroupIngress
@@ -145,58 +137,65 @@ Resources:
       IpProtocol: tcp
       FromPort: 5432
       ToPort: 5432
-      CidrIp: 10.20.0.0/16
-      Description: VPC-local ECS tasks only; not 0.0.0.0/0
+      CidrIp: 10.30.0.0/16
+      Description: PackProof VPC workloads only
 
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: packproof-v2-staging-db-subnets
-      DBSubnetGroupDescription: Isolated subnets for PackProof V2 staging PostgreSQL
+      DBSubnetGroupDescription: Isolated PackProof production DB subnets
       SubnetIds:
-        - !Ref IsolatedSubnetA
-        - !Ref IsolatedSubnetB
+        - !Ref DatabaseSubnetA
+        - !Ref DatabaseSubnetB
 
   Database:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: packproof-v2-staging-db
+      DBInstanceIdentifier: packproof-production-db
       DBName: packproof_v2
       Engine: postgres
       EngineVersion: "16.15"
-      DBInstanceClass: db.t4g.micro
-      AllocatedStorage: 20
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      AllocatedStorage: 50
+      MaxAllocatedStorage: 500
       StorageType: gp3
       StorageEncrypted: true
-      MultiAZ: false
+      MultiAZ: true
       PubliclyAccessible: false
-      BackupRetentionPeriod: 1
+      BackupRetentionPeriod: !Ref BackupRetentionDays
+      CopyTagsToSnapshot: true
+      DeleteAutomatedBackups: false
       PreferredBackupWindow: "07:00-08:00"
       PreferredMaintenanceWindow: "sun:08:00-sun:09:00"
       AutoMinorVersionUpgrade: true
-      DeletionProtection: false
+      DeletionProtection: true
       MasterUsername: packproof
       ManageMasterUserPassword: true
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      EnableCloudwatchLogsExports:
+        - postgresql
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      AvailabilityZone: !Select [0, !GetAZs ""]
 
-  LogGroup:
+  ApiLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      LogGroupName: /ecs/packproof-v2-staging-api
-      RetentionInDays: 14
+      LogGroupName: /ecs/packproof-production-api
+      RetentionInDays: 90
 
   NotificationSecret:
     Type: AWS::SecretsManager::Secret
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Name: packproof/staging/notifications/runtime
-      Description: PackProof staging live Proof tracker signing secret and SMTP credential slots.
+      Name: packproof/production/notifications/runtime
+      Description: PackProof live Proof tracker signing secret and SMTP credential slots.
       GenerateSecretString:
         SecretStringTemplate: '{"smtpUsername":"","smtpPassword":""}'
         GenerateStringKey: trackerLinkSecret
@@ -206,7 +205,7 @@ Resources:
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: packproof-v2-staging-execution
+      RoleName: packproof-production-execution
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -217,13 +216,12 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Policies:
-        - PolicyName: packproof-v2-staging-secret-read
+        - PolicyName: packproof-production-runtime-secret-read
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
+                Action: secretsmanager:GetSecretValue
                 Resource:
                   - !GetAtt Database.MasterUserSecret.SecretArn
                   - !Ref NotificationSecret
@@ -231,7 +229,7 @@ Resources:
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: packproof-v2-staging-task
+      RoleName: packproof-production-task
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -240,38 +238,43 @@ Resources:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: packproof-v2-staging-evidence
+        - PolicyName: packproof-production-evidence
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Sid: EvidenceObjects
+              - Sid: ReadWriteEvidenceWithoutDelete
                 Effect: Allow
                 Action:
                   - s3:PutObject
                   - s3:GetObject
+                  - s3:GetObjectVersion
                 Resource: !Sub "arn:aws:s3:::${EvidenceBucket}/evidence/*"
-        - PolicyName: packproof-v2-staging-integration-secrets
+              - Sid: ReadEvidenceBucketMetadata
+                Effect: Allow
+                Action:
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketObjectLockConfiguration
+                Resource: !Sub "arn:aws:s3:::${EvidenceBucket}"
+        - PolicyName: packproof-production-integration-secrets
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Sid: TrustedIntegrationSecrets
-                Effect: Allow
+              - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
                   - secretsmanager:CreateSecret
                   - secretsmanager:PutSecretValue
                   - secretsmanager:DeleteSecret
-                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:packproof/staging/integrations/*"
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:packproof/production/integrations/*"
 
   InfrastructureRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: packproof-v2-staging-infrastructure
+      RoleName: packproof-production-infrastructure
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: AllowAccessToECSForInfrastructureManagement
-            Effect: Allow
+          - Effect: Allow
             Principal:
               Service: ecs.amazonaws.com
             Action: sts:AssumeRole
@@ -281,96 +284,44 @@ Resources:
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: packproof-v2-staging-cluster
+      ClusterName: packproof-production-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
 
-  BuildBucket:
-    Type: AWS::S3::Bucket
+  DatabaseCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
     Properties:
-      BucketName: !Sub "packproof-v2-staging-build-${AWS::AccountId}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      LifecycleConfiguration:
-        Rules:
-          - Id: expire-build-source
-            Status: Enabled
-            ExpirationInDays: 14
+      AlarmDescription: PackProof production DB CPU is sustained above 80 percent.
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: missing
 
-  BuildRole:
-    Type: AWS::IAM::Role
+  DatabaseFreeStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
     Properties:
-      RoleName: packproof-v2-staging-codebuild
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codebuild.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: packproof-v2-staging-image-build
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/packproof-v2-staging-api*"
-              - Effect: Allow
-                Action:
-                  - ecr:GetAuthorizationToken
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:CompleteLayerUpload
-                  - ecr:InitiateLayerUpload
-                  - ecr:PutImage
-                  - ecr:UploadLayerPart
-                  - ecr:BatchGetImage
-                  - ecr:GetDownloadUrlForLayer
-                Resource: !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/packproof-v2-staging-api"
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Resource: !Sub "arn:aws:s3:::${BuildBucket}/*"
-
-  BuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: packproof-v2-staging-api
-      Description: One-shot/rebuild image for the PackProof V2 staging API
-      ServiceRole: !GetAtt BuildRole.Arn
-      Artifacts:
-        Type: NO_ARTIFACTS
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
-        PrivilegedMode: true
-      Source:
-        Type: S3
-        Location: !Sub "${BuildBucket}/backend-src.zip"
-      TimeoutInMinutes: 30
-      LogsConfig:
-        CloudWatchLogs:
-          Status: ENABLED
-          GroupName: /aws/codebuild/packproof-v2-staging-api
-
-  BuildLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /aws/codebuild/packproof-v2-staging-api
-      RetentionInDays: 14
+      AlarmDescription: PackProof production DB free storage is below 10 GiB.
+      Namespace: AWS/RDS
+      MetricName: FreeStorageSpace
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 10737418240
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: missing
 
 Outputs:
   VpcId:
@@ -379,8 +330,6 @@ Outputs:
     Value: !Ref PublicSubnetA
   PublicSubnetB:
     Value: !Ref PublicSubnetB
-  DatabaseSecurityGroupId:
-    Value: !Ref DatabaseSecurityGroup
   DatabaseEndpoint:
     Value: !GetAtt Database.Endpoint.Address
   DatabasePort:
@@ -399,11 +348,7 @@ Outputs:
   InfrastructureRoleArn:
     Value: !GetAtt InfrastructureRole.Arn
   LogGroupName:
-    Value: !Ref LogGroup
-  BuildBucketName:
-    Value: !Ref BuildBucket
-  BuildProjectName:
-    Value: !Ref BuildProject
+    Value: !Ref ApiLogGroup
   EvidenceBucket:
     Value: !Ref EvidenceBucket
   CognitoUserPoolId:

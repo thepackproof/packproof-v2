@@ -1,0 +1,43 @@
+name: Infrastructure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infrastructure.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infrastructure.yml"
+
+concurrency:
+  group: infrastructure-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cloudformation:
+    name: CloudFormation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install cfn-lint
+        run: pip install cfn-lint
+      - name: Validate foundation templates
+        run: >-
+          cfn-lint
+          infra/staging.yaml
+          infra/evidence-bucket.yaml
+          infra/production-foundation.yaml
+
+      # api-service.yaml uses AWS::ECS::ExpressGatewayService, which can lag the
+      # public cfn-lint resource specification. Validate that template through
+      # the AWS CloudFormation deployment/change-set path until the spec catches up.

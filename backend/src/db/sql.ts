@@ -4,9 +4,33 @@ export function splitSqlStatements(sql: string): string[] {
   let i = 0;
   let inDollar: string | null = null;
   let inSingle = false;
+  let inLineComment = false;
+  let inBlockComment = false;
 
   while (i < sql.length) {
     const char = sql[i];
+    const next = sql[i + 1];
+
+    if (inLineComment) {
+      current += char;
+      i += 1;
+      if (char === "\n") {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      current += char;
+      if (char === "*" && next === "/") {
+        current += next;
+        i += 2;
+        inBlockComment = false;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
 
     if (inDollar) {
       if (sql.startsWith(inDollar, i)) {
@@ -22,8 +46,8 @@ export function splitSqlStatements(sql: string): string[] {
 
     if (inSingle) {
       current += char;
-      if (char === "'" && sql[i + 1] === "'") {
-        current += sql[i + 1];
+      if (char === "'" && next === "'") {
+        current += next;
         i += 2;
         continue;
       }
@@ -31,6 +55,20 @@ export function splitSqlStatements(sql: string): string[] {
         inSingle = false;
       }
       i += 1;
+      continue;
+    }
+
+    if (char === "-" && next === "-") {
+      inLineComment = true;
+      current += "--";
+      i += 2;
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      inBlockComment = true;
+      current += "/*";
+      i += 2;
       continue;
     }
 

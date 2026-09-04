@@ -1,0 +1,9 @@
+# Default ownership for PackProof V2.
+* @thepackproof
+
+# Integrity-sensitive surfaces.
+/backend/src/domain/ @thepackproof
+/backend/src/s3/ @thepackproof
+/backend/migrations/ @thepackproof
+/infra/ @thepackproof
+/.github/ @thepackproof

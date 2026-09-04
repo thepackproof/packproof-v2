@@ -1,0 +1,73 @@
+name: Android AAB
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android-aab.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-aab-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Signed internal AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Require Expo automation token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN repository secret is required to access the existing EAS project and remote Play signing credentials." >&2
+            exit 1
+          fi
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install --global eas-cli@latest
+
+      - name: Build signed Android App Bundle
+        working-directory: mobile
+        run: |
+          mkdir -p dist
+          eas build --platform android --profile internal-staging --non-interactive --wait --json > dist/eas-build.json
+          node <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync('dist/eas-build.json', 'utf8'));
+          const build = Array.isArray(payload) ? payload[0] : payload;
+          const url = build?.artifacts?.buildUrl || build?.artifactUrl;
+          if (!url) {
+            console.error('EAS did not return an Android build artifact URL.');
+            process.exit(1);
+          }
+          fs.writeFileSync('dist/aab-url.txt', url + '\n');
+          NODE
+          curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-v2-internal-27.aab
+          test -s dist/packproof-v2-internal-27.aab
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: packproof-v2-internal-27-aab
+          path: mobile/dist/packproof-v2-internal-27.aab
+          if-no-files-found: error
+          retention-days: 30

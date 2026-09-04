@@ -7,7 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DomainError } from "../domain/errors.js";
-import { sha256HexFromStream } from "../hash.js";
+import { sha256Hex, sha256HexFromStream } from "../hash.js";
 import { assertSafeObjectKey, committedEvidenceObjectKey } from "./object-key.js";
 import type {
   CommittedObject,
@@ -64,11 +64,16 @@ export class AwsS3ObjectStore implements ObjectStore {
       if (!bytes) {
         return null;
       }
+      const body = Buffer.from(bytes);
+      assertCommittedObjectDigest(objectKey, body);
       return {
-        body: Buffer.from(bytes),
+        body,
         contentType: result.ContentType ?? "application/octet-stream",
       };
     } catch (error) {
+      if (error instanceof DomainError) {
+        throw error;
+      }
       if (isMissingS3Object(error)) {
         return null;
       }
@@ -110,6 +115,7 @@ export class AwsS3ObjectStore implements ObjectStore {
           409,
         );
       }
+      assertCommittedDigestValue(objectKey, hashed.sha256);
       return {
         sha256: hashed.sha256,
         byteSize: hashed.byteSize,
@@ -275,6 +281,24 @@ function uploadChangedError(): DomainError {
     "Uploaded object changed while it was being committed; retry the commit",
     409,
   );
+}
+
+function assertCommittedObjectDigest(key: string, body: Buffer): void {
+  assertCommittedDigestValue(key, sha256Hex(body));
+}
+
+function assertCommittedDigestValue(key: string, actualSha256: string): void {
+  const match = /\/committed\/sha256-([a-f0-9]{64})$/.exec(key);
+  if (!match?.[1]) {
+    return;
+  }
+  if (actualSha256.toLowerCase() !== match[1]) {
+    throw new DomainError(
+      "EVIDENCE_OBJECT_INTEGRITY_FAILURE",
+      "Committed evidence bytes do not match their content-addressed SHA-256 key",
+      500,
+    );
+  }
 }
 
 function copySource(bucket: string, key: string): string {
