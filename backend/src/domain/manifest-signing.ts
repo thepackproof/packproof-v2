@@ -1,4 +1,4 @@
-import { constants, createVerify } from "node:crypto";
+import { constants, createVerify, timingSafeEqual } from "node:crypto";
 import { sha256Hex } from "../hash.js";
 import { DomainError } from "./errors.js";
 
@@ -44,7 +44,7 @@ export function verifyManifestIntegrity(input: {
   publicKeyPem?: string | null;
 }): ManifestVerificationResult {
   const actualSha256 = sha256Hex(input.canonicalJson);
-  const digestValid = timingSafeHexEqual(actualSha256, input.expectedSha256);
+  const digestValid = secureDigestEqual(actualSha256, input.expectedSha256);
   const signature = input.signature ?? null;
   if (!signature) {
     return {
@@ -118,7 +118,14 @@ export function requireManifestSignatureAlgorithm(value: unknown): ManifestSigna
   );
 }
 
-function timingSafeHexEqual(left: string, right: string): boolean {
+function secureDigestEqual(left: string, right: string): boolean {
+  const normalizedLeft = left.trim().toLowerCase();
   const normalizedRight = right.trim().toLowerCase();
-  return left.length === normalizedRight.length && left === normalizedRight;
+  if (!/^[a-f0-9]{64}$/.test(normalizedLeft) || !/^[a-f0-9]{64}$/.test(normalizedRight)) {
+    return false;
+  }
+  return timingSafeEqual(
+    Buffer.from(normalizedLeft, "hex"),
+    Buffer.from(normalizedRight, "hex"),
+  );
 }
