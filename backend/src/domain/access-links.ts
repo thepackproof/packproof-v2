@@ -177,38 +177,40 @@ export async function resolveAccessToken(
     throw new DomainError("ACCESS_LINK_INVALID", "This viewing link is not valid", 404);
   }
   const tokenHash = sha256Hex(presented);
-  const found = await db.query<ProofAccessLinkRow>(
-    `SELECT * FROM proof_access_links WHERE token_hash = $1`,
-    [tokenHash],
-  );
-  const row = found.rows[0];
-  if (!row || !hashesMatch(row.token_hash, tokenHash)) {
-    throw new DomainError("ACCESS_LINK_INVALID", "This viewing link is not valid", 404);
-  }
-  const now = clock.now();
-  if (row.revoked_at) {
-    throw new DomainError("ACCESS_LINK_REVOKED", "This viewing link has been revoked", 404);
-  }
-  if (row.expires_at && new Date(row.expires_at).getTime() <= now.getTime()) {
-    throw new DomainError("ACCESS_LINK_EXPIRED", "This viewing link has expired", 404);
-  }
-  const firstView = !row.last_accessed_at;
-  await db.query(
-    `UPDATE proof_access_links
-        SET last_accessed_at = $2, view_count = view_count + 1
-      WHERE id = $1`,
-    [row.id, now.toISOString()],
-  );
-  if (firstView) {
-    await appendAudit(db, {
-      proofId: row.proof_id,
-      actorUserId: null,
-      eventType: "PROOF_VIEWED_VIA_ACCESS_LINK",
-      eventData: { accessLinkId: row.id, scope: row.scope },
-      at: now,
-    });
-  }
-  return row;
+  return db.transaction(async (tx) => {
+    const found = await tx.query<ProofAccessLinkRow>(
+      `SELECT * FROM proof_access_links WHERE token_hash = $1 FOR UPDATE`,
+      [tokenHash],
+    );
+    const row = found.rows[0];
+    if (!row || !hashesMatch(row.token_hash, tokenHash)) {
+      throw new DomainError("ACCESS_LINK_INVALID", "This viewing link is not valid", 404);
+    }
+    const now = clock.now();
+    if (row.revoked_at) {
+      throw new DomainError("ACCESS_LINK_REVOKED", "This viewing link has been revoked", 404);
+    }
+    if (row.expires_at && new Date(row.expires_at).getTime() <= now.getTime()) {
+      throw new DomainError("ACCESS_LINK_EXPIRED", "This viewing link has expired", 404);
+    }
+    const firstView = !row.last_accessed_at;
+    await tx.query(
+      `UPDATE proof_access_links
+          SET last_accessed_at = $2, view_count = view_count + 1
+        WHERE id = $1`,
+      [row.id, now.toISOString()],
+    );
+    if (firstView) {
+      await appendAudit(tx, {
+        proofId: row.proof_id,
+        actorUserId: null,
+        eventType: "PROOF_VIEWED_VIA_ACCESS_LINK",
+        eventData: { accessLinkId: row.id, scope: row.scope },
+        at: now,
+      });
+    }
+    return row;
+  });
 }
 
 function hashesMatch(stored: string, computed: string): boolean {
@@ -254,6 +256,15 @@ const buckets = new Map<string, { count: number; resetAt: number }>();
 
 export function assertPublicProofRateLimit(key: string): void {
   const now = Date.now();
+  // Expired IPs must not accumulate indefinitely on a public endpoint.
+  if (buckets.size >= 10_000) {
+    for (const [ip, bucket] of buckets) {
+      if (bucket.resetAt <= now) buckets.delete(ip);
+    }
+    if (!buckets.has(key) && buckets.size >= 10_000) {
+      throw new DomainError("RATE_LIMITED", "Too many viewing requests. Try again shortly.", 429);
+    }
+  }
   const current = buckets.get(key);
   if (!current || current.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });

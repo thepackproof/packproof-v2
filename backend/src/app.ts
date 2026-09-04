@@ -8,6 +8,8 @@ import express, {
 import type { AuthenticationAdapter } from "./auth/adapter.js";
 import type { Clock } from "./clock.js";
 import type { Database } from "./db/database.js";
+import { httpBoundary, requestBodyErrors } from "./http/boundary.js";
+import { createProofPackage } from "./domain/proof-package.js";
 import { createOrGetProof, createProof } from "./domain/create-proof.js";
 import { requireParticipationPolicy } from "./domain/participation.js";
 import { requireWorkflowType } from "./domain/workflow.js";
@@ -179,13 +181,6 @@ function asyncRoute(
   };
 }
 
-function headerOrigin(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-  return value;
-}
-
 function bearerUser(req: Request): string {
   const userId = req.packproofUserId;
   if (!userId) {
@@ -227,23 +222,7 @@ export function createApp(deps: AppDependencies): Express {
       ? `${corsOrigins[0].replace(/\/$/, "")}/account`
       : "/account",
   };
-  app.use((req, res, next) => {
-    const origin = headerOrigin(req.headers.origin);
-    if (origin && corsOrigins.includes(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-      res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Authorization, Content-Type, Idempotency-Key",
-      );
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-    }
-    if (req.method === "OPTIONS") {
-      res.status(204).end();
-      return;
-    }
-    next();
-  });
+  app.use(httpBoundary(corsOrigins));
   app.use(
     "/integrations/webhooks",
     express.raw({ type: () => true, limit: "256kb" }),
@@ -1410,6 +1389,21 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
+  app.get(
+    "/proofs/:id/package",
+    asyncRoute(async (req, res) => {
+      const manifest = await getManifest(deps.db, bearerUser(req), req.params.id);
+      const proofPackage = createProofPackage({
+        proofId: manifest.proofId,
+        manifestId: manifest.manifestId,
+        manifest: manifest.manifest,
+        expectedSha256: manifest.sha256,
+      });
+      res.attachment(`packproof-${manifest.proofId}.json`).json(proofPackage);
+    }),
+  );
+
+  app.use(requestBodyErrors);
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof IntegrationError) {
       res.status(error.httpStatus).json({

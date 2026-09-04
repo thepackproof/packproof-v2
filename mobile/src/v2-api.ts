@@ -1,3 +1,4 @@
+import { withRequestTimeout } from "./request-timeout";
 export type ProofStatus =
   | "OPEN"
   | "AWAITING_PARTICIPANT"
@@ -875,14 +876,17 @@ export class PackProofV2Client {
       ...target.headers,
       "Content-Type": contentType,
     };
-    const response = await fetch(url, {
-      method: target.method,
-      headers,
-      body: toFetchBody(body),
-    });
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(url, {
+        method: target.method,
+        headers,
+        signal,
+        body: toFetchBody(body),
+      });
+      if (!response.ok) {
+        throw await errorFromResponse(response);
+      }
+    }, 10 * 60_000);
   }
 
   async commitEvidence(
@@ -959,18 +963,21 @@ export class PackProofV2Client {
       }
       headers.Authorization = `Bearer ${token}`;
     }
-    const response = await fetch(joinUrl(this.options.baseUrl, path), {
-      method: init.method ?? "GET",
-      headers,
-      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(joinUrl(this.options.baseUrl, path), {
+        method: init.method ?? "GET",
+        headers,
+        signal,
+        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+      });
+      if (!response.ok) {
+        throw await errorFromResponse(response);
+      }
+      if (response.status === 204) {
+        return undefined as T;
+      }
+      return (await response.json()) as T;
     });
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
-    if (response.status === 204) {
-      return undefined as T;
-    }
-    return (await response.json()) as T;
   }
 }
 

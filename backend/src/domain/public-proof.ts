@@ -108,6 +108,13 @@ export async function projectPublicProof(
 
   const scope = link.scope as AccessLinkScope;
   if (scope === "STATUS_ONLY") {
+    view.tracker = {
+      ...tracker,
+      reference: null,
+      itemTitle: null,
+      shipment: null,
+      milestones: tracker.milestones.map((milestone) => ({ ...milestone, detail: null })),
+    };
     return view;
   }
 

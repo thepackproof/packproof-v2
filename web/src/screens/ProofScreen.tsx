@@ -33,6 +33,7 @@ export function ProofScreen(props: {
   currentUserId: string;
   loading: boolean;
   error: string | null;
+  onRetry?: () => void;
   busy: boolean;
   development?: boolean;
   shareNotice?: string | null;
@@ -54,12 +55,15 @@ export function ProofScreen(props: {
     body?: Record<string, unknown>,
   ) => Promise<void>;
   onCommitCapture?: (files: Array<{ slot: string; file: File }>) => Promise<Array<{ slot: string; evidenceId: string }>>;
+  onDownloadPackage?: () => Promise<void>;
   onLoadEvidence?: (evidenceId: string) => Promise<Blob>;
   onBack?: () => void;
   onImportShipmentEvents?: (throughEventType?: string) => void;
   onSyncShipment?: () => void;
   onConnectTrustedDemo?: () => void;
 }) {
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const proof = props.proof;
   const role = proof?.participants.find((participant) => participant.userId === props.currentUserId)
@@ -107,7 +111,8 @@ export function ProofScreen(props: {
     return (
       <main className="page">
         <div className="banner banner-error" role="alert">
-          {props.error}
+          <p>{props.error}</p>
+          {props.onRetry ? <button type="button" className="btn btn-secondary" disabled={props.loading} onClick={props.onRetry}>Try again</button> : null}
         </div>
       </main>
     );
@@ -228,7 +233,8 @@ export function ProofScreen(props: {
       </div>
       {props.error ? (
         <div className="banner banner-error" role="alert">
-          {props.error}
+          <p>{props.error}</p>
+          {props.onRetry ? <button type="button" className="btn btn-secondary" disabled={props.loading} onClick={props.onRetry}>Try again</button> : null}
         </div>
       ) : null}
       {props.shareNotice ? <p className="note">{props.shareNotice}</p> : null}
@@ -304,7 +310,7 @@ export function ProofScreen(props: {
       </div>
 
       <div className="stack">
-          <EvidenceList proof={proof} />
+          <EvidenceList proof={proof} loadEvidence={props.onLoadEvidence} />
           <AttestationList proof={proof} />
       </div>
 
@@ -391,6 +397,23 @@ export function ProofScreen(props: {
           ) : null}
       </div>
 
+      {proof.status === "FINALIZED" && props.onDownloadPackage ? (
+        <section className="section export-panel">
+          <div>
+            <p className="kicker">Keep your record</p>
+            <h2>Download verification package</h2>
+            <p className="note">Save the finalized record and its SHA-256 digest for independent integrity checks. Download media separately from Evidence above.</p>
+          </div>
+          <button type="button" className="btn btn-secondary" disabled={exporting} onClick={async () => {
+            setExporting(true);
+            setExportError(null);
+            try { await props.onDownloadPackage?.(); }
+            catch { setExportError("The download could not be prepared. Please try again."); }
+            finally { setExporting(false); }
+          }}>{exporting ? "Preparing download…" : "Download package"}</button>
+          {exportError ? <p role="alert" className="note">{exportError}</p> : null}
+        </section>
+      ) : null}
       <TechnicalDetails proof={proof} />
     </main>
   );

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   filterProofLibrary,
+  filterProofInvitations,
   invitationCardModel,
   toProofCardModel,
   uniqueCarriers,
@@ -19,6 +20,7 @@ export function HomeScreen(props: {
   invitations: InvitationInboxView[];
   loading: boolean;
   error: string | null;
+  onRetry?: () => void;
   onOpenProof: (proofId: string) => void;
   onCreate: () => void;
   onOpenInvitation: (invite: InvitationInboxView) => void;
@@ -35,25 +37,17 @@ export function HomeScreen(props: {
     () => filterProofLibrary(props.proofs, { view, query, sort, role, carrier }),
     [props.proofs, view, query, sort, role, carrier],
   );
-  const invitations =
-    view === "in_progress" && role === "all" && !carrier
-      ? props.invitations.filter((invite) => {
-          const needle = query.trim().toLowerCase();
-          if (!needle) {
-            return true;
-          }
-          return [invite.transaction.itemTitle, invite.inviter.displayName, invite.inviter.username]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase()
-            .includes(needle);
-        })
-      : [];
+  const invitations = filterProofInvitations(props.invitations, { view, role, carrier, query });
+  const filtered = Boolean(query.trim() || role !== "all" || carrier);
+  const clearFilters = () => { setQuery(""); setRole("all"); setCarrier(null); };
   const empty = !props.loading && proofs.length === 0 && invitations.length === 0;
 
   return (
     <main className="page library-page">
-      <h1 className="page-title">My Proofs</h1>
+      <div className="library-heading">
+        <h1 className="page-title">My Proofs</h1>
+        <p className="meta">Your evidence, connected to every order.</p>
+      </div>
       <SegmentedTabs
         label="Proof library"
         selected={view}
@@ -84,6 +78,7 @@ export function HomeScreen(props: {
           onClick={() => setFilterOpen((open) => !open)}
         >
           <IconFilter />
+          {filtered ? <span className="filter-indicator" aria-label="Filters active" /> : null}
         </button>
       </div>
       {filterOpen ? (
@@ -124,14 +119,21 @@ export function HomeScreen(props: {
 
       {props.error ? (
         <div className="banner banner-error" role="alert">
-          {props.error}
+          <p>{props.error}</p>
+          {props.onRetry ? <button type="button" className="btn btn-secondary" disabled={props.loading} onClick={props.onRetry}>Try again</button> : null}
         </div>
       ) : null}
 
       {props.loading && proofs.length === 0 && invitations.length === 0 ? (
-        <p className="empty">Loading PackProofs…</p>
+        <div className="proof-skeletons" role="status" aria-label="Loading PackProofs">
+          {[0, 1, 2].map((id) => <div className="proof-skeleton" key={id} aria-hidden="true"><span /><div><i /><i /><i /></div></div>)}
+        </div>
       ) : null}
 
+      {!props.loading ? <div className="library-results" role="status">
+        <span>{proofs.length} {proofs.length === 1 ? "Proof" : "Proofs"}{invitations.length ? ` · ${invitations.length} ${invitations.length === 1 ? "invitation" : "invitations"}` : ""}</span>
+        {filtered ? <button type="button" className="text-button" onClick={clearFilters}>Clear filters</button> : null}
+      </div> : null}
       <div className="card-list">
         {invitations.map((invite) => (
           <ProofCard
@@ -149,15 +151,17 @@ export function HomeScreen(props: {
         ))}
       </div>
 
-      {empty ? (
+      {empty && !props.error ? (
         <div className="empty-card empty-state">
-          <p className="card-title">{view === "completed" ? "No completed Proofs" : "No Proofs in progress"}</p>
+          <p className="card-title">{filtered ? "No matching Proofs" : view === "completed" ? "No completed Proofs" : "No Proofs in progress"}</p>
           <p>
-            {view === "completed"
+            {filtered
+              ? "Try a different search or clear your filters to see your Proofs."
+              : view === "completed"
               ? "Finalized Proofs will appear here."
               : "Create a Proof to start a record, or review an invitation."}
           </p>
-          {view === "in_progress" ? (
+          {filtered ? <button className="btn btn-secondary" type="button" onClick={clearFilters}>Reset search and filters</button> : view === "in_progress" ? (
             <button className="btn" type="button" onClick={props.onCreate}>
               Create a Proof
             </button>

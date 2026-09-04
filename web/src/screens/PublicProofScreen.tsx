@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { ApiError } from "../api/types";
+import { withRequestTimeout } from "../api/timeout";
 import type { PublicProofView } from "../api/types";
 
 type TrackerMilestone = {
@@ -28,9 +30,12 @@ type RecipientSubscription = { email: string; preference: EmailPreference };
 
 export function PublicProofScreen(props: {
   token: string;
+  apiBaseUrl?: string;
   load: (token: string) => Promise<PublicProofView>;
   onSignIn: () => void;
 }) {
+  const [retry, setRetry] = useState(0);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [proof, setProof] = useState<PublicProofView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [emailSubscription, setEmailSubscription] = useState<RecipientSubscription | null>(null);
@@ -41,64 +46,73 @@ export function PublicProofScreen(props: {
     [proof],
   );
 
+  useEffect(() => { setProof(null); setCheckedAt(null); }, [props.token]);
+
   useEffect(() => {
     let cancelled = false;
-    let firstLoad = true;
-
+    let inFlight = false;
+    let terminal = false;
     const refresh = async () => {
+      if (inFlight || terminal) return;
+      inFlight = true;
       try {
         const loaded = await props.load(props.token);
         if (!cancelled) {
           setProof(loaded);
           setError(null);
-          firstLoad = false;
+          setCheckedAt(new Date().toISOString());
         }
       } catch (caught) {
-        if (!cancelled && firstLoad) {
-          setError(caught instanceof Error ? caught.message : "This viewing link is not valid.");
+        if (cancelled) return;
+        if (caught instanceof ApiError && [401, 403, 404, 410].includes(caught.status)) {
+          terminal = true;
+          setProof(null);
+          setEmailSubscription(null);
+          setError("This viewing link has expired, was revoked, or is no longer available.");
+        } else {
+          setError("Live updates are paused. Check your connection and try again. Any status shown is from the last successful update.");
         }
-      }
+      } finally { inFlight = false; }
     };
-
     setError(null);
-    setProof(null);
     void refresh();
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, 15_000);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", onVisible);
-
+    window.addEventListener("online", onVisible);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onVisible);
     };
-  }, [props.token, props.load]);
+  }, [props.token, props.load, retry]);
 
   useEffect(() => {
     let cancelled = false;
     setEmailSubscription(null);
     setEmailStatus(null);
-    void fetch(recipientApiUrl(props.token), { method: "GET", headers: { Accept: "application/json" } })
-      .then(async (response) => {
-        if (!response.ok || cancelled) return;
-        const payload = (await response.json()) as { subscription?: RecipientSubscription };
-        if (!cancelled && payload.subscription) setEmailSubscription(payload.subscription);
+    void withRequestTimeout(async (signal) => {
+      const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), { method: "GET", headers: { Accept: "application/json" }, signal });
+      if (!response.ok) return null;
+      return response.json() as Promise<{ subscription?: RecipientSubscription }>;
+    })
+      .then((payload) => {
+        if (!cancelled && payload?.subscription) setEmailSubscription(payload.subscription);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [props.token]);
+  }, [props.token, props.apiBaseUrl]);
 
   const updateEmailPreference = async (preference: EmailPreference) => {
     setEmailBusy(true);
     setEmailStatus(null);
     try {
-      const response = await fetch(recipientApiUrl(props.token), {
+      const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), {
         method: "PATCH",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({ preference }),
@@ -118,7 +132,7 @@ export function PublicProofScreen(props: {
     setEmailBusy(true);
     setEmailStatus(null);
     try {
-      const response = await fetch(recipientApiUrl(props.token), { method: "DELETE" });
+      const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), { method: "DELETE" });
       if (!response.ok) throw new Error("Unable to stop email updates.");
       setEmailSubscription(null);
       setEmailStatus("Email updates stopped. This secure Proof link will continue to work.");
@@ -137,7 +151,7 @@ export function PublicProofScreen(props: {
           PackProof
         </span>
       </header>
-      <main className="page stack" style={{ maxWidth: 720 }}>
+      <main className="page stack public-proof-page">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <div>
             <p className="kicker">Live Proof tracker</p>
@@ -163,16 +177,17 @@ export function PublicProofScreen(props: {
           ) : null}
         </div>
 
-        {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
+        {error ? <div className="banner banner-error" role="alert"><p>{error}</p><button type="button" className="btn btn-secondary" onClick={() => setRetry((value) => value + 1)}>Try again</button></div> : null}
         {!proof && !error ? <p className="empty">Loading Proof status…</p> : null}
 
         {proof ? (
           <>
-            <section className="section" aria-live="polite">
+            <section className="section tracker-current" aria-live="polite">
               <p className="kicker">Current status</p>
               <p className="card-title" style={{ fontSize: 22 }}>{tracker?.headline || proof.nextAction?.title || statusLabel(proof.status)}</p>
               {!tracker && <p className="meta">{stageLabel(proof.workflowStage)}</p>}
-              {tracker ? <p className="meta">Updated {formatTime(tracker.lastUpdatedAt)}</p> : null}
+              {tracker ? <p className="meta">Last event {formatTime(tracker.lastUpdatedAt)}</p> : null}
+              {checkedAt ? <p className="tracker-freshness">{error ? "Updates paused" : `Checked ${formatTime(checkedAt)}`}</p> : null}
               {tracker?.shipment ? (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginTop: 16 }}>
                   {tracker.shipment.carrier ? <Detail label="Carrier" value={tracker.shipment.carrier} /> : null}
@@ -194,20 +209,7 @@ export function PublicProofScreen(props: {
                         ) : null}
                         <span
                           aria-hidden="true"
-                          style={{
-                            position: "relative",
-                            zIndex: 1,
-                            width: 20,
-                            height: 20,
-                            borderRadius: "50%",
-                            display: "grid",
-                            placeItems: "center",
-                            border: "2px solid var(--border)",
-                            background: milestone.state === "COMPLETE" ? "var(--text)" : "var(--surface)",
-                            color: "var(--surface)",
-                            fontSize: 11,
-                            fontWeight: 800,
-                          }}
+                          className={`tracker-dot tracker-dot-${milestone.state.toLowerCase()}`}
                         >
                           {milestone.state === "COMPLETE" ? "✓" : milestone.state === "CURRENT" ? "•" : ""}
                         </span>
@@ -297,9 +299,9 @@ function PreferenceButton(props: {
   );
 }
 
-function recipientApiUrl(token: string): string {
+function recipientApiUrl(token: string, apiBaseUrl?: string): string {
   const path = `/public/proofs/${encodeURIComponent(token)}/email-subscription`;
-  const base = import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
+  const base = apiBaseUrl ?? import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
   if (!base) return path;
   return new URL(path.replace(/^\//, ""), base.endsWith("/") ? base : `${base}/`).toString();
 }

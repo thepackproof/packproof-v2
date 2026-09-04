@@ -34,6 +34,7 @@ export async function createHarness(
   clock: Clock = systemClock,
   options: {
     publicBaseUrl?: string;
+    corsOrigins?: string[];
     objectStore?: ObjectStore;
     integrations?: IntegrationAdapterRegistry;
     ebay?: import("../src/domain/ebay-marketplace.js").EbayRuntime;
@@ -66,6 +67,7 @@ export async function createHarness(
     auth: new BearerUserAdapter(opened.db),
     publicBaseUrl,
     devAuth: true,
+    corsOrigins: options.corsOrigins,
     credentialStore,
     integrations: options.integrations,
     ebay: options.ebay,

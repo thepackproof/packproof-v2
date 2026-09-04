@@ -162,6 +162,19 @@ export function sortProofLibrary<T extends ProofSummaryLike>(items: T[], sort: P
   return copy;
 }
 
+export function filterProofInvitations<T extends {
+  transaction: { itemTitle: string | null };
+  inviter: { displayName: string | null; username: string | null };
+}>(items: T[], input: {
+  view: ProofLibraryView; role?: ProofRoleFilter; carrier?: string | null; query?: string;
+}): T[] {
+  if (input.view !== "in_progress" || (input.role && input.role !== "all") || input.carrier) return [];
+  const query = input.query?.trim().toLowerCase() ?? "";
+  return items.filter((invite) => !query ||
+    [invite.transaction.itemTitle, invite.inviter.displayName, invite.inviter.username]
+      .filter(Boolean).join(" ").toLowerCase().includes(query));
+}
+
 export function filterProofLibrary<T extends ProofSummaryLike>(
   items: T[],
   input: {

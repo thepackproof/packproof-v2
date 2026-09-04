@@ -84,6 +84,7 @@ export async function buildProofTracker(db: Database, proofId: string): Promise<
            FROM evidence
           WHERE proof_id = $1
             AND validation_status = 'COMMITTED'
+            AND evidence_type = 'FULFILLMENT_CAPTURE'
             AND committed_at IS NOT NULL
          UNION ALL
          SELECT occurred_at
@@ -129,7 +130,7 @@ export async function buildProofTracker(db: Database, proofId: string): Promise<
     "DEPARTED_FACILITY",
   ]);
   addShipmentMilestone(occurred, shipmentEvents, "OUT_FOR_DELIVERY", ["OUT_FOR_DELIVERY"]);
-  addShipmentMilestone(occurred, shipmentEvents, "DELIVERED", ["DELIVERED", "RETURN_DELIVERED"]);
+  addShipmentMilestone(occurred, shipmentEvents, "DELIVERED", ["DELIVERED"]);
 
   const completed = new Set(occurred.keys());
   const firstUpcomingIndex = TRACKER_MILESTONE_CODES.findIndex((code) => !completed.has(code));
