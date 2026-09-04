@@ -112,13 +112,16 @@ export function PublicProofScreen(props: {
     setEmailBusy(true);
     setEmailStatus(null);
     try {
-      const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), {
-        method: "PATCH",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({ preference }),
+      const payload = await withRequestTimeout(async (signal) => {
+        const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), {
+          method: "PATCH",
+          signal,
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ preference }),
+        });
+        if (!response.ok) throw new Error("Unable to update email preferences.");
+        return response.json() as Promise<{ subscription: RecipientSubscription }>;
       });
-      if (!response.ok) throw new Error("Unable to update email preferences.");
-      const payload = (await response.json()) as { subscription: RecipientSubscription };
       setEmailSubscription(payload.subscription);
       setEmailStatus("Email preferences updated.");
     } catch (caught) {
@@ -132,8 +135,10 @@ export function PublicProofScreen(props: {
     setEmailBusy(true);
     setEmailStatus(null);
     try {
-      const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), { method: "DELETE" });
-      if (!response.ok) throw new Error("Unable to stop email updates.");
+      await withRequestTimeout(async (signal) => {
+        const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), { method: "DELETE", signal });
+        if (!response.ok) throw new Error("Unable to stop email updates.");
+      });
       setEmailSubscription(null);
       setEmailStatus("Email updates stopped. This secure Proof link will continue to work.");
     } catch (caught) {

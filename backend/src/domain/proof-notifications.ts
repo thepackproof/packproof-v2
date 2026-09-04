@@ -9,6 +9,7 @@ import { DomainError } from "./errors.js";
 import { requireParticipant } from "./proof-access.js";
 import {
   buildProofTracker,
+  trackerForScope,
   type ProofTrackerView,
   type TrackerMilestoneCode,
 } from "./proof-tracker.js";
@@ -333,7 +334,7 @@ export async function dispatchPendingProofEmails(
       }
       const tracker = await buildProofTracker(db, row.proof_id);
       const viewUrl = trackerViewUrl(publicWebBaseUrl, trackerLinkSecret, row.subscription_id);
-      const message = emailForEvent(row.event_key, tracker, viewUrl, row.email);
+      const message = emailForEvent(row.event_key, trackerForScope(tracker, row.scope), viewUrl, row.email);
       await emailDelivery.send(message);
       await db.query(
         `UPDATE proof_notification_outbox

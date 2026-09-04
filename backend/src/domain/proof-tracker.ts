@@ -36,6 +36,18 @@ export interface ProofTrackerView {
   milestones: ProofTrackerMilestone[];
 }
 
+/** The same visibility rules apply to browser projections and emailed updates. */
+export function trackerForScope(tracker: ProofTrackerView, scope: string): ProofTrackerView {
+  if (scope !== "STATUS_ONLY") return tracker;
+  return {
+    ...tracker,
+    reference: null,
+    itemTitle: null,
+    shipment: null,
+    milestones: tracker.milestones.map((milestone) => ({ ...milestone, detail: null })),
+  };
+}
+
 type TrackerRow = {
   proof_id: string;
   status: string;

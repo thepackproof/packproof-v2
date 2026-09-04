@@ -53,6 +53,14 @@ describe("product reliability and public boundaries", () => {
     expect(view.body.tracker).toMatchObject({ reference: null, itemTitle: null, shipment: null });
     expect(JSON.stringify(view.body)).not.toContain("PRIVATE-");
     expect(view.body.tracker.milestones.find((m: { code: string }) => m.code === "PACKING_RECORDED").state).toBe("CURRENT");
+    await createProofEmailSubscription(h.db, h.clock, seller, proofId, {
+      email: "status@example.com", scope: "STATUS_ONLY", publicWebBaseUrl: origin, trackerLinkSecret: secret,
+    });
+    const messages: unknown[] = [];
+    await dispatchPendingProofEmails(h.db, h.clock, { enabled: true, send: async (message) => { messages.push(message); } }, origin, secret, proofId);
+    expect(messages).toHaveLength(1);
+    expect(JSON.stringify(messages)).not.toContain("PRIVATE-");
+    expect(JSON.stringify(messages)).not.toContain("Private collectible");
   });
 
   it("exports only authorized finalized records and independently verifies their hash", async () => {
