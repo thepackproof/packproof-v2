@@ -52,7 +52,7 @@ jobs:
               [ref]$errors
             )
             if ($errors.Count -gt 0) {
-              $errors | ForEach-Object { Write-Error "$path: $($_.Message)" }
+              $errors | ForEach-Object { Write-Error "${path}: $($_.Message)" }
               throw "$path contains PowerShell syntax errors"
             }
           }
