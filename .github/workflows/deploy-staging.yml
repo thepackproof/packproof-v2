@@ -21,7 +21,7 @@ permissions:
 jobs:
   deploy:
     name: API + web staging parity
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 90
     env:
       AWS_REGION: us-east-1
@@ -40,6 +40,22 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Validate deployment PowerShell
+        shell: pwsh
+        run: |
+          foreach ($path in @("infra/deploy.ps1", "infra/deploy-web.ps1", "infra/deploy-staging-current.ps1")) {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$null,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$path: $($_.Message)" }
+              throw "$path contains PowerShell syntax errors"
+            }
+          }
 
       - name: Configure AWS with OIDC role
         if: ${{ env.AWS_ROLE_ARN != '' }}
