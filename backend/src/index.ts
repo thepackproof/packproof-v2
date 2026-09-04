@@ -3,7 +3,7 @@ import { createAuthentication, isDevLoginEnabled } from "./auth/create-auth.js";
 import { systemClock } from "./clock.js";
 import { loadConfig, loadEnvFile } from "./config.js";
 import { migrate } from "./db/migrate.js";
-import { createApp } from "./app.js";
+import { createServerApp } from "./server-app.js";
 import { openDatabase } from "./db/open.js";
 import { createObjectStore } from "./s3/create-object-store.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
@@ -20,8 +20,9 @@ loadEnvFile(path.resolve(process.cwd()));
 const config = loadConfig();
 const opened = await openDatabase(config);
 await migrate(opened.db);
+const credentialStore = createCredentialStore(config);
 
-const app = createApp({
+const app = createServerApp({
   db: opened.db,
   objectStore: createObjectStore(config),
   clock: systemClock,
@@ -30,7 +31,7 @@ const app = createApp({
   devAuth: isDevLoginEnabled(config),
   corsOrigins: config.webOrigins,
   integrations: createDefaultIntegrationRegistry(systemClock),
-  credentialStore: createCredentialStore(config),
+  credentialStore,
   releaseIdentity: config.release,
   ebay: createEbayRuntime(config, {
     publicBaseUrl: config.publicBaseUrl,
