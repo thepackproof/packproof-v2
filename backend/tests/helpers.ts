@@ -4,7 +4,10 @@ import os from "node:os";
 import request from "supertest";
 import { BearerUserAdapter } from "../src/auth/adapter.js";
 import { systemClock, type Clock } from "../src/clock.js";
-import { createApp } from "../src/app.js";
+import {
+  createServerApp,
+  type EbayDeletionSignatureVerifier,
+} from "../src/server-app.js";
 import { migrate } from "../src/db/migrate.js";
 import { createPgliteDatabase } from "../src/db/pglite.js";
 import type { Database } from "../src/db/database.js";
@@ -20,7 +23,7 @@ import { sha256Hex } from "../src/hash.js";
 
 export interface TestHarness {
   db: Database;
-  app: ReturnType<typeof createApp>;
+  app: ReturnType<typeof createServerApp>;
   clock: Clock;
   objectStore: ObjectStore;
   credentialStore: MutableCredentialStore;
@@ -39,6 +42,7 @@ export async function createHarness(
     facebook?: import("../src/integrations/connected-accounts/providers/facebook.js").FacebookOAuthRuntime;
     credentialStore?: MutableCredentialStore;
     opened?: { db: Database; close: () => Promise<void> };
+    ebayDeletionSignatureVerifier?: EbayDeletionSignatureVerifier;
   } = {},
 ): Promise<TestHarness> {
   const resolvedClock = clock ?? systemClock;
@@ -55,7 +59,7 @@ export async function createHarness(
       "test-upload-secret",
     );
   const credentialStore = options.credentialStore ?? new MemoryCredentialStore();
-  const app = createApp({
+  const app = createServerApp({
     db: opened.db,
     objectStore,
     clock: resolvedClock,
@@ -68,6 +72,10 @@ export async function createHarness(
     shopify: options.shopify,
     google: options.google,
     facebook: options.facebook,
+    // Unit/integration tests opt out of the external eBay key lookup by default.
+    // Dedicated verifier tests exercise the real cryptographic implementation.
+    ebayDeletionSignatureVerifier:
+      options.ebayDeletionSignatureVerifier ?? (async () => undefined),
   });
 
   return {
