@@ -27,9 +27,9 @@ const COMMERCE_SALE_V1: WorkflowDefinition = Object.freeze({
   title: "Commerce sale",
   description:
     "Evidence protocol for documenting seller fulfillment of a commerce transaction without changing the underlying transaction or adjudicating a dispute.",
-  participantRoles: ["SELLER", "BUYER"],
-  observationTypes: ["PACKED", "RELEASED", "RECEIVED"],
-  captureRecipes: ["PACKING_STANDARD_V1", "RECEIPT_STANDARD_V1"],
+  participantRoles: ["SELLER", "BUYER"] as const,
+  observationTypes: ["PACKED", "RELEASED", "RECEIVED"] as const,
+  captureRecipes: ["PACKING_STANDARD_V1", "RECEIPT_STANDARD_V1"] as const,
   semantics: {
     originRole: "Seller",
     receivingRole: "Buyer",
@@ -44,7 +44,7 @@ const GRADING_SUBMISSION_V1: WorkflowDefinition = Object.freeze({
   title: "Grading submission",
   description:
     "Evidence protocol for documenting identified assets across origin capture, outbound custody, processing, return, and final receipt.",
-  participantRoles: ["SELLER", "BUYER"],
+  participantRoles: ["SELLER", "BUYER"] as const,
   observationTypes: [
     "ORIGIN_CAPTURE",
     "PACKED",
@@ -54,8 +54,8 @@ const GRADING_SUBMISSION_V1: WorkflowDefinition = Object.freeze({
     "PROCESS_OUTPUT",
     "RETURN_PACKED",
     "FINAL_RECEIPT",
-  ],
-  captureRecipes: ["CARD_STANDARD_V1", "PACKING_STANDARD_V1", "RECEIPT_STANDARD_V1"],
+  ] as const,
+  captureRecipes: ["CARD_STANDARD_V1", "PACKING_STANDARD_V1", "RECEIPT_STANDARD_V1"] as const,
   semantics: {
     originRole: "Originator",
     receivingRole: "Receiving participant",

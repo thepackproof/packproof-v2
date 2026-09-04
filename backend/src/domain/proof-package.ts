@@ -1,4 +1,4 @@
-import { canonicalJson } from "../canonical.js";
+import { canonicalize } from "../canonical.js";
 import { sha256Hex } from "../hash.js";
 import {
   verifyManifestIntegrity,
@@ -25,7 +25,7 @@ export function createProofPackage(input: {
   expectedSha256?: string;
   signature?: ManifestSignature | null;
 }): PortableProofPackageV1 {
-  const serialized = canonicalJson(input.manifest);
+  const serialized = canonicalize(input.manifest);
   const digest = sha256Hex(serialized);
   if (input.expectedSha256 && input.expectedSha256.toLowerCase() !== digest) {
     throw new Error("Manifest does not match the expected SHA-256");
@@ -49,7 +49,7 @@ export function verifyProofPackage(input: {
   canonicalJsonValid: boolean;
 } {
   const pkg = input.package;
-  const regeneratedCanonicalJson = canonicalJson(pkg.canonicalManifest);
+  const regeneratedCanonicalJson = canonicalize(pkg.canonicalManifest);
   const canonicalJsonValid = regeneratedCanonicalJson === pkg.canonicalJson;
   const integrity = verifyManifestIntegrity({
     canonicalJson: pkg.canonicalJson,
