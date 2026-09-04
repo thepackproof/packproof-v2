@@ -22,6 +22,7 @@ export interface ProofRow {
   version: number;
   participation_policy?: string;
   workflow_type?: string;
+  workflow_version?: number;
 }
 
 export interface ParticipantRow {
