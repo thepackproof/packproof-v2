@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response } from "express";
 import { createApp, type AppDependencies } from "./app.js";
 import { DomainError } from "./domain/errors.js";
+import { requireParticipant } from "./domain/proof-access.js";
 import {
   createProofEmailSubscription,
   dispatchPendingProofEmails,
@@ -99,6 +100,10 @@ export function createServerApp(deps: ServerAppDependencies): Express {
     async (req, res) => {
       try {
         const actorUserId = await authenticateUser(deps, req);
+        // Authorize before resolving tracker details so a nonparticipant cannot
+        // use this endpoint to distinguish an existing private Proof from an
+        // arbitrary id.
+        await requireParticipant(deps.db, req.params.id, actorUserId);
         const subscription = await createProofEmailSubscription(
           deps.db,
           deps.clock,
