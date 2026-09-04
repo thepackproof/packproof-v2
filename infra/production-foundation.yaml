@@ -238,7 +238,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - s3:GetBucketVersioning
-                  - s3:GetObjectLockConfiguration
+                  - s3:GetBucketObjectLockConfiguration
                 Resource: !Sub "arn:aws:s3:::${EvidenceBucket}"
         - PolicyName: packproof-production-integration-secrets
           PolicyDocument:
