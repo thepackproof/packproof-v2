@@ -2,6 +2,10 @@
 -- Existing finalized Proofs remain valid hash-only manifests. New manifests can
 -- be signed by an asymmetric signer (production target: AWS KMS) without
 -- changing canonical manifest v1 itself.
+--
+-- final_manifests has been UPDATE/DELETE immutable since migration 001. These
+-- fields therefore must be supplied on the original INSERT. A signature can
+-- never be attached, replaced, or repaired after finalization.
 
 ALTER TABLE final_manifests
   ADD COLUMN signature_algorithm TEXT,
@@ -15,24 +19,3 @@ ALTER TABLE final_manifests
     OR
     (signature_algorithm IS NOT NULL AND signature_base64 IS NOT NULL AND signing_key_id IS NOT NULL AND signed_at IS NOT NULL)
   );
-
-CREATE FUNCTION reject_manifest_signature_mutation()
-RETURNS trigger AS $$
-BEGIN
-  IF OLD.signature_base64 IS NOT NULL AND (
-    NEW.signature_algorithm IS DISTINCT FROM OLD.signature_algorithm OR
-    NEW.signature_base64 IS DISTINCT FROM OLD.signature_base64 OR
-    NEW.signing_key_id IS DISTINCT FROM OLD.signing_key_id OR
-    NEW.signed_at IS DISTINCT FROM OLD.signed_at
-  ) THEN
-    RAISE EXCEPTION 'MANIFEST_SIGNATURE_IMMUTABLE'
-      USING ERRCODE = 'P0001';
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER final_manifest_signature_immutable
-  BEFORE UPDATE ON final_manifests
-  FOR EACH ROW
-  EXECUTE PROCEDURE reject_manifest_signature_mutation();
