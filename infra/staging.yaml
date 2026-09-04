@@ -190,6 +190,19 @@ Resources:
       LogGroupName: /ecs/packproof-v2-staging-api
       RetentionInDays: 14
 
+  NotificationSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: packproof/staging/notifications/runtime
+      Description: PackProof staging live Proof tracker signing secret and SMTP credential slots.
+      GenerateSecretString:
+        SecretStringTemplate: '{"smtpUsername":"","smtpPassword":""}'
+        GenerateStringKey: trackerLinkSecret
+        PasswordLength: 64
+        ExcludePunctuation: true
+
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -211,7 +224,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !GetAtt Database.MasterUserSecret.SecretArn
+                Resource:
+                  - !GetAtt Database.MasterUserSecret.SecretArn
+                  - !Ref NotificationSecret
 
   TaskRole:
     Type: AWS::IAM::Role
@@ -372,6 +387,9 @@ Outputs:
     Value: !GetAtt Database.Endpoint.Port
   DatabaseSecretArn:
     Value: !GetAtt Database.MasterUserSecret.SecretArn
+  NotificationSecretArn:
+    Description: Secret containing trackerLinkSecret and SMTP credential slots.
+    Value: !Ref NotificationSecret
   ClusterName:
     Value: !Ref Cluster
   TaskRoleArn:
