@@ -41,6 +41,20 @@ Parameters:
     Type: String
   DatabaseSecretArn:
     Type: String
+  NotificationSecretArn:
+    Type: String
+    Default: ""
+    Description: Optional Secrets Manager ARN with trackerLinkSecret, smtpUsername, and smtpPassword keys.
+  SmtpHost:
+    Type: String
+    Default: email-smtp.us-east-1.amazonaws.com
+  SmtpPort:
+    Type: String
+    Default: "465"
+  EmailFrom:
+    Type: String
+    Default: ""
+    Description: Verified sender address. Empty keeps SMTP email delivery disabled.
   LogGroupName:
     Type: String
   EvidenceBucket:
@@ -61,6 +75,9 @@ Parameters:
     Type: String
     Default: ""
     Description: Image tag for GET /meta. Not a secret.
+
+Conditions:
+  HasNotificationSecret: !Not [!Equals [!Ref NotificationSecretArn, ""]]
 
 Rules:
   ScalingRangeIsValid:
@@ -132,11 +149,32 @@ Resources:
             Value: !Ref ReleaseSha
           - Name: PACKPROOF_RELEASE_IMAGE
             Value: !Ref ReleaseImage
+          - Name: PACKPROOF_SMTP_HOST
+            Value: !Ref SmtpHost
+          - Name: PACKPROOF_SMTP_PORT
+            Value: !Ref SmtpPort
+          - Name: PACKPROOF_EMAIL_FROM
+            Value: !Ref EmailFrom
         Secrets:
           - Name: PACKPROOF_DB_USER
             ValueFrom: !Sub "${DatabaseSecretArn}:username::"
           - Name: PACKPROOF_DB_PASSWORD
             ValueFrom: !Sub "${DatabaseSecretArn}:password::"
+          - !If
+            - HasNotificationSecret
+            - Name: PACKPROOF_TRACKER_LINK_SECRET
+              ValueFrom: !Sub "${NotificationSecretArn}:trackerLinkSecret::"
+            - !Ref AWS::NoValue
+          - !If
+            - HasNotificationSecret
+            - Name: PACKPROOF_SMTP_USERNAME
+              ValueFrom: !Sub "${NotificationSecretArn}:smtpUsername::"
+            - !Ref AWS::NoValue
+          - !If
+            - HasNotificationSecret
+            - Name: PACKPROOF_SMTP_PASSWORD
+              ValueFrom: !Sub "${NotificationSecretArn}:smtpPassword::"
+            - !Ref AWS::NoValue
 
 Outputs:
   ServiceArn:
