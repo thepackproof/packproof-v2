@@ -1,8 +1,12 @@
 import { createSign, generateKeyPairSync } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import request from "supertest";
+import type { EbayRuntime } from "../src/domain/ebay-marketplace.js";
 import {
   verifyEbayDeletionNotificationSignature,
 } from "../src/integrations/ebay/account-deletion.js";
+import { createHarness, type TestHarness } from "./helpers.js";
+import { FakeEbayClient } from "./fixtures/ebay.js";
 
 function signedFixture(kid: string, payload: unknown) {
   const { privateKey, publicKey } = generateKeyPairSync("ec", {
@@ -37,7 +41,30 @@ function ebayVerificationFetch(publicKeyPem: string, calls: string[]): typeof fe
   }) as typeof fetch;
 }
 
+function enabledEbayRuntime(): EbayRuntime {
+  return {
+    enabled: true,
+    packproofEnvironment: "test",
+    environment: "sandbox",
+    clientId: "ebay-app-id",
+    ruName: "PackProof-RuName-1",
+    marketplaceId: "EBAY_US",
+    appCredentialReference: "memory:ebay-app",
+    deletionVerificationToken: "deletion-token",
+    deletionEndpoint: "https://api.packproof.test/integrations/webhooks/ebay/account-deletion",
+    webReturnUrl: "http://127.0.0.1:5173/stores",
+    client: new FakeEbayClient(),
+  };
+}
+
 describe("eBay account-deletion webhook signatures", () => {
+  let harness: TestHarness | undefined;
+
+  afterEach(async () => {
+    await harness?.close();
+    harness = undefined;
+  });
+
   it("accepts an authentic signed notification using the eBay public-key flow", async () => {
     const payload = {
       metadata: { topic: "MARKETPLACE_ACCOUNT_DELETION" },
@@ -107,5 +134,31 @@ describe("eBay account-deletion webhook signatures", () => {
         clientSecret: "client-secret",
       }),
     ).rejects.toMatchObject({ code: "INVALID_WEBHOOK_SIGNATURE", httpStatus: 412 });
+  });
+
+  it("fails closed at the production server boundary before account mutation", async () => {
+    harness = await createHarness(undefined, {
+      ebay: enabledEbayRuntime(),
+      ebayDeletionSignatureVerifier: verifyEbayDeletionNotificationSignature,
+    });
+    await harness.credentialStore.put({
+      adapterKey: "ebay",
+      credentialReference: "memory:ebay-app",
+      material: { clientSecret: "test-cert-id" },
+    });
+
+    const response = await request(harness.app)
+      .post("/integrations/webhooks/ebay/account-deletion")
+      .set("Content-Type", "application/json")
+      .send({
+        metadata: { topic: "MARKETPLACE_ACCOUNT_DELETION" },
+        notification: {
+          notificationId: "unsigned-note",
+          data: { userId: "ebay-user-001" },
+        },
+      });
+
+    expect(response.status).toBe(412);
+    expect(response.body.error.code).toBe("INVALID_WEBHOOK_SIGNATURE");
   });
 });
