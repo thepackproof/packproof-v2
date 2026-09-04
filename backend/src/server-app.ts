@@ -2,12 +2,15 @@ import express, { type Express, type Request, type Response } from "express";
 import { createApp, type AppDependencies } from "./app.js";
 import { DomainError } from "./domain/errors.js";
 import { requireParticipant } from "./domain/proof-access.js";
+import { resolveAccessToken } from "./domain/access-links.js";
+import { appendAudit } from "./domain/audit.js";
 import {
   createProofEmailSubscription,
   dispatchPendingProofEmails,
   listProofEmailSubscriptions,
   reconcileAllProofNotifications,
   revokeProofEmailSubscription,
+  type NotificationPreference,
 } from "./domain/proof-notifications.js";
 import {
   handleEbayAccountDeletion,
@@ -168,6 +171,91 @@ export function createServerApp(deps: ServerAppDependencies): Express {
     }
   });
 
+  server.get("/public/proofs/:token/email-subscription", async (req, res) => {
+    try {
+      const access = await resolveAccessToken(deps.db, deps.clock, req.params.token);
+      const subscription = await findRecipientSubscription(deps, access.id);
+      res.json({
+        subscription: {
+          email: maskEmail(subscription.email),
+          preference: subscription.preference,
+        },
+      });
+    } catch (error) {
+      sendBoundaryError(error, res);
+    }
+  });
+
+  server.patch(
+    "/public/proofs/:token/email-subscription",
+    express.json({ limit: "8kb" }),
+    async (req, res) => {
+      try {
+        const preference = parseRecipientPreference(req.body?.preference);
+        const access = await resolveAccessToken(deps.db, deps.clock, req.params.token);
+        const subscription = await findRecipientSubscription(deps, access.id);
+        const now = deps.clock.now();
+        await deps.db.query(
+          `UPDATE proof_notification_subscriptions
+              SET preference = $2, updated_at = $3
+            WHERE id = $1 AND revoked_at IS NULL`,
+          [subscription.id, preference, now.toISOString()],
+        );
+        await appendAudit(deps.db, {
+          proofId: access.proof_id,
+          actorUserId: null,
+          eventType: "PROOF_TRACKER_EMAIL_PREFERENCE_UPDATED",
+          eventData: { subscriptionId: subscription.id, preference },
+          at: now,
+        });
+        res.json({
+          subscription: {
+            email: maskEmail(subscription.email),
+            preference,
+          },
+        });
+      } catch (error) {
+        sendBoundaryError(error, res);
+      }
+    },
+  );
+
+  server.delete("/public/proofs/:token/email-subscription", async (req, res) => {
+    try {
+      const access = await resolveAccessToken(deps.db, deps.clock, req.params.token);
+      const subscription = await findRecipientSubscription(deps, access.id);
+      const now = deps.clock.now();
+      await deps.db.transaction(async (tx) => {
+        await tx.query(
+          `UPDATE proof_notification_subscriptions
+              SET revoked_at = $2, updated_at = $2
+            WHERE id = $1 AND revoked_at IS NULL`,
+          [subscription.id, now.toISOString()],
+        );
+        await tx.query(
+          `UPDATE proof_notification_outbox
+              SET cancelled_at = $2
+            WHERE subscription_id = $1
+              AND sent_at IS NULL
+              AND cancelled_at IS NULL`,
+          [subscription.id, now.toISOString()],
+        );
+        await appendAudit(tx, {
+          proofId: access.proof_id,
+          actorUserId: null,
+          eventType: "PROOF_TRACKER_EMAIL_UNSUBSCRIBED",
+          eventData: { subscriptionId: subscription.id },
+          at: now,
+        });
+      });
+      // Recipient unsubscribe stops future email only. The secure view-only
+      // Proof link remains valid unless a Proof participant separately revokes it.
+      res.status(204).end();
+    } catch (error) {
+      sendBoundaryError(error, res);
+    }
+  });
+
   // Reconcile notification projections after successful mutations and at most
   // once per minute on ordinary traffic. The database outbox makes delivery
   // retryable; load-balancer health traffic is enough to retry a transient SMTP
@@ -198,6 +286,50 @@ export function createServerApp(deps: ServerAppDependencies): Express {
   );
 
   return server;
+}
+
+async function findRecipientSubscription(
+  deps: ServerAppDependencies,
+  accessLinkId: string,
+): Promise<{ id: string; email: string; preference: NotificationPreference }> {
+  const found = await deps.db.query<{
+    id: string;
+    email: string;
+    preference: NotificationPreference;
+  }>(
+    `SELECT id, email, preference
+       FROM proof_notification_subscriptions
+      WHERE access_link_id = $1 AND revoked_at IS NULL`,
+    [accessLinkId],
+  );
+  const row = found.rows[0];
+  if (!row) {
+    throw new DomainError(
+      "NOTIFICATION_SUBSCRIPTION_NOT_FOUND",
+      "Email updates are not active for this viewing link",
+      404,
+    );
+  }
+  return row;
+}
+
+function parseRecipientPreference(value: unknown): NotificationPreference {
+  if (value === "IMPORTANT" || value === "ALL" || value === "FINAL_ONLY") {
+    return value;
+  }
+  throw new DomainError(
+    "INVALID_NOTIFICATION_PREFERENCE",
+    "notification preference is not allowed",
+    400,
+  );
+}
+
+function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at <= 0) return "•••";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  return `${local.slice(0, Math.min(2, local.length))}${local.length > 2 ? "•••" : ""}@${domain}`;
 }
 
 async function runNotificationMaintenance(
