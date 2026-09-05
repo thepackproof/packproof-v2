@@ -60,11 +60,23 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
       - name: Inspect test identity and signature
         run: |
-          APK=mobile/android/app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -1
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -1 | rg "name='com.packproof.mobile.cameraspike'"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
-          sha256sum "$APK" > mobile/android/app/build/outputs/apk/release/app-release.apk.sha256
+          node <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+          const { createHash } = require('crypto');
+          const apk = 'mobile/android/app/build/outputs/apk/release/app-release.apk';
+          const sdkTools = process.env.ANDROID_HOME + '/build-tools/36.0.0/';
+          const badging = execFileSync(sdkTools + 'aapt', ['dump', 'badging', apk], { encoding: 'utf8' });
+          const packageLine = badging.split('\n')[0];
+          console.log(packageLine);
+          if (!packageLine.startsWith("package: name='com.packproof.mobile.cameraspike' ")) {
+            throw new Error('Unexpected Android package identity');
+          }
+          execFileSync(sdkTools + 'apksigner', ['verify', '--verbose', apk], { stdio: 'inherit' });
+          const digest = createHash('sha256').update(fs.readFileSync(apk)).digest('hex');
+          fs.writeFileSync(apk + '.sha256', digest + '  app-release.apk\n');
+          console.log('APK SHA-256: ' + digest);
+          NODE
       - uses: actions/upload-artifact@v4
         with:
           name: packproof-camera-spike-android
