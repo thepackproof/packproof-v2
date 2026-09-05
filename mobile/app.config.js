@@ -18,11 +18,13 @@ function isReleaseSafeApiUrl(url) {
 }
 
 const easProfile = env("EAS_BUILD_PROFILE");
+const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
 const isPlayRelease = easProfile === "internal-staging";
 const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isPlayRelease ? "cognito" : "dev");
 
 if (isPlayRelease) {
+  if (isCameraSpike) throw new Error("Camera spike builds cannot use the Play release profile");
   if (apiBaseUrl && !isReleaseSafeApiUrl(apiBaseUrl)) {
     throw new Error(
       "internal-staging builds must target a public HTTPS API, not localhost or a private development host",
@@ -35,7 +37,7 @@ if (isPlayRelease) {
 
 module.exports = {
   expo: {
-    name: "PackProof",
+    name: isCameraSpike ? "PackProof Camera Test" : "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
     version: "0.3.0",
@@ -51,7 +53,7 @@ module.exports = {
       barStyle: "dark-content",
     },
     icon: "./assets/icon.png",
-    scheme: "packproof-v2",
+    scheme: isCameraSpike ? "packproof-camera-test" : "packproof-v2",
     ios: {
       supportsTablet: false,
       infoPlist: {
@@ -60,31 +62,31 @@ module.exports = {
       },
     },
     android: {
-      package: "com.packproof.mobile",
+      package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
       versionCode: 29,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
         backgroundColor: "#F4F6F8",
       },
-      permissions: ["CAMERA"],
+      permissions: isCameraSpike ? ["CAMERA", "RECORD_AUDIO"] : ["CAMERA"],
     },
     plugins: [
-      "./plugins/with-order-share",
+      ...(!isCameraSpike ? ["./plugins/with-order-share"] : []),
       "expo-video",
       [
         "expo-camera",
         {
           cameraPermission: "Scan shipping labels and record evidence with the camera for this Proof.",
-          microphonePermission: false,
-          recordAudioAndroid: false,
+          microphonePermission: isCameraSpike ? "Record audio during the optional camera hardware test." : false,
+          recordAudioAndroid: isCameraSpike,
         },
       ],
       [
         "expo-image-picker",
         {
           cameraPermission: "Take evidence photos with the camera for this Proof’s grading workflow.",
-          microphonePermission: false,
+          microphonePermission: isCameraSpike ? "Record audio during the optional camera hardware test." : false,
           photosPermission: false,
         },
       ],

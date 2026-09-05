@@ -2,8 +2,8 @@ node_modules/
 .expo/
 dist/
 .env
-android/
-ios/
+/android/
+/ios/
 *.aab
 *.apk
 *.jks

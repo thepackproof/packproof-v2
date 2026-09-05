@@ -1,0 +1,75 @@
+name: Android camera spike
+
+on:
+  push:
+    branches: [codex/in-video-camera-spike]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android-camera-spike.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-camera-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: "true"
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+      - name: Check TypeScript
+        working-directory: mobile
+        run: |
+          npm run typecheck
+          npm run test:camera-spike
+      - name: Generate dedicated camera-test Android app
+        working-directory: mobile
+        run: |
+          npx expo prebuild --platform android --no-install
+          node <<'NODE'
+          const fs = require('fs');
+          const manifest = fs.readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
+          const permission = manifest.match(/<uses-permission\b[^>]*android:name="android\.permission\.RECORD_AUDIO"[^>]*>/)?.[0];
+          if (!permission || permission.includes('tools:node="remove"')) {
+            throw new Error('The camera test must retain its optional microphone permission');
+          }
+          NODE
+      - name: Build standalone APK using the generated debug test key
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+      - name: Inspect test identity and signature
+        run: |
+          APK=mobile/android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -1
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -1 | rg "name='com.packproof.mobile.cameraspike'"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
+          sha256sum "$APK" > mobile/android/app/build/outputs/apk/release/app-release.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-camera-spike-android
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            mobile/android/app/build/outputs/apk/release/app-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
