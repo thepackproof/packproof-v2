@@ -10,8 +10,9 @@ import {
 } from "../../../mobile/src/packing-station/machine";
 import { normalizeStationReference } from "../../../mobile/src/packing-station/scan";
 import { submitStationSession } from "../../../mobile/src/packing-station/submit";
-import type { StationCandidate } from "../../../mobile/src/packing-station/types";
+import type { StationCandidate, StationEvent, StationState } from "../../../mobile/src/packing-station/types";
 import { detectWebScanAdapter } from "../packing-station/scan-adapter";
+import { clearStationCapture, recoverStationCapture, saveStationCapture, stationCaptureKey, type PendingStationCapture } from "../capture-queue";
 
 const COMPLETED_HOLD_MS = 1600;
 
@@ -24,7 +25,12 @@ export function PackingStationScreen(props: {
   onAuthExpired: () => void;
   onLeave?: () => void;
 }) {
-  const [state, dispatch] = useReducer(reduceStation, undefined, initialStationState);
+  const [state, dispatch] = useReducer(
+    (current: StationState, event: StationEvent | { type: "RESTORE_LOCAL"; state: StationState }) =>
+      event.type === "RESTORE_LOCAL" ? event.state : reduceStation(current, event),
+    undefined,
+    initialStationState,
+  );
   const [heldBlob, setHeldBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -39,6 +45,7 @@ export function PackingStationScreen(props: {
   const heldBlobRef = useRef<Blob | null>(null);
   const bootstrapped = useRef(false);
   const finishingRef = useRef(false);
+  const pendingRef = useRef<PendingStationCapture | null>(null);
   orderRef.current = state.order;
   stateRef.current = state;
   heldBlobRef.current = heldBlob;
@@ -65,20 +72,42 @@ export function PackingStationScreen(props: {
   }, [state.phase]);
 
   useEffect(() => {
-    if (bootstrapped.current) {
-      return;
-    }
-    const reference = normalizeStationReference(props.initialReference);
-    if (!reference) {
-      return;
-    }
-    bootstrapped.current = true;
-    void identify("REFERENCE", reference);
-  }, [props.initialReference]);
+    let cancelled = false;
+    setBusy(true);
+    void recoverStationCapture(props.userId).then(async (pending) => {
+      if (cancelled) return;
+      if (pending) {
+        const url = URL.createObjectURL(pending.file);
+        pendingRef.current = pending;
+        setHeldBlob(pending.file);
+        setPreviewUrl(url);
+        dispatch({ type: "RESTORE_LOCAL", state: {
+          ...initialStationState(),
+          phase: pending.finishConfirmed ? "RECOVERY" : "FINISH_SCANNING",
+          order: pending.order,
+          capture: { handle: url, contentType: pending.file.type, byteSize: pending.file.size, durationMs: null },
+          evidenceIdempotencyKey: pending.uploadKey,
+          canRetry: pending.finishConfirmed,
+        } });
+        setLocalError("Your packing recording was recovered. Finish saving it without recording again.");
+      } else if (!bootstrapped.current) {
+        const reference = normalizeStationReference(props.initialReference);
+        if (reference) {
+          bootstrapped.current = true;
+          await identify("REFERENCE", reference);
+        }
+      }
+    }).catch((error) => {
+      if (!cancelled) setLocalError(error instanceof Error ? error.message : "Unable to recover local recording.");
+    }).finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [props.userId, props.initialReference]);
 
   useEffect(() => {
     return () => stopLiveTracks();
   }, []);
+
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   useEffect(() => {
     if (state.phase !== "RECORDING") {
@@ -98,9 +127,6 @@ export function PackingStationScreen(props: {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
   }
 
   async function identify(method: "SCAN" | "REFERENCE" | "QUEUE_SELECT", reference: string, transactionId?: string) {
@@ -175,6 +201,7 @@ export function PackingStationScreen(props: {
       recorder.start();
       dispatch({ type: "RECORDING_STARTED" });
     } catch {
+      stopLiveTracks();
       setLocalError("Camera is unavailable. Choose a packing video instead.");
       fileRef.current?.click();
     }
@@ -257,6 +284,26 @@ export function PackingStationScreen(props: {
       },
     });
     dispatch({ type: "FINISH_SCAN_STARTED" });
+    try {
+      await preserveStation(file, false);
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : "Unable to preserve the recording locally.");
+    }
+  }
+
+  async function preserveStation(file: Blob, finishConfirmed: boolean) {
+    const order = orderRef.current;
+    if (!order) throw new Error("Identify the order before saving this recording.");
+    const previous = pendingRef.current;
+    const pending: PendingStationCapture = {
+      key: stationCaptureKey(props.userId), file, order,
+      uploadKey: previous?.order.proofId === order.proofId ? previous.uploadKey : newIdempotencyKey(),
+      evidenceId: previous?.order.proofId === order.proofId ? previous.evidenceId : undefined,
+      finishConfirmed,
+    };
+    await saveStationCapture(pending);
+    pendingRef.current = pending;
+    return pending;
   }
 
   async function acceptLiveVideo(blob: Blob, contentType: string, trigger: "MANUAL" | "RESCAN") {
@@ -284,16 +331,23 @@ export function PackingStationScreen(props: {
     if (!order) {
       return;
     }
-    const key = state.evidenceIdempotencyKey ?? newIdempotencyKey();
-    dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+    setLocalError(null);
+    dispatch({ type: "PROCESSING_STARTED", submitStep: "upload" });
     setBusy(true);
     try {
+      const pending = await preserveStation(blob, true);
+      dispatch({ type: "PROCESSING_STARTED", idempotencyKey: pending.uploadKey, submitStep: "upload" });
       const proof = await props.api.getProof(order.proofId);
       const result = await submitStationSession({
         proof,
         actorUserId: props.userId,
         capture: { handle, contentType, byteSize: blob.size, durationMs: null },
-        idempotencyKey: key,
+        idempotencyKey: pending.uploadKey,
+        evidenceId: pending.evidenceId,
+        onEvidenceInitialized: async (evidenceId) => {
+          pending.evidenceId = evidenceId;
+          await saveStationCapture(pending);
+        },
         deps: {
           api: props.api,
           newIdempotencyKey,
@@ -311,7 +365,10 @@ export function PackingStationScreen(props: {
           });
         },
       });
+      await clearStationCapture(props.userId);
+      pendingRef.current = null;
       setHeldBlob(null);
+      setPreviewUrl(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -320,6 +377,11 @@ export function PackingStationScreen(props: {
         return;
       }
       const mapped = stationErrorFromUnknown(error);
+      if (mapped.code === "UNAUTHENTICATED") {
+        dispatch({ type: "AUTH_FAILED" });
+        props.onAuthExpired();
+        return;
+      }
       dispatch({
         type: "PROCESSING_FAILED",
         error: mapped,

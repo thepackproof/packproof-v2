@@ -148,22 +148,13 @@ export async function completeConnectedAccountOAuth(
   clock: Clock,
   service: ConnectedAccountService,
   providerRaw: string,
-  query: { code?: unknown; state?: unknown; error?: unknown; shop?: unknown },
+  query: Record<string, unknown>,
 ): Promise<{ redirectTo: string }> {
   const providerId = requireConnectedAccountProvider(providerRaw);
   const provider = service.registry.get(providerId);
   const returnUrl = service.webReturnUrl || "/account";
-  if (typeof query.error === "string" && query.error.trim()) {
-    await appendAccountAudit(db, {
-      actorUserId: null,
-      eventType: "CONNECTED_ACCOUNT_AUTH_ERROR",
-      eventData: { provider: providerId, error: query.error.trim() },
-      at: clock.now(),
-    });
-    return { redirectTo: callbackRedirect(returnUrl, providerId, "error", query.error.trim()) };
-  }
-    let actorUserId: string | null = null;
-    try {
+  let actorUserId: string | null = null;
+  try {
     if (!provider.isEnabled()) {
       throw new DomainError(
         "CONNECTED_ACCOUNT_PROVIDER_DISABLED",
@@ -171,6 +162,7 @@ export async function completeConnectedAccountOAuth(
         403,
       );
     }
+    await provider.verifyCallback?.(query);
     const attempt = await consumeOAuthAttempt(db, clock, query.state);
     actorUserId = attempt.userId;
     if (attempt.provider !== providerId) {
@@ -179,12 +171,15 @@ export async function completeConnectedAccountOAuth(
     if (!attempt.userId) {
       throw new DomainError("UNAUTHENTICATED", "An authenticated PackProof session is required", 401);
     }
+    if (typeof query.error === "string" && query.error.trim()) {
+      throw new DomainError("CONNECTED_ACCOUNT_AUTH_DENIED", "Account authorization was declined", 400);
+    }
     if (typeof query.code !== "string" || !query.code.trim()) {
       throw new DomainError("OAUTH_STATE_INVALID", "OAuth authorization code is missing", 400);
     }
     const extra: ConnectExtra = { ...attempt.metadata };
-    if (query.shop != null) {
-      extra.shop = query.shop;
+    if (providerId === "shopify" && normalizeShopifyShop(query.shop) !== normalizeShopifyShop(extra.shop)) {
+      throw new DomainError("OAUTH_SHOP_MISMATCH", "Shopify shop does not match the authorization attempt", 400);
     }
     const { tokens, identity } = await provider.handleCallback({
       code: query.code.trim(),

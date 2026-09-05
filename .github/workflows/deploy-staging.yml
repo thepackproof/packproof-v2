@@ -6,6 +6,8 @@ on:
     paths:
       - "backend/**"
       - "web/**"
+      # Web compilation consumes shared mobile modules and their dependencies.
+      - "mobile/**"
       - "infra/**"
       - ".github/workflows/deploy-staging.yml"
   workflow_dispatch:
@@ -17,10 +19,44 @@ concurrency:
 permissions:
   contents: read
   id-token: write
+  actions: read
 
 jobs:
+  verify-ci:
+    name: Require CI for this commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for successful main CI
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.ref !== 'refs/heads/main') {
+              throw new Error('Staging deployment requires the main branch.');
+            }
+            const deadline = Date.now() + 20 * 60 * 1000;
+            while (Date.now() < deadline) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner, repo: context.repo.repo,
+                workflow_id: 'ci.yml', head_sha: context.sha, event: 'push', per_page: 10,
+              });
+              const run = data.workflow_runs.filter(r => r.head_branch === 'main')
+                .sort((a, b) => b.id - a.id)[0];
+              if (run?.status === 'completed') {
+                if (run.conclusion !== 'success') {
+                  throw new Error(`CI for ${context.sha} ended with ${run.conclusion}: ${run.html_url}`);
+                }
+                core.info(`Verified CI for ${context.sha}: ${run.html_url}`);
+                return;
+              }
+              core.info(`Waiting for CI on ${context.sha} (${run?.status ?? 'not started'})`);
+              await new Promise(resolve => setTimeout(resolve, 10000));
+            }
+            throw new Error(`No successful CI run for ${context.sha} within 20 minutes.`);
+
   deploy:
     name: API + web staging parity
+    needs: verify-ci
     runs-on: windows-latest
     timeout-minutes: 90
     env:
@@ -39,12 +75,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            mobile/package-lock.json
 
       - name: Validate deployment PowerShell
         shell: pwsh
         run: |
-          foreach ($path in @("infra/deploy.ps1", "infra/deploy-web.ps1", "infra/deploy-staging-current.ps1")) {
+          foreach ($path in (Get-ChildItem infra -Filter *.ps1 -Recurse).FullName) {
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile(
               (Resolve-Path $path),
@@ -86,6 +124,10 @@ jobs:
           }
           Write-Host "Deploying to AWS account $($identity.Account)"
 
+      - name: Install shared mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
       - name: Install web dependencies
         working-directory: web
         run: npm ci
@@ -123,16 +165,21 @@ jobs:
             throw "API parity check failed: /meta environment is $($meta.environment)"
           }
 
-          $index = (Invoke-WebRequest -Uri "$webUrl/" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache" }).Content
-          $match = [regex]::Match($index, 'src="([^"]*\/assets\/[^\"]+\.js)"')
-          if (-not $match.Success) {
-            throw "Web parity check failed: could not find the Vite JavaScript bundle in index.html"
+          $release = Invoke-RestMethod -Uri "$webUrl/release.json" -Headers @{ "Cache-Control" = "no-cache" }
+          if ($release.commit -ne $env:GITHUB_SHA -or $release.environment -ne "staging" -or $release.apiUrl.TrimEnd("/") -ne $apiUrl) {
+            throw "Web parity check failed: release metadata does not match the requested commit and API"
           }
-          $assetPath = $match.Groups[1].Value
-          if (-not $assetPath.StartsWith("/")) { $assetPath = "/$assetPath" }
-          $bundle = (Invoke-WebRequest -Uri "$webUrl$assetPath" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache" }).Content
-          if ($bundle -notlike '*Email live Proof*' -or $bundle -notlike '*All tracker milestones*') {
-            throw "Web parity check failed: live bundle does not contain the RC1 tracker sharing UI"
+          $indexFile = Join-Path $env:RUNNER_TEMP "packproof-live-index.html"
+          Invoke-WebRequest -Uri "$webUrl/" -OutFile $indexFile -Headers @{ "Cache-Control" = "no-cache" }
+          if ((Get-FileHash $indexFile -Algorithm SHA256).Hash.ToLowerInvariant() -ne $release.indexSha256) {
+            throw "Web parity check failed: served index does not match the release hash"
+          }
+          foreach ($asset in $release.assets) {
+            $assetFile = Join-Path $env:RUNNER_TEMP "packproof-live-asset"
+            Invoke-WebRequest -Uri "$webUrl/$($asset.path)" -OutFile $assetFile -Headers @{ "Cache-Control" = "no-cache" }
+            if ((Get-FileHash $assetFile -Algorithm SHA256).Hash.ToLowerInvariant() -ne $asset.sha256) {
+              throw "Web parity check failed: served asset $($asset.path) does not match the release hash"
+            }
           }
 
           "### PackProof staging parity" >> $env:GITHUB_STEP_SUMMARY
@@ -140,4 +187,4 @@ jobs:
           "- API: $apiUrl" >> $env:GITHUB_STEP_SUMMARY
           "- Web: $webUrl" >> $env:GITHUB_STEP_SUMMARY
           "- API /meta exact commit: verified" >> $env:GITHUB_STEP_SUMMARY
-          "- Web RC1 tracker bundle: verified" >> $env:GITHUB_STEP_SUMMARY
+          "- Web exact commit, index and asset hashes: verified" >> $env:GITHUB_STEP_SUMMARY

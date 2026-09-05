@@ -15,7 +15,7 @@ param(
   [string]$PublicUrl = ""
 )
 
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 $Aws = "$env:LOCALAPPDATA\Programs\Amazon\AWSCLIV2\aws.exe"
 if (-not (Test-Path $Aws)) {
   $Aws = "aws"
@@ -65,6 +65,8 @@ function Get-StackOutputs([string]$Name) {
   }
   return $map
 }
+
+. (Join-Path $PSScriptRoot "deployment-helpers.ps1")
 
 $Account = (Invoke-AwsJson sts get-caller-identity).Account
 $EcrUri = "$Account.dkr.ecr.$Region.amazonaws.com/$EcrName"
@@ -232,6 +234,20 @@ $network = @{
   subnets = @($Outputs.PublicSubnetA, $Outputs.PublicSubnetB)
 }
 $scaling = @{ minTaskCount = 1; maxTaskCount = 1 }
+# Preserve optional settings before starting the new image. A second rollout
+# after this one temporarily disabled integrations and exceeded the 10-minute
+# generic ECS waiter during the managed canary deployment.
+$existing = Invoke-AwsJson ecs describe-services --cluster $Outputs.ClusterName --services $ApiStack --region $Region
+$serviceStatus = $existing.services[0].status
+$serviceArn = $existing.services[0].serviceArn
+$previousContainer = $null
+$previousDefinition = ""
+if ($serviceStatus -eq "ACTIVE" -and $serviceArn) {
+  $previousExpress = Invoke-AwsJson ecs describe-express-gateway-service --service-arn $serviceArn --region $Region
+  $previousContainer = $previousExpress.service.activeConfigurations[0].primaryContainer
+  $previousDefinition = @($existing.services[0].deployments | Where-Object status -eq "PRIMARY")[0].taskDefinition
+}
+$container = Merge-ContainerRuntime -Desired $container -Previous $previousContainer -NotificationSecretArn $Outputs.NotificationSecretArn -Region $Region
 $containerFile = Join-Path $env:TEMP "packproof-express-container.json"
 $networkFile = Join-Path $env:TEMP "packproof-express-network.json"
 $scalingFile = Join-Path $env:TEMP "packproof-express-scaling.json"
@@ -239,9 +255,6 @@ $scalingFile = Join-Path $env:TEMP "packproof-express-scaling.json"
 [System.IO.File]::WriteAllText($networkFile, ($network | ConvertTo-Json -Depth 8))
 [System.IO.File]::WriteAllText($scalingFile, ($scaling | ConvertTo-Json -Depth 8))
 
-$existing = Invoke-AwsJson ecs describe-services --cluster $Outputs.ClusterName --services $ApiStack --region $Region
-$serviceStatus = $existing.services[0].status
-$serviceArn = $existing.services[0].serviceArn
 if ($serviceStatus -eq "ACTIVE" -and $serviceArn) {
   Write-Host "Updating Express Mode service $ApiStack"
   Invoke-Aws ecs update-express-gateway-service `
@@ -269,67 +282,10 @@ if ($serviceStatus -eq "ACTIVE" -and $serviceArn) {
   $serviceArn = $created.service.serviceArn
 }
 
-Write-Host "Ensuring desired count is 1 and forcing a new task set"
-Invoke-Aws ecs update-service --cluster $Outputs.ClusterName --service $ApiStack --desired-count 1 --force-new-deployment --region $Region | Out-Null
+Write-Host "Ensuring desired count is 1"
+Invoke-Aws ecs update-service --cluster $Outputs.ClusterName --service $ApiStack --desired-count 1 --region $Region | Out-Null
 
-function Get-RunningTaskImages {
-  $listedRaw = & $Aws ecs list-tasks --cluster $Outputs.ClusterName --service-name $ApiStack --desired-status RUNNING --region $Region --output json
-  if ($LASTEXITCODE -ne 0) {
-    throw "aws ecs list-tasks failed with exit $LASTEXITCODE"
-  }
-  $listed = $listedRaw | ConvertFrom-Json
-  $arns = @($listed.taskArns | Where-Object { $_ })
-  if ($arns.Count -eq 0) {
-    return @()
-  }
-  $describedRaw = & $Aws ecs describe-tasks --cluster $Outputs.ClusterName --tasks $arns --region $Region --output json
-  if ($LASTEXITCODE -ne 0) {
-    throw "aws ecs describe-tasks failed with exit $LASTEXITCODE"
-  }
-  $described = $describedRaw | ConvertFrom-Json
-  return @($described.tasks | ForEach-Object { $_.containers[0].image })
-}
-
-$endpoint = $null
-$converged = $false
-for ($i = 0; $i -lt 80; $i++) {
-  $express = Invoke-AwsJson ecs describe-express-gateway-service --service-arn $serviceArn --region $Region
-  $endpoint = $express.service.activeConfigurations[0].ingressPaths[0].endpoint
-  $counts = Invoke-AwsJson ecs describe-services --cluster $Outputs.ClusterName --services $ApiStack --region $Region
-  $service = $counts.services[0]
-  $running = $service.runningCount
-  $desired = $service.desiredCount
-  $pending = $service.pendingCount
-  $images = Get-RunningTaskImages
-  $wrong = @($images | Where-Object { $_ -notlike "*:${ImageTag}" })
-  $extra = @($service.deployments | Where-Object { $_.status -ne "PRIMARY" -and ($_.runningCount -gt 0 -or $_.pendingCount -gt 0) })
-  $primary = @($service.deployments | Where-Object { $_.status -eq "PRIMARY" })[0]
-  Write-Host "Service desired=$desired running=$running pending=$pending images=$($images -join ',') extra=$($extra.Count) rollout=$($primary.rolloutState) endpoint=$endpoint"
-  if ($desired -eq 0) {
-    Invoke-Aws ecs update-service --cluster $Outputs.ClusterName --service $ApiStack --desired-count 1 --region $Region | Out-Null
-  }
-  if (
-    $endpoint -and
-    $desired -ge 1 -and
-    $running -eq $desired -and
-    $pending -eq 0 -and
-    $images.Count -eq $running -and
-    $wrong.Count -eq 0 -and
-    $extra.Count -eq 0 -and
-    $primary.rolloutState -eq "COMPLETED"
-  ) {
-    $converged = $true
-    break
-  }
-  Start-Sleep -Seconds 15
-}
-
-if (-not $endpoint) {
-  throw "Express Mode service did not publish an endpoint"
-}
-if (-not $converged) {
-  throw "ECS did not converge onto image tag $ImageTag with a single PRIMARY deployment"
-}
+$endpoint = Wait-ExpressDeployment -ClusterName $Outputs.ClusterName -ServiceName $ApiStack -ServiceArn $serviceArn -ExpectedImage $image -PreviousTaskDefinition $previousDefinition -Region $Region
 
 $publicUrl = $endpoint.TrimEnd("/")
 if ($publicUrl -notmatch "^https?://") {

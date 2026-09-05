@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system";
 import type { FileSystemUploadResult } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
+import { withRequestTimeout } from "./request-timeout";
 import {
   ApiError,
   newIdempotencyKey,
@@ -99,6 +100,7 @@ export function durableCaptureUri(): string {
 }
 
 export async function persistLocalCapture(capture: LocalCapture): Promise<LocalCapture> {
+  if (!FileSystem.documentDirectory) throw new Error("Local document storage is unavailable.");
   const dest = `${FileSystem.documentDirectory}packproof-evidence-${newIdempotencyKey()}.mp4`;
   if (capture.uri !== dest) {
     const existing = await FileSystem.getInfoAsync(dest);
@@ -195,7 +197,15 @@ export async function uploadCaptureFile(input: {
   );
   let result: FileSystemUploadResult | undefined;
   try {
-    result = await task.uploadAsync();
+    result = await withRequestTimeout(async (signal) => {
+      const cancel = () => { void task.cancelAsync().catch(() => undefined); };
+      signal.addEventListener("abort", cancel);
+      try {
+        return await task.uploadAsync();
+      } finally {
+        signal.removeEventListener("abort", cancel);
+      }
+    }, 10 * 60_000);
   } catch (error) {
     throw new Error(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
   }

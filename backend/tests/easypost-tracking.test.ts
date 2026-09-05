@@ -560,9 +560,10 @@ describe("staging IAM and EasyPost secrets", () => {
     expect(deploy).toMatch(/secrets-manager/);
     expect(deploy).toMatch(/PACKPROOF_RELEASE_SHA/);
     expect(deploy).toMatch(/PACKPROOF_ENVIRONMENT/);
-    expect(deploy).toMatch(/force-new-deployment/);
     expect(deploy).toMatch(/runningNewImage/);
-    expect(deploy).toMatch(/ecs describe-tasks --cluster \$Outputs\.ClusterName --tasks \$arns/);
+    // Runtime preservation and exact-image convergence are exercised by the
+    // native PowerShell regressions in infra/tests/deployment-helpers.test.ps1.
+    expect(deploy).toMatch(/Wait-ExpressDeployment/);
     expect(deploy).toMatch(/--task-role-arn/);
     expect(deploy).toMatch(/\[switch\]\$EnableEbay/);
     expect(deploy).toMatch(/PACKPROOF_EBAY_APP_CREDENTIAL_REFERENCE/);

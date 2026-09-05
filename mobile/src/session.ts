@@ -14,6 +14,7 @@ export interface CachedClientState {
   refreshToken: string | null;
   idToken: string | null;
   accessExpiresAt: number | null;
+  needsReauthentication?: boolean;
   cognitoUserPoolId: string | null;
   cognitoClientId: string | null;
   cognitoRegion: string | null;
@@ -43,7 +44,7 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
   }
   try {
     const parsed = JSON.parse(raw) as Partial<CachedClientState>;
-    if (!parsed.apiBaseUrl || !parsed.userId || !parsed.token) {
+    if (!parsed.apiBaseUrl || !parsed.userId || (!parsed.token && parsed.needsReauthentication !== true)) {
       return null;
     }
     return {
@@ -54,7 +55,8 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
       userId: parsed.userId,
       username: parsed.username ?? null,
       displayName: parsed.displayName ?? null,
-      token: parsed.token,
+      token: parsed.token ?? "",
+      needsReauthentication: parsed.needsReauthentication === true,
       refreshToken: parsed.refreshToken ?? null,
       idToken: parsed.idToken ?? null,
       accessExpiresAt: parsed.accessExpiresAt ?? null,

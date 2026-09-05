@@ -38,6 +38,8 @@ export interface EvidenceCommitView {
   proof: ProofView;
 }
 
+export const MAX_EVIDENCE_BYTES = 200 * 1024 * 1024;
+
 function objectKeyFor(proofId: string, evidenceId: string): string {
   return evidenceObjectKey(proofId, evidenceId);
 }
@@ -89,6 +91,7 @@ export async function initializeEvidenceUpload(
     );
     if (existing.rows[0]) {
       const row = existing.rows[0];
+      assertUploadReplay(row, actorUserId, contentType, evidenceType);
       if (row.validation_status === "REJECTED") {
         throw new DomainError(
           "EVIDENCE_UPLOAD_DISCARDED",
@@ -138,6 +141,14 @@ export async function initializeEvidenceUpload(
           [proofId, input.idempotencyKey],
         );
         if (raced.rows[0]) {
+          assertUploadReplay(raced.rows[0], actorUserId, contentType, evidenceType);
+          if (raced.rows[0].validation_status === "REJECTED") {
+            throw new DomainError(
+              "EVIDENCE_UPLOAD_DISCARDED",
+              "Start a new upload for a replacement recording",
+              409,
+            );
+          }
           if (raced.rows[0].validation_status === "COMMITTED") {
             throw new DomainError(
               "EVIDENCE_ALREADY_COMMITTED",
@@ -180,6 +191,28 @@ export async function initializeEvidenceUpload(
   });
 }
 
+function assertUploadReplay(
+  row: EvidenceRow,
+  actorUserId: string,
+  contentType: string,
+  evidenceType: string,
+): void {
+  if (row.submitted_by !== actorUserId) {
+    throw new DomainError(
+      "PARTICIPANT_NOT_AUTHORIZED",
+      "This upload belongs to another participant",
+      403,
+    );
+  }
+  if (row.content_type !== contentType || row.evidence_type !== evidenceType) {
+    throw new DomainError(
+      "IDEMPOTENCY_CONFLICT",
+      "This upload key already identifies different evidence metadata",
+      409,
+    );
+  }
+}
+
 function toUploadView(row: EvidenceRow, upload: UploadTarget): EvidenceUploadView {
   return {
     evidenceId: row.id,
@@ -211,6 +244,14 @@ export async function commitEvidence(
   const committedObject = await objectStore.commitUpload(prepared.objectKey);
   if (!committedObject) {
     throw new DomainError("EVIDENCE_OBJECT_MISSING", "Uploaded object was not found", 409);
+  }
+  if (!Number.isSafeInteger(committedObject.byteSize) || committedObject.byteSize < 1 ||
+    committedObject.byteSize > MAX_EVIDENCE_BYTES) {
+    throw new DomainError(
+      "INVALID_EVIDENCE_SIZE",
+      "Evidence must contain between 1 byte and 200 MiB",
+      422,
+    );
   }
   if (!contentTypesCompatible(committedObject.contentType, prepared.contentType)) {
     throw new DomainError(

@@ -67,14 +67,14 @@ jobs:
           }
           fs.writeFileSync('dist/aab-url.txt', url + '\n');
           NODE
-          curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-v2-internal-28.aab
-          test -s dist/packproof-v2-internal-28.aab
+          curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-v2-internal-${{ github.run_id }}.aab
+          test -s dist/packproof-v2-internal-${{ github.run_id }}.aab
 
       - name: Upload AAB artifact
         if: steps.expo-auth.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: packproof-v2-internal-28-aab
-          path: mobile/dist/packproof-v2-internal-28.aab
+          name: packproof-v2-internal-${{ github.run_id }}-aab
+          path: mobile/dist/packproof-v2-internal-${{ github.run_id }}.aab
           if-no-files-found: error
           retention-days: 30

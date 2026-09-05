@@ -166,7 +166,7 @@ export async function recordCommerceSyncState(
        last_succeeded_at = COALESCE(EXCLUDED.last_succeeded_at, commerce_connection_sync_states.last_succeeded_at),
        last_error_code = EXCLUDED.last_error_code,
        last_error_retryable = EXCLUDED.last_error_retryable,
-       provider_cursor = COALESCE(EXCLUDED.provider_cursor, commerce_connection_sync_states.provider_cursor),
+       provider_cursor = CASE WHEN $7::boolean THEN EXCLUDED.provider_cursor ELSE commerce_connection_sync_states.provider_cursor END,
        updated_at = EXCLUDED.updated_at`,
     [
       input.connectionId,
@@ -175,6 +175,7 @@ export async function recordCommerceSyncState(
       input.succeeded ? null : (input.errorCode ?? null),
       input.succeeded ? null : (input.retryable ?? null),
       input.providerCursor ?? null,
+      input.succeeded,
     ],
   );
 }

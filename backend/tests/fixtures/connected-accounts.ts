@@ -1,5 +1,5 @@
 import type { FetchLike } from "../../src/integrations/connected-accounts/http.js";
-import type { ShopifyClient, ShopifyOrder, ShopifyShopIdentity, ShopifyTokenSet } from "../../src/integrations/shopify/types.js";
+import type { ShopifyClient, ShopifyOrder, ShopifyOrderPage, ShopifyShopIdentity, ShopifyTokenSet } from "../../src/integrations/shopify/types.js";
 import { providerAuthFailed, providerResponseInvalid } from "../../src/domain/integration-errors.js";
 
 export class FakeShopifyClient implements ShopifyClient {
@@ -70,11 +70,11 @@ export class FakeShopifyClient implements ShopifyClient {
     };
   }
 
-  async listOrders(input: { shop: string; accessToken: string }): Promise<ShopifyOrder[]> {
+  async listOrders(input: { shop: string; accessToken: string }): Promise<ShopifyOrderPage> {
     if (!this.tokens.get(input.accessToken)) {
       throw providerAuthFailed();
     }
-    return this.orders;
+    return { orders: this.orders, cursor: null };
   }
 
   async revoke(): Promise<void> {

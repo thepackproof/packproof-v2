@@ -423,6 +423,9 @@ export function reduceStation(state: StationState, event: StationEvent): Station
         canRetry: false,
       };
 
+    case "OPERATION_FAILED":
+      return { ...state, phase: "RECOVERY", error: event.error, canRetry: event.canRetry };
+
     case "PROCESSING_FAILED":
       if (state.phase !== "PROCESSING") {
         return state;

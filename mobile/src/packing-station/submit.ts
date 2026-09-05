@@ -53,11 +53,18 @@ export async function submitStationSession(input: {
   actorUserId: string;
   capture: StationCaptureRef;
   idempotencyKey?: string | null;
+  evidenceId?: string | null;
+  onEvidenceInitialized?: (evidenceId: string) => Promise<void>;
   deps: StationSubmitDeps;
   onProgress?: (progress: { step: SubmitStep; uploadPercent: number | null }) => void;
 }): Promise<StationSubmitResult> {
   const proofId = input.proof.proofId;
-  if (input.proof.status === "FINALIZED") {
+  const recoveredEvidence = input.evidenceId
+    ? input.proof.evidence.find(
+        (item) => item.evidenceId === input.evidenceId && item.validationStatus === "COMMITTED",
+      )
+    : null;
+  if (input.proof.status === "FINALIZED" && !recoveredEvidence) {
     throw {
       code: "PROOF_ALREADY_FINALIZED",
       message: "This PackProof is already complete.",
@@ -66,7 +73,7 @@ export async function submitStationSession(input: {
   const alreadyCommitted = input.proof.evidence.some(
     (item) => item.validationStatus === "COMMITTED",
   );
-  if (alreadyCommitted) {
+  if (alreadyCommitted && !recoveredEvidence) {
     throw {
       code: "EVIDENCE_ALREADY_COMMITTED",
       message: "This order already has packing evidence.",
@@ -80,14 +87,17 @@ export async function submitStationSession(input: {
 
   notify("upload", 0);
   let initialized: Awaited<ReturnType<StationSubmitApi["initializeEvidenceUpload"]>> | null = null;
-  let evidenceId: string | null = null;
-  let proof: StationProofSnapshot | null = null;
-  try {
+  let evidenceId: string | null = recoveredEvidence?.evidenceId ?? null;
+  let proof: StationProofSnapshot | null = recoveredEvidence ? input.proof : null;
+  if (!proof) try {
     initialized = await input.deps.api.initializeEvidenceUpload(proofId, {
       contentType: input.capture.contentType,
       evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey: key,
     });
+    // Save the exact evidence identity before bytes can be committed, so a lost
+    // response or app restart can resume attestation/finalization safely.
+    await input.onEvidenceInitialized?.(initialized.evidenceId);
     if (input.deps.uploadEvidence)
       await input.deps.uploadEvidence(proofId, initialized.evidenceId, input.capture, (percent) =>
         notify("upload", percent),
@@ -146,7 +156,7 @@ export async function submitStationSession(input: {
   }
 
   const optional = proof.participationPolicy === "COUNTERPARTY_OPTIONAL";
-  if (optional && !sellerHasPackingAttestation(proof, input.actorUserId)) {
+  if (proof.status !== "FINALIZED" && optional && !sellerHasPackingAttestation(proof, input.actorUserId)) {
     notify("attest", 100);
     try {
       const attested = await input.deps.api.createAttestation(proofId, {

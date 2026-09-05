@@ -162,6 +162,8 @@ Server-authoritative. Default order is oldest fulfillment-eligible order first. 
 
 Manual `POST /me/commerce-connections/:id/sync` is enough for this slice. A later Shopify webhook should normalize the payload inside the Shopify adapter, then call `executeCommerceFulfillmentSync` or a single-order variant that still uses `importNormalizedTransaction`.
 
+Sync follows at most ten provider pages per request and checkpoints each fully imported page. A non-null response `cursor` means another sync is needed; that request resumes from the stored cursor. Failure leaves completed-page progress intact, and finishing the scan clears the cursor. Single-page adapters keep the same behavior. Provider cursor cycles are rejected rather than treated as a complete import.
+
 ## Future Shopify adapter
 
 A later adapter (`kind: "trusted"`) should:

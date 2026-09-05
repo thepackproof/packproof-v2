@@ -28,34 +28,11 @@ export function InviteScreen() {
       return;
     }
     await app.run(async () => {
-      const base = app.apiBaseUrl.replace(/\/$/, "");
-      const response = await fetch(`${base}/proofs/${encodeURIComponent(proof.proofId)}/email-subscriptions`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${app.session?.token ?? ""}`,
-        },
-        body: JSON.stringify({
-          email: trackerEmail.trim(),
-          preference,
-          scope: "SUMMARY",
-        }),
+      const payload = await app.client.emailProof(proof.proofId, {
+        email: trackerEmail.trim(),
+        preference,
+        scope: "SUMMARY",
       });
-      if (!response.ok) {
-        let message = `Unable to email this Proof (${response.status}).`;
-        try {
-          const payload = (await response.json()) as { error?: { message?: string } };
-          message = payload.error?.message ?? message;
-        } catch {
-          // Keep the HTTP fallback.
-        }
-        throw new Error(message);
-      }
-      const payload = (await response.json()) as {
-        subscription?: { email?: string };
-        emailDeliveryConfigured?: boolean;
-      };
       setEmailResult(
         payload.emailDeliveryConfigured === false
           ? `Tracker created for ${payload.subscription?.email ?? trackerEmail.trim()}. Email delivery is not configured on this environment yet.`

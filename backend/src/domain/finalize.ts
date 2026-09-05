@@ -29,7 +29,7 @@ import { listTransactionItems } from "./transaction-items.js";
 import { isQualifyingFulfillmentCapture } from "./evidence-types.js";
 import { evaluateFinalizeRequirements } from "./finalize-requirements.js";
 import { DEFAULT_PARTICIPATION_POLICY, requireParticipationPolicy } from "./participation.js";
-import { listObservations } from "./observations.js";
+import { listObservations, originDocumentedAssetIds } from "./observations.js";
 import { listProofAssets } from "./assets.js";
 import { listTransfers } from "./transfers.js";
 import { listContinuityEvaluations } from "./continuity.js";
@@ -147,6 +147,11 @@ export async function finalizeProof(
     );
     const observations = await listObservations(tx, proofId);
     const workflowType = requireWorkflowType(proof.workflow_type);
+    const assets = workflowType === "GRADING_SUBMISSION" ? await listProofAssets(tx, proofId) : [];
+    const committedIds = new Set(evidence.rows.map((row) => row.id));
+    const documentedAssetIds = originDocumentedAssetIds(observations.filter(
+      (row) => row.evidence.every((link) => committedIds.has(link.evidenceId)),
+    ));
     const evaluation = evaluateFinalizeRequirements({
       participationPolicy,
       workflowType,
@@ -162,6 +167,8 @@ export async function finalizeProof(
         }),
       ).length,
       packingAttested,
+      assetCount: assets.length,
+      documentedAssetCount: assets.filter((asset) => documentedAssetIds.has(asset.assetId)).length,
       packed: observations.some((row) => row.type === "PACKED"),
       released: observations.some((row) => row.type === "RELEASED"),
       received: observations.some((row) => row.type === "RECEIVED"),
@@ -317,6 +324,7 @@ export async function finalizeProof(
         fromObservationId: row.fromObservationId,
         toObservationId: row.toObservationId,
         algorithmVersion: row.algorithmVersion,
+        actorParticipantId: row.actorParticipantId,
         result: row.result,
         summary: row.summary,
         evidencePairs: row.evidencePairs,

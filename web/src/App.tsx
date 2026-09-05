@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
 import { captureEvidenceType } from "@packproof/copy/custody";
 import { PackProofApi } from "./api/client";
+import { createSessionTokenProvider } from "./auth/token-provider";
+import { cognitoRefresh, defaultCognitoConfig } from "./auth/cognito";
 import { ApiError } from "./api/types";
 import type {
   CanonicalProof,
@@ -21,6 +23,7 @@ import type {
 } from "./api/types";
 import {
   clearSession,
+  defaultApiBaseUrl,
   isProfileComplete,
   loadSession,
   saveSession,
@@ -306,6 +309,17 @@ function PackProofApp() {
   const [displayNameInput, setDisplayNameInput] = useState(() => loadSession()?.displayName ?? "");
   const [usernameInput, setUsernameInput] = useState(() => loadSession()?.username ?? "");
   const tokenRef = useRef<string | null>(session?.token ?? null);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const getSessionToken = useMemo(() => createSessionTokenProvider({
+    getSession: () => sessionRef.current,
+    onSession: (updated) => {
+      sessionRef.current = updated;
+      tokenRef.current = updated.token;
+      setSession(updated);
+    },
+    refresh: (token) => cognitoRefresh(defaultCognitoConfig(), token),
+  }), []);
   const proofIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -315,11 +329,12 @@ function PackProofApp() {
   const api = useMemo(
     () =>
       new PackProofApi({
-        baseUrl: session?.apiBaseUrl ?? "",
-        getToken: () => tokenRef.current,
+        baseUrl: session?.apiBaseUrl ?? defaultApiBaseUrl(),
+        getToken: getSessionToken,
       }),
-    [session?.apiBaseUrl],
+    [session?.apiBaseUrl, getSessionToken],
   );
+  const loadPublicProof = useCallback((token: string) => api.getPublicProof(token), [api]);
 
   const loadProofEvidence = useCallback(
     async (evidenceId: string) => {
@@ -332,6 +347,7 @@ function PackProofApp() {
   );
 
   function signOut() {
+    sessionRef.current = null;
     tokenRef.current = null;
     clearSession();
     setSession(null);
@@ -456,16 +472,24 @@ function PackProofApp() {
     if (!session || !isProfileComplete(session)) {
       return;
     }
+    let cancelled = false;
+    const fail = (caught: unknown) => {
+      if (!cancelled) setError(handleError(caught));
+    };
+    const finished = () => {
+      if (!cancelled) setLoading(false);
+    };
     if (route.name === "home" || route.name === "proofs" || route.name === "activity") {
       setLoading(true);
       setError(null);
       void Promise.all([api.listMyProofs(), api.listInvitations()])
         .then(([listed, inbox]) => {
+          if (cancelled) return;
           setProofs(listed.proofs);
           setInvitations(inbox.invitations);
         })
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .catch(fail)
+        .finally(finished);
     }
     if (route.name === "account") {
       setLoading(true);
@@ -476,14 +500,15 @@ function PackProofApp() {
         api.listConnectedAccounts(),
       ])
         .then(([inbox, listed, marketplaces, connected]) => {
+          if (cancelled) return;
           setInvitations(inbox.invitations);
           setConnections(listed.connections);
           setEbay(pickEbay(marketplaces));
           setConnectedAccounts(connected.accounts);
           setConnectedProviders(connected.providers);
         })
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .catch(fail)
+        .finally(finished);
     }
     if (needsProof(route.name)) {
       const proofId = routeProofId(route);
@@ -495,13 +520,15 @@ function PackProofApp() {
         void api
           .getProof(proofId)
           .then(async (loaded) => {
+            if (cancelled) return;
             proofIdRef.current = loaded.proofId;
             setProof(loaded);
             const integrity = await api.getShipmentIntegrity(loaded.proofId);
+            if (cancelled) return;
             setShipmentIntegrity(integrity);
           })
-          .catch((caught) => setError(handleError(caught)))
-          .finally(() => setLoading(false));
+          .catch(fail)
+          .finally(finished);
       } else {
         setLoading(false);
       }
@@ -510,9 +537,9 @@ function PackProofApp() {
       setLoading(true);
       void api
         .listInvitations()
-        .then((inbox) => setInvitations(inbox.invitations))
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .then((inbox) => { if (!cancelled) setInvitations(inbox.invitations); })
+        .catch(fail)
+        .finally(finished);
     }
     if (
       route.name === "fulfillment" ||
@@ -523,27 +550,29 @@ function PackProofApp() {
       setError(null);
       void api
         .listFulfillmentQueue(route.name === "fulfillment-detail" ? "all" : "ready")
-        .then((result) => setQueue(result.items))
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .then((result) => { if (!cancelled) setQueue(result.items); })
+        .catch(fail)
+        .finally(finished);
     }
     if (route.name === "stores") {
       setLoading(true);
       void Promise.all([api.listCommerceConnections(), api.listMarketplaces()])
         .then(([listed, marketplaces]) => {
+          if (cancelled) return;
           setConnections(listed.connections);
           setEbay(pickEbay(marketplaces));
         })
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .catch(fail)
+        .finally(finished);
     }
     if (route.name === "create") {
       void api
         .listMarketplaces()
-        .then((marketplaces) => setEbay(pickEbay(marketplaces)))
+        .then((marketplaces) => { if (!cancelled) setEbay(pickEbay(marketplaces)); })
         .catch(() => undefined);
     }
-  }, [api, route, session]);
+    return () => { cancelled = true; };
+  }, [api, route, session?.userId, session?.username, session?.displayName]);
 
   if (isLegalRoute(route)) {
     return <LegalScreen kind={route.name} onGo={go} />;
@@ -552,8 +581,10 @@ function PackProofApp() {
   if (isPublicRoute(route)) {
     return (
       <PublicProofScreen
+        key={route.token}
+        apiBaseUrl={session?.apiBaseUrl ?? defaultApiBaseUrl()}
         token={route.token}
-        load={(token) => api.getPublicProof(token)}
+        load={loadPublicProof}
         loadMedia={(id) => api.getPublicEvidence(route.token, id)}
         onSignIn={() => go("/")}
       />
@@ -572,9 +603,12 @@ function PackProofApp() {
         <SignInScreen
           onGo={go}
           onSignedIn={(next) => {
+            sessionRef.current = next;
             tokenRef.current = next.token;
             setSession(next);
-            go("/");
+            // Keep the requested Proof or receiver invitation through sign-in.
+            // The current route is already guarded until the session/profile is ready.
+            setError(null);
           }}
         />
       </div>

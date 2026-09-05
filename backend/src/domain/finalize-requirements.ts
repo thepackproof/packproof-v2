@@ -11,6 +11,8 @@ export interface FinalizeRequirementInput {
   committedEvidenceCount: number;
   committedFulfillmentCaptureCount: number;
   packingAttested: boolean;
+  assetCount?: number;
+  documentedAssetCount?: number;
   packed?: boolean;
   released?: boolean;
   received?: boolean;
@@ -105,6 +107,18 @@ function evaluatePeerFinalize(input: FinalizeRequirementInput): FinalizeEvaluati
 }
 
 function evaluateGradingFinalize(input: FinalizeRequirementInput): FinalizeEvaluation {
+  if (
+    input.proofStatus !== "EVIDENCE_COMMITTED" ||
+    input.committedEvidenceCount < 1 ||
+    !input.assetCount ||
+    input.documentedAssetCount !== input.assetCount
+  ) {
+    return {
+      ok: false,
+      code: "PROOF_NOT_READY_FOR_FINALIZATION",
+      message: "Document every item with committed origin evidence before finalizing",
+    };
+  }
   if (!input.packed || !input.released) {
     return {
       ok: false,

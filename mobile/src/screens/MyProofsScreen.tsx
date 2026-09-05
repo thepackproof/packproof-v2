@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import {
   filterProofLibrary,
+  filterProofInvitations,
   invitationCardModel,
   toProofCardModel,
   uniqueCarriers,
@@ -52,26 +53,13 @@ export function MyProofsScreen() {
       }),
     [app.proofCollection, library],
   );
-  const invitations =
-    library.view === "in_progress" && !library.role && !library.carrier
-      ? app.pendingInvites.filter((invite) => {
-          const query = library.query.trim().toLowerCase();
-          if (!query) {
-            return true;
-          }
-          return [invite.transaction.itemTitle, invite.inviter.displayName, invite.inviter.username]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase()
-            .includes(query);
-        })
-      : [];
+  const invitations = filterProofInvitations(app.pendingInvites, library);
   const showSkeleton = app.busy && proofs.length === 0 && invitations.length === 0 && !app.error;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <AppScreen
-        onRefresh={() => void app.syncWorkspace()}
+        onRefresh={() => void app.run(app.syncWorkspace)}
         refreshing={app.busy}
         extraBottom={108}
         bottomInset={false}
