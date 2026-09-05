@@ -1,8 +1,15 @@
+import type { IntakePreview } from "@packproof/copy/order-intake";
+import { IntakePanel } from "../components/IntakePanel";
 import { useState } from "react";
 import { MARKETPLACE_DISCLOSURE } from "@packproof/copy/errors";
 import { displayName, formatDate, moneyLabel, quantityLabel } from "@packproof/copy/format";
 import { providerDisplay, sourceLabel } from "@packproof/copy/status";
-import type { EbaySellerOrderView, TransactionImportView, TransactionView, TransactionWriteInput } from "../api/types";
+import type {
+  EbaySellerOrderView,
+  TransactionImportView,
+  TransactionView,
+  TransactionWriteInput,
+} from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 
 const EMPTY = {
@@ -19,7 +26,7 @@ const EMPTY = {
   shipmentDate: "",
 };
 
-type Step = "choose" | "ebay-list" | "manual" | "review" | "grading";
+type Step = "choose" | "ebay-list" | "manual" | "review" | "grading" | "paste";
 
 export function CreateProofScreen(props: {
   busy: boolean;
@@ -30,15 +37,20 @@ export function CreateProofScreen(props: {
   onScan: () => void;
   onOpenAccount: () => void;
   onAcceptInvitation: (invitationId: string) => void;
+  onPreviewIntake?: (text: string) => Promise<IntakePreview>;
   onCreate: (input: TransactionWriteInput) => void;
   onCreateGrading: (input: { itemCount: number; itemTitle: string }) => void;
   onImportPurchase: () => Promise<TransactionImportView>;
-  onListEbayOrders: () => Promise<{ orders: EbaySellerOrderView[]; disclosure: string }>;
+  onListEbayOrders: () => Promise<{
+    orders: EbaySellerOrderView[];
+    disclosure: string;
+  }>;
   onImportEbayOrder: (orderId: string) => Promise<TransactionImportView>;
   onConfirmImport: (transactionId: string) => void;
 }) {
   const [step, setStep] = useState<Step>("choose");
   const [form, setForm] = useState(EMPTY);
+  const [intake, setIntake] = useState<IntakePreview | null>(null);
   const [imported, setImported] = useState<TransactionImportView | null>(null);
   const [ebayOrders, setEbayOrders] = useState<EbaySellerOrderView[]>([]);
   const [ebayDisclosure, setEbayDisclosure] = useState<string | null>(null);
@@ -59,6 +71,14 @@ export function CreateProofScreen(props: {
             <div className="banner banner-error" role="alert">
               {props.error}
             </div>
+          ) : null}
+          {props.onPreviewIntake ? (
+            <button className="option-card" onClick={() => setStep("paste")} type="button">
+              <span className="option-copy">
+                <strong className="card-title">Paste an order</strong>
+                <span className="meta">Confirm details from an order or email</span>
+              </span>
+            </button>
           ) : null}
           <button
             className="option-card"
@@ -130,7 +150,11 @@ export function CreateProofScreen(props: {
             type="button"
             disabled={props.busy}
             aria-label="Enter manually"
-            onClick={() => setStep("manual")}
+            onClick={() => {
+              setIntake(null);
+              setForm(EMPTY);
+              setStep("manual");
+            }}
           >
             <span className="option-icon" aria-hidden="true">
               ▤
@@ -156,16 +180,21 @@ export function CreateProofScreen(props: {
             </span>
           </button>
           <p className="note">
-            Invite a buyer by PackProof username from the Proof after it's created. Pending invitations appear in My
-            Proofs.
+            Invite a buyer by PackProof username from the Proof after it's created. Pending
+            invitations appear in My Proofs.
           </p>
-          <button className="btn btn-tertiary" type="button" onClick={() => setShowInviteId((value) => !value)}>
+          <button
+            className="btn btn-tertiary"
+            type="button"
+            onClick={() => setShowInviteId((value) => !value)}
+          >
             {showInviteId ? "Hide invitation ID" : "I have an invitation ID"}
           </button>
           {showInviteId ? (
             <div className="info-card stack">
               <p className="note">
-                Use this only if you were given an invitation ID. Ordinary collaboration uses PackProof usernames.
+                Use this only if you were given an invitation ID. Ordinary collaboration uses
+                PackProof usernames.
               </p>
               <label className="field" htmlFor="create-invitation-id">
                 <span>Invitation ID</span>
@@ -189,6 +218,26 @@ export function CreateProofScreen(props: {
         </section>
       ) : null}
 
+      {step === "paste" && props.onPreviewIntake ? (
+        <IntakePanel
+          onPreview={props.onPreviewIntake}
+          onReview={(preview) => {
+            const d = preview.draft;
+            setIntake(preview);
+            setForm({
+              ...EMPTY,
+              externalReference: d.externalReference ?? "",
+              itemTitle: d.itemTitle ?? "",
+              quantity: d.quantity == null ? "" : String(d.quantity),
+              transactionValue: d.transactionValue == null ? "" : String(d.transactionValue),
+              currency: d.currency ?? "",
+              carrier: d.shipping.carrier ?? "",
+              trackingNumber: d.shipping.trackingNumber ?? "",
+            });
+            setStep("manual");
+          }}
+        />
+      ) : null}
       {step === "grading" ? (
         <section className="section stack">
           <h2>Grading submission</h2>
@@ -273,7 +322,8 @@ export function CreateProofScreen(props: {
                   itemTitle: txn.itemTitle ?? "",
                   itemDescription: txn.itemDescription ?? "",
                   quantity: txn.quantity == null ? "" : String(txn.quantity),
-                  transactionValue: txn.transactionValue == null ? "" : String(txn.transactionValue),
+                  transactionValue:
+                    txn.transactionValue == null ? "" : String(txn.transactionValue),
                   currency: txn.currency ?? "",
                   carrier: txn.shipping?.carrier ?? "",
                   service: txn.shipping?.service ?? "",
@@ -330,13 +380,15 @@ export function CreateProofScreen(props: {
                 <span className="option-copy">
                   <strong className="card-title">{order.title}</strong>
                   <span className="meta">
-                    {[formatDate(order.soldAt), moneyLabel(order.total, order.currency), order.fulfillmentLabel]
+                    {[
+                      formatDate(order.soldAt),
+                      moneyLabel(order.total, order.currency),
+                      order.fulfillmentLabel,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
-                  {order.proofId ? (
-                    <span className="meta">PackProof already exists</span>
-                  ) : null}
+                  {order.proofId ? <span className="meta">PackProof already exists</span> : null}
                 </span>
               </button>
             ))
@@ -353,6 +405,16 @@ export function CreateProofScreen(props: {
           onSubmit={(event) => {
             event.preventDefault();
             props.onCreate({
+              ...(intake
+                ? {
+                    metadata: {
+                      intake: {
+                        ...intake.draft.metadata.intake,
+                        confirmed: true,
+                      },
+                    },
+                  }
+                : {}),
               externalReference: form.externalReference.trim() || null,
               transactionDate: form.transactionDate.trim() || null,
               itemTitle: form.itemTitle.trim() || null,
@@ -369,10 +431,25 @@ export function CreateProofScreen(props: {
             });
           }}
         >
+          {intake ? (
+            <div className="banner">
+              <strong>Review your order</strong>
+              {intake.warnings.map((warning, i) => (
+                <p className="note" key={i}>
+                  {warning}
+                </p>
+              ))}
+            </div>
+          ) : null}
           <div className="grid-2">
             <label className="field">
               <span>Item title</span>
-              <input value={form.itemTitle} onChange={(event) => set("itemTitle", event.target.value)} />
+              <input
+                required
+                maxLength={200}
+                value={form.itemTitle}
+                onChange={(event) => set("itemTitle", event.target.value)}
+              />
             </label>
             <label className="field">
               <span>Order reference</span>
@@ -381,30 +458,41 @@ export function CreateProofScreen(props: {
                 onChange={(event) => set("externalReference", event.target.value)}
               />
             </label>
-            <label className="field">
-              <span>Purchase date</span>
-              <input
-                value={form.transactionDate}
-                onChange={(event) => set("transactionDate", event.target.value)}
-                placeholder="YYYY-MM-DD"
-              />
-            </label>
-            <label className="field">
-              <span>Currency</span>
-              <input value={form.currency} onChange={(event) => set("currency", event.target.value)} />
-            </label>
-            <label className="field">
-              <span>Quantity</span>
-              <input value={form.quantity} onChange={(event) => set("quantity", event.target.value)} />
-            </label>
-            <label className="field">
-              <span>Amount</span>
-              <input
-                value={form.transactionValue}
-                onChange={(event) => set("transactionValue", event.target.value)}
-              />
-            </label>
           </div>
+          <details open={Boolean(intake)}>
+            <summary>Optional purchase details</summary>
+            <div className="grid-2">
+              <label className="field">
+                <span>Purchase date</span>
+                <input
+                  value={form.transactionDate}
+                  onChange={(event) => set("transactionDate", event.target.value)}
+                  placeholder="YYYY-MM-DD"
+                />
+              </label>
+              <label className="field">
+                <span>Currency</span>
+                <input
+                  value={form.currency}
+                  onChange={(event) => set("currency", event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Quantity</span>
+                <input
+                  value={form.quantity}
+                  onChange={(event) => set("quantity", event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Amount</span>
+                <input
+                  value={form.transactionValue}
+                  onChange={(event) => set("transactionValue", event.target.value)}
+                />
+              </label>
+            </div>
+          </details>
           <label className="field">
             <span>Item description</span>
             <textarea
@@ -415,7 +503,10 @@ export function CreateProofScreen(props: {
           <div className="grid-2">
             <label className="field">
               <span>Carrier</span>
-              <input value={form.carrier} onChange={(event) => set("carrier", event.target.value)} />
+              <input
+                value={form.carrier}
+                onChange={(event) => set("carrier", event.target.value)}
+              />
             </label>
             <label className="field">
               <span>Tracking number</span>
@@ -430,6 +521,10 @@ export function CreateProofScreen(props: {
               {props.error}
             </div>
           ) : null}
+          <p className="note">
+            Invite the buyer by username after creating the Proof. Only the item title is required
+            to start.
+          </p>
           <div className="btn-row">
             <button className="btn" type="submit" disabled={props.busy}>
               {props.busy ? "Creating…" : "Create PackProof"}
@@ -439,6 +534,7 @@ export function CreateProofScreen(props: {
               type="button"
               onClick={() => {
                 setForm(EMPTY);
+                setIntake(null);
                 setStep("choose");
               }}
             >
@@ -461,14 +557,20 @@ function ImportedFacts(props: {
   const shipping = props.transaction.shipping;
   const provenance = props.transaction.provenance;
   const buyer = provenance?.buyer;
-  const source = sourceLabel(provenance?.source ?? props.identity.source, provenance?.provider ?? props.identity.adapterKey);
+  const source = sourceLabel(
+    provenance?.source ?? props.identity.source,
+    provenance?.provider ?? props.identity.adapterKey,
+  );
   return (
     <div className="stack">
       <article className="info-card">
         <h3 className="card-title">{props.transaction.itemTitle || "Imported purchase"}</h3>
         {props.transaction.itemDescription ? <p>{props.transaction.itemDescription}</p> : null}
         <p className="meta">
-          {[quantityLabel(props.transaction.quantity), moneyLabel(props.transaction.transactionValue, props.transaction.currency)]
+          {[
+            quantityLabel(props.transaction.quantity),
+            moneyLabel(props.transaction.transactionValue, props.transaction.currency),
+          ]
             .filter(Boolean)
             .join(" • ")}
         </p>
@@ -497,7 +599,10 @@ function ImportedFacts(props: {
       <p className="meta">{source}</p>
       <p className="visually-hidden">{provenance?.source ?? props.identity.source}</p>
       <p className="note">
-        Recorded from {providerDisplay(provenance?.provider ?? props.identity.adapterKey) || "the connected source"}.
+        Recorded from{" "}
+        {providerDisplay(provenance?.provider ?? props.identity.adapterKey) ||
+          "the connected source"}
+        .
       </p>
     </div>
   );

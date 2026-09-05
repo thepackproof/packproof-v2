@@ -2,12 +2,20 @@ import { displayName } from "@packproof/copy/format";
 import { ACCOUNT_DELETION_COPY } from "@packproof/copy/legal";
 import { providerDisplay } from "@packproof/copy/status";
 import type { AppearancePreference } from "@packproof/theme/tokens";
-import type { CommerceConnectionView, ConnectedAccountProviderCatalogView, ConnectedAccountView } from "../api/types";
+import type {
+  CommerceConnectionView,
+  ConnectedAccountProviderCatalogView,
+  ConnectedAccountView,
+} from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { useTheme } from "../theme/ThemeProvider";
 import { ConnectedAccountsPanel } from "./ConnectedAccountsPanel";
 
-const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
+const APPEARANCE_OPTIONS: Array<{
+  id: AppearancePreference;
+  label: string;
+  hint: string;
+}> = [
   { id: "system", label: "System", hint: "Match this device" },
   { id: "light", label: "Light", hint: "Always use light PackProof" },
   { id: "dark", label: "Dark", hint: "Always use dark PackProof" },
@@ -28,6 +36,7 @@ export function AccountScreen(props: {
   onDisplayNameChange: (value: string) => void;
   onUsernameChange: (value: string) => void;
   onSaveProfile: () => void;
+  onOpenDeveloper?: () => void;
   onOpenStation: () => void;
   onOpenStores: () => void;
   onOpenFulfillment: () => void;
@@ -112,6 +121,15 @@ export function AccountScreen(props: {
         </div>
       </section>
 
+      {props.onOpenDeveloper ? (
+        <section className="section stack">
+          <h2>Integrations</h2>
+          <button className="btn btn-secondary" onClick={props.onOpenDeveloper}>
+            Developer access
+          </button>
+        </section>
+      ) : null}
+
       <ConnectedAccountsPanel
         accounts={props.connectedAccounts}
         providers={props.connectedProviders}
@@ -126,7 +144,8 @@ export function AccountScreen(props: {
         <h2>Connected marketplaces</h2>
         {props.connections.length === 0 ? (
           <p className="meta">
-            No marketplace connections on this account yet. Connect eBay or Shopify from Connected Accounts above.
+            No marketplace connections on this account yet. Connect eBay or Shopify from Connected
+            Accounts above.
           </p>
         ) : (
           props.connections.map((connection) => (
@@ -158,8 +177,8 @@ export function AccountScreen(props: {
       <section className="section stack">
         <h2>About PackProof</h2>
         <p className="note">
-          PackProof creates tamper-evident records for commerce. It records what was submitted, when, and by whom. It
-          does not decide who is right.
+          PackProof creates tamper-evident records for commerce. It records what was submitted,
+          when, and by whom. It does not decide who is right.
         </p>
         <button className="btn btn-tertiary" type="button" onClick={props.onOpenTerms}>
           Terms of Service

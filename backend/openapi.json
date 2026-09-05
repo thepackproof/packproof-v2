@@ -1,0 +1,1969 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PackProof Public API",
+    "version": "1.0.0",
+    "description": "One Proof, one API, many interfaces. API keys are scoped to a tenant and act as its owner. First-party account authentication is required to manage keys. Sandbox and live are separate tenant namespaces; use a separate staging deployment for untrusted experiments."
+  },
+  "servers": [
+    {
+      "url": "/v1"
+    }
+  ],
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/proofs": {
+      "post": {
+        "operationId": "post_proofs",
+        "summary": "POST /proofs",
+        "description": "Required scope: proofs:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation cursor. Events are sequence ordered; see the concurrency/reconciliation policy in PUBLIC_API.md."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "externalId": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "transaction": {
+                    "type": "object",
+                    "properties": {
+                      "itemTitle": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "itemDescription": {
+                        "type": "string",
+                        "maxLength": 10000
+                      },
+                      "transactionDate": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "quantity": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "transactionValue": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "shipping": {
+                        "type": "object",
+                        "properties": {
+                          "carrier": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "service": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "trackingNumber": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "shipmentDate": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": []
+                      },
+                      "metadata": {
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "itemTitle"
+                    ]
+                  },
+                  "participationPolicy": {
+                    "enum": [
+                      "COUNTERPARTY_OPTIONAL",
+                      "COUNTERPARTY_REQUIRED"
+                    ]
+                  }
+                },
+                "required": [
+                  "externalId",
+                  "transaction"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "get_proofs",
+        "summary": "GET /proofs",
+        "description": "Required scope: proofs:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation cursor. Events are sequence ordered; see the concurrency/reconciliation policy in PUBLIC_API.md."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}": {
+      "get": {
+        "operationId": "get_proofs_id",
+        "summary": "GET /proofs/{id}",
+        "description": "Required scope: proofs:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/participants": {
+      "post": {
+        "operationId": "post_proofs_id_participants",
+        "summary": "POST /proofs/{id}/participants",
+        "description": "Required scope: participants:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "participants:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "userId"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/evidence": {
+      "post": {
+        "operationId": "post_proofs_id_evidence",
+        "summary": "POST /proofs/{id}/evidence",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contentType": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "evidenceType": {
+                    "type": "string",
+                    "default": "FULFILLMENT_CAPTURE"
+                  }
+                },
+                "required": [
+                  "contentType",
+                  "evidenceType"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/evidence/{evidenceId}/commit": {
+      "post": {
+        "operationId": "post_proofs_id_evidence_evidenceId_commit",
+        "summary": "POST /proofs/{id}/evidence/{evidenceId}/commit",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/evidence/{evidenceId}/parts": {
+      "get": {
+        "operationId": "get_proofs_id_evidence_evidenceId_parts",
+        "summary": "GET /proofs/{id}/evidence/{evidenceId}/parts",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/evidence/{evidenceId}/parts/complete": {
+      "post": {
+        "operationId": "post_proofs_id_evidence_evidenceId_parts_complete",
+        "summary": "POST /proofs/{id}/evidence/{evidenceId}/parts/complete",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "totalBytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 209715200
+                  }
+                },
+                "required": [
+                  "totalBytes"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/evidence/discard": {
+      "post": {
+        "operationId": "post_proofs_id_evidence_discard",
+        "summary": "POST /proofs/{id}/evidence/discard",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "uploadIdempotencyKey": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "uploadIdempotencyKey"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/attestations": {
+      "post": {
+        "operationId": "post_proofs_id_attestations",
+        "summary": "POST /proofs/{id}/attestations",
+        "description": "Required scope: attestations:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "attestations:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "statement": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "relatedEvidenceId": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "statement"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/finalize": {
+      "post": {
+        "operationId": "post_proofs_id_finalize",
+        "summary": "POST /proofs/{id}/finalize",
+        "description": "Required scope: proofs:finalize. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:finalize",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/manifest": {
+      "get": {
+        "operationId": "get_proofs_id_manifest",
+        "summary": "GET /proofs/{id}/manifest",
+        "description": "Required scope: proofs:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/review": {
+      "get": {
+        "operationId": "get_proofs_id_review",
+        "summary": "GET /proofs/{id}/review",
+        "description": "Required scope: proofs:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/access-links": {
+      "post": {
+        "operationId": "post_proofs_id_access_links",
+        "summary": "POST /proofs/{id}/access-links",
+        "description": "Required scope: proofs:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "enum": [
+                      "STATUS_ONLY",
+                      "SUMMARY",
+                      "EVIDENCE_VIEW"
+                    ]
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/events": {
+      "get": {
+        "operationId": "get_proofs_id_events",
+        "summary": "GET /proofs/{id}/events",
+        "description": "Required scope: events:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "events:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation cursor. Events are sequence ordered; see the concurrency/reconciliation policy in PUBLIC_API.md."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "get_events",
+        "summary": "GET /events",
+        "description": "Required scope: events:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "events:read",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation cursor. Events are sequence ordered; see the concurrency/reconciliation policy in PUBLIC_API.md."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/order-intake": {
+      "post": {
+        "operationId": "post_order_intake",
+        "summary": "POST /order-intake",
+        "description": "Required scope: intake:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "intake:write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 20000
+                  },
+                  "source": {
+                    "enum": [
+                      "paste",
+                      "share",
+                      "email"
+                    ]
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks": {
+      "get": {
+        "operationId": "get_webhooks",
+        "summary": "GET /webhooks",
+        "description": "Required scope: webhooks:manage. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_webhooks",
+        "summary": "POST /webhooks",
+        "description": "Required scope: webhooks:manage. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "eventTypes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "enum": [
+                        "proof.created",
+                        "participant.joined",
+                        "evidence.uploaded",
+                        "evidence.committed",
+                        "capture.completed",
+                        "shipment.updated",
+                        "proof.finalized",
+                        "proof.accessed"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "url",
+                  "eventTypes"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{webhookId}": {
+      "delete": {
+        "operationId": "delete_webhooks_webhookId",
+        "summary": "DELETE /webhooks/{webhookId}",
+        "description": "Required scope: webhooks:manage. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/webhooks/{webhookId}/rotate-secret": {
+      "post": {
+        "operationId": "post_webhooks_webhookId_rotate_secret",
+        "summary": "POST /webhooks/{webhookId}/rotate-secret",
+        "description": "Required scope: webhooks:manage. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-deliveries/{deliveryId}/retry": {
+      "post": {
+        "operationId": "post_webhook_deliveries_deliveryId_retry",
+        "summary": "POST /webhook-deliveries/{deliveryId}/retry",
+        "description": "Required scope: webhooks:manage. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-deliveries": {
+      "get": {
+        "operationId": "get_webhook_deliveries",
+        "summary": "GET /webhook-deliveries",
+        "description": "Required scope: webhooks:manage. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle": {
+      "get": {
+        "operationId": "get_proofs_id_lifecycle",
+        "summary": "GET /proofs/{id}/lifecycle",
+        "description": "Required scope: proofs:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle/receiver": {
+      "post": {
+        "operationId": "post_proofs_id_lifecycle_receiver",
+        "summary": "POST /proofs/{id}/lifecycle/receiver",
+        "description": "Required scope: participants:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "participants:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "userId"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle/accept": {
+      "post": {
+        "operationId": "post_proofs_id_lifecycle_accept",
+        "summary": "POST /proofs/{id}/lifecycle/accept",
+        "description": "Required scope: participants:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "participants:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle/stages": {
+      "post": {
+        "operationId": "post_proofs_id_lifecycle_stages",
+        "summary": "POST /proofs/{id}/lifecycle/stages",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "RECEIPT",
+                      "RETURN_PACKING",
+                      "RETURN_RECEIPT"
+                    ]
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle/stages/{stageId}/evidence": {
+      "post": {
+        "operationId": "post_proofs_id_lifecycle_stages_stageId_evidence",
+        "summary": "POST /proofs/{id}/lifecycle/stages/{stageId}/evidence",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contentType": {
+                    "type": "string",
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "contentType"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle/stages/{stageId}/evidence/{evidenceId}/commit": {
+      "post": {
+        "operationId": "post_proofs_id_lifecycle_stages_stageId_evidence_evidenceId_commit",
+        "summary": "POST /proofs/{id}/lifecycle/stages/{stageId}/evidence/{evidenceId}/commit",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle/stages/{stageId}/finalize": {
+      "post": {
+        "operationId": "post_proofs_id_lifecycle_stages_stageId_finalize",
+        "summary": "POST /proofs/{id}/lifecycle/stages/{stageId}/finalize",
+        "description": "Required scope: attestations:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "attestations:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "statement": {
+                    "enum": [
+                      "I_RECORDED_RECEIPT",
+                      "I_PACKED_RETURN",
+                      "I_RECEIVED_RETURN"
+                    ]
+                  }
+                },
+                "required": [
+                  "statement"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/retention": {
+      "get": {
+        "operationId": "get_proofs_id_retention",
+        "summary": "GET /proofs/{id}/retention",
+        "description": "Required scope: proofs:read. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/retention/holds": {
+      "post": {
+        "operationId": "post_proofs_id_retention_holds",
+        "summary": "POST /proofs/{id}/retention/holds",
+        "description": "Required scope: proofs:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/retention/holds/{holdId}": {
+      "delete": {
+        "operationId": "delete_proofs_id_retention_holds_holdId",
+        "summary": "DELETE /proofs/{id}/retention/holds/{holdId}",
+        "description": "Required scope: proofs:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "holdId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/retention/deletion-requests": {
+      "post": {
+        "operationId": "post_proofs_id_retention_deletion_requests",
+        "summary": "POST /proofs/{id}/retention/deletion-requests",
+        "description": "Required scope: proofs:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "proofs:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/package": {
+      "get": {
+        "summary": "GET /proofs/{id}/package",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-packproof-scope": "proofs:read",
+        "responses": {
+          "200": {
+            "description": "Verified media/package bytes",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/evidence/{evidenceId}": {
+      "get": {
+        "summary": "GET /proofs/{id}/evidence/{evidenceId}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-packproof-scope": "proofs:read",
+        "responses": {
+          "200": {
+            "description": "Verified media/package bytes",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/evidence/{evidenceId}/parts/{partNumber}": {
+      "put": {
+        "summary": "PUT /proofs/{id}/evidence/{evidenceId}/parts/{partNumber}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partNumber",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 40
+            }
+          }
+        ],
+        "x-packproof-scope": "evidence:write",
+        "responses": {
+          "200": {
+            "description": "Part receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 5242880
+              }
+            }
+          }
+        },
+        "description": "Naturally idempotent by part number and exact bytes. At most 5 MiB per part; only the last part may be shorter. A changed part returns 409."
+      }
+    },
+    "/proofs/{id}/lifecycle/stages/{stageId}/evidence/{evidenceId}/discard": {
+      "post": {
+        "operationId": "post_proofs_id_lifecycle_stages_stageId_evidence_evidenceId_discard",
+        "summary": "Discard an unfinished stage upload",
+        "description": "Required scope: evidence:write. Tenant binding and participant role are validated by the server.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "pp_sandbox_\u2026 or pp_live_\u2026"
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Domain error. 400 invalid request, 401 bad key, 403 scope/role, 404 inaccessible object, 409 immutable/idempotency conflict, 413 limit, 422 failed domain validation, 429 rate limit, 503 unavailable configuration.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "maxLength": 1000
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ]
+                }
+              },
+              "required": [
+                "error"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

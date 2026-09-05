@@ -1,9 +1,8 @@
-# PackProof V2 — Strict Development Plan and Architecture Directive
+# PackProof V2 — Development Plan and Architecture Directive
 
-This document is the authoritative implementation specification for this repository.
+This document defines the enduring core invariants. The September 4, 2026 **PackProof V2 Comprehensive Development Plan**, explicitly authorized for implementation, expands the original release-candidate scope. Its current phase-by-phase implementation and remaining operational gates are in [COMPREHENSIVE_PLAN_EXECUTION.md](COMPREHENSIVE_PLAN_EXECUTION.md), with the external contract in [PUBLIC_API.md](PUBLIC_API.md).
 
-If existing code conflicts with this specification, this specification takes precedence.
-If an implementation decision is not explicitly required to complete this specification, do not implement it.
+The historical release-candidate scope below is retained as context; its exclusions of tenants, returns, receiver capture and outbound event workers are superseded by that comprehensive plan. The core invariants, neutral adapters and immutable manifests remain mandatory. The plan does not authorize AI adjudication, proprietary claims-management software, broad connector proliferation or changes to the legacy repository.
 
 PackProof V2 is an independent repository. It is not a branch of PackProof.
 
@@ -21,7 +20,7 @@ A PackProof is one immutable, transaction-bound evidence record whose history ca
 6. Capture/upload state is not Proof state.
 7. Finalization produces an immutable hashed canonical manifest.
 
-## Release-candidate scope
+## Historical release-candidate scope (superseded where noted)
 
 Supported: two users, two devices, one transaction, one Proof, seller, buyer, PackProof user search, account-targeted invitation, acceptance, seller evidence, SHA-256, commit, server-side validation, finalize, retrieve Proof/manifest, minimal UI, retries/idempotency.
 

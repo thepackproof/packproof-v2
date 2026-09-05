@@ -6,6 +6,7 @@ import {
   localCaptureExists,
   recordPackingEvidence,
   uploadCaptureFile,
+  uploadCaptureResumable,
   type LocalCapture,
 } from "../capture";
 import {
@@ -52,10 +53,8 @@ export function PackingStationScreen(props: {
   onAuthExpired: () => void;
   onLeave: () => void;
 }) {
-  const [state, dispatch] = useReducer(
-    reduceStation,
-    undefined,
-    () => initialStationForRestore(props),
+  const [state, dispatch] = useReducer(reduceStation, undefined, () =>
+    initialStationForRestore(props),
   );
   const [candidates, setCandidates] = useState<StationCandidate[]>([]);
   const [localBusy, setLocalBusy] = useState(false);
@@ -80,10 +79,7 @@ export function PackingStationScreen(props: {
     return () => clearTimeout(handle);
   }, [state.phase]);
 
-  async function persistFromState(
-    next: StationState,
-    capture: LocalCapture | null,
-  ): Promise<void> {
+  async function persistFromState(next: StationState, capture: LocalCapture | null): Promise<void> {
     await props.onPersist({
       capture,
       evidenceIdempotencyKey: next.evidenceIdempotencyKey,
@@ -91,7 +87,8 @@ export function PackingStationScreen(props: {
       transactionId: next.order?.transactionId ?? null,
       orderLabel: next.order?.orderLabel ?? null,
       itemSummary: next.order?.itemSummary ?? null,
-      stationActive: next.phase !== "READY" && next.phase !== "PROOF_CREATED" ? true : Boolean(capture),
+      stationActive:
+        next.phase !== "READY" && next.phase !== "PROOF_CREATED" ? true : Boolean(capture),
     });
   }
 
@@ -152,12 +149,21 @@ export function PackingStationScreen(props: {
       dispatch({ type: "IDENTIFY_STARTED", method, reference });
       try {
         let proof: ProofView;
-        let labels: { orderLabel: string; itemSummary: string; trackingHint?: string | null } | undefined;
+        let labels:
+          | {
+              orderLabel: string;
+              itemSummary: string;
+              trackingHint?: string | null;
+            }
+          | undefined;
         if (transactionId) {
           proof = await props.client.createOrGetProof(transactionId);
           const selected = candidates.find((item) => item.transactionId === transactionId);
           labels = selected
-            ? { orderLabel: selected.orderLabel, itemSummary: selected.itemSummary }
+            ? {
+                orderLabel: selected.orderLabel,
+                itemSummary: selected.itemSummary,
+              }
             : undefined;
         } else {
           const resolved = await props.client.resolvePackingStation(reference);
@@ -226,20 +232,33 @@ export function PackingStationScreen(props: {
 
   async function resolveFinishScan(value: string): Promise<void> {
     await guarded(async () => {
-      const afterDecode = reduceStation(stateRef.current, { type: "FINISH_SCAN_DECODED", value });
+      const afterDecode = reduceStation(stateRef.current, {
+        type: "FINISH_SCAN_DECODED",
+        value,
+      });
       if (afterDecode.phase !== "VERIFYING_FINISH_SCAN") {
         return;
       }
       dispatch({ type: "FINISH_SCAN_DECODED", value });
       try {
         const resolvedView = await props.client.resolvePackingStation(value);
-        const resolved = { transactionId: resolvedView.transactionId, proofId: resolvedView.proofId };
-        const next = reduceStation(afterDecode, { type: "FINISH_RESOLVED", resolved });
+        const resolved = {
+          transactionId: resolvedView.transactionId,
+          proofId: resolvedView.proofId,
+        };
+        const next = reduceStation(afterDecode, {
+          type: "FINISH_RESOLVED",
+          resolved,
+        });
         dispatch({ type: "FINISH_RESOLVED", resolved });
         const captured = heldCaptureRef.current;
         if (next.phase === "PROCESSING" && captured) {
           const key = next.evidenceIdempotencyKey ?? newIdempotencyKey();
-          dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+          dispatch({
+            type: "PROCESSING_STARTED",
+            idempotencyKey: key,
+            submitStep: "upload",
+          });
           await processCapture(captured, key);
         }
       } catch (error) {
@@ -260,7 +279,11 @@ export function PackingStationScreen(props: {
     dispatch({ type: "FINISH_MANUAL" });
     if (next.phase === "PROCESSING" && captured) {
       const key = next.evidenceIdempotencyKey ?? newIdempotencyKey();
-      dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+      dispatch({
+        type: "PROCESSING_STARTED",
+        idempotencyKey: key,
+        submitStep: "upload",
+      });
       await processCapture(captured, key);
     }
   }
@@ -297,6 +320,15 @@ export function PackingStationScreen(props: {
         idempotencyKey: key,
         deps: {
           api: props.client,
+          uploadEvidence: (proofId, evidenceId, _capture, onProgress) =>
+            uploadCaptureResumable({
+              client: props.client,
+              baseUrl: props.apiBaseUrl,
+              proofId,
+              evidenceId,
+              fileUri: captured.uri,
+              onProgress,
+            }),
           newIdempotencyKey,
           upload: async (target, _capture, onProgress) => {
             await uploadCaptureFile({
@@ -332,7 +364,8 @@ export function PackingStationScreen(props: {
       dispatch({
         type: "PROCESSING_FAILED",
         error: mapped,
-        canRetry: mapped.code !== "PROOF_ALREADY_FINALIZED" && mapped.code !== "EVIDENCE_ALREADY_COMMITTED",
+        canRetry:
+          mapped.code !== "PROOF_ALREADY_FINALIZED" && mapped.code !== "EVIDENCE_ALREADY_COMMITTED",
       });
       await persistFromState(stateRef.current, captured);
     }
@@ -345,7 +378,11 @@ export function PackingStationScreen(props: {
       return;
     }
     dispatch({ type: "RETRY" });
-    dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+    dispatch({
+      type: "PROCESSING_STARTED",
+      idempotencyKey: key,
+      submitStep: "upload",
+    });
     await processCapture(captured, key);
   }
 
@@ -358,7 +395,10 @@ export function PackingStationScreen(props: {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) },
+          {
+            paddingTop: Math.max(insets.top, 24),
+            paddingBottom: Math.max(insets.bottom, 24),
+          },
         ]}
         keyboardShouldPersistTaps="handled"
       >
@@ -383,7 +423,8 @@ export function PackingStationScreen(props: {
         ) : null}
         {state.phase === "PROCESSING" ? (
           <Text style={[styles.hint, { color: tone.muted }]}>
-            Saving packing video{state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}
+            Saving packing video
+            {state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}
           </Text>
         ) : null}
 
@@ -454,7 +495,9 @@ export function PackingStationScreen(props: {
                     label={`${item.orderLabel} · ${item.itemSummary}`}
                     disabled={localBusy}
                     secondary
-                    onPress={() => void identify("QUEUE_SELECT", item.orderLabel, item.transactionId)}
+                    onPress={() =>
+                      void identify("QUEUE_SELECT", item.orderLabel, item.transactionId)
+                    }
                   />
                 ))}
               </View>
@@ -475,7 +518,8 @@ export function PackingStationScreen(props: {
                 type: "FINISH_SCAN_FAILED",
                 error: {
                   code: "CAMERA_PERMISSION_DENIED",
-                  message: "Camera permission is required to scan the package. The packing video is kept.",
+                  message:
+                    "Camera permission is required to scan the package. The packing video is kept.",
                 },
               })
             }
@@ -484,7 +528,8 @@ export function PackingStationScreen(props: {
                 type: "FINISH_SCAN_FAILED",
                 error: {
                   code: "SCANNER_UNAVAILABLE",
-                  message: "The camera scanner is unavailable. Use Finished Packing. The packing video is kept.",
+                  message:
+                    "The camera scanner is unavailable. Use Finished Packing. The packing video is kept.",
                 },
               })
             }
@@ -596,7 +641,11 @@ function initialStationForRestore(props: {
   });
 }
 
-function toneForPhase(phase: StationState["phase"]): { background: string; ink: string; muted: string } {
+function toneForPhase(phase: StationState["phase"]): {
+  background: string;
+  ink: string;
+  muted: string;
+} {
   switch (phase) {
     case "RECORDING":
     case "FINISH_SCANNING":
@@ -671,8 +720,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
   },
-  buttonSecondary: { backgroundColor: "transparent", borderWidth: 2, borderColor: "#FFFFFF" },
+  buttonSecondary: {
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
   buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: "#FFFFFF", textAlign: "center", fontSize: 20, fontWeight: "800" },
+  buttonText: {
+    color: "#FFFFFF",
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "800",
+  },
   buttonSecondaryText: { color: "#FFFFFF" },
 });

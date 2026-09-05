@@ -81,7 +81,10 @@ export async function createAccessLink(
 ): Promise<CreatedAccessLink> {
   const scope = requireAccessLinkScope(input.scope);
   const recipientHint = normalizeHint(input.recipientHint);
-  const expiresAt = parseExpiresAt(input.expiresAt);
+  const expiresAt =
+    parseExpiresAt(input.expiresAt) ?? new Date(clock.now().getTime() + 7 * 86400000).toISOString();
+  if (new Date(expiresAt).getTime() > clock.now().getTime() + 90 * 86400000)
+    throw new DomainError("INVALID_ACCESS_LINK", "Viewing links may last at most 90 days", 400);
   const token = randomBytes(32).toString("base64url");
   const tokenHash = sha256Hex(token);
   return db.transaction(async (tx) => {
@@ -93,16 +96,7 @@ export async function createAccessLink(
          id, proof_id, token_hash, scope, created_by_participant_id, recipient_hint,
          created_at, expires_at
        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        id,
-        proofId,
-        tokenHash,
-        scope,
-        participant.id,
-        recipientHint,
-        now.toISOString(),
-        expiresAt,
-      ],
+      [id, proofId, tokenHash, scope, participant.id, recipientHint, now.toISOString(), expiresAt],
     );
     await appendAudit(tx, {
       proofId,
@@ -153,10 +147,10 @@ export async function revokeAccessLink(
       return;
     }
     const now = clock.now();
-    await tx.query(
-      `UPDATE proof_access_links SET revoked_at = $2 WHERE id = $1`,
-      [linkId, now.toISOString()],
-    );
+    await tx.query(`UPDATE proof_access_links SET revoked_at = $2 WHERE id = $1`, [
+      linkId,
+      now.toISOString(),
+    ]);
     await appendAudit(tx, {
       proofId,
       actorUserId,

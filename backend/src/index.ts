@@ -9,6 +9,8 @@ import { createObjectStore } from "./s3/create-object-store.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { createCredentialStore } from "./integrations/create-credential-store.js";
 import { createEbayRuntime } from "./integrations/ebay/runtime.js";
+import { webhookConfigFromEnv } from "./platform/webhooks.js";
+import { startWebhookWorker } from "./platform/worker.js";
 import {
   createFacebookRuntime,
   createGoogleRuntime,
@@ -21,6 +23,7 @@ const config = loadConfig();
 const opened = await openDatabase(config);
 await migrate(opened.db);
 const credentialStore = createCredentialStore(config);
+const webhookConfig = webhookConfigFromEnv();
 
 const app = createServerApp({
   db: opened.db,
@@ -32,6 +35,7 @@ const app = createServerApp({
   corsOrigins: config.webOrigins,
   integrations: createDefaultIntegrationRegistry(systemClock),
   credentialStore,
+  webhookConfig,
   releaseIdentity: config.release,
   ebay: createEbayRuntime(config, {
     publicBaseUrl: config.publicBaseUrl,
@@ -47,9 +51,18 @@ const server = app.listen(config.port, "0.0.0.0", () => {
     `PackProof V2 API listening on ${config.port} engine=${opened.engine} objectStore=${config.objectStore} authMode=${config.authMode}`,
   );
 });
+const stopWebhookWorker =
+  webhookConfig.encryptionKey &&
+  webhookConfig.allowedHosts.length &&
+  process.env.PACKPROOF_WEBHOOK_WORKER !== "false"
+    ? startWebhookWorker(opened.db, systemClock, webhookConfig)
+    : async () => {};
 
 const shutdown = async () => {
-  server.close();
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+  await stopWebhookWorker();
   await opened.close();
 };
 

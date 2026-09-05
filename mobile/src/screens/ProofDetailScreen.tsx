@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RecordedVideo } from "../ui/RecordedVideo";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
@@ -30,7 +31,12 @@ import {
   quantityLabel,
   shippingSummary,
 } from "../copy/format";
-import { deriveNextAction, fieldsLocked, isCompletedAction, shouldShowRequiredAction } from "../copy/next-action";
+import {
+  deriveNextAction,
+  fieldsLocked,
+  isCompletedAction,
+  shouldShowRequiredAction,
+} from "../copy/next-action";
 import { humanProofStatus, proofStatusLabel } from "../copy/status";
 import { spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -65,7 +71,7 @@ export function ProofDetailScreen() {
   const grading = isGradingWorkflow(proof.workflowType);
   const committed = (proof.evidence ?? []).filter((item) => item.validationStatus === "COMMITTED");
   const pending = (proof.evidence ?? []).filter((item) => item.validationStatus === "PENDING");
-  const captureBelongs = app.session.proofId === proof.proofId;
+  const captureBelongs = app.session.captureProofId === proof.proofId;
   const localAction = deriveNextAction({
     role: app.role,
     proofStatus: proof.status,
@@ -93,13 +99,16 @@ export function ProofDetailScreen() {
       )
     : Boolean(localAction.enabled && localAction.label);
   const captureRecipe = serverAction?.captureRecipe;
-  const imageSlots = grading && nextActionNeedsCapture(serverAction?.type) ? captureSlots(captureRecipe) : [];
+  const imageSlots =
+    grading && nextActionNeedsCapture(serverAction?.type) ? captureSlots(captureRecipe) : [];
   const usesVideoCapture =
     grading &&
     nextActionNeedsCapture(serverAction?.type) &&
     captureRecipe === "PACKING_STANDARD_V1";
   const usesImageCapture = grading && imageSlots.length > 0 && !usesVideoCapture;
-  const slotsReady = imageSlots.filter((slot) => slot.required).every((slot) => Boolean(slotCaptures[slot.slot]));
+  const slotsReady = imageSlots
+    .filter((slot) => slot.required)
+    .every((slot) => Boolean(slotCaptures[slot.slot]));
   const latestShipment = proof.shipmentObservations?.latest?.eventType ?? null;
   const statusLabel = humanProofStatus({
     proofStatus: proof.status,
@@ -122,11 +131,20 @@ export function ProofDetailScreen() {
     timeLabel: formatTime(entry.occurredAt),
     dateLabel: formatDate(entry.occurredAt),
     category: entry.category,
-    sourceLabel: chronologyCategoryLabel(entry.category, entry.source, entry.provider, entry.eventType),
+    sourceLabel: chronologyCategoryLabel(
+      entry.category,
+      entry.source,
+      entry.provider,
+      entry.eventType,
+    ),
     eventType: entry.eventType,
     relatedEntityId: entry.relatedEntityId,
     occurredAt: entry.occurredAt,
-    afterFinalization: isShipmentAfterFinalization(entry.occurredAt, proof.finalizedAt, entry.category),
+    afterFinalization: isShipmentAfterFinalization(
+      entry.occurredAt,
+      proof.finalizedAt,
+      entry.category,
+    ),
     icon: timelineIconFor(entry.eventType, entry.category),
   }));
   const summaryLine = [
@@ -229,7 +247,11 @@ export function ProofDetailScreen() {
           label={localAction.label}
           onPress={handlePrimary}
           loading={app.busy}
-          icon={localAction.key === "start_capture" || localAction.key === "review_recording" ? "videocam-outline" : undefined}
+          icon={
+            localAction.key === "start_capture" || localAction.key === "review_recording"
+              ? "videocam-outline"
+              : undefined
+          }
         />
       );
     }
@@ -244,7 +266,10 @@ export function ProofDetailScreen() {
     { label: "Created", value: formatDateTime(proof.createdAt) },
     { label: "Updated", value: formatDateTime(proof.updatedAt) },
     { label: "Finalized", value: formatDateTime(proof.finalizedAt) },
-    { label: "Manifest SHA-256", value: proof.integrity?.manifestSha256 ?? app.manifest?.sha256 ?? "" },
+    {
+      label: "Manifest SHA-256",
+      value: proof.integrity?.manifestSha256 ?? app.manifest?.sha256 ?? "",
+    },
   ];
   const rawRows = [
     { label: "Proof ID", value: proof.proofId },
@@ -257,7 +282,10 @@ export function ProofDetailScreen() {
     { label: "Finalized (raw)", value: proof.finalizedAt ?? "" },
     { label: "Seller user ID", value: seller?.userId ?? "" },
     { label: "Buyer user ID", value: buyer?.userId ?? "" },
-    { label: "Shipment supplement SHA-256", value: app.shipmentIntegrity?.shipmentSupplementSha256 ?? "" },
+    {
+      label: "Shipment supplement SHA-256",
+      value: app.shipmentIntegrity?.shipmentSupplementSha256 ?? "",
+    },
     { label: "Source", value: txn.provenance?.source ?? "" },
     { label: "Provider", value: txn.provenance?.provider ?? "" },
     { label: "Payload SHA-256", value: txn.provenance?.payloadSha256 ?? "" },
@@ -270,7 +298,9 @@ export function ProofDetailScreen() {
   return (
     <AppScreen
       extraBottom={24}
-      onRefresh={() => void app.run(async () => app.refreshProof(proof.proofId).then(() => undefined))}
+      onRefresh={() =>
+        void app.run(async () => app.refreshProof(proof.proofId).then(() => undefined))
+      }
       refreshing={app.busy}
     >
       <AppHeader
@@ -285,13 +315,21 @@ export function ProofDetailScreen() {
       <ErrorBanner message={app.error} />
       <OfflineBanner
         visible={app.offline}
-        message={app.offline && app.localCapture ? "Offline. Your recording is still on this device." : undefined}
+        message={
+          app.offline && app.localCapture
+            ? "Offline. Your recording is still on this device."
+            : undefined
+        }
       />
 
       <View style={styles.headerBlock}>
-        {summaryLine ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{summaryLine}</Text> : null}
+        {summaryLine ? (
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{summaryLine}</Text>
+        ) : null}
         {txn.externalReference ? (
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{orderReferenceLabel(txn.externalReference)}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            {orderReferenceLabel(txn.externalReference)}
+          </Text>
         ) : null}
         <StatusBadge label={statusLabel} tone={statusTone(statusLabel)} />
       </View>
@@ -299,12 +337,16 @@ export function ProofDetailScreen() {
       {showActionCard && (actionTitle || actionHint) ? (
         <InfoCard>
           <Text style={[styles.kicker, { color: colors.accent }]}>Next step</Text>
-          <Text style={[styles.body, { color: colors.textPrimary }]}>{actionHint || actionTitle}</Text>
+          <Text style={[styles.body, { color: colors.textPrimary }]}>
+            {actionHint || actionTitle}
+          </Text>
           {usesImageCapture ? (
             <View style={styles.slotList}>
               {imageSlots.map((slot) => (
                 <View key={slot.slot} style={styles.slotRow}>
-                  <Text style={[styles.meta, { color: colors.textSecondary, flex: 1 }]}>{slot.prompt}</Text>
+                  <Text style={[styles.meta, { color: colors.textSecondary, flex: 1 }]}>
+                    {slot.prompt}
+                  </Text>
                   {slotCaptures[slot.slot] ? (
                     <Text style={[styles.meta, { color: colors.success }]}>Captured</Text>
                   ) : null}
@@ -333,7 +375,9 @@ export function ProofDetailScreen() {
             <Ionicons name="lock-closed" size={16} color={colors.success} />
             <Text style={[styles.success, { color: colors.success }]}>PackProof finalized</Text>
           </View>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>Evidence record secured</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            Evidence record secured
+          </Text>
         </InfoCard>
       ) : null}
 
@@ -355,7 +399,10 @@ export function ProofDetailScreen() {
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Progress</Text>
           <InfoCard>
             {proof.observations.map((observation) => (
-              <Text key={observation.observationId} style={[styles.body, { color: colors.textPrimary }]}>
+              <Text
+                key={observation.observationId}
+                style={[styles.body, { color: colors.textPrimary }]}
+              >
                 {observation.label || observationProgressLabel(observation.type)}
               </Text>
             ))}
@@ -369,6 +416,29 @@ export function ProofDetailScreen() {
         contentUrl={(evidenceId) => app.client.evidenceContentUrl(proof.proofId, evidenceId)}
       />
 
+      {committed
+        .filter((e) => e.contentType?.startsWith("video/"))
+        .map((e) => (
+          <RecordedVideo
+            key={e.evidenceId}
+            uri={app.client.evidenceContentUrl(proof.proofId, e.evidenceId)}
+            token={app.session!.token}
+          />
+        ))}
+      {!grading && proof.status === "FINALIZED" ? (
+        <Button
+          label="Document receipt or return"
+          variant="secondary"
+          onPress={() => app.openReceipt(proof.proofId)}
+        />
+      ) : null}
+      {app.localCapture && app.session.captureProofId && !captureBelongs ? (
+        <Button
+          label="Return to saved recording"
+          variant="secondary"
+          onPress={() => void app.run(() => app.openProof(app.session!.captureProofId!))}
+        />
+      ) : null}
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Proof record</Text>
       <Text style={[styles.note, { color: colors.textSecondary }]}>{SOURCE_DISCLOSURE}</Text>
       <Timeline
@@ -435,7 +505,11 @@ export function ProofDetailScreen() {
         ) : null}
         {proof.shipmentSync?.available ? (
           <Button
-            label={proof.shipmentSync.provider === "easypost" ? "Update tracking" : "Update shipment observations"}
+            label={
+              proof.shipmentSync.provider === "easypost"
+                ? "Update tracking"
+                : "Update shipment observations"
+            }
             variant="secondary"
             loading={app.busy}
             onPress={() => {
@@ -466,7 +540,12 @@ export function ProofDetailScreen() {
 
 const styles = StyleSheet.create({
   headerBlock: { gap: spacing.sm },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flexWrap: "wrap",
+  },
   kicker: { ...typography.caption },
   sectionTitle: { ...typography.sectionTitle },
   body: { ...typography.bodyStrong },
@@ -475,7 +554,12 @@ const styles = StyleSheet.create({
   progress: { ...typography.bodyStrong },
   success: { ...typography.secondaryStrong },
   slotList: { gap: spacing.sm },
-  slotRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
+  slotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flexWrap: "wrap",
+  },
   techRow: {
     flexDirection: "row",
     alignItems: "center",

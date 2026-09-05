@@ -546,6 +546,12 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
+  evidence?: Array<{
+    evidenceId: string;
+    slot: string;
+    committed: true;
+    contentType?: string;
+  }>;
   schema?: "packproof.proof.public/v1" | string;
   proofId: string;
   status: string;

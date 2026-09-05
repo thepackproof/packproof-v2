@@ -1,0 +1,9 @@
+{
+  "id": "sandbox-order-1001",
+  "itemTitle": "Example collectible — demonstration only",
+  "itemDescription": "Synthetic order for integration testing",
+  "quantity": 1,
+  "value": 3000,
+  "currency": "USD",
+  "shipping": {}
+}

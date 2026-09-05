@@ -1,7 +1,13 @@
 import * as FileSystem from "expo-file-system";
 import type { FileSystemUploadResult } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import { ApiError, resolveUploadUrl, type UploadTarget } from "./v2-api";
+import {
+  ApiError,
+  newIdempotencyKey,
+  resolveUploadUrl,
+  type UploadTarget,
+  type PackProofV2Client,
+} from "./v2-api";
 
 const LOCAL_CAPTURE_NAME = "packproof-seller-evidence.mp4";
 
@@ -26,7 +32,10 @@ export async function requestCapturePermissions(): Promise<void> {
 }
 
 /** Native camera owns the device for packing video. Finish-scan uses expo-camera after this returns. */
-export async function captureGradingPhoto(): Promise<{ uri: string; contentType: string } | null> {
+export async function captureGradingPhoto(): Promise<{
+  uri: string;
+  contentType: string;
+} | null> {
   await requestCapturePermissions();
   let result: ImagePicker.ImagePickerResult;
   try {
@@ -63,9 +72,7 @@ export async function recordPackingEvidence(): Promise<LocalCapture | null> {
     });
   } catch (error) {
     throw new Error(
-      error instanceof Error
-        ? `Recording failed: ${error.message}`
-        : "Camera is unavailable.",
+      error instanceof Error ? `Recording failed: ${error.message}` : "Camera is unavailable.",
     );
   }
   if (result.canceled || !result.assets[0]?.uri) {
@@ -92,7 +99,7 @@ export function durableCaptureUri(): string {
 }
 
 export async function persistLocalCapture(capture: LocalCapture): Promise<LocalCapture> {
-  const dest = durableCaptureUri();
+  const dest = `${FileSystem.documentDirectory}packproof-evidence-${newIdempotencyKey()}.mp4`;
   if (capture.uri !== dest) {
     const existing = await FileSystem.getInfoAsync(dest);
     if (existing.exists) {
@@ -133,7 +140,11 @@ export async function discardLocalCapture(uri: string | null | undefined): Promi
 
 export async function describeLocalCapture(
   uri: string,
-  fallback: { byteSize?: number | null; durationMs?: number | null; contentType?: string | null },
+  fallback: {
+    byteSize?: number | null;
+    durationMs?: number | null;
+    contentType?: string | null;
+  },
 ): Promise<LocalCapture | null> {
   const info = await FileSystem.getInfoAsync(uri);
   if (!info.exists || info.isDirectory) {
@@ -142,7 +153,8 @@ export async function describeLocalCapture(
   return {
     uri,
     contentType: fallback.contentType ?? "video/mp4",
-    byteSize: "size" in info && typeof info.size === "number" ? info.size : (fallback.byteSize ?? null),
+    byteSize:
+      "size" in info && typeof info.size === "number" ? info.size : (fallback.byteSize ?? null),
     durationMs: fallback.durationMs ?? null,
   };
 }
@@ -185,9 +197,7 @@ export async function uploadCaptureFile(input: {
   try {
     result = await task.uploadAsync();
   } catch (error) {
-    throw new Error(
-      error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.",
-    );
+    throw new Error(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
   }
   if (!result || result.status < 200 || result.status >= 300) {
     throw new ApiError(
@@ -223,4 +233,55 @@ export function formatDuration(durationMs: number | null | undefined): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${minutes}m ${remainder}s`;
+}
+
+/** Durable 5 MiB parts; server lists completed parts after an app restart. */
+export async function uploadCaptureResumable(input: {
+  client: PackProofV2Client;
+  baseUrl: string;
+  proofId: string;
+  evidenceId: string;
+  fileUri: string;
+  onProgress?: (percent: number) => void;
+}): Promise<void> {
+  const info = await FileSystem.getInfoAsync(input.fileUri);
+  if (!info.exists || info.isDirectory || !("size" in info) || !info.size)
+    throw new Error("Recorded video is unavailable");
+  const state = await input.client.listUploadParts(input.proofId, input.evidenceId);
+  const count = Math.ceil(info.size / state.partSize);
+  if (count > state.maxParts)
+    throw new Error("This recording exceeds 200 MiB. Record a shorter video.");
+  const saved = new Set(state.parts.map((p) => p.partNumber));
+  for (let part = 1; part <= count; part++) {
+    if (!saved.has(part)) {
+      const position = (part - 1) * state.partSize,
+        length = Math.min(state.partSize, info.size - position);
+      const chunkUri = `${FileSystem.cacheDirectory}packproof-${input.evidenceId}-${part}.part`;
+      try {
+        const data = await FileSystem.readAsStringAsync(input.fileUri, {
+          encoding: FileSystem.EncodingType.Base64,
+          position,
+          length,
+        });
+        await FileSystem.writeAsStringAsync(chunkUri, data, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        await uploadCaptureFile({
+          baseUrl: input.baseUrl,
+          target: input.client.uploadPartTarget(input.proofId, input.evidenceId, part),
+          fileUri: chunkUri,
+          contentType: "application/octet-stream",
+          onProgress: (percent) =>
+            input.onProgress?.(
+              Math.min(99, Math.round(((part - 1 + percent / 100) / count) * 100)),
+            ),
+        });
+      } finally {
+        await FileSystem.deleteAsync(chunkUri, { idempotent: true }).catch(() => undefined);
+      }
+    }
+    input.onProgress?.(Math.min(99, Math.round((part / count) * 100)));
+  }
+  await input.client.completeUploadParts(input.proofId, input.evidenceId, info.size);
+  input.onProgress?.(100);
 }

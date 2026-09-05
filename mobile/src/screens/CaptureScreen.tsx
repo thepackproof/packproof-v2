@@ -9,6 +9,7 @@ import { Button } from "../ui/Button";
 import { ProgressState } from "../ui/EvidenceCard";
 import { InfoCard } from "../ui/ProofCard";
 import { ErrorBanner } from "../ui/EmptyState";
+import { VideoReview } from "../ui/VideoReview";
 
 export function CaptureScreen() {
   const app = usePackProof();
@@ -20,7 +21,8 @@ export function CaptureScreen() {
   const securing = app.captureStatus === "uploaded";
   const committed = app.captureStatus === "committed";
   const inFlight = preparing || uploading || securing || committed;
-  const reviewing = Boolean(app.localCapture) && !inFlight;
+  const belongs = app.session?.captureProofId === app.proof?.proofId;
+  const reviewing = Boolean(app.localCapture) && belongs && !inFlight;
 
   const progressLabel = preparing
     ? "Preparing…"
@@ -55,13 +57,25 @@ export function CaptureScreen() {
       </Text>
       {txn ? (
         <InfoCard>
-          <Text style={[styles.item, { color: colors.textPrimary }]}>{txn.itemTitle || "Item"}</Text>
+          <Text style={[styles.item, { color: colors.textPrimary }]}>
+            {txn.itemTitle || "Item"}
+          </Text>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>
             {txn.externalReference ? `Order ${txn.externalReference}` : ""}
           </Text>
         </InfoCard>
       ) : null}
       <ErrorBanner message={app.error} />
+      {app.localCapture && !belongs ? (
+        <Button
+          label="Return to saved recording"
+          onPress={() => {
+            if (app.session?.captureProofId)
+              void app.run(() => app.openProof(app.session!.captureProofId!));
+            else app.goBack();
+          }}
+        />
+      ) : null}
       {app.offline && app.localCapture ? (
         <Text style={[styles.note, { color: colors.scanMuted }]}>{OFFLINE_CAPTURE_MESSAGE}</Text>
       ) : null}
@@ -76,15 +90,28 @@ export function CaptureScreen() {
 
       {reviewing && app.localCapture ? (
         <View style={styles.preview}>
-          <Text style={[styles.item, { color: colors.scanText }]}>{formatDuration(app.localCapture.durationMs)} recording</Text>
+          <VideoReview key={app.localCapture.uri} uri={app.localCapture.uri} />
+          <Text style={[styles.item, { color: colors.scanText }]}>
+            {formatDuration(app.localCapture.durationMs)} recording
+          </Text>
           <Button
             label={app.captureStatus === "retry" ? "Try again" : "Use recording"}
             onPress={() => void app.submitCapture()}
             loading={app.busy}
             haptic="medium"
           />
-          <Button label="Retake" onPress={() => void app.startCapture()} variant="secondary" disabled={app.busy} />
-          <Button label="Discard" onPress={() => void app.discardCapture()} variant="tertiary" disabled={app.busy} />
+          <Button
+            label="Retake"
+            onPress={() => void app.startCapture()}
+            variant="secondary"
+            disabled={app.busy}
+          />
+          <Button
+            label="Discard"
+            onPress={() => void app.discardCapture()}
+            variant="tertiary"
+            disabled={app.busy}
+          />
         </View>
       ) : null}
 
@@ -97,7 +124,12 @@ export function CaptureScreen() {
         />
       ) : null}
 
-      <Button label="Back" onPress={app.goBack} variant="tertiary" disabled={app.busy && inFlight} />
+      <Button
+        label="Back"
+        onPress={app.goBack}
+        variant="tertiary"
+        disabled={app.busy && inFlight}
+      />
     </View>
   );
 }

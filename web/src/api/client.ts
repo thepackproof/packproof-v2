@@ -90,7 +90,9 @@ export class PackProofApi {
     });
   }
 
-  async listCommerceConnections(): Promise<{ connections: CommerceConnectionView[] }> {
+  async listCommerceConnections(): Promise<{
+    connections: CommerceConnectionView[];
+  }> {
     return this.request("/me/integration-connections?capability=commerce");
   }
 
@@ -105,16 +107,22 @@ export class PackProofApi {
   async startConnectedAccountConnect(
     provider: string,
     input: { shop?: string } = {},
-  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+  ): Promise<{
+    authorizationUrl: string;
+    expiresAt: string;
+    provider: string;
+  }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(provider)}/connect`, {
       method: "POST",
       body: input.shop ? { shop: input.shop } : {},
     });
   }
 
-  async reauthorizeConnectedAccount(
-    accountId: string,
-  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+  async reauthorizeConnectedAccount(accountId: string): Promise<{
+    authorizationUrl: string;
+    expiresAt: string;
+    provider: string;
+  }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(accountId)}/reauthorize`, {
       method: "POST",
       body: {},
@@ -127,7 +135,10 @@ export class PackProofApi {
     });
   }
 
-  async startEbayConnect(): Promise<{ authorizationUrl: string; expiresAt: string }> {
+  async startEbayConnect(): Promise<{
+    authorizationUrl: string;
+    expiresAt: string;
+  }> {
     return this.request("/me/marketplaces/ebay/connect", { method: "POST" });
   }
 
@@ -143,13 +154,10 @@ export class PackProofApi {
     orderId: string,
     input: { createProof?: boolean } = {},
   ): Promise<TransactionImportView> {
-    return this.request(
-      `/me/marketplaces/ebay/orders/${encodeURIComponent(orderId)}/import`,
-      {
-        method: "POST",
-        body: { createProof: input.createProof === true },
-      },
-    );
+    return this.request(`/me/marketplaces/ebay/orders/${encodeURIComponent(orderId)}/import`, {
+      method: "POST",
+      body: { createProof: input.createProof === true },
+    });
   }
 
   async syncCommerceConnection(connectionId: string): Promise<CommerceSyncView> {
@@ -176,10 +184,7 @@ export class PackProofApi {
     return this.request(`/users/search?q=${encodeURIComponent(query)}`);
   }
 
-  async searchProofUsers(
-    proofId: string,
-    query: string,
-  ): Promise<{ users: PublicProfileView[] }> {
+  async searchProofUsers(proofId: string, query: string): Promise<{ users: PublicProfileView[] }> {
     return this.request(
       `/proofs/${encodeURIComponent(proofId)}/users/search?q=${encodeURIComponent(query)}`,
     );
@@ -193,6 +198,48 @@ export class PackProofApi {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/shipment-integrity`);
   }
 
+  async lifecycleRequest<T>(
+    proofId: string,
+    path: string,
+    method = "GET",
+    body?: unknown,
+  ): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/lifecycle${path}`, {
+      method,
+      body,
+    });
+  }
+
+  async previewOrderIntake(
+    text: string,
+  ): Promise<import("@packproof/copy/order-intake").IntakePreview> {
+    return this.request("/order-intake/preview", {
+      method: "POST",
+      body: { text, source: "paste" },
+    });
+  }
+
+  async developerRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+    return this.request(`/me/tenants${path}`, { method, body });
+  }
+
+  async reviewProof(proofId: string): Promise<{
+    integrity: { manifestDigestValid: boolean; manifestSha256: string } | null;
+  }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/review`);
+  }
+
+  async exportProofPackage(proofId: string): Promise<Blob> {
+    const response = await fetch(
+      joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/package`),
+      {
+        headers: { Authorization: `Bearer ${this.options.getToken()}` },
+      },
+    );
+    if (!response.ok) throw await errorFromResponse(response);
+    return response.blob();
+  }
+
   async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {
     return this.request("/transactions", {
       method: "POST",
@@ -200,11 +247,13 @@ export class PackProofApi {
     });
   }
 
-  async importTransaction(input: {
-    adapterKey?: string;
-    externalTransactionId?: string | null;
-    createProof?: boolean;
-  } = {}): Promise<TransactionImportView> {
+  async importTransaction(
+    input: {
+      adapterKey?: string;
+      externalTransactionId?: string | null;
+      createProof?: boolean;
+    } = {},
+  ): Promise<TransactionImportView> {
     return this.request("/integrations/transactions/import", {
       method: "POST",
       body: {
@@ -265,10 +314,7 @@ export class PackProofApi {
     });
   }
 
-  async createAccessLink(
-    proofId: string,
-    input: { scope?: string } = {},
-  ): Promise<AccessLinkView> {
+  async createAccessLink(proofId: string, input: { scope?: string } = {}): Promise<AccessLinkView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/access-links`, {
       method: "POST",
       body: input,
@@ -312,7 +358,20 @@ export class PackProofApi {
   }
 
   async getPublicProof(token: string): Promise<PublicProofView> {
-    return this.request(`/public/proofs/${encodeURIComponent(token)}`, { auth: false });
+    return this.request(`/public/proofs/${encodeURIComponent(token)}`, {
+      auth: false,
+    });
+  }
+  async getPublicEvidence(token: string, evidenceId: string): Promise<Blob> {
+    const response = await fetch(
+      joinUrl(
+        this.options.baseUrl,
+        `/public/proofs/${encodeURIComponent(token)}/evidence/${encodeURIComponent(evidenceId)}`,
+      ),
+      { referrerPolicy: "no-referrer" },
+    );
+    if (!response.ok) throw await errorFromResponse(response);
+    return response.blob();
   }
 
   async runProofAction(
@@ -338,31 +397,41 @@ export class PackProofApi {
     proofId: string,
     input: { inviteeIdentifier?: string; inviteeUserId?: string },
   ): Promise<{ invitation: InvitationView; proof: CanonicalProof }> {
-    const result = await this.request<{ invitation: InvitationView; proof: CanonicalProof }>(
-      `/proofs/${encodeURIComponent(proofId)}/invitations`,
-      {
-        method: "POST",
-        body: input,
-      },
-    );
-    return { invitation: publicInvitation(result.invitation), proof: result.proof };
+    const result = await this.request<{
+      invitation: InvitationView;
+      proof: CanonicalProof;
+    }>(`/proofs/${encodeURIComponent(proofId)}/invitations`, {
+      method: "POST",
+      body: input,
+    });
+    return {
+      invitation: publicInvitation(result.invitation),
+      proof: result.proof,
+    };
   }
 
   async acceptInvitation(
     tokenOrId: string,
   ): Promise<{ invitation: InvitationView; proof: CanonicalProof }> {
-    const result = await this.request<{ invitation: InvitationView; proof: CanonicalProof }>(
-      `/invitations/${encodeURIComponent(tokenOrId)}/accept`,
-      {
-        method: "POST",
-      },
-    );
-    return { invitation: publicInvitation(result.invitation), proof: result.proof };
+    const result = await this.request<{
+      invitation: InvitationView;
+      proof: CanonicalProof;
+    }>(`/invitations/${encodeURIComponent(tokenOrId)}/accept`, {
+      method: "POST",
+    });
+    return {
+      invitation: publicInvitation(result.invitation),
+      proof: result.proof,
+    };
   }
 
   async initializeEvidenceUpload(
     proofId: string,
-    input: { contentType: string; evidenceType?: string; idempotencyKey: string },
+    input: {
+      contentType: string;
+      evidenceType?: string;
+      idempotencyKey: string;
+    },
   ): Promise<EvidenceUploadView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/uploads`, {
       method: "POST",
@@ -380,7 +449,10 @@ export class PackProofApi {
       throw new ApiError("UNAUTHENTICATED", "Missing bearer token", 401);
     }
     const response = await fetch(
-      joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`),
+      joinUrl(
+        this.options.baseUrl,
+        `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`,
+      ),
       {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
@@ -392,11 +464,7 @@ export class PackProofApi {
     return response.blob();
   }
 
-  async uploadObject(
-    target: UploadTarget,
-    body: Blob,
-    contentType: string,
-  ): Promise<void> {
+  async uploadObject(target: UploadTarget, body: Blob, contentType: string): Promise<void> {
     const url = resolveUploadUrl(this.options.baseUrl, target.url);
     const response = await fetch(url, {
       method: target.method,
@@ -409,6 +477,57 @@ export class PackProofApi {
     if (!response.ok) {
       throw await errorFromResponse(response);
     }
+  }
+
+  async discardUpload(proofId: string, idempotencyKey: string): Promise<void> {
+    await this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/discard`, {
+      method: "POST",
+      body: { idempotencyKey },
+    });
+  }
+  async uploadResumable(
+    proofId: string,
+    evidenceId: string,
+    file: Blob,
+    progress: (percent: number) => void,
+  ): Promise<void> {
+    const path = `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}/parts`;
+    const state = await this.request<{
+      partSize: number;
+      parts: Array<{ partNumber: number; sha256: string }>;
+    }>(path);
+    const token = this.options.getToken();
+    if (!token) throw new ApiError("UNAUTHENTICATED", "Sign in to resume the recording", 401);
+    for (let offset = 0, part = 1; offset < file.size; offset += state.partSize, part++) {
+      if (!state.parts.some((p) => p.partNumber === part)) {
+        const response = await fetch(joinUrl(this.options.baseUrl, `${path}/${part}`), {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/octet-stream",
+          },
+          body: file.slice(offset, offset + state.partSize),
+        });
+        if (!response.ok) throw await errorFromResponse(response);
+      }
+      progress(Math.round((Math.min(offset + state.partSize, file.size) / file.size) * 95));
+    }
+    await this.request(`${path}/complete`, {
+      method: "POST",
+      body: { totalBytes: file.size },
+    });
+  }
+
+  async retentionRequest<T>(
+    proofId: string,
+    path = "",
+    method = "GET",
+    body?: unknown,
+  ): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/retention${path}`, {
+      method,
+      body,
+    });
   }
 
   async commitEvidence(
@@ -450,7 +569,10 @@ export class PackProofApi {
       headers?: Record<string, string>;
     } = {},
   ): Promise<T> {
-    const headers: Record<string, string> = { Accept: "application/json", ...(init.headers ?? {}) };
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      ...(init.headers ?? {}),
+    };
     if (init.body !== undefined) {
       headers["Content-Type"] = "application/json";
     }
@@ -517,7 +639,9 @@ async function errorFromResponse(response: Response): Promise<ApiError> {
   let code = "HTTP_ERROR";
   let message = `HTTP ${response.status}`;
   try {
-    const payload = (await response.json()) as { error?: { code?: string; message?: string } };
+    const payload = (await response.json()) as {
+      error?: { code?: string; message?: string };
+    };
     code = payload.error?.code ?? code;
     message = payload.error?.message ?? message;
   } catch {

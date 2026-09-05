@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PublicProofView } from "../api/types";
+import { PublicMedia } from "../components/PublicMedia";
 
 type TrackerMilestone = {
   code: string;
@@ -29,6 +30,7 @@ type RecipientSubscription = { email: string; preference: EmailPreference };
 export function PublicProofScreen(props: {
   token: string;
   load: (token: string) => Promise<PublicProofView>;
+  loadMedia?: (id: string) => Promise<Blob>;
   onSignIn: () => void;
 }) {
   const [proof, setProof] = useState<PublicProofView | null>(null);
@@ -82,10 +84,15 @@ export function PublicProofScreen(props: {
     let cancelled = false;
     setEmailSubscription(null);
     setEmailStatus(null);
-    void fetch(recipientApiUrl(props.token), { method: "GET", headers: { Accept: "application/json" } })
+    void fetch(recipientApiUrl(props.token), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    })
       .then(async (response) => {
         if (!response.ok || cancelled) return;
-        const payload = (await response.json()) as { subscription?: RecipientSubscription };
+        const payload = (await response.json()) as {
+          subscription?: RecipientSubscription;
+        };
         if (!cancelled && payload.subscription) setEmailSubscription(payload.subscription);
       })
       .catch(() => undefined);
@@ -100,15 +107,22 @@ export function PublicProofScreen(props: {
     try {
       const response = await fetch(recipientApiUrl(props.token), {
         method: "PATCH",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ preference }),
       });
       if (!response.ok) throw new Error("Unable to update email preferences.");
-      const payload = (await response.json()) as { subscription: RecipientSubscription };
+      const payload = (await response.json()) as {
+        subscription: RecipientSubscription;
+      };
       setEmailSubscription(payload.subscription);
       setEmailStatus("Email preferences updated.");
     } catch (caught) {
-      setEmailStatus(caught instanceof Error ? caught.message : "Unable to update email preferences.");
+      setEmailStatus(
+        caught instanceof Error ? caught.message : "Unable to update email preferences.",
+      );
     } finally {
       setEmailBusy(false);
     }
@@ -118,7 +132,9 @@ export function PublicProofScreen(props: {
     setEmailBusy(true);
     setEmailStatus(null);
     try {
-      const response = await fetch(recipientApiUrl(props.token), { method: "DELETE" });
+      const response = await fetch(recipientApiUrl(props.token), {
+        method: "DELETE",
+      });
       if (!response.ok) throw new Error("Unable to stop email updates.");
       setEmailSubscription(null);
       setEmailStatus("Email updates stopped. This secure Proof link will continue to work.");
@@ -138,7 +154,14 @@ export function PublicProofScreen(props: {
         </span>
       </header>
       <main className="page stack" style={{ maxWidth: 720 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+          }}
+        >
           <div>
             <p className="kicker">Live Proof tracker</p>
             <h1 style={{ marginBottom: 4 }}>View Proof</h1>
@@ -163,34 +186,81 @@ export function PublicProofScreen(props: {
           ) : null}
         </div>
 
-        {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
+        {error ? (
+          <div className="banner banner-error" role="alert">
+            {error}
+          </div>
+        ) : null}
         {!proof && !error ? <p className="empty">Loading Proof status…</p> : null}
 
         {proof ? (
           <>
             <section className="section" aria-live="polite">
               <p className="kicker">Current status</p>
-              <p className="card-title" style={{ fontSize: 22 }}>{tracker?.headline || proof.nextAction?.title || statusLabel(proof.status)}</p>
+              <p className="card-title" style={{ fontSize: 22 }}>
+                {tracker?.headline || proof.nextAction?.title || statusLabel(proof.status)}
+              </p>
               {!tracker && <p className="meta">{stageLabel(proof.workflowStage)}</p>}
               {tracker ? <p className="meta">Updated {formatTime(tracker.lastUpdatedAt)}</p> : null}
               {tracker?.shipment ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginTop: 16 }}>
-                  {tracker.shipment.carrier ? <Detail label="Carrier" value={tracker.shipment.carrier} /> : null}
-                  {tracker.shipment.service ? <Detail label="Service" value={tracker.shipment.service} /> : null}
-                  {tracker.shipment.trackingNumber ? <Detail label="Tracking" value={tracker.shipment.trackingNumber} /> : null}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
+                    gap: 12,
+                    marginTop: 16,
+                  }}
+                >
+                  {tracker.shipment.carrier ? (
+                    <Detail label="Carrier" value={tracker.shipment.carrier} />
+                  ) : null}
+                  {tracker.shipment.service ? (
+                    <Detail label="Service" value={tracker.shipment.service} />
+                  ) : null}
+                  {tracker.shipment.trackingNumber ? (
+                    <Detail label="Tracking" value={tracker.shipment.trackingNumber} />
+                  ) : null}
                 </div>
               ) : null}
             </section>
 
+            {props.loadMedia
+              ? proof.evidence?.map((media) => (
+                  <PublicMedia key={media.evidenceId} media={media} load={props.loadMedia!} />
+                ))
+              : null}
             {tracker ? (
               <section className="section">
                 <h2>Proof progress</h2>
                 <div style={{ marginTop: 18 }}>
                   {tracker.milestones.map((milestone, index) => (
-                    <div key={milestone.code} style={{ display: "grid", gridTemplateColumns: "28px 1fr", gap: 12, minHeight: 66 }}>
-                      <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
+                    <div
+                      key={milestone.code}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "28px 1fr",
+                        gap: 12,
+                        minHeight: 66,
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "relative",
+                          display: "flex",
+                          justifyContent: "center",
+                        }}
+                      >
                         {index < tracker.milestones.length - 1 ? (
-                          <span aria-hidden="true" style={{ position: "absolute", top: 22, bottom: -4, width: 2, background: "var(--border)" }} />
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              position: "absolute",
+                              top: 22,
+                              bottom: -4,
+                              width: 2,
+                              background: "var(--border)",
+                            }}
+                          />
                         ) : null}
                         <span
                           aria-hidden="true"
@@ -203,19 +273,37 @@ export function PublicProofScreen(props: {
                             display: "grid",
                             placeItems: "center",
                             border: "2px solid var(--border)",
-                            background: milestone.state === "COMPLETE" ? "var(--text)" : "var(--surface)",
+                            background:
+                              milestone.state === "COMPLETE" ? "var(--text)" : "var(--surface)",
                             color: "var(--surface)",
                             fontSize: 11,
                             fontWeight: 800,
                           }}
                         >
-                          {milestone.state === "COMPLETE" ? "✓" : milestone.state === "CURRENT" ? "•" : ""}
+                          {milestone.state === "COMPLETE"
+                            ? "✓"
+                            : milestone.state === "CURRENT"
+                              ? "•"
+                              : ""}
                         </span>
                       </div>
                       <div style={{ paddingBottom: 18 }}>
-                        <div className="card-title" style={{ opacity: milestone.state === "UPCOMING" ? 0.55 : 1 }}>{milestone.label}</div>
-                        {milestone.occurredAt ? <div className="meta">{formatTime(milestone.occurredAt)}</div> : null}
-                        {milestone.detail ? <div className="note" style={{ marginTop: 4 }}>{milestone.detail}</div> : null}
+                        <div
+                          className="card-title"
+                          style={{
+                            opacity: milestone.state === "UPCOMING" ? 0.55 : 1,
+                          }}
+                        >
+                          {milestone.label}
+                        </div>
+                        {milestone.occurredAt ? (
+                          <div className="meta">{formatTime(milestone.occurredAt)}</div>
+                        ) : null}
+                        {milestone.detail ? (
+                          <div className="note" style={{ marginTop: 4 }}>
+                            {milestone.detail}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -226,7 +314,9 @@ export function PublicProofScreen(props: {
                 <h2>Progress</h2>
                 <ul className="card-list">
                   {proof.observations.map((observation, index) => (
-                    <li key={`${observation.label}-${index}`}><div className="card-title">{observation.label}</div></li>
+                    <li key={`${observation.label}-${index}`}>
+                      <div className="card-title">{observation.label}</div>
+                    </li>
                   ))}
                 </ul>
               </section>
@@ -243,32 +333,71 @@ export function PublicProofScreen(props: {
               <section className="section stack" aria-label="Email updates">
                 <div>
                   <h2>Email updates</h2>
-                  <p className="note">Updates are being sent to {emailSubscription.email}. Choose how often PackProof should email you.</p>
+                  <p className="note">
+                    Updates are being sent to {emailSubscription.email}. Choose how often PackProof
+                    should email you.
+                  </p>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  <PreferenceButton label="Important" value="IMPORTANT" selected={emailSubscription.preference} busy={emailBusy} onSelect={updateEmailPreference} />
-                  <PreferenceButton label="All milestones" value="ALL" selected={emailSubscription.preference} busy={emailBusy} onSelect={updateEmailPreference} />
-                  <PreferenceButton label="Finalization only" value="FINAL_ONLY" selected={emailSubscription.preference} busy={emailBusy} onSelect={updateEmailPreference} />
+                  <PreferenceButton
+                    label="Important"
+                    value="IMPORTANT"
+                    selected={emailSubscription.preference}
+                    busy={emailBusy}
+                    onSelect={updateEmailPreference}
+                  />
+                  <PreferenceButton
+                    label="All milestones"
+                    value="ALL"
+                    selected={emailSubscription.preference}
+                    busy={emailBusy}
+                    onSelect={updateEmailPreference}
+                  />
+                  <PreferenceButton
+                    label="Finalization only"
+                    value="FINAL_ONLY"
+                    selected={emailSubscription.preference}
+                    busy={emailBusy}
+                    onSelect={updateEmailPreference}
+                  />
                 </div>
-                <button className="btn btn-secondary" type="button" disabled={emailBusy} onClick={() => void unsubscribeEmail()}>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={emailBusy}
+                  onClick={() => void unsubscribeEmail()}
+                >
                   Stop email updates
                 </button>
-                {emailStatus ? <p className="meta" role="status">{emailStatus}</p> : null}
+                {emailStatus ? (
+                  <p className="meta" role="status">
+                    {emailStatus}
+                  </p>
+                ) : null}
               </section>
             ) : emailStatus ? (
-              <section className="section"><p className="note" role="status">{emailStatus}</p></section>
+              <section className="section">
+                <p className="note" role="status">
+                  {emailStatus}
+                </p>
+              </section>
             ) : null}
 
             {proof.join.eligible ? (
               <section className="section stack">
                 <p className="note">{proof.join.message}</p>
-                <button className="btn" type="button" onClick={props.onSignIn}>Join PackProof</button>
+                <button className="btn" type="button" onClick={props.onSignIn}>
+                  Join PackProof
+                </button>
               </section>
             ) : null}
 
             <section className="section">
               <p className="card-title">View-only record</p>
-              <p className="note">This secure link can display the Proof and its progress, but it cannot add, remove, or change Proof evidence.</p>
+              <p className="note">
+                This secure link can display the Proof and its progress, but it cannot add, remove,
+                or change Proof evidence.
+              </p>
             </section>
           </>
         ) : null}
@@ -328,17 +457,25 @@ function formatTime(value: string): string {
 function stageLabel(stage: string): string {
   switch (stage) {
     case "DOCUMENTING":
-    case "AWAITING_DOCUMENTATION": return "Documenting items";
-    case "AWAITING_PACK": return "Ready to pack";
-    case "AWAITING_HANDOFF": return "Ready to hand off";
-    case "IN_TRANSIT": return "Handed off";
+    case "AWAITING_DOCUMENTATION":
+      return "Documenting items";
+    case "AWAITING_PACK":
+      return "Ready to pack";
+    case "AWAITING_HANDOFF":
+      return "Ready to hand off";
+    case "IN_TRANSIT":
+      return "Handed off";
     case "AWAITING_RECEIPT_CAPTURE":
-    case "AWAITING_COMPARE": return "Received";
+    case "AWAITING_COMPARE":
+      return "Received";
     case "AWAITING_RETURN":
-    case "AWAITING_FINAL_RECEIPT": return "Returning";
+    case "AWAITING_FINAL_RECEIPT":
+      return "Returning";
     case "READY_TO_FINALIZE":
-    case "COMPLETE": return "Complete";
-    default: return "In progress";
+    case "COMPLETE":
+      return "Complete";
+    default:
+      return "In progress";
   }
 }
 

@@ -1,5 +1,8 @@
-import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { OrderIntakeScreen } from "../screens/OrderIntakeScreen";
+import { CommerceReceiptScreen } from "../screens/CommerceReceiptScreen";
+import { sharedOrderText } from "../copy/share-intake";
+import { useEffect, useState } from "react";
+import { StyleSheet, Text, View, Linking } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
 import { isImmersiveRoute } from "./navigation";
@@ -29,6 +32,7 @@ export function Root() {
   const app = usePackProof();
   const theme = useTheme();
   const immersive = isImmersiveRoute(app.route);
+  const [sharedText, setSharedText] = useState<string | null>(null);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
 
   useEffect(() => {
@@ -40,6 +44,23 @@ export function Root() {
     });
   }, [immersive, ready, theme.colors.background, theme.colors.scanBackground, theme.scheme]);
 
+  useEffect(() => {
+    const receive = (url: string) => {
+      const text = sharedOrderText(url);
+      if (text) setSharedText(text);
+    };
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (url) receive(url);
+      })
+      .catch(() => undefined);
+    const listener = Linking.addEventListener("url", (event) => receive(event.url));
+    return () => listener.remove();
+  }, []);
+  useEffect(() => {
+    if (ready && app.session && sharedText) app.go("intake");
+  }, [ready, app.session?.userId, sharedText]);
+
   const statusStyle = immersive || theme.scheme === "dark" || !ready ? "light" : "dark";
 
   if (!ready) {
@@ -48,7 +69,9 @@ export function Root() {
         <StatusBar style={theme.scheme === "dark" ? "light" : "dark"} />
         <Logo size={72} />
         <Text style={[styles.splashTitle, { color: theme.colors.textPrimary }]}>PackProof</Text>
-        <Text style={[styles.splashCopy, { color: theme.colors.textSecondary }]}>Loading PackProof</Text>
+        <Text style={[styles.splashCopy, { color: theme.colors.textSecondary }]}>
+          Loading PackProof
+        </Text>
       </View>
     );
   }
@@ -102,12 +125,22 @@ export function Root() {
     body = <AccountScreen />;
   } else if (app.route.name === "proof") {
     body = <ProofDetailScreen />;
+  } else if (app.route.name === "receipt" && app.receiptProofId) {
+    body = <CommerceReceiptScreen key={app.receiptProofId} />;
   } else if (app.route.name === "capture") {
     body = <CaptureScreen />;
   } else if (app.route.name === "scan") {
     body = <ScanScreen />;
   } else if (app.route.name === "review") {
     body = <PurchaseReviewScreen />;
+  } else if (app.route.name === "intake") {
+    body = (
+      <OrderIntakeScreen
+        key={sharedText ?? "paste"}
+        sharedText={sharedText}
+        onConsumed={() => setSharedText(null)}
+      />
+    );
   } else if (app.route.name === "manual") {
     body = <ManualCreateScreen />;
   } else if (app.route.name === "finalize") {

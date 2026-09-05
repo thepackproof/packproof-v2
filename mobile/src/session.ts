@@ -21,7 +21,10 @@ export interface CachedClientState {
   transactionId: string | null;
   invitationToken: string | null;
   captureUri: string | null;
+  captureProofId?: string | null;
   evidenceIdempotencyKey: string | null;
+  uploadEvidenceId?: string | null;
+  supersededUploads?: Array<{ proofId: string; key: string }>;
   evidenceContentType: string | null;
   captureByteSize: number | null;
   captureDurationMs: number | null;
@@ -62,7 +65,12 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
       transactionId: parsed.transactionId ?? null,
       invitationToken: parsed.invitationToken ?? null,
       captureUri: parsed.captureUri ?? null,
+      captureProofId:
+        parsed.captureProofId ??
+        (parsed.captureUri ? (parsed.stationProofId ?? parsed.proofId ?? null) : null),
       evidenceIdempotencyKey: parsed.evidenceIdempotencyKey ?? null,
+      uploadEvidenceId: parsed.uploadEvidenceId ?? null,
+      supersededUploads: parsed.supersededUploads ?? [],
       evidenceContentType: parsed.evidenceContentType ?? null,
       captureByteSize: parsed.captureByteSize ?? null,
       captureDurationMs: parsed.captureDurationMs ?? null,

@@ -580,10 +580,7 @@ export class PackProofV2Client {
     return this.request("/me");
   }
 
-  async updateProfile(input: {
-    username?: string;
-    displayName?: string;
-  }): Promise<ProfileView> {
+  async updateProfile(input: { username?: string; displayName?: string }): Promise<ProfileView> {
     return this.request("/me/profile", {
       method: "PATCH",
       body: input,
@@ -594,10 +591,7 @@ export class PackProofV2Client {
     return this.request(`/users/search?q=${encodeURIComponent(query)}`);
   }
 
-  async searchProofUsers(
-    proofId: string,
-    query: string,
-  ): Promise<{ users: PublicProfileView[] }> {
+  async searchProofUsers(proofId: string, query: string): Promise<{ users: PublicProfileView[] }> {
     return this.request(
       `/proofs/${encodeURIComponent(proofId)}/users/search?q=${encodeURIComponent(query)}`,
     );
@@ -625,16 +619,22 @@ export class PackProofV2Client {
   async startConnectedAccountConnect(
     provider: string,
     input: { shop?: string } = {},
-  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+  ): Promise<{
+    authorizationUrl: string;
+    expiresAt: string;
+    provider: string;
+  }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(provider)}/connect`, {
       method: "POST",
       body: input.shop ? { shop: input.shop } : {},
     });
   }
 
-  async reauthorizeConnectedAccount(
-    accountId: string,
-  ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
+  async reauthorizeConnectedAccount(accountId: string): Promise<{
+    authorizationUrl: string;
+    expiresAt: string;
+    provider: string;
+  }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(accountId)}/reauthorize`, {
       method: "POST",
       body: {},
@@ -660,6 +660,81 @@ export class PackProofV2Client {
     });
   }
 
+  async discardPendingUpload(proofId: string, idempotencyKey: string): Promise<void> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/discard`, {
+      method: "POST",
+      body: { idempotencyKey },
+    });
+  }
+
+  async listUploadParts(
+    proofId: string,
+    evidenceId: string,
+  ): Promise<{
+    partSize: number;
+    maxParts: number;
+    parts: Array<{ partNumber: number; byteSize: number; sha256: string }>;
+  }> {
+    return this.request(
+      `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}/parts`,
+    );
+  }
+
+  uploadPartTarget(proofId: string, evidenceId: string, part: number): UploadTarget {
+    return {
+      method: "PUT",
+      url: `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}/parts/${part}`,
+      headers: { Authorization: `Bearer ${this.options.getToken()}` },
+    };
+  }
+
+  async completeUploadParts(
+    proofId: string,
+    evidenceId: string,
+    totalBytes: number,
+  ): Promise<{ sha256: string }> {
+    return this.request(
+      `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}/parts/complete`,
+      { method: "POST", body: { totalBytes } },
+    );
+  }
+
+  async previewOrderIntake(
+    text: string,
+    source: "paste" | "share" | "email" = "paste",
+  ): Promise<import("./copy/order-intake").IntakePreview> {
+    return this.request("/order-intake/preview", {
+      method: "POST",
+      body: { text, source },
+    });
+  }
+  async lifecycleRequest<T>(
+    proofId: string,
+    path: string,
+    method = "GET",
+    body?: unknown,
+  ): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/lifecycle${path}`, {
+      method,
+      body,
+    });
+  }
+  lifecycleEvidenceUrl(proofId: string, stageId: string, evidenceId: string): string {
+    return joinUrl(
+      this.options.baseUrl,
+      `/proofs/${encodeURIComponent(proofId)}/lifecycle/stages/${encodeURIComponent(stageId)}/evidence/${encodeURIComponent(evidenceId)}`,
+    );
+  }
+  async receiptInvitations(): Promise<{
+    invitations: Array<{
+      proofId: string;
+      itemTitle: string;
+      acceptedAt: string | null;
+    }>;
+  }> {
+    return this.request("/me/receipt-invitations");
+  }
+
   async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {
     return this.request("/transactions", {
       method: "POST",
@@ -677,11 +752,13 @@ export class PackProofV2Client {
     });
   }
 
-  async importTransaction(input: {
-    adapterKey?: string;
-    externalTransactionId?: string | null;
-    createProof?: boolean;
-  } = {}): Promise<TransactionImportView> {
+  async importTransaction(
+    input: {
+      adapterKey?: string;
+      externalTransactionId?: string | null;
+      createProof?: boolean;
+    } = {},
+  ): Promise<TransactionImportView> {
     return this.request("/integrations/transactions/import", {
       method: "POST",
       body: {
@@ -747,10 +824,7 @@ export class PackProofV2Client {
     });
   }
 
-  async updateShipping(
-    transactionId: string,
-    input: ShippingWriteInput,
-  ): Promise<TransactionView> {
+  async updateShipping(transactionId: string, input: ShippingWriteInput): Promise<TransactionView> {
     return this.request(`/transactions/${encodeURIComponent(transactionId)}/shipping`, {
       method: "PATCH",
       body: {
@@ -773,10 +847,7 @@ export class PackProofV2Client {
     });
   }
 
-  async createAccessLink(
-    proofId: string,
-    input: { scope?: string } = {},
-  ): Promise<AccessLinkView> {
+  async createAccessLink(proofId: string, input: { scope?: string } = {}): Promise<AccessLinkView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/access-links`, {
       method: "POST",
       body: input,
@@ -819,19 +890,14 @@ export class PackProofV2Client {
     proofId: string,
     inviteeIdentifier: string | { inviteeIdentifier?: string; inviteeUserId?: string },
   ): Promise<{ invitation: InvitationView; proof: ProofView }> {
-    const body =
-      typeof inviteeIdentifier === "string"
-        ? { inviteeIdentifier }
-        : inviteeIdentifier;
+    const body = typeof inviteeIdentifier === "string" ? { inviteeIdentifier } : inviteeIdentifier;
     return this.request(`/proofs/${encodeURIComponent(proofId)}/invitations`, {
       method: "POST",
       body,
     });
   }
 
-  async acceptInvitation(
-    token: string,
-  ): Promise<{ invitation: InvitationView; proof: ProofView }> {
+  async acceptInvitation(token: string): Promise<{ invitation: InvitationView; proof: ProofView }> {
     return this.request(`/invitations/${encodeURIComponent(token)}/accept`, {
       method: "POST",
     });
@@ -865,11 +931,7 @@ export class PackProofV2Client {
     });
   }
 
-  async uploadObject(
-    target: UploadTarget,
-    body: Uint8Array,
-    contentType: string,
-  ): Promise<void> {
+  async uploadObject(target: UploadTarget, body: Uint8Array, contentType: string): Promise<void> {
     const url = resolveUploadUrl(this.options.baseUrl, target.url);
     const headers: Record<string, string> = {
       ...target.headers,
@@ -924,9 +986,7 @@ export class PackProofV2Client {
     return this.getProof(committed.proof.proofId);
   }
 
-  async finalizeProof(
-    proofId: string,
-  ): Promise<{ proof: ProofView; manifest: ManifestView }> {
+  async finalizeProof(proofId: string): Promise<{ proof: ProofView; manifest: ManifestView }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/finalize`, {
       method: "POST",
     });

@@ -130,7 +130,7 @@ if (Test-Path $stage) {
   Remove-Item $stage -Recurse -Force
 }
 New-Item -ItemType Directory -Path $stage | Out-Null
-foreach ($name in @("Dockerfile", ".dockerignore", "package.json", "package-lock.json", "tsconfig.json", "buildspec.yml")) {
+foreach ($name in @("Dockerfile", ".dockerignore", "package.json", "package-lock.json", "tsconfig.json", "buildspec.yml", "openapi.json")) {
   Copy-Item (Join-Path $BackendRoot $name) (Join-Path $stage $name)
 }
 Copy-Item -Recurse (Join-Path $BackendRoot "src") (Join-Path $stage "src")
@@ -248,6 +248,8 @@ if ($serviceStatus -eq "ACTIVE" -and $serviceArn) {
     --service-arn $serviceArn `
     --region $Region `
     --health-check-path /health `
+    --cpu 256 `
+    --memory 1024 `
     --primary-container "file://$containerFile" | Out-Null
 } else {
   Write-Host "Creating Express Mode service $ApiStack"
@@ -260,7 +262,7 @@ if ($serviceStatus -eq "ACTIVE" -and $serviceArn) {
     --task-role-arn $Outputs.TaskRoleArn `
     --health-check-path /health `
     --cpu 256 `
-    --memory 512 `
+    --memory 1024 `
     --primary-container "file://$containerFile" `
     --network-configuration "file://$networkFile" `
     --scaling-target "file://$scalingFile"
