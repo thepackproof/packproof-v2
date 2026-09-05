@@ -1,3 +1,4 @@
+import { Button } from "../ui/Button";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,10 +26,18 @@ export function MyProofsScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
   const [filterOpen, setFilterOpen] = useState(false);
+  const [receipts, setReceipts] = useState<
+    Array<{ proofId: string; itemTitle: string; acceptedAt: string | null }>
+  >([]);
   const library = app.proofsLibrary;
 
   useEffect(() => {
     void app.syncWorkspace().catch(() => undefined);
+    void app
+      .ensureAuth()
+      .then(() => app.client.receiptInvitations())
+      .then((result) => setReceipts(result.invitations))
+      .catch(() => undefined);
   }, []);
 
   const carriers = useMemo(() => uniqueCarriers(app.proofCollection), [app.proofCollection]);
@@ -82,6 +91,51 @@ export function MyProofsScreen() {
           />
         </View>
         <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Proofs</Text>
+        {app.localCapture ? (
+          <Button
+            label="Resume saved recording"
+            variant="secondary"
+            onPress={() => {
+              if (app.session?.stationActive) app.go("station");
+              else if (app.session?.captureProofId)
+                void app.run(() => app.openProof(app.session!.captureProofId!));
+            }}
+          />
+        ) : null}
+        {receipts.map((receipt) => (
+          <Button
+            key={receipt.proofId}
+            label={`${receipt.acceptedAt ? "Receipt and return" : "Receipt invitation"} · ${receipt.itemTitle}`}
+            variant="secondary"
+            onPress={() => app.openReceipt(receipt.proofId)}
+          />
+        ))}
+        {!app.busy && !app.proofCollection.length && !app.pendingInvites.length ? (
+          <View style={{ gap: 12, paddingVertical: 16 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 20,
+                fontWeight: "600",
+              }}
+            >
+              Protect your shipment with a PackProof.
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 16,
+                lineHeight: 24,
+              }}
+            >
+              Add your order, record the packing and seal, then preserve the record.
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+              Order → Record → Seal → Proof
+            </Text>
+            <Button label="Create your first Proof" onPress={() => app.go("create")} />
+          </View>
+        ) : null}
         <SegmentedTabs
           options={[
             { id: "in_progress", label: "In Progress", icon: "time-outline" },
@@ -94,7 +148,10 @@ export function MyProofsScreen() {
           <View
             style={[
               styles.search,
-              { borderColor: colors.border, backgroundColor: colors.inputBackground },
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.inputBackground,
+              },
             ]}
           >
             <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
@@ -113,7 +170,10 @@ export function MyProofsScreen() {
             onPress={() => setFilterOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="Filter and sort"
-            style={[styles.filterBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            style={[
+              styles.filterBtn,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
           >
             <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
           </Pressable>
@@ -132,7 +192,10 @@ export function MyProofsScreen() {
         {library.view === "in_progress" &&
           invitations.map((invite, index) => (
             <FadeSlideIn key={invite.invitationId} index={index}>
-              <ProofCard model={invitationCardModel(invite)} onPress={() => app.openInvitation(invite)} />
+              <ProofCard
+                model={invitationCardModel(invite)}
+                onPress={() => app.openInvitation(invite)}
+              />
             </FadeSlideIn>
           ))}
 
@@ -142,7 +205,7 @@ export function MyProofsScreen() {
               model={toProofCardModel(item, {
                 captureStatus: app.captureStatus,
                 hasLocalCapture: Boolean(app.localCapture),
-                captureProofId: app.session?.proofId,
+                captureProofId: app.session?.captureProofId,
               })}
               onPress={() => void app.run(async () => app.openProof(item.proofId))}
             />
@@ -164,7 +227,11 @@ export function MyProofsScreen() {
         ) : null}
       </AppScreen>
       <CreateFab onPress={() => app.go("create")} />
-      <BottomSheet visible={filterOpen} title="Sort and filter" onClose={() => setFilterOpen(false)}>
+      <BottomSheet
+        visible={filterOpen}
+        title="Sort and filter"
+        onClose={() => setFilterOpen(false)}
+      >
         <Text style={[styles.sheetLabel, { color: colors.textPrimary }]}>Sort</Text>
         <ChipRow
           options={[
@@ -190,7 +257,10 @@ export function MyProofsScreen() {
           <>
             <Text style={[styles.sheetLabel, { color: colors.textPrimary }]}>Carrier</Text>
             <ChipRow
-              options={[{ id: "", label: "All" }, ...carriers.map((carrier) => ({ id: carrier, label: carrier }))]}
+              options={[
+                { id: "", label: "All" },
+                ...carriers.map((carrier) => ({ id: carrier, label: carrier })),
+              ]}
               selected={library.carrier ?? ""}
               onSelect={(value) => app.setProofsCarrierFilter(value || null)}
             />
@@ -225,7 +295,12 @@ function ChipRow<T extends string>(props: {
               },
             ]}
           >
-            <Text style={[styles.chipLabel, { color: selected ? colors.textOnPrimary : colors.textPrimary }]}>
+            <Text
+              style={[
+                styles.chipLabel,
+                { color: selected ? colors.textOnPrimary : colors.textPrimary },
+              ]}
+            >
               {option.label}
             </Text>
           </Pressable>
@@ -237,7 +312,11 @@ function ChipRow<T extends string>(props: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   brandName: { ...typography.sectionTitle },
   pageTitle: { ...typography.pageTitle },
@@ -262,7 +341,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sheetLabel: { ...typography.secondaryStrong, marginTop: spacing.sm },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

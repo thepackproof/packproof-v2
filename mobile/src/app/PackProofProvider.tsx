@@ -1,3 +1,4 @@
+import type { IntakePreview } from "../copy/order-intake";
 import {
   createContext,
   useCallback,
@@ -11,6 +12,7 @@ import {
 import { AppState, Linking } from "react-native";
 import {
   PackProofV2Client,
+  ApiError,
   newIdempotencyKey,
   type ChronologyEntry,
   type ConnectedAccountProviderCatalogView,
@@ -48,6 +50,7 @@ import {
   localCaptureExists,
   recordPackingEvidence,
   uploadCaptureFile,
+  uploadCaptureResumable,
   type LocalCapture,
 } from "../capture";
 import {
@@ -56,8 +59,17 @@ import {
   nextActionNeedsCapture,
   workflowActionFor,
 } from "../copy/custody";
-import { clearCachedState, loadCachedState, saveCachedState, type CachedClientState } from "../session";
-import { resolveRuntimeConfig, shouldRestoreCachedSession, type ResolvedRuntimeConfig } from "../runtime-config";
+import {
+  clearCachedState,
+  loadCachedState,
+  saveCachedState,
+  type CachedClientState,
+} from "../session";
+import {
+  resolveRuntimeConfig,
+  shouldRestoreCachedSession,
+  type ResolvedRuntimeConfig,
+} from "../runtime-config";
 import { EMPTY_FORM, formFromTransaction, parseContextForm, type ContextForm } from "../copy/forms";
 import {
   formatUserFacingError,
@@ -84,13 +96,15 @@ const IS_RELEASE_CLIENT = !__DEV__;
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN_LENGTH = 2;
 
-function currentRuntime(cached?: {
-  apiBaseUrl?: string | null;
-  authMode?: AuthMode | null;
-  cognitoUserPoolId?: string | null;
-  cognitoClientId?: string | null;
-  cognitoRegion?: string | null;
-} | null): ResolvedRuntimeConfig {
+function currentRuntime(
+  cached?: {
+    apiBaseUrl?: string | null;
+    authMode?: AuthMode | null;
+    cognitoUserPoolId?: string | null;
+    cognitoClientId?: string | null;
+    cognitoRegion?: string | null;
+  } | null,
+): ResolvedRuntimeConfig {
   return resolveRuntimeConfig({
     env: {
       EXPO_PUBLIC_PACKPROOF_API_BASE_URL: process.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL,
@@ -140,6 +154,11 @@ export interface PackProofContextValue {
   localCapture: LocalCapture | null;
   uploadPercent: number | null;
   createForm: ContextForm;
+  intakeReview: IntakePreview | null;
+  receiptProofId: string | null;
+  openReceipt: (proofId: string) => void;
+  clearIntakeReview: () => void;
+  beginIntakeReview: (preview: IntakePreview) => void;
   editForm: ContextForm;
   importReview: TransactionImportView | null;
   scanResult: PackingStationResolveView | null;
@@ -260,6 +279,7 @@ const PackProofContext = createContext<PackProofContextValue | null>(null);
 
 export function PackProofProvider(props: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
+  const [receiptProofId, setReceiptProofId] = useState<string | null>(null);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
   const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(DEFAULT_PROOFS_LIBRARY);
   const [authPane, setAuthPane] = useState<AuthPane>("signIn");
@@ -278,7 +298,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [displayNameInput, setDisplayNameInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PublicProfileView[]>([]);
-  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "empty" | "ready" | "error">("idle");
+  const [searchStatus, setSearchStatus] = useState<
+    "idle" | "loading" | "empty" | "ready" | "error"
+  >("idle");
   const [pendingInvites, setPendingInvites] = useState<InvitationInboxView[]>([]);
   const [selectedInvite, setSelectedInvite] = useState<InvitationInboxView | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<ChronologyEntry | null>(null);
@@ -287,6 +309,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [session, setSession] = useState<CachedClientState | null>(null);
   const [proof, setProof] = useState<ProofView | null>(null);
   const [transactionDetail, setTransactionDetail] = useState<TransactionView | null>(null);
+  const [intakeReview, setIntakeReview] = useState<IntakePreview | null>(null);
   const [createForm, setCreateForm] = useState<ContextForm>(EMPTY_FORM);
   const [importReview, setImportReview] = useState<TransactionImportView | null>(null);
   const [editForm, setEditForm] = useState<ContextForm>(EMPTY_FORM);
@@ -297,12 +320,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [scanResult, setScanResult] = useState<PackingStationResolveView | null>(null);
   const [scanInput, setScanInput] = useState("");
-  const [scanPhase, setScanPhase] = useState<"camera" | "reference" | "found" | "missing">("camera");
+  const [scanPhase, setScanPhase] = useState<"camera" | "reference" | "found" | "missing">(
+    "camera",
+  );
   const [connections, setConnections] = useState<IntegrationConnectionView[]>([]);
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountView[]>([]);
-  const [connectedProviders, setConnectedProviders] = useState<ConnectedAccountProviderCatalogView[]>(
-    [],
-  );
+  const [connectedProviders, setConnectedProviders] = useState<
+    ConnectedAccountProviderCatalogView[]
+  >([]);
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -323,6 +348,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
   );
 
   const go = useCallback((name: AppRouteName) => {
+    if (name === "station" && sessionRef.current?.captureUri && !sessionRef.current.stationActive) {
+      setError("Finish or discard your saved recording before opening the packing station.");
+      return;
+    }
+    if (name === "capture" && sessionRef.current?.captureUri && sessionRef.current.stationActive) {
+      setRoute({ name: "station" });
+      return;
+    }
     setError(null);
     if (name === "scan") {
       setScanPhase("camera");
@@ -428,7 +461,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setDisplayNameInput(profile.displayName ?? "");
   }
 
-  async function restoreAuthoritativeSession(cached: CachedClientState): Promise<CachedClientState | null> {
+  async function restoreAuthoritativeSession(
+    cached: CachedClientState,
+  ): Promise<CachedClientState | null> {
     let next = cached;
     if (cached.authMode === "cognito" && cached.refreshToken) {
       const needsRefresh = !cached.accessExpiresAt || cached.accessExpiresAt - Date.now() < 60_000;
@@ -492,20 +527,23 @@ export function PackProofProvider(props: { children: ReactNode }) {
       cognitoUserPoolId: authMode === "cognito" ? cognitoPoolId.trim() : null,
       cognitoClientId: authMode === "cognito" ? cognitoClientId.trim() : null,
       cognitoRegion: authMode === "cognito" ? cognitoRegion.trim() : null,
-      proofId: sameUser ? previous?.proofId ?? null : null,
-      transactionId: sameUser ? previous?.transactionId ?? null : null,
-      invitationToken: sameUser ? previous?.invitationToken ?? null : null,
-      captureUri: sameUser ? previous?.captureUri ?? null : null,
-      evidenceIdempotencyKey: sameUser ? previous?.evidenceIdempotencyKey ?? null : null,
-      evidenceContentType: sameUser ? previous?.evidenceContentType ?? null : null,
-      captureByteSize: sameUser ? previous?.captureByteSize ?? null : null,
-      captureDurationMs: sameUser ? previous?.captureDurationMs ?? null : null,
+      proofId: sameUser ? (previous?.proofId ?? null) : null,
+      transactionId: sameUser ? (previous?.transactionId ?? null) : null,
+      invitationToken: sameUser ? (previous?.invitationToken ?? null) : null,
+      captureUri: sameUser ? (previous?.captureUri ?? null) : null,
+      captureProofId: sameUser ? (previous?.captureProofId ?? previous?.proofId ?? null) : null,
+      uploadEvidenceId: sameUser ? (previous?.uploadEvidenceId ?? null) : null,
+      supersededUploads: sameUser ? (previous?.supersededUploads ?? []) : [],
+      evidenceIdempotencyKey: sameUser ? (previous?.evidenceIdempotencyKey ?? null) : null,
+      evidenceContentType: sameUser ? (previous?.evidenceContentType ?? null) : null,
+      captureByteSize: sameUser ? (previous?.captureByteSize ?? null) : null,
+      captureDurationMs: sameUser ? (previous?.captureDurationMs ?? null) : null,
       stationActive: sameUser ? previous?.stationActive === true : false,
-      stationPhase: sameUser ? previous?.stationPhase ?? null : null,
-      stationProofId: sameUser ? previous?.stationProofId ?? null : null,
-      stationTransactionId: sameUser ? previous?.stationTransactionId ?? null : null,
-      stationOrderLabel: sameUser ? previous?.stationOrderLabel ?? null : null,
-      stationItemSummary: sameUser ? previous?.stationItemSummary ?? null : null,
+      stationPhase: sameUser ? (previous?.stationPhase ?? null) : null,
+      stationProofId: sameUser ? (previous?.stationProofId ?? null) : null,
+      stationTransactionId: sameUser ? (previous?.stationTransactionId ?? null) : null,
+      stationOrderLabel: sameUser ? (previous?.stationOrderLabel ?? null) : null,
+      stationItemSummary: sameUser ? (previous?.stationItemSummary ?? null) : null,
     };
     await persist(next);
     await applyProfile(profile);
@@ -529,7 +567,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     return profile;
   }
 
-  async function persistCapture(next: LocalCapture | null, idempotencyKey: string | null): Promise<void> {
+  async function persistCapture(
+    next: LocalCapture | null,
+    idempotencyKey: string | null,
+  ): Promise<void> {
     const current = sessionRef.current;
     if (!current) {
       return;
@@ -538,11 +579,43 @@ export function PackProofProvider(props: { children: ReactNode }) {
     await persist({
       ...current,
       captureUri: next?.uri ?? null,
+      captureProofId: next ? current.proofId : null,
       evidenceIdempotencyKey: idempotencyKey,
+      uploadEvidenceId:
+        idempotencyKey && idempotencyKey === current.evidenceIdempotencyKey
+          ? current.uploadEvidenceId
+          : null,
       evidenceContentType: next?.contentType ?? null,
       captureByteSize: next?.byteSize ?? null,
       captureDurationMs: next?.durationMs ?? null,
     });
+  }
+
+  async function retireSupersededUploads() {
+    const current = sessionRef.current;
+    if (!current) return;
+    for (const retired of current.supersededUploads ?? []) {
+      try {
+        await client.discardPendingUpload(retired.proofId, retired.key);
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== "EVIDENCE_ALREADY_COMMITTED")
+          throw error;
+      }
+    }
+    if (current.supersededUploads?.length)
+      await persist({ ...sessionRef.current!, supersededUploads: [] });
+  }
+
+  async function queueRetiredUpload(proofId: string) {
+    const current = sessionRef.current;
+    if (current?.evidenceIdempotencyKey)
+      await persist({
+        ...current,
+        supersededUploads: [
+          ...(current.supersededUploads ?? []),
+          { proofId, key: current.evidenceIdempotencyKey },
+        ],
+      });
   }
 
   async function ensureFreshCognitoToken(): Promise<void> {
@@ -618,7 +691,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setShipmentIntegrity(await client.getShipmentIntegrity(proofId));
     const current = sessionRef.current;
     if (current) {
-      await persist({ ...current, proofId: fresh.proofId, transactionId: fresh.transactionId });
+      await persist({
+        ...current,
+        proofId: fresh.proofId,
+        transactionId: fresh.transactionId,
+      });
     }
     setOffline(false);
     return fresh;
@@ -762,7 +839,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active" && sessionRef.current && route.name !== "capture" && route.name !== "station") {
+      if (
+        state === "active" &&
+        sessionRef.current &&
+        route.name !== "capture" &&
+        route.name !== "station"
+      ) {
         void syncWorkspace().catch(() => undefined);
       }
     });
@@ -810,6 +892,22 @@ export function PackProofProvider(props: { children: ReactNode }) {
     localCapture,
     uploadPercent,
     createForm,
+    intakeReview,
+    receiptProofId,
+    openReceipt: (proofId) => {
+      setReceiptProofId(proofId);
+      go("receipt");
+    },
+    clearIntakeReview: () => {
+      setIntakeReview(null);
+      setImportReview(null);
+    },
+    beginIntakeReview: (preview) => {
+      setIntakeReview(preview);
+      setImportReview(null);
+      setCreateForm(formFromTransaction(preview.draft));
+      go("manual");
+    },
     editForm,
     importReview,
     scanResult,
@@ -849,7 +947,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setProofsSort: (sort) => setProofsLibrary((current) => ({ ...current, sort })),
     setProofsRoleFilter: (role) => setProofsLibrary((current) => ({ ...current, role })),
     setProofsCarrierFilter: (carrier) => setProofsLibrary((current) => ({ ...current, carrier })),
-    setProofsScrollOffset: (scrollOffset) => setProofsLibrary((current) => ({ ...current, scrollOffset })),
+    setProofsScrollOffset: (scrollOffset) =>
+      setProofsLibrary((current) => ({ ...current, scrollOffset })),
     setError,
     setAuthPane,
     setAuthMode,
@@ -881,7 +980,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
           const result = await client.login(subject.trim());
           await finishSignIn({ token: result.token, subject: subject.trim() });
         } else {
-          const tokens = await cognitoSignIn(requireCognitoConfig(), { email: email.trim(), password });
+          const tokens = await cognitoSignIn(requireCognitoConfig(), {
+            email: email.trim(),
+            password,
+          });
           setPassword("");
           await finishSignIn({
             token: tokens.accessToken,
@@ -896,13 +998,19 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }),
     createAccount: async () =>
       run(async () => {
-        const created = await cognitoSignUp(requireCognitoConfig(), { email: email.trim(), password });
+        const created = await cognitoSignUp(requireCognitoConfig(), {
+          email: email.trim(),
+          password,
+        });
         setPassword("");
         setAuthPane(created.userConfirmed ? "signIn" : "verify");
       }),
     verifyEmail: async () =>
       run(async () => {
-        await cognitoConfirmSignUp(requireCognitoConfig(), { email: email.trim(), code: verificationCode.trim() });
+        await cognitoConfirmSignUp(requireCognitoConfig(), {
+          email: email.trim(),
+          code: verificationCode.trim(),
+        });
         setVerificationCode("");
         setAuthPane("signIn");
       }),
@@ -979,7 +1087,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
         const updated = await client.updateProfile(
           session?.username
             ? { displayName: displayNameInput.trim() }
-            : { username: usernameInput.trim(), displayName: displayNameInput.trim() || usernameInput.trim() },
+            : {
+                username: usernameInput.trim(),
+                displayName: displayNameInput.trim() || usernameInput.trim(),
+              },
         );
         await applyProfile(updated);
       }),
@@ -988,7 +1099,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     refreshProof,
     importPurchase: async () =>
       run(async () => {
-        const imported = await client.importTransaction({ adapterKey: "demo-marketplace", createProof: false });
+        const imported = await client.importTransaction({
+          adapterKey: "demo-marketplace",
+          createProof: false,
+        });
         setImportReview(imported);
         go("review");
       }),
@@ -1017,10 +1131,25 @@ export function PackProofProvider(props: { children: ReactNode }) {
         try {
           let transactionId = importReview?.transaction.transactionId ?? null;
           if (transactionId) {
-            await client.updateTransaction(transactionId, { ...parsed.transaction });
+            await client.updateTransaction(transactionId, {
+              ...parsed.transaction,
+            });
             await client.updateShipping(transactionId, parsed.shipping);
           } else {
-            const txn = await client.createTransaction({ ...parsed.transaction, shipping: parsed.shipping });
+            const txn = await client.createTransaction({
+              ...parsed.transaction,
+              shipping: parsed.shipping,
+              ...(intakeReview
+                ? {
+                    metadata: {
+                      intake: {
+                        ...intakeReview.draft.metadata.intake,
+                        confirmed: true,
+                      },
+                    },
+                  }
+                : {}),
+            });
             transactionId = txn.transactionId;
           }
           const created = await client.createOrGetProof(transactionId);
@@ -1032,6 +1161,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           await refreshProofCollection();
           await refreshProof(created.proofId);
           setCreateForm(EMPTY_FORM);
+          setIntakeReview(null);
           setImportReview(null);
           go("proof");
         } catch (err) {
@@ -1074,7 +1204,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
         if (!proof) {
           return;
         }
-        const link = await client.createAccessLink(proof.proofId, { scope: "SUMMARY" });
+        const link = await client.createAccessLink(proof.proofId, {
+          scope: "SUMMARY",
+        });
         const url = link.url?.trim();
         if (!url) {
           throw new Error("Viewing link is unavailable.");
@@ -1096,7 +1228,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
         });
         await refreshProof(result.proof.proofId);
       }),
-    commitGradingCapture: async (slots: Array<{ slot: string; uri: string; contentType: string }>) =>
+    commitGradingCapture: async (
+      slots: Array<{ slot: string; uri: string; contentType: string }>,
+    ) =>
       run(async () => {
         if (!proof || slots.length === 0) {
           return;
@@ -1148,7 +1282,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
           setScanPhase("found");
         } catch (err) {
           const mapped = presentError(err);
-          if (mapped.code === "STATION_REFERENCE_NOT_FOUND" || mapped.code === "TRANSACTION_NOT_FOUND") {
+          if (
+            mapped.code === "STATION_REFERENCE_NOT_FOUND" ||
+            mapped.code === "TRANSACTION_NOT_FOUND"
+          ) {
             setScanResult(null);
             setScanPhase("missing");
             setError(mapped.title);
@@ -1179,7 +1316,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
           return;
         }
         const parsed = parseContextForm(editForm);
-        const updated = await client.updateTransaction(proof.transactionId, { ...parsed.transaction });
+        const updated = await client.updateTransaction(proof.transactionId, {
+          ...parsed.transaction,
+        });
         setTransactionDetail(updated);
         setEditForm(formFromTransaction(updated));
         await refreshProof(proof.proofId);
@@ -1202,6 +1341,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
         if (!proof) {
           return;
         }
+        if (localCapture && sessionRef.current?.captureProofId !== proof.proofId)
+          throw new Error(
+            "Finish or discard your saved recording on its original Proof before recording another shipment.",
+          );
         setCaptureStatus("capturing");
         const captured = await recordPackingEvidence();
         if (!captured) {
@@ -1209,10 +1352,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
           return;
         }
         void haptic("medium");
-        if (localCapture && localCapture.uri !== captured.uri) {
+        await queueRetiredUpload(proof.proofId);
+        await persistCapture(captured, newIdempotencyKey());
+        if (localCapture && localCapture.uri !== captured.uri)
           await discardLocalCapture(localCapture.uri);
-        }
-        await persistCapture(captured, sessionRef.current?.evidenceIdempotencyKey ?? null);
         setCaptureStatus("captured");
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);
@@ -1222,8 +1365,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
         if (!localCapture || !proof) {
           return;
         }
+        if (sessionRef.current?.captureProofId !== proof.proofId)
+          throw new Error("Open the original Proof to discard its saved recording.");
         await discardLocalCapture(localCapture.uri);
-        await persistCapture(null, sessionRef.current?.evidenceIdempotencyKey ?? null);
+        await queueRetiredUpload(proof.proofId);
+        await persistCapture(null, null);
+        await retireSupersededUploads();
         setCaptureStatus("idle");
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);
@@ -1238,12 +1385,19 @@ export function PackProofProvider(props: { children: ReactNode }) {
           if (!localCapture || !proof || !sessionRef.current) {
             return;
           }
+          if (sessionRef.current.captureProofId !== proof.proofId)
+            throw new Error(
+              "This recording belongs to another Proof. Open its original Proof to resume.",
+            );
           const available = await localCaptureExists(localCapture.uri);
           if (!available) {
             await persistCapture(null, null);
             setCaptureStatus("idle");
-            throw new Error("Captured video is no longer available. Record packing evidence again.");
+            throw new Error(
+              "Captured video is no longer available. Record packing evidence again.",
+            );
           }
+          await retireSupersededUploads();
           const key = sessionRef.current.evidenceIdempotencyKey ?? newIdempotencyKey();
           await persistCapture(localCapture, key);
           setCaptureStatus("preparing");
@@ -1255,22 +1409,36 @@ export function PackProofProvider(props: { children: ReactNode }) {
           });
           const serverAction = proof.nextAction;
           try {
-            const initialized = await client.initializeEvidenceUpload(proof.proofId, {
-              contentType: localCapture.contentType,
-              evidenceType,
-              idempotencyKey: key,
-            });
-            setCaptureStatus("uploading");
-            setUploadPercent(0);
-            await uploadCaptureFile({
-              baseUrl: apiBaseUrl.trim(),
-              target: initialized.upload,
-              fileUri: localCapture.uri,
-              contentType: localCapture.contentType,
-              onProgress: setUploadPercent,
-            });
+            const savedEvidenceId = sessionRef.current?.uploadEvidenceId;
+            const currentProof = savedEvidenceId ? await client.getProof(proof.proofId) : null;
+            const alreadyCommitted = currentProof?.evidence.some(
+              (e) => e.evidenceId === savedEvidenceId && e.validationStatus === "COMMITTED",
+            );
+            let evidenceId = savedEvidenceId;
+            if (!alreadyCommitted) {
+              const initialized = await client.initializeEvidenceUpload(proof.proofId, {
+                contentType: localCapture.contentType,
+                evidenceType,
+                idempotencyKey: key,
+              });
+              evidenceId = initialized.evidenceId;
+              await persist({
+                ...sessionRef.current!,
+                uploadEvidenceId: evidenceId,
+              });
+              setCaptureStatus("uploading");
+              setUploadPercent(0);
+              await uploadCaptureResumable({
+                client,
+                baseUrl: apiBaseUrl.trim(),
+                proofId: proof.proofId,
+                evidenceId,
+                fileUri: localCapture.uri,
+                onProgress: setUploadPercent,
+              });
+            }
             setCaptureStatus("uploaded");
-            const committedEvidence = await client.commitEvidence(proof.proofId, initialized.evidenceId);
+            const committedEvidence = await client.commitEvidence(proof.proofId, evidenceId!);
             if (
               isGradingWorkflow(proof.workflowType) &&
               serverAction &&
@@ -1282,7 +1450,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
                   assetId: serverAction.assetId,
                   transferId: serverAction.transferId,
                   recipe: serverAction.captureRecipe,
-                  evidence: [{ slot: "PACKING_VIDEO", evidenceId: committedEvidence.evidenceId }],
+                  evidence: [
+                    {
+                      slot: "PACKING_VIDEO",
+                      evidenceId: committedEvidence.evidenceId,
+                    },
+                  ],
                   idempotencyKey: newIdempotencyKey(),
                 });
               }
@@ -1309,6 +1482,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         if (!proof) {
           return;
         }
+        await retireSupersededUploads();
         const result = await client.finalizeProof(proof.proofId);
         setProof(result.proof);
         setManifest(result.manifest);
@@ -1324,7 +1498,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
         }
         await client.createInvitation(proof.proofId, { inviteeUserId: userId });
         setSearchResults((current) =>
-          current.map((row) => (row.userId === userId ? { ...row, invitationState: "INVITED" } : row)),
+          current.map((row) =>
+            row.userId === userId ? { ...row, invitationState: "INVITED" } : row,
+          ),
         );
         await refreshProof(proof.proofId);
       }),
@@ -1416,6 +1592,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       await persist({
         ...current,
         captureUri: next.capture?.uri ?? null,
+        captureProofId: next.capture ? next.proofId : null,
+        uploadEvidenceId: null,
         evidenceIdempotencyKey: next.evidenceIdempotencyKey,
         evidenceContentType: next.capture?.contentType ?? null,
         captureByteSize: next.capture?.byteSize ?? null,

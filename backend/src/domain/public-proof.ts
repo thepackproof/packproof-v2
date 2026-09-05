@@ -7,6 +7,8 @@ import { resolveAccessToken, type ProofAccessLinkRow } from "./access-links.js";
 import type { AccessLinkScope } from "./workflow.js";
 import { isQualifyingFulfillmentCapture } from "./evidence-types.js";
 import { buildProofTracker, type ProofTrackerView } from "./proof-tracker.js";
+import type { ObjectStore } from "../s3/object-store.js";
+import { readCommittedEvidence } from "./evidence.js";
 
 export interface PublicProofView {
   schema: "packproof.proof.public/v1";
@@ -38,6 +40,7 @@ export interface PublicProofView {
     summary: string;
   }>;
   evidence?: Array<{
+    evidenceId: string;
     slot: string;
     committed: true;
     contentType?: string;
@@ -67,12 +70,13 @@ export async function projectPublicProof(
     `SELECT id, evidence_type, validation_status, content_type FROM evidence WHERE proof_id = $1`,
     [proof.id],
   );
-  const attestations = await db.query<{ statement: string; attested_by: string }>(
-    `SELECT statement, attested_by FROM attestations WHERE proof_id = $1`,
-    [proof.id],
-  );
+  const attestations = await db.query<{
+    statement: string;
+    attested_by: string;
+  }>(`SELECT statement, attested_by FROM attestations WHERE proof_id = $1`, [proof.id]);
   const custody = await loadCustodyBundle(db, proof, null, {
-    committedEvidenceCount: evidence.rows.filter((row) => row.validation_status === "COMMITTED").length,
+    committedEvidenceCount: evidence.rows.filter((row) => row.validation_status === "COMMITTED")
+      .length,
     packingAttested: attestations.rows.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
     fulfillmentCaptureCount: evidence.rows.filter((row) =>
       isQualifyingFulfillmentCapture({
@@ -129,15 +133,37 @@ export async function projectPublicProof(
   }));
 
   if (scope === "EVIDENCE_VIEW") {
-    view.evidence = custody.observations.flatMap((observation) =>
-      observation.evidence.map((item) => ({
-        slot: humanSlot(item.slot),
-        committed: true as const,
-      })),
-    );
+    view.evidence = evidence.rows
+      .filter((e) => e.validation_status === "COMMITTED")
+      .map((item) => ({
+        evidenceId: item.id,
+        slot: item.evidence_type === "FULFILLMENT_CAPTURE" ? "Packing" : "Evidence",
+        committed: true,
+        contentType: item.content_type,
+      }));
   }
 
   return view;
+}
+
+export async function readPublicEvidence(
+  db: Database,
+  clock: Clock,
+  store: ObjectStore,
+  token: string,
+  evidenceId: string,
+) {
+  const link = await resolveAccessToken(db, clock, token);
+  if (link.scope !== "EVIDENCE_VIEW")
+    throw new DomainError("INSUFFICIENT_SCOPE", "This link does not grant media access", 403);
+  const creator = (
+    await db.query<{ user_id: string }>(
+      "SELECT user_id FROM proof_participants WHERE id=$1 AND proof_id=$2",
+      [link.created_by_participant_id, link.proof_id],
+    )
+  ).rows[0];
+  if (!creator) throw new DomainError("ACCESS_LINK_INVALID", "Viewing access unavailable", 404);
+  return readCommittedEvidence(db, store, creator.user_id, link.proof_id, evidenceId);
 }
 
 function humanSlot(slot: string): string {

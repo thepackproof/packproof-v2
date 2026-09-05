@@ -4,10 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { Database } from "./database.js";
 import { splitSqlStatements } from "./sql.js";
 
-const migrationsDir = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../migrations",
-);
+const migrationsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../migrations");
 
 export async function migrate(db: Database): Promise<void> {
   await db.query(`
@@ -17,9 +14,7 @@ export async function migrate(db: Database): Promise<void> {
     )
   `);
 
-  const files = (await readdir(migrationsDir))
-    .filter((name) => name.endsWith(".sql"))
-    .sort();
+  const files = (await readdir(migrationsDir)).filter((name) => name.endsWith(".sql")).sort();
 
   for (const file of files) {
     const id = file.replace(/\.sql$/i, "");
@@ -32,15 +27,17 @@ export async function migrate(db: Database): Promise<void> {
     }
 
     const sql = await readFile(path.join(migrationsDir, file), "utf8");
-    for (const statement of splitSqlStatements(sql)) {
-      if (/CREATE TABLE schema_migrations/i.test(statement)) {
-        continue;
+    await db.transaction(async (tx) => {
+      for (const statement of splitSqlStatements(sql)) {
+        if (/CREATE TABLE schema_migrations/i.test(statement)) {
+          continue;
+        }
+        await tx.query(statement);
       }
-      await db.query(statement);
-    }
-    await db.query(
-      `INSERT INTO schema_migrations (id, applied_at) VALUES ($1, $2)`,
-      [id, new Date().toISOString()],
-    );
+      await tx.query(`INSERT INTO schema_migrations (id, applied_at) VALUES ($1, $2)`, [
+        id,
+        new Date().toISOString(),
+      ]);
+    });
   }
 }

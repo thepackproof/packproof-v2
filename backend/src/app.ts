@@ -1,3 +1,4 @@
+import { appendAudit } from "./domain/audit.js";
 import express, {
   type ErrorRequestHandler,
   type Express,
@@ -103,7 +104,10 @@ import type { IntegrationAdapterRegistry } from "./integrations/registry.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { parseIntegrationImportRequest } from "./integrations/import-request.js";
 import { parseShipmentImportRequest } from "./integrations/shipment-import-request.js";
-import type { IntegrationCredentialStore, IntegrationCredentials } from "./integrations/credentials.js";
+import type {
+  IntegrationCredentialStore,
+  IntegrationCredentials,
+} from "./integrations/credentials.js";
 import { parseReleaseIdentity, type ReleaseIdentity } from "./config.js";
 import { disabledEbayRuntime } from "./integrations/ebay/runtime.js";
 import {
@@ -153,6 +157,23 @@ import {
 } from "./integrations/connected-accounts/providers/facebook.js";
 import { parseAppClientSecret } from "./integrations/connected-accounts/app-secret.js";
 import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
+import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
+import type { WebhookConfig } from "./platform/webhooks.js";
+import { previewOrderIntake } from "./intake/order-intake.js";
+import { exportEvidencePackage, getEvidenceReview } from "./domain/evidence-review.js";
+import {
+  listUploadParts,
+  storeUploadPart,
+  completeUploadParts,
+  discardPendingUpload,
+} from "./domain/resumable-upload.js";
+import { commerceLifecycleRouter } from "./http/commerce-lifecycle-router.js";
+import {
+  getRetentionControls,
+  createRetentionHold,
+  releaseRetentionHold,
+  requestProofDeletion,
+} from "./domain/retention-controls.js";
 
 export interface AppDependencies {
   db: Database;
@@ -163,12 +184,15 @@ export interface AppDependencies {
   devAuth: boolean;
   corsOrigins?: string[];
   integrations?: IntegrationAdapterRegistry;
-  credentialStore?: IntegrationCredentialStore & { put?: (credentials: IntegrationCredentials) => void };
+  credentialStore?: IntegrationCredentialStore & {
+    put?: (credentials: IntegrationCredentials) => void;
+  };
   releaseIdentity?: ReleaseIdentity;
   ebay?: EbayRuntime;
   shopify?: ShopifyOAuthRuntime;
   google?: GoogleOAuthRuntime;
   facebook?: FacebookOAuthRuntime;
+  webhookConfig?: WebhookConfig;
 }
 
 function asyncRoute(
@@ -223,19 +247,14 @@ export function createApp(deps: AppDependencies): Express {
     }),
     credentials: credentialStore,
     packproofEnvironment: releaseIdentity.environment,
-    webReturnUrl: corsOrigins[0]
-      ? `${corsOrigins[0].replace(/\/$/, "")}/account`
-      : "/account",
+    webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
   app.use((req, res, next) => {
     const origin = headerOrigin(req.headers.origin);
     if (origin && corsOrigins.includes(origin)) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Vary", "Origin");
-      res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Authorization, Content-Type, Idempotency-Key",
-      );
+      res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
     }
     if (req.method === "OPTIONS") {
@@ -244,10 +263,7 @@ export function createApp(deps: AppDependencies): Express {
     }
     next();
   });
-  app.use(
-    "/integrations/webhooks",
-    express.raw({ type: () => true, limit: "256kb" }),
-  );
+  app.use("/integrations/webhooks", express.raw({ type: () => true, limit: "256kb" }));
   app.use((req, res, next) => {
     if (Buffer.isBuffer(req.body)) {
       next();
@@ -270,8 +286,28 @@ export function createApp(deps: AppDependencies): Express {
     "/public/proofs/:token",
     asyncRoute(async (req, res) => {
       assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Referrer-Policy", "no-referrer");
       const result = await getPublicProof(deps.db, deps.clock, req.params.token);
       res.json(result);
+    }),
+  );
+
+  app.get(
+    "/public/proofs/:token/evidence/:evidenceId",
+    asyncRoute(async (req, res) => {
+      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
+      const { readPublicEvidence } = await import("./domain/public-proof.js");
+      const media = await readPublicEvidence(
+        deps.db,
+        deps.clock,
+        deps.objectStore,
+        req.params.token,
+        req.params.evidenceId,
+      );
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Referrer-Policy", "no-referrer");
+      res.type(media.contentType).send(media.body);
     }),
   );
 
@@ -293,12 +329,7 @@ export function createApp(deps: AppDependencies): Express {
         if (!subject) {
           throw new DomainError("INVALID_SUBJECT", "subject is required", 400);
         }
-        const userId = await ensureIdentityUser(
-          deps.db,
-          deps.clock,
-          "dev",
-          subject,
-        );
+        const userId = await ensureIdentityUser(deps.db, deps.clock, "dev", subject);
         res.json({ userId, token: userId });
       }),
     );
@@ -311,14 +342,12 @@ export function createApp(deps: AppDependencies): Express {
         ? req.body
         : Buffer.from(typeof req.body === "string" ? req.body : "");
       const contentType = req.header("content-type") ?? undefined;
-      const result = await deps.objectStore.putUpload(
-        req.params.token,
-        body,
-        contentType,
-      );
+      const result = await deps.objectStore.putUpload(req.params.token, body, contentType);
       res.json({ objectKey: result.key });
     }),
   );
+
+  app.use("/v1", createPlatformRouter(deps));
 
   app.use((req, _res, next) => {
     if (
@@ -343,20 +372,169 @@ export function createApp(deps: AppDependencies): Express {
       .catch(next);
   });
 
+  app.use("/me/tenants", createTenantManagementRouter(deps));
+  app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
+  app.get(
+    "/proofs/:id/retention",
+    asyncRoute(async (req, res) => {
+      res.json(await getRetentionControls(deps.db, deps.clock, bearerUser(req), req.params.id));
+    }),
+  );
+  app.post(
+    "/proofs/:id/retention/holds",
+    asyncRoute(async (req, res) => {
+      res
+        .status(201)
+        .json(
+          await createRetentionHold(
+            deps.db,
+            deps.clock,
+            bearerUser(req),
+            req.params.id,
+            req.body?.reason,
+          ),
+        );
+    }),
+  );
+  app.delete(
+    "/proofs/:id/retention/holds/:holdId",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await releaseRetentionHold(
+          deps.db,
+          deps.clock,
+          bearerUser(req),
+          req.params.id,
+          req.params.holdId,
+        ),
+      );
+    }),
+  );
+  app.post(
+    "/proofs/:id/retention/deletion-requests",
+    asyncRoute(async (req, res) => {
+      res
+        .status(201)
+        .json(
+          await requestProofDeletion(
+            deps.db,
+            deps.clock,
+            bearerUser(req),
+            req.params.id,
+            req.body?.reason,
+          ),
+        );
+    }),
+  );
+  app.get(
+    "/me/receipt-invitations",
+    asyncRoute(async (req, res) => {
+      res.json({
+        invitations: (
+          await deps.db.query(
+            `SELECT r.proof_id AS "proofId",r.created_at AS "createdAt",r.accepted_at AS "acceptedAt",t.item_title AS "itemTitle" FROM commerce_receivers r
+      JOIN proofs p ON p.id=r.proof_id JOIN transactions t ON t.id=p.transaction_id WHERE r.user_id=$1 ORDER BY r.created_at DESC LIMIT 100`,
+            [bearerUser(req)],
+          )
+        ).rows,
+      });
+    }),
+  );
+  app.post(
+    "/order-intake/preview",
+    asyncRoute(async (req, res) => {
+      bearerUser(req);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(previewOrderIntake(req.body));
+    }),
+  );
+  app.get(
+    "/proofs/:id/review",
+    asyncRoute(async (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await getEvidenceReview(deps.db, deps.clock, bearerUser(req), req.params.id));
+    }),
+  );
+  app.get(
+    "/proofs/:id/evidence/:evidenceId/parts",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await listUploadParts(deps.db, bearerUser(req), req.params.id, req.params.evidenceId),
+      );
+    }),
+  );
+  app.post(
+    "/proofs/:id/evidence/discard",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await discardPendingUpload(
+          deps.db,
+          deps.clock,
+          bearerUser(req),
+          req.params.id,
+          req.body?.idempotencyKey,
+        ),
+      );
+    }),
+  );
+  app.put(
+    "/proofs/:id/evidence/:evidenceId/parts/:partNumber",
+    asyncRoute(async (req, res) => {
+      if (!Buffer.isBuffer(req.body))
+        throw new DomainError("INVALID_UPLOAD_PART", "Send binary bytes", 400);
+      res.json(
+        await storeUploadPart(
+          deps.db,
+          deps.clock,
+          deps.objectStore,
+          bearerUser(req),
+          req.params.id,
+          req.params.evidenceId,
+          Number(req.params.partNumber),
+          req.body,
+        ),
+      );
+    }),
+  );
+  app.post(
+    "/proofs/:id/evidence/:evidenceId/parts/complete",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await completeUploadParts(
+          deps.db,
+          deps.objectStore,
+          bearerUser(req),
+          req.params.id,
+          req.params.evidenceId,
+          req.body?.totalBytes,
+        ),
+      );
+    }),
+  );
+  app.get(
+    "/proofs/:id/package",
+    asyncRoute(async (req, res) => {
+      const bytes = await exportEvidencePackage(
+        deps.db,
+        deps.clock,
+        deps.objectStore,
+        bearerUser(req),
+        req.params.id,
+      );
+      res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}.pkpr"`);
+      res.setHeader("Cache-Control", "no-store");
+      res.type("application/zip").send(bytes);
+    }),
+  );
+
   app.get(
     "/integrations/oauth/ebay/callback",
     asyncRoute(async (req, res) => {
-      const result = await completeEbayOAuth(
-        deps.db,
-        deps.clock,
-        ebay,
-        credentialStore,
-        {
-          code: req.query.code,
-          state: req.query.state,
-          error: req.query.error,
-        },
-      );
+      const result = await completeEbayOAuth(deps.db, deps.clock, ebay, credentialStore, {
+        code: req.query.code,
+        state: req.query.state,
+        error: req.query.error,
+      });
       res.redirect(302, result.redirectTo);
     }),
   );
@@ -365,17 +543,11 @@ export function createApp(deps: AppDependencies): Express {
     "/oauth/:provider/callback",
     asyncRoute(async (req, res) => {
       if (req.params.provider === "ebay") {
-        const result = await completeEbayOAuth(
-          deps.db,
-          deps.clock,
-          ebay,
-          credentialStore,
-          {
-            code: req.query.code,
-            state: req.query.state,
-            error: req.query.error,
-          },
-        );
+        const result = await completeEbayOAuth(deps.db, deps.clock, ebay, credentialStore, {
+          code: req.query.code,
+          state: req.query.state,
+          error: req.query.error,
+        });
         res.redirect(302, result.redirectTo);
         return;
       }
@@ -401,7 +573,9 @@ export function createApp(deps: AppDependencies): Express {
       if (!shopify.enabled || !shopify.appCredentialReference) {
         throw new DomainError("CONNECTED_ACCOUNT_PROVIDER_DISABLED", "Shopify is not enabled", 403);
       }
-      const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body ?? ""), "utf8");
+      const rawBody = Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(String(req.body ?? ""), "utf8");
       const secret = parseAppClientSecret(
         await credentialStore.getCredentials({
           adapterKey: "shopify",
@@ -419,7 +593,12 @@ export function createApp(deps: AppDependencies): Express {
         return;
       }
       const shop = String(req.header("X-Shopify-Shop-Domain") ?? "");
-      const result = await handleShopifyAppUninstalled(deps.db, deps.clock, shop, connectedAccounts);
+      const result = await handleShopifyAppUninstalled(
+        deps.db,
+        deps.clock,
+        shop,
+        connectedAccounts,
+      );
       res.status(200).json(result);
     }),
   );
@@ -647,7 +826,9 @@ export function createApp(deps: AppDependencies): Express {
       "/dev/integrations/demo-storefront/simulate",
       asyncRoute(async (req, res) => {
         bearerUser(req);
-        const adapter = integrations.getCommerce(DEMO_STOREFRONT_ADAPTER_KEY) as DemoStorefrontAdapter;
+        const adapter = integrations.getCommerce(
+          DEMO_STOREFRONT_ADAPTER_KEY,
+        ) as DemoStorefrontAdapter;
         const body =
           req.body != null && typeof req.body === "object" && !Array.isArray(req.body)
             ? (req.body as Record<string, unknown>)
@@ -658,11 +839,10 @@ export function createApp(deps: AppDependencies): Express {
             typeof body.externalAccountReference === "string"
               ? body.externalAccountReference
               : undefined,
-          externalOrderId: typeof body.externalOrderId === "string" ? body.externalOrderId : undefined,
+          externalOrderId:
+            typeof body.externalOrderId === "string" ? body.externalOrderId : undefined,
           paymentState:
-            typeof body.paymentState === "string"
-              ? (body.paymentState as "CONFIRMED")
-              : undefined,
+            typeof body.paymentState === "string" ? (body.paymentState as "CONFIRMED") : undefined,
           fulfillmentState:
             typeof body.fulfillmentState === "string"
               ? (body.fulfillmentState as "CANCELLED")
@@ -681,9 +861,7 @@ export function createApp(deps: AppDependencies): Express {
             ? (req.body as Record<string, unknown>)
             : {};
         if (body.apiKey != null || body.webhookSecret != null || body.credentials != null) {
-          throw integrationTrustBoundary(
-            "EasyPost credentials cannot be supplied by the client",
-          );
+          throw integrationTrustBoundary("EasyPost credentials cannot be supplied by the client");
         }
         const transactionId = String(body.transactionId ?? "").trim();
         const credentialReference = String(body.credentialReference ?? "").trim();
@@ -781,20 +959,14 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/transactions/:id/proof",
     asyncRoute(async (req, res) => {
-      const result = await createOrGetProof(
-        deps.db,
-        deps.clock,
-        bearerUser(req),
-        req.params.id,
-        {
-          participationPolicy: requireParticipationPolicy(req.body?.participationPolicy),
-          workflowType: requireWorkflowType(req.body?.workflowType),
-          assetCount:
-            req.body?.itemCount == null || req.body?.itemCount === ""
-              ? undefined
-              : Number(req.body.itemCount),
-        },
-      );
+      const result = await createOrGetProof(deps.db, deps.clock, bearerUser(req), req.params.id, {
+        participationPolicy: requireParticipationPolicy(req.body?.participationPolicy),
+        workflowType: requireWorkflowType(req.body?.workflowType),
+        assetCount:
+          req.body?.itemCount == null || req.body?.itemCount === ""
+            ? undefined
+            : Number(req.body.itemCount),
+      });
       res.json(result);
     }),
   );
@@ -840,17 +1012,11 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/assets",
     asyncRoute(async (req, res) => {
-      const assets = await createProofAssets(
-        deps.db,
-        deps.clock,
-        bearerUser(req),
-        req.params.id,
-        {
-          count: req.body?.count ?? req.body?.itemCount,
-          assetType: req.body?.assetType,
-          catalogDescriptor: req.body?.catalogDescriptor,
-        },
-      );
+      const assets = await createProofAssets(deps.db, deps.clock, bearerUser(req), req.params.id, {
+        count: req.body?.count ?? req.body?.itemCount,
+        assetType: req.body?.assetType,
+        catalogDescriptor: req.body?.catalogDescriptor,
+      });
       res.status(201).json({ assets });
     }),
   );
@@ -893,7 +1059,13 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/actions/document",
     asyncRoute(async (req, res) => {
-      const result = await documentAssets(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      const result = await documentAssets(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
       res.json(result);
     }),
   );
@@ -901,7 +1073,13 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/actions/pack",
     asyncRoute(async (req, res) => {
-      const result = await completePacking(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      const result = await completePacking(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
       res.json(result);
     }),
   );
@@ -909,7 +1087,13 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/actions/handoff",
     asyncRoute(async (req, res) => {
-      const result = await handoffAssets(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      const result = await handoffAssets(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
       res.json(result);
     }),
   );
@@ -917,7 +1101,13 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/actions/receive",
     asyncRoute(async (req, res) => {
-      const result = await receiveAssets(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      const result = await receiveAssets(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
       res.json(result);
     }),
   );
@@ -925,7 +1115,13 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/actions/compare",
     asyncRoute(async (req, res) => {
-      const result = await compareObservations(deps.db, deps.clock, bearerUser(req), req.params.id, req.body ?? {});
+      const result = await compareObservations(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.body ?? {},
+      );
       res.json(result);
     }),
   );
@@ -984,8 +1180,7 @@ export function createApp(deps: AppDependencies): Express {
     "/proofs/:id/access-links",
     asyncRoute(async (req, res) => {
       const webBase =
-        (deps.corsOrigins ?? []).find((origin) => origin.startsWith("http")) ??
-        deps.publicBaseUrl;
+        (deps.corsOrigins ?? []).find((origin) => origin.startsWith("http")) ?? deps.publicBaseUrl;
       const created = await createAccessLink(deps.db, deps.clock, bearerUser(req), req.params.id, {
         scope: req.body?.scope,
         expiresAt: req.body?.expiresAt,
@@ -999,7 +1194,13 @@ export function createApp(deps: AppDependencies): Express {
   app.delete(
     "/proofs/:id/access-links/:linkId",
     asyncRoute(async (req, res) => {
-      await revokeAccessLink(deps.db, deps.clock, bearerUser(req), req.params.id, req.params.linkId);
+      await revokeAccessLink(
+        deps.db,
+        deps.clock,
+        bearerUser(req),
+        req.params.id,
+        req.params.linkId,
+      );
       res.status(204).end();
     }),
   );
@@ -1227,7 +1428,10 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/me/commerce-connections/:connectionId/sync",
     asyncRoute(async (req, res) => {
-      parseEmptyTrustedBody(req.body, "Commerce sync does not accept client-supplied order payloads");
+      parseEmptyTrustedBody(
+        req.body,
+        "Commerce sync does not accept client-supplied order payloads",
+      );
       const result = await executeCommerceFulfillmentSync(
         deps.db,
         deps.clock,
@@ -1282,24 +1486,16 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/invitations",
     asyncRoute(async (req, res) => {
-      const result = await createInvitation(
-        deps.db,
-        deps.clock,
-        bearerUser(req),
-        req.params.id,
-        {
-          inviteeIdentifier:
-            req.body?.inviteeIdentifier == null
+      const result = await createInvitation(deps.db, deps.clock, bearerUser(req), req.params.id, {
+        inviteeIdentifier:
+          req.body?.inviteeIdentifier == null ? undefined : String(req.body.inviteeIdentifier),
+        inviteeUserId:
+          req.body?.inviteeUserId == null
+            ? req.body?.userId == null
               ? undefined
-              : String(req.body.inviteeIdentifier),
-          inviteeUserId:
-            req.body?.inviteeUserId == null
-              ? req.body?.userId == null
-                ? undefined
-                : String(req.body.userId)
-              : String(req.body.inviteeUserId),
-        },
-      );
+              : String(req.body.userId)
+            : String(req.body.inviteeUserId),
+      });
       res.status(201).json(result);
     }),
   );
@@ -1307,12 +1503,7 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/invitations/:token/accept",
     asyncRoute(async (req, res) => {
-      const result = await acceptInvitation(
-        deps.db,
-        deps.clock,
-        bearerUser(req),
-        req.params.token,
-      );
+      const result = await acceptInvitation(deps.db, deps.clock, bearerUser(req), req.params.token);
       res.json(result);
     }),
   );
@@ -1350,7 +1541,14 @@ export function createApp(deps: AppDependencies): Express {
         req.params.evidenceId,
       );
       res.setHeader("Content-Type", result.contentType);
-      res.setHeader("Cache-Control", "private, max-age=60");
+      await appendAudit(deps.db, {
+        proofId: req.params.id,
+        actorUserId: bearerUser(req),
+        eventType: "PROOF_ACCESSED",
+        eventData: { channel: "evidence_playback", evidenceId: req.params.evidenceId },
+        at: deps.clock.now(),
+      });
+      res.setHeader("Cache-Control", "private, no-store");
       res.send(result.body);
     }),
   );
@@ -1374,17 +1572,11 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/attestations",
     asyncRoute(async (req, res) => {
-      const result = await commitAttestation(
-        deps.db,
-        deps.clock,
-        bearerUser(req),
-        req.params.id,
-        {
-          statement: req.body?.statement == null ? undefined : String(req.body.statement),
-          relatedEvidenceId:
-            req.body?.relatedEvidenceId == null ? undefined : String(req.body.relatedEvidenceId),
-        },
-      );
+      const result = await commitAttestation(deps.db, deps.clock, bearerUser(req), req.params.id, {
+        statement: req.body?.statement == null ? undefined : String(req.body.statement),
+        relatedEvidenceId:
+          req.body?.relatedEvidenceId == null ? undefined : String(req.body.relatedEvidenceId),
+      });
       res.status(201).json(result);
     }),
   );
@@ -1392,12 +1584,7 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/finalize",
     asyncRoute(async (req, res) => {
-      const result = await finalizeProof(
-        deps.db,
-        deps.clock,
-        bearerUser(req),
-        req.params.id,
-      );
+      const result = await finalizeProof(deps.db, deps.clock, bearerUser(req), req.params.id);
       res.json(result);
     }),
   );
@@ -1431,7 +1618,10 @@ export function createApp(deps: AppDependencies): Express {
     if (sqlCode) {
       const status = sqlCode === "PROOF_ALREADY_FINALIZED" ? 409 : 409;
       res.status(status).json({
-        error: { code: sqlCode, message: error instanceof Error ? error.message : sqlCode },
+        error: {
+          code: sqlCode,
+          message: error instanceof Error ? error.message : sqlCode,
+        },
       });
       return;
     }
@@ -1460,10 +1650,7 @@ function parseEmptyTrustedBody(body: unknown, message: string): void {
 }
 
 function parseShipmentSyncRequest(body: unknown): void {
-  parseEmptyTrustedBody(
-    body,
-    "Shipment sync does not accept client-supplied provider payloads",
-  );
+  parseEmptyTrustedBody(body, "Shipment sync does not accept client-supplied provider payloads");
 }
 
 function publicSyncResult(result: {

@@ -46,6 +46,8 @@ export default defineConfig({
     port: 5173,
     fs: { allow: [".."] },
     proxy: {
+      "/v1": api,
+      "/order-intake": api,
       "/upload": api,
       "/health": api,
       "/auth": api,

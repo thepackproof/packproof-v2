@@ -15,11 +15,7 @@ import {
   type ShipmentSyncAvailability,
 } from "./integration-connections.js";
 import { loadTransactionView, type TransactionView } from "./transactions.js";
-import {
-  CANONICAL_PROOF_SCHEMA,
-  DIGEST_ALGORITHM,
-  TRUST_KIND,
-} from "./trust.js";
+import { CANONICAL_PROOF_SCHEMA, DIGEST_ALGORITHM, TRUST_KIND } from "./trust.js";
 import {
   asIso,
   asRequiredIso,
@@ -43,6 +39,7 @@ import type { TransferView } from "./transfers.js";
 import type { ContinuityView } from "./continuity.js";
 import type { AssetExternalRefView } from "./asset-bindings.js";
 import type { NextAction } from "./workflow.js";
+import { listCommerceStages } from "./commerce-lifecycle.js";
 
 export interface CanonicalParticipant {
   participantId: string;
@@ -169,6 +166,7 @@ export interface CanonicalProof {
   shippingContext: TransactionView["shipping"];
   externalBindings: Array<ProofExternalReferenceView | AssetExternalRefView>;
   auditEvents: AuditEventView[];
+  commerceStages?: Awaited<ReturnType<typeof listCommerceStages>>;
 }
 
 export async function getCanonicalProof(
@@ -246,9 +244,10 @@ export async function getCanonicalProof(
   const actorRole =
     actorUserId == null
       ? null
-      : participantViews.find((row) => row.userId === actorUserId)?.role ?? null;
+      : (participantViews.find((row) => row.userId === actorUserId)?.role ?? null);
   const custody = await loadCustodyBundle(db, proof, actorRole, {
-    committedEvidenceCount: evidenceViews.filter((row) => row.validationStatus === "COMMITTED").length,
+    committedEvidenceCount: evidenceViews.filter((row) => row.validationStatus === "COMMITTED")
+      .length,
     packingAttested: attestations.rows.some((row) => row.statement === "PACKED_DESCRIBED_ITEM"),
     fulfillmentCaptureCount: evidence.rows.filter((row) =>
       isQualifyingFulfillmentCapture({
@@ -341,6 +340,9 @@ export async function getCanonicalProof(
     shippingContext: transaction.shipping,
     externalBindings: [...references, ...custody.bindings],
     auditEvents: events,
+    ...(proof.status === "FINALIZED" && proof.workflow_type === "COMMERCE_SALE"
+      ? { commerceStages: await listCommerceStages(db, proof.id) }
+      : {}),
   };
 }
 
@@ -458,26 +460,59 @@ function collectExternalRecords(transaction: TransactionView): CanonicalExternal
     ? "INTEGRATION"
     : "PARTICIPANT_SUPPLIED";
   const records: Array<{ field: string; value: unknown }> = [
-    { field: "transaction.externalReference", value: transaction.externalReference },
-    { field: "transaction.transactionDate", value: transaction.transactionDate },
+    {
+      field: "transaction.externalReference",
+      value: transaction.externalReference,
+    },
+    {
+      field: "transaction.transactionDate",
+      value: transaction.transactionDate,
+    },
     { field: "transaction.itemTitle", value: transaction.itemTitle },
-    { field: "transaction.itemDescription", value: transaction.itemDescription },
+    {
+      field: "transaction.itemDescription",
+      value: transaction.itemDescription,
+    },
     { field: "transaction.quantity", value: transaction.quantity },
-    { field: "transaction.items", value: transaction.items.some((item) => item.itemId) ? transaction.items : null },
-    { field: "transaction.transactionValue", value: transaction.transactionValue },
+    {
+      field: "transaction.items",
+      value: transaction.items.some((item) => item.itemId) ? transaction.items : null,
+    },
+    {
+      field: "transaction.transactionValue",
+      value: transaction.transactionValue,
+    },
     { field: "transaction.currency", value: transaction.currency },
     { field: "transaction.metadata", value: transaction.metadata },
     { field: "shipping.carrier", value: transaction.shipping?.carrier ?? null },
     { field: "shipping.service", value: transaction.shipping?.service ?? null },
-    { field: "shipping.trackingNumber", value: transaction.shipping?.trackingNumber ?? null },
-    { field: "shipping.shipmentDate", value: transaction.shipping?.shipmentDate ?? null },
+    {
+      field: "shipping.trackingNumber",
+      value: transaction.shipping?.trackingNumber ?? null,
+    },
+    {
+      field: "shipping.shipmentDate",
+      value: transaction.shipping?.shipmentDate ?? null,
+    },
   ];
   if (transaction.provenance) {
     records.push(
-      { field: "transaction.provenance.source", value: transaction.provenance.source },
-      { field: "transaction.provenance.provider", value: transaction.provenance.provider },
-      { field: "transaction.provenance.adapterKey", value: transaction.provenance.adapterKey },
-      { field: "transaction.provenance.tenantKey", value: transaction.provenance.tenantKey },
+      {
+        field: "transaction.provenance.source",
+        value: transaction.provenance.source,
+      },
+      {
+        field: "transaction.provenance.provider",
+        value: transaction.provenance.provider,
+      },
+      {
+        field: "transaction.provenance.adapterKey",
+        value: transaction.provenance.adapterKey,
+      },
+      {
+        field: "transaction.provenance.tenantKey",
+        value: transaction.provenance.tenantKey,
+      },
     );
   }
 

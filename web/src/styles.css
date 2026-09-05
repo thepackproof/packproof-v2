@@ -1373,3 +1373,12 @@ h2 {
   letter-spacing: 0.08em;
 }
 
+
+/* Evidence review and partner access reuse the PackProof theme. */
+.evidence-player video, .evidence-player img { width:100%; max-height:65vh; object-fit:contain; border-radius:12px; background:#10141b; }
+.scope-grid { border:1px solid var(--border); border-radius:12px; display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); padding:16px; }
+.scope-grid label { display:flex; gap:10px; align-items:center; min-height:36px; }
+.scope-grid input { width:18px; height:18px; }
+.secret-value { overflow-wrap:anywhere; }
+.review-mode { display:flex; gap:8px; flex-wrap:wrap; }
+.capture-preview { width: 100%; max-height: 360px; border-radius: 12px; background: #111; }

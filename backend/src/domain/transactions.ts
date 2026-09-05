@@ -57,6 +57,13 @@ export async function createTransaction(
         [externalReference],
       );
       if (existing.rows[0]) {
+        if (existing.rows[0].created_by !== actorUserId) {
+          throw new DomainError(
+            "TRANSACTION_REFERENCE_CONFLICT",
+            "externalReference is already used",
+            409,
+          );
+        }
         return loadTransactionView(tx, existing.rows[0].id);
       }
     }
@@ -91,6 +98,13 @@ export async function createTransaction(
           [externalReference],
         );
         if (raced.rows[0]) {
+          if (raced.rows[0].created_by !== actorUserId) {
+            throw new DomainError(
+              "TRANSACTION_REFERENCE_CONFLICT",
+              "externalReference is already used",
+              409,
+            );
+          }
           return loadTransactionView(tx, raced.rows[0].id);
         }
       }
@@ -137,14 +151,10 @@ export async function updateTransaction(
           ? parsed.externalReference
           : locked.txn.external_reference,
       transactionDate:
-        parsed.transactionDate !== undefined
-          ? parsed.transactionDate
-          : locked.txn.transaction_date,
+        parsed.transactionDate !== undefined ? parsed.transactionDate : locked.txn.transaction_date,
       itemTitle: parsed.itemTitle !== undefined ? parsed.itemTitle : locked.txn.item_title,
       itemDescription:
-        parsed.itemDescription !== undefined
-          ? parsed.itemDescription
-          : locked.txn.item_description,
+        parsed.itemDescription !== undefined ? parsed.itemDescription : locked.txn.item_description,
       quantity:
         parsed.quantity !== undefined ? parsed.quantity : asNullableNumber(locked.txn.quantity),
       transactionValue:
@@ -272,14 +282,7 @@ export async function updateShipping(
                 shipment_date = $5,
                 updated_at = $6
           WHERE transaction_id = $1`,
-        [
-          transactionId,
-          next.carrier,
-          next.service,
-          next.trackingNumber,
-          next.shipmentDate,
-          nowIso,
-        ],
+        [transactionId, next.carrier, next.service, next.trackingNumber, next.shipmentDate, nowIso],
       );
     }
 
@@ -312,10 +315,9 @@ export async function loadTransactionBundle(
   db: Database,
   transactionId: string,
 ): Promise<TransactionBundle | null> {
-  const result = await db.query<TransactionRow>(
-    `SELECT * FROM transactions WHERE id = $1`,
-    [transactionId],
-  );
+  const result = await db.query<TransactionRow>(`SELECT * FROM transactions WHERE id = $1`, [
+    transactionId,
+  ]);
   const txn = result.rows[0];
   if (!txn) {
     return null;
@@ -328,10 +330,9 @@ async function attachContext(db: Database, txn: TransactionRow): Promise<Transac
     `SELECT * FROM transaction_shipping WHERE transaction_id = $1`,
     [txn.id],
   );
-  const proof = await db.query<ProofRow>(
-    `SELECT * FROM proofs WHERE transaction_id = $1`,
-    [txn.id],
-  );
+  const proof = await db.query<ProofRow>(`SELECT * FROM proofs WHERE transaction_id = $1`, [
+    txn.id,
+  ]);
   const proofRow = proof.rows[0] ?? null;
   let buyerUserId: string | null = null;
   if (proofRow) {
@@ -427,7 +428,11 @@ async function assertCanReadTransaction(
     return;
   }
   if (!bundle.proofId) {
-    throw new DomainError("PARTICIPANT_NOT_AUTHORIZED", "Not allowed to read this transaction", 403);
+    throw new DomainError(
+      "PARTICIPANT_NOT_AUTHORIZED",
+      "Not allowed to read this transaction",
+      403,
+    );
   }
   const viaProof = await db.query<{ id: string }>(
     `SELECT 1 AS id
@@ -436,7 +441,11 @@ async function assertCanReadTransaction(
     [bundle.proofId, actorUserId],
   );
   if (!viaProof.rows[0]) {
-    throw new DomainError("PARTICIPANT_NOT_AUTHORIZED", "Not allowed to read this transaction", 403);
+    throw new DomainError(
+      "PARTICIPANT_NOT_AUTHORIZED",
+      "Not allowed to read this transaction",
+      403,
+    );
   }
 }
 

@@ -15,6 +15,8 @@ export type AppRouteName =
   | "proof"
   | "capture"
   | "scan"
+  | "intake"
+  | "receipt"
   | "manual"
   | "review"
   | "finalize"
@@ -68,6 +70,7 @@ export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
     case "complete":
       return "proof";
     case "scan":
+    case "intake":
     case "manual":
     case "review":
       return "create";

@@ -1,14 +1,5 @@
-import {
-  proofHasBuyer,
-  sellerHasPackingAttestation,
-  stationErrorFromUnknown,
-} from "./display";
-import type {
-  StationCaptureRef,
-  StationError,
-  StationProofSnapshot,
-  SubmitStep,
-} from "./types";
+import { proofHasBuyer, sellerHasPackingAttestation, stationErrorFromUnknown } from "./display";
+import type { StationCaptureRef, StationError, StationProofSnapshot, SubmitStep } from "./types";
 
 export interface StationUploadTarget {
   method: "PUT";
@@ -19,12 +10,13 @@ export interface StationUploadTarget {
 export interface StationSubmitApi {
   initializeEvidenceUpload(
     proofId: string,
-    input: { contentType: string; evidenceType?: string; idempotencyKey: string },
+    input: {
+      contentType: string;
+      evidenceType?: string;
+      idempotencyKey: string;
+    },
   ): Promise<{ evidenceId: string; upload: StationUploadTarget }>;
-  commitEvidence(
-    proofId: string,
-    evidenceId: string,
-  ): Promise<{ proof: StationProofSnapshot }>;
+  commitEvidence(proofId: string, evidenceId: string): Promise<{ proof: StationProofSnapshot }>;
   createAttestation(
     proofId: string,
     input: { statement: string; relatedEvidenceId?: string },
@@ -35,6 +27,12 @@ export interface StationSubmitApi {
 
 export interface StationSubmitDeps {
   api: StationSubmitApi;
+  uploadEvidence?: (
+    proofId: string,
+    evidenceId: string,
+    capture: StationCaptureRef,
+    onProgress: (percent: number) => void,
+  ) => Promise<void>;
   upload: (
     target: StationUploadTarget,
     capture: StationCaptureRef,
@@ -90,17 +88,22 @@ export async function submitStationSession(input: {
       evidenceType: "FULFILLMENT_CAPTURE",
       idempotencyKey: key,
     });
-    await input.deps.upload(initialized.upload, input.capture, (percent) => {
-      notify("upload", percent);
-    });
+    if (input.deps.uploadEvidence)
+      await input.deps.uploadEvidence(proofId, initialized.evidenceId, input.capture, (percent) =>
+        notify("upload", percent),
+      );
+    else
+      await input.deps.upload(initialized.upload, input.capture, (percent) => {
+        notify("upload", percent);
+      });
   } catch (error) {
     const mapped = stationErrorFromUnknown(error);
     if (mapped.code === "EVIDENCE_ALREADY_COMMITTED") {
       notify("refresh", 100);
       proof = await input.deps.api.getProof(proofId);
-      evidenceId = proof.evidence.find(
-        (item) => item.validationStatus === "COMMITTED" && item.evidenceId,
-      )?.evidenceId ?? null;
+      evidenceId =
+        proof.evidence.find((item) => item.validationStatus === "COMMITTED" && item.evidenceId)
+          ?.evidenceId ?? null;
       if (!evidenceId) {
         throw mapSubmitError(
           error,
@@ -109,7 +112,11 @@ export async function submitStationSession(input: {
         );
       }
     } else {
-      throw mapSubmitError(error, "UPLOAD_FAILED", "Upload failed. The packing video is still on this device.");
+      throw mapSubmitError(
+        error,
+        "UPLOAD_FAILED",
+        "Upload failed. The packing video is still on this device.",
+      );
     }
   }
 
@@ -123,7 +130,11 @@ export async function submitStationSession(input: {
       const committed = await input.deps.api.commitEvidence(proofId, initialized.evidenceId);
       proof = committed.proof;
     } catch (error) {
-      throw mapSubmitError(error, "NETWORK", "Evidence was not committed. The packing video is still on this device.");
+      throw mapSubmitError(
+        error,
+        "NETWORK",
+        "Evidence was not committed. The packing video is still on this device.",
+      );
     }
   }
 
@@ -152,8 +163,7 @@ export async function submitStationSession(input: {
     }
   }
 
-  const canFinalize =
-    optional || (proof.status === "EVIDENCE_COMMITTED" && proofHasBuyer(proof));
+  const canFinalize = optional || (proof.status === "EVIDENCE_COMMITTED" && proofHasBuyer(proof));
   if (canFinalize && proof.status !== "FINALIZED") {
     notify("finalize", 100);
     try {
@@ -161,14 +171,21 @@ export async function submitStationSession(input: {
       proof = finalized.proof;
     } catch (error) {
       const mapped = stationErrorFromUnknown(error);
-      if (mapped.code === "PROOF_NOT_READY_FOR_FINALIZATION" || mapped.code === "FULFILLMENT_CAPTURE_REQUIRED") {
+      if (
+        mapped.code === "PROOF_NOT_READY_FOR_FINALIZATION" ||
+        mapped.code === "FULFILLMENT_CAPTURE_REQUIRED"
+      ) {
         notify("refresh", 100);
         proof = await input.deps.api.getProof(proofId);
       } else if (mapped.code === "PROOF_ALREADY_FINALIZED") {
         notify("refresh", 100);
         proof = await input.deps.api.getProof(proofId);
       } else {
-        throw mapSubmitError(error, "NETWORK", "Packing video was saved. Retry to finish the PackProof.");
+        throw mapSubmitError(
+          error,
+          "NETWORK",
+          "Packing video was saved. Retry to finish the PackProof.",
+        );
       }
     }
   }

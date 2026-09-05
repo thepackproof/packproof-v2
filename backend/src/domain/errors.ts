@@ -28,6 +28,8 @@ export function isUniqueViolation(error: unknown): boolean {
 export function errorCodeFromSql(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error);
   const codes = [
+    "PLATFORM_RECORD_IMMUTABLE",
+    "COMMERCE_STAGE_IMMUTABLE",
     "PROOF_ALREADY_FINALIZED",
     "EVIDENCE_ALREADY_COMMITTED",
     "AUDIT_IMMUTABLE",

@@ -1,5 +1,4 @@
-const STAGING_API_BASE_URL =
-  "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws";
+const STAGING_API_BASE_URL = "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws";
 
 function env(name, fallback = "") {
   return (process.env[name] ?? fallback).trim();
@@ -56,13 +55,14 @@ module.exports = {
     ios: {
       supportsTablet: false,
       infoPlist: {
-        NSCameraUsageDescription: "Scan shipping labels and record packing evidence for this Proof.",
+        NSCameraUsageDescription:
+          "Scan shipping labels and record packing evidence for this Proof.",
         NSPhotoLibraryUsageDescription: "Select captured evidence if the camera is unavailable.",
       },
     },
     android: {
       package: "com.packproof.mobile",
-      versionCode: 27,
+      versionCode: 28,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
@@ -71,6 +71,8 @@ module.exports = {
       permissions: ["CAMERA", "RECORD_AUDIO"],
     },
     plugins: [
+      "./plugins/with-order-share",
+      "expo-video",
       [
         "expo-camera",
         {

@@ -1,3 +1,4 @@
+import { sha256Hex } from "../hash.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
@@ -79,11 +80,7 @@ export async function initializeEvidenceUpload(
     }
 
     if (proof.status !== "READY_FOR_EVIDENCE" && proof.status !== "EVIDENCE_COMMITTED") {
-      throw new DomainError(
-        "INVALID_PROOF_TRANSITION",
-        "Proof is not ready for evidence",
-        422,
-      );
+      throw new DomainError("INVALID_PROOF_TRANSITION", "Proof is not ready for evidence", 422);
     }
 
     const existing = await tx.query<EvidenceRow>(
@@ -92,6 +89,13 @@ export async function initializeEvidenceUpload(
     );
     if (existing.rows[0]) {
       const row = existing.rows[0];
+      if (row.validation_status === "REJECTED") {
+        throw new DomainError(
+          "EVIDENCE_UPLOAD_DISCARDED",
+          "Start a new upload for a replacement recording",
+          409,
+        );
+      }
       if (row.validation_status === "COMMITTED") {
         throw new DomainError(
           "EVIDENCE_ALREADY_COMMITTED",
@@ -206,11 +210,7 @@ export async function commitEvidence(
 
   const committedObject = await objectStore.commitUpload(prepared.objectKey);
   if (!committedObject) {
-    throw new DomainError(
-      "EVIDENCE_OBJECT_MISSING",
-      "Uploaded object was not found",
-      409,
-    );
+    throw new DomainError("EVIDENCE_OBJECT_MISSING", "Uploaded object was not found", 409);
   }
   if (!contentTypesCompatible(committedObject.contentType, prepared.contentType)) {
     throw new DomainError(
@@ -242,13 +242,7 @@ export async function commitEvidence(
               committed_at = $5,
               validation_status = 'COMMITTED'
         WHERE id = $1 AND committed_at IS NULL`,
-      [
-        evidenceId,
-        committedObject.key,
-        committedObject.sha256,
-        committedObject.byteSize,
-        now,
-      ],
+      [evidenceId, committedObject.key, committedObject.sha256, committedObject.byteSize, now],
     );
 
     if (current.proofStatus === "READY_FOR_EVIDENCE") {
@@ -291,8 +285,18 @@ async function loadEvidenceForCommit(
   proofId: string,
   evidenceId: string,
 ): Promise<
-  | { committed: EvidenceCommitView; objectKey?: never; contentType?: never; proofStatus?: never }
-  | { committed: null; objectKey: string; contentType: string; proofStatus: string }
+  | {
+      committed: EvidenceCommitView;
+      objectKey?: never;
+      contentType?: never;
+      proofStatus?: never;
+    }
+  | {
+      committed: null;
+      objectKey: string;
+      contentType: string;
+      proofStatus: string;
+    }
 > {
   const proof = await loadProof(tx, proofId, true);
   const participant = await requireParticipant(tx, proofId, actorUserId);
@@ -309,7 +313,10 @@ async function loadEvidenceForCommit(
     requireWorkflowType(proof.workflow_type),
     evidence.evidence_type,
   );
-  if (!allowed.includes(participant.role as "SELLER" | "BUYER") || evidence.submitted_by !== actorUserId) {
+  if (
+    !allowed.includes(participant.role as "SELLER" | "BUYER") ||
+    evidence.submitted_by !== actorUserId
+  ) {
     throw new DomainError(
       "PARTICIPANT_NOT_AUTHORIZED",
       "Only the submitting participant can commit this evidence",
@@ -329,6 +336,14 @@ async function loadEvidenceForCommit(
         proof: await getProofView(tx, proofId),
       },
     };
+  }
+
+  if (evidence.validation_status === "REJECTED") {
+    throw new DomainError(
+      "EVIDENCE_UPLOAD_DISCARDED",
+      "Discarded uploads cannot be committed",
+      409,
+    );
   }
 
   assertNotFinalized(proof);
@@ -380,6 +395,13 @@ export async function readCommittedEvidence(
   const stored = await objectStore.get(row.object_key);
   if (!stored) {
     throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence is not available", 404);
+  }
+  if (sha256Hex(stored.body) !== row.sha256 || stored.body.length !== Number(row.byte_size)) {
+    throw new DomainError(
+      "EVIDENCE_INTEGRITY_FAILURE",
+      "Stored evidence does not match its committed digest",
+      409,
+    );
   }
   return {
     body: stored.body,

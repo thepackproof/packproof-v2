@@ -1,3 +1,6 @@
+import { preserveCapture, recoverCapture, captureQueueKey } from "./capture-queue";
+import { ReceiptScreen } from "./screens/ReceiptScreen";
+import { DeveloperScreen } from "./screens/DeveloperScreen";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
 import { captureEvidenceType } from "@packproof/copy/custody";
@@ -16,7 +19,13 @@ import type {
   ShipmentIntegrityView,
   TransactionWriteInput,
 } from "./api/types";
-import { clearSession, isProfileComplete, loadSession, saveSession, type WebSession } from "./auth/session";
+import {
+  clearSession,
+  isProfileComplete,
+  loadSession,
+  saveSession,
+  type WebSession,
+} from "./auth/session";
 import { AppNav } from "./components/AppNav";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { AccountScreen } from "./screens/AccountScreen";
@@ -46,6 +55,8 @@ type Route =
   | { name: "scan" }
   | { name: "activity" }
   | { name: "account" }
+  | { name: "developer" }
+  | { name: "receipt"; proofId: string }
   | { name: "proof"; proofId: string }
   | { name: "invite"; proofId: string }
   | { name: "finalize"; proofId: string }
@@ -81,6 +92,7 @@ function parseHref(href: string): Route {
   if (pathname === "/activity") {
     return { name: "activity" };
   }
+  if (pathname === "/developer") return { name: "developer" };
   if (pathname === "/account") {
     return { name: "account" };
   }
@@ -94,17 +106,25 @@ function parseHref(href: string): Route {
   if (pathname === "/stores") {
     return { name: "stores" };
   }
+  const receipt = pathname.match(/^\/receipt\/([^/]+)$/);
+  if (receipt) return { name: "receipt", proofId: decodeURIComponent(receipt[1]) };
   const shared = pathname.match(/^\/p\/([^/]+)$/);
   if (shared?.[1]) {
     return { name: "public", token: decodeURIComponent(shared[1]) };
   }
   const invitation = pathname.match(/^\/invitations\/([^/]+)$/);
   if (invitation?.[1]) {
-    return { name: "invitation", invitationId: decodeURIComponent(invitation[1]) };
+    return {
+      name: "invitation",
+      invitationId: decodeURIComponent(invitation[1]),
+    };
   }
   const fulfillment = pathname.match(/^\/fulfillment\/([^/]+)$/);
   if (fulfillment?.[1]) {
-    return { name: "fulfillment-detail", proofId: decodeURIComponent(fulfillment[1]) };
+    return {
+      name: "fulfillment-detail",
+      proofId: decodeURIComponent(fulfillment[1]),
+    };
   }
   const invite = pathname.match(/^\/proofs\/([^/]+)\/invite$/);
   if (invite?.[1]) {
@@ -120,7 +140,11 @@ function parseHref(href: string): Route {
   }
   const event = pathname.match(/^\/proofs\/([^/]+)\/events\/([^/]+)$/);
   if (event?.[1] && event[2]) {
-    return { name: "event", proofId: decodeURIComponent(event[1]), eventId: decodeURIComponent(event[2]) };
+    return {
+      name: "event",
+      proofId: decodeURIComponent(event[1]),
+      eventId: decodeURIComponent(event[2]),
+    };
   }
   const proof = pathname.match(/^\/proofs\/([^/]+)$/);
   if (proof?.[1]) {
@@ -244,7 +268,13 @@ function needsWorkspace(name: Route["name"]): boolean {
 }
 
 function needsProof(name: Route["name"]): boolean {
-  return name === "proof" || name === "invite" || name === "finalize" || name === "complete" || name === "event";
+  return (
+    name === "proof" ||
+    name === "invite" ||
+    name === "finalize" ||
+    name === "complete" ||
+    name === "event"
+  );
 }
 
 function PackProofApp() {
@@ -259,6 +289,8 @@ function PackProofApp() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(() => oauthReturnError(window.location.href));
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
   const [connectedNotice, setConnectedNotice] = useState<string | null>(() =>
     oauthReturnNotice(window.location.href),
@@ -266,9 +298,9 @@ function PackProofApp() {
   const [queue, setQueue] = useState<FulfillmentQueueItem[]>([]);
   const [connections, setConnections] = useState<CommerceConnectionView[]>([]);
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountView[]>([]);
-  const [connectedProviders, setConnectedProviders] = useState<ConnectedAccountProviderCatalogView[]>(
-    [],
-  );
+  const [connectedProviders, setConnectedProviders] = useState<
+    ConnectedAccountProviderCatalogView[]
+  >([]);
   const [ebay, setEbay] = useState<EbayMarketplaceView | null>(null);
   const [lastSync, setLastSync] = useState<CommerceSyncView | null>(null);
   const [displayNameInput, setDisplayNameInput] = useState(() => loadSession()?.displayName ?? "");
@@ -321,6 +353,7 @@ function PackProofApp() {
     const next = parseHref(path);
     setError(null);
     setShareNotice(null);
+    setShareLink(null);
     const nextId = routeProofId(next);
     if (!nextId || nextId !== proofIdRef.current) {
       setProof(null);
@@ -481,7 +514,11 @@ function PackProofApp() {
         .catch((caught) => setError(handleError(caught)))
         .finally(() => setLoading(false));
     }
-    if (route.name === "fulfillment" || route.name === "fulfillment-detail" || route.name === "station") {
+    if (
+      route.name === "fulfillment" ||
+      route.name === "fulfillment-detail" ||
+      route.name === "station"
+    ) {
       setLoading(true);
       setError(null);
       void api
@@ -517,6 +554,7 @@ function PackProofApp() {
       <PublicProofScreen
         token={route.token}
         load={(token) => api.getPublicProof(token)}
+        loadMedia={(id) => api.getPublicEvidence(route.token, id)}
         onSignIn={() => go("/")}
       />
     );
@@ -604,6 +642,18 @@ function PackProofApp() {
         />
       ) : null}
 
+      {route.name === "receipt" ? (
+        <ReceiptScreen
+          key={route.proofId}
+          api={api}
+          proofId={route.proofId}
+          onBack={() => go("/")}
+        />
+      ) : null}
+      {route.name === "developer" ? (
+        <DeveloperScreen api={api} onBack={() => go("/account")} />
+      ) : null}
+
       {route.name === "account" ? (
         <AccountScreen
           displayName={session.displayName}
@@ -637,6 +687,7 @@ function PackProofApp() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+          onOpenDeveloper={() => go("/developer")}
           onOpenStation={() => go("/station")}
           onOpenStores={() => go("/stores")}
           onOpenFulfillment={() => go("/fulfillment")}
@@ -688,6 +739,7 @@ function PackProofApp() {
 
       {route.name === "create" ? (
         <CreateProofScreen
+          onPreviewIntake={(text) => api.previewOrderIntake(text)}
           busy={busy}
           error={error}
           development={import.meta.env.DEV}
@@ -700,7 +752,10 @@ function PackProofApp() {
             setBusy(true);
             setError(null);
             return api
-              .importTransaction({ adapterKey: "demo-marketplace", createProof: false })
+              .importTransaction({
+                adapterKey: "demo-marketplace",
+                createProof: false,
+              })
               .catch((caught) => {
                 setError(handleError(caught));
                 throw caught;
@@ -772,16 +827,20 @@ function PackProofApp() {
           onIdentify={(reference) => {
             setBusy(true);
             setError(null);
-            return api.resolvePackingStation(reference).catch((caught) => {
-              if (
-                caught instanceof ApiError &&
-                (caught.code === "STATION_REFERENCE_NOT_FOUND" || caught.code === "TRANSACTION_NOT_FOUND")
-              ) {
+            return api
+              .resolvePackingStation(reference)
+              .catch((caught) => {
+                if (
+                  caught instanceof ApiError &&
+                  (caught.code === "STATION_REFERENCE_NOT_FOUND" ||
+                    caught.code === "TRANSACTION_NOT_FOUND")
+                ) {
+                  throw caught;
+                }
+                setError(handleError(caught));
                 throw caught;
-              }
-              setError(handleError(caught));
-              throw caught;
-            }).finally(() => setBusy(false));
+              })
+              .finally(() => setBusy(false));
           }}
           onContinue={(transactionId) => {
             setBusy(true);
@@ -812,7 +871,9 @@ function PackProofApp() {
           api={api}
           userId={session.userId}
           queue={queue.filter(
-            (item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT",
+            (item) =>
+              item.workflowState !== "COMPLETED" &&
+              item.workflowState !== "REMOVED_FROM_FULFILLMENT",
           )}
           error={error}
           initialReference={route.reference}
@@ -824,7 +885,9 @@ function PackProofApp() {
       {route.name === "fulfillment" ? (
         <FulfillmentQueueScreen
           items={queue.filter(
-            (item) => item.workflowState !== "COMPLETED" && item.workflowState !== "REMOVED_FROM_FULFILLMENT",
+            (item) =>
+              item.workflowState !== "COMPLETED" &&
+              item.workflowState !== "REMOVED_FROM_FULFILLMENT",
           )}
           loading={loading}
           error={error}
@@ -847,7 +910,9 @@ function PackProofApp() {
             setBusy(true);
             setError(null);
             void api
-              .createAttestation(current.proofId, { statement: "PACKED_DESCRIBED_ITEM" })
+              .createAttestation(current.proofId, {
+                statement: "PACKED_DESCRIBED_ITEM",
+              })
               .then(() => api.listFulfillmentQueue("all"))
               .then((result) => setQueue(result.items))
               .catch((caught) => setError(handleError(caught)))
@@ -963,6 +1028,24 @@ function PackProofApp() {
 
       {route.name === "proof" ? (
         <ProofScreen
+          key={route.proofId}
+          api={api}
+          shareLink={shareLink}
+          uploadProgress={uploadProgress}
+          onRecoverCapture={() =>
+            recoverCapture(captureQueueKey(session.userId, route.proofId, "PACKING"))
+          }
+          onOpenReceipt={() => go(`/receipt/${route.proofId}`)}
+          onVerify={() => api.reviewProof(route.proofId)}
+          onExport={async () => {
+            const blob = await api.exportProofPackage(route.proofId);
+            const url = URL.createObjectURL(blob),
+              anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `${route.proofId}.pkpr`;
+            anchor.click();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}
           proof={proof?.proofId === route.proofId ? proof : null}
           shipmentIntegrity={shipmentIntegrity}
           currentUserId={session.userId}
@@ -975,26 +1058,34 @@ function PackProofApp() {
           onOpenInvite={() => go(`/proofs/${encodeURIComponent(route.proofId)}/invite`)}
           onOpenFinalize={() => go(`/proofs/${encodeURIComponent(route.proofId)}/finalize`)}
           onOpenEvent={(event) =>
-            go(`/proofs/${encodeURIComponent(route.proofId)}/events/${encodeURIComponent(event.id)}`)
+            go(
+              `/proofs/${encodeURIComponent(route.proofId)}/events/${encodeURIComponent(event.id)}`,
+            )
           }
           onOpenStation={() => {
             const reference = proof?.transaction.externalReference || "";
             go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
           }}
-          onShare={() => {
+          onShare={(scope = "SUMMARY") => {
             if (!proof) {
               return;
             }
             setBusy(true);
             setError(null);
             setShareNotice(null);
+            setShareLink(null);
             void api
-              .createAccessLink(proof.proofId, { scope: "SUMMARY" })
+              .createAccessLink(proof.proofId, { scope })
               .then(async (link) => {
                 const url = link.url || `${window.location.origin}/p/${link.token ?? ""}`;
+                setShareLink(url);
                 try {
                   await navigator.clipboard.writeText(url);
-                  setShareNotice("Viewing link copied. Anyone with the link can see live status. They cannot change the Proof.");
+                  setShareNotice(
+                    scope === "EVIDENCE_VIEW"
+                      ? "Evidence link copied. Anyone with this link can view the submitted media for seven days."
+                      : "Viewing link copied. Anyone with the link can see live status for seven days.",
+                  );
                 } catch {
                   setShareNotice(url);
                 }
@@ -1035,16 +1126,18 @@ function PackProofApp() {
               });
               const committed: Array<{ slot: string; evidenceId: string }> = [];
               for (const row of files) {
-                const contentType = row.file.type || "application/octet-stream";
-                const initialized = await api.initializeEvidenceUpload(proof.proofId, {
-                  contentType,
+                const evidenceId = await preserveCapture(
+                  api,
+                  session.userId,
+                  proof.proofId,
+                  row.slot,
+                  row.file,
                   evidenceType,
-                  idempotencyKey: crypto.randomUUID(),
-                });
-                await api.uploadObject(initialized.upload, row.file, contentType);
-                await api.commitEvidence(proof.proofId, initialized.evidenceId);
-                committed.push({ slot: row.slot, evidenceId: initialized.evidenceId });
+                  setUploadProgress,
+                );
+                committed.push({ slot: row.slot, evidenceId });
               }
+              setProof(await api.getProof(proof.proofId));
               return committed;
             } catch (caught) {
               setError(handleError(caught));

@@ -29,6 +29,13 @@ export function CreateScreen() {
       <ErrorBanner message={app.error} />
       <View style={styles.list}>
         <CreateOption
+          title="Paste an order"
+          detail="Review details from an order or email"
+          icon="clipboard-outline"
+          onPress={() => app.go("intake")}
+          disabled={app.busy}
+        />
+        <CreateOption
           title="Scan order or label"
           detail="Fastest"
           icon="scan-outline"
@@ -37,7 +44,9 @@ export function CreateScreen() {
         />
         <CreateOption
           title="Import purchase"
-          detail={importReady ? "From a connected marketplace" : "Connect a marketplace in Account first"}
+          detail={
+            importReady ? "From a connected marketplace" : "Connect a marketplace in Account first"
+          }
           icon="storefront-outline"
           onPress={() => {
             if (!importReady) {
@@ -53,6 +62,7 @@ export function CreateScreen() {
           detail="For direct sales"
           icon="document-text-outline"
           onPress={() => {
+            app.clearIntakeReview();
             app.setCreateForm({
               externalReference: "",
               transactionDate: "",
@@ -79,7 +89,16 @@ export function CreateScreen() {
         />
       </View>
       {showGrading ? (
-        <View style={[styles.fallback, { borderColor: colors.border, backgroundColor: colors.surface, ...shadows.card }]}>
+        <View
+          style={[
+            styles.fallback,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              ...shadows.card,
+            },
+          ]}
+        >
           <Text style={[styles.fallbackCopy, { color: colors.textSecondary }]}>
             How many items are in this submission?
           </Text>
@@ -101,7 +120,8 @@ export function CreateScreen() {
         </View>
       ) : null}
       <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Invite a buyer by PackProof username from the Proof after it's created. Pending invitations appear in My Proofs.
+        Invite a buyer by PackProof username from the Proof after it's created. Pending invitations
+        appear in My Proofs.
       </Text>
       <Button
         label={showInviteId ? "Hide invitation ID" : "I have an invitation ID"}
@@ -109,11 +129,25 @@ export function CreateScreen() {
         onPress={() => setShowInviteId((value) => !value)}
       />
       {showInviteId ? (
-        <View style={[styles.fallback, { borderColor: colors.border, backgroundColor: colors.surface, ...shadows.card }]}>
+        <View
+          style={[
+            styles.fallback,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              ...shadows.card,
+            },
+          ]}
+        >
           <Text style={[styles.fallbackCopy, { color: colors.textSecondary }]}>
-            Use this only if you were given an invitation ID. Ordinary collaboration uses PackProof usernames.
+            Use this only if you were given an invitation ID. Ordinary collaboration uses PackProof
+            usernames.
           </Text>
-          <FormField label="Invitation ID" value={app.invitationInput} onChangeText={app.setInvitationInput} />
+          <FormField
+            label="Invitation ID"
+            value={app.invitationInput}
+            onChangeText={app.setInvitationInput}
+          />
           <Button
             label="Join Proof"
             variant="secondary"
@@ -183,6 +217,11 @@ const styles = StyleSheet.create({
   title: { ...typography.cardTitle },
   detail: { ...typography.secondary },
   hint: { ...typography.secondary },
-  fallback: { gap: spacing.md, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg },
+  fallback: {
+    gap: spacing.md,
+    borderWidth: 1,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+  },
   fallbackCopy: { ...typography.secondary },
 });

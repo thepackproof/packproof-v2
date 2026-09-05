@@ -54,6 +54,16 @@ export function HomeScreen(props: {
   return (
     <main className="page library-page">
       <h1 className="page-title">My Proofs</h1>
+      {!props.loading && !props.proofs.length && !props.invitations.length ? (
+        <section className="section stack">
+          <h2>Protect your shipment with a PackProof.</h2>
+          <p>Add your order, record the packing and seal, then preserve the record.</p>
+          <p className="kicker">Order → Record → Seal → Proof</p>
+          <button className="btn" onClick={props.onCreate}>
+            Create your first Proof
+          </button>
+        </section>
+      ) : null}
       <SegmentedTabs
         label="Proof library"
         selected={view}
@@ -113,7 +123,10 @@ export function HomeScreen(props: {
             <>
               <p className="filter-label">Carrier</p>
               <ChipRow
-                options={[{ id: "", label: "All" }, ...carriers.map((item) => ({ id: item, label: item }))]}
+                options={[
+                  { id: "", label: "All" },
+                  ...carriers.map((item) => ({ id: item, label: item })),
+                ]}
                 selected={carrier ?? ""}
                 onSelect={(value) => setCarrier(value || null)}
               />
@@ -151,7 +164,9 @@ export function HomeScreen(props: {
 
       {empty ? (
         <div className="empty-card empty-state">
-          <p className="card-title">{view === "completed" ? "No completed Proofs" : "No Proofs in progress"}</p>
+          <p className="card-title">
+            {view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
+          </p>
           <p>
             {view === "completed"
               ? "Finalized Proofs will appear here."
