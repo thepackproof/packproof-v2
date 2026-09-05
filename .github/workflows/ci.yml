@@ -28,6 +28,12 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             mobile/package-lock.json
+      - name: Install media validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - name: Install shared mobile dependencies
         run: npm ci
         working-directory: mobile

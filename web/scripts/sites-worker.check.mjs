@@ -18,10 +18,15 @@ test("proxies only to the fixed API and never forwards the private Site cookie",
     return new Response('{"ok":true}', { headers: { "set-cookie": "unexpected=value" } });
   };
   try {
-    const response = await worker.fetch(new Request("https://packproof.example/api//other.example/me?q=1", { headers: { authorization: "Bearer test", cookie: "private-access=secret", origin: "https://packproof.example", "idempotency-key": "capture-retry-123" } }), {});
+    const response = await worker.fetch(new Request("https://packproof.example/api//other.example/me?q=1", { headers: { authorization: "Bearer test", cookie: "private-access=secret", origin: "https://packproof.example", "idempotency-key": "capture-retry-123", "x-packproof-station-token": "station-capability", "x-shopify-hmac-sha256": "signed-webhook", "x-shopify-shop-domain": "fixture.myshopify.com", "x-shopify-topic": "orders/updated", "x-shopify-webhook-id": "delivery-fixture" } }), {});
     assert.equal(new URL(call.url).hostname, "pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws");
     assert.equal(call.options.headers.get("authorization"), "Bearer test");
     assert.equal(call.options.headers.get("idempotency-key"), "capture-retry-123");
+    assert.equal(call.options.headers.get("x-packproof-station-token"), "station-capability");
+    assert.equal(call.options.headers.get("x-shopify-hmac-sha256"), "signed-webhook");
+    assert.equal(call.options.headers.get("x-shopify-shop-domain"), "fixture.myshopify.com");
+    assert.equal(call.options.headers.get("x-shopify-topic"), "orders/updated");
+    assert.equal(call.options.headers.get("x-shopify-webhook-id"), "delivery-fixture");
     assert.equal(call.options.headers.get("cookie"), null);
     assert.equal(call.options.headers.get("origin"), null);
     assert.equal(call.options.redirect, "manual");
