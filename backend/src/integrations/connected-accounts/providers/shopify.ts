@@ -8,6 +8,7 @@ import {
   shopifyAuthorizeUrl,
 } from "../../shopify/constants.js";
 import { normalizeShopifyShop } from "../../shopify/shop.js";
+import { verifyShopifyOAuthHmac } from "../../shopify/hmac.js";
 import { splitScopes } from "../http.js";
 import { parseAppClientSecret } from "../app-secret.js";
 import type { ConnectedAccountProvider } from "../types.js";
@@ -39,6 +40,14 @@ export function createShopifyConnectedAccountProvider(input: {
     },
     callbackRedirectUri() {
       return runtime.redirectUri;
+    },
+    async verifyCallback(query) {
+      requireEnabled(runtime);
+      const secret = parseAppClientSecret(await credentials.getCredentials({
+        adapterKey: SHOPIFY_PROVIDER,
+        credentialReference: runtime.appCredentialReference,
+      }));
+      verifyShopifyOAuthHmac(secret, query);
     },
     async getAuthorizationUrl(start) {
       requireEnabled(runtime);

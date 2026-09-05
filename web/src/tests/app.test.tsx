@@ -1,4 +1,6 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import "fake-indexeddb/auto";
+import { Blob as NodeBlob } from "node:buffer";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -40,6 +42,7 @@ function stationReadyProof(overrides: Record<string, unknown> = {}) {
 }
 
 function stubStationCamera() {
+  vi.stubGlobal("Blob", NodeBlob);
   class FakeMediaRecorder {
     static isTypeSupported() {
       return true;
@@ -235,6 +238,7 @@ describe("PackProof web reference client", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     sessionStorage.clear();
   });
@@ -345,6 +349,33 @@ describe("PackProof web reference client", () => {
     render(<App />);
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.queryByText("Vintage camera")).not.toBeInTheDocument();
+  });
+
+  it.each([200, 401])("ignores a stale Proof response (%s) after navigating to another record", async (status) => {
+    signInSession();
+    window.history.replaceState(null, "", "/proofs/older");
+    let resolveOld!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => { resolveOld = resolve; });
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === "/proofs/older" ? pending : originalFetch(input, init),
+    ));
+    render(<App />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/proofs/older", expect.anything()));
+    act(() => {
+      window.history.pushState(null, "", `/proofs/${canonicalProof.proofId}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(await screen.findByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
+    await act(async () => {
+      resolveOld(status === 200
+        ? json({ ...canonicalProof, proofId: "older" })
+        : json({ error: { code: "UNAUTHENTICATED", message: "expired old request" } }, 401));
+      await pending;
+    });
+    expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe(`/proofs/${canonicalProof.proofId}`);
   });
 
   it("shows an empty discovery state", async () => {
@@ -498,6 +529,27 @@ describe("PackProof web reference client", () => {
       expect(screen.getAllByText("Vintage camera").length).toBeGreaterThan(0);
     });
   });
+
+  it.each(["/invitations/inv_01", "/receipt/proof_receiver"])(
+    "preserves the requested %s link through sign-in",
+    async (path) => {
+      window.history.replaceState(null, "", path);
+      const user = userEvent.setup();
+      render(<App />);
+      await user.click(screen.getByText("Developer options"));
+      await user.click(screen.getByLabelText("Use development subject"));
+      await user.click(screen.getByRole("button", { name: "Sign in" }));
+      await waitFor(() => {
+        expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
+      });
+      expect(window.location.pathname).toBe(path);
+      if (path.startsWith("/receipt")) {
+        expect(screen.getByRole("heading", { name: "Receipt and returns" })).toBeInTheDocument();
+      } else {
+        expect(screen.getByRole("button", { name: "Review Proof" })).toBeInTheDocument();
+      }
+    },
+  );
 
   it("reviews a server-imported purchase before creating the Proof", async () => {
     signInSession();
@@ -1531,7 +1583,8 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByText("PROOF CREATED")).toBeInTheDocument();
   });
 
-  it("renders a guest viewing page without a session", async () => {
+  it.each(["", "https://api.packproof.example"])("renders a guest viewing page using configured API origin %s without a session", async (baseUrl) => {
+    vi.stubEnv("VITE_PACKPROOF_API_BASE_URL", baseUrl);
     window.history.replaceState(null, "", "/p/guest-token");
     vi.stubGlobal(
       "fetch",
@@ -1564,9 +1617,13 @@ describe("PackProof web reference client", () => {
     expect(screen.getByRole("button", { name: "Join PackProof" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
-      "/public/proofs/guest-token",
+      `${baseUrl}/public/proofs/guest-token`,
       expect.objectContaining({ method: "GET" }),
     );
+    const request = vi.mocked(fetch).mock.calls.find(([url]) =>
+      String(url).endsWith("/public/proofs/guest-token"),
+    );
+    expect(request?.[1]?.headers).not.toHaveProperty("Authorization");
   });
 
   it("creates a grading submission from Create", async () => {

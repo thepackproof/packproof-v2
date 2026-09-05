@@ -5,6 +5,7 @@ import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
 import { asRequiredIso, type EvidenceRow } from "./types.js";
 import { assertNotFinalized, loadProof, requireParticipant } from "./proof-access.js";
+import { requireCaptureRecipe } from "./capture-recipes.js";
 import {
   observationAllowedForRole,
   requireObservationType,
@@ -37,6 +38,22 @@ export interface ObservationView {
   captureRecipe: string | null;
   assetIds: string[];
   evidence: Array<{ evidenceId: string; slot: string }>;
+}
+
+export function originDocumentedAssetIds(observations: ObservationView[]): Set<string> {
+  return new Set(observations
+    .filter((row) => {
+      if (row.type !== "ORIGIN_CAPTURE") return false;
+      try {
+        const recipe = requireCaptureRecipe(row.captureRecipe ?? "CARD_STANDARD_V1");
+        return recipe.evidenceType === "ASSET_CAPTURE" && recipe.slots
+          .filter((slot) => slot.required)
+          .every((slot) => row.evidence.some((link) => link.slot === slot.slot));
+      } catch {
+        return false;
+      }
+    })
+    .flatMap((row) => row.assetIds));
 }
 
 export async function listObservations(db: Database, proofId: string): Promise<ObservationView[]> {

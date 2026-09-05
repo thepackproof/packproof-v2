@@ -118,6 +118,10 @@ GET `/events` or `/proofs/{id}/events` returns up to 100 events with a sequence 
 
 POST `/proofs/{id}/access-links` defaults to a one-hour summary link; `scope: "EVIDENCE_VIEW"` explicitly grants media access. Links are revocable through the participant account, bearer tokens are hashed, maximum requested lifetime is 90 days, and first-party sharing defaults to seven days. SUMMARY/STATUS_ONLY links cannot fetch evidence bytes. Sharing and participation are separate permissions.
 
+Partner link creation stores its replay response encrypted with AES-GCM because that response contains a bearer viewing token. Configure `PACKPROOF_WEBHOOK_ENCRYPTION_KEY` (a base64-encoded 32-byte server secret) before using this endpoint, even if outbound webhooks are disabled. Without it, link creation returns `503 ACCESS_LINKS_UNAVAILABLE` and creates no link. Other partner read, capture and finalization endpoints and first-party sharing do not require this key. Keep the key stable across deployments so existing encrypted replay responses remain readable.
+
+Cached viewing-link responses written before this hardening are encrypted on their next authorized replay, preserving the original link. Before production expansion, operators must inventory remaining legacy plaintext cache rows and have the original authorized callers replay them, or expire those caches under an approved retention policy. Replay encryption binds the original `Idempotency-Key`; PostgreSQL stores only its hash, so a bulk rewrite cannot reconstruct that context from the database and server secret alone. Deploying code does not rewrite untouched historical responses.
+
 GET `…/review` returns the Proof, access history, manifest digest check, shipment supplement, and retention state. GET `…/package` downloads a `.pkpr` ZIP with frozen core data and finalized lifecycle supplements. It contains original evidence, manifests and SHA-256 indexes. Verify independently:
 
 ```sh

@@ -1,4 +1,5 @@
 import type { PackProofApi } from "./api/client";
+import type { StationOrderContext } from "../../mobile/src/packing-station/types";
 
 type PendingCapture = {
   key: string;
@@ -40,6 +41,29 @@ export async function recoverCapture(key: string): Promise<File | null> {
   return (
     (await queue<PendingCapture | undefined>("readonly", (store) => store.get(key)))?.file ?? null
   );
+}
+
+export type PendingStationCapture = {
+  key: string;
+  file: Blob;
+  order: StationOrderContext;
+  uploadKey: string;
+  evidenceId?: string;
+  finishConfirmed: boolean;
+};
+export const stationCaptureKey = (userId: string) => `${userId}:station`;
+export async function recoverStationCapture(userId: string): Promise<PendingStationCapture | null> {
+  return (await queue<PendingStationCapture | undefined>("readonly", (store) =>
+    store.get(stationCaptureKey(userId)),
+  )) ?? null;
+}
+export async function saveStationCapture(capture: PendingStationCapture): Promise<void> {
+  if (!capture.file.size || capture.file.size > 200 * 1024 * 1024)
+    throw new Error("Choose a recording between 1 byte and 200 MiB.");
+  await queue("readwrite", (store) => store.put(capture));
+}
+export async function clearStationCapture(userId: string): Promise<void> {
+  await queue("readwrite", (store) => store.delete(stationCaptureKey(userId)));
 }
 
 /** Save bytes before initializing an upload. Retries keep the same evidence ID,

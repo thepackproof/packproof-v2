@@ -6,6 +6,7 @@ import { DomainError } from "./errors.js";
 import { IntegrationError, integrationDisabled, integrationNeedsReauth } from "./integration-errors.js";
 import {
   bindCommerceOrderTransaction,
+  loadCommerceSyncState,
   recordCommerceSyncState,
   upsertCommerceOrderRecord,
 } from "./commerce-order-records.js";
@@ -31,6 +32,8 @@ export interface CommerceFulfillmentSyncResult {
   ineligibleCount: number;
   cursor: string | null;
 }
+
+export const MAX_COMMERCE_SYNC_PAGES = 10;
 
 export async function executeCommerceFulfillmentSync(
   db: Database,
@@ -76,78 +79,87 @@ export async function executeCommerceFulfillmentSync(
   }
 
   try {
-    const page = await adapter.listFulfillmentOrders({
-      connection,
-      credentials,
-      cursor: null,
-    });
+    let cursor = (await loadCommerceSyncState(db, connection.id))?.provider_cursor ?? null;
+    const visited = new Set<string | null>();
+    let discoveredCount = 0;
     let createdTransactionCount = 0;
     let createdProofCount = 0;
     let existingProofCount = 0;
     let eligibleCount = 0;
 
-    for (const raw of page.orders) {
-      const order = parseNormalizedFulfillmentOrder(raw);
-      const eligibility = eligibilityOf(order);
-      const fingerprint = fulfillmentOrderFingerprint(order);
-      const tenantKey = tenantKeyForImport(
-        order.provider,
-        order.provenance.source,
-        order.externalAccountReference,
-      );
-      const record = await upsertCommerceOrderRecord(db, clock, {
+    for (let pageNumber = 0; pageNumber < MAX_COMMERCE_SYNC_PAGES; pageNumber++) {
+      visited.add(cursor);
+      const page = await adapter.listFulfillmentOrders({ connection, credentials, cursor });
+      if (page.cursor != null && visited.has(page.cursor)) {
+        throw new IntegrationError("PROVIDER_RESPONSE_INVALID", "The provider returned a repeated order cursor", 502, false);
+      }
+      discoveredCount += page.orders.length;
+      for (const raw of page.orders) {
+        const order = parseNormalizedFulfillmentOrder(raw);
+        const eligibility = eligibilityOf(order);
+        const fingerprint = fulfillmentOrderFingerprint(order);
+        const tenantKey = tenantKeyForImport(
+          order.provider,
+          order.provenance.source,
+          order.externalAccountReference,
+        );
+        const record = await upsertCommerceOrderRecord(db, clock, {
+          connectionId: connection.id,
+          commerceTenantKey: tenantKey,
+          externalOrderId: order.externalOrderId,
+          externalReference: order.externalReference,
+          orderedAt: order.orderedAt,
+          paymentState: order.paymentState,
+          fulfillmentState: order.fulfillmentState,
+          requiresPhysicalFulfillment: order.requiresPhysicalFulfillment,
+          cancelled: order.cancelled,
+          eligibility,
+          providerUpdatedAt: order.providerUpdatedAt,
+          fingerprint,
+        });
+
+        if (eligibility !== "FULFILLMENT_ELIGIBLE") {
+          continue;
+        }
+        eligibleCount += 1;
+        const imported = fulfillmentOrderToImportedTransaction(order, clock.now().toISOString());
+        const result = await importNormalizedTransaction(db, clock, actorUserId, imported, {
+          adapterKey: adapter.adapterKey,
+          createProof: true,
+          participationPolicy: "COUNTERPARTY_OPTIONAL",
+        });
+        await bindCommerceOrderTransaction(db, record.id, result.transaction.transactionId);
+        if (result.created) {
+          createdTransactionCount += 1;
+        }
+        if (result.proofCreated) {
+          createdProofCount += 1;
+        } else if (result.proof) {
+          existingProofCount += 1;
+        }
+      }
+      cursor = page.cursor;
+      // Advance only after the entire page imports. A failed page is retryable
+      // through existing order identity/idempotency checks; completed pages survive.
+      await recordCommerceSyncState(db, clock, {
         connectionId: connection.id,
-        commerceTenantKey: tenantKey,
-        externalOrderId: order.externalOrderId,
-        externalReference: order.externalReference,
-        orderedAt: order.orderedAt,
-        paymentState: order.paymentState,
-        fulfillmentState: order.fulfillmentState,
-        requiresPhysicalFulfillment: order.requiresPhysicalFulfillment,
-        cancelled: order.cancelled,
-        eligibility,
-        providerUpdatedAt: order.providerUpdatedAt,
-        fingerprint,
+        succeeded: true,
+        providerCursor: cursor,
       });
-
-      if (eligibility !== "FULFILLMENT_ELIGIBLE") {
-        continue;
-      }
-      eligibleCount += 1;
-      const imported = fulfillmentOrderToImportedTransaction(order, clock.now().toISOString());
-      const result = await importNormalizedTransaction(db, clock, actorUserId, imported, {
-        adapterKey: adapter.adapterKey,
-        createProof: true,
-        participationPolicy: "COUNTERPARTY_OPTIONAL",
-      });
-      await bindCommerceOrderTransaction(db, record.id, result.transaction.transactionId);
-      if (result.created) {
-        createdTransactionCount += 1;
-      }
-      if (result.proofCreated) {
-        createdProofCount += 1;
-      } else if (result.proof) {
-        existingProofCount += 1;
-      }
+      if (cursor === null) break;
     }
-
-    await recordCommerceSyncState(db, clock, {
-      connectionId: connection.id,
-      succeeded: true,
-      providerCursor: page.cursor,
-    });
 
     return {
       connectionId: connection.id,
       adapterKey: adapter.adapterKey,
       provider: adapter.provider,
-      discoveredCount: page.orders.length,
+      discoveredCount,
       eligibleCount,
       createdTransactionCount,
       createdProofCount,
       existingProofCount,
-      ineligibleCount: page.orders.length - eligibleCount,
-      cursor: page.cursor,
+      ineligibleCount: discoveredCount - eligibleCount,
+      cursor,
     };
   } catch (error) {
     const code =

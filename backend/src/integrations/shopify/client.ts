@@ -41,7 +41,7 @@ export function createHttpShopifyClient(fetchImpl: FetchLike = fetch): ShopifyCl
       });
       const shop = asRecord(asRecord(payload).shop);
       const myshopifyDomain = asString(shop.myshopify_domain) ?? input.shop;
-      const shopId = asString(shop.id) ?? asString(shop.myshopify_domain) ?? input.shop;
+      const shopId = shopifyId(shop.id) ?? asString(shop.myshopify_domain) ?? input.shop;
       return {
         shopId,
         name: asString(shop.name),
@@ -52,14 +52,23 @@ export function createHttpShopifyClient(fetchImpl: FetchLike = fetch): ShopifyCl
     async listOrders(input) {
       const limit = Math.min(Math.max(input.limit ?? 50, 1), 50);
       const url = new URL(shopifyAdminApiUrl(input.shop, "/orders.json"));
-      url.searchParams.set("status", "any");
+      if (input.cursor) {
+        if (input.cursor.length > 4096 || /[\x00-\x1f]/.test(input.cursor)) throw providerResponseInvalid();
+        url.searchParams.set("page_info", input.cursor);
+      } else url.searchParams.set("status", "any");
       url.searchParams.set("limit", String(limit));
-      const payload = await shopifyJson(fetchImpl, {
-        url: url.toString(),
-        accessToken: input.accessToken,
+      const response = await fetchImpl(url.toString(), {
+        headers: { Accept: "application/json", "X-Shopify-Access-Token": input.accessToken },
+        redirect: "error",
+        signal: AbortSignal.timeout(15_000),
       });
+      const payload = await readJson(response);
+      if (!response.ok) mapOAuthHttpError(response.status);
       const raw = Array.isArray(asRecord(payload).orders) ? (asRecord(payload).orders as unknown[]) : [];
-      return raw.map(parseOrder).filter((order): order is ShopifyOrder => order != null);
+      return {
+        orders: raw.map(parseOrder).filter((order): order is ShopifyOrder => order != null),
+        cursor: nextOrderCursor(response.headers.get("link"), url),
+      };
     },
     async revoke(input) {
       const response = await fetchImpl(shopifyRevokeUrl(input.shop), {
@@ -98,7 +107,7 @@ async function shopifyJson(
 
 function parseOrder(value: unknown): ShopifyOrder | null {
   const record = asRecord(value);
-  const id = asString(record.id);
+  const id = shopifyId(record.id);
   if (!id) {
     return null;
   }
@@ -128,13 +137,13 @@ function parseOrder(value: unknown): ShopifyOrder | null {
     totalPrice: asString(record.total_price),
     currency: asString(record.currency),
     customer:
-      asString(customer.id) || displayName
-        ? { id: asString(customer.id), displayName: displayName || null }
+      shopifyId(customer.id) || displayName
+        ? { id: shopifyId(customer.id), displayName: displayName || null }
         : null,
     lineItems: items.map((item) => {
       const row = asRecord(item);
       return {
-        id: asString(row.id),
+        id: shopifyId(row.id),
         title: asString(row.title),
         sku: asString(row.sku),
         quantity: asNumber(row.quantity),
@@ -145,4 +154,32 @@ function parseOrder(value: unknown): ShopifyOrder | null {
     trackingCompany,
     trackingNumber,
   };
+}
+
+function shopifyId(value: unknown): string | null {
+  if (typeof value === "number") {
+    // REST represents IDs as JSON numbers. Never bind rounded/unsafe identities.
+    if (!Number.isSafeInteger(value) || value <= 0) throw providerResponseInvalid();
+    return String(value);
+  }
+  return asString(value);
+}
+
+function nextOrderCursor(header: string | null, requested: URL): string | null {
+  if (!header) return null;
+  const links = header.split(/,\s*(?=<)/);
+  for (const link of links) {
+    if (!/;\s*rel\s*=\s*"?next"?(?:\s*;|\s*$)/i.test(link)) continue;
+    const href = /^\s*<([^>]+)>/.exec(link)?.[1];
+    if (!href) throw providerResponseInvalid();
+    let next: URL;
+    try { next = new URL(href); } catch { throw providerResponseInvalid(); }
+    // Never follow an arbitrary provider URL with the merchant's access token.
+    if (next.origin !== requested.origin || next.pathname !== requested.pathname ||
+        next.username || next.password || next.hash) throw providerResponseInvalid();
+    const cursor = next.searchParams.get("page_info");
+    if (!cursor || cursor.length > 4096 || /[\x00-\x1f]/.test(cursor)) throw providerResponseInvalid();
+    return cursor;
+  }
+  return null;
 }

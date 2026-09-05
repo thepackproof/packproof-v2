@@ -32,5 +32,22 @@
   "devDependencies": {
     "@types/react": "~18.3.12",
     "typescript": "~5.3.3"
+  },
+  "overrides": {
+    "@expo/plist": {
+      "@xmldom/xmldom": "0.8.15"
+    },
+    "@expo/metro-config": {
+      "postcss": "8.5.28"
+    },
+    "@expo/bunyan": {
+      "uuid": "11.1.1"
+    },
+    "@expo/rudder-sdk-node": {
+      "uuid": "11.1.1"
+    },
+    "xcode": {
+      "uuid": "11.1.1"
+    }
   }
 }

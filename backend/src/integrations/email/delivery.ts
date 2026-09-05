@@ -48,8 +48,12 @@ export class SmtpEmailDelivery implements EmailDelivery {
       rejectUnauthorized: true,
     });
     socket.setTimeout(15_000, () => socket.destroy(new Error("SMTP connection timed out")));
-    await once(socket, "secureConnect");
-
+    // Observe socket failures for the entire conversation, not only the TLS handshake.
+    const failure = new Promise<never>((_resolve, reject) => {
+      socket.on("error", reject);
+      socket.once("close", () => reject(new Error("SMTP connection closed unexpectedly")));
+    });
+    const deadline = setTimeout(() => socket.destroy(new Error("SMTP delivery timed out")), 60_000);
     const lines = createInterface({ input: socket, crlfDelay: Infinity });
     const iterator = lines[Symbol.asyncIterator]();
     const readReply = async (expected: number): Promise<void> => {
@@ -71,20 +75,27 @@ export class SmtpEmailDelivery implements EmailDelivery {
     };
 
     try {
-      await readReply(220);
-      await command(`EHLO ${sanitizeHeader(this.config.heloName || "thepackproof.com")}`, 250);
-      await command("AUTH LOGIN", 334);
-      await command(Buffer.from(this.config.username).toString("base64"), 334);
-      await command(Buffer.from(this.config.password).toString("base64"), 235);
-      await command(`MAIL FROM:<${sanitizeAddress(this.config.from)}>`, 250);
-      await command(`RCPT TO:<${sanitizeAddress(message.to)}>`, 250);
-      await command("DATA", 354);
-      socket.write(`${formatMimeMessage(this.config.from, message)}\r\n.\r\n`);
-      await readReply(250);
-      socket.write("QUIT\r\n");
+      await Promise.race([
+        (async () => {
+          await once(socket, "secureConnect");
+          await readReply(220);
+          await command(`EHLO ${sanitizeHeader(this.config.heloName || "thepackproof.com")}`, 250);
+          await command("AUTH LOGIN", 334);
+          await command(Buffer.from(this.config.username).toString("base64"), 334);
+          await command(Buffer.from(this.config.password).toString("base64"), 235);
+          await command(`MAIL FROM:<${sanitizeAddress(this.config.from)}>`, 250);
+          await command(`RCPT TO:<${sanitizeAddress(message.to)}>`, 250);
+          await command("DATA", 354);
+          socket.write(`${formatMimeMessage(this.config.from, message)}\r\n.\r\n`);
+          await readReply(250);
+          socket.write("QUIT\r\n");
+        })(),
+        failure,
+      ]);
     } finally {
+      clearTimeout(deadline);
       lines.close();
-      socket.end();
+      socket.destroy();
     }
   }
 }

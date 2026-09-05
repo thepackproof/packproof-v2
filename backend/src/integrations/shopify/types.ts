@@ -43,6 +43,11 @@ export interface ShopifyClient {
     code: string;
   }): Promise<ShopifyTokenSet>;
   getShop(input: { shop: string; accessToken: string }): Promise<ShopifyShopIdentity>;
-  listOrders(input: { shop: string; accessToken: string; limit?: number }): Promise<ShopifyOrder[]>;
+  listOrders(input: { shop: string; accessToken: string; limit?: number; cursor?: string | null }): Promise<ShopifyOrderPage>;
   revoke(input: { shop: string; accessToken: string }): Promise<void>;
+}
+
+export interface ShopifyOrderPage {
+  orders: ShopifyOrder[];
+  cursor: string | null;
 }

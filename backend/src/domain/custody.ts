@@ -3,7 +3,7 @@ import type { Database } from "../db/database.js";
 import { listProofAssets, type ProofAssetView } from "./assets.js";
 import { listAssetBindings, type AssetExternalRefView } from "./asset-bindings.js";
 import { listContinuityEvaluations, type ContinuityView } from "./continuity.js";
-import { listObservations, type ObservationView } from "./observations.js";
+import { listObservations, originDocumentedAssetIds, type ObservationView } from "./observations.js";
 import { listTransfers, type TransferView } from "./transfers.js";
 import {
   evaluateWorkflowPolicy,
@@ -42,7 +42,7 @@ export async function loadCustodyBundle(
     listContinuityEvaluations(db, proof.id),
     listAssetBindings(db, proof.id),
   ]);
-  const documentedAssetIds = assetIdsOfType(observations, "ORIGIN_CAPTURE");
+  const documentedAssetIds = [...originDocumentedAssetIds(observations)];
   const packedAssetIds = assetIdsOfType(observations, "PACKED");
   const origin = [...observations].find((row) => row.type === "ORIGIN_CAPTURE") ?? null;
   const policy = evaluateWorkflowPolicy({

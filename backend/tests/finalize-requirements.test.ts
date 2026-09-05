@@ -68,6 +68,10 @@ describe("evaluateFinalizeRequirements", () => {
     const gradingBase = {
       ...merchantBase,
       workflowType: "GRADING_SUBMISSION" as const,
+      proofStatus: "EVIDENCE_COMMITTED",
+      committedEvidenceCount: 2,
+      assetCount: 1,
+      documentedAssetCount: 1,
       packed: true,
       released: true,
     };

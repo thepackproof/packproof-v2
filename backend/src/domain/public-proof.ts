@@ -6,7 +6,7 @@ import { loadProof } from "./proof-access.js";
 import { resolveAccessToken, type ProofAccessLinkRow } from "./access-links.js";
 import type { AccessLinkScope } from "./workflow.js";
 import { isQualifyingFulfillmentCapture } from "./evidence-types.js";
-import { buildProofTracker, type ProofTrackerView } from "./proof-tracker.js";
+import { buildProofTracker, trackerForScope, type ProofTrackerView } from "./proof-tracker.js";
 import type { ObjectStore } from "../s3/object-store.js";
 import { readCommittedEvidence } from "./evidence.js";
 
@@ -102,7 +102,7 @@ export async function projectPublicProof(
         }
       : null,
     scope: link.scope,
-    tracker,
+    tracker: trackerForScope(tracker, link.scope),
     join: {
       eligible: proof.status !== "FINALIZED",
       requiresAuthentication: true,

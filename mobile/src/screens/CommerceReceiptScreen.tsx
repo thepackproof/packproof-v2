@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text, View, Share } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
@@ -60,6 +60,7 @@ export function CommerceReceiptScreen() {
     >([]),
     [progress, setProgress] = useState<number | null>(null);
   const storageKey = `packproof-receipt:${app.session!.userId}:${proofId}`;
+  const actionLock = useRef(false);
   const request = <T,>(path: string, method = "GET", body?: unknown) =>
     app.client.lifecycleRequest<T>(proofId, path, method, body);
   const reload = async () => {
@@ -79,6 +80,8 @@ export function CommerceReceiptScreen() {
       .catch(() => undefined);
   }, [proofId]);
   async function run(fn: () => Promise<void>) {
+    if (actionLock.current) return;
+    actionLock.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -87,6 +90,7 @@ export function CommerceReceiptScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Receipt action failed");
     } finally {
+      actionLock.current = false;
       setBusy(false);
     }
   }
@@ -96,6 +100,11 @@ export function CommerceReceiptScreen() {
   };
   async function capture(index: number) {
     await requestCapturePermissions();
+    // Resolve the server stage before recording, so a network failure cannot
+    // strand a newly captured video before its durable retry state is saved.
+    const stage = await request<{ stageId: string }>("/stages", "POST", {
+      type: sequence[index],
+    });
     const video = await ImagePicker.launchCameraAsync({
       mediaTypes: ["videos"],
       cameraType: ImagePicker.CameraType.back,
@@ -103,9 +112,6 @@ export function CommerceReceiptScreen() {
       allowsEditing: false,
     });
     if (video.canceled || !video.assets[0]) return;
-    const stage = await request<{ stageId: string }>("/stages", "POST", {
-      type: sequence[index],
-    });
     const key = `receipt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const uri = `${FileSystem.documentDirectory}${key}.mp4`;
     await FileSystem.copyAsync({ from: video.assets[0].uri, to: uri });

@@ -168,6 +168,7 @@ import {
   discardPendingUpload,
 } from "./domain/resumable-upload.js";
 import { commerceLifecycleRouter } from "./http/commerce-lifecycle-router.js";
+import { httpBoundary, requestBodyErrors } from "./http/boundary.js";
 import {
   getRetentionControls,
   createRetentionHold,
@@ -201,13 +202,6 @@ function asyncRoute(
   return (req, res, next) => {
     void fn(req, res).catch(next);
   };
-}
-
-function headerOrigin(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-  return value;
 }
 
 function bearerUser(req: Request): string {
@@ -249,20 +243,7 @@ export function createApp(deps: AppDependencies): Express {
     packproofEnvironment: releaseIdentity.environment,
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
-  app.use((req, res, next) => {
-    const origin = headerOrigin(req.headers.origin);
-    if (origin && corsOrigins.includes(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key");
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-    }
-    if (req.method === "OPTIONS") {
-      res.status(204).end();
-      return;
-    }
-    next();
-  });
+  app.use(httpBoundary(corsOrigins));
   app.use("/integrations/webhooks", express.raw({ type: () => true, limit: "256kb" }));
   app.use((req, res, next) => {
     if (Buffer.isBuffer(req.body)) {
@@ -556,12 +537,7 @@ export function createApp(deps: AppDependencies): Express {
         deps.clock,
         connectedAccounts,
         req.params.provider,
-        {
-          code: req.query.code,
-          state: req.query.state,
-          error: req.query.error,
-          shop: req.query.shop,
-        },
+        req.query,
       );
       res.redirect(302, result.redirectTo);
     }),
@@ -1597,6 +1573,7 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
+  app.use(requestBodyErrors);
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof IntegrationError) {
       res.status(error.httpStatus).json({

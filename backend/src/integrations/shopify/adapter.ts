@@ -25,10 +25,10 @@ export function createShopifyCommerceAdapter(client: ShopifyClient): CommerceFul
     }): Promise<CommerceOrderPage> {
       const shop = shopFromConnection(input.connection, input.credentials);
       const accessToken = input.credentials?.material.accessToken?.trim() ?? "";
-      const orders = await client.listOrders({ shop, accessToken, limit: 50 });
+      const page = await client.listOrders({ shop, accessToken, limit: 50, cursor: input.cursor });
       return {
-        orders: orders.filter((order) => Boolean(order.createdAt)).map((order) => toNormalized(order, shop)),
-        cursor: null,
+        orders: page.orders.filter((order) => Boolean(order.createdAt)).map((order) => toNormalized(order, shop)),
+        cursor: page.cursor,
       };
     },
   };

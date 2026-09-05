@@ -9,6 +9,7 @@ import { DomainError } from "./errors.js";
 import { requireParticipant } from "./proof-access.js";
 import {
   buildProofTracker,
+  trackerForScope,
   type ProofTrackerView,
   type TrackerMilestoneCode,
 } from "./proof-tracker.js";
@@ -74,13 +75,14 @@ export async function createProofEmailSubscription(
   const scope = requireAccessLinkScope(input.scope);
   requireTrackerSecret(input.trackerLinkSecret);
 
-  const tracker = await buildProofTracker(db, proofId);
-  const baseline = tracker.milestones
-    .filter((milestone) => milestone.state === "COMPLETE")
-    .map((milestone) => milestone.code);
-
   return db.transaction(async (tx) => {
     const participant = await requireParticipant(tx, proofId, actorUserId);
+    // Serialize create-or-get for the same Proof, including across API instances.
+    await tx.query(`SELECT id FROM proofs WHERE id = $1 FOR UPDATE`, [proofId]);
+    const tracker = await buildProofTracker(tx, proofId);
+    const baseline = tracker.milestones
+      .filter((milestone) => milestone.state === "COMPLETE")
+      .map((milestone) => milestone.code);
     const existing = await tx.query<SubscriptionRow>(
       `SELECT * FROM proof_notification_subscriptions
         WHERE proof_id = $1 AND email_normalized = $2 AND revoked_at IS NULL`,
@@ -272,10 +274,15 @@ export async function dispatchPendingProofEmails(
             s.email, s.preference, s.scope, s.revoked_at
        FROM proof_notification_outbox o
        JOIN proof_notification_subscriptions s ON s.id = o.subscription_id
+       JOIN proof_access_links l ON l.id = s.access_link_id
       WHERE o.sent_at IS NULL
         AND o.cancelled_at IS NULL
         AND o.next_attempt_at <= $1
-        AND s.revoked_at IS NULL${proofClause}
+        AND (o.delivery_lease_until IS NULL OR o.delivery_lease_until <= $1)
+        AND o.attempt_count < 8
+        AND s.revoked_at IS NULL
+        AND l.revoked_at IS NULL
+        AND (l.expires_at IS NULL OR l.expires_at > $1)${proofClause}
       ORDER BY o.created_at ASC, o.id ASC
       LIMIT 25`,
     params,
@@ -283,27 +290,70 @@ export async function dispatchPendingProofEmails(
   let sent = 0;
   let failed = 0;
   for (const row of pending.rows) {
+    const claimedAt = clock.now();
+    const token = newId("delivery");
+    const claimed = await db.query<{ attempt_count: number }>(
+      `UPDATE proof_notification_outbox o
+          SET delivery_token = $2, delivery_lease_until = $4,
+              attempt_count = attempt_count + 1
+        WHERE o.id = $1 AND o.sent_at IS NULL AND o.cancelled_at IS NULL
+          AND o.next_attempt_at <= $3 AND o.attempt_count < 8
+          AND (o.delivery_lease_until IS NULL OR o.delivery_lease_until <= $3)
+          AND EXISTS (
+            SELECT 1 FROM proof_notification_subscriptions s
+            JOIN proof_access_links l ON l.id = s.access_link_id
+            WHERE s.id = o.subscription_id AND s.revoked_at IS NULL
+              AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at > $3)
+          )
+        RETURNING attempt_count`,
+      [row.id, token, claimedAt.toISOString(), new Date(claimedAt.getTime() + 5 * 60_000).toISOString()],
+    );
+    if (!claimed.rows[0]) continue;
     try {
+      // Recheck preferences and revocation after claiming, before external delivery.
+      const active = await db.query<{ preference: NotificationPreference }>(
+        `SELECT s.preference FROM proof_notification_subscriptions s
+         JOIN proof_notification_outbox o ON o.subscription_id = s.id
+         JOIN proof_access_links l ON l.id = s.access_link_id
+         WHERE o.id = $1 AND o.delivery_token = $2 AND o.cancelled_at IS NULL
+           AND s.revoked_at IS NULL AND l.revoked_at IS NULL
+           AND (l.expires_at IS NULL OR l.expires_at > $3)`,
+        [row.id, token, clock.now().toISOString()],
+      );
+      const preference = active.rows[0]?.preference;
+      const milestone = row.event_key.startsWith("MILESTONE:")
+        ? row.event_key.slice("MILESTONE:".length) as TrackerMilestoneCode : null;
+      if (!preference || (milestone && !shouldNotify(preference, milestone))) {
+        await db.query(
+          `UPDATE proof_notification_outbox SET cancelled_at = $3,
+             delivery_token = NULL, delivery_lease_until = NULL
+           WHERE id = $1 AND delivery_token = $2`,
+          [row.id, token, clock.now().toISOString()],
+        );
+        continue;
+      }
       const tracker = await buildProofTracker(db, row.proof_id);
       const viewUrl = trackerViewUrl(publicWebBaseUrl, trackerLinkSecret, row.subscription_id);
-      const message = emailForEvent(row.event_key, tracker, viewUrl, row.email);
+      const message = emailForEvent(row.event_key, trackerForScope(tracker, row.scope), viewUrl, row.email);
       await emailDelivery.send(message);
       await db.query(
         `UPDATE proof_notification_outbox
-            SET sent_at = $2, attempt_count = attempt_count + 1, last_error = NULL
-          WHERE id = $1 AND sent_at IS NULL`,
-        [row.id, clock.now().toISOString()],
+            SET sent_at = $3, last_error = NULL,
+                delivery_token = NULL, delivery_lease_until = NULL
+          WHERE id = $1 AND delivery_token = $2 AND sent_at IS NULL`,
+        [row.id, token, clock.now().toISOString()],
       );
       sent += 1;
-    } catch (error) {
-      const attempts = Number(row.attempt_count ?? 0) + 1;
+    } catch {
+      const attempts = Number(claimed.rows[0].attempt_count);
       const delayMs = Math.min(60 * 60 * 1000, 30_000 * 2 ** Math.min(attempts - 1, 7));
       const nextAttempt = new Date(clock.now().getTime() + delayMs).toISOString();
       await db.query(
         `UPDATE proof_notification_outbox
-            SET attempt_count = attempt_count + 1, last_error = $2, next_attempt_at = $3
-          WHERE id = $1 AND sent_at IS NULL`,
-        [row.id, errorMessage(error), nextAttempt],
+            SET last_error = 'Email delivery failed', next_attempt_at = $3,
+                delivery_token = NULL, delivery_lease_until = NULL
+          WHERE id = $1 AND delivery_token = $2 AND sent_at IS NULL`,
+        [row.id, token, nextAttempt],
       );
       failed += 1;
     }
@@ -446,11 +496,6 @@ function escapeHtml(value: string): string {
     "\"": "&quot;",
     "'": "&#39;",
   })[character] ?? character);
-}
-
-function errorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, 1000);
 }
 
 function toIso(value: Date | string): string {

@@ -2,7 +2,7 @@ import { OrderIntakeScreen } from "../screens/OrderIntakeScreen";
 import { CommerceReceiptScreen } from "../screens/CommerceReceiptScreen";
 import { sharedOrderText } from "../copy/share-intake";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, Linking } from "react-native";
+import { BackHandler, StyleSheet, Text, View, Linking } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
 import { isImmersiveRoute } from "./navigation";
@@ -34,6 +34,15 @@ export function Root() {
   const immersive = isImmersiveRoute(app.route);
   const [sharedText, setSharedText] = useState<string | null>(null);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
+
+  useEffect(() => {
+    if (!ready || !app.session || ["auth", "home", "station"].includes(app.route.name)) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!app.busy) app.goBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [ready, app.session?.userId, app.route.name, app.busy, app.goBack]);
 
   useEffect(() => {
     void applySystemBars({
@@ -95,6 +104,7 @@ export function Root() {
           userId={app.session.userId}
           restoredCapture={app.localCapture}
           restoredKey={app.session.evidenceIdempotencyKey}
+          restoredEvidenceId={app.session.uploadEvidenceId ?? null}
           restoredProofId={app.session.stationProofId}
           restoredTransactionId={app.session.stationTransactionId}
           restoredOrderLabel={app.session.stationOrderLabel}
@@ -109,7 +119,7 @@ export function Root() {
           onLeave={() => {
             app.setError(null);
             app.go("home");
-            void app.syncWorkspace();
+            void app.run(app.syncWorkspace);
           }}
         />
       </>

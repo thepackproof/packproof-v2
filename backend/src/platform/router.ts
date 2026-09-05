@@ -118,6 +118,14 @@ export function createPlatformRouter(deps: AppDependencies) {
         let value: unknown;
         if (method === "get") value = await fn(deps.db, principal, req);
         else {
+          const createsAccessLink = path.endsWith("/access-links") && method === "post";
+          if (createsAccessLink && Buffer.from(config.encryptionKey, "base64").length !== 32) {
+            throw new DomainError(
+              "ACCESS_LINKS_UNAVAILABLE",
+              "Secure viewing-link response encryption is not configured",
+              503,
+            );
+          }
           const result = await idempotent(
             deps.db,
             deps.clock,
@@ -126,10 +134,11 @@ export function createPlatformRouter(deps: AppDependencies) {
             req.header("Idempotency-Key"),
             req.body,
             (tx) => fn(tx, principal, req),
-            path.startsWith("/webhooks") && method === "post"
+            (path.startsWith("/webhooks") || createsAccessLink) && method === "post"
               ? protectWebhookResponse(
                   `${principal.tenantId}:${req.path}:${req.header("Idempotency-Key")}`,
                   config,
+                  createsAccessLink,
                 )
               : undefined,
           );
