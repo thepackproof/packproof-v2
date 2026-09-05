@@ -1,3 +1,5 @@
+import { withRequestTimeout } from "../api/timeout";
+
 export interface CognitoConfig {
   userPoolId: string;
   clientId: string;
@@ -6,6 +8,7 @@ export interface CognitoConfig {
 
 export interface CognitoSessionTokens {
   accessToken: string;
+  idToken?: string | null;
   refreshToken: string | null;
   expiresAt: number | null;
 }
@@ -37,6 +40,19 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+export async function cognitoForgotPassword(config: CognitoConfig, email: string): Promise<void> {
+  await cognitoCall(config, "ForgotPassword", { ClientId: config.clientId, Username: normalizeEmail(email) });
+}
+
+export async function cognitoConfirmForgotPassword(config: CognitoConfig, input: { email: string; code: string; password: string }): Promise<void> {
+  await cognitoCall(config, "ConfirmForgotPassword", {
+    ClientId: config.clientId,
+    Username: normalizeEmail(input.email),
+    ConfirmationCode: input.code.trim(),
+    Password: input.password,
+  });
+}
+
 function endpoint(region: string): string {
   return `https://cognito-idp.${region}.amazonaws.com/`;
 }
@@ -46,24 +62,27 @@ async function cognitoCall<T>(
   action: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const response = await fetch(endpoint(config.region), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-amz-json-1.1",
-      "X-Amz-Target": `AWSCognitoIdentityProviderService.${action}`,
-    },
-    body: JSON.stringify(body),
+  return withRequestTimeout(async (signal) => {
+    const response = await fetch(endpoint(config.region), {
+      method: "POST",
+      signal,
+      headers: {
+        "Content-Type": "application/x-amz-json-1.1",
+        "X-Amz-Target": `AWSCognitoIdentityProviderService.${action}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      __type?: string;
+      message?: string;
+      Message?: string;
+    };
+    if (!response.ok) {
+      const type = (payload.__type ?? "CognitoError").split("#").pop() ?? "CognitoError";
+      throw new CognitoAuthError(type, payload.message ?? payload.Message ?? type);
+    }
+    return payload as T;
   });
-  const payload = (await response.json().catch(() => ({}))) as {
-    __type?: string;
-    message?: string;
-    Message?: string;
-  };
-  if (!response.ok) {
-    const type = (payload.__type ?? "CognitoError").split("#").pop() ?? "CognitoError";
-    throw new CognitoAuthError(type, payload.message ?? payload.Message ?? type);
-  }
-  return payload as T;
 }
 
 export async function cognitoSignIn(
@@ -74,6 +93,7 @@ export async function cognitoSignIn(
   const result = await cognitoCall<{
     AuthenticationResult?: {
       AccessToken?: string;
+      IdToken?: string;
       RefreshToken?: string;
       ExpiresIn?: number;
     };
@@ -91,6 +111,7 @@ export async function cognitoSignIn(
   }
   return {
     accessToken: result.AuthenticationResult.AccessToken,
+    idToken: result.AuthenticationResult.IdToken ?? null,
     refreshToken: result.AuthenticationResult.RefreshToken ?? null,
     expiresAt:
       typeof result.AuthenticationResult.ExpiresIn === "number"
@@ -144,6 +165,7 @@ export async function cognitoRefresh(
   const result = await cognitoCall<{
     AuthenticationResult?: {
       AccessToken?: string;
+      IdToken?: string;
       RefreshToken?: string;
       ExpiresIn?: number;
     };
@@ -157,6 +179,7 @@ export async function cognitoRefresh(
   }
   return {
     accessToken: result.AuthenticationResult.AccessToken,
+    idToken: result.AuthenticationResult.IdToken ?? null,
     refreshToken: result.AuthenticationResult.RefreshToken ?? refreshToken,
     expiresAt:
       typeof result.AuthenticationResult.ExpiresIn === "number"

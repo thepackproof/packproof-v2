@@ -22,6 +22,8 @@ eBay seller OAuth that already existed (`/me/marketplaces/ebay/*` and `GET /inte
 
 Shopify install dual-writes an `integration_connections` row so existing commerce sync / fulfillment ingestion can import shop orders without a new ingestion pipeline.
 
+The existing REST connector targets Shopify's supported `2026-07` API. It follows `Link: rel="next"` cursors at 50 orders per page, rejects cross-shop pagination URLs, and imports up to ten pages per sync. Completed-page cursors are saved server-side; another sync continues a larger catalog or resumes after a provider failure. The response cursor is non-null while more pages remain. Finishing a scan clears the cursor so the next sync checks current orders again. REST remains a legacy Shopify API; new public-app distribution still requires the separate GraphQL migration and Shopify approval work described by [Shopify's REST documentation](https://shopify.dev/docs/api/admin-rest).
+
 ## Provider capability abstraction
 
 Every provider implements `ConnectedAccountProvider`:

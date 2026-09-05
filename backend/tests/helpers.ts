@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import os from "node:os";
 import request from "supertest";
 import { BearerUserAdapter } from "../src/auth/adapter.js";
@@ -19,6 +19,7 @@ import { MemoryCredentialStore } from "../src/integrations/memory-credential-sto
 import type { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
 import { commitAttestation } from "../src/domain/attestations.js";
 import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
+import { createCaptureSession, completeCaptureSession } from "../src/domain/capture-sessions.js";
 import { sha256Hex } from "../src/hash.js";
 
 export interface TestHarness {
@@ -34,6 +35,7 @@ export async function createHarness(
   clock: Clock = systemClock,
   options: {
     publicBaseUrl?: string;
+    corsOrigins?: string[];
     objectStore?: ObjectStore;
     integrations?: IntegrationAdapterRegistry;
     ebay?: import("../src/domain/ebay-marketplace.js").EbayRuntime;
@@ -43,6 +45,7 @@ export async function createHarness(
     credentialStore?: MutableCredentialStore;
     opened?: { db: Database; close: () => Promise<void> };
     ebayDeletionSignatureVerifier?: EbayDeletionSignatureVerifier;
+    manifestSigning?: import("../src/integrity/signing-runtime.js").ManifestSigningRuntime;
   } = {},
 ): Promise<TestHarness> {
   const resolvedClock = clock ?? systemClock;
@@ -66,6 +69,8 @@ export async function createHarness(
     auth: new BearerUserAdapter(opened.db),
     publicBaseUrl,
     devAuth: true,
+    corsOrigins: options.corsOrigins,
+    manifestSigning: options.manifestSigning,
     credentialStore,
     integrations: options.integrations,
     ebay: options.ebay,
@@ -120,7 +125,11 @@ export async function commitProofEvidence(
     idempotencyKey?: string;
   } = {},
 ) {
-  const bytes = input.bytes ?? Buffer.from(`evidence-${proofId}-${input.evidenceType ?? "default"}`);
+  const bytes = input.bytes ?? (input.evidenceType === "FULFILLMENT_CAPTURE"
+    ? await readFile(new URL("./fixtures/camera-recording.mp4", import.meta.url))
+    : Buffer.from(`evidence-${proofId}-${input.evidenceType ?? "default"}`));
+  const capture = input.evidenceType === "FULFILLMENT_CAPTURE" ? await createCaptureSession(harness.db,harness.clock,seller,proofId,{client:"NATIVE_CAMERA",idempotencyKey:input.idempotencyKey ?? `cap-${proofId}`}) : null;
+  if (capture) await completeCaptureSession(harness.db,harness.clock,seller,proofId,capture.id,{sha256:sha256Hex(bytes),byteSize:bytes.length,contentType:input.contentType??"video/mp4"});
   const contentType = input.contentType ?? "video/mp4";
   const upload = await initializeEvidenceUpload(
     harness.db,
@@ -131,6 +140,7 @@ export async function commitProofEvidence(
     {
       contentType,
       evidenceType: input.evidenceType,
+      captureSessionId: capture?.id,
       idempotencyKey: input.idempotencyKey ?? `evd-${proofId}-${input.evidenceType ?? "default"}`,
     },
   );
@@ -165,4 +175,12 @@ export async function commitFulfillmentAndAttest(
     relatedEvidenceId: committed.evidenceId,
   });
   return committed;
+}
+
+/** Real media with explicit server authorization for tests that exercise primary capture. */
+export async function prepareCameraCapture(harness: TestHarness, seller: string, proofId: string, key: string, stageId?: string) {
+  const bytes=await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url));
+  const session=await createCaptureSession(harness.db,harness.clock,seller,proofId,{client:"NATIVE_CAMERA",idempotencyKey:key,stageId});
+  await completeCaptureSession(harness.db,harness.clock,seller,proofId,session.id,{sha256:sha256Hex(bytes),byteSize:bytes.length,contentType:"video/mp4"});
+  return {captureSessionId:session.id,bytes};
 }

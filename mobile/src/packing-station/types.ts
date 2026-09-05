@@ -65,6 +65,7 @@ export interface StationError {
 }
 
 export interface StationCaptureRef {
+  captureSessionId?: string;
   handle: string;
   contentType: string;
   byteSize: number | null;
@@ -129,6 +130,7 @@ export type StationEvent =
   | { type: "PROCESSING_PROGRESS"; uploadPercent?: number | null; submitStep?: SubmitStep }
   | { type: "COMPLETED"; completion: "FINALIZED" | "EVIDENCE_COMMITTED" }
   | { type: "PROCESSING_FAILED"; error: StationError; canRetry: boolean }
+  | { type: "OPERATION_FAILED"; error: StationError; canRetry: boolean }
   | { type: "RETRY" }
   | { type: "RESET" }
   | { type: "AUTH_FAILED"; error?: StationError }

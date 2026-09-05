@@ -9,6 +9,7 @@ import { acceptInvitation, createInvitation } from "../src/domain/invitations.js
 import { createTransaction } from "../src/domain/transactions.js";
 import {
   auth,
+  prepareCameraCapture,
   commitFulfillmentAndAttest,
   createHarness,
   login,
@@ -52,6 +53,7 @@ describe("optional counterparty participation", () => {
     const proof = await createOrGetProof(harness.db, harness.clock, seller, txn.transactionId);
     expect(proof.participants.filter((row) => row.role === "BUYER")).toHaveLength(0);
 
+    const recording = await prepareCameraCapture(harness,seller,proof.proofId,`opt-capture-${proof.proofId}`);
     const upload = await initializeEvidenceUpload(
       harness.db,
       harness.clock,
@@ -61,6 +63,7 @@ describe("optional counterparty participation", () => {
       {
         contentType: "video/mp4",
         evidenceType: "FULFILLMENT_CAPTURE",
+        captureSessionId: recording.captureSessionId,
         idempotencyKey: `opt-capture-${proof.proofId}`,
       },
     );
@@ -147,6 +150,9 @@ describe("optional counterparty participation", () => {
       .post(`/proofs/${created.body.proofId}/evidence/${upload.body.evidenceId}/commit`)
       .set(auth(seller))
       .send({ sha256: sha256Hex(bytes) });
+    const blocked = await request(harness.app).post(`/proofs/${created.body.proofId}/finalize`).set(auth(seller));
+    expect(blocked.body.error.code).toBe("FULFILLMENT_CAPTURE_REQUIRED");
+    await commitFulfillmentAndAttest(harness,seller,created.body.proofId);
     const finalized = await request(harness.app)
       .post(`/proofs/${created.body.proofId}/finalize`)
       .set(auth(seller));

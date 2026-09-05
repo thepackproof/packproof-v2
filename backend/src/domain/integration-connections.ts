@@ -14,6 +14,7 @@ export interface IntegrationConnectionRow {
   provider: string;
   external_account_reference: string | null;
   credential_reference: string;
+  auto_sync_enabled?: boolean;
   status: IntegrationConnectionStatus | string;
   created_at: Date | string;
   updated_at: Date | string;

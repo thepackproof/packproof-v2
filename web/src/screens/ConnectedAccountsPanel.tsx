@@ -18,14 +18,13 @@ export function ConnectedAccountsPanel(props: {
 
   return (
     <section className="section stack">
-      <h2>Connected Accounts</h2>
+      <h2>Your platforms</h2>
       <p className="note">
-        Link official provider accounts to this PackProof user. This is not PackProof sign-in.
-        Tokens stay on the server.
+        Authorize a supported store to read order and fulfillment details. Automatic intake can prepare a Proof for paid physical orders before packing.
       </p>
       {props.notice ? <div className="banner banner-info">{props.notice}</div> : null}
       {props.accounts.length === 0 ? (
-        <p className="meta">No connected accounts yet.</p>
+        <p className="meta">Choose a supported platform to get started.</p>
       ) : (
         props.accounts.map((account) => (
           <article key={account.id} className="stack">

@@ -36,7 +36,8 @@ jobs:
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Signed AAB build skipped because the EXPO_TOKEN repository secret is not configured. Add the Expo automation token and re-run this workflow; the existing EAS remote Play signing credentials will be reused."
+            echo "::error::Android 0.3.0 (version code 29) was not built because the EXPO_TOKEN repository secret is not configured. Configure an authorized Expo automation token and re-run this workflow; the existing EAS remote Play signing credentials will be reused."
+            exit 1
           else
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
@@ -67,14 +68,14 @@ jobs:
           }
           fs.writeFileSync('dist/aab-url.txt', url + '\n');
           NODE
-          curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-v2-internal-28.aab
-          test -s dist/packproof-v2-internal-28.aab
+          curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-v2-internal-29.aab
+          test -s dist/packproof-v2-internal-29.aab
 
       - name: Upload AAB artifact
         if: steps.expo-auth.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: packproof-v2-internal-28-aab
-          path: mobile/dist/packproof-v2-internal-28.aab
+          name: packproof-v2-internal-29-aab
+          path: mobile/dist/packproof-v2-internal-29.aab
           if-no-files-found: error
           retention-days: 30

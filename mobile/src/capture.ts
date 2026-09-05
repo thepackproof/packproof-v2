@@ -1,6 +1,9 @@
+import { sha256 } from "@noble/hashes/sha256";
+import { toByteArray } from "base64-js";
 import * as FileSystem from "expo-file-system";
 import type { FileSystemUploadResult } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
+import { withRequestTimeout } from "./request-timeout";
 import {
   ApiError,
   newIdempotencyKey,
@@ -16,6 +19,23 @@ export interface LocalCapture {
   contentType: string;
   byteSize: number | null;
   durationMs: number | null;
+  captureSessionId?: string;
+  captureProofId?: string;
+  captureStageId?: string;
+  captureUserId?: string;
+  captureSha256?: string;
+  uploadEvidenceId?: string;
+  bookmarks?: CaptureBookmark[];
+  interrupted?: boolean;
+}
+
+export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED"; recipeVersion?: string; }
+export interface NativeRecordingRequest { proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
+let nativeRecorder: NativeRecorder | null = null;
+export function registerNativeRecorder(recorder: NativeRecorder): () => void {
+  nativeRecorder = recorder;
+  return () => { if (nativeRecorder === recorder) nativeRecorder = null; };
 }
 
 export async function requestCapturePermissions(): Promise<void> {
@@ -60,34 +80,67 @@ export async function captureGradingPhoto(): Promise<{
   };
 }
 
-export async function recordPackingEvidence(): Promise<LocalCapture | null> {
+export async function recordPackingEvidence(input: {
+  client: PackProofV2Client; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
+}): Promise<LocalCapture | null> {
   await requestCapturePermissions();
-  let result: ImagePicker.ImagePickerResult;
-  try {
-    result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["videos"],
-      cameraType: ImagePicker.CameraType.back,
-      videoMaxDuration: 180,
-      allowsEditing: false,
-    });
-  } catch (error) {
-    throw new Error(
-      error instanceof Error ? `Recording failed: ${error.message}` : "Camera is unavailable.",
-    );
-  }
-  if (result.canceled || !result.assets[0]?.uri) {
+  if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
+  // Authorization exists before a frame is recorded. No gallery or camera-error file path.
+  const session = await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId);
+  const captured = await nativeRecorder({ proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide });
+  if (!captured) {
+    await input.client.cancelCaptureSession(input.proofId, session.id).catch(() => undefined);
     return null;
   }
-  const asset = result.assets[0];
-  if (asset.type && asset.type !== "video") {
-    throw new Error("Packing evidence must be a video recording.");
+  return persistLocalCapture({ ...captured, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+}
+
+/** Existing grading recipes retain their original actor/recipe checks and evidence origin.
+ * This live-camera compatibility path never claims a commerce capture-session attestation.
+ */
+export async function recordGradingPackingEvidence(input: {
+  proofId: string; userId: string; orderLabel: string;
+}): Promise<LocalCapture | null> {
+  await requestCapturePermissions();
+  if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
+  const captured = await nativeRecorder({ proofId: input.proofId, orderLabel: input.orderLabel, compatibilityWorkflow: "GRADING_SUBMISSION" });
+  return captured ? persistLocalCapture({ ...captured, captureProofId: input.proofId, captureUserId: input.userId }) : null;
+}
+
+/** Stream bounded chunks after recording; hashing never runs in the live capture path. */
+export async function bindRecordedCapture(client: PackProofV2Client, capture: LocalCapture, proofId: string, userId: string, stageId?: string): Promise<void> {
+  if (!capture.captureSessionId || capture.captureProofId !== proofId || capture.captureUserId !== userId || capture.captureStageId !== stageId)
+    throw new Error("This saved recording has no eligible session for this account and Proof. It remains on this device; record a new packing video to meet the current policy.");
+  const info = await FileSystem.getInfoAsync(capture.uri);
+  if (!info.exists || info.isDirectory || !("size" in info) || info.size <= 0) throw new Error("The original recording is unavailable or empty.");
+  const hash = sha256.create();
+  for (let position = 0; position < info.size; position += 256 * 1024) {
+    const base64 = await FileSystem.readAsStringAsync(capture.uri, { encoding: FileSystem.EncodingType.Base64, position, length: Math.min(256 * 1024, info.size - position) });
+    hash.update(toByteArray(base64));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
-  return persistLocalCapture({
-    uri: asset.uri,
-    contentType: asset.mimeType ?? "video/mp4",
-    byteSize: asset.fileSize ?? null,
-    durationMs: asset.duration ?? null,
+  const digest = Array.from(hash.digest(), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const recordedDurationMs = typeof capture.durationMs === "number" && Number.isFinite(capture.durationMs) && capture.durationMs >= 0 && capture.durationMs <= 1_800_000
+    ? Math.floor(capture.durationMs)
+    : undefined;
+  await client.completeCaptureSession(proofId, capture.captureSessionId, {
+    sha256: digest, byteSize: info.size, contentType: capture.contentType,
+    ...(typeof capture.interrupted === "boolean" ? { interrupted: capture.interrupted } : {}),
+    ...(recordedDurationMs !== undefined ? { recordedDurationMs } : {}),
   });
+}
+
+/** Bookmarks are an optional index. An index failure must never invalidate committed bytes. */
+export async function saveCaptureBookmarks(client: PackProofV2Client, proofId: string, evidenceId: string, capture: LocalCapture): Promise<void> {
+  if (!capture.bookmarks?.length) return;
+  const view = await client.signatureRequest<{ snapshot: { data: { evidence: Array<{ evidenceId: string; capturedDurationMs?: number | null }> } } }>(proofId);
+  const duration = view.snapshot.data.evidence.find((item) => item.evidenceId === evidenceId)?.capturedDurationMs ?? capture.durationMs;
+  for (const [index, bookmark] of capture.bookmarks.entries()) {
+    const endMs = duration ? Math.min(bookmark.endMs, Math.floor(duration)) : bookmark.endMs;
+    if (bookmark.startMs >= endMs) continue;
+    const anchor = await client.signatureRequest<{ anchorId: string }>(proofId, "/anchors", "POST", { ...bookmark, endMs, evidenceId, ...(capture.captureStageId ? { stageId: capture.captureStageId } : {}), idempotencyKey: `${capture.captureSessionId}:bookmark:${index}` });
+    if (!capture.captureStageId) await client.disclosureRequest(proofId, `/thumbnails/${encodeURIComponent(anchor.anchorId)}`, "POST", {}).catch(() => undefined);
+  }
 }
 
 export function durableCaptureUri(): string {
@@ -99,6 +152,7 @@ export function durableCaptureUri(): string {
 }
 
 export async function persistLocalCapture(capture: LocalCapture): Promise<LocalCapture> {
+  if (!FileSystem.documentDirectory) throw new Error("Local document storage is unavailable.");
   const dest = `${FileSystem.documentDirectory}packproof-evidence-${newIdempotencyKey()}.mp4`;
   if (capture.uri !== dest) {
     const existing = await FileSystem.getInfoAsync(dest);
@@ -111,12 +165,19 @@ export async function persistLocalCapture(capture: LocalCapture): Promise<LocalC
   if (!info.exists || info.isDirectory) {
     throw new Error("Captured video could not be saved locally.");
   }
-  return {
+  const durable: LocalCapture = {
+    ...capture,
     uri: dest,
     contentType: capture.contentType || "video/mp4",
     byteSize: "size" in info && typeof info.size === "number" ? info.size : capture.byteSize,
     durationMs: capture.durationMs,
   };
+  await FileSystem.writeAsStringAsync(`${dest}.json`, JSON.stringify(durable));
+  return durable;
+}
+
+export async function persistCaptureMetadata(capture: LocalCapture): Promise<void> {
+  await FileSystem.writeAsStringAsync(`${capture.uri}.json`, JSON.stringify(capture));
 }
 
 export async function localCaptureExists(uri: string | null | undefined): Promise<boolean> {
@@ -133,6 +194,7 @@ export async function discardLocalCapture(uri: string | null | undefined): Promi
   }
   try {
     await FileSystem.deleteAsync(uri, { idempotent: true });
+    await FileSystem.deleteAsync(`${uri}.json`, { idempotent: true });
   } catch {
     // A missing temporary file is not Proof state.
   }
@@ -150,7 +212,10 @@ export async function describeLocalCapture(
   if (!info.exists || info.isDirectory) {
     return null;
   }
+  let metadata: Partial<LocalCapture> = {};
+  try { metadata = JSON.parse(await FileSystem.readAsStringAsync(`${uri}.json`)); } catch { /* Legacy origin remains unknown. */ }
   return {
+    ...metadata,
     uri,
     contentType: fallback.contentType ?? "video/mp4",
     byteSize:
@@ -195,7 +260,15 @@ export async function uploadCaptureFile(input: {
   );
   let result: FileSystemUploadResult | undefined;
   try {
-    result = await task.uploadAsync();
+    result = await withRequestTimeout(async (signal) => {
+      const cancel = () => { void task.cancelAsync().catch(() => undefined); };
+      signal.addEventListener("abort", cancel);
+      try {
+        return await task.uploadAsync();
+      } finally {
+        signal.removeEventListener("abort", cancel);
+      }
+    }, 10 * 60_000);
   } catch (error) {
     throw new Error(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
   }

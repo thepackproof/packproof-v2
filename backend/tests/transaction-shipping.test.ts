@@ -10,7 +10,7 @@ import { hashCanonicalManifest } from "../src/domain/finalize.js";
 import { acceptInvitation, createInvitation } from "../src/domain/invitations.js";
 import { createTransaction } from "../src/domain/transactions.js";
 import { sha256Hex } from "../src/hash.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, createHarness, login, type TestHarness } from "./helpers.js";
 
 const DETAILS = {
   externalReference: "ORD-1001",
@@ -269,12 +269,13 @@ describe("transaction and shipping context", () => {
       .post(`/invitations/${invite.body.invitation.token}/accept`)
       .set(auth(buyer));
 
-    const bytes = Buffer.from("txn-shipping-evidence");
+    const recording=await prepareCameraCapture(harness,seller,proofId,"txn-shipping-camera");
+    const bytes = recording.bytes;
     const upload = await request(harness.app)
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "seller-capture-1")
-      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId });
     const uploadUrl = new URL(upload.body.upload.url as string);
     await request(harness.app).put(uploadUrl.pathname).set("Content-Type", "video/mp4").send(bytes);
     await request(harness.app)

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { initializeManifestSigningRuntime } from "./integrity/kms-signing-runtime.js";
 import { createAuthentication, isDevLoginEnabled } from "./auth/create-auth.js";
 import { systemClock } from "./clock.js";
 import { loadConfig, loadEnvFile } from "./config.js";
@@ -10,6 +11,9 @@ import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
 import { createCredentialStore } from "./integrations/create-credential-store.js";
 import { createEbayRuntime } from "./integrations/ebay/runtime.js";
 import { webhookConfigFromEnv } from "./platform/webhooks.js";
+import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
+import { startMediaWorker } from "./workers/media-worker.js";
+import { startCommerceWorker } from "./workers/commerce-worker.js";
 import { startWebhookWorker } from "./platform/worker.js";
 import {
   createFacebookRuntime,
@@ -20,27 +24,31 @@ import {
 loadEnvFile(path.resolve(process.cwd()));
 
 const config = loadConfig();
+// Validate signing configuration before opening the database or starting workers.
+const manifestSigning = await initializeManifestSigningRuntime(systemClock);
 const opened = await openDatabase(config);
 await migrate(opened.db);
 const credentialStore = createCredentialStore(config);
+const objectStore = createObjectStore(config);
 const webhookConfig = webhookConfigFromEnv();
 
+const ebayRuntime=createEbayRuntime(config,{publicBaseUrl:config.publicBaseUrl,webOrigins:config.webOrigins});
+const integrations=createDefaultIntegrationRegistry(systemClock);
+if(ebayRuntime.enabled) integrations.registerCommerce(createEbayCommerceAdapter(opened.db,systemClock,ebayRuntime,credentialStore));
 const app = createServerApp({
   db: opened.db,
-  objectStore: createObjectStore(config),
+  objectStore,
   clock: systemClock,
   auth: createAuthentication(config, opened.db, systemClock),
   publicBaseUrl: config.publicBaseUrl,
   devAuth: isDevLoginEnabled(config),
   corsOrigins: config.webOrigins,
-  integrations: createDefaultIntegrationRegistry(systemClock),
+  integrations,
   credentialStore,
   webhookConfig,
+  manifestSigning,
   releaseIdentity: config.release,
-  ebay: createEbayRuntime(config, {
-    publicBaseUrl: config.publicBaseUrl,
-    webOrigins: config.webOrigins,
-  }),
+  ebay: ebayRuntime,
   shopify: createShopifyRuntime(config),
   google: createGoogleRuntime(config),
   facebook: createFacebookRuntime(config),
@@ -58,11 +66,19 @@ const stopWebhookWorker =
     ? startWebhookWorker(opened.db, systemClock, webhookConfig)
     : async () => {};
 
+const stopCommerceWorker=process.env.PACKPROOF_COMMERCE_WORKER!=="false"
+  ? startCommerceWorker(opened.db,systemClock,{integrations,credentials:credentialStore}) : async()=>{};
+
+const stopMediaWorker=process.env.PACKPROOF_MEDIA_WORKER!=="false"
+  ? startMediaWorker(opened.db,systemClock,objectStore) : async()=>{};
+
 const shutdown = async () => {
   await new Promise<void>((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );
   await stopWebhookWorker();
+  await stopCommerceWorker();
+  await stopMediaWorker();
   await opened.close();
 };
 

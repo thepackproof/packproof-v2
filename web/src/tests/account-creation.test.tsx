@@ -81,7 +81,7 @@ function tokens() {
 
 describe("web account creation", () => {
   beforeEach(() => {
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, "", "/proofs");
     sessionStorage.clear();
   });
 

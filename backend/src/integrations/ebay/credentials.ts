@@ -66,7 +66,7 @@ export function parseEbayUserCredentials(credentials: IntegrationCredentials | n
   return {
     accessToken,
     refreshToken,
-    accessTokenExpiresAt: credentials.material.accessTokenExpiresAt?.trim() ?? "",
+    accessTokenExpiresAt: credentials.material.accessTokenExpiresAt?.trim() || credentials.material.expiresAt?.trim() || "",
     ebayUserId: credentials.material.ebayUserId?.trim() ?? "",
     ebayUsername: credentials.material.ebayUsername?.trim() || null,
     environment: credentials.material.environment?.trim() || null,

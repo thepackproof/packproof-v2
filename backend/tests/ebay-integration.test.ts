@@ -164,7 +164,7 @@ describe("eBay seller OAuth and order import", () => {
     expect(created.status).toBe(201);
     expect(created.body.transaction.itemTitle).toBe("Nikon F3 Camera");
     expect(created.body.transaction.provenance.provider).toBe("ebay");
-    expect(created.body.transaction.provenance.tenantKey).toBe("marketplace:ebay:sandbox");
+    expect(created.body.transaction.provenance.tenantKey).toMatch(/^marketplace:ebay:sandbox\.[a-z0-9._-]+$/);
     expect(created.body.proof.participationPolicy).toBe("COUNTERPARTY_OPTIONAL");
     expect(created.body.proof.status).toBe("READY_FOR_EVIDENCE");
     const metadata = JSON.stringify(created.body.transaction.metadata);
@@ -194,6 +194,23 @@ describe("eBay seller OAuth and order import", () => {
       .get("/me/marketplaces/ebay/orders")
       .set(auth(userId));
     expect(orders.body.orders[0].proofId).toBe(created.body.proof.proofId);
+  });
+
+  it("shares one Proof between automatic eBay intake and manual recovery", async () => {
+    const client=new FakeEbayClient(); harness=await createHarness(undefined,{ebay:ebayRuntime(client)});
+    const userId=await connectEbay(harness);
+    const connections=await request(harness.app).get("/me/integration-connections?capability=commerce").set(auth(userId));
+    const connection=connections.body.connections.find((row:{provider:string})=>row.provider==="ebay");
+    expect(connection.autoSyncEnabled).toBe(false);
+    const enabled=await request(harness.app).post(`/me/commerce-connections/${connection.connectionId}/automation`).set(auth(userId)).send({enabled:true});
+    expect(enabled.status).toBe(200);
+    const synced=await request(harness.app).post(`/me/commerce-connections/${connection.connectionId}/sync`).set(auth(userId)).send({});
+    expect(synced.status).toBe(200);expect(synced.body.createdProofCount).toBe(1);
+    const recovered=await request(harness.app).post(`/me/marketplaces/ebay/orders/${EBAY_FIXTURE_ORDER_ID}/import`).set(auth(userId)).send({createProof:true});
+    expect(recovered.status).toBe(200);expect(recovered.body.created).toBe(false);
+    expect((await harness.db.query("SELECT id FROM proofs")).rows).toHaveLength(1);
+    const context=await request(harness.app).get(`/transactions/${recovered.body.transaction.transactionId}/commerce-context`).set(auth(userId));
+    expect(context.status).toBe(200);expect(context.body.order.latestSource.externalOrderId).toBe(EBAY_FIXTURE_ORDER_ID);
   });
 
   it("validates OAuth state and does not put the client secret in the authorize URL", async () => {

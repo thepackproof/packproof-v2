@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { PackProofApi } from "../api/client";
 import type { CanonicalProof, PublicProfileView } from "../api/types";
+import { StageRecorder } from "../components/StageRecorder";
 import { PageHeader } from "../components/PageHeader";
 
 type Stage = {
@@ -41,10 +42,12 @@ const STAGES = [
 export function ReceiptScreen({
   api,
   proofId,
+  userId,
   onBack,
 }: {
   api: PackProofApi;
   proofId: string;
+  userId: string;
   onBack: () => void;
 }) {
   const [data, setData] = useState<Lifecycle | null>(null),
@@ -53,13 +56,7 @@ export function ReceiptScreen({
   const [query, setQuery] = useState(""),
     [users, setUsers] = useState<PublicProfileView[]>([]),
     [notice, setNotice] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null),
-    [attested, setAttested] = useState(false);
-  const [upload, setUpload] = useState<{
-    stageId: string;
-    evidenceId: string;
-    target: Parameters<PackProofApi["uploadObject"]>[0];
-  } | null>(null);
+  const [attested,setAttested]=useState(false);
   const refresh = async () => {
     setData(await api.lifecycleRequest<Lifecycle>(proofId, ""));
   };
@@ -117,6 +114,7 @@ export function ReceiptScreen({
               their own linked manifests.
             </p>
           </section>
+          {data.role === "BUYER" && <section className="section stack"><h2>Receipt updates</h2><p>Choose whether to receive updates at your verified account email. Viewing this record does not acknowledge delivery.</p><div className="btn-row"><button className="btn btn-secondary" disabled={busy} onClick={()=>void action(async()=>{await api.setReceiptPreference(proofId,true);setNotice("Receipt updates enabled for your verified email.");})}>Enable email updates</button><button className="btn btn-secondary" disabled={busy} onClick={()=>void action(async()=>{await api.setReceiptPreference(proofId,false);setNotice("Receipt updates disabled.");})}>Disable email updates</button></div>{notice&&<p role="status">{notice}</p>}</section>}
           {data.role === "SELLER" ? (
             <section className="section stack">
               <h2>Invite the receiver</h2>
@@ -206,8 +204,6 @@ export function ReceiptScreen({
                           "POST",
                           {},
                         );
-                      setUpload(null);
-                      setFile(null);
                       await refresh();
                     })
                   }
@@ -215,64 +211,7 @@ export function ReceiptScreen({
                   Discard unfinished upload and record again
                 </button>
               ) : null}
-              {!committed ? (
-                <>
-                  <label className="field">
-                    <span>Stage recording</span>
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png"
-                      capture="environment"
-                      disabled={busy || Boolean(upload)}
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                  <button
-                    className="btn"
-                    disabled={busy || !file}
-                    onClick={() =>
-                      void action(async () => {
-                        const stage =
-                          active ??
-                          (await api.lifecycleRequest<{ stageId: string }>(
-                            proofId,
-                            "/stages",
-                            "POST",
-                            { type: next.type },
-                          ));
-                        let target = upload;
-                        if (!target) {
-                          const initialized = await api.lifecycleRequest<{
-                            evidenceId: string;
-                            upload: Parameters<PackProofApi["uploadObject"]>[0];
-                          }>(proofId, `/stages/${stage.stageId}/evidence`, "POST", {
-                            contentType: file!.type,
-                            idempotencyKey: crypto.randomUUID(),
-                          });
-                          target = {
-                            stageId: stage.stageId,
-                            evidenceId: initialized.evidenceId,
-                            target: initialized.upload,
-                          };
-                          setUpload(target);
-                        }
-                        await api.uploadObject(target.target, file!, file!.type);
-                        await api.lifecycleRequest(
-                          proofId,
-                          `/stages/${target.stageId}/evidence/${target.evidenceId}/commit`,
-                          "POST",
-                          {},
-                        );
-                        setFile(null);
-                        setUpload(null);
-                        await refresh();
-                      })
-                    }
-                  >
-                    {busy ? "Preserving…" : upload ? "Retry upload" : "Use stage recording"}
-                  </button>
-                </>
-              ) : null}
+              {!committed && <StageRecorder key={next.type} api={api} userId={userId} proofId={proofId} stageType={next.type} stageId={active?.stageId} onSaved={refresh}/>}
               {committed ? (
                 <>
                   <label>

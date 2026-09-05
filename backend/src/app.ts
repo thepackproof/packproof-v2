@@ -168,12 +168,22 @@ import {
   discardPendingUpload,
 } from "./domain/resumable-upload.js";
 import { commerceLifecycleRouter } from "./http/commerce-lifecycle-router.js";
+import { httpBoundary, requestBodyErrors } from "./http/boundary.js";
+import { captureSessionRouter, packingRelayRouter } from "./http/capture-router.js";
+import { signatureRouter } from "./http/signature-router.js";
+import { disclosureRouter, sendPrivateMedia } from "./http/disclosure-router.js";
+import { exportDisclosurePackage } from "./domain/disclosure-package.js";
+import { setCommerceAutomation, AUTOMATIC_ORDER_POLICY, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
+import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
+import { normalizeShopifyShop, shopifyShopHandle } from "./integrations/shopify/shop.js";
 import {
   getRetentionControls,
   createRetentionHold,
   releaseRetentionHold,
   requestProofDeletion,
 } from "./domain/retention-controls.js";
+
+import type { ManifestSigningRuntime } from "./integrity/signing-runtime.js";
 
 export interface AppDependencies {
   db: Database;
@@ -193,6 +203,7 @@ export interface AppDependencies {
   google?: GoogleOAuthRuntime;
   facebook?: FacebookOAuthRuntime;
   webhookConfig?: WebhookConfig;
+  manifestSigning?: ManifestSigningRuntime;
 }
 
 function asyncRoute(
@@ -201,13 +212,6 @@ function asyncRoute(
   return (req, res, next) => {
     void fn(req, res).catch(next);
   };
-}
-
-function headerOrigin(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-  return value;
 }
 
 function bearerUser(req: Request): string {
@@ -234,6 +238,7 @@ export function createApp(deps: AppDependencies): Express {
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
   const releaseIdentity = deps.releaseIdentity ?? parseReleaseIdentity();
   const ebay = deps.ebay ?? disabledEbayRuntime();
+  if (ebay.enabled) integrations.registerCommerce(createEbayCommerceAdapter(deps.db, deps.clock, ebay, credentialStore));
   const shopify = deps.shopify ?? disabledShopifyRuntime();
   const google = deps.google ?? disabledGoogleRuntime();
   const facebook = deps.facebook ?? disabledFacebookRuntime();
@@ -249,20 +254,7 @@ export function createApp(deps: AppDependencies): Express {
     packproofEnvironment: releaseIdentity.environment,
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
-  app.use((req, res, next) => {
-    const origin = headerOrigin(req.headers.origin);
-    if (origin && corsOrigins.includes(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key");
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-    }
-    if (req.method === "OPTIONS") {
-      res.status(204).end();
-      return;
-    }
-    next();
-  });
+  app.use(httpBoundary(corsOrigins));
   app.use("/integrations/webhooks", express.raw({ type: () => true, limit: "256kb" }));
   app.use((req, res, next) => {
     if (Buffer.isBuffer(req.body)) {
@@ -307,9 +299,33 @@ export function createApp(deps: AppDependencies): Express {
       );
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Referrer-Policy", "no-referrer");
-      res.type(media.contentType).send(media.body);
+      sendPrivateMedia(req, res, media);
     }),
   );
+
+  app.get("/public/proofs/:token/package", asyncRoute(async (req, res) => {
+    assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    const bytes = await exportDisclosurePackage(deps.db, deps.clock, deps.objectStore, req.params.token);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", 'attachment; filename="proof-view.zip"');
+    res.type("application/zip").send(bytes);
+  }));
+
+  app.get("/.well-known/packproof-trust.json", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (!deps.manifestSigning?.trustList) {
+      res.status(503).json({ error: { code: "MANIFEST_TRUST_NOT_CONFIGURED", message: "An authenticated public trust list has not been configured" } });
+      return;
+    }
+    res.json(deps.manifestSigning.trustList);
+  });
+  app.get("/integrity/signing", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(deps.manifestSigning?.publicStatus ?? { mode: "UNSIGNED", algorithm: null, keyId: null, required: false, trustListSha256: null });
+  });
 
   app.get("/meta", (_req, res) => {
     res.json({
@@ -374,6 +390,10 @@ export function createApp(deps: AppDependencies): Express {
 
   app.use("/me/tenants", createTenantManagementRouter(deps));
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
+  app.use("/proofs/:id/capture-sessions", captureSessionRouter(deps));
+  app.use("/me/packing-relay", packingRelayRouter(deps));
+  app.use("/proofs/:id/signature", signatureRouter(deps));
+  app.use("/proofs/:id/disclosure", disclosureRouter(deps));
   app.get(
     "/proofs/:id/retention",
     asyncRoute(async (req, res) => {
@@ -521,7 +541,7 @@ export function createApp(deps: AppDependencies): Express {
         bearerUser(req),
         req.params.id,
       );
-      res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}.pkpr"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${req.params.id.replace(/[^A-Za-z0-9_-]/g, "")}.zip"`);
       res.setHeader("Cache-Control", "no-store");
       res.type("application/zip").send(bytes);
     }),
@@ -556,12 +576,7 @@ export function createApp(deps: AppDependencies): Express {
         deps.clock,
         connectedAccounts,
         req.params.provider,
-        {
-          code: req.query.code,
-          state: req.query.state,
-          error: req.query.error,
-          shop: req.query.shop,
-        },
+        req.query,
       );
       res.redirect(302, result.redirectTo);
     }),
@@ -588,6 +603,15 @@ export function createApp(deps: AppDependencies): Express {
         header: req.header("X-Shopify-Hmac-Sha256"),
       });
       const topic = String(req.header("X-Shopify-Topic") ?? "").toLowerCase();
+      if (["orders/create", "orders/updated", "orders/cancelled", "orders/paid", "fulfillments/create", "fulfillments/update"].includes(topic)) {
+        const result = await enqueueCommerceWebhook(deps.db, deps.clock, {
+          provider: "shopify",
+          externalAccountReference: shopifyShopHandle(normalizeShopifyShop(req.header("X-Shopify-Shop-Domain"))),
+          deliveryId: String(req.header("X-Shopify-Webhook-Id") ?? ""), topic,
+        });
+        res.status(200).json(result);
+        return;
+      }
       if (topic !== "app/uninstalled") {
         res.status(200).json({ accepted: true });
         return;
@@ -626,6 +650,10 @@ export function createApp(deps: AppDependencies): Express {
       res.status(200).json(result);
     }),
   );
+
+  app.get("/transactions/:id/commerce-context", asyncRoute(async (req, res) => {
+    res.json(await getCommerceOrderContext(deps.db, bearerUser(req), req.params.id));
+  }));
 
   app.post(
     "/transactions",
@@ -1419,11 +1447,18 @@ export function createApp(deps: AppDependencies): Express {
           lastErrorCode: sync.lastErrorCode,
           retryable: sync.retryable,
           readyOrderCount: await countReadyFulfillmentOrders(deps.db, row.id, actor),
+          autoSyncEnabled: row.auto_sync_enabled,
+          orderPolicy: AUTOMATIC_ORDER_POLICY,
+          sync,
         });
       }
       res.json({ connections });
     }),
   );
+
+  app.post("/me/commerce-connections/:connectionId/automation", asyncRoute(async (req, res) => {
+    res.json(await setCommerceAutomation(deps.db, deps.clock, bearerUser(req), req.params.connectionId, req.body?.enabled, integrations));
+  }));
 
   app.post(
     "/me/commerce-connections/:connectionId/sync",
@@ -1523,6 +1558,7 @@ export function createApp(deps: AppDependencies): Express {
         {
           contentType: String(req.body?.contentType ?? ""),
           evidenceType: req.body?.evidenceType,
+          captureSessionId: req.body?.captureSessionId,
           idempotencyKey,
         },
       );
@@ -1548,8 +1584,7 @@ export function createApp(deps: AppDependencies): Express {
         eventData: { channel: "evidence_playback", evidenceId: req.params.evidenceId },
         at: deps.clock.now(),
       });
-      res.setHeader("Cache-Control", "private, no-store");
-      res.send(result.body);
+      sendPrivateMedia(req, res, result);
     }),
   );
 
@@ -1584,7 +1619,7 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/finalize",
     asyncRoute(async (req, res) => {
-      const result = await finalizeProof(deps.db, deps.clock, bearerUser(req), req.params.id);
+      const result = await finalizeProof(deps.db, deps.clock, bearerUser(req), req.params.id, deps.manifestSigning?.signer);
       res.json(result);
     }),
   );
@@ -1597,6 +1632,7 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
+  app.use(requestBodyErrors);
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof IntegrationError) {
       res.status(error.httpStatus).json({

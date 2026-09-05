@@ -48,7 +48,7 @@ export function PressableScale(props: PressableScaleProps) {
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable {...rest} onPressIn={handlePressIn} onPressOut={handlePressOut} style={(state) => [style, state.pressed ? pressedStyle : null]}>
+      <Pressable {...rest} onPressIn={handlePressIn} onPressOut={handlePressOut} style={(state) => [style, state.pressed ? { opacity: 0.72 } : null, state.pressed ? pressedStyle : null]}>
         {children}
       </Pressable>
     </Animated.View>

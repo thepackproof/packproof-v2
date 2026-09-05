@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { sha256Hex } from "../src/hash.js";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
@@ -86,14 +88,19 @@ describe("evidence capture API boundary", () => {
     expect(before.status).toBe("READY_FOR_EVIDENCE");
     expect(before.evidence.filter((item) => item.validationStatus === "COMMITTED")).toHaveLength(0);
 
+    const submittedBytes = new Uint8Array(await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url)));
+    const session=await ctx.seller.createCaptureSession(proof.proofId,"local-session-1");
+    await ctx.seller.completeCaptureSession(proof.proofId,session.id,{sha256:sha256Hex(Buffer.from(submittedBytes)),byteSize:submittedBytes.length,contentType:"video/mp4"});
     const initialized = await ctx.seller.initializeEvidenceUpload(proof.proofId, {
       contentType: "video/mp4",
       evidenceType: "FULFILLMENT_CAPTURE",
+      captureSessionId: session.id,
       idempotencyKey: "local-only-1",
     });
     const retryInit = await ctx.seller.initializeEvidenceUpload(proof.proofId, {
       contentType: "video/mp4",
       evidenceType: "FULFILLMENT_CAPTURE",
+      captureSessionId: session.id,
       idempotencyKey: "local-only-1",
     });
     expect(retryInit.evidenceId).toBe(initialized.evidenceId);
@@ -105,7 +112,6 @@ describe("evidence capture API boundary", () => {
     expect(afterInit.evidence.some((item) => item.validationStatus === "COMMITTED")).toBe(false);
 
     const firstBytes = new Uint8Array(Buffer.from("discarded-local-capture"));
-    const submittedBytes = new Uint8Array(Buffer.from("submitted-packing-video"));
     await ctx.seller.uploadObject(initialized.upload, firstBytes, "video/mp4");
     await ctx.seller.uploadObject(retryInit.upload, submittedBytes, "video/mp4");
 

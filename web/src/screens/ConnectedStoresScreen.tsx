@@ -1,8 +1,10 @@
+import type { ReactNode } from "react";
 import { formatDateTime } from "@packproof/copy/format";
 import type { CommerceConnectionView, CommerceSyncView, EbayMarketplaceView } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 
 export function ConnectedStoresScreen(props: {
+  connectionPanel?: ReactNode;
   connections: CommerceConnectionView[];
   lastSync: CommerceSyncView | null;
   loading: boolean;
@@ -14,6 +16,7 @@ export function ConnectedStoresScreen(props: {
   onConnectEbay: () => void;
   onDisconnectEbay: () => void;
   onImportSales: () => void;
+  onAutomation: (connectionId:string,enabled:boolean)=>void;
   onSync: (connectionId: string) => void;
   onBack?: () => void;
 }) {
@@ -22,11 +25,12 @@ export function ConnectedStoresScreen(props: {
 
   return (
     <main className="page stack">
-      <PageHeader title="Connected Stores" onBack={props.onBack} />
+      <PageHeader title="Connections" onBack={props.onBack} />
       <p className="lede">
-        Commerce connections that can create PackProofs for fulfillment-eligible orders.
+        Connect your store once. Choose which eligible orders become ready to record.
       </p>
-      {props.ebay?.enabled ? (
+      {props.connectionPanel}
+      {!props.connectionPanel && props.ebay?.enabled ? (
         <section className="section stack">
           <h2>eBay</h2>
           {ebayConnection ? (
@@ -77,8 +81,8 @@ export function ConnectedStoresScreen(props: {
       ) : null}
       {props.lastSync ? (
         <div className="banner banner-info">
-          Sync finished: {props.lastSync.discoveredCount} orders discovered,{" "}
-          {props.lastSync.eligibleCount} fulfillment eligible, {props.lastSync.createdProofCount} new
+          Order check finished: {props.lastSync.discoveredCount} orders discovered,{" "}
+          {props.lastSync.eligibleCount} ready to pack, {props.lastSync.createdProofCount} new
           PackProofs.
         </div>
       ) : null}
@@ -92,7 +96,7 @@ export function ConnectedStoresScreen(props: {
               Connect Demo Storefront
             </button>
           ) : (
-            <p className="note">Connect Shopify from Connected Accounts. Synced shops appear here.</p>
+            <p className="note">Choose an available selling platform above. Only paid physical orders that still need fulfillment are eligible.</p>
           )}
         </section>
       ) : (
@@ -103,6 +107,9 @@ export function ConnectedStoresScreen(props: {
               <p className="meta">
                 {connection.providerDisplay} · {connection.status}
               </p>
+              <label className="row"><input type="checkbox" checked={connection.autoSyncEnabled===true} disabled={props.busy||connection.status!=="ACTIVE"} onChange={e=>props.onAutomation(connection.connectionId,e.target.checked)}/> Automatically prepare eligible paid orders for recording</label>
+              <p className="note">Paid physical orders with remaining fulfillment enter Orders automatically while this is enabled, even when this tab is closed. Digital, unpaid, cancelled and fully fulfilled orders are excluded. Recording always remains a deliberate action.</p>
+              <p className="meta">{connection.autoSyncEnabled ? connection.sync?.initialSyncCompletedAt ? "Automatic intake enabled" : "Initial order check pending or in progress" : "Automatic intake off"}{connection.sync?.runStatus ? ` · ${connection.sync.runStatus.toLowerCase().replaceAll("_"," ")}` : ""}</p>
               <p className="meta">{connection.readyOrderCount} orders ready</p>
               {connection.lastSyncAt ? <p className="meta">Last sync {connection.lastSyncAt}</p> : null}
               {connection.lastErrorCode ? (
@@ -114,7 +121,7 @@ export function ConnectedStoresScreen(props: {
                 disabled={props.busy}
                 onClick={() => props.onSync(connection.connectionId)}
               >
-                Sync now
+                Check for orders now
               </button>
             </article>
           ))}

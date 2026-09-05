@@ -16,6 +16,8 @@ export interface CognitoTokenClaims {
   aud?: string | string[];
   iss: string;
   exp: number;
+  email?: string;
+  email_verified?: boolean;
 }
 
 export interface CognitoTokenVerifier {
@@ -54,6 +56,8 @@ export function createCognitoJwtVerifier(input: {
           sub: id.sub,
           token_use: id.token_use,
           aud: id.aud,
+          email: typeof id.email === "string" ? id.email : undefined,
+          email_verified: id.email_verified === true,
           iss: id.iss,
           exp: id.exp,
         };
@@ -91,6 +95,16 @@ export class CognitoJwtAdapter implements AuthenticationAdapter {
     }
 
     const userId = await ensureIdentityUser(this.db, this.clock, "cognito", claims.sub);
+    if (claims.token_use === "id") {
+      await this.db.transaction(async tx => {
+        // Replace a formerly verified contact when Cognito reports a new email
+        // or an unverified state. The client cannot assert this relationship.
+        await tx.query("DELETE FROM user_verified_contacts WHERE user_id=$1", [userId]);
+        if (claims.email_verified === true && typeof claims.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claims.email) && claims.email.length <= 254) {
+          await tx.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,$2,$3,'COGNITO')", [userId, claims.email.trim().toLowerCase(), this.clock.now().toISOString()]);
+        }
+      });
+    }
     return { userId };
   }
 }

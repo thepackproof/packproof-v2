@@ -49,6 +49,9 @@ import {
   discardLocalCapture,
   localCaptureExists,
   recordPackingEvidence,
+  recordGradingPackingEvidence,
+  bindRecordedCapture,
+  saveCaptureBookmarks,
   uploadCaptureFile,
   uploadCaptureResumable,
   type LocalCapture,
@@ -61,10 +64,13 @@ import {
 } from "../copy/custody";
 import {
   clearCachedState,
+  loadCaptureRecovery,
+  saveCaptureRecovery,
   loadCachedState,
   saveCachedState,
   type CachedClientState,
 } from "../session";
+import { mergeRefreshedSession, sessionForReauthentication } from "../session-recovery";
 import {
   resolveRuntimeConfig,
   shouldRestoreCachedSession,
@@ -267,6 +273,7 @@ export interface PackProofContextValue {
   persistStation: (next: {
     capture: LocalCapture | null;
     evidenceIdempotencyKey: string | null;
+    uploadEvidenceId?: string | null;
     proofId: string | null;
     transactionId: string | null;
     orderLabel: string | null;
@@ -338,11 +345,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const sessionRef = useRef<CachedClientState | null>(null);
   const searchGeneration = useRef(0);
   const captureSubmitLock = useRef(false);
+  const tokenRefresh = useRef<Promise<void> | null>(null);
   const client = useMemo(
     () =>
       new PackProofV2Client({
         baseUrl: apiBaseUrl.trim(),
         getToken: () => tokenRef.current,
+        getIdToken: () => sessionRef.current?.idToken ?? null,
       }),
     [apiBaseUrl],
   );
@@ -428,10 +437,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
           cognitoRegion: runtime.cognito.region,
         }
       : next;
-    tokenRef.current = stored.token;
+    tokenRef.current = stored.token || null;
     sessionRef.current = stored;
-    setSession(stored);
+    setSession(stored.needsReauthentication ? null : stored);
     await saveCachedState(stored);
+    await saveCaptureRecovery(stored);
   }
 
   function requireCognitoConfig(): CognitoConfig {
@@ -512,6 +522,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     const profile = await client.getMe();
     const previous = sessionRef.current;
     const sameUser = previous?.userId === profile.userId;
+    const recovery = sameUser ? null : await loadCaptureRecovery(apiBaseUrl.trim(), profile.userId);
     const next: CachedClientState = {
       apiBaseUrl: apiBaseUrl.trim(),
       authMode,
@@ -544,6 +555,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       stationTransactionId: sameUser ? (previous?.stationTransactionId ?? null) : null,
       stationOrderLabel: sameUser ? (previous?.stationOrderLabel ?? null) : null,
       stationItemSummary: sameUser ? (previous?.stationItemSummary ?? null) : null,
+      ...(recovery ?? {}),
     };
     await persist(next);
     await applyProfile(profile);
@@ -562,6 +574,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setEditForm(EMPTY_FORM);
       setManifest(null);
       setSearchResults([]);
+    }
+    if (recovery?.captureUri) {
+      const restored = await describeLocalCapture(recovery.captureUri, { contentType: recovery.evidenceContentType, byteSize: recovery.captureByteSize, durationMs: recovery.captureDurationMs });
+      if (restored && (!restored.captureUserId || restored.captureUserId === profile.userId)) {
+        setLocalCapture(restored); setCaptureStatus("retry");
+      }
     }
     setOffline(false);
     return profile;
@@ -622,27 +640,41 @@ export function PackProofProvider(props: { children: ReactNode }) {
     const current = sessionRef.current;
     if (
       !current ||
+      current.needsReauthentication ||
       current.authMode !== "cognito" ||
       !current.refreshToken ||
       (current.accessExpiresAt && current.accessExpiresAt - Date.now() > 60_000)
     ) {
       return;
     }
-    const refreshed = await cognitoRefresh(
-      {
-        userPoolId: current.cognitoUserPoolId ?? cognitoPoolId,
-        clientId: current.cognitoClientId ?? cognitoClientId,
-        region: current.cognitoRegion ?? cognitoRegion,
-      },
-      current.refreshToken,
-    );
-    await persist({
-      ...current,
-      token: refreshed.accessToken,
-      idToken: refreshed.idToken,
-      refreshToken: refreshed.refreshToken,
-      accessExpiresAt: refreshed.expiresAt,
-    });
+    if (tokenRefresh.current) return tokenRefresh.current;
+    const pending = (async () => {
+      const refreshed = await cognitoRefresh(
+        {
+          userPoolId: current.cognitoUserPoolId ?? cognitoPoolId,
+          clientId: current.cognitoClientId ?? cognitoClientId,
+          region: current.cognitoRegion ?? cognitoRegion,
+        },
+        current.refreshToken!,
+      );
+      const next = mergeRefreshedSession(sessionRef.current, current, refreshed);
+      if (next) await persist(next);
+    })();
+    tokenRefresh.current = pending;
+    try {
+      await pending;
+    } finally {
+      if (tokenRefresh.current === pending) tokenRefresh.current = null;
+    }
+  }
+
+  async function requireSignIn(): Promise<void> {
+    const current = sessionRef.current;
+    if (current) await persist(sessionForReauthentication(current));
+    tokenRef.current = null;
+    setSession(null);
+    setAuthPane("signIn");
+    go("auth");
   }
 
   async function refreshPendingInvites(): Promise<void> {
@@ -715,7 +747,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setError(null);
     setErrorDetail(null);
     try {
-      await ensureFreshCognitoToken();
+      if (route.name !== "auth") await ensureFreshCognitoToken();
       await action();
       setOffline(false);
     } catch (err) {
@@ -723,8 +755,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setOffline(true);
       }
       if (isAuthenticationFailure(err)) {
-        setAuthPane("signIn");
-        go("auth");
+        await requireSignIn();
       }
       const mapped = presentError(err);
       setErrorDetail(mapped);
@@ -748,7 +779,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
         }
         const runtime = currentRuntime(cached);
         applyResolvedRuntime(runtime);
-        if (!shouldRestoreCachedSession(cached, IS_RELEASE_CLIENT)) {
+        if (!shouldRestoreCachedSession(cached, IS_RELEASE_CLIENT) &&
+          !(cached.needsReauthentication && cached.authMode === "cognito")) {
           tokenRef.current = null;
           sessionRef.current = null;
           await clearCachedState();
@@ -765,7 +797,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         };
         tokenRef.current = next.token;
         sessionRef.current = next;
-        setSession(next);
+        setSession(next.needsReauthentication ? null : next);
         if (
           next.apiBaseUrl !== cached.apiBaseUrl ||
           next.authMode !== cached.authMode ||
@@ -795,6 +827,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
             await persist({
               ...next,
               captureUri: null,
+              captureProofId: null,
+              uploadEvidenceId: null,
               evidenceIdempotencyKey: null,
               evidenceContentType: null,
               captureByteSize: null,
@@ -804,8 +838,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
             setError("Your recording was removed by the device. Record packing evidence again.");
           }
         }
+        if (next.needsReauthentication) {
+          tokenRef.current = null;
+          go("auth");
+          setError("Session expired. Sign in again to resume your saved recording.");
+          return;
+        }
         try {
-          const restored = await restoreAuthoritativeSession(next);
+          const restored = await restoreAuthoritativeSession(sessionRef.current ?? next);
           if (!restored) {
             go("auth");
             return;
@@ -813,14 +853,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           go(next.stationActive ? "station" : "home");
         } catch (err) {
           if (isAuthenticationFailure(err)) {
-            const compiled = currentRuntime();
-            tokenRef.current = null;
-            sessionRef.current = null;
-            await clearCachedState();
-            setSession(null);
-            applyResolvedRuntime(compiled);
-            setAuthPane("signIn");
-            go("auth");
+            await requireSignIn();
             setError("Session expired. Sign in again.");
             return;
           }
@@ -831,6 +864,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
           }
           go("home");
         }
+      } catch (err) {
+        go("auth");
+        setError(formatUserFacingError(err));
       } finally {
         setHydrated(true);
       }
@@ -1054,7 +1090,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         // Local sign-out still proceeds if remote revoke fails.
       }
       try {
-        await discardLocalCapture(sessionRef.current?.captureUri);
+        if (sessionRef.current) await saveCaptureRecovery(sessionRef.current);
         tokenRef.current = null;
         sessionRef.current = null;
         await clearCachedState();
@@ -1199,24 +1235,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await refreshProof(created.proofId);
         go("proof");
       }),
-    shareProofLink: async () =>
-      run(async () => {
-        if (!proof) {
-          return;
-        }
-        const link = await client.createAccessLink(proof.proofId, {
-          scope: "SUMMARY",
-        });
-        const url = link.url?.trim();
-        if (!url) {
-          throw new Error("Viewing link is unavailable.");
-        }
-        const { Share } = await import("react-native");
-        await Share.share({
-          message: `View this PackProof: ${url}`,
-          url,
-        });
-      }),
+    shareProofLink: async () => { if (proof) go("sharing"); },
     runWorkflowAction: async (action: ProofWorkflowAction, body: Record<string, unknown> = {}) =>
       run(async () => {
         if (!proof) {
@@ -1346,7 +1365,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
             "Finish or discard your saved recording on its original Proof before recording another shipment.",
           );
         setCaptureStatus("capturing");
-        const captured = await recordPackingEvidence();
+        const captureInput = { proofId: proof.proofId, userId: sessionRef.current!.userId, orderLabel: proof.transaction.itemTitle || "Packing this order" };
+        const captured = isGradingWorkflow(proof.workflowType)
+          ? await recordGradingPackingEvidence(captureInput)
+          : await recordPackingEvidence({ client, ...captureInput });
         if (!captured) {
           setCaptureStatus(localCapture ? "captured" : "idle");
           return;
@@ -1416,7 +1438,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
             );
             let evidenceId = savedEvidenceId;
             if (!alreadyCommitted) {
+              if (evidenceType === "FULFILLMENT_CAPTURE") await bindRecordedCapture(client, localCapture, proof.proofId, sessionRef.current!.userId);
               const initialized = await client.initializeEvidenceUpload(proof.proofId, {
+                ...(evidenceType === "FULFILLMENT_CAPTURE" ? { captureSessionId: localCapture.captureSessionId } : {}),
                 contentType: localCapture.contentType,
                 evidenceType,
                 idempotencyKey: key,
@@ -1460,6 +1484,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
                 });
               }
             }
+            if (localCapture.captureSessionId) await saveCaptureBookmarks(client, proof.proofId, committedEvidence.evidenceId, localCapture).catch(() => { setError("Recording saved. Some replay bookmarks are unavailable; original playback still works."); });
             setCaptureStatus("committed");
             void haptic("success");
             await discardLocalCapture(localCapture.uri);
@@ -1593,7 +1618,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
         ...current,
         captureUri: next.capture?.uri ?? null,
         captureProofId: next.capture ? next.proofId : null,
-        uploadEvidenceId: null,
+        uploadEvidenceId: next.capture
+          ? next.uploadEvidenceId ??
+            (next.proofId === current.captureProofId &&
+            next.evidenceIdempotencyKey === current.evidenceIdempotencyKey
+              ? current.uploadEvidenceId
+              : null)
+          : null,
         evidenceIdempotencyKey: next.evidenceIdempotencyKey,
         evidenceContentType: next.capture?.contentType ?? null,
         captureByteSize: next.capture?.byteSize ?? null,

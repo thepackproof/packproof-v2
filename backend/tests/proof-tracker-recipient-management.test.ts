@@ -3,6 +3,13 @@ import request from "supertest";
 import { createProofEmailSubscription } from "../src/domain/proof-notifications.js";
 import { auth, createHarness, login, type TestHarness } from "./helpers.js";
 
+import { setReceiptPreference } from "../src/domain/buyer-receipt.js";
+async function optInBuyer(h:TestHarness,proofId:string,email:string) {
+  const buyer=await login(h.app,`buyer-${email}`);
+  await h.db.query("INSERT INTO commerce_receivers(proof_id,user_id,invited_by,created_at) SELECT $1,$2,user_id,$3 FROM proof_participants WHERE proof_id=$1 AND role='SELLER'",[proofId,buyer,h.clock.now().toISOString()]);
+  await h.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,$2,$3,'COGNITO')",[buyer,email,h.clock.now().toISOString()]);
+  await setReceiptPreference(h.db,h.clock,buyer,proofId,true);
+}
 const TRACKER_SECRET = "test-packproof-tracker-secret-with-at-least-32-bytes";
 
 describe("recipient Proof tracker email controls", () => {
@@ -21,6 +28,7 @@ describe("recipient Proof tracker email controls", () => {
       .set(auth(seller));
     const proofId = proof.body.proofId as string;
 
+    await optInBuyer(harness,proofId,"recipient.controls@example.com");
     const subscription = await createProofEmailSubscription(
       harness.db,
       harness.clock,
@@ -69,6 +77,7 @@ describe("recipient Proof tracker email controls", () => {
     const proof = await request(harness.app)
       .post(`/transactions/${transaction.body.transactionId}/proof`)
       .set(auth(seller));
+    await optInBuyer(harness,proof.body.proofId as string,"recipient@example.com");
     const subscription = await createProofEmailSubscription(
       harness.db,
       harness.clock,

@@ -35,6 +35,7 @@ function emitLegalPages(): Plugin {
 export default defineConfig({
   plugins: [react(), emitLegalPages()],
   appType: "spa",
+  esbuild: { tsconfigRaw: JSON.stringify({ compilerOptions: { jsx: "react-jsx", useDefineForClassFields: true } }) },
   resolve: {
     alias: {
       "@packproof/station": path.resolve(root, "../mobile/src/packing-station"),
@@ -43,6 +44,8 @@ export default defineConfig({
     },
   },
   server: {
+    host: "0.0.0.0",
+    allowedHosts: ["terminal.local"],
     port: 5173,
     fs: { allow: [".."] },
     proxy: {

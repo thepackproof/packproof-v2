@@ -26,6 +26,7 @@ export interface FulfillmentEligibilityInput {
   fulfillmentState: NormalizedFulfillmentState | string;
   requiresPhysicalFulfillment: boolean;
   cancelled: boolean;
+  onHold?: boolean;
 }
 
 /**
@@ -37,7 +38,7 @@ export interface FulfillmentEligibilityInput {
 export function decideFulfillmentEligibility(
   input: FulfillmentEligibilityInput,
 ): FulfillmentEligibility {
-  if (input.cancelled) {
+  if (input.cancelled || input.onHold) {
     return "INELIGIBLE";
   }
   if (!input.requiresPhysicalFulfillment) {

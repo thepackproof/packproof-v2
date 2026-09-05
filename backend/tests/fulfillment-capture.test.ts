@@ -94,7 +94,7 @@ describe("merchant fulfillment capture finalization", () => {
     expect(spoofName.status).toBe(400);
   });
 
-  it("leaves P2P finalization on any committed evidence and buyer join", async () => {
+  it("rejects the P2P generic-upload bypass and finalizes with the same capture standard", async () => {
     harness = await createHarness();
     const seller = await login(harness.app, "cap-p2p-s");
     const buyer = await login(harness.app, "cap-p2p-b");
@@ -111,6 +111,9 @@ describe("merchant fulfillment capture finalization", () => {
     await commitProofEvidence(harness, seller, proof.proofId, {
       evidenceType: "SELLER_EVIDENCE",
     });
+    await expect(finalizeProof(harness.db,harness.clock,seller,proof.proofId)).rejects.toMatchObject({code:"FULFILLMENT_CAPTURE_REQUIRED"});
+    const capture = await commitProofEvidence(harness,seller,proof.proofId,{evidenceType:"FULFILLMENT_CAPTURE",idempotencyKey:"primary"});
+    await commitAttestation(harness.db,harness.clock,seller,proof.proofId,{statement:"PACKED_DESCRIBED_ITEM",relatedEvidenceId:capture.evidenceId});
     const finalized = await finalizeProof(harness.db, harness.clock, seller, proof.proofId);
     expect(finalized.proof.status).toBe("FINALIZED");
     expect(finalized.manifest.manifest).not.toHaveProperty("participationPolicy");

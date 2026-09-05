@@ -1,0 +1,42 @@
+{
+  "schema": "packproof.canonical-vectors.v1",
+  "canonicalization": "packproof.sorted-json.v1",
+  "vectors": [
+    {
+      "input": {
+        "z": null,
+        "a": [
+          true,
+          false,
+          {
+            "z": "last",
+            "a": "first"
+          }
+        ]
+      },
+      "canonicalJson": "{\"a\":[true,false,{\"a\":\"first\",\"z\":\"last\"}],\"z\":null}",
+      "sha256": "0b0642efb469f28da943bf20cdbcdfef0b0b0d3c2017b202d39f2d578eb8a6ba"
+    },
+    {
+      "input": {
+        "2": "two",
+        "10": "ten",
+        "unicode": "é😀",
+        "negative": 0,
+        "small": 1e-7,
+        "quote": "line\n\"quoted\""
+      },
+      "canonicalJson": "{\"2\":\"two\",\"10\":\"ten\",\"negative\":0,\"quote\":\"line\\n\\\"quoted\\\"\",\"small\":1e-7,\"unicode\":\"é😀\"}",
+      "sha256": "c10a241395ccb58c93c258dc6726bb56ef3e65184b9105ebf82bb63e6a2e6666"
+    },
+    {
+      "input": {
+        "proofId": "proof_fixture",
+        "manifestVersion": 1,
+        "evidence": []
+      },
+      "canonicalJson": "{\"evidence\":[],\"manifestVersion\":1,\"proofId\":\"proof_fixture\"}",
+      "sha256": "924d81ec52083a7b47397e3b2849067b20c978e5b136be89fff59b5880e0f9ce"
+    }
+  ]
+}

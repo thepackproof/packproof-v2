@@ -27,6 +27,8 @@ export interface EbayOrderLineItem {
   title: string | null;
   quantity: number | null;
   lineItemCost: EbayMoney | null;
+  fulfillmentStatus?: string | null;
+
 }
 
 export interface EbayOrder {
@@ -37,6 +39,7 @@ export interface EbayOrder {
   orderFulfillmentStatus: string | null;
   orderPaymentStatus: string | null;
   sellerId: string | null;
+  requiresPhysicalFulfillment?: boolean;
   cancelState: string | null;
   buyerUsername: string | null;
   total: EbayMoney | null;
@@ -77,6 +80,8 @@ export interface EbayClient {
     marketplaceId: string;
     limit?: number;
     offset?: number;
+    updatedSince?: string;
+    updatedUntil?: string;
   }): Promise<EbayOrderList>;
   getOrder(input: {
     environment: EbayEnvironment;

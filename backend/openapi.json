@@ -301,7 +301,11 @@
                   },
                   "evidenceType": {
                     "type": "string",
-                    "default": "FULFILLMENT_CAPTURE"
+                    "default": "SELLER_EVIDENCE"
+                  },
+                  "captureSessionId": {
+                    "type": "string",
+                    "description": "Required for FULFILLMENT_CAPTURE. Server-issued session bound to this Proof and participant, with registered original digest and size."
                   }
                 },
                 "required": [
@@ -1376,6 +1380,10 @@
                   "contentType": {
                     "type": "string",
                     "maxLength": 100
+                  },
+                  "captureSessionId": {
+                    "type": "string",
+                    "description": "Required for stage video. Must be an eligible capture session issued for this same actor, Proof and stage."
                   }
                 },
                 "required": [
@@ -1899,6 +1907,309 @@
             "application/json": {
               "schema": {
                 "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/capture-sessions": {
+      "post": {
+        "operationId": "post_proofs_id_capture-sessions",
+        "summary": "POST /proofs/{id}/capture-sessions",
+        "description": "Authorize or recover the same direct packing capture. Scope evidence:write; server checks API tenant, participant, Proof, policy, and immutable original binding. Physical camera origin is not independently attested.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client": {
+                    "type": "string",
+                    "enum": [
+                      "WEB_CAMERA",
+                      "NATIVE_CAMERA"
+                    ]
+                  },
+                  "stageId": {
+                    "type": "string",
+                    "description": "Optional receipt or return stage. Server validates stage ownership and lifecycle role; root capture is seller packing."
+                  }
+                },
+                "required": [
+                  "client"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/capture-sessions/{sessionId}/complete": {
+      "post": {
+        "operationId": "post_proofs_id_capture-sessions_sessionId_complete",
+        "summary": "POST /proofs/{id}/capture-sessions/{sessionId}/complete",
+        "description": "Authorize or recover the same direct packing capture. Scope evidence:write; server checks API tenant, participant, Proof, policy, and immutable original binding. Physical camera origin is not independently attested.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-fA-F0-9]{64}$"
+                  },
+                  "byteSize": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 209715200
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "enum": [
+                      "video/mp4",
+                      "video/webm",
+                      "video/quicktime"
+                    ]
+                  },
+                  "interrupted": {
+                    "type": "boolean",
+                    "description": "Client-reported recording interruption. Once reported true it is not downgraded by retries. Not independently attested."
+                  },
+                  "recordedDurationMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1800000,
+                    "description": "Optional client-reported recording duration, distinct from the server-probed media duration. Immutable on retry once provided."
+                  }
+                },
+                "required": [
+                  "sha256",
+                  "byteSize",
+                  "contentType"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/capture-sessions/{sessionId}": {
+      "get": {
+        "operationId": "get_proofs_id_capture-sessions_sessionId",
+        "summary": "GET /proofs/{id}/capture-sessions/{sessionId}",
+        "description": "Authorize or recover the same direct packing capture. Scope evidence:write; server checks API tenant, participant, Proof, policy, and immutable original binding. Physical camera origin is not independently attested.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/capture-sessions/{sessionId}/recover": {
+      "post": {
+        "operationId": "post_proofs_id_capture-sessions_sessionId_recover",
+        "summary": "POST /proofs/{id}/capture-sessions/{sessionId}/recover",
+        "description": "Authorize or recover the same direct packing capture. Scope evidence:write; server checks API tenant, participant, Proof, policy, and immutable original binding. Physical camera origin is not independently attested.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/capture-sessions/{sessionId}/cancel": {
+      "post": {
+        "operationId": "post_proofs_id_capture-sessions_sessionId_cancel",
+        "summary": "POST /proofs/{id}/capture-sessions/{sessionId}/cancel",
+        "description": "Authorize or recover the same direct packing capture. Scope evidence:write; server checks API tenant, participant, Proof, policy, and immutable original binding. Physical camera origin is not independently attested.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
               }
             }
           }

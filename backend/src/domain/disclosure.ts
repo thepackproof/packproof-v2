@@ -1,0 +1,171 @@
+import type { Clock } from '../clock.js';
+import type { Database } from '../db/database.js';
+import type { ObjectStore } from '../s3/object-store.js';
+import { canonicalize } from '../canonical.js';
+import { sha256Hex } from '../hash.js';
+import { createAccessLink, resolveAccessToken, type ProofAccessLinkRow } from './access-links.js';
+import { requireParticipant, loadProof } from './proof-access.js';
+import { buildProofTracker } from './proof-tracker.js';
+import { readCommittedEvidence } from './evidence.js';
+import { DomainError } from './errors.js';
+import { appendAudit } from './audit.js';
+import { loadCustodyBundle } from './custody.js';
+import { isQualifyingFulfillmentCapture } from './evidence-types.js';
+
+export const DISCLOSURE_POLICY_VERSION = 'packproof.disclosure/v1';
+export const DISCLOSURE_FIELDS = ['status', 'order', 'shipping', 'evidence', 'statements'] as const;
+export type DisclosureField = typeof DISCLOSURE_FIELDS[number];
+export type DisclosurePurpose = 'BUYER_RECEIPT' | 'CLAIMS_REVIEW' | 'PUBLIC_SAMPLE';
+export interface DisclosureMedia { evidenceId: string; representation: 'ORIGINAL' | 'DERIVATIVE'; derivativeId?: string }
+export interface DisclosureContext {
+  proofId: string; actorUserId?: string; grantId: string; scopeIdentity?:string; policyVersion: string; scopeVersion: number;
+  purpose: DisclosurePurpose | 'PARTICIPANT'; fields: DisclosureField[]; media: DisclosureMedia[];
+}
+export interface DisclosureInput {
+  purpose?: unknown; fields?: unknown; media?: unknown; originalsReviewed?: unknown;
+  expiresAt?: unknown; recipientHint?: unknown; previewHash?: unknown;
+}
+interface GrantRow { scope_version: number; policy_version: string; purpose: DisclosurePurpose; fields: DisclosureField[]; media: DisclosureMedia[] }
+function invalid(message: string): never { throw new DomainError('INVALID_DISCLOSURE', message, 400); }
+function forbidden(): never { throw new DomainError('INSUFFICIENT_SCOPE', 'This view does not include that source', 403); }
+
+export async function resolveDisclosureContext(db: Database, clock: Clock, input: { proofId?: string; actorUserId?: string; token?: string }): Promise<DisclosureContext> {
+  if (input.token) {
+    const link = await resolveAccessToken(db, clock, input.token);
+    if (input.proofId && input.proofId !== link.proof_id) forbidden();
+    return disclosureContextForLink(db, link, clock.now());
+  }
+  if (!input.proofId || !input.actorUserId) forbidden();
+  await requireParticipant(db, input.proofId!, input.actorUserId!);
+  const rows = await db.query<{id:string}>('SELECT id FROM evidence WHERE proof_id=$1 AND validation_status=\'COMMITTED\'', [input.proofId]);
+  return {proofId: input.proofId!, actorUserId: input.actorUserId, grantId: `participant:${input.actorUserId}`, policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: 1, purpose:'PARTICIPANT', fields:[...DISCLOSURE_FIELDS], media: rows.rows.map(row=>({evidenceId:row.id,representation:'ORIGINAL'}))};
+}
+export async function disclosureContextForLink(db: Database, link: ProofAccessLinkRow, now:Date=new Date()): Promise<DisclosureContext> {
+  const creator = await db.query('SELECT 1 FROM proof_participants WHERE id=$1 AND proof_id=$2', [link.created_by_participant_id,link.proof_id]);
+  if (!creator.rows[0]) forbidden();
+  const subscription=(await db.query<{recipient_grant_id:string|null}>('SELECT recipient_grant_id FROM proof_notification_subscriptions WHERE access_link_id=$1',[link.id])).rows[0];
+  let effectiveLinkId=link.id;
+  if(subscription?.recipient_grant_id) {
+    const parent=(await db.query<ProofAccessLinkRow>('SELECT * FROM proof_access_links WHERE id=$1 AND proof_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>$3)',[subscription.recipient_grant_id,link.proof_id,now.toISOString()])).rows[0];
+    if(!parent) throw new DomainError('ACCESS_LINK_REVOKED','This viewing link is no longer available',404);
+    effectiveLinkId=parent.id;
+  }
+  const latest = (await db.query<GrantRow>('SELECT * FROM proof_disclosure_grants WHERE access_link_id=$1 ORDER BY scope_version DESC LIMIT 1',[effectiveLinkId])).rows[0];
+  if (latest && latest.policy_version !== DISCLOSURE_POLICY_VERSION) forbidden();
+  if(subscription?.recipient_grant_id && latest?.purpose!=='BUYER_RECEIPT') forbidden();
+  // Historical broad scopes never imply permission to reveal unreviewed media.
+  return {proofId:link.proof_id,grantId:link.id,scopeIdentity:effectiveLinkId,policyVersion:DISCLOSURE_POLICY_VERSION,scopeVersion:Number(latest?.scope_version ?? 0),purpose:latest?.purpose ?? 'BUYER_RECEIPT',fields: latest?.fields ?? (link.scope==='STATUS_ONLY'?['status']:['status','order','shipping']), media:latest?.media ?? []};
+}
+export function assertDisclosureField(ctx: DisclosureContext, field: DisclosureField): void { if(!ctx.fields.includes(field)) forbidden(); }
+export function assertDisclosureMedia(ctx: DisclosureContext, evidenceId: string, derivativeId?: string): DisclosureMedia {
+  const match=ctx.media.find(m=>m.evidenceId===evidenceId && (derivativeId===undefined || m.derivativeId===derivativeId));
+  if(!ctx.fields.includes('evidence') || !match) forbidden();
+  return match!;
+}
+export async function validateDisclosureInput(db: Database, actorUserId:string,proofId:string,input:DisclosureInput): Promise<DisclosureContext> {
+  await requireParticipant(db,proofId,actorUserId,'SELLER');
+  const purpose = input.purpose ?? 'BUYER_RECEIPT';
+  if(typeof purpose!=='string'||!['BUYER_RECEIPT','CLAIMS_REVIEW','PUBLIC_SAMPLE'].includes(purpose)) invalid('Choose a recipient purpose');
+  const fields=input.fields ?? ['status','order','shipping'];
+  if(!Array.isArray(fields)||fields.length>4||fields.some(x=>!['status','order','shipping','evidence'].includes(x))) invalid('Only status, item title, shipping status and selected media can be shared');
+  if(!fields.includes('status')) invalid('Every receipt includes the Proof status');
+  const media=input.media ?? [];
+  if(!Array.isArray(media)||media.length>30) invalid('Select at most 30 media sources');
+  const selected:DisclosureMedia[]=[];
+  for(const m of media) {
+    if(!m||typeof m.evidenceId!=='string'||!['ORIGINAL','DERIVATIVE'].includes(m.representation)) invalid('Invalid media selection');
+    if(selected.some(s=>s.evidenceId===m.evidenceId)) invalid('Select only one representation per source');
+    const evidence=(await db.query<{sha256:string}>('SELECT sha256 FROM evidence WHERE id=$1 AND proof_id=$2 AND validation_status=\'COMMITTED\'',[m.evidenceId,proofId])).rows[0];
+    if(!evidence) forbidden();
+    if(m.representation==='ORIGINAL') {
+      if(purpose!=='CLAIMS_REVIEW'||input.originalsReviewed!==true) invalid('Original media requires explicit review for a claims recipient');
+      selected.push({evidenceId:m.evidenceId,representation:'ORIGINAL'});
+    } else {
+      if(typeof m.derivativeId!=='string') invalid('Select a reviewed redacted derivative');
+      const row=(await db.query('SELECT 1 FROM proof_media_derivatives WHERE id=$1 AND proof_id=$2 AND evidence_id=$3 AND source_sha256=$4 AND status=\'REVIEWED\'',[m.derivativeId,proofId,m.evidenceId,evidence.sha256])).rows[0];
+      if(!row) invalid('The redaction is not available and reviewed');
+      selected.push({evidenceId:m.evidenceId,representation:'DERIVATIVE',derivativeId:m.derivativeId});
+    }
+  }
+  if(selected.length&&!fields.includes('evidence')) invalid('Enable selected media before sharing a recording');
+  return {proofId,grantId:'preview',policyVersion:DISCLOSURE_POLICY_VERSION,scopeVersion:1,purpose:purpose as DisclosurePurpose,fields:[...new Set(fields)] as DisclosureField[],media:selected};
+}
+
+export async function getDisclosureProjection(db:Database,ctx:DisclosureContext) {
+  const proof=await loadProof(db,ctx.proofId);
+  const source=await buildProofTracker(db,ctx.proofId);
+  const committed=(await db.query<{evidence_type:string}>('SELECT evidence_type FROM evidence WHERE proof_id=$1 AND validation_status=\'COMMITTED\'',[ctx.proofId])).rows;
+  const packingAttested=(await db.query('SELECT 1 FROM attestations WHERE proof_id=$1 AND statement=\'PACKED_DESCRIBED_ITEM\'',[ctx.proofId])).rows.length>0;
+  const custody=await loadCustodyBundle(db,proof,null,{committedEvidenceCount:committed.length,packingAttested,fulfillmentCaptureCount:committed.filter(e=>isQualifyingFulfillmentCapture({evidenceType:e.evidence_type,validationStatus:'COMMITTED'})).length});
+  const shipping=ctx.fields.includes('shipping');
+  const safeMilestones=source.milestones.filter(m=>shipping||['PROOF_CREATED','PACKING_RECORDED','PROOF_FINALIZED'].includes(m.code)).map(m=>({...m, detail:null, label:m.code==='DELIVERED'?'Carrier reported delivery':m.label}));
+  const tracker={...source,reference:null,itemTitle:ctx.fields.includes('order')?source.itemTitle:null,
+    headline:shipping?(source.headline==='Delivered'?'Carrier reported delivery':source.headline):(proof.status==='FINALIZED'?'Proof finalized':'Proof in progress'),
+    shipment:shipping&&source.shipment?{carrier:source.shipment.carrier,service:null,trackingNumber:null}:null,
+    milestones:safeMilestones,lastUpdatedAt:safeMilestones.filter(m=>m.occurredAt).map(m=>m.occurredAt!).sort().at(-1)??source.lastUpdatedAt};
+  const evidence=[];
+  for(const media of ctx.media) {
+    const e=(await db.query<{id:string,evidence_type:string,content_type:string,sha256:string}>('SELECT id,evidence_type,content_type,sha256 FROM evidence WHERE id=$1 AND proof_id=$2 AND validation_status=\'COMMITTED\'',[media.evidenceId,ctx.proofId])).rows[0];
+    if(!e) continue;
+    let contentType=e.content_type;
+    if(media.representation==='DERIVATIVE') {
+      const d=(await db.query<{content_type:string}>('SELECT content_type FROM proof_media_derivatives WHERE id=$1 AND proof_id=$2 AND evidence_id=$3 AND source_sha256=$4 AND status=\'REVIEWED\'',[media.derivativeId,ctx.proofId,e.id,e.sha256])).rows[0];
+      if(!d) continue;
+      contentType=d.content_type;
+    }
+    evidence.push({evidenceId:e.id,slot:e.evidence_type==='FULFILLMENT_CAPTURE'?'Packing':'Evidence',committed:true as const,contentType,representation:media.representation,derivativeId:media.derivativeId??null,label:media.representation==='DERIVATIVE'?'Reviewed redacted copy':'Original recording'});
+  }
+  const received=(await db.query('SELECT 1 FROM commerce_stages WHERE proof_id=$1 AND stage_type=\'RECEIPT\' AND finalized_at IS NOT NULL LIMIT 1',[ctx.proofId])).rows.length>0;
+  const value={schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
+    join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
+    evidence:ctx.fields.includes('evidence')?evidence:[],
+    observations:ctx.fields.includes('shipping')?custody.observations.map(o=>({label:o.label,occurredAt:o.occurredAt})):[],
+    receipt:{mode:ctx.purpose==='PUBLIC_SAMPLE'?'SAMPLE':'LIVE',carrierReportedDelivered:shipping&&source.milestones.some(m=>m.code==='DELIVERED'&&m.state==='COMPLETE'),buyerReportedReceived:received,contributionRequiresVerification:true,contributionUrl:`/proof/${proof.id}/lifecycle`,message:'No buyer report is not acceptance. A receipt report is not a waiver.'},
+    disclosure:{policyVersion:ctx.policyVersion,grantId:ctx.grantId,scopeVersion:ctx.scopeVersion,purpose:ctx.purpose,fields:ctx.fields,revocationNotice:'Revoking a link prevents future access. It cannot recall files or screenshots already saved.'}};
+  // Hash the exact disclosure content independent of the server-generated link id.
+  const viewHash=sha256Hex(canonicalize({...value,disclosure:{...value.disclosure,grantId:null,scopeVersion:null}}));
+  return {...value,disclosure:{...value.disclosure,viewHash}};
+}
+export async function previewDisclosure(db:Database,actorUserId:string,proofId:string,input:DisclosureInput) {
+  return getDisclosureProjection(db,await validateDisclosureInput(db,actorUserId,proofId,input));
+}
+export async function createDisclosureGrant(db:Database,clock:Clock,actorUserId:string,proofId:string,input:DisclosureInput&{publicWebBaseUrl:string,accessLinkId?:string}) {
+  return db.transaction(async tx=>{
+    await loadProof(tx,proofId,true);
+    const ctx=await validateDisclosureInput(tx,actorUserId,proofId,input);
+    const preview=await getDisclosureProjection(tx,ctx);
+    if(input.previewHash!==preview.disclosure.viewHash) throw new DomainError('DISCLOSURE_PREVIEW_CHANGED','Review the latest recipient preview before creating this link',409);
+    let link;
+    if(input.accessLinkId) {
+      const found=(await tx.query<ProofAccessLinkRow>('SELECT * FROM proof_access_links WHERE id=$1 AND proof_id=$2 AND revoked_at IS NULL FOR UPDATE',[input.accessLinkId,proofId])).rows[0];
+      if(!found || (found.expires_at&&new Date(found.expires_at)<=clock.now())) forbidden();
+      link={accessLinkId:found.id};
+      ctx.scopeVersion=Number((await tx.query<{version:number}>('SELECT COALESCE(MAX(scope_version),0)+1 AS version FROM proof_disclosure_grants WHERE access_link_id=$1',[found.id])).rows[0].version);
+    } else link=await createAccessLink(tx,clock,actorUserId,proofId,{scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',expiresAt:input.expiresAt,recipientHint:input.recipientHint,publicWebBaseUrl:input.publicWebBaseUrl});
+    ctx.grantId=link.accessLinkId;
+    await tx.query('INSERT INTO proof_disclosure_grants(access_link_id,scope_version,policy_version,purpose,fields,media,preview_hash,created_by_user_id,created_at) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9)',[ctx.grantId,ctx.scopeVersion,ctx.policyVersion,ctx.purpose,JSON.stringify(ctx.fields),JSON.stringify(ctx.media),preview.disclosure.viewHash,actorUserId,clock.now().toISOString()]);
+    await appendAudit(tx,{proofId,actorUserId,eventType:'DISCLOSURE_SCOPE_REVIEWED',eventData:{accessLinkId:ctx.grantId,scopeVersion:ctx.scopeVersion,policyVersion:ctx.policyVersion,previewHash:preview.disclosure.viewHash},at:clock.now()});
+    return {...link,preview:await getDisclosureProjection(tx,ctx)};
+  });
+}
+export async function readDisclosedMedia(db:Database,clock:Clock,store:ObjectStore,token:string,evidenceId:string) {
+  const ctx=await resolveDisclosureContext(db,clock,{token});
+  const media=assertDisclosureMedia(ctx,evidenceId);
+  let result:{body:Buffer,contentType:string,evidenceId:string};
+  if(media.representation==='ORIGINAL') {
+    const creator=(await db.query<{user_id:string}>('SELECT pp.user_id FROM proof_access_links l JOIN proof_participants pp ON pp.id=l.created_by_participant_id WHERE l.id=$1',[ctx.grantId])).rows[0];
+    if(!creator) forbidden();
+    result=await readCommittedEvidence(db,store,creator.user_id,ctx.proofId,evidenceId);
+  } else {
+    const row=(await db.query<{object_key:string,sha256:string,byte_size:number,content_type:string}>('SELECT d.* FROM proof_media_derivatives d JOIN evidence e ON e.id=d.evidence_id AND e.proof_id=d.proof_id AND e.sha256=d.source_sha256 WHERE d.id=$1 AND d.proof_id=$2 AND d.evidence_id=$3 AND d.status=\'REVIEWED\'',[media.derivativeId,ctx.proofId,evidenceId])).rows[0];
+    if(!row) forbidden();
+    const stored=await store.get(row.object_key);
+    if(!stored||sha256Hex(stored.body)!==row.sha256||stored.body.length!==Number(row.byte_size)) throw new DomainError('DERIVATIVE_UNAVAILABLE','This redacted copy is unavailable',409);
+    result={body:stored.body,contentType:row.content_type,evidenceId};
+  }
+  // Reauthorize after fetching bytes; a scope change or revocation in flight fails closed.
+  const current=await resolveDisclosureContext(db,clock,{token});
+  if(current.scopeVersion!==ctx.scopeVersion||current.scopeIdentity!==ctx.scopeIdentity) forbidden();
+  assertDisclosureMedia(current,evidenceId,media.derivativeId);
+  return result;
+}

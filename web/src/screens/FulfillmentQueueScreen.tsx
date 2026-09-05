@@ -12,7 +12,7 @@ export function FulfillmentQueueScreen(props: {
   const readyCount = props.items.length;
   return (
     <main className="page">
-      <PageHeader title="Fulfillment" onBack={props.onBack} />
+      <PageHeader title="Orders" onBack={props.onBack} />
       <div className="section-head">
         <p className="lede">
           Orders imported from a connected store. Pack, record evidence, and complete the PackProof.
@@ -27,7 +27,7 @@ export function FulfillmentQueueScreen(props: {
       {props.loading ? (
         <p className="empty">Loading fulfillment queue…</p>
       ) : props.items.length === 0 ? (
-        <p className="empty">No orders are ready to pack.</p>
+        <p className="empty">No orders are waiting to be packed. Check Connections for your store’s automatic intake status.</p>
       ) : (
         <div className="card-list">
           {props.items.map((item) => (
@@ -43,7 +43,7 @@ export function FulfillmentQueueScreen(props: {
                 </div>
               </div>
               <button className="btn" type="button" onClick={() => props.onOpen(item.proofId)}>
-                Pack
+                Record packing
               </button>
             </article>
           ))}

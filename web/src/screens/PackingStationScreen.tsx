@@ -1,3 +1,5 @@
+import { RelayStationPanel } from "../components/RelayStationPanel";
+import { CaptureCoach, type CaptureBookmark } from "../components/CaptureCoach";
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { PackProofApi } from "../api/client";
 import { ApiError } from "../api/types";
@@ -10,8 +12,9 @@ import {
 } from "../../../mobile/src/packing-station/machine";
 import { normalizeStationReference } from "../../../mobile/src/packing-station/scan";
 import { submitStationSession } from "../../../mobile/src/packing-station/submit";
-import type { StationCandidate } from "../../../mobile/src/packing-station/types";
+import type { StationCandidate, StationEvent, StationState } from "../../../mobile/src/packing-station/types";
 import { detectWebScanAdapter } from "../packing-station/scan-adapter";
+import { clearStationCapture, recoverStationCapture, saveStationCapture, stationCaptureKey, type PendingStationCapture } from "../capture-queue";
 
 const COMPLETED_HOLD_MS = 1600;
 
@@ -21,10 +24,17 @@ export function PackingStationScreen(props: {
   queue: FulfillmentQueueItem[];
   error: string | null;
   initialReference?: string;
+  initialProofId?: string;
   onAuthExpired: () => void;
   onLeave?: () => void;
 }) {
-  const [state, dispatch] = useReducer(reduceStation, undefined, initialStationState);
+  const [state, dispatch] = useReducer(
+    (current: StationState, event: StationEvent | { type: "RESTORE_LOCAL"; state: StationState }) =>
+      event.type === "RESTORE_LOCAL" ? event.state : reduceStation(current, event),
+    undefined,
+    initialStationState,
+  );
+  const [relayRole,setRelayRole]=useState<"CAMERA"|"CONTROLLER"|null>(null);
   const [heldBlob, setHeldBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -33,12 +43,20 @@ export function PackingStationScreen(props: {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const captureSessionRef = useRef<string | undefined>(undefined);
+  const startedAt = useRef(0);
+  const interruptedRef=useRef(false);
+  const [bookmarks, setBookmarks] = useState<CaptureBookmark[]>([]);
+  const bookmarksRef = useRef<CaptureBookmark[]>([]);
+  const durationRef = useRef(0);
+  const journalRef = useRef<Promise<void>>(Promise.resolve());
+  bookmarksRef.current = bookmarks;
   const orderRef = useRef(state.order);
   const stateRef = useRef(state);
   const heldBlobRef = useRef<Blob | null>(null);
   const bootstrapped = useRef(false);
   const finishingRef = useRef(false);
+  const pendingRef = useRef<PendingStationCapture | null>(null);
   orderRef.current = state.order;
   stateRef.current = state;
   heldBlobRef.current = heldBlob;
@@ -65,20 +83,53 @@ export function PackingStationScreen(props: {
   }, [state.phase]);
 
   useEffect(() => {
-    if (bootstrapped.current) {
-      return;
-    }
-    const reference = normalizeStationReference(props.initialReference);
-    if (!reference) {
-      return;
-    }
-    bootstrapped.current = true;
-    void identify("REFERENCE", reference);
-  }, [props.initialReference]);
+    let cancelled = false;
+    setBusy(true);
+    void recoverStationCapture(props.userId).then(async (pending) => {
+      if (cancelled) return;
+      if (pending) {
+        const url = URL.createObjectURL(pending.file);
+        pendingRef.current = pending;
+        captureSessionRef.current = pending.captureSessionId;
+        interruptedRef.current=!!pending.interrupted;
+        setBookmarks(pending.bookmarks || []);
+        durationRef.current = pending.durationMs || 0;
+        setHeldBlob(pending.file);
+        setPreviewUrl(url);
+        dispatch({ type: "RESTORE_LOCAL", state: {
+          ...initialStationState(),
+          phase: pending.finishConfirmed ? "RECOVERY" : "FINISH_SCANNING",
+          order: pending.order,
+          capture: { handle: url, contentType: pending.file.type, byteSize: pending.file.size, durationMs: null },
+          evidenceIdempotencyKey: pending.uploadKey,
+          canRetry: pending.finishConfirmed,
+        } });
+        setLocalError(pending.interrupted ? "Recording was interrupted. The recovered segment may be incomplete. Review it before saving; any missing footage remains missing." : "Your packing recording was recovered. Finish saving it without recording again.");
+      } else if (!bootstrapped.current) {
+        if (props.initialProofId) {
+          bootstrapped.current = true;
+          dispatch({type:"IDENTIFY_STARTED",method:"QUEUE_SELECT",reference:props.initialProofId});
+          const proof = await props.api.getProof(props.initialProofId);
+          if (!cancelled) dispatch({ type: "IDENTIFY_RESOLVED", context: stationContextFromProof(proof), method: "QUEUE_SELECT" });
+          return;
+        }
+        const reference = normalizeStationReference(props.initialReference);
+        if (reference) {
+          bootstrapped.current = true;
+          await identify("REFERENCE", reference);
+        }
+      }
+    }).catch((error) => {
+      if (!cancelled) setLocalError(error instanceof Error ? error.message : "Unable to recover local recording.");
+    }).finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [props.userId, props.initialReference, props.initialProofId]);
 
   useEffect(() => {
     return () => stopLiveTracks();
   }, []);
+
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   useEffect(() => {
     if (state.phase !== "RECORDING") {
@@ -98,9 +149,6 @@ export function PackingStationScreen(props: {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
   }
 
   async function identify(method: "SCAN" | "REFERENCE" | "QUEUE_SELECT", reference: string, transactionId?: string) {
@@ -142,42 +190,44 @@ export function PackingStationScreen(props: {
     }
   }
 
-  async function startPacking() {
-    setLocalError(null);
-    dispatch({ type: "START_RECORDING", trigger: "MANUAL" });
-    if (!navigator.mediaDevices?.getUserMedia) {
-      fileRef.current?.click();
-      return;
+  async function startPacking(onSessionIssued?:(id:string)=>void) {
+    if (busy || recorderRef.current?.state === "recording" || !orderRef.current) return;
+    if(pendingRef.current||heldBlobRef.current){setLocalError("Finish saving the recovered original before starting another recording.");return;}
+    if(stateRef.current.phase!=="READY_TO_RECORD")return;
+    setBusy(true); setLocalError(null);
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setLocalError("This browser cannot record packing. Open PackProof on a supported phone and sign in to the same account. Your order is preserved."); setBusy(false); return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       streamRef.current = stream;
-      chunksRef.current = [];
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-        ? "video/webm;codecs=vp9"
-        : MediaRecorder.isTypeSupported("video/webm")
-          ? "video/webm"
-          : "";
+      const session = await props.api.createCaptureSession(orderRef.current.proofId, newIdempotencyKey());
+      captureSessionRef.current = session.id;
+      onSessionIssued?.(session.id);
+      interruptedRef.current=false;
+      chunksRef.current = []; setBookmarks([]); durationRef.current = 0; pendingRef.current = null;
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+      const mime = ["video/webm;codecs=vp8", "video/mp4", "video/webm"].find(type => MediaRecorder.isTypeSupported(type));
       const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
+      recorder.ondataavailable = event => {
+        if (!event.data.size) return;
+        chunksRef.current.push(event.data);
+        const partial = new Blob(chunksRef.current, {type: recorder.mimeType || "video/webm"});
+        durationRef.current = Math.max(1, Math.round(performance.now()-startedAt.current));
+        journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
+        if (partial.size > 190*1024*1024 || durationRef.current > 29*60*1000) {
+          setLocalError("Recording reached this device’s safe limit. Saving the recorded segment now.");
+          if (!finishingRef.current) { finishingRef.current = true; void finishPacking(); }
         }
       };
-      recorderRef.current = recorder;
-      recorder.start();
-      dispatch({ type: "RECORDING_STARTED" });
-    } catch {
-      setLocalError("Camera is unavailable. Choose a packing video instead.");
-      fileRef.current?.click();
-    }
+      recorder.onerror = () => { interruptedRef.current=true; setLocalError("Camera recording was interrupted. Saved segments remain available on this device."); if (!finishingRef.current) { finishingRef.current = true; void finishPacking(); } };
+      recorderRef.current = recorder; startedAt.current = performance.now();
+      dispatch({type:"START_RECORDING",trigger:"MANUAL"}); recorder.start(2000); dispatch({type:"RECORDING_STARTED"});
+      return session.id;
+    } catch (error) {
+      stopLiveTracks();
+      setLocalError(error instanceof DOMException && error.name === "NotAllowedError" ? "Allow camera access in your browser’s site settings, then retry. No recording has been uploaded." : error instanceof Error ? error.message : "Camera unavailable. Check that another app is not using it, then retry camera.");
+    } finally { setBusy(false); }
   }
 
   async function resolveFinishScan(value: string) {
@@ -235,28 +285,24 @@ export function PackingStationScreen(props: {
       };
       recorder.stop();
     });
+    await journalRef.current;
     stopLiveTracks();
     await acceptLiveVideo(blob, blob.type || "video/webm", trigger);
   }
 
-  async function holdCapturedFile(file: Blob, contentType: string) {
-    if (file.size < 8) {
-      setLocalError("Recording was empty. Start packing again.");
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    setHeldBlob(file);
-    dispatch({
-      type: "CAPTURE_HELD",
-      capture: {
-        handle: url,
-        contentType: contentType || "video/webm",
-        byteSize: file.size,
-        durationMs: null,
-      },
-    });
-    dispatch({ type: "FINISH_SCAN_STARTED" });
+  async function preserveStation(file: Blob, finishConfirmed: boolean, interrupted = false) {
+    const order = orderRef.current;
+    if (!order) throw new Error("Identify the order before saving this recording.");
+    const previous = pendingRef.current;
+    const pending: PendingStationCapture = {
+      key: stationCaptureKey(props.userId), file, order,
+      uploadKey: previous?.order.proofId === order.proofId ? previous.uploadKey : newIdempotencyKey(),
+      evidenceId: previous?.order.proofId === order.proofId ? previous.evidenceId : undefined,
+      finishConfirmed, captureSessionId: captureSessionRef.current, bookmarks: bookmarksRef.current, durationMs: durationRef.current, interrupted,
+    };
+    await saveStationCapture(pending);
+    pendingRef.current = pending;
+    return pending;
   }
 
   async function acceptLiveVideo(blob: Blob, contentType: string, trigger: "MANUAL" | "RESCAN") {
@@ -284,22 +330,35 @@ export function PackingStationScreen(props: {
     if (!order) {
       return;
     }
-    const key = state.evidenceIdempotencyKey ?? newIdempotencyKey();
-    dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+    setLocalError(null);
+    dispatch({ type: "PROCESSING_STARTED", submitStep: "upload" });
     setBusy(true);
     try {
+      const pending = await preserveStation(blob, true, interruptedRef.current);
+      dispatch({ type: "PROCESSING_STARTED", idempotencyKey: pending.uploadKey, submitStep: "upload" });
       const proof = await props.api.getProof(order.proofId);
+      if (!pending.captureSessionId) throw new Error("This older recording has no direct-capture session. It remains on this device; record a new packing session to finish this Proof.");
+      if (proof.status !== "FINALIZED") {
+        const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())), b => b.toString(16).padStart(2,"0")).join("");
+        await props.api.completeCaptureSession(order.proofId, pending.captureSessionId, {sha256,byteSize:blob.size,contentType,interrupted:pending.interrupted,recordedDurationMs:pending.durationMs});
+      }
       const result = await submitStationSession({
         proof,
         actorUserId: props.userId,
-        capture: { handle, contentType, byteSize: blob.size, durationMs: null },
-        idempotencyKey: key,
+        capture: { handle, contentType, byteSize: blob.size, durationMs: pending.durationMs || null, captureSessionId: pending.captureSessionId },
+        idempotencyKey: pending.uploadKey,
+        evidenceId: pending.evidenceId,
+        onEvidenceInitialized: async (evidenceId) => {
+          pending.evidenceId = evidenceId;
+          await saveStationCapture(pending);
+        },
         deps: {
           api: props.api,
           newIdempotencyKey,
-          upload: async (target, _capture, onProgress) => {
-            onProgress(10);
-            await props.api.uploadObject(target, blob, contentType);
+          upload: async (_target, _capture, onProgress) => {
+            const id = pending.evidenceId;
+            if (!id) throw new Error("Recording upload has not been initialized.");
+            await props.api.uploadResumable(order.proofId, id, blob, onProgress);
             onProgress(100);
           },
         },
@@ -311,7 +370,17 @@ export function PackingStationScreen(props: {
           });
         },
       });
+      const finalProof = await props.api.getProof(order.proofId);
+      const recordedEvidence = finalProof.evidence.find(e => e.evidenceId === pending.evidenceId && e.validationStatus === "COMMITTED");
+      if (recordedEvidence && pending.bookmarks?.length) {
+        try {
+          for (const mark of pending.bookmarks) await props.api.featureRequest(order.proofId, "signature/anchors", "POST", {evidenceId:recordedEvidence.evidenceId,startMs:mark.startMs,endMs:Math.min(mark.startMs+1000,pending.durationMs || mark.startMs+1000),label:mark.label,sourceType:mark.sourceType,recipeVersion:mark.recipeVersion,idempotencyKey:mark.id});
+        } catch { setLocalError("Your Proof is finished. Some optional chapter bookmarks could not be saved; the full recording remains available."); }
+      }
+      await clearStationCapture(props.userId);
+      pendingRef.current = null;
       setHeldBlob(null);
+      setPreviewUrl(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -320,6 +389,11 @@ export function PackingStationScreen(props: {
         return;
       }
       const mapped = stationErrorFromUnknown(error);
+      if (mapped.code === "UNAUTHENTICATED") {
+        dispatch({ type: "AUTH_FAILED" });
+        props.onAuthExpired();
+        return;
+      }
       dispatch({
         type: "PROCESSING_FAILED",
         error: mapped,
@@ -343,6 +417,8 @@ export function PackingStationScreen(props: {
 
   return (
     <main className={`station station-${state.phase.toLowerCase()}`}>
+      <RelayStationPanel api={props.api} userId={props.userId} queue={props.queue} localProofId={state.order?.proofId} localPhase={state.phase} onRole={setRelayRole} start={startPacking} finish={async()=>{finishingRef.current=true;await finishPacking();}} selectProof={async(id)=>{if(stateRef.current.phase==="RECORDING"||pendingRef.current)throw new Error("Save the camera’s current recording before selecting another order.");const proof=await props.api.getProof(id);const context=stationContextFromProof(proof);orderRef.current=context;dispatch({type:"RESTORE_LOCAL",state:{...initialStationState(),phase:"READY_TO_RECORD",order:context}});}}/>
+      {relayRole!=="CONTROLLER"&&<>
       <p className="station-phase">{phase}</p>
       {state.order ? (
         <div className="station-identity">
@@ -351,7 +427,7 @@ export function PackingStationScreen(props: {
           {state.order.trackingHint ? <p className="station-item">{state.order.trackingHint}</p> : null}
         </div>
       ) : (
-        <p className="station-copy">Scan a label, pack in frame, then PackProof finishes the record.</p>
+        <p className="station-copy">Choose an order or scan its reference. Record the item, packing, and seal.</p>
       )}
       {props.error || localError || state.error ? (
         <p className="station-error" role="alert">
@@ -378,6 +454,9 @@ export function PackingStationScreen(props: {
         autoPlay
       />
 
+      {state.phase === "RECORDING" || state.phase === "READY_TO_RECORD" ? <CaptureCoach video={videoRef} recording={state.phase === "RECORDING"} startedAt={startedAt.current} bookmarks={bookmarks} onBookmark={mark => setBookmarks(old => [...old,mark])} /> : null}
+      {previewUrl && heldBlob && state.phase === "RECOVERY" ? <video src={previewUrl} controls playsInline aria-label="Recovered packing recording" /> : null}
+      {state.phase === "READY_TO_RECORD" && localError ? <p><a href={`/station?proof=${encodeURIComponent(state.order?.proofId || "")}`}>Continue on your signed-in phone</a> · Open this same order on your phone. Camera access still requires your account.</p> : null}
       {state.phase === "SCANNING" ? (
         <form
           className="station-identify"
@@ -466,7 +545,7 @@ export function PackingStationScreen(props: {
 
       {state.phase === "READY_TO_RECORD" ? (
         <button className="btn station-btn" type="button" disabled={busy} onClick={() => void startPacking()}>
-          Start Packing
+          {busy ? "Opening camera…" : "Start recording"}
         </button>
       ) : null}
 
@@ -546,25 +625,12 @@ export function PackingStationScreen(props: {
       ) : null}
 
       {props.onLeave ? (
-        <button className="btn btn-secondary station-btn" type="button" disabled={busy && state.phase === "PROCESSING"} onClick={props.onLeave}>
+        <button className="btn btn-secondary station-btn" type="button" disabled={busy || state.phase === "RECORDING"} onClick={props.onLeave}>
           Leave station
         </button>
       ) : null}
 
-      <input
-        ref={fileRef}
-        className="visually-hidden"
-        type="file"
-        accept="video/*"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (!file) {
-            return;
-          }
-          void holdCapturedFile(file, file.type || "video/mp4");
-        }}
-      />
+      </>}
     </main>
   );
 }

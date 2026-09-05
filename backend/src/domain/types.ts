@@ -45,6 +45,11 @@ export interface EvidenceRow {
   committed_at: Date | string | null;
   validation_status: EvidenceValidationStatus;
   evidence_type: string;
+  capture_session_id?: string | null;
+  capture_origin?: string;
+  capture_registered_at?: string | Date | null;
+  capture_expires_at?: string | Date | null;
+  captured_duration_ms?: number | string | null;
   idempotency_key: string | null;
 }
 

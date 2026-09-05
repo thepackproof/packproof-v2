@@ -7,7 +7,7 @@ import { finalizeProof } from "../src/domain/finalize.js";
 import { acceptInvitation, createInvitation } from "../src/domain/invitations.js";
 import { createTransaction, updateShipping } from "../src/domain/transactions.js";
 import { sha256Hex } from "../src/hash.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, createHarness, login, type TestHarness } from "./helpers.js";
 
 async function connectAndSync(harness: TestHarness, seller: string) {
   const connected = await request(harness.app)
@@ -31,7 +31,8 @@ async function resolve(harness: TestHarness, seller: string, reference: string) 
 }
 
 async function commitVideo(harness: TestHarness, seller: string, proofId: string) {
-  const bytes = Buffer.from("packing-station-video");
+  const recording=await prepareCameraCapture(harness,seller,proofId,`station-session-${proofId}`);
+  const bytes = recording.bytes;
   const upload = await initializeEvidenceUpload(
     harness.db,
     harness.clock,
@@ -41,6 +42,7 @@ async function commitVideo(harness: TestHarness, seller: string, proofId: string
     {
       contentType: "video/mp4",
       evidenceType: "FULFILLMENT_CAPTURE",
+      captureSessionId: recording.captureSessionId,
       idempotencyKey: `station-${proofId}`,
     },
   );

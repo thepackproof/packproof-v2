@@ -1,3 +1,5 @@
+import { withRequestTimeout } from "./request-timeout";
+
 export type ProofStatus =
   | "OPEN"
   | "AWAITING_PARTICIPANT"
@@ -565,6 +567,7 @@ export class PackProofV2Client {
     private readonly options: {
       baseUrl: string;
       getToken: () => string | null;
+      getIdToken?: () => string | null;
     },
   ) {}
 
@@ -897,6 +900,16 @@ export class PackProofV2Client {
     });
   }
 
+  async emailProof(
+    proofId: string,
+    input: { email: string; preference: "IMPORTANT" | "ALL" | "FINAL_ONLY"; scope: "SUMMARY" },
+  ): Promise<{ subscription?: { email?: string }; emailDeliveryConfigured?: boolean }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/email-subscriptions`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
   async acceptInvitation(token: string): Promise<{ invitation: InvitationView; proof: ProofView }> {
     return this.request(`/invitations/${encodeURIComponent(token)}/accept`, {
       method: "POST",
@@ -913,11 +926,64 @@ export class PackProofV2Client {
     });
   }
 
+  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, {
+      method: "POST", body: { idempotencyKey, client: "NATIVE_CAMERA", ...(stageId ? { stageId } : {}) },
+    });
+  }
+
+  async completeCaptureSession(proofId: string, sessionId: string, input: { sha256: string; byteSize: number; contentType: string; interrupted?: boolean; recordedDurationMs?: number }): Promise<unknown> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/complete`, { method: "POST", body: input });
+  }
+
+  async cancelCaptureSession(proofId: string, sessionId: string): Promise<unknown> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/cancel`, { method: "POST", body: {} });
+  }
+
+  caseExportUrl(proofId: string, caseId: string): string {
+    return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/signature/cases/${encodeURIComponent(caseId)}/export.html`);
+  }
+
+  authorizedDownloadHeaders(): Record<string, string> {
+    const token = this.options.getToken();
+    if (!token) throw new ApiError("UNAUTHENTICATED", "Sign in before downloading", 401);
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  async setReceiptPreference(proofId: string, optedIn: boolean): Promise<{ optedIn: boolean; message: string }> {
+    const idToken = this.options.getIdToken?.();
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/disclosure/receipt-preference`, {
+      method: "POST", body: { optedIn },
+      ...(idToken ? { auth: false, headers: { Authorization: `Bearer ${idToken}` } } : {}),
+    });
+  }
+
+  async disclosureRequest<T>(proofId: string, path: string, method = "GET", body?: unknown): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/disclosure${path}`, { method, body });
+  }
+  thumbnailUrl(proofId: string, derivativeId: string): string {
+    return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/disclosure/thumbnails/${encodeURIComponent(derivativeId)}/media`);
+  }
+  redactionReviewUrl(proofId: string, derivativeId: string): string {
+    return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/disclosure/redactions/${encodeURIComponent(derivativeId)}/media`);
+  }
+  async listAccessLinks(proofId: string): Promise<{ accessLinks: AccessLinkView[] }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/access-links`);
+  }
+  async revokeAccessLink(proofId: string, linkId: string): Promise<void> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/access-links/${encodeURIComponent(linkId)}`, { method: "DELETE" });
+  }
+
+  async signatureRequest<T>(proofId: string, path = "", method = "GET", body?: unknown): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/signature${path}`, { method, body });
+  }
+
   async initializeEvidenceUpload(
     proofId: string,
     input: {
       contentType: string;
       evidenceType?: string;
+      captureSessionId?: string;
       idempotencyKey: string;
     },
   ): Promise<EvidenceUploadView> {
@@ -927,6 +993,7 @@ export class PackProofV2Client {
       body: {
         contentType: input.contentType,
         evidenceType: input.evidenceType ?? "SELLER_EVIDENCE",
+        captureSessionId: input.captureSessionId,
       },
     });
   }
@@ -937,14 +1004,15 @@ export class PackProofV2Client {
       ...target.headers,
       "Content-Type": contentType,
     };
-    const response = await fetch(url, {
-      method: target.method,
-      headers,
-      body: toFetchBody(body),
-    });
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(url, {
+        method: target.method,
+        headers,
+        signal,
+        body: toFetchBody(body),
+      });
+      if (!response.ok) throw await errorFromResponse(response);
+    }, 10 * 60_000);
   }
 
   async commitEvidence(
@@ -967,6 +1035,7 @@ export class PackProofV2Client {
     contentType: string;
     idempotencyKey: string;
     evidenceType?: string;
+    captureSessionId?: string;
   }): Promise<ProofView> {
     let initialized: EvidenceUploadView;
     try {
@@ -974,6 +1043,7 @@ export class PackProofV2Client {
         contentType: input.contentType,
         evidenceType: input.evidenceType ?? "FULFILLMENT_CAPTURE",
         idempotencyKey: input.idempotencyKey,
+        captureSessionId: input.captureSessionId,
       });
     } catch (error) {
       if (error instanceof ApiError && error.code === "EVIDENCE_ALREADY_COMMITTED") {
@@ -1019,18 +1089,17 @@ export class PackProofV2Client {
       }
       headers.Authorization = `Bearer ${token}`;
     }
-    const response = await fetch(joinUrl(this.options.baseUrl, path), {
-      method: init.method ?? "GET",
-      headers,
-      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(joinUrl(this.options.baseUrl, path), {
+        method: init.method ?? "GET",
+        headers,
+        signal,
+        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+      });
+      if (!response.ok) throw await errorFromResponse(response);
+      if (response.status === 204) return undefined as T;
+      return (await response.json()) as T;
     });
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
-    if (response.status === 204) {
-      return undefined as T;
-    }
-    return (await response.json()) as T;
   }
 }
 

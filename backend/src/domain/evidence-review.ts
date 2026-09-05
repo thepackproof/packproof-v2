@@ -12,6 +12,8 @@ import { sha256Hex } from "../hash.js";
 import { zipFiles } from "../export/zip.js";
 import { getRetentionControls } from "./retention-controls.js";
 import { listCommerceStages } from "./commerce-lifecycle.js";
+import { requireManifestSignatureAlgorithm } from "./manifest-signing.js";
+import type { ManifestRow } from "./types.js";
 
 export async function getEvidenceReview(
   db: Database,
@@ -26,6 +28,8 @@ export async function getEvidenceReview(
         manifestSha256: manifest.sha256,
         manifestDigestValid: sha256Hex(manifest.canonicalJson) === manifest.sha256,
         signatureVerified: false,
+        signaturePresent: Boolean(manifest.signature),
+        signingKeyId: manifest.signature?.keyId ?? null,
       }
     : null;
   await appendAudit(db, {
@@ -58,11 +62,22 @@ export async function exportEvidencePackage(
 ): Promise<Buffer> {
   const proof = await getProofForUser(db, userId, proofId);
   const manifest = await getManifest(db, userId, proofId);
+  const signatureRow = (await db.query<ManifestRow>(
+    "SELECT * FROM final_manifests WHERE id = $1 AND proof_id = $2",
+    [manifest.manifestId, proofId],
+  )).rows[0];
+  const signature = signatureRow?.signature_base64 ? {
+    algorithm: requireManifestSignatureAlgorithm(signatureRow.signature_algorithm),
+    keyId: signatureRow.signing_key_id!,
+    signatureBase64: signatureRow.signature_base64,
+    signedAt: new Date(signatureRow.signed_at!).toISOString(),
+  } : null;
   const pkg = createProofPackage({
     proofId,
     manifestId: manifest.manifestId,
     manifest: manifest.manifest,
     expectedSha256: manifest.sha256,
+    signature,
   });
   const core = manifest.manifest as {
     transaction: unknown;
@@ -103,11 +118,16 @@ export async function exportEvidencePackage(
     observations: proof.shipmentObservations,
   });
   json("events.json", proof.events);
+  const omissions: Array<{ evidenceId: string; stageId?: string; reason: "UNAVAILABLE" }> = [];
   const evidenceIndex = [];
   for (const evidence of core.evidence) {
     const object = await store.get(evidence.objectKey);
+    if (!object) {
+      omissions.push({ evidenceId: evidence.evidenceId, reason: "UNAVAILABLE" });
+      evidenceIndex.push({ evidenceId: evidence.evidenceId, sha256: evidence.sha256, byteSize: evidence.byteSize, status: "OMITTED", reason: "UNAVAILABLE" });
+      continue;
+    }
     if (
-      !object ||
       object.body.length !== evidence.byteSize ||
       sha256Hex(object.body) !== evidence.sha256
     )
@@ -124,21 +144,24 @@ export async function exportEvidencePackage(
           "image/jpeg": "jpg",
           "image/png": "png",
           "video/webm": "webm",
+          "application/pdf": "pdf",
         } as Record<string, string>
-      )[evidence.contentType] ?? "bin";
+      )[evidence.contentType.split(";")[0].trim().toLowerCase()] ?? "bin";
     const name = `evidence/${evidence.evidenceId}.${extension}`;
     files.push({ name, bytes: object.body });
     evidenceIndex.push({
       evidenceId: evidence.evidenceId,
       path: name,
       sha256: evidence.sha256,
+      byteSize: evidence.byteSize,
+      status: "INCLUDED",
     });
   }
   json("integrity/evidence.json", evidenceIndex);
   json("integrity/signatures.json", {
-    manifestSignature: null,
+    manifestSignature: signature,
     trustedTimestamp: null,
-    status: "not-configured",
+    status: signature ? "SIGNED_REQUIRES_INDEPENDENT_TRUST_KEY" : "UNSIGNED",
     verification: "Compare the manifest digest with an independently obtained value",
   });
   const stages = await listCommerceStages(db, proofId);
@@ -173,8 +196,12 @@ export async function exportEvidencePackage(
           413,
         );
       const stored = await store.get(evidence.objectKey);
+      if (!stored) {
+        omissions.push({ evidenceId: evidence.evidenceId, stageId: stage.stageId, reason: "UNAVAILABLE" });
+        stageMedia.push({ evidenceId: evidence.evidenceId, sha256: evidence.sha256, byteSize: evidence.byteSize, status: "OMITTED", reason: "UNAVAILABLE" });
+        continue;
+      }
       if (
-        !stored ||
         stored.body.length !== evidence.byteSize ||
         sha256Hex(stored.body) !== evidence.sha256
       )
@@ -185,7 +212,7 @@ export async function exportEvidencePackage(
         );
       const path = `lifecycle/${stage.stageId}/evidence/${evidence.evidenceId}.bin`;
       files.push({ name: path, bytes: stored.body });
-      stageMedia.push({ evidenceId: evidence.evidenceId, path });
+      stageMedia.push({ evidenceId: evidence.evidenceId, path, sha256: evidence.sha256, byteSize: evidence.byteSize, status: "INCLUDED" });
     }
     stageIndex.push({
       stageId: stage.stageId,
@@ -195,13 +222,30 @@ export async function exportEvidencePackage(
     });
   }
   json("lifecycle/stages.json", stageIndex);
-  json("integrity/hashes.json", Object.fromEntries(files.map((f) => [f.name, sha256Hex(f.bytes)])));
+  json("archive.json", {
+    schema: "packproof.proof-archive.v1",
+    canonicalization: "packproof.sorted-json.v1",
+    snapshot: { proofId, manifestId: manifest.manifestId, manifestSha256: manifest.sha256 },
+    exportedAt: clock.now().toISOString(),
+    disclosure: { kind: "PARTICIPANT_FULL_RECORD", policyVersion: 1, exportedBy: userId },
+    omissions,
+    derivatives: [],
+    sources: {
+      canonicalRecord: "manifest.json",
+      evidenceInventory: "integrity/evidence.json",
+      lifecycleManifests: "lifecycle/stages.json",
+      supplements: ["shipping.json", "events.json"],
+    },
+    supplementIntegrity: "SELF_CONSISTENCY_ONLY_NOT_COVERED_BY_ROOT_SIGNATURE",
+    limitations: ["Signing time is not filming time", "Integrity is not a physical truth verdict", "Offline trust cannot discover later revocations", "Unavailable media has not been verified"],
+  });
   files.push({
     name: "README.txt",
     bytes: Buffer.from(
-      "PackProof portable evidence package v1\nmanifest.json is the frozen canonical record.\nLater shipping and access events are supplements, outside that frozen manifest.\nVerify manifest SHA-256 against a digest obtained separately from PackProof.\nSelf-consistency does not establish origin or the truth of recorded assertions.\nUse backend/scripts/verify-proof-package.py from the PackProof repository.\n",
+      "PackProof portable evidence package v1\nmanifest.json is the frozen canonical record.\nLater shipping and access events are supplements, outside that frozen manifest.\nVerify manifest SHA-256 against a digest obtained separately from PackProof.\nSelf-consistency does not establish origin or the truth of recorded assertions.\nObtain the read-only verifier independently from the PackProof repository: verifier/verify.py.\nUse a separately obtained trust list; package contents cannot make their own key trusted.\nUnavailable files are explicit omissions and have not been verified.\n",
     ),
   });
+  json("integrity/hashes.json", Object.fromEntries(files.map((f) => [f.name, sha256Hex(f.bytes)])));
   await appendAudit(db, {
     proofId,
     actorUserId: userId,
@@ -209,6 +253,8 @@ export async function exportEvidencePackage(
     eventData: {
       manifestSha256: manifest.sha256,
       evidenceCount: core.evidence.length,
+      omittedEvidenceCount: omissions.length,
+      signaturePresent: Boolean(signature),
     },
     at: clock.now(),
   });

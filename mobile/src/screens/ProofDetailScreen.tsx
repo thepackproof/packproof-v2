@@ -410,6 +410,7 @@ export function ProofDetailScreen() {
         </>
       ) : null}
 
+      <Button label="Replay, ask, or build a case packet" variant="secondary" onPress={() => app.go("signature")} />
       <ContinuityCompare
         proof={proof}
         token={app.session?.token ?? null}
@@ -464,7 +465,7 @@ export function ProofDetailScreen() {
       </Pressable>
 
       <BottomSheet visible={menuOpen} title="Proof actions" onClose={() => setMenuOpen(false)}>
-        <Button
+        {app.role === "SELLER" ? <Button
           label="Share viewing link"
           variant="secondary"
           loading={app.busy}
@@ -472,7 +473,7 @@ export function ProofDetailScreen() {
             setMenuOpen(false);
             void app.shareProofLink();
           }}
-        />
+        /> : null}
         {app.role === "SELLER" && !buyer && proof.status !== "FINALIZED" ? (
           <Button
             label={inviteParticipantTitle(proof.workflowType)}

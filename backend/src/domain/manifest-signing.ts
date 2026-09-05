@@ -19,7 +19,8 @@ export interface ManifestSignature {
 export interface ManifestSigner {
   /**
    * Sign the canonical manifest. Production implementations should keep the
-   * private key outside the application process (target: AWS KMS asymmetric key).
+   * private key outside the application process when using an HSM/KMS adapter.
+   * The optional PEM runtime is explicitly software signing with process-memory keys.
    */
   signManifest(input: {
     proofId: string;
@@ -54,6 +55,9 @@ export function verifyManifestIntegrity(input: {
       algorithm: null,
       keyId: null,
     };
+  }
+  if (!(MANIFEST_SIGNATURE_ALGORITHMS as readonly string[]).includes(signature.algorithm)) {
+    return { digestValid, signaturePresent: true, signatureValid: false, algorithm: signature.algorithm, keyId: signature.keyId };
   }
   if (!input.publicKeyPem) {
     return {

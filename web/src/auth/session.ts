@@ -9,13 +9,17 @@ export interface WebSession {
   username: string | null;
   displayName: string | null;
   token: string;
+  idToken?: string | null;
   refreshToken: string | null;
   accessExpiresAt: number | null;
   subject: string;
 }
 
 export function defaultApiBaseUrl(): string {
-  return import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
+  const configured = import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
+  // URL-based media and API helpers require an absolute base, including when
+  // a hosted preview uses the same-origin API bridge.
+  return configured.startsWith("/") ? new URL(configured, window.location.origin).toString() : configured;
 }
 
 export function defaultAuthMode(): AuthMode {
@@ -47,6 +51,7 @@ export function loadSession(): WebSession | null {
       username: parsed.username ?? null,
       displayName: parsed.displayName ?? null,
       token: parsed.token,
+      idToken: parsed.idToken ?? null,
       refreshToken: parsed.refreshToken ?? null,
       accessExpiresAt: parsed.accessExpiresAt ?? null,
       subject: parsed.subject ?? "",

@@ -116,6 +116,13 @@ export async function handoffAssets(
     if (!packed) {
       throw new DomainError("OBSERVATION_NOT_FOUND", "Pack items before handing them off", 422);
     }
+    // Follow the transaction -> shipping -> Proof lock order used by finalization.
+    // Recording RELEASED first would hold the Proof while waiting for shipping,
+    // which can deadlock with a concurrent finalization or context update.
+    const loaded = await loadProof(tx, proofId);
+    if (input.shipping) {
+      await updateShipping(tx, clock, actorUserId, loaded.transaction_id, input.shipping);
+    }
     const key = idempotencyOf(input);
     const released = await createObservation(tx, clock, actorUserId, proofId, {
       type: "RELEASED",
@@ -124,10 +131,6 @@ export async function handoffAssets(
       occurredAt: input.occurredAt,
       idempotencyKey: key ? `${key}:released` : null,
     });
-    const loaded = await loadProof(tx, proofId);
-    if (input.shipping) {
-      await updateShipping(tx, clock, actorUserId, loaded.transaction_id, input.shipping);
-    }
     await openTransfer(tx, clock, actorUserId, proofId, {
       fromObservationId: released.observationId,
       transferType: requireTransferType(input.transferType),

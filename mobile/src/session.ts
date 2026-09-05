@@ -14,6 +14,7 @@ export interface CachedClientState {
   refreshToken: string | null;
   idToken: string | null;
   accessExpiresAt: number | null;
+  needsReauthentication?: boolean;
   cognitoUserPoolId: string | null;
   cognitoClientId: string | null;
   cognitoRegion: string | null;
@@ -43,7 +44,7 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
   }
   try {
     const parsed = JSON.parse(raw) as Partial<CachedClientState>;
-    if (!parsed.apiBaseUrl || !parsed.userId || !parsed.token) {
+    if (!parsed.apiBaseUrl || !parsed.userId || (!parsed.token && parsed.needsReauthentication !== true)) {
       return null;
     }
     return {
@@ -54,7 +55,8 @@ export async function loadCachedState(): Promise<CachedClientState | null> {
       userId: parsed.userId,
       username: parsed.username ?? null,
       displayName: parsed.displayName ?? null,
-      token: parsed.token,
+      token: parsed.token ?? "",
+      needsReauthentication: parsed.needsReauthentication === true,
       refreshToken: parsed.refreshToken ?? null,
       idToken: parsed.idToken ?? null,
       accessExpiresAt: parsed.accessExpiresAt ?? null,
@@ -92,4 +94,24 @@ export async function saveCachedState(state: CachedClientState): Promise<void> {
 
 export async function clearCachedState(): Promise<void> {
   await AsyncStorage.removeItem(STORAGE_KEY);
+}
+
+const recoveryFields = ["proofId", "transactionId", "captureUri", "captureProofId", "uploadEvidenceId", "evidenceIdempotencyKey", "evidenceContentType", "captureByteSize", "captureDurationMs", "stationActive", "stationPhase", "stationProofId", "stationTransactionId", "stationOrderLabel", "stationItemSummary"] as const;
+type CaptureRecovery = Pick<CachedClientState, typeof recoveryFields[number]>;
+function recoveryKey(apiBaseUrl: string, userId: string): string { return `packproof.capture-recovery:${encodeURIComponent(apiBaseUrl.replace(/\/$/, ""))}:${userId}`; }
+/** Recovery metadata is account-scoped and deliberately excludes all credentials. */
+export async function saveCaptureRecovery(state: CachedClientState): Promise<void> {
+  const key = recoveryKey(state.apiBaseUrl, state.userId);
+  if (!state.captureUri) { await AsyncStorage.removeItem(key); return; }
+  const value = Object.fromEntries(recoveryFields.map((field) => [field, state[field] ?? null]));
+  await AsyncStorage.setItem(key, JSON.stringify(value));
+}
+export async function loadCaptureRecovery(apiBaseUrl: string, userId: string): Promise<CaptureRecovery | null> {
+  try {
+    const raw = await AsyncStorage.getItem(recoveryKey(apiBaseUrl, userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CaptureRecovery>;
+    if (typeof parsed.captureUri !== "string" || typeof parsed.captureProofId !== "string") return null;
+    return Object.fromEntries(recoveryFields.map((field) => [field, parsed[field] ?? null])) as CaptureRecovery;
+  } catch { return null; }
 }

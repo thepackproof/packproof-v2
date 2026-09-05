@@ -1,3 +1,4 @@
+import { createCaptureSession, completeCaptureSession, recoverCaptureSession, cancelCaptureSession } from "../domain/capture-sessions.js";
 import express, { type Request, type Response, type NextFunction } from "express";
 import { fileURLToPath } from "node:url";
 import type { AppDependencies } from "../app.js";
@@ -118,6 +119,14 @@ export function createPlatformRouter(deps: AppDependencies) {
         let value: unknown;
         if (method === "get") value = await fn(deps.db, principal, req);
         else {
+          const createsAccessLink = path.endsWith("/access-links") && method === "post";
+          if (createsAccessLink && Buffer.from(config.encryptionKey, "base64").length !== 32) {
+            throw new DomainError(
+              "ACCESS_LINKS_UNAVAILABLE",
+              "Secure viewing-link response encryption is not configured",
+              503,
+            );
+          }
           const result = await idempotent(
             deps.db,
             deps.clock,
@@ -126,10 +135,11 @@ export function createPlatformRouter(deps: AppDependencies) {
             req.header("Idempotency-Key"),
             req.body,
             (tx) => fn(tx, principal, req),
-            path.startsWith("/webhooks") && method === "post"
+            (path.startsWith("/webhooks") || createsAccessLink) && method === "post"
               ? protectWebhookResponse(
                   `${principal.tenantId}:${req.path}:${req.header("Idempotency-Key")}`,
                   config,
+                  createsAccessLink,
                 )
               : undefined,
           );
@@ -260,6 +270,16 @@ export function createPlatformRouter(deps: AppDependencies) {
       }),
     201,
   );
+  endpoint("post", "/proofs/:id/capture-sessions", "evidence:write", (db,p,req)=>
+    createCaptureSession(db,deps.clock,p.userId,req.params.id,{client:String(req.body?.client??""),stageId:req.body?.stageId==null?undefined:String(req.body.stageId),idempotencyKey:sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`)}),201);
+  endpoint("post", "/proofs/:id/capture-sessions/:sessionId/complete", "evidence:write", (db,p,req)=>
+    completeCaptureSession(db,deps.clock,p.userId,req.params.id,req.params.sessionId,{sha256:req.body?.sha256,byteSize:req.body?.byteSize,contentType:req.body?.contentType,interrupted:req.body?.interrupted,recordedDurationMs:req.body?.recordedDurationMs}));
+  endpoint("get", "/proofs/:id/capture-sessions/:sessionId", "evidence:write", (db,p,req)=>
+    recoverCaptureSession(db,deps.clock,p.userId,req.params.id,req.params.sessionId));
+  endpoint("post", "/proofs/:id/capture-sessions/:sessionId/recover", "evidence:write", (db,p,req)=>
+    recoverCaptureSession(db,deps.clock,p.userId,req.params.id,req.params.sessionId));
+  endpoint("post", "/proofs/:id/capture-sessions/:sessionId/cancel", "evidence:write", (db,p,req)=>
+    cancelCaptureSession(db,deps.clock,p.userId,req.params.id,req.params.sessionId));
   endpoint(
     "post",
     "/proofs/:id/evidence",
@@ -268,6 +288,7 @@ export function createPlatformRouter(deps: AppDependencies) {
       initializeEvidenceUpload(db, deps.clock, deps.objectStore, p.userId, req.params.id, {
         contentType: textField(req.body?.contentType, "contentType", 100),
         evidenceType: req.body?.evidenceType,
+        captureSessionId: req.body?.captureSessionId,
         idempotencyKey: sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`),
       }),
     201,
@@ -355,7 +376,7 @@ export function createPlatformRouter(deps: AppDependencies) {
     201,
   );
   endpoint("post", "/proofs/:id/finalize", "proofs:finalize", (db, p, req) =>
-    finalizeProof(db, deps.clock, p.userId, req.params.id),
+    finalizeProof(db, deps.clock, p.userId, req.params.id, deps.manifestSigning?.signer),
   );
   endpoint("get", "/proofs/:id/manifest", "proofs:read", (db, p, req) =>
     getManifest(db, p.userId, req.params.id),
@@ -454,6 +475,7 @@ export function createPlatformRouter(deps: AppDependencies) {
         req.params.stageId,
         {
           contentType: req.body?.contentType,
+          captureSessionId: req.body?.captureSessionId,
           idempotencyKey: req.header("Idempotency-Key"),
         },
       ),

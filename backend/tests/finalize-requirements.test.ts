@@ -49,7 +49,7 @@ describe("evaluateFinalizeRequirements", () => {
     ).toEqual({ ok: true });
   });
 
-  it("keeps P2P finalization independent of fulfillment capture type", () => {
+  it("requires the same primary packing capture for P2P finalization", () => {
     expect(
       evaluateFinalizeRequirements({
         participationPolicy: "COUNTERPARTY_REQUIRED",
@@ -61,13 +61,17 @@ describe("evaluateFinalizeRequirements", () => {
         committedFulfillmentCaptureCount: 0,
         packingAttested: false,
       }),
-    ).toEqual({ ok: true });
+    ).toMatchObject({ ok: false, code: "FULFILLMENT_CAPTURE_REQUIRED" });
   });
 
   it("distinguishes origin-only grading closure from a complete observed round trip", () => {
     const gradingBase = {
       ...merchantBase,
       workflowType: "GRADING_SUBMISSION" as const,
+      proofStatus: "EVIDENCE_COMMITTED",
+      committedEvidenceCount: 2,
+      assetCount: 1,
+      documentedAssetCount: 1,
       packed: true,
       released: true,
     };

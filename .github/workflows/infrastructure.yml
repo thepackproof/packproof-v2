@@ -34,6 +34,7 @@ jobs:
       - name: Validate foundation templates
         run: >-
           cfn-lint
+          infra/web.yaml
           infra/staging.yaml
           infra/evidence-bucket.yaml
           infra/production-foundation.yaml

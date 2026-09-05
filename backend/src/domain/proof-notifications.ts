@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { sha256Hex } from "../hash.js";
@@ -6,7 +6,9 @@ import { newId } from "../ids.js";
 import type { EmailDelivery } from "../integrations/email/delivery.js";
 import { appendAudit } from "./audit.js";
 import { DomainError } from "./errors.js";
-import { requireParticipant } from "./proof-access.js";
+import { requireParticipant, loadProof } from "./proof-access.js";
+import { getDisclosureProjection, resolveDisclosureContext } from "./disclosure.js";
+import { verifiedReceiptContact } from "./buyer-receipt.js";
 import {
   buildProofTracker,
   type ProofTrackerView,
@@ -30,6 +32,8 @@ interface SubscriptionRow {
   created_at: Date | string;
   updated_at: Date | string;
   revoked_at: Date | string | null;
+  recipient_user_id: string | null;
+  recipient_grant_id?: string | null;
 }
 
 interface OutboxRow {
@@ -42,6 +46,7 @@ interface OutboxRow {
   preference: NotificationPreference;
   scope: AccessLinkScope;
   revoked_at: Date | string | null;
+  recipient_user_id: string | null;
 }
 
 export interface ProofEmailSubscriptionView {
@@ -66,31 +71,50 @@ export async function createProofEmailSubscription(
     scope?: unknown;
     publicWebBaseUrl: string;
     trackerLinkSecret: string;
+    recipientGrantId?: unknown;
   },
 ): Promise<ProofEmailSubscriptionView> {
   const email = requireEmail(input.email);
   const normalized = email.toLowerCase();
   const preference = requirePreference(input.preference);
   const scope = requireAccessLinkScope(input.scope);
+  await requireParticipant(db, proofId, actorUserId, "SELLER");
+  const recipientUserId = await verifiedReceiptContact(db, proofId, normalized);
   requireTrackerSecret(input.trackerLinkSecret);
 
-  const tracker = await buildProofTracker(db, proofId);
-  const baseline = tracker.milestones
-    .filter((milestone) => milestone.state === "COMPLETE")
-    .map((milestone) => milestone.code);
-
   return db.transaction(async (tx) => {
+    await loadProof(tx, proofId, true);
     const participant = await requireParticipant(tx, proofId, actorUserId);
+    // Baseline capture belongs under the same Proof lock as subscription creation.
+    // It cannot race a committed milestone and create a false historical update.
+    const tracker = await buildProofTracker(tx, proofId);
+    const baseline = tracker.milestones
+      .filter((milestone) => milestone.state === "COMPLETE")
+      .map((milestone) => milestone.code);
+    const now = clock.now();
     const existing = await tx.query<SubscriptionRow>(
       `SELECT * FROM proof_notification_subscriptions
         WHERE proof_id = $1 AND email_normalized = $2 AND revoked_at IS NULL`,
       [proofId, normalized],
     );
     if (existing.rows[0]) {
-      return toSubscriptionView(existing.rows[0], input.publicWebBaseUrl, input.trackerLinkSecret);
+      const old = existing.rows[0];
+      const usable = (await tx.query("SELECT 1 FROM proof_access_links WHERE id=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>$2)", [old.access_link_id, now.toISOString()])).rows[0];
+      if (usable) {
+        if (input.recipientGrantId !== undefined) {
+          const version = await copyReceiptGrant(tx,clock,actorUserId,proofId,old.access_link_id,input.recipientGrantId);
+          await tx.query("UPDATE proof_notification_subscriptions SET recipient_grant_id=$2,recipient_user_id=$3,updated_at=$4 WHERE id=$1", [old.id,input.recipientGrantId,recipientUserId,now.toISOString()]);
+          if (version !== null || old.recipient_grant_id !== input.recipientGrantId) {
+            await enqueueOutbox(tx,now,proofId,old.id,`RECEIPT_SCOPE:${input.recipientGrantId}:${version ?? 'same'}`);
+            await appendAudit(tx,{proofId,actorUserId,eventType:"BUYER_RECEIPT_SCOPE_BOUND",eventData:{subscriptionId:old.id,accessLinkId:old.access_link_id,recipientGrantId:input.recipientGrantId,scopeVersion:version},at:now});
+          }
+        }
+        return toSubscriptionView(old, input.publicWebBaseUrl, input.trackerLinkSecret);
+      }
+      await tx.query("UPDATE proof_notification_subscriptions SET revoked_at=$2,updated_at=$2 WHERE id=$1",[old.id,now.toISOString()]);
+      await tx.query("UPDATE proof_notification_outbox SET cancelled_at=$2 WHERE subscription_id=$1 AND sent_at IS NULL AND cancelled_at IS NULL",[old.id,now.toISOString()]);
     }
 
-    const now = clock.now();
     const subscriptionId = newId("pns");
     const accessLinkId = newId("pal");
     const token = trackerAccessToken(input.trackerLinkSecret, subscriptionId);
@@ -100,14 +124,15 @@ export async function createProofEmailSubscription(
       `INSERT INTO proof_access_links (
          id, proof_id, token_hash, scope, created_by_participant_id, recipient_hint,
          created_at, expires_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)`,
-      [accessLinkId, proofId, tokenHash, scope, participant.id, email, now.toISOString()],
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [accessLinkId, proofId, tokenHash, scope, participant.id, null, now.toISOString(), new Date(now.getTime()+30*86400000).toISOString()],
     );
+    if (input.recipientGrantId !== undefined) await copyReceiptGrant(tx,clock,actorUserId,proofId,accessLinkId,input.recipientGrantId);
     await tx.query(
       `INSERT INTO proof_notification_subscriptions (
          id, proof_id, email, email_normalized, preference, scope, access_link_id,
-         created_by_user_id, processed_milestones, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $10)`,
+         created_by_user_id, processed_milestones, created_at, updated_at, recipient_user_id, recipient_grant_id
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $10, $11, $12)`,
       [
         subscriptionId,
         proofId,
@@ -119,6 +144,8 @@ export async function createProofEmailSubscription(
         actorUserId,
         JSON.stringify(baseline),
         now.toISOString(),
+        recipientUserId,
+        input.recipientGrantId ?? null,
       ],
     );
     await enqueueOutbox(tx, now, proofId, subscriptionId, "TRACKER_SHARED");
@@ -126,7 +153,7 @@ export async function createProofEmailSubscription(
       proofId,
       actorUserId,
       eventType: "PROOF_TRACKER_EMAIL_SUBSCRIBED",
-      eventData: { subscriptionId, accessLinkId, preference, scope, recipientHint: email },
+      eventData: { subscriptionId, accessLinkId, preference, scope },
       at: now,
     });
 
@@ -250,6 +277,12 @@ export async function reconcileAllProofNotifications(db: Database, clock: Clock)
   return total;
 }
 
+const MAX_EMAIL_ATTEMPTS = 5;
+// The release transition contains both lease namespaces. Claim/check/clear both
+// atomically so old delivery_token workers and new lease_token workers cannot
+// concurrently own one row during rolling deployment. Remove the bridge only
+// after all old instances and their maximum leases have drained.
+
 export async function dispatchPendingProofEmails(
   db: Database,
   clock: Clock,
@@ -259,9 +292,21 @@ export async function dispatchPendingProofEmails(
   proofId?: string,
 ): Promise<{ sent: number; failed: number }> {
   requireTrackerSecret(trackerLinkSecret);
-  if (!emailDelivery.enabled) return { sent: 0, failed: 0 };
+  if (!emailDelivery.enabled || process.env.PACKPROOF_RECEIPT_NOTIFICATIONS === "false")
+    return { sent: 0, failed: 0 };
   const now = clock.now();
-  const params: unknown[] = [now.toISOString()];
+  // An instance may die after its final claim. Give that row an explicit terminal
+  // state once its lease expires; repeatedly crashed workers cannot retry forever.
+  await db.query(
+    `UPDATE proof_notification_outbox
+        SET exhausted_at=$1,cancelled_at=$1,last_error='EMAIL_ATTEMPTS_EXHAUSTED',
+            lease_token=NULL,lease_until=NULL,delivery_token=NULL,delivery_lease_until=NULL
+      WHERE sent_at IS NULL AND cancelled_at IS NULL AND exhausted_at IS NULL
+        AND attempt_count >= $2 AND (lease_until IS NULL OR lease_until <= $1)
+        AND (delivery_lease_until IS NULL OR delivery_lease_until <= $1)`,
+    [now.toISOString(), MAX_EMAIL_ATTEMPTS],
+  );
+  const params: unknown[] = [now.toISOString(), MAX_EMAIL_ATTEMPTS];
   let proofClause = "";
   if (proofId) {
     params.push(proofId);
@@ -269,41 +314,138 @@ export async function dispatchPendingProofEmails(
   }
   const pending = await db.query<OutboxRow>(
     `SELECT o.id, o.proof_id, o.subscription_id, o.event_key, o.attempt_count,
-            s.email, s.preference, s.scope, s.revoked_at
+            s.email, s.preference, s.scope, s.revoked_at, s.recipient_user_id
        FROM proof_notification_outbox o
-       JOIN proof_notification_subscriptions s ON s.id = o.subscription_id
-      WHERE o.sent_at IS NULL
-        AND o.cancelled_at IS NULL
-        AND o.next_attempt_at <= $1
-        AND s.revoked_at IS NULL${proofClause}
-      ORDER BY o.created_at ASC, o.id ASC
-      LIMIT 25`,
+       JOIN proof_notification_subscriptions s ON s.id=o.subscription_id
+       JOIN proof_access_links l ON l.id=s.access_link_id
+      WHERE o.sent_at IS NULL AND o.cancelled_at IS NULL
+        AND o.next_attempt_at <= $1 AND o.exhausted_at IS NULL
+        AND o.attempt_count < $2 AND (o.lease_until IS NULL OR o.lease_until <= $1)
+        AND (o.delivery_lease_until IS NULL OR o.delivery_lease_until <= $1)
+        AND s.revoked_at IS NULL AND l.revoked_at IS NULL
+        AND (l.expires_at IS NULL OR l.expires_at > $1)${proofClause}
+      ORDER BY o.created_at ASC, o.id ASC LIMIT 25`,
     params,
   );
   let sent = 0;
   let failed = 0;
   for (const row of pending.rows) {
+    const leaseToken = randomUUID();
+    const claimedAt = clock.now();
+    const claimed = await db.query<{ attempt_count: number | string }>(
+      `UPDATE proof_notification_outbox o
+          SET lease_token=$2,delivery_token=$2,lease_until=$4,delivery_lease_until=$4,
+              attempt_count=attempt_count+1
+        WHERE o.id=$1 AND o.sent_at IS NULL AND o.cancelled_at IS NULL
+          AND o.exhausted_at IS NULL AND o.next_attempt_at <= $3
+          AND o.attempt_count < $5 AND (o.lease_until IS NULL OR o.lease_until <= $3)
+          AND (o.delivery_lease_until IS NULL OR o.delivery_lease_until <= $3)
+          AND EXISTS (
+            SELECT 1 FROM proof_notification_subscriptions s
+            JOIN proof_access_links l ON l.id=s.access_link_id
+            WHERE s.id=o.subscription_id AND s.revoked_at IS NULL
+              AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at > $3)
+          )
+        RETURNING attempt_count`,
+      [row.id, leaseToken, claimedAt.toISOString(),
+       new Date(claimedAt.getTime()+120_000).toISOString(), MAX_EMAIL_ATTEMPTS],
+    );
+    if (!claimed.rows[0]) continue;
+    const attempts = Number(claimed.rows[0].attempt_count);
+    const cancelClaim = async () => {
+      await db.query(
+        `UPDATE proof_notification_outbox SET cancelled_at=$3,
+            lease_token=NULL,lease_until=NULL,delivery_token=NULL,delivery_lease_until=NULL
+          WHERE id=$1 AND lease_token=$2 AND sent_at IS NULL`,
+        [row.id, leaseToken, clock.now().toISOString()],
+      );
+    };
     try {
-      const tracker = await buildProofTracker(db, row.proof_id);
-      const viewUrl = trackerViewUrl(publicWebBaseUrl, trackerLinkSecret, row.subscription_id);
-      const message = emailForEvent(row.event_key, tracker, viewUrl, row.email);
+      // Read current preference, identity and scope after claiming, never merely
+      // the values in the earlier candidate query.
+      const active = (await db.query<{
+        preference: NotificationPreference;
+        email: string;
+        recipient_user_id: string | null;
+      }>(
+        `SELECT s.preference,s.email,s.recipient_user_id
+           FROM proof_notification_subscriptions s
+           JOIN proof_notification_outbox o ON o.subscription_id=s.id
+           JOIN proof_access_links l ON l.id=s.access_link_id
+          WHERE o.id=$1 AND o.lease_token=$2 AND o.cancelled_at IS NULL
+            AND s.revoked_at IS NULL AND l.revoked_at IS NULL
+            AND (l.expires_at IS NULL OR l.expires_at>$3)`,
+        [row.id,leaseToken,clock.now().toISOString()],
+      )).rows[0];
+      const milestone = row.event_key.startsWith("MILESTONE:")
+        ? row.event_key.slice("MILESTONE:".length) as TrackerMilestoneCode : null;
+      if (!active || (milestone && !shouldNotify(active.preference,milestone))) {
+        await cancelClaim();
+        continue;
+      }
+      const verifiedUserId = await verifiedReceiptContact(db,row.proof_id,active.email);
+      if (active.recipient_user_id !== verifiedUserId)
+        throw new DomainError("RECEIPT_CONTACT_UNVERIFIED","Recipient changed",409);
+      const token = trackerAccessToken(trackerLinkSecret,row.subscription_id);
+      const context = await resolveDisclosureContext(db,clock,{token});
+      // This supersedes trackerForScope: one central projection controls fields,
+      // parent-grant revocation, and which milestone may appear in email text.
+      const projection = await getDisclosureProjection(db,context);
+      if (milestone && !projection.tracker.milestones.some(
+        event => event.code === milestone && event.state === "COMPLETE",
+      )) {
+        await cancelClaim();
+        continue;
+      }
+      const viewUrl = trackerViewUrl(publicWebBaseUrl,trackerLinkSecret,row.subscription_id);
+      const message = emailForEvent(row.event_key,projection.tracker,viewUrl,active.email);
+      const latestContext = await resolveDisclosureContext(db,clock,{token});
+      if (latestContext.scopeVersion !== context.scopeVersion ||
+          latestContext.scopeIdentity !== context.scopeIdentity ||
+          latestContext.policyVersion !== context.policyVersion) {
+        await cancelClaim();
+        continue;
+      }
+      // Consent and preference can change while the scoped projection is built.
+      const stillActive = (await db.query<{ preference: NotificationPreference }>(
+        `SELECT s.preference FROM proof_notification_outbox o
+           JOIN proof_notification_subscriptions s ON s.id=o.subscription_id
+           JOIN proof_access_links l ON l.id=s.access_link_id
+           JOIN proof_receipt_preferences p ON p.proof_id=s.proof_id
+             AND p.user_id=s.recipient_user_id AND p.opted_in=TRUE
+           JOIN user_verified_contacts c ON c.user_id=s.recipient_user_id
+             AND c.email_normalized=s.email_normalized
+          WHERE o.id=$1 AND o.lease_token=$2 AND o.cancelled_at IS NULL
+            AND s.revoked_at IS NULL AND l.revoked_at IS NULL
+            AND s.email=$4 AND s.recipient_user_id=$5
+            AND (l.expires_at IS NULL OR l.expires_at>$3)`,
+        [row.id,leaseToken,clock.now().toISOString(),active.email,verifiedUserId],
+      )).rows[0];
+      if (!stillActive || (milestone && !shouldNotify(stillActive.preference,milestone))) {
+        await cancelClaim();
+        continue;
+      }
       await emailDelivery.send(message);
       await db.query(
         `UPDATE proof_notification_outbox
-            SET sent_at = $2, attempt_count = attempt_count + 1, last_error = NULL
-          WHERE id = $1 AND sent_at IS NULL`,
-        [row.id, clock.now().toISOString()],
+            SET sent_at=$3,last_error=NULL,lease_token=NULL,lease_until=NULL,
+                delivery_token=NULL,delivery_lease_until=NULL
+          WHERE id=$1 AND lease_token=$2 AND sent_at IS NULL`,
+        [row.id,leaseToken,clock.now().toISOString()],
       );
       sent += 1;
     } catch (error) {
-      const attempts = Number(row.attempt_count ?? 0) + 1;
-      const delayMs = Math.min(60 * 60 * 1000, 30_000 * 2 ** Math.min(attempts - 1, 7));
-      const nextAttempt = new Date(clock.now().getTime() + delayMs).toISOString();
+      const delayMs = Math.min(60*60*1000,30_000*2**Math.min(attempts-1,7));
       await db.query(
         `UPDATE proof_notification_outbox
-            SET attempt_count = attempt_count + 1, last_error = $2, next_attempt_at = $3
-          WHERE id = $1 AND sent_at IS NULL`,
-        [row.id, errorMessage(error), nextAttempt],
+            SET last_error=$3,next_attempt_at=$4,lease_token=NULL,lease_until=NULL,
+                delivery_token=NULL,delivery_lease_until=NULL,
+                cancelled_at=CASE WHEN attempt_count >= $5 THEN $6::timestamptz ELSE cancelled_at END,
+                exhausted_at=CASE WHEN attempt_count >= $5 THEN $6::timestamptz ELSE NULL END
+          WHERE id=$1 AND lease_token=$2 AND sent_at IS NULL`,
+        [row.id,leaseToken,error instanceof DomainError ? error.code : "EMAIL_DELIVERY_FAILED",
+         new Date(clock.now().getTime()+delayMs).toISOString(),MAX_EMAIL_ATTEMPTS,
+         clock.now().toISOString()],
       );
       failed += 1;
     }
@@ -408,21 +550,11 @@ function toSubscriptionView(
 }
 
 function emailForEvent(eventKey: string, tracker: ProofTrackerView, viewUrl: string, to: string) {
-  const reference = tracker.reference ? ` ${tracker.reference}` : "";
   const milestone = eventKey.startsWith("MILESTONE:") ? eventKey.slice("MILESTONE:".length) : null;
-  const title = milestone ? milestoneEmailTitle(milestone as TrackerMilestoneCode) : "Your PackProof tracker is ready";
-  const subject = milestone ? `PackProof update: ${title}` : "A PackProof record has been shared with you";
-  const text = [
-    title,
-    "",
-    `PackProof${reference} is ${tracker.headline.toLowerCase()}.`,
-    tracker.itemTitle ? `Item: ${tracker.itemTitle}` : null,
-    "",
-    `View the live Proof: ${viewUrl}`,
-    "",
-    "This secure link is view-only. It cannot alter the Proof.",
-  ].filter(Boolean).join("\n");
-  const html = `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#172033"><h2>${escapeHtml(title)}</h2><p>PackProof${escapeHtml(reference)} is <strong>${escapeHtml(tracker.headline.toLowerCase())}</strong>.</p>${tracker.itemTitle ? `<p>Item: ${escapeHtml(tracker.itemTitle)}</p>` : ""}<p><a href="${escapeHtml(viewUrl)}" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#155eef;color:white;text-decoration:none;font-weight:600">View live Proof</a></p><p style="color:#667085;font-size:13px">This secure link is view-only. It cannot alter the Proof.</p></div>`;
+  const title = milestone ? milestoneEmailTitle(milestone as TrackerMilestoneCode) : "Your PackProof receipt is ready";
+  const subject = milestone ? `PackProof update: ${title}` : "A PackProof receipt has been shared with you";
+  const text = `${title}\n\nView the receipt: ${viewUrl}\n\nThis view-only link cannot change the Proof. Sign in to manage notification preferences. No response is not acceptance.`;
+  const html = `<p>${escapeHtml(title)}</p><p><a href="${escapeHtml(viewUrl)}">View your PackProof receipt</a></p><p>This view-only link cannot change the Proof. Sign in to manage notification preferences. No response is not acceptance.</p>`;
   return { to, subject, text, html };
 }
 
@@ -434,7 +566,7 @@ function milestoneEmailTitle(code: TrackerMilestoneCode): string {
     case "CARRIER_ACCEPTED": return "Carrier accepted the package";
     case "IN_TRANSIT": return "Package in transit";
     case "OUT_FOR_DELIVERY": return "Package out for delivery";
-    case "DELIVERED": return "Package delivered";
+    case "DELIVERED": return "Carrier reported delivery";
   }
 }
 
@@ -448,11 +580,19 @@ function escapeHtml(value: string): string {
   })[character] ?? character);
 }
 
-function errorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, 1000);
-}
 
 function toIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+async function copyReceiptGrant(db:Database,clock:Clock,actorUserId:string,proofId:string,targetLinkId:string,sourceLinkId:unknown):Promise<number|null> {
+  if(typeof sourceLinkId!=="string"||sourceLinkId===targetLinkId) throw new DomainError("INVALID_DISCLOSURE","Select a reviewed buyer receipt link",400);
+  type Copied={scope_version:number,policy_version:string,purpose:string,fields:unknown,media:unknown,preview_hash:string};
+  const source=(await db.query<Copied>(`SELECT g.* FROM proof_disclosure_grants g JOIN proof_access_links l ON l.id=g.access_link_id WHERE l.id=$1 AND l.proof_id=$2 AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at>$3) AND NOT EXISTS(SELECT 1 FROM proof_notification_subscriptions s WHERE s.access_link_id=l.id) ORDER BY g.scope_version DESC LIMIT 1`,[sourceLinkId,proofId,clock.now().toISOString()])).rows[0];
+  if(!source||source.purpose!=="BUYER_RECEIPT")throw new DomainError("INVALID_DISCLOSURE","Select a current reviewed buyer receipt link",409);
+  const previous=(await db.query<Copied>("SELECT * FROM proof_disclosure_grants WHERE access_link_id=$1 ORDER BY scope_version DESC LIMIT 1",[targetLinkId])).rows[0];
+  if(previous&&previous.policy_version===source.policy_version&&previous.purpose===source.purpose&&JSON.stringify(previous.fields)===JSON.stringify(source.fields)&&JSON.stringify(previous.media)===JSON.stringify(source.media)&&previous.preview_hash===source.preview_hash)return null;
+  const version=Number(previous?.scope_version??0)+1;
+  await db.query("INSERT INTO proof_disclosure_grants(access_link_id,scope_version,policy_version,purpose,fields,media,preview_hash,created_by_user_id,created_at) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9)",[targetLinkId,version,source.policy_version,source.purpose,JSON.stringify(source.fields),JSON.stringify(source.media),source.preview_hash,actorUserId,clock.now().toISOString()]);
+  return version;
 }

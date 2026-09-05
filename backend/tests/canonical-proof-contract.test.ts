@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { canonicalize } from "../src/canonical.js";
@@ -20,7 +21,7 @@ import {
   PROOF_SUMMARY_SCHEMA,
   TRUST_KIND,
 } from "../src/domain/trust.js";
-import { auth, createHarness, createUser, login, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, createHarness, createUser, login, type TestHarness } from "./helpers.js";
 
 async function readyProof(harness: TestHarness, seller: string, buyer: string) {
   const txn = await createTransaction(harness.db, harness.clock, seller, {
@@ -46,13 +47,14 @@ async function commitSellerEvidence(
   proofId: string,
   bytes: Buffer,
 ) {
+  const recording = await prepareCameraCapture(harness,seller,proofId,`canon-session-${proofId}`);
   const upload = await initializeEvidenceUpload(
     harness.db,
     harness.clock,
     harness.objectStore,
     seller,
     proofId,
-    { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: `canon-${proofId}` },
+    { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId, idempotencyKey: `canon-${proofId}` },
   );
   await harness.objectStore.put(upload.objectKey, bytes, "video/mp4");
   return commitEvidence(
@@ -132,7 +134,7 @@ describe("canonical Proof contract", () => {
     const seller = await login(harness.app, "digest-seller");
     const buyer = await login(harness.app, "digest-buyer");
     const ready = await readyProof(harness, seller, buyer);
-    const bytes = Buffer.from("canonical-evidence-bytes");
+    const bytes = await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url));
     const expected = sha256Hex(bytes);
     const committed = await commitSellerEvidence(harness, seller, ready.proofId, bytes);
     expect(committed.sha256).toBe(expected);
@@ -182,7 +184,7 @@ describe("canonical Proof contract", () => {
       harness,
       seller,
       ready.proofId,
-      Buffer.from("attestation-evidence"),
+      await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url)),
     );
 
     const denied = await request(harness.app)
@@ -417,7 +419,7 @@ describe("canonical Proof contract", () => {
     const seller = await login(harness.app, "life-seller");
     const buyer = await login(harness.app, "life-buyer");
     const ready = await readyProof(harness, seller, buyer);
-    await commitSellerEvidence(harness, seller, ready.proofId, Buffer.from("finalize-canonical"));
+    await commitSellerEvidence(harness, seller, ready.proofId, await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url)));
 
     await commitAttestation(harness.db, harness.clock, seller, ready.proofId, {
       statement: "PACKED_DESCRIBED_ITEM",

@@ -1,4 +1,5 @@
 import type { PackProofApi } from "./api/client";
+import type { StationOrderContext } from "../../mobile/src/packing-station/types";
 
 type PendingCapture = {
   key: string;
@@ -40,6 +41,33 @@ export async function recoverCapture(key: string): Promise<File | null> {
   return (
     (await queue<PendingCapture | undefined>("readonly", (store) => store.get(key)))?.file ?? null
   );
+}
+
+export type PendingStationCapture = {
+  key: string;
+  file: Blob;
+  order: StationOrderContext;
+  uploadKey: string;
+  evidenceId?: string;
+  finishConfirmed: boolean;
+  captureSessionId?: string;
+  bookmarks?: Array<{id:string;label:string;startMs:number;sourceType:"USER_MARKED"|"SCANNER_TRIGGERED";recipeVersion?:string}>;
+  durationMs?: number;
+  interrupted?: boolean;
+};
+export const stationCaptureKey = (userId: string) => `${userId}:station`;
+export async function recoverStationCapture(userId: string): Promise<PendingStationCapture | null> {
+  return (await queue<PendingStationCapture | undefined>("readonly", (store) =>
+    store.get(stationCaptureKey(userId)),
+  )) ?? null;
+}
+export async function saveStationCapture(capture: PendingStationCapture): Promise<void> {
+  if (!capture.file.size || capture.file.size > 200 * 1024 * 1024)
+    throw new Error("Choose a recording between 1 byte and 200 MiB.");
+  await queue("readwrite", (store) => store.put(capture));
+}
+export async function clearStationCapture(userId: string): Promise<void> {
+  await queue("readwrite", (store) => store.delete(stationCaptureKey(userId)));
 }
 
 /** Save bytes before initializing an upload. Retries keep the same evidence ID,
@@ -96,3 +124,9 @@ export async function preserveCapture(
   progress(100);
   return evidenceId;
 }
+
+export type PendingStageCapture = {key:string;stageId:string;captureSessionId:string;uploadKey:string;file:Blob;interrupted:boolean;bookmarks:Array<{label:string;startMs:number;sourceType?:string;recipeVersion?:string}>};
+export const stageCaptureKey=(userId:string,proofId:string,stageType:string)=>`${userId}:${proofId}:stage:${stageType}`;
+export async function recoverStageCapture(key:string):Promise<PendingStageCapture|null>{return (await queue<PendingStageCapture|undefined>("readonly",store=>store.get(key)))??null;}
+export async function saveStageCapture(capture:PendingStageCapture){if(!capture.file.size||capture.file.size>200*1024*1024)throw new Error("Recording exceeds available upload size.");await queue("readwrite",store=>store.put(capture));}
+export async function clearStageCapture(key:string){await queue("readwrite",store=>store.delete(key));}

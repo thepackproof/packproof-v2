@@ -15,6 +15,9 @@ export interface CommerceFulfillmentAdapter {
     connection: IntegrationConnectionRow;
     credentials?: IntegrationCredentials | null;
     cursor?: string | null;
+    updatedSince?: string;
+    updatedUntil?: string;
+    onProgress?: () => Promise<void>;
   }): Promise<CommerceOrderPage>;
   fetchFulfillmentOrder?(input: {
     connection: IntegrationConnectionRow;

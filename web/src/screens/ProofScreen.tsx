@@ -1,7 +1,10 @@
+import { SignatureWorkbench } from "../components/SignatureWorkbench";
+import { PrivacySharePanel } from "../components/PrivacySharePanel";
+import { ShipmentTracking } from "../components/ShipmentTracking";
 import { EvidencePlayer } from "../components/EvidencePlayer";
 import { EvidenceReviewPanel } from "../components/EvidenceReviewPanel";
-import { useEffect, useRef, useState } from "react";
-import { CapturePreview } from "../components/CapturePreview";
+import { useState } from "react";
+import { useViewState } from "../navigation-context";
 import { SharingCode } from "../components/SharingCode";
 import { RetentionPanel } from "../components/RetentionPanel";
 import type { PackProofApi } from "../api/client";
@@ -83,21 +86,7 @@ export function ProofScreen(props: {
   onConnectTrustedDemo?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [detailed, setDetailed] = useState(false);
-  const packingInput = useRef<HTMLInputElement>(null);
-  const [packingFile, setPackingFile] = useState<File | null>(null);
-  useEffect(() => {
-    let active = true;
-    void props
-      .onRecoverCapture?.()
-      .then((file) => {
-        if (active && file) setPackingFile(file);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [props.proof?.proofId]);
+  const [detailed, setDetailed] = useViewState(`proof.${window.location.pathname}.detailed`, false);
   const proof = props.proof;
   const role = proof?.participants.find(
     (participant) => participant.userId === props.currentUserId,
@@ -194,8 +183,7 @@ export function ProofScreen(props: {
       localAction.key === "review_recording" ||
       localAction.key === "retry_upload"
     ) {
-      if (!grading && role === "SELLER") packingInput.current?.click();
-      else props.onOpenStation?.();
+      props.onOpenStation?.();
       return;
     }
     if (localAction.key === "finalize") {
@@ -241,10 +229,10 @@ export function ProofScreen(props: {
               disabled={props.busy}
               onClick={() => {
                 setMenuOpen(false);
-                props.onShare?.();
+                document.getElementById("sharing")?.scrollIntoView({block:"start",behavior:"smooth"});
               }}
             >
-              Share viewing link
+              Preview sharing
             </button>
           ) : null}
           {props.onShare ? (
@@ -254,10 +242,10 @@ export function ProofScreen(props: {
               disabled={props.busy}
               onClick={() => {
                 setMenuOpen(false);
-                props.onShare?.("EVIDENCE_VIEW");
+                document.getElementById("sharing")?.scrollIntoView({block:"start",behavior:"smooth"});
               }}
             >
-              Share evidence viewing link
+              Choose shared evidence
             </button>
           ) : null}
           {canInvite ? (
@@ -339,54 +327,15 @@ export function ProofScreen(props: {
         </section>
       ) : null}
 
-      {!grading && role === "SELLER" && proof.status !== "FINALIZED" && props.onCommitCapture ? (
-        <section className="section stack">
-          <h2>Record your packing</h2>
-          <p className="note">
-            Show the item and identifying details, place it in the package, then show the seal.
-          </p>
-          <label className="field">
-            <span>Packing video</span>
-            <input
-              ref={packingInput}
-              type="file"
-              accept="video/*"
-              capture="environment"
-              disabled={props.busy}
-              onChange={(event) => setPackingFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
-          {packingFile ? <CapturePreview file={packingFile} /> : null}
-          {props.busy && props.uploadProgress != null ? (
-            <p role="status">Preserving recording: {props.uploadProgress}%</p>
-          ) : null}
-          {packingFile ? (
-            <p className="note">
-              Review the recording, then save it. If the connection is interrupted, return to this
-              Proof and retry to resume.
-            </p>
-          ) : null}
-          {packingFile ? (
-            <button
-              className="btn"
-              disabled={props.busy}
-              onClick={() => {
-                void props.onCommitCapture!([{ slot: "PACKING", file: packingFile }])
-                  .then(() => setPackingFile(null))
-                  .catch(() => undefined);
-              }}
-            >
-              {props.busy ? "Preserving recording…" : "Use recording"}
-            </button>
-          ) : null}
-        </section>
-      ) : null}
+      {!grading && role === "SELLER" && proof.status !== "FINALIZED" && !actionEnabled ? <section className="section stack"><h2>Record your packing</h2><p>Use the PackProof camera to show the item, packing, and seal. Unfinished recordings stay on this device for recovery.</p><button className="btn" onClick={props.onOpenStation}>Open camera</button></section> : null}
       {!grading && proof.status === "FINALIZED" && props.onOpenReceipt ? (
         <button className="btn btn-secondary" onClick={props.onOpenReceipt}>
           Document receipt or return
         </button>
       ) : null}
-      <EvidencePlayer key={proof.proofId} proof={proof} load={props.onLoadEvidence} />
+      {props.api && <SignatureWorkbench key={proof.proofId} api={props.api} proof={proof} />}
+      {props.api && role === "SELLER" && <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} /></div>}
+      <EvidencePlayer key={`evidence-${proof.proofId}`} proof={proof} load={props.onLoadEvidence} />
       <div className="review-mode" role="group" aria-label="Proof detail level">
         <button
           className={detailed ? "btn btn-secondary" : "btn"}
@@ -444,6 +393,7 @@ export function ProofScreen(props: {
 
       <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
 
+      <ShipmentTracking key={`tracking-${proof.proofId}`} events={proof.shipmentObservations?.events ?? []} carrier={proof.transaction.shipping?.carrier} trackingNumber={proof.transaction.shipping?.trackingNumber} />
       <EventTimeline proof={proof} onSelect={props.onOpenEvent} />
 
       <div>

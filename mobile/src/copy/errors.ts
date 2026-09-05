@@ -7,6 +7,11 @@ export interface UserFacingError {
 }
 
 const CODE_MESSAGES: Record<string, { title: string; message: string; action?: UserFacingError["action"] }> = {
+  REQUEST_TIMEOUT: {
+    title: "The connection took too long.",
+    message: "Try again. Any saved recording is kept on this device.",
+    action: "retry",
+  },
   DUPLICATE_PROOF_EXTERNAL_TRANSACTION_BINDING: {
     title: "A PackProof already exists for this order.",
     message: "Open the existing record instead of creating another.",
@@ -176,7 +181,7 @@ export function isInternalErrorText(text: string): boolean {
 }
 
 export function isAuthenticationFailure(error: unknown): boolean {
-  if (error && typeof error === "object" && "status" in error && (error.status === 401 || error.status === 403)) {
+  if (error && typeof error === "object" && "status" in error && error.status === 401) {
     return true;
   }
   if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {

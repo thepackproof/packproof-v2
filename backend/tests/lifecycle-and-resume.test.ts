@@ -1,10 +1,12 @@
+import { createCaptureSession, completeCaptureSession } from "../src/domain/capture-sessions.js";
 import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import request from "supertest";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
+  prepareCameraCapture,
   createHarness,
   createUser,
   auth,
@@ -42,6 +44,13 @@ describe("receipt lifecycle and resumable capture", () => {
     const proof = await createProof(h.db, h.clock, seller, {
       transaction: { itemTitle: "Camera" },
     });
+    const original = await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url));
+    const padding = Buffer.alloc(UPLOAD_PART_BYTES + 64);
+    padding.writeUInt32BE(padding.length,0); padding.write("free",4,"ascii");
+    const recording = Buffer.concat([original,padding]);
+    const first = recording.subarray(0,UPLOAD_PART_BYTES), last = recording.subarray(UPLOAD_PART_BYTES);
+    const session = await createCaptureSession(h.db,h.clock,seller,proof.proofId,{client:"NATIVE_CAMERA",idempotencyKey:"resume-camera"});
+    await completeCaptureSession(h.db,h.clock,seller,proof.proofId,session.id,{sha256:sha256Hex(recording),byteSize:recording.length,contentType:"video/mp4"});
     const init = await initializeEvidenceUpload(
       h.db,
       h.clock,
@@ -52,10 +61,9 @@ describe("receipt lifecycle and resumable capture", () => {
         contentType: "video/mp4",
         evidenceType: "FULFILLMENT_CAPTURE",
         idempotencyKey: "resume",
+        captureSessionId: session.id,
       },
     );
-    const first = Buffer.alloc(UPLOAD_PART_BYTES, 42),
-      last = Buffer.from("last-part");
     await storeUploadPart(
       h.db,
       h.clock,
@@ -212,7 +220,7 @@ describe("receipt lifecycle and resumable capture", () => {
           .post(`${base}/stages/${stageId}/evidence`)
           .set(auth(actor))
           .set("Idempotency-Key", "abandoned-stage-upload")
-          .send({ contentType: "video/mp4" });
+          .send({ contentType: "image/jpeg" });
         expect(abandoned.status).toBe(201);
         const discardPath = `${base}/stages/${stageId}/evidence/${abandoned.body.evidenceId}/discard`;
         expect((await request(h.app).post(discardPath).set(auth(seller)).send({})).status).toBe(
@@ -229,13 +237,14 @@ describe("receipt lifecycle and resumable capture", () => {
           ).status,
         ).toBe(404);
       }
+      const recording=await prepareCameraCapture(h,actor,proof.proofId,`stage-camera-${stageId}`,stageId);
       const upload = await request(h.app)
         .post(`${base}/stages/${stageId}/evidence`)
         .set(auth(actor))
         .set("Idempotency-Key", "media")
-        .send({ contentType: "video/mp4" });
+        .send({ contentType: "video/mp4", captureSessionId: recording.captureSessionId });
       expect(upload.status, JSON.stringify(upload.body)).toBe(201);
-      const bytes = Buffer.from(`${type}-recording`);
+      const bytes = recording.bytes;
       await h.objectStore.putUpload(
         new URL(upload.body.upload.url).pathname.split("/").at(-1)!,
         bytes,
@@ -293,7 +302,7 @@ describe("receipt lifecycle and resumable capture", () => {
       expect(verified.independentDigestMatched).toBe(true);
       expect(verified.evidenceVerified).toBe(1);
       const tampered = Buffer.from(bundle);
-      const offset = tampered.indexOf(Buffer.from("RECEIPT-recording"));
+      const offset = tampered.lastIndexOf(await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url)));
       expect(offset).toBeGreaterThan(0);
       tampered[offset] ^= 1;
       await writeFile(file, tampered);

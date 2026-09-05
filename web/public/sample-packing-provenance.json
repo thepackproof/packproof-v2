@@ -1,0 +1,44 @@
+{
+  "sourcePage": "https://www.pexels.com/video/close-up-of-a-person-packing-a-ceramic-product-7667415/",
+  "sourceDownload": "https://videos.pexels.com/video-files/7667415/7667415-uhd_4096_2160_25fps.mp4",
+  "author": "MART PRODUCTION",
+  "licensePage": "https://www.pexels.com/license/",
+  "licenseCheckedAt": "2026-09-05",
+  "durationSeconds": 20.76,
+  "localFile": "/workspace/scratch/eb11cadb4faa/sample-packing.mp4",
+  "byteSize": 2660391,
+  "sha256": "bcd3a7a17dd7c65a1c2f7c435fb43277284fefb443ef4a328ecf5a00a5e20b13",
+  "processing": "Full source duration and sequence retained; resized to 1280x676, H.264 CRF24, no synthesized frames or sequence edits. Source contains no audio stream.",
+  "sampleLabel": "Illustrative stock footage with fictional order details. This clip was not recorded through PackProof and does not depict a PackProof customer shipment.",
+  "credit": "Footage: MART PRODUCTION / Pexels. No endorsement is implied.",
+  "chapters": [
+    {
+      "atSeconds": 0,
+      "label": "Open box",
+      "observation": "An empty open cardboard box is visible on the worktable."
+    },
+    {
+      "atSeconds": 4,
+      "label": "Packing material",
+      "observation": "Hands lower shredded paper filler into the open box."
+    },
+    {
+      "atSeconds": 14,
+      "label": "Item view",
+      "observation": "Hands hold the brown ceramic mug above the box."
+    },
+    {
+      "atSeconds": 18,
+      "label": "Item in box",
+      "observation": "The ceramic mug is being set and adjusted in the paper-filled box."
+    }
+  ],
+  "notShown": [
+    "Sealed box",
+    "Shipping label",
+    "Serial number",
+    "Carrier handoff",
+    "Actual order identity",
+    "Continuous PackProof authorized capture"
+  ]
+}

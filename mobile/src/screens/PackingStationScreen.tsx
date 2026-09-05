@@ -1,10 +1,15 @@
+import { PressableScale } from "../ui/motion";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { isAuthenticationFailure } from "../copy/errors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   discardLocalCapture,
   localCaptureExists,
   recordPackingEvidence,
+  bindRecordedCapture,
+  persistCaptureMetadata,
+  saveCaptureBookmarks,
   uploadCaptureFile,
   uploadCaptureResumable,
   type LocalCapture,
@@ -23,7 +28,7 @@ import {
 import { normalizeStationReference } from "../packing-station/scan";
 import { submitStationSession } from "../packing-station/submit";
 import type { StationCandidate, StationState } from "../packing-station/types";
-import { ApiError, PackProofV2Client, newIdempotencyKey, type ProofView } from "../v2-api";
+import { PackProofV2Client, newIdempotencyKey, type ProofView } from "../v2-api";
 import { BarcodeScanView } from "./BarcodeScanView";
 
 const COMPLETED_HOLD_MS = 1600;
@@ -31,6 +36,7 @@ const COMPLETED_HOLD_MS = 1600;
 export interface StationPersistSnapshot {
   capture: LocalCapture | null;
   evidenceIdempotencyKey: string | null;
+  uploadEvidenceId?: string | null;
   proofId: string | null;
   transactionId: string | null;
   orderLabel: string | null;
@@ -44,6 +50,7 @@ export function PackingStationScreen(props: {
   userId: string;
   restoredCapture: LocalCapture | null;
   restoredKey: string | null;
+  restoredEvidenceId: string | null;
   restoredProofId: string | null;
   restoredTransactionId: string | null;
   restoredOrderLabel: string | null;
@@ -61,12 +68,26 @@ export function PackingStationScreen(props: {
   const [heldCapture, setHeldCapture] = useState<LocalCapture | null>(props.restoredCapture);
   const stateRef = useRef(state);
   const heldCaptureRef = useRef(heldCapture);
+  const evidenceIdRef = useRef(props.restoredEvidenceId);
+  const actionLock = useRef(false);
+  const submitLock = useRef(false);
   stateRef.current = state;
   heldCaptureRef.current = heldCapture;
 
   useEffect(() => {
     void loadCandidates();
   }, [props.client]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (actionLock.current || submitLock.current) return true;
+      if (state.phase === "SCANNING") dispatch({ type: "SCAN_CANCELLED" });
+      else if (state.phase === "FINISH_SCANNING") dispatch({ type: "FINISH_SCAN_CANCELLED" });
+      else void leaveStation();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [state.phase, props.onLeave]);
 
   useEffect(() => {
     if (state.phase !== "PROOF_CREATED") {
@@ -83,6 +104,7 @@ export function PackingStationScreen(props: {
     await props.onPersist({
       capture,
       evidenceIdempotencyKey: next.evidenceIdempotencyKey,
+      uploadEvidenceId: capture ? evidenceIdRef.current : null,
       proofId: next.order?.proofId ?? null,
       transactionId: next.order?.transactionId ?? null,
       orderLabel: next.order?.orderLabel ?? null,
@@ -123,19 +145,26 @@ export function PackingStationScreen(props: {
     }
   }
 
-  async function guarded(action: () => Promise<void>): Promise<void> {
+  async function guarded(action: () => Promise<void>, needsAuth = true): Promise<void> {
+    if (actionLock.current) return;
+    actionLock.current = true;
     setLocalBusy(true);
     try {
-      await props.onEnsureAuth();
+      if (needsAuth) await props.onEnsureAuth();
       await action();
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (isAuthenticationFailure(error)) {
         dispatch({ type: "AUTH_FAILED" });
         props.onAuthExpired();
         return;
       }
-      throw error;
+      dispatch({
+        type: "OPERATION_FAILED",
+        error: stationErrorFromUnknown(error),
+        canRetry: Boolean(heldCaptureRef.current),
+      });
     } finally {
+      actionLock.current = false;
       setLocalBusy(false);
     }
   }
@@ -200,16 +229,20 @@ export function PackingStationScreen(props: {
   async function startPacking(): Promise<void> {
     await guarded(async () => {
       dispatch({ type: "START_RECORDING", trigger: "MANUAL" });
-      const captured = await recordPackingEvidence();
+      const order = stateRef.current.order;
+      if (!order) throw new Error("Choose an order before recording.");
+      const captured = await recordPackingEvidence({ client: props.client, proofId: order.proofId, userId: props.userId, orderLabel: order.itemSummary || order.orderLabel });
       if (!captured) {
         dispatch({ type: "CAPTURE_CANCELLED" });
         return;
       }
       const key = stateRef.current.evidenceIdempotencyKey ?? newIdempotencyKey();
+      evidenceIdRef.current = null;
       dispatch({
         type: "CAPTURE_HELD",
         capture: {
           handle: captured.uri,
+          captureSessionId: captured.captureSessionId,
           contentType: captured.contentType,
           byteSize: captured.byteSize,
           durationMs: captured.durationMs,
@@ -293,7 +326,11 @@ export function PackingStationScreen(props: {
     if (!order) {
       return;
     }
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setLocalBusy(true);
     try {
+      await props.onEnsureAuth();
       const available = await localCaptureExists(captured.uri);
       if (!available) {
         dispatch({
@@ -308,18 +345,35 @@ export function PackingStationScreen(props: {
         return;
       }
       const proof = await props.client.getProof(order.proofId);
+      if (!proof.evidence.some((media) => media.evidenceId === captured.uploadEvidenceId && media.validationStatus === "COMMITTED"))
+        await bindRecordedCapture(props.client, captured, order.proofId, props.userId);
       const result = await submitStationSession({
         proof,
         actorUserId: props.userId,
         capture: {
           handle: captured.uri,
+          captureSessionId: captured.captureSessionId,
           contentType: captured.contentType,
           byteSize: captured.byteSize,
           durationMs: captured.durationMs,
         },
         idempotencyKey: key,
+        evidenceId: captured.uploadEvidenceId ?? evidenceIdRef.current,
+        onEvidenceInitialized: async (evidenceId) => {
+          evidenceIdRef.current = evidenceId;
+          captured.uploadEvidenceId = evidenceId;
+          await persistCaptureMetadata(captured);
+          setHeldCapture({ ...captured });
+          await persistFromState(stateRef.current, captured);
+        },
         deps: {
-          api: props.client,
+          api: {
+            initializeEvidenceUpload: (proofId, input) => props.client.initializeEvidenceUpload(proofId, { ...input, captureSessionId: captured.captureSessionId }),
+            commitEvidence: (proofId, evidenceId) => props.client.commitEvidence(proofId, evidenceId),
+            createAttestation: (proofId, input) => props.client.createAttestation(proofId, input),
+            finalizeProof: (proofId) => props.client.finalizeProof(proofId),
+            getProof: (proofId) => props.client.getProof(proofId),
+          },
           uploadEvidence: (proofId, evidenceId, _capture, onProgress) =>
             uploadCaptureResumable({
               client: props.client,
@@ -348,13 +402,14 @@ export function PackingStationScreen(props: {
           });
         },
       });
+      await saveCaptureBookmarks(props.client, order.proofId, result.evidenceId, captured).catch(() => undefined);
       await discardLocalCapture(captured.uri);
       setHeldCapture(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
       await persistFromState(initialStationState(), null);
       await loadCandidates();
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (isAuthenticationFailure(error)) {
         dispatch({ type: "AUTH_FAILED" });
         await persistFromState(stateRef.current, captured);
         props.onAuthExpired();
@@ -368,7 +423,18 @@ export function PackingStationScreen(props: {
           mapped.code !== "PROOF_ALREADY_FINALIZED" && mapped.code !== "EVIDENCE_ALREADY_COMMITTED",
       });
       await persistFromState(stateRef.current, captured);
+    } finally {
+      submitLock.current = false;
+      setLocalBusy(false);
     }
+  }
+
+  async function leaveStation(): Promise<void> {
+    if (actionLock.current || submitLock.current) return;
+    await guarded(async () => {
+      await persistFromState(stateRef.current, heldCaptureRef.current);
+      props.onLeave();
+    }, false);
   }
 
   async function retry(): Promise<void> {
@@ -593,11 +659,10 @@ export function PackingStationScreen(props: {
 
         <StationButton
           label={leaveBlocked ? "Keep video and leave" : "Leave station"}
-          disabled={localBusy && state.phase === "PROCESSING"}
+          disabled={localBusy}
           secondary
           onPress={() => {
-            void persistFromState(stateRef.current, heldCapture);
-            props.onLeave();
+            void leaveStation();
           }}
         />
       </ScrollView>
@@ -669,7 +734,10 @@ function StationButton(props: {
   secondary?: boolean;
 }) {
   return (
-    <Pressable
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: props.disabled }}
       onPress={props.onPress}
       disabled={props.disabled}
       style={[
@@ -681,7 +749,7 @@ function StationButton(props: {
       <Text style={[styles.buttonText, props.secondary ? styles.buttonSecondaryText : null]}>
         {props.label}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 

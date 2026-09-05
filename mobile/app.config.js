@@ -38,7 +38,7 @@ module.exports = {
     name: "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
-    version: "0.2.0",
+    version: "0.3.0",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
@@ -56,19 +56,18 @@ module.exports = {
       supportsTablet: false,
       infoPlist: {
         NSCameraUsageDescription:
-          "Scan shipping labels and record packing evidence for this Proof.",
-        NSPhotoLibraryUsageDescription: "Select captured evidence if the camera is unavailable.",
+          "Scan shipping labels and record evidence with the camera for this Proof.",
       },
     },
     android: {
       package: "com.packproof.mobile",
-      versionCode: 28,
+      versionCode: 29,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
         backgroundColor: "#F4F6F8",
       },
-      permissions: ["CAMERA", "RECORD_AUDIO"],
+      permissions: ["CAMERA"],
     },
     plugins: [
       "./plugins/with-order-share",
@@ -76,7 +75,7 @@ module.exports = {
       [
         "expo-camera",
         {
-          cameraPermission: "Scan shipping labels and record packing evidence for this Proof.",
+          cameraPermission: "Scan shipping labels and record evidence with the camera for this Proof.",
           microphonePermission: false,
           recordAudioAndroid: false,
         },
@@ -84,9 +83,9 @@ module.exports = {
       [
         "expo-image-picker",
         {
-          cameraPermission: "Record packing evidence for this Proof.",
-          microphonePermission: "Record packing evidence audio with the camera.",
-          photosPermission: "Access a captured video if the camera app stores it in the library.",
+          cameraPermission: "Take evidence photos with the camera for this Proof’s grading workflow.",
+          microphonePermission: false,
+          photosPermission: false,
         },
       ],
       "expo-asset",

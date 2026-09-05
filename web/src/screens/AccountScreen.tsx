@@ -9,7 +9,7 @@ import type {
 } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { useTheme } from "../theme/ThemeProvider";
-import { ConnectedAccountsPanel } from "./ConnectedAccountsPanel";
+
 
 const APPEARANCE_OPTIONS: Array<{
   id: AppearancePreference;
@@ -130,15 +130,7 @@ export function AccountScreen(props: {
         </section>
       ) : null}
 
-      <ConnectedAccountsPanel
-        accounts={props.connectedAccounts}
-        providers={props.connectedProviders}
-        notice={props.connectedNotice}
-        busy={props.busy}
-        onConnect={props.onConnectAccount}
-        onReauthorize={props.onReauthorizeAccount}
-        onDisconnect={props.onDisconnectAccount}
-      />
+
 
       <section className="section stack">
         <h2>Connected marketplaces</h2>
@@ -160,7 +152,7 @@ export function AccountScreen(props: {
           ))
         )}
         <button className="btn btn-secondary" type="button" onClick={props.onOpenStores}>
-          Connected stores
+          Connections
         </button>
       </section>
 

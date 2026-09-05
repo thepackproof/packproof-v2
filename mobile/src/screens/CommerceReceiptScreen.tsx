@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { Text, View, Share } from "react-native";
-import * as ImagePicker from "expo-image-picker";
+import { useEffect, useRef, useState } from "react";
+import { Image, Text, View, Share } from "react-native";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePackProof } from "../app/PackProofProvider";
@@ -11,7 +10,7 @@ import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { VideoReview } from "../ui/VideoReview";
 import { RecordedVideo } from "../ui/RecordedVideo";
-import { requestCapturePermissions, uploadCaptureFile } from "../capture";
+import { recordPackingEvidence, bindRecordedCapture, saveCaptureBookmarks, discardLocalCapture, uploadCaptureFile, type LocalCapture } from "../capture";
 import type { UploadTarget } from "../v2-api";
 type Media = {
   evidenceId: string;
@@ -31,7 +30,7 @@ type Receipt = {
   proof: { transaction: { itemTitle: string } };
   stages: Stage[];
 };
-type Recording = {
+type Recording = LocalCapture & {
   uri: string;
   contentType: string;
   key: string;
@@ -49,6 +48,9 @@ export function CommerceReceiptScreen() {
     [recording, setRecording] = useState<Recording | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null),
+    [notice, setNotice] = useState<string | null>(null),
+    [guides, setGuides] = useState<Array<{ derivativeId: string; transform: { anchorId: string } }>>([]),
+    [guideId, setGuideId] = useState<string | null>(null),
     [needsAccept, setNeedsAccept] = useState(false),
     [query, setQuery] = useState(""),
     [people, setPeople] = useState<
@@ -60,12 +62,15 @@ export function CommerceReceiptScreen() {
     >([]),
     [progress, setProgress] = useState<number | null>(null);
   const storageKey = `packproof-receipt:${app.session!.userId}:${proofId}`;
+  const actionLock = useRef(false);
   const request = <T,>(path: string, method = "GET", body?: unknown) =>
     app.client.lifecycleRequest<T>(proofId, path, method, body);
   const reload = async () => {
     await app.ensureAuth();
     setRecord(await request<Receipt>(""));
     setNeedsAccept(false);
+    const guideMedia = await app.client.disclosureRequest<{ derivatives: Array<{ derivativeId: string; status: string; transform: { anchorId: string } }> }>(proofId, "/thumbnails").catch(() => ({ derivatives: [] }));
+    setGuides(guideMedia.derivatives.filter((item) => item.status === "READY"));
   };
   useEffect(() => {
     void reload().catch((e) => {
@@ -79,6 +84,8 @@ export function CommerceReceiptScreen() {
       .catch(() => undefined);
   }, [proofId]);
   async function run(fn: () => Promise<void>) {
+    if (actionLock.current) return;
+    actionLock.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -87,6 +94,7 @@ export function CommerceReceiptScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Receipt action failed");
     } finally {
+      actionLock.current = false;
       setBusy(false);
     }
   }
@@ -95,28 +103,13 @@ export function CommerceReceiptScreen() {
     setRecording(value);
   };
   async function capture(index: number) {
-    await requestCapturePermissions();
-    const video = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["videos"],
-      cameraType: ImagePicker.CameraType.back,
-      videoMaxDuration: 120,
-      allowsEditing: false,
-    });
-    if (video.canceled || !video.assets[0]) return;
-    const stage = await request<{ stageId: string }>("/stages", "POST", {
-      type: sequence[index],
-    });
+    const stage = await request<{ stageId: string }>("/stages", "POST", { type: sequence[index] });
+    const video = await recordPackingEvidence({ client: app.client, proofId, userId: app.session!.userId, orderLabel: record?.proof.transaction.itemTitle || "Receipt / return", stageId: stage.stageId, stageType: sequence[index], ...(guideId && index === 2 ? { guide: { uri: app.client.thumbnailUrl(proofId, guideId), headers: app.client.authorizedDownloadHeaders() } } : {}) });
+    if (!video) return;
     const key = `receipt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const uri = `${FileSystem.documentDirectory}${key}.mp4`;
-    await FileSystem.copyAsync({ from: video.assets[0].uri, to: uri });
     const old = recording;
-    await save({
-      uri,
-      key,
-      stageId: stage.stageId,
-      contentType: video.assets[0].mimeType ?? "video/mp4",
-    });
-    if (old) await FileSystem.deleteAsync(old.uri, { idempotent: true });
+    await save({ ...video, key, stageId: stage.stageId });
+    if (old) await discardLocalCapture(old.uri);
     await reload();
   }
   async function preserve() {
@@ -128,12 +121,14 @@ export function CommerceReceiptScreen() {
         .flatMap((s) => s.evidence)
         .some((e) => e.evidenceId === saved.evidenceId && e.committedAt)
     ) {
+      await bindRecordedCapture(app.client, saved, proofId, app.session!.userId, saved.stageId);
       const initialized = await request<{
         evidenceId: string;
         upload: UploadTarget;
       }>(`/stages/${saved.stageId}/evidence`, "POST", {
         contentType: saved.contentType,
         idempotencyKey: saved.key,
+        captureSessionId: saved.captureSessionId,
       });
       saved = { ...saved, evidenceId: initialized.evidenceId };
       await save(saved);
@@ -146,9 +141,10 @@ export function CommerceReceiptScreen() {
       });
       await request(`/stages/${saved.stageId}/evidence/${saved.evidenceId}/commit`, "POST", {});
     }
+    if (saved.evidenceId) await saveCaptureBookmarks(app.client, proofId, saved.evidenceId, saved).catch(() => undefined);
     await AsyncStorage.removeItem(storageKey);
     setRecording(null);
-    await FileSystem.deleteAsync(saved.uri, { idempotent: true });
+    await discardLocalCapture(saved.uri);
     await reload();
   }
   return (
@@ -159,6 +155,7 @@ export function CommerceReceiptScreen() {
           {error}
         </Text>
       ) : null}
+      {notice ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textPrimary }}>{notice}</Text> : null}
       {needsAccept ? (
         <Button
           label="Accept receipt invitation"
@@ -186,6 +183,11 @@ export function CommerceReceiptScreen() {
             Receipt and return recordings are added to this Proof. The original packing record stays
             sealed.
           </Text>
+          {record.role === "BUYER" ? <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.textSecondary }}>Carrier delivery and your receipt report are separate. Notifications are optional and do not mean acceptance.</Text>
+            <Button label="Opt in to receipt updates" variant="secondary" disabled={busy} onPress={() => void run(async () => { await app.client.setReceiptPreference(proofId, true); setNotice("Receipt updates enabled for your verified email."); })} />
+            <Button label="Turn off receipt updates" variant="tertiary" disabled={busy} onPress={() => void run(async () => { await app.client.setReceiptPreference(proofId, false); setNotice("Receipt updates are turned off."); })} />
+          </View> : null}
           {record.role === "SELLER" ? (
             <View style={{ gap: 12 }}>
               <FormField label="Receiver username" value={query} onChangeText={setQuery} />
@@ -217,6 +219,11 @@ export function CommerceReceiptScreen() {
               ))}
             </View>
           ) : null}
+          {record.role === "SELLER" && guides.length ? <View style={{ gap: 8 }}>
+            <Text style={{ color: colors.textPrimary }}>Optional guide for returned-item capture</Text>
+            <Text style={{ color: colors.textSecondary }}>Choose an outbound frame to help match the angle. The translucent guide is never burned into your incoming evidence.</Text>
+            {guides.map((guide, index) => <View key={guide.derivativeId} style={{ gap: 8 }}><Image source={{ uri: app.client.thumbnailUrl(proofId, guide.derivativeId), headers: app.client.authorizedDownloadHeaders() }} style={{ width: "100%", height: 150 }} resizeMode="contain" accessibilityLabel={`Outbound guide frame ${index + 1}`} /><Button label={`${guideId === guide.derivativeId ? "Selected · " : ""}Outbound frame ${index + 1}`} variant="secondary" onPress={() => setGuideId(guideId === guide.derivativeId ? null : guide.derivativeId)} /></View>)}
+          </View> : null}
           {sequence.map((type, index) => {
             const stage = record.stages.find((s) => s.type === type),
               previousDone =

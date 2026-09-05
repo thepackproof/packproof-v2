@@ -3,7 +3,7 @@ import request from "supertest";
 import { sha256Hex } from "../src/hash.js";
 import { createApp } from "../src/app.js";
 import { BearerUserAdapter } from "../src/auth/adapter.js";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, createHarness, login, type TestHarness } from "./helpers.js";
 
 describe("PackProof V2 API workflow", () => {
   let harness: TestHarness;
@@ -117,22 +117,23 @@ describe("PackProof V2 API workflow", () => {
     expect(asBuyer.status).toBe(200);
     expect(asBuyer.body.proofId).toBe(proofId);
 
+    const recording = await prepareCameraCapture(harness,seller,proofId,"seller-capture-session");
     const upload1 = await request(harness.app)
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "seller-capture-1")
-      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId });
     const upload2 = await request(harness.app)
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "seller-capture-1")
-      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId });
     expect(upload1.status).toBe(201);
     expect(upload2.body.evidenceId).toBe(upload1.body.evidenceId);
     const evidenceId = upload1.body.evidenceId as string;
     const uploadUrl = new URL(upload1.body.upload.url as string);
 
-    const bytes = Buffer.from("seller-recorded-evidence");
+    const bytes = recording.bytes;
     const put = await request(harness.app)
       .put(uploadUrl.pathname)
       .set("Content-Type", "video/mp4")

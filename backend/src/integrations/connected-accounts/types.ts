@@ -54,6 +54,7 @@ export interface ConnectedAccountProvider {
   isEnabled(): boolean;
   oauthPurpose(): OAuthAttemptPurpose;
   callbackRedirectUri(): string;
+  verifyCallback?(query: Record<string, unknown>): Promise<void>;
   getAuthorizationUrl(input: AuthorizationStartInput): Promise<{
     authorizationUrl: string;
     redirectUri: string;

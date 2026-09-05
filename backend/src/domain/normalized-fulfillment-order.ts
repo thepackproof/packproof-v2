@@ -23,10 +23,14 @@ export interface NormalizedOrderItem {
   quantity: number | null;
   unitValue: number | null;
   currency: string | null;
+  remainingQuantity?: number | null;
+  variant?: string | null;
 }
 
 export interface NormalizedFulfillmentOrder {
   provider: string;
+  providerEnvironment?: string | null;
+  identityAccountReference?: string | null;
   externalAccountReference: string;
   externalOrderId: string;
   externalReference: string | null;
@@ -35,6 +39,8 @@ export interface NormalizedFulfillmentOrder {
   fulfillmentState: NormalizedFulfillmentState;
   requiresPhysicalFulfillment: boolean;
   cancelled: boolean;
+  onHold?: boolean;
+  packages?: Array<{externalFulfillmentId:string|null;trackingNumber:string|null;lineItems:Array<{id:string|null;quantity:number|null}>}>;
   items: NormalizedOrderItem[];
   transactionValue: number | null;
   currency: string | null;
@@ -103,6 +109,8 @@ export function parseNormalizedFulfillmentOrder(input: unknown): NormalizedFulfi
   const buyer = parseBuyer(record.buyer);
   return {
     provider,
+    providerEnvironment: normalizeOptionalText(record.providerEnvironment,"providerEnvironment",80),
+    identityAccountReference: record.identityAccountReference == null ? null : normalizeExternalAccountReference(record.identityAccountReference),
     externalAccountReference,
     externalOrderId,
     externalReference: normalizeOptionalText(record.externalReference, "externalReference", ORDER_ID_MAX),
@@ -115,6 +123,12 @@ export function parseNormalizedFulfillmentOrder(input: unknown): NormalizedFulfi
     ),
     requiresPhysicalFulfillment: record.requiresPhysicalFulfillment === true,
     cancelled: record.cancelled === true,
+    onHold: record.onHold === true,
+    packages: Array.isArray(record.packages) ? record.packages.map(value=>{const p=asRecord(value);return {
+      externalFulfillmentId:normalizeOptionalText(p.externalFulfillmentId,"packages.externalFulfillmentId",200),
+      trackingNumber:normalizeOptionalText(p.trackingNumber,"packages.trackingNumber",200),
+      lineItems:Array.isArray(p.lineItems)?p.lineItems.map(value=>{const line=asRecord(value);return {id:normalizeOptionalText(line.id,"packages.lineItems.id",200),quantity:line.quantity==null?null:normalizeNonnegativeInt(line.quantity,"packages.lineItems.quantity")};}):[],
+    };}) : [],
     items,
     transactionValue: normalizeMoney(record.transactionValue, "transactionValue"),
     currency: normalizeCurrency(record.currency),
@@ -139,6 +153,8 @@ export function fulfillmentOrderFingerprint(order: NormalizedFulfillmentOrder): 
   return sha256Hex(
     canonicalize({
       provider: order.provider,
+      providerEnvironment: order.providerEnvironment ?? null,
+      identityAccountReference: order.identityAccountReference ?? null,
       externalAccountReference: order.externalAccountReference,
       externalOrderId: order.externalOrderId,
       externalReference: order.externalReference,
@@ -147,6 +163,8 @@ export function fulfillmentOrderFingerprint(order: NormalizedFulfillmentOrder): 
       fulfillmentState: order.fulfillmentState,
       requiresPhysicalFulfillment: order.requiresPhysicalFulfillment,
       cancelled: order.cancelled,
+      onHold: order.onHold ?? false,
+      packages: order.packages ?? [],
       items: order.items,
       transactionValue: order.transactionValue,
       currency: order.currency,
@@ -170,7 +188,7 @@ export function fulfillmentOrderToImportedTransaction(
   return {
     provider: order.provider,
     externalTransactionId: order.externalOrderId,
-    externalAccountReference: order.externalAccountReference,
+    externalAccountReference: commerceIdentityAccount(order),
     externalReference: order.externalReference ?? order.externalOrderId,
     transactionDate: order.orderedAt.slice(0, 10),
     itemTitle: summary.itemTitle,
@@ -282,6 +300,8 @@ function parseItems(value: unknown): NormalizedOrderItem[] {
       description: normalizeOptionalText(record.description, "items.description", 4000),
       sku: normalizeOptionalText(record.sku, "items.sku", 120),
       quantity: normalizePositiveInt(record.quantity, "items.quantity"),
+      remainingQuantity: record.remainingQuantity == null ? null : normalizeNonnegativeInt(record.remainingQuantity,"items.remainingQuantity"),
+      variant: normalizeOptionalText(record.variant,"items.variant",400),
       unitValue: normalizeMoney(record.unitValue, "items.unitValue"),
       currency: normalizeCurrency(record.currency),
     };
@@ -380,6 +400,11 @@ function normalizeOptionalText(value: unknown, field: string, max: number): stri
   return trimmed;
 }
 
+function normalizeNonnegativeInt(value:unknown,field:string):number {
+  if(typeof value!=="number"||!Number.isInteger(value)||value<0) throw new DomainError("INVALID_FULFILLMENT_ORDER",`${field} must be a non-negative integer`,400);
+  return value;
+}
+
 function normalizePositiveInt(value: unknown, field: string): number | null {
   if (value == null || value === "") {
     return null;
@@ -422,4 +447,8 @@ function asRecord(body: unknown): Record<string, unknown> {
     return {};
   }
   return body as Record<string, unknown>;
+}
+
+export function commerceIdentityAccount(order:NormalizedFulfillmentOrder):string {
+  return order.identityAccountReference ?? (order.providerEnvironment ? `${order.providerEnvironment}.${order.externalAccountReference}` : order.externalAccountReference);
 }

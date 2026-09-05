@@ -3,13 +3,22 @@ export function zipFiles(files: Array<{ name: string; bytes: Buffer }>): Buffer 
   const local: Buffer[] = [],
     central: Buffer[] = [];
   let offset = 0;
+  const names = new Set<string>();
+  if (files.length > 4096) throw new Error("Too many ZIP entries");
   for (const file of files) {
     if (
       !/^[A-Za-z0-9_./-]+$/.test(file.name) ||
       file.name.includes("..") ||
-      file.name.startsWith("/")
+      file.name.startsWith("/") ||
+      file.name.endsWith("/") ||
+      file.name.includes("//") ||
+      names.has(file.name) ||
+      Buffer.byteLength(file.name) > 1024
     )
       throw new Error("Invalid ZIP entry name");
+    names.add(file.name);
+    if (file.bytes.length > 220 * 1024 * 1024 || offset + file.bytes.length > 220 * 1024 * 1024)
+      throw new Error("ZIP exceeds package size limit");
     const name = Buffer.from(file.name),
       crc = crc32(file.bytes);
     const header = Buffer.alloc(30);

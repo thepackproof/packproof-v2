@@ -1,4 +1,7 @@
+import { Glyph } from "../site/Brand";
 import { useEffect, useMemo, useState } from "react";
+import { ApiError } from "../api/types";
+import { withRequestTimeout } from "../api/timeout";
 import type { PublicProofView } from "../api/types";
 import { PublicMedia } from "../components/PublicMedia";
 
@@ -29,10 +32,13 @@ type RecipientSubscription = { email: string; preference: EmailPreference };
 
 export function PublicProofScreen(props: {
   token: string;
+  apiBaseUrl?: string;
   load: (token: string) => Promise<PublicProofView>;
   loadMedia?: (id: string) => Promise<Blob>;
   onSignIn: () => void;
 }) {
+  const [retry, setRetry] = useState(0);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [proof, setProof] = useState<PublicProofView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [emailSubscription, setEmailSubscription] = useState<RecipientSubscription | null>(null);
@@ -43,86 +49,86 @@ export function PublicProofScreen(props: {
     [proof],
   );
 
+  useEffect(() => { setProof(null); setCheckedAt(null); }, [props.token]);
+
   useEffect(() => {
     let cancelled = false;
-    let firstLoad = true;
-
+    let inFlight = false;
+    let terminal = false;
     const refresh = async () => {
+      if (inFlight || terminal) return;
+      inFlight = true;
       try {
         const loaded = await props.load(props.token);
         if (!cancelled) {
           setProof(loaded);
           setError(null);
-          firstLoad = false;
+          setCheckedAt(new Date().toISOString());
         }
       } catch (caught) {
-        if (!cancelled && firstLoad) {
-          setError(caught instanceof Error ? caught.message : "This viewing link is not valid.");
+        if (cancelled) return;
+        if (caught instanceof ApiError && [401, 403, 404, 410].includes(caught.status)) {
+          terminal = true;
+          setProof(null);
+          setEmailSubscription(null);
+          setError("This viewing link has expired, was revoked, or is no longer available.");
+        } else {
+          setError("Live updates are paused. Check your connection and try again. Any status shown is from the last successful update.");
         }
-      }
+      } finally { inFlight = false; }
     };
-
     setError(null);
-    setProof(null);
     void refresh();
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, 15_000);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", onVisible);
-
+    window.addEventListener("online", onVisible);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onVisible);
     };
-  }, [props.token, props.load]);
+  }, [props.token, props.load, retry]);
 
   useEffect(() => {
     let cancelled = false;
     setEmailSubscription(null);
     setEmailStatus(null);
-    void fetch(recipientApiUrl(props.token), {
-      method: "GET",
-      headers: { Accept: "application/json" },
+    void withRequestTimeout(async (signal) => {
+      const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), { method: "GET", headers: { Accept: "application/json" }, signal });
+      if (!response.ok) return null;
+      return response.json() as Promise<{ subscription?: RecipientSubscription }>;
     })
-      .then(async (response) => {
-        if (!response.ok || cancelled) return;
-        const payload = (await response.json()) as {
-          subscription?: RecipientSubscription;
-        };
-        if (!cancelled && payload.subscription) setEmailSubscription(payload.subscription);
+      .then((payload) => {
+        if (!cancelled && payload?.subscription) setEmailSubscription(payload.subscription);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [props.token]);
+  }, [props.token, props.apiBaseUrl]);
 
   const updateEmailPreference = async (preference: EmailPreference) => {
     setEmailBusy(true);
     setEmailStatus(null);
     try {
-      const response = await fetch(recipientApiUrl(props.token), {
-        method: "PATCH",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ preference }),
+      const payload = await withRequestTimeout(async (signal) => {
+        const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), {
+          method: "PATCH",
+          signal,
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ preference }),
+        });
+        if (!response.ok) throw new Error("Unable to update email preferences.");
+        return response.json() as Promise<{ subscription: RecipientSubscription }>;
       });
-      if (!response.ok) throw new Error("Unable to update email preferences.");
-      const payload = (await response.json()) as {
-        subscription: RecipientSubscription;
-      };
       setEmailSubscription(payload.subscription);
       setEmailStatus("Email preferences updated.");
     } catch (caught) {
-      setEmailStatus(
-        caught instanceof Error ? caught.message : "Unable to update email preferences.",
-      );
+      setEmailStatus(caught instanceof Error ? caught.message : "Unable to update email preferences.");
     } finally {
       setEmailBusy(false);
     }
@@ -132,10 +138,10 @@ export function PublicProofScreen(props: {
     setEmailBusy(true);
     setEmailStatus(null);
     try {
-      const response = await fetch(recipientApiUrl(props.token), {
-        method: "DELETE",
+      await withRequestTimeout(async (signal) => {
+        const response = await fetch(recipientApiUrl(props.token, props.apiBaseUrl), { method: "DELETE", signal });
+        if (!response.ok) throw new Error("Unable to stop email updates.");
       });
-      if (!response.ok) throw new Error("Unable to stop email updates.");
       setEmailSubscription(null);
       setEmailStatus("Email updates stopped. This secure Proof link will continue to work.");
     } catch (caught) {
@@ -163,7 +169,7 @@ export function PublicProofScreen(props: {
           }}
         >
           <div>
-            <p className="kicker">Live Proof tracker</p>
+            <p className="kicker">{proof?.receipt?.mode==="SAMPLE"?"Sample Proof tracker":"Live Proof tracker"}</p>
             <h1 style={{ marginBottom: 4 }}>View Proof</h1>
             <p className="meta" style={{ marginTop: 0 }}>
               {tracker?.reference ? `Order ${tracker.reference}` : "Transaction Proof"}
@@ -188,7 +194,10 @@ export function PublicProofScreen(props: {
 
         {error ? (
           <div className="banner banner-error" role="alert">
-            {error}
+            <p>{error}</p>
+            <button type="button" className="btn btn-secondary" onClick={() => setRetry((value) => value + 1)}>
+              Try again
+            </button>
           </div>
         ) : null}
         {!proof && !error ? <p className="empty">Loading Proof status…</p> : null}
@@ -201,7 +210,8 @@ export function PublicProofScreen(props: {
                 {tracker?.headline || proof.nextAction?.title || statusLabel(proof.status)}
               </p>
               {!tracker && <p className="meta">{stageLabel(proof.workflowStage)}</p>}
-              {tracker ? <p className="meta">Updated {formatTime(tracker.lastUpdatedAt)}</p> : null}
+              {tracker ? <p className="meta">Last event {formatTime(tracker.lastUpdatedAt)}</p> : null}
+              {checkedAt ? <p className="meta">{error ? "Updates paused" : `Checked ${formatTime(checkedAt)}`}</p> : null}
               {tracker?.shipment ? (
                 <div
                   style={{
@@ -224,90 +234,19 @@ export function PublicProofScreen(props: {
               ) : null}
             </section>
 
+            {proof.receipt && <section className="section stack"><p className="kicker">{proof.receipt.mode === "SAMPLE" ? "Sample receipt" : "Buyer Proof receipt"}</p><p>{proof.receipt.carrierReportedDelivered ? "The carrier reported delivery." : "No carrier delivery report is included."}</p><p>{proof.receipt.buyerReportedReceived ? "The buyer added a receiving record." : "The buyer has not added a receiving record."}</p><p className="note">{proof.receipt.message}</p><a className="btn btn-secondary" href={`/receipt/${encodeURIComponent(proof.proofId)}`}>Sign in to document arrival</a><p className="note">Only the invited account can contribute. Opening this receipt does not confirm delivery or acceptance.</p></section>}
             {props.loadMedia
               ? proof.evidence?.map((media) => (
-                  <PublicMedia key={media.evidenceId} media={media} load={props.loadMedia!} />
+                  <PublicMedia key={`${media.evidenceId}:${proof.disclosure?.viewHash}`} media={media} load={props.loadMedia!} />
                 ))
               : null}
             {tracker ? (
-              <section className="section">
-                <h2>Proof progress</h2>
-                <div style={{ marginTop: 18 }}>
-                  {tracker.milestones.map((milestone, index) => (
-                    <div
-                      key={milestone.code}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "28px 1fr",
-                        gap: 12,
-                        minHeight: 66,
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: "relative",
-                          display: "flex",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {index < tracker.milestones.length - 1 ? (
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              position: "absolute",
-                              top: 22,
-                              bottom: -4,
-                              width: 2,
-                              background: "var(--border)",
-                            }}
-                          />
-                        ) : null}
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            position: "relative",
-                            zIndex: 1,
-                            width: 20,
-                            height: 20,
-                            borderRadius: "50%",
-                            display: "grid",
-                            placeItems: "center",
-                            border: "2px solid var(--border)",
-                            background:
-                              milestone.state === "COMPLETE" ? "var(--text)" : "var(--surface)",
-                            color: "var(--surface)",
-                            fontSize: 11,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {milestone.state === "COMPLETE"
-                            ? "✓"
-                            : milestone.state === "CURRENT"
-                              ? "•"
-                              : ""}
-                        </span>
-                      </div>
-                      <div style={{ paddingBottom: 18 }}>
-                        <div
-                          className="card-title"
-                          style={{
-                            opacity: milestone.state === "UPCOMING" ? 0.55 : 1,
-                          }}
-                        >
-                          {milestone.label}
-                        </div>
-                        {milestone.occurredAt ? (
-                          <div className="meta">{formatTime(milestone.occurredAt)}</div>
-                        ) : null}
-                        {milestone.detail ? (
-                          <div className="note" style={{ marginTop: 4 }}>
-                            {milestone.detail}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <section className="section public-progress">
+                <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="clock" size={15} /> FROM PACKED TO PRESERVED</span><h2>Proof progress</h2></div></div>
+                <ol className="public-progress-list">{tracker.milestones.map(milestone => <li key={milestone.code} data-state={milestone.state}>
+                  <span className="public-progress-node" aria-hidden="true"><Glyph name={milestone.state === "COMPLETE" ? "check" : milestone.state === "CURRENT" ? "clock" : "box"} size={15} /></span>
+                  <div><div className="public-progress-title"><strong>{milestone.label}</strong><span>{milestone.state === "COMPLETE" ? "Recorded" : milestone.state === "CURRENT" ? "Awaiting update" : "Upcoming"}</span></div>{milestone.occurredAt && <time dateTime={milestone.occurredAt}>{formatTime(milestone.occurredAt)}</time>}{milestone.detail && <p>{milestone.detail}</p>}</div>
+                </li>)}</ol>
               </section>
             ) : proof.observations && proof.observations.length > 0 ? (
               <section className="section">
@@ -426,9 +365,9 @@ function PreferenceButton(props: {
   );
 }
 
-function recipientApiUrl(token: string): string {
+function recipientApiUrl(token: string, apiBaseUrl?: string): string {
   const path = `/public/proofs/${encodeURIComponent(token)}/email-subscription`;
-  const base = import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
+  const base = apiBaseUrl ?? import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
   if (!base) return path;
   return new URL(path.replace(/^\//, ""), base.endsWith("/") ? base : `${base}/`).toString();
 }

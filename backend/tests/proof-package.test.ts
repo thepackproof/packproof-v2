@@ -63,6 +63,13 @@ describe("portable Proof package", () => {
     expect(verified.digestValid).toBe(false);
   });
 
+  it("rejects unknown signature algorithms instead of treating them as ECDSA", () => {
+    const unsigned = createProofPackage({ proofId: "proof_unknown_algorithm", manifestId: "manifest_unknown", manifest: { proofId: "proof_unknown_algorithm", manifestVersion: 1 } });
+    const signed = signCanonicalJson(unsigned.canonicalJson);
+    const pkg = { ...unsigned, signature: { ...signed.signature, algorithm: "UNKNOWN" as ManifestSignature["algorithm"] } };
+    expect(verifyProofPackage({ package: pkg, publicKeyPem: signed.publicKeyPem }).signatureValid).toBe(false);
+  });
+
   it("keeps existing hash-only manifests explicitly distinguishable from signed manifests", () => {
     const pkg = createProofPackage({
       proofId: "proof_3",

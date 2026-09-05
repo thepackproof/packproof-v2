@@ -1,0 +1,68 @@
+{
+  "siteProjectId": "appgprj_6a9c2365007c8191a0958c54e4a67b95",
+  "canonicalOrigin": "https://thepackproof.com",
+  "dnsStatus": "active",
+  "httpsStatus": "active",
+  "verifiedAt": "2026-09-05T17:00:28Z",
+  "records": [
+    {
+      "type": "A",
+      "name": "@",
+      "content": "162.159.143.30",
+      "proxied": false,
+      "ttl": 1
+    },
+    {
+      "type": "A",
+      "name": "@",
+      "content": "172.66.3.26",
+      "proxied": false,
+      "ttl": 1
+    },
+    {
+      "type": "TXT",
+      "name": "_openai-site-verification.thepackproof.com",
+      "content": "openai-site-verification=tjspUPKMgZmYv4yWZTe4CQ2sC0BJCcfgL866sj-Gurw",
+      "proxied": false,
+      "ttl": 1
+    },
+    {
+      "type": "TXT",
+      "name": "_cf-custom-hostname.thepackproof.com",
+      "content": "acbe5801-e30d-4182-ad7c-a7fd2cb44c49",
+      "proxied": false,
+      "ttl": 1
+    },
+    {
+      "type": "CNAME",
+      "name": "www",
+      "content": "custom-domains.chatgpt.site",
+      "proxied": false,
+      "ttl": 1
+    },
+    {
+      "type": "TXT",
+      "name": "_openai-site-verification.www.thepackproof.com",
+      "content": "openai-site-verification=MJteG_6vavFsEU-xzxn5JYLtTJdEl0B5Al765tD75YY",
+      "proxied": false,
+      "ttl": 1
+    },
+    {
+      "type": "TXT",
+      "name": "_cf-custom-hostname.www.thepackproof.com",
+      "content": "8081c1eb-7938-42f0-ba18-1be82892572f",
+      "proxied": false,
+      "ttl": 1
+    }
+  ],
+  "apexDomainId": "appgdom_6a9c2f729a88819188063facaf6ba307",
+  "wwwDomainId": "appgdom_6a9c2f9606708191bee40c2d73f9b073",
+  "apiOriginsAfterDnsActive": "https://thepackproof.com,https://dvpmnwc27i8tw.cloudfront.net,https://packproof-experience.packproof.chatgpt.site",
+  "apiPublicUrl": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+  "notes": [
+    "Preserve all existing MX and email TXT records.",
+    "Inspect current apex A/AAAA/CNAME and www records before replacing only web routing records.",
+    "Verify certificate validation records again after DNS is applied.",
+    "Set the canonical API web origin only after the domain routes successfully."
+  ]
+}

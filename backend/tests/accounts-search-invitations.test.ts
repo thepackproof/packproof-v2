@@ -4,7 +4,7 @@ import { sha256Hex } from "../src/hash.js";
 import { createInvitation } from "../src/domain/invitations.js";
 import { createOrGetProof } from "../src/domain/create-proof.js";
 import { createTransaction } from "../src/domain/transactions.js";
-import { auth, createHarness, createUser, login, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, createHarness, createUser, login, type TestHarness } from "./helpers.js";
 
 async function completeProfile(
   harness: TestHarness,
@@ -445,12 +445,13 @@ describe("direct account invitations", () => {
     expect(reinvite.status).toBe(409);
     expect(reinvite.body.error.code).toBe("ALREADY_PARTICIPANT");
 
+    const recording=await prepareCameraCapture(harness,seller,proofId,"rel-evidence-session");
     const upload = await request(harness.app)
       .post(`/proofs/${proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "rel-evidence")
-      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
-    const bytes = Buffer.from("relationship-evidence");
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId });
+    const bytes = recording.bytes;
     await request(harness.app)
       .put(new URL(upload.body.upload.url as string).pathname)
       .set("Content-Type", "video/mp4")
@@ -506,12 +507,13 @@ describe("account-phase evidence and manifest regression", () => {
       .post(`/invitations/${(await request(harness.app).get("/invitations").set(auth(buyer))).body.invitations[0].invitationId}/accept`)
       .set(auth(buyer));
 
+    const recording=await prepareCameraCapture(harness,seller,proof.body.proofId,"account-phase-evidence-session");
     const upload = await request(harness.app)
       .post(`/proofs/${proof.body.proofId}/evidence/uploads`)
       .set(auth(seller))
       .set("Idempotency-Key", "account-phase-evidence")
-      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
-    const bytes = Buffer.from("account-phase-evidence-bytes");
+      .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId });
+    const bytes = recording.bytes;
     await request(harness.app)
       .put(new URL(upload.body.upload.url as string).pathname)
       .set("Content-Type", "video/mp4")

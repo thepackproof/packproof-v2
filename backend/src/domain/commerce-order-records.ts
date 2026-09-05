@@ -35,6 +35,18 @@ export interface CommerceSyncStateRow {
   last_error_retryable: boolean | null;
   provider_cursor: string | null;
   updated_at: Date | string;
+  run_status: string;
+  attempt_count: number;
+  lease_token: string | null;
+  lease_expires_at: Date | string | null;
+  next_run_at: Date | string | null;
+  window_started_at: Date | string | null;
+  window_ended_at: Date | string | null;
+  initial_sync_completed_at: Date | string | null;
+  last_reconciled_at: Date | string | null;
+  reconciliation_pass: boolean;
+  discovered_count: number;
+  eligible_count: number;
 }
 
 export async function upsertCommerceOrderRecord(
@@ -56,79 +68,32 @@ export async function upsertCommerceOrderRecord(
   },
 ): Promise<CommerceOrderRecordRow> {
   const now = clock.now().toISOString();
-  const existing = await db.query<CommerceOrderRecordRow>(
-    `SELECT * FROM commerce_order_records
-      WHERE commerce_tenant_key = $1 AND external_order_id = $2`,
-    [input.commerceTenantKey, input.externalOrderId],
-  );
-  if (existing.rows[0]) {
-    await db.query(
-      `UPDATE commerce_order_records
-          SET connection_id = $2,
-              external_reference = $3,
-              ordered_at = $4,
-              payment_state = $5,
-              fulfillment_state = $6,
-              requires_physical_fulfillment = $7,
-              cancelled = $8,
-              eligibility = $9,
-              provider_updated_at = $10,
-              last_seen_at = $11,
-              normalized_fingerprint = $12
-        WHERE id = $1`,
-      [
-        existing.rows[0].id,
-        input.connectionId,
-        input.externalReference,
-        input.orderedAt,
-        input.paymentState,
-        input.fulfillmentState,
-        input.requiresPhysicalFulfillment,
-        input.cancelled,
-        input.eligibility,
-        input.providerUpdatedAt,
-        now,
-        input.fingerprint,
-      ],
-    );
-    const updated = await db.query<CommerceOrderRecordRow>(
-      `SELECT * FROM commerce_order_records WHERE id = $1`,
-      [existing.rows[0].id],
-    );
-    return updated.rows[0];
-  }
-  const id = newId("cor");
-  await db.query(
+  const result = await db.query<CommerceOrderRecordRow>(
     `INSERT INTO commerce_order_records (
-       id, connection_id, transaction_id, commerce_tenant_key, external_order_id,
-       external_reference, ordered_at, payment_state, fulfillment_state,
-       requires_physical_fulfillment, cancelled, eligibility, provider_updated_at,
-       first_seen_at, last_seen_at, normalized_fingerprint
-     ) VALUES (
-       $1, $2, NULL, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14
-     )`,
-    [
-      id,
-      input.connectionId,
-      input.commerceTenantKey,
-      input.externalOrderId,
-      input.externalReference,
-      input.orderedAt,
-      input.paymentState,
-      input.fulfillmentState,
-      input.requiresPhysicalFulfillment,
-      input.cancelled,
-      input.eligibility,
-      input.providerUpdatedAt,
-      now,
-      input.fingerprint,
-    ],
+      id,connection_id,commerce_tenant_key,external_order_id,external_reference,ordered_at,
+      payment_state,fulfillment_state,requires_physical_fulfillment,cancelled,eligibility,
+      provider_updated_at,first_seen_at,last_seen_at,normalized_fingerprint
+    ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13,$14)
+    ON CONFLICT(commerce_tenant_key,external_order_id) DO UPDATE SET
+      connection_id=EXCLUDED.connection_id,last_seen_at=EXCLUDED.last_seen_at
+    RETURNING *`,
+    [newId("cor"),input.connectionId,input.commerceTenantKey,input.externalOrderId,
+     input.externalReference,input.orderedAt,input.paymentState,input.fulfillmentState,
+     input.requiresPhysicalFulfillment,input.cancelled,input.eligibility,input.providerUpdatedAt,
+     now,input.fingerprint],
   );
-  const inserted = await db.query<CommerceOrderRecordRow>(
-    `SELECT * FROM commerce_order_records WHERE id = $1`,
-    [id],
+  const current = result.rows[0];
+  // Monotonic provider revision under the row lock held by the ingestion transaction.
+  if (current.provider_updated_at && (!input.providerUpdatedAt ||
+      new Date(current.provider_updated_at).getTime() > Date.parse(input.providerUpdatedAt))) return current;
+  const updated = await db.query<CommerceOrderRecordRow>(
+    `UPDATE commerce_order_records SET external_reference=$2,ordered_at=$3,payment_state=$4,
+      fulfillment_state=$5,requires_physical_fulfillment=$6,cancelled=$7,eligibility=$8,
+      provider_updated_at=$9,normalized_fingerprint=$10 WHERE id=$1 RETURNING *`,
+    [current.id,input.externalReference,input.orderedAt,input.paymentState,input.fulfillmentState,
+     input.requiresPhysicalFulfillment,input.cancelled,input.eligibility,input.providerUpdatedAt,input.fingerprint],
   );
-  return inserted.rows[0];
+  return updated.rows[0];
 }
 
 export async function bindCommerceOrderTransaction(
@@ -166,7 +131,7 @@ export async function recordCommerceSyncState(
        last_succeeded_at = COALESCE(EXCLUDED.last_succeeded_at, commerce_connection_sync_states.last_succeeded_at),
        last_error_code = EXCLUDED.last_error_code,
        last_error_retryable = EXCLUDED.last_error_retryable,
-       provider_cursor = COALESCE(EXCLUDED.provider_cursor, commerce_connection_sync_states.provider_cursor),
+       provider_cursor = CASE WHEN $7::boolean THEN EXCLUDED.provider_cursor ELSE commerce_connection_sync_states.provider_cursor END,
        updated_at = EXCLUDED.updated_at`,
     [
       input.connectionId,
@@ -175,6 +140,7 @@ export async function recordCommerceSyncState(
       input.succeeded ? null : (input.errorCode ?? null),
       input.succeeded ? null : (input.retryable ?? null),
       input.providerCursor ?? null,
+      input.succeeded,
     ],
   );
 }
@@ -195,11 +161,23 @@ export function syncStateView(row: CommerceSyncStateRow | null): {
   lastSucceededAt: string | null;
   lastErrorCode: string | null;
   retryable: boolean | null;
+  runStatus: string;
+  attemptCount: number;
+  nextRunAt: string | null;
+  initialSyncCompletedAt: string | null;
+  discoveredCount: number;
+  eligibleCount: number;
 } {
   return {
     lastAttemptedAt: row?.last_attempted_at ? asRequiredIso(row.last_attempted_at) : null,
     lastSucceededAt: row?.last_succeeded_at ? asIso(row.last_succeeded_at) : null,
     lastErrorCode: row?.last_error_code ?? null,
     retryable: row?.last_error_retryable ?? null,
+    runStatus: row?.run_status ?? "IDLE",
+    attemptCount: row?.attempt_count ?? 0,
+    nextRunAt: row?.next_run_at ? asIso(row.next_run_at) : null,
+    initialSyncCompletedAt: row?.initial_sync_completed_at ? asIso(row.initial_sync_completed_at) : null,
+    discoveredCount: row?.discovered_count ?? 0,
+    eligibleCount: row?.eligible_count ?? 0,
   };
 }

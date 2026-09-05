@@ -1,3 +1,4 @@
+import { resumeCommerceAutomation } from "./commerce-automation.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
@@ -16,7 +17,7 @@ import {
   findProofIdByExternalReference,
   normalizeTenantKey,
 } from "./external-references.js";
-import { findTransactionIdentity } from "./integration-identities.js";
+import { findTransactionIdentity, insertTransactionIdentity } from "./integration-identities.js";
 import { tenantKeyForImport } from "./provenance.js";
 import { importNormalizedTransaction, type TransactionImportView } from "./transaction-import.js";
 import {
@@ -37,7 +38,7 @@ import {
   parseEbayAppSecret,
   parseEbayUserCredentials,
 } from "../integrations/ebay/credentials.js";
-import { ebayAccountReference, ebayOrderToImportedTransaction, summarizeEbayOrder, type EbayOrderSummary } from "../integrations/ebay/normalize.js";
+import { ebayIdentityAccount, ebayAccountReference, ebayOrderToImportedTransaction, summarizeEbayOrder, type EbayOrderSummary } from "../integrations/ebay/normalize.js";
 import type { EbayClient, EbayTokenSet } from "../integrations/ebay/types.js";
 import {
   ebayDeletionChallengeResponse,
@@ -235,6 +236,7 @@ export async function completeEbayOAuth(
         status: "ACTIVE",
       });
     }
+    await resumeCommerceAutomation(db,clock,connectionId);
     const expiry = tokenExpiry(clock, tokens);
     await upsertConnectedAccountFromMarketplace(db, clock, {
       id: connectionId,
@@ -276,13 +278,13 @@ export async function listEbaySellerOrders(
       offset: 0,
     }),
   );
-  const tenantKey = normalizeTenantKey(
-    tenantKeyForImport("ebay", "MARKETPLACE_API", runtime.environment),
-  );
+  const accountIdentity=await verifiedEbayIdentityAccount(credentials,connection,runtime.environment);
+  const tenantKey=normalizeTenantKey(tenantKeyForImport("ebay","MARKETPLACE_API",accountIdentity));
   const views: EbaySellerOrderView[] = [];
   for (const order of orders.orders) {
+    await aliasLegacyEbayIdentity(db,clock,userId,runtime.environment,accountIdentity,order.orderId);
     const identity = await findTransactionIdentity(db, tenantKey, order.orderId);
-    const proofId = await findProofIdByExternalReference(db, tenantKey, order.orderId);
+    const proofId = identity ? (await db.query<{id:string}>("SELECT id FROM proofs WHERE transaction_id=$1",[identity.transaction_id])).rows[0]?.id : null;
     views.push({
       ...summarizeEbayOrder(order),
       transactionId: identity?.transaction_id ?? null,
@@ -316,6 +318,8 @@ export async function importEbaySellerOrder(
       orderId,
     }),
   );
+  const accountIdentity=await verifiedEbayIdentityAccount(credentials,connection,runtime.environment);
+  await aliasLegacyEbayIdentity(db,clock,userId,runtime.environment,accountIdentity,order.orderId);
   return importNormalizedTransaction(
     db,
     clock,
@@ -325,6 +329,7 @@ export async function importEbaySellerOrder(
       environment: runtime.environment,
       marketplaceId: runtime.marketplaceId,
       importedAt: clock.now().toISOString(),
+      externalAccountReference: accountIdentity,
     }),
     {
       createProof: options.createProof === true,
@@ -449,7 +454,7 @@ async function requireEbayConnection(
   return connection;
 }
 
-async function withEbayUserToken<T>(
+export async function withEbayUserToken<T>(
   db: Database,
   clock: Clock,
   runtime: EbayRuntime,
@@ -475,15 +480,8 @@ async function withEbayUserToken<T>(
       credentialReference: runtime.appCredentialReference,
     }),
   );
-  const accessToken = await ensureAccessToken(
-    clock,
-    runtime,
-    credentials,
-    connection,
-    stored,
-    appSecret,
-  );
   try {
+    const accessToken = await ensureAccessToken(clock,runtime,credentials,connection,stored,appSecret);
     return await fn(accessToken);
   } catch (error) {
     if (!isAuthFailure(error)) {
@@ -498,7 +496,8 @@ async function withEbayUserToken<T>(
       });
       await persistUserTokens(clock, credentials, connection, stored, refreshed, runtime.environment);
       return await fn(refreshed.accessToken);
-    } catch {
+    } catch (refreshError) {
+      if (!isAuthFailure(refreshError)) throw refreshError;
       await updateConnectionStatus(db, clock, connection.id, "NEEDS_REAUTH");
       throw integrationNeedsReauth();
     }
@@ -548,7 +547,7 @@ async function persistUserTokens(
     adapterKey: EBAY_ADAPTER_KEY,
     credentialReference: connection.credential_reference,
     material: ebayUserCredentialMaterial({
-      ...tokenExpiry(clock, tokens),
+      ...tokenExpiry(clock, {...tokens,refreshToken:tokens.refreshToken||stored.refreshToken}),
       ebayUserId: stored.ebayUserId,
       ebayUsername: stored.ebayUsername,
       environment,
@@ -596,4 +595,20 @@ function withQuery(base: string, query: Record<string, string>): string {
     return url.toString();
   }
   return `${url.pathname}${url.search}`;
+}
+
+async function aliasLegacyEbayIdentity(db:Database,clock:Clock,userId:string,environment:EbayEnvironment,accountIdentity:string,orderId:string) {
+  const tenantKey=tenantKeyForImport("ebay","MARKETPLACE_API",accountIdentity);
+  if(await findTransactionIdentity(db,tenantKey,orderId)) return;
+  const legacy=await findTransactionIdentity(db,tenantKeyForImport("ebay","MARKETPLACE_API",environment),orderId);
+  if(!legacy) return;
+  const owned=await db.query("SELECT id FROM transactions WHERE id=$1 AND created_by=$2",[legacy.transaction_id,userId]);
+  if(owned.rows[0]) await insertTransactionIdentity(db,{transactionId:legacy.transaction_id,tenantKey,externalTransactionId:orderId,adapterKey:"ebay",source:"MARKETPLACE_API",at:clock.now()});
+}
+
+async function verifiedEbayIdentityAccount(credentials:EbayCredentialStore,connection:IntegrationConnectionRow,environment:EbayEnvironment) {
+  const material=await credentials.getCredentials({adapterKey:"ebay",credentialReference:connection.credential_reference,connectionId:connection.id});
+  const userId=material?.material.ebayUserId;
+  if(!userId) throw integrationNeedsReauth();
+  return ebayIdentityAccount(environment,userId);
 }

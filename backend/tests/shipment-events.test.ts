@@ -86,7 +86,6 @@ async function finalizeWithBuyer(
   });
   await acceptInvitation(harness.db, harness.clock, buyer, invite.invitation.token);
   await commitFulfillmentAndAttest(harness, seller, proofId, {
-    bytes: Buffer.from(`ship-evidence-${proofId}`),
     idempotencyKey: `ship-${proofId}`,
   });
   return request(harness.app).post(`/proofs/${proofId}/finalize`).set(auth(seller));

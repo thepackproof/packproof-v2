@@ -36,6 +36,18 @@ export interface ProofTrackerView {
   milestones: ProofTrackerMilestone[];
 }
 
+/** The same visibility rules apply to browser projections and emailed updates. */
+export function trackerForScope(tracker: ProofTrackerView, scope: string): ProofTrackerView {
+  if (scope !== "STATUS_ONLY") return tracker;
+  return {
+    ...tracker,
+    reference: null,
+    itemTitle: null,
+    shipment: null,
+    milestones: tracker.milestones.map((milestone) => ({ ...milestone, detail: null })),
+  };
+}
+
 type TrackerRow = {
   proof_id: string;
   status: string;
@@ -84,6 +96,7 @@ export async function buildProofTracker(db: Database, proofId: string): Promise<
            FROM evidence
           WHERE proof_id = $1
             AND validation_status = 'COMMITTED'
+            AND evidence_type = 'FULFILLMENT_CAPTURE'
             AND committed_at IS NOT NULL
          UNION ALL
          SELECT occurred_at
@@ -129,7 +142,7 @@ export async function buildProofTracker(db: Database, proofId: string): Promise<
     "DEPARTED_FACILITY",
   ]);
   addShipmentMilestone(occurred, shipmentEvents, "OUT_FOR_DELIVERY", ["OUT_FOR_DELIVERY"]);
-  addShipmentMilestone(occurred, shipmentEvents, "DELIVERED", ["DELIVERED", "RETURN_DELIVERED"]);
+  addShipmentMilestone(occurred, shipmentEvents, "DELIVERED", ["DELIVERED"]);
 
   const completed = new Set(occurred.keys());
   const firstUpcomingIndex = TRACKER_MILESTONE_CODES.findIndex((code) => !completed.has(code));

@@ -73,3 +73,42 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+
+  migrations-postgres:
+    name: PostgreSQL migration concurrency
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: packproof_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d packproof_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - name: Verify concurrent PostgreSQL startup migrations
+        working-directory: backend
+        env:
+          PACKPROOF_MIGRATION_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
+        run: npm test -- tests/migrations.test.ts
+
+  deployment-scripts:
+    name: Deployment scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PowerShell and runtime preservation
+        shell: pwsh
+        run: ./infra/tests/deployment-helpers.test.ps1

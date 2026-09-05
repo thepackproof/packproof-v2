@@ -14,7 +14,7 @@ import {
   type ShippingWrite,
   type TransactionView,
 } from "./transaction-fields.js";
-import { provenanceFromIdentity } from "./provenance.js";
+import { asMetadataRecord, readImportMetadata, provenanceFromIdentity } from "./provenance.js";
 import type {
   ProofRow,
   ShippingRow,
@@ -224,6 +224,7 @@ export async function updateTransaction(
         at: now,
       });
     }
+    await markSellerCorrections(tx,transactionId,locked.txn.transaction_metadata,Object.keys(changed),actorUserId,now);
     // Transaction metadata is not Proof identity. Do not bind or rebind
     // proof_external_references from this update.
 
@@ -296,6 +297,7 @@ export async function updateShipping(
       });
     }
 
+    await markSellerCorrections(tx,transactionId,locked.txn.transaction_metadata,Object.keys(changed).map(field=>`shipping.${field}`),actorUserId,now);
     return loadTransactionView(tx, transactionId);
   });
 }
@@ -489,4 +491,12 @@ function snapshotTransactionDetails(row: TransactionRow): Record<string, unknown
     transactionValue: asNullableNumber(row.transaction_value),
     currency: row.currency,
   };
+}
+
+async function markSellerCorrections(db:Database,transactionId:string,metadata:unknown,fields:string[],actor:string,at:Date) {
+  if(!readImportMetadata(metadata)||!fields.length) return;
+  const current=asMetadataRecord(metadata);
+  const corrections={...asMetadataRecord(current.sellerCorrections)};
+  for(const field of fields) corrections[field]={actorUserId:actor,editedAt:at.toISOString(),source:"PARTICIPANT_SUPPLIED"};
+  await db.query("UPDATE transactions SET transaction_metadata=$2::jsonb WHERE id=$1",[transactionId,JSON.stringify({...current,sellerCorrections:corrections})]);
 }

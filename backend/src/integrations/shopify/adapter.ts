@@ -22,13 +22,19 @@ export function createShopifyCommerceAdapter(client: ShopifyClient): CommerceFul
       connection: IntegrationConnectionRow;
       credentials?: IntegrationCredentials | null;
       cursor?: string | null;
+      updatedSince?: string;
+      updatedUntil?: string;
+      onProgress?: () => Promise<void>;
     }): Promise<CommerceOrderPage> {
       const shop = shopFromConnection(input.connection, input.credentials);
       const accessToken = input.credentials?.material.accessToken?.trim() ?? "";
-      const orders = await client.listOrders({ shop, accessToken, limit: 50 });
+      const page = client.listOrdersPage
+        ? await client.listOrdersPage({shop,accessToken,limit:10,cursor:input.cursor,updatedSince:input.updatedSince,updatedUntil:input.updatedUntil,onProgress:input.onProgress})
+        : {orders:await client.listOrders({shop,accessToken,limit:50}),cursor:null};
+      const orders=page.orders;
       return {
         orders: orders.filter((order) => Boolean(order.createdAt)).map((order) => toNormalized(order, shop)),
-        cursor: null,
+        cursor: page.cursor,
       };
     },
   };
@@ -46,17 +52,19 @@ function shopFromConnection(
 
 function toNormalized(order: ShopifyOrder, shop: string): NormalizedFulfillmentOrder {
   const account = shopifyShopHandle(shop);
-  const items: NormalizedOrderItem[] = order.lineItems.map((item, index) => ({
+  const items: NormalizedOrderItem[] = order.lineItems.filter(item => item.currentQuantity !== 0).map((item, index) => ({
     externalItemId: item.id,
     position: index + 1,
     title: item.title,
-    description: null,
+    description: item.variantTitle ?? null,
+    remainingQuantity: item.remainingQuantity ?? null,
+    variant: item.variantTitle ?? null,
     sku: item.sku,
-    quantity: item.quantity,
+    quantity: item.currentQuantity ?? item.quantity,
     unitValue: parseMoney(item.price),
     currency: order.currency,
   }));
-  const requiresShipping = order.lineItems.some((item) => item.requiresShipping !== false);
+  const requiresShipping = order.lineItems.some((item) => item.requiresShipping === true && (item.currentQuantity ?? item.quantity ?? 0) > 0);
   return {
     provider: SHOPIFY_PROVIDER,
     externalAccountReference: account,
@@ -82,7 +90,9 @@ function toNormalized(order: ShopifyOrder, shop: string): NormalizedFulfillmentO
             shipmentDate: null,
           }
         : null,
-    providerUpdatedAt: null,
+    providerUpdatedAt: order.updatedAt ?? null,
+    onHold: order.fulfillmentHolds ?? false,
+    packages: (order.fulfillments ?? []).map(f=>({externalFulfillmentId:f.id,trackingNumber:f.trackingNumber,lineItems:f.lineItems})),
     provenance: {
       source: "STOREFRONT_API",
       sourceRecordId: order.id,
@@ -102,6 +112,7 @@ function paymentState(value: string | null): NormalizedPaymentState {
     case "partially_refunded":
       return "REFUNDED";
     case "voided":
+    case "expired":
       return "FAILED";
     default:
       return "UNKNOWN";
@@ -119,8 +130,16 @@ function fulfillmentState(
     case "fulfilled":
       return "FULFILLED";
     case "partial":
+    case "partially_fulfilled":
+    case "in_progress":
+    case "pending_fulfillment":
       return "IN_PROGRESS";
     case "unfulfilled":
+    case "open":
+    case "on_hold":
+    case "scheduled":
+    case "request_declined":
+    case "restocked":
     case "":
       return "AWAITING_FULFILLMENT";
     default:

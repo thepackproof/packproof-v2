@@ -252,7 +252,7 @@ export async function ensureTransactionExternalReference(
 
 export function normalizeTenantKey(value: string): string {
   const tenant = value.trim().toLowerCase();
-  if (!tenant || tenant.length > TENANT_MAX || !/^[a-z0-9][a-z0-9:_-]*$/.test(tenant)) {
+  if (!tenant || tenant.length > TENANT_MAX || !/^[a-z0-9][a-z0-9:._-]*$/.test(tenant)) {
     throw new DomainError("INVALID_EXTERNAL_REFERENCE", "tenantKey is invalid", 400);
   }
   if (tenant.startsWith("packproof:") && tenant !== PACKPROOF_TRANSACTION_TENANT) {

@@ -1,3 +1,4 @@
+import { readCaptureClientContext, type ClientCaptureContext } from "./capture-sessions.js";
 import type { Database } from "../db/database.js";
 import { listAuditEvents, type AuditEventView } from "./audit.js";
 import { buildChronology, type ChronologyEntry } from "./chronology.js";
@@ -54,6 +55,12 @@ export interface CanonicalParticipant {
 export interface CanonicalEvidence {
   evidenceId: string;
   evidenceType: string;
+  clientReportedCapture: ClientCaptureContext | null;
+  captureRegistrationTiming: string;
+  capturedDurationMs: number | null;
+  captureOrigin: string;
+  captureSessionId: string | null;
+  captureAssurance: string;
   validationStatus: string;
   submittedBy: string;
   createdAt: string;
@@ -190,7 +197,7 @@ export async function getCanonicalProof(
     [proofId],
   );
   const evidence = await db.query<EvidenceRow>(
-    `SELECT * FROM evidence WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
+    `SELECT e.*,c.recorded_at AS capture_registered_at,c.expires_at AS capture_expires_at FROM evidence e LEFT JOIN capture_sessions c ON c.id=e.capture_session_id WHERE e.proof_id = $1 ORDER BY e.created_at ASC, e.id ASC`,
     [proofId],
   );
   const attestations = await db.query<AttestationRow>(
@@ -224,7 +231,8 @@ export async function getCanonicalProof(
       joinedAt: asRequiredIso(row.joined_at),
     }),
   );
-  const evidenceViews = evidence.rows.map(toCanonicalEvidence);
+  const captureContexts=new Map(await Promise.all(evidence.rows.filter(row=>row.capture_session_id).map(async row=>[row.capture_session_id!,await readCaptureClientContext(db,row.capture_session_id!)] as const)));
+  const evidenceViews = evidence.rows.map(row=>toCanonicalEvidence(row,row.capture_session_id?captureContexts.get(row.capture_session_id)??null:null));
   const attestationViews = attestations.rows.map(
     (row): CanonicalAttestation => ({
       kind: TRUST_KIND.ATTESTATION,
@@ -346,11 +354,19 @@ export async function getCanonicalProof(
   };
 }
 
-function toCanonicalEvidence(row: EvidenceRow): CanonicalEvidence {
+function toCanonicalEvidence(row: EvidenceRow, clientReportedCapture:ClientCaptureContext|null = null): CanonicalEvidence {
   const createdAt = asRequiredIso(row.created_at);
   return {
     evidenceId: row.id,
     evidenceType: row.evidence_type,
+    clientReportedCapture,
+    captureRegistrationTiming: row.capture_registered_at && row.capture_expires_at ? (new Date(row.capture_registered_at).getTime()>new Date(row.capture_expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "UNKNOWN",
+    capturedDurationMs: row.captured_duration_ms == null ? null : Number(row.captured_duration_ms),
+    captureOrigin: row.capture_origin ?? "LEGACY_UNKNOWN",
+    captureSessionId: row.capture_session_id ?? null,
+    captureAssurance: row.capture_origin === "AUTHORIZED_CAPTURE_SESSION"
+      ? "Authorized capture workflow; camera origin is not independently attested."
+      : row.capture_origin === "UPLOADED_ATTACHMENT" ? "Participant-uploaded supporting evidence." : "Historical evidence; capture origin is unknown.",
     validationStatus: row.validation_status,
     submittedBy: row.submitted_by,
     createdAt,

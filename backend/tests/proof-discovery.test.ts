@@ -6,7 +6,7 @@ import { sha256Hex } from "../src/hash.js";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { PackProofV2Client } from "../../mobile/src/v2-api.ts";
-import { auth, createHarness, login, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, createHarness, login, type TestHarness } from "./helpers.js";
 
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -55,11 +55,13 @@ async function inviteAndAccept(harness: TestHarness, seller: string, buyer: stri
 }
 
 async function commitAndFinalize(harness: TestHarness, seller: string, proofId: string, bytes: Buffer) {
+  const recording=await prepareCameraCapture(harness,seller,proofId,`discovery-session-${proofId}`);
+  bytes=recording.bytes;
   const upload = await request(harness.app)
     .post(`/proofs/${proofId}/evidence/uploads`)
     .set(auth(seller))
     .set("Idempotency-Key", `discovery-${proofId}`)
-    .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE" });
+    .send({ contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId });
   expect(upload.status).toBe(201);
   await request(harness.app)
     .put(new URL(upload.body.upload.url as string).pathname)

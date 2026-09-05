@@ -1,3 +1,4 @@
+import { sha256Hex } from "../../hash.js";
 import type { ImportedTransaction } from "../../domain/imported-transaction.js";
 import type { EbayEnvironment } from "./constants.js";
 import type { EbayOrder } from "./types.js";
@@ -45,6 +46,7 @@ export function ebayOrderToImportedTransaction(input: {
   environment: EbayEnvironment;
   marketplaceId: string;
   importedAt: string;
+  externalAccountReference?: string;
 }): ImportedTransaction {
   const { order, environment, marketplaceId, importedAt } = input;
   const summary = summarizeEbayOrder(order);
@@ -52,13 +54,11 @@ export function ebayOrderToImportedTransaction(input: {
   return {
     provider: "ebay",
     externalTransactionId: order.orderId,
-    externalAccountReference: environment,
+    externalAccountReference: input.externalAccountReference ?? environment,
     externalReference: order.orderId,
     transactionDate: order.creationDate ? order.creationDate.slice(0, 10) : null,
-    itemTitle: extraCount > 0 && order.lineItems[0]?.title
-      ? `${order.lineItems[0].title} + ${extraCount} more`
-      : (order.lineItems[0]?.title ?? null),
-    itemDescription: null,
+    itemTitle: order.lineItems[0]?.title ?? null,
+    itemDescription: extraCount > 0 ? `${order.lineItems.length} line items` : null,
     quantity: summary.quantity,
     transactionValue: summary.total,
     currency: summary.currency,
@@ -68,7 +68,7 @@ export function ebayOrderToImportedTransaction(input: {
       title: item.title,
       sku: item.sku,
       quantity: item.quantity,
-      unitValue: parseAmount(item.lineItemCost?.value),
+      unitValue: item.quantity && parseAmount(item.lineItemCost?.value) != null ? parseAmount(item.lineItemCost?.value)! / item.quantity : parseAmount(item.lineItemCost?.value),
       currency: item.lineItemCost?.currency ?? summary.currency,
     })),
     shipping:
@@ -121,4 +121,9 @@ function parseAmount(value: string | null | undefined): number | null {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Seller usernames can change; OAuth's eBay user ID defines the merchant namespace. */
+export function ebayIdentityAccount(environment:EbayEnvironment,userId:string):string {
+  return `${environment}.merchant-${sha256Hex(userId).slice(0,40)}`;
 }

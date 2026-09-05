@@ -9,18 +9,24 @@ The Proof is the product. This repository implements one transaction-bound PackP
 ## Layout
 
 - `backend/` — modular monolith REST API
-- `mobile/` — Phase 10 thin Expo client
-- `web/` — first-party reference client for the canonical Proof API
+- `mobile/` — Expo Android client for capture, recovery, Proof reading, sharing, and receipt/return stages
+- `web/` — first-party web client and Packing Station over the canonical Proof API
 - `docs/` — binding specification and architecture
 
 ## Quick start
 
 ```text
-cd backend
-npm install
+cd mobile
+npm ci
+cd ../backend
+npm ci
 npm test
 npm start
 ```
+
+Backend regression tests import shared mobile presentation and capture modules,
+so install both packages when running the test suite from a fresh checkout.
+For the browser client, run `npm ci` and `npm run dev` from `web/`.
 
 Without `DATABASE_URL`, the API uses an on-disk PGlite database under `backend/data/` so the process can run locally. Production and shared development must use PostgreSQL.
 
@@ -44,3 +50,6 @@ Staging API: `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`.
 - [Web reference client](docs/WEB_CLIENT.md)
 - [Custody workflow](docs/CUSTODY_WORKFLOW.md) (including guest Proof viewing)
 - [Connected accounts](docs/CONNECTED_ACCOUNTS.md)
+- [Public API](docs/PUBLIC_API.md)
+- [Pilot and release gates](docs/PILOT_RUNBOOK.md)
+- [September 5 repository audit](docs/STATE_OF_PACKPROOF_2026-09-05.md)

@@ -83,13 +83,21 @@ function decrypt(value: string, id: string, config: WebhookConfig): string {
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(bytes), decipher.final()]).toString("utf8");
 }
-export function protectWebhookResponse(context: string, config: WebhookConfig) {
+export function protectWebhookResponse(context: string, config: WebhookConfig, migrateAccessLinks = false) {
   return {
     seal: (value: unknown) => ({
       encrypted: encrypt(JSON.stringify(value), context, config),
     }),
-    open: (value: unknown) =>
-      JSON.parse(decrypt((value as { encrypted: string }).encrypted, context, config)) as unknown,
+    open: (value: unknown) => {
+      // Older partner viewing-link responses were cached as plaintext. Accept
+      // that specific legacy shape only on this authorized endpoint; idempotent
+      // reseals it in the same transaction before returning the existing link.
+      const legacy = value as { token?: unknown; accessLinkId?: unknown; url?: unknown } | null;
+      if (migrateAccessLinks && legacy && typeof legacy.token === "string" &&
+          /^[A-Za-z0-9_-]{43}$/.test(legacy.token) &&
+          typeof legacy.accessLinkId === "string" && typeof legacy.url === "string") return value;
+      return JSON.parse(decrypt((value as { encrypted: string }).encrypted, context, config)) as unknown;
+    },
   };
 }
 export async function createWebhook(

@@ -12,6 +12,8 @@ export type AppRouteName =
   | "home"
   | "create"
   | "account"
+  | "sharing"
+  | "signature"
   | "proof"
   | "capture"
   | "scan"
@@ -61,6 +63,9 @@ export function normalizeRouteName(name: string): AppRouteName {
 
 export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
   switch (routeName) {
+    case "sharing":
+    case "signature":
+    case "receipt":
     case "capture":
     case "finalize":
     case "invite":

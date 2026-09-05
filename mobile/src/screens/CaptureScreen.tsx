@@ -83,7 +83,7 @@ export function CaptureScreen() {
       {inFlight ? (
         <ProgressState
           label={progressLabel}
-          percent={preparing ? 8 : uploading ? app.uploadPercent : 100}
+          percent={uploading ? app.uploadPercent : null}
           detail={committed ? "Evidence is now part of this Proof." : undefined}
         />
       ) : null}
@@ -92,7 +92,7 @@ export function CaptureScreen() {
         <View style={styles.preview}>
           <VideoReview key={app.localCapture.uri} uri={app.localCapture.uri} />
           <Text style={[styles.item, { color: colors.scanText }]}>
-            {formatDuration(app.localCapture.durationMs)} recording
+            {formatDuration(app.localCapture.durationMs)} recording{app.localCapture.interrupted ? " · interrupted segment" : ""}
           </Text>
           <Button
             label={app.captureStatus === "retry" ? "Try again" : "Use recording"}

@@ -1,0 +1,9 @@
+{
+  "name": "packproof-experience",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node web/scripts/build-sites.mjs",
+    "dev": "npm --prefix web run dev --"
+  }
+}

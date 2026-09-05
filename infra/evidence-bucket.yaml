@@ -10,6 +10,10 @@ Parameters:
     Default: 90
     MinValue: 1
     Description: Minimum governance-mode retention applied to every evidence object version. This is a tamper-resistance floor, not an application deletion policy.
+  BrowserOrigins:
+    Type: CommaDelimitedList
+    Default: "https://thepackproof.com,https://packproof-experience.packproof.chatgpt.site,https://dvpmnwc27i8tw.cloudfront.net"
+    Description: Exact website origins permitted to use signed browser evidence uploads. This does not grant access to objects.
 
 Resources:
   EvidenceBucket:
@@ -18,6 +22,14 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Ref BucketName
+      CorsConfiguration:
+        CorsRules:
+          - Id: packproof-browser-evidence
+            AllowedOrigins: !Ref BrowserOrigins
+            AllowedMethods: [PUT, GET, HEAD]
+            AllowedHeaders: [content-type]
+            ExposedHeaders: [ETag]
+            MaxAge: 3600
       ObjectLockEnabled: true
       ObjectLockConfiguration:
         ObjectLockEnabled: Enabled

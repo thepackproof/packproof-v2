@@ -17,6 +17,7 @@ import {
 import { getProofView, loadProof, type ProofView } from "./proofs.js";
 import {
   readImportMetadata,
+  sellerCorrectedFields,
   tenantKeyForImport,
   writeImportMetadata,
   type ImportMetadata,
@@ -283,9 +284,15 @@ async function applyImportedFacts(
     transactionValue: parsed.transactionValue,
     currency: parsed.currency,
   };
+  const corrected=sellerCorrectedFields(locked.txn.transaction_metadata);
+  for(const field of corrected) if(field in afterTxn) (afterTxn as Record<string,unknown>)[field]=beforeTxn[field];
   const txnChanged = changedEntries(beforeTxn, afterTxn);
   const currentShipping = shippingSnapshot(locked.shipping);
-  const nextShipping: ShippingWrite = parsed.shipping ?? currentShipping;
+  const nextShipping: ShippingWrite = {...(parsed.shipping ?? currentShipping)};
+  for(const field of corrected) if(field.startsWith("shipping.")) {
+    const key=field.slice(9) as keyof ShippingWrite;
+    if(key in nextShipping) nextShipping[key]=currentShipping[key];
+  }
   const shipChanged =
     parsed.shipping && shippingWriteHasValues(parsed.shipping)
       ? changedEntries(currentShipping, nextShipping)

@@ -1,4 +1,5 @@
 import { DomainError } from "../../../domain/errors.js";
+import { providerAuthFailed } from "../../../domain/integration-errors.js";
 import type { ShopifyClient } from "../../shopify/types.js";
 import {
   SHOPIFY_CAPABILITIES,
@@ -8,6 +9,7 @@ import {
   shopifyAuthorizeUrl,
 } from "../../shopify/constants.js";
 import { normalizeShopifyShop } from "../../shopify/shop.js";
+import { verifyShopifyOAuthHmac } from "../../shopify/hmac.js";
 import { splitScopes } from "../http.js";
 import { parseAppClientSecret } from "../app-secret.js";
 import type { ConnectedAccountProvider } from "../types.js";
@@ -40,6 +42,14 @@ export function createShopifyConnectedAccountProvider(input: {
     callbackRedirectUri() {
       return runtime.redirectUri;
     },
+    async verifyCallback(query) {
+      requireEnabled(runtime);
+      const secret = parseAppClientSecret(await credentials.getCredentials({
+        adapterKey: SHOPIFY_PROVIDER,
+        credentialReference: runtime.appCredentialReference,
+      }));
+      verifyShopifyOAuthHmac(secret, query);
+    },
     async getAuthorizationUrl(start) {
       requireEnabled(runtime);
       const shop = normalizeShopifyShop(start.extra?.shop);
@@ -71,13 +81,14 @@ export function createShopifyConnectedAccountProvider(input: {
         accessToken: tokens.accessToken,
       });
       const scopes = splitScopes(tokens.scope);
+      if (!scopes.includes("read_orders") && !scopes.includes("write_orders")) throw providerAuthFailed();
       return {
         tokens: {
           accessToken: tokens.accessToken,
           refreshToken: null,
           tokenType: "offline",
           expiresAt: null,
-          scopes: scopes.length > 0 ? scopes : [...SHOPIFY_SCOPES],
+          scopes,
           extraMaterial: { shop: identity.myshopifyDomain, shopId: identity.shopId },
         },
         identity: {

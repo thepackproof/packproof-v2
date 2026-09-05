@@ -208,7 +208,6 @@ describe("PackProof V2 domain invariants", () => {
     );
     await acceptInvitation(harness.db, harness.clock, buyer, invite.invitation.token);
     await commitFulfillmentAndAttest(harness, seller, proof.proofId, {
-      bytes: Buffer.from("final-bytes"),
       idempotencyKey: "capture-1",
     });
 

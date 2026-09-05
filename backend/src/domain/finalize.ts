@@ -1,3 +1,4 @@
+import { readCaptureClientContext } from "./capture-sessions.js";
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
 import type { Database } from "../db/database.js";
@@ -29,12 +30,13 @@ import { listTransactionItems } from "./transaction-items.js";
 import { isQualifyingFulfillmentCapture } from "./evidence-types.js";
 import { evaluateFinalizeRequirements } from "./finalize-requirements.js";
 import { DEFAULT_PARTICIPATION_POLICY, requireParticipationPolicy } from "./participation.js";
-import { listObservations } from "./observations.js";
+import { listObservations, originDocumentedAssetIds } from "./observations.js";
 import { listProofAssets } from "./assets.js";
 import { listTransfers } from "./transfers.js";
 import { listContinuityEvaluations } from "./continuity.js";
 import { listAssetBindings } from "./asset-bindings.js";
 import { custodyOutcomeFor, requireWorkflowType } from "./workflow.js";
+import { requireManifestSignatureAlgorithm, type ManifestSigner, type ManifestSignature } from "./manifest-signing.js";
 
 export interface ManifestView {
   manifestId: string;
@@ -42,6 +44,11 @@ export interface ManifestView {
   sha256: string;
   manifest: unknown;
   canonicalJson: string;
+  signature?: ManifestSignature;
+}
+
+function signatureFromRow(row: ManifestRow): { signature?: ManifestSignature } {
+  return row.signature_base64 ? { signature: { algorithm: requireManifestSignatureAlgorithm(row.signature_algorithm), keyId: row.signing_key_id!, signatureBase64: row.signature_base64, signedAt: asRequiredIso(row.signed_at!) } } : {};
 }
 
 export interface FinalizeView {
@@ -69,6 +76,7 @@ export async function getManifest(
     sha256: row.sha256,
     canonicalJson: row.canonical_json,
     manifest: JSON.parse(row.canonical_json) as unknown,
+    ...signatureFromRow(row),
   };
 }
 
@@ -77,6 +85,7 @@ export async function finalizeProof(
   clock: Clock,
   actorUserId: string,
   proofId: string,
+  signer?: ManifestSigner,
 ): Promise<FinalizeView> {
   return db.transaction(async (tx) => {
     const existingProof = await tx.query<ProofRow>(`SELECT * FROM proofs WHERE id = $1`, [proofId]);
@@ -112,6 +121,7 @@ export async function finalizeProof(
           sha256: existing.rows[0].sha256,
           canonicalJson: existing.rows[0].canonical_json,
           manifest: JSON.parse(existing.rows[0].canonical_json) as unknown,
+          ...signatureFromRow(existing.rows[0]),
         },
       };
     }
@@ -138,6 +148,16 @@ export async function finalizeProof(
         ORDER BY committed_at ASC, id ASC`,
       [proofId],
     );
+    const eligibleSessions = (await tx.query<{id: string; policy_version:string; client:string; recorded_at:string|Date;expires_at:string|Date}>(
+      `SELECT c.id,c.policy_version,c.client,c.recorded_at,c.expires_at FROM capture_sessions c JOIN evidence e ON e.id=c.evidence_id
+       WHERE c.proof_id=$1 AND c.state='COMMITTED' AND c.actor_user_id=e.submitted_by
+         AND e.capture_session_id=c.id AND c.expected_sha256=e.sha256
+         AND c.expected_byte_size=e.byte_size`, [proofId]
+    )).rows;
+    const captureContexts=new Map(await Promise.all(eligibleSessions.map(async session=>[session.id,await readCaptureClientContext(tx,session.id)] as const)));
+    const eligibleSessionIds = new Set(eligibleSessions.map(row=>row.id));
+    if (evidence.rows.some(row => row.capture_session_id && !eligibleSessionIds.has(row.capture_session_id)))
+      throw new DomainError("CAPTURE_SESSION_CONFLICT", "Committed capture context does not match its original evidence", 409);
     const attestations = await tx.query<AttestationRow>(
       `SELECT * FROM attestations WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
       [proofId],
@@ -147,6 +167,11 @@ export async function finalizeProof(
     );
     const observations = await listObservations(tx, proofId);
     const workflowType = requireWorkflowType(proof.workflow_type);
+    const assets = workflowType === "GRADING_SUBMISSION" ? await listProofAssets(tx, proofId) : [];
+    const committedIds = new Set(evidence.rows.map((row) => row.id));
+    const documentedAssetIds = originDocumentedAssetIds(observations.filter(
+      (row) => row.evidence.every((link) => committedIds.has(link.evidenceId)),
+    ));
     const evaluation = evaluateFinalizeRequirements({
       participationPolicy,
       workflowType,
@@ -156,12 +181,15 @@ export async function finalizeProof(
       pendingEvidenceCount: pendingEvidence.rows.length,
       committedEvidenceCount: evidence.rows.length,
       committedFulfillmentCaptureCount: evidence.rows.filter((row) =>
+        (row.capture_origin === "LEGACY_UNKNOWN" || (row.capture_origin === "AUTHORIZED_CAPTURE_SESSION" && !!row.capture_session_id && eligibleSessionIds.has(row.capture_session_id))) &&
         isQualifyingFulfillmentCapture({
           evidenceType: row.evidence_type,
           validationStatus: row.validation_status,
         }),
       ).length,
       packingAttested,
+      assetCount: assets.length,
+      documentedAssetCount: assets.filter((asset) => documentedAssetIds.has(asset.assetId)).length,
       packed: observations.some((row) => row.type === "PACKED"),
       released: observations.some((row) => row.type === "RELEASED"),
       received: observations.some((row) => row.type === "RECEIVED"),
@@ -251,6 +279,16 @@ export async function finalizeProof(
       evidence: evidence.rows.map((row) => ({
         evidenceId: row.id,
         evidenceType: row.evidence_type,
+        ...(row.capture_session_id ? { capture: {
+          sessionId: row.capture_session_id,
+          clientReportedCapture: captureContexts.get(row.capture_session_id)??null,
+          policyVersion: eligibleSessions.find(session=>session.id===row.capture_session_id)?.policy_version,
+          client: eligibleSessions.find(session=>session.id===row.capture_session_id)?.client,
+          registeredAt: asRequiredIso(eligibleSessions.find(session=>session.id===row.capture_session_id)!.recorded_at),
+          origin: "AUTHORIZED_CAPTURE_SESSION",
+          registrationTiming: new Date(eligibleSessions.find(session=>session.id===row.capture_session_id)!.recorded_at).getTime()>new Date(eligibleSessions.find(session=>session.id===row.capture_session_id)!.expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW",
+          assurance: "Workflow authorization; camera origin and offline timing are not independently attested.",
+        }} : {}),
         objectKey: row.object_key,
         contentType: row.content_type,
         byteSize: Number(row.byte_size ?? 0),
@@ -262,8 +300,8 @@ export async function finalizeProof(
       createdAt: asRequiredIso(proof.created_at),
       finalizedAt: now.toISOString(),
     };
-    if (merchantOptional) {
-      payload.participationPolicy = participationPolicy;
+    if (merchantOptional) payload.participationPolicy = participationPolicy;
+    if (merchantOptional || eligibleSessions.length > 0) {
       payload.attestations = attestations.rows.map((row) => ({
         attestationId: row.id,
         attestedBy: row.attested_by,
@@ -317,6 +355,7 @@ export async function finalizeProof(
         fromObservationId: row.fromObservationId,
         toObservationId: row.toObservationId,
         algorithmVersion: row.algorithmVersion,
+        actorParticipantId: row.actorParticipantId,
         result: row.result,
         summary: row.summary,
         evidencePairs: row.evidencePairs,
@@ -337,10 +376,11 @@ export async function finalizeProof(
     const canonicalJson = canonicalize(payload);
     const digest = sha256Hex(canonicalJson);
 
+    const signature = signer ? await signer.signManifest({ proofId, manifestId, canonicalJson, sha256: digest }) : null;
     await tx.query(
-      `INSERT INTO final_manifests (id, proof_id, canonical_json, sha256, created_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [manifestId, proofId, canonicalJson, digest, now.toISOString()],
+      `INSERT INTO final_manifests (id, proof_id, canonical_json, sha256, created_at, signature_algorithm, signature_base64, signing_key_id, signed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [manifestId, proofId, canonicalJson, digest, now.toISOString(), signature?.algorithm ?? null, signature?.signatureBase64 ?? null, signature?.keyId ?? null, signature?.signedAt ?? null],
     );
     await tx.query(
       `UPDATE proofs
@@ -367,6 +407,7 @@ export async function finalizeProof(
         sha256: digest,
         canonicalJson,
         manifest: JSON.parse(canonicalJson) as unknown,
+        ...(signature ? { signature } : {}),
       },
     };
   });

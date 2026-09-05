@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useViewState } from "../navigation-context";
+import { useMemo } from "react";
 import {
   filterProofLibrary,
   invitationCardModel,
@@ -13,6 +14,8 @@ import { CreateFab } from "../components/CreateFab";
 import { IconCheck, IconFilter, IconSearch, IconTime } from "../components/Icons";
 import { ProofCard } from "../components/ProofCard";
 import { SegmentedTabs } from "../components/SegmentedTabs";
+import { Notice } from "../components/Notice";
+import { Glyph } from "../site/Brand";
 
 export function HomeScreen(props: {
   proofs: ProofCollectionItem[];
@@ -23,12 +26,12 @@ export function HomeScreen(props: {
   onCreate: () => void;
   onOpenInvitation: (invite: InvitationInboxView) => void;
 }) {
-  const [view, setView] = useState<ProofLibraryView>("in_progress");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<ProofLibrarySort>("newest");
-  const [role, setRole] = useState<ProofRoleFilter>("all");
-  const [carrier, setCarrier] = useState<string | null>(null);
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [view, setView] = useViewState<ProofLibraryView>("library.view", "in_progress");
+  const [query, setQuery] = useViewState("library.query", "");
+  const [sort, setSort] = useViewState<ProofLibrarySort>("library.sort", "newest");
+  const [role, setRole] = useViewState<ProofRoleFilter>("library.role", "all");
+  const [carrier, setCarrier] = useViewState<string | null>("library.carrier", null);
+  const [filterOpen, setFilterOpen] = useViewState("library.filterOpen", false);
 
   const carriers = useMemo(() => uniqueCarriers(props.proofs), [props.proofs]);
   const proofs = useMemo(
@@ -49,21 +52,15 @@ export function HomeScreen(props: {
             .includes(needle);
         })
       : [];
-  const empty = !props.loading && proofs.length === 0 && invitations.length === 0;
+  const hasFilters = Boolean(query.trim() || role !== "all" || carrier || sort !== "newest");
+  const clearFilters = () => { setQuery(""); setRole("all"); setCarrier(null); setSort("newest"); };
+  const empty = !props.error && !props.loading && proofs.length === 0 && invitations.length === 0;
 
   return (
     <main className="page library-page">
-      <h1 className="page-title">My Proofs</h1>
-      {!props.loading && !props.proofs.length && !props.invitations.length ? (
-        <section className="section stack">
-          <h2>Protect your shipment with a PackProof.</h2>
-          <p>Add your order, record the packing and seal, then preserve the record.</p>
-          <p className="kicker">Order → Record → Seal → Proof</p>
-          <button className="btn" onClick={props.onCreate}>
-            Create your first Proof
-          </button>
-        </section>
-      ) : null}
+      <p className="workspace-overline">Workspace / Proofs</p>
+      <div className="workspace-heading"><div><h1 className="page-title">My Proofs</h1><p>Every shipment. Every detail. All in one place.</p></div><button className="btn" onClick={props.onCreate}><Glyph name="plus" size={16} />New Proof</button></div>
+      <div className="library-section-heading"><h2>Your Proof library</h2><span>Search, filter, and keep moving.</span></div>
       <SegmentedTabs
         label="Proof library"
         selected={view}
@@ -135,11 +132,15 @@ export function HomeScreen(props: {
         </section>
       ) : null}
 
-      {props.error ? (
-        <div className="banner banner-error" role="alert">
-          {props.error}
-        </div>
-      ) : null}
+      {hasFilters ? <div className="active-filter-chips" aria-label="Active filters">
+        <Glyph name="grid" size={15} />
+        {query.trim() && <button onClick={() => setQuery("")} aria-label="Remove search filter"><span>Search</span><strong>{query.trim()}</strong><Glyph name="close" size={13} /></button>}
+        {role !== "all" && <button onClick={() => setRole("all")} aria-label="Remove role filter"><span>Role is</span><strong>{role}</strong><Glyph name="close" size={13} /></button>}
+        {carrier && <button onClick={() => setCarrier(null)} aria-label="Remove carrier filter"><span>Carrier is</span><strong>{carrier}</strong><Glyph name="close" size={13} /></button>}
+        {sort !== "newest" && <button onClick={() => setSort("newest")} aria-label="Reset sort"><span>Sort</span><strong>{sort === "oldest" ? "Oldest first" : sort === "price_high" ? "Price high to low" : "Price low to high"}</strong><Glyph name="close" size={13} /></button>}
+        <button className="clear-filters" onClick={clearFilters}>Clear all</button>
+      </div> : null}
+      {props.error ? <Notice title="We couldn’t load your Proofs" kind="error">{props.error}</Notice> : null}
 
       {props.loading && proofs.length === 0 && invitations.length === 0 ? (
         <p className="empty">Loading PackProofs…</p>
@@ -165,14 +166,14 @@ export function HomeScreen(props: {
       {empty ? (
         <div className="empty-card empty-state">
           <p className="card-title">
-            {view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
+            {hasFilters ? "No matching Proofs" : view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
           </p>
           <p>
-            {view === "completed"
+            {hasFilters ? "Try a different search or clear your filters." : view === "completed"
               ? "Finalized Proofs will appear here."
               : "Create a Proof to start a record, or review an invitation."}
           </p>
-          {view === "in_progress" ? (
+          {hasFilters ? <button className="btn btn-secondary" onClick={clearFilters}>Clear filters</button> : view === "in_progress" ? (
             <button className="btn" type="button" onClick={props.onCreate}>
               Create a Proof
             </button>

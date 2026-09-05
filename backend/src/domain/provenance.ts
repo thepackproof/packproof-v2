@@ -19,6 +19,8 @@ export interface ImportedBuyer {
 }
 
 export interface TransactionProvenanceView {
+  originalSource?: string;
+  sellerCorrectedFields?: string[];
   source: ProvenanceSource | string;
   adapterKey: string;
   provider: string;
@@ -138,8 +140,10 @@ export function provenanceFromIdentity(
     return null;
   }
   const stored = readImportMetadata(metadata);
+  const corrected=sellerCorrectedFields(metadata);
   return {
-    source: identity.source,
+    source: corrected.length ? "PARTICIPANT_SUPPLIED" : identity.source,
+    ...(corrected.length ? {originalSource:identity.source,sellerCorrectedFields:corrected}:{}),
     adapterKey: identity.adapter_key,
     provider: stored?.provider || providerFromTenant(identity.tenant_key),
     tenantKey: identity.tenant_key,
@@ -163,6 +167,7 @@ export function manifestProvenance(
   }
   return {
     source: provenance.source,
+    ...(provenance.sellerCorrectedFields?.length ? {originalSource:provenance.originalSource,sellerCorrectedFields:provenance.sellerCorrectedFields}:{}),
     adapterKey: provenance.adapterKey,
     provider: provenance.provider,
     tenantKey: provenance.tenantKey,
@@ -217,4 +222,9 @@ function readBuyer(value: unknown): ImportedBuyer | null {
     displayName: buyer.displayName,
     email: buyer.email,
   };
+}
+
+export function sellerCorrectedFields(metadata:unknown):string[] {
+  const corrections=asMetadataRecord(asMetadataRecord(metadata).sellerCorrections);
+  return Object.keys(corrections).sort();
 }

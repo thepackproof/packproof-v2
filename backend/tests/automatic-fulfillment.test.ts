@@ -8,7 +8,7 @@ import { acceptInvitation, createInvitation } from "../src/domain/invitations.js
 import { createTransaction } from "../src/domain/transactions.js";
 import { sha256Hex } from "../src/hash.js";
 import { DEMO_STOREFRONT_CREDENTIAL_REFERENCE } from "../src/integrations/demo-storefront.js";
-import { auth, commitProofEvidence, createHarness, login, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, commitProofEvidence, createHarness, login, type TestHarness } from "./helpers.js";
 
 const ELIGIBLE_ORDERS = ["DS-1001", "DS-1002", "DS-1003", "DS-1004", "DS-1009", "DS-1010"];
 const INELIGIBLE_ORDERS = ["DS-1005", "DS-1006", "DS-1007", "DS-1008"];
@@ -265,6 +265,7 @@ describe("automatic fulfillment ingestion", () => {
       .post(`/proofs/${order.proofId}/attestations`)
       .set(auth(seller))
       .send({ statement: "PACKED_DESCRIBED_ITEM" });
+    const recording = await prepareCameraCapture(harness,seller,order.proofId,`camera-${order.proofId}`);
     const upload = await initializeEvidenceUpload(
       harness.db,
       harness.clock,
@@ -274,6 +275,7 @@ describe("automatic fulfillment ingestion", () => {
       {
         contentType: "video/mp4",
         evidenceType: "FULFILLMENT_CAPTURE",
+        captureSessionId: recording.captureSessionId,
         idempotencyKey: `media-${order.proofId}`,
       },
     );
@@ -281,7 +283,7 @@ describe("automatic fulfillment ingestion", () => {
       .post(`/proofs/${order.proofId}/finalize`)
       .set(auth(seller));
     expect(pending.status).toBe(422);
-    const bytes = Buffer.from(`merchant-media-${order.proofId}`);
+    const bytes = recording.bytes;
     await harness.objectStore.put(upload.objectKey, bytes, "video/mp4");
     await commitEvidence(
       harness.db,
@@ -428,7 +430,7 @@ describe("automatic fulfillment ingestion", () => {
     ).rejects.toThrow(/PROOF_ALREADY_FINALIZED/);
   });
 
-  it("leaves manual P2P participant and finalization rules unchanged", async () => {
+  it("keeps manual P2P participation and enforces the shared packing standard", async () => {
     harness = await createHarness();
     const seller = await login(harness.app, "p2p-seller");
     const buyer = await login(harness.app, "p2p-buyer");
@@ -474,6 +476,8 @@ describe("automatic fulfillment ingestion", () => {
       upload.evidenceId,
       sha256Hex(bytes),
     );
+    await expect(finalizeProof(harness.db,harness.clock,seller,proof.proofId)).rejects.toMatchObject({code:"FULFILLMENT_CAPTURE_REQUIRED"});
+    await commitProofEvidence(harness,seller,proof.proofId,{evidenceType:"FULFILLMENT_CAPTURE",idempotencyKey:"p2p-primary"});
     const finalized = await finalizeProof(harness.db, harness.clock, seller, proof.proofId);
     expect(finalized.proof.status).toBe("FINALIZED");
     expect(finalized.manifest.manifest).not.toHaveProperty("participationPolicy");

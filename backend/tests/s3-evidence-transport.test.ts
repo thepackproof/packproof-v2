@@ -8,7 +8,7 @@ import { acceptInvitation, createInvitation } from "../src/domain/invitations.js
 import { createTransaction, getTransaction } from "../src/domain/transactions.js";
 import { sha256Hex } from "../src/hash.js";
 import { resolveUploadUrl } from "../../mobile/src/v2-api.ts";
-import { auth, createHarness, createUser, type TestHarness } from "./helpers.js";
+import { prepareCameraCapture, auth, createHarness, createUser, type TestHarness } from "./helpers.js";
 import { MemoryObjectStore } from "./memory-object-store.js";
 
 async function readyProof(harness: TestHarness, input: { itemTitle: string; tracking: string }) {
@@ -79,13 +79,14 @@ describe("S3 evidence transport boundary", () => {
       tracking: "1ZS3",
     });
 
+    const recording=await prepareCameraCapture(harness,seller,proof.proofId,"s3-session");
     const first = await initializeEvidenceUpload(
       harness.db,
       harness.clock,
       store,
       seller,
       proof.proofId,
-      { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: "s3-same" },
+      { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId, idempotencyKey: "s3-same" },
     );
     const renewed = await initializeEvidenceUpload(
       harness.db,
@@ -93,7 +94,7 @@ describe("S3 evidence transport boundary", () => {
       store,
       seller,
       proof.proofId,
-      { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: "s3-same" },
+      { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId, idempotencyKey: "s3-same" },
     );
     expect(renewed.evidenceId).toBe(first.evidenceId);
     expect(renewed.objectKey).toBe(first.objectKey);
@@ -136,7 +137,7 @@ describe("S3 evidence transport boundary", () => {
       ),
     ).rejects.toMatchObject({ code: "EVIDENCE_METADATA_MISMATCH" });
 
-    const bytes = Buffer.from("direct-s3-object");
+    const bytes = recording.bytes;
     await store.put(first.objectKey, bytes, "video/mp4");
     await expect(
       commitEvidence(
@@ -191,7 +192,7 @@ describe("S3 evidence transport boundary", () => {
         store,
         seller,
         proof.proofId,
-        { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: "s3-same" },
+        { contentType: "video/mp4", evidenceType: "FULFILLMENT_CAPTURE", captureSessionId: recording.captureSessionId, idempotencyKey: "s3-same" },
       ),
     ).rejects.toMatchObject({ code: "EVIDENCE_ALREADY_COMMITTED" });
 

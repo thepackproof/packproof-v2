@@ -538,7 +538,7 @@ export function rolesAllowedToSubmitEvidence(
     if (evidenceType === "RECEIPT_CAPTURE") {
       return ["BUYER"];
     }
-    if (evidenceType === "ASSET_CAPTURE") {
+    if (evidenceType === "ASSET_CAPTURE" || evidenceType === "PACKING_CAPTURE") {
       return ["SELLER", "BUYER"];
     }
     return ["SELLER"];

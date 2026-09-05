@@ -1,5 +1,6 @@
 import {
   providerResponseInvalid,
+  providerAuthFailed,
 } from "../../domain/integration-errors.js";
 import { ebayApiBaseUrl, type EbayEnvironment } from "./constants.js";
 import { basicAuthHeader, ebayTokenUrl } from "./oauth.js";
@@ -51,6 +52,7 @@ export function createHttpEbayClient(fetchImpl: typeof fetch = fetch): EbayClien
       const url = new URL(`${ebayApiBaseUrl(input.environment)}/sell/fulfillment/v1/order`);
       url.searchParams.set("limit", String(limit));
       url.searchParams.set("offset", String(offset));
+      if(input.updatedSince) url.searchParams.set("filter",`lastmodifieddate:[${input.updatedSince}..${input.updatedUntil ?? new Date().toISOString()}]`);
       const payload = await ebayJson(fetchImpl, {
         url: url.toString(),
         accessToken: input.accessToken,
@@ -104,14 +106,16 @@ async function tokenRequest(
       Authorization: basicAuthHeader(clientId, clientSecret),
     },
     body: new URLSearchParams(body).toString(),
+    signal: AbortSignal.timeout(20_000),
   });
   const payload = await parseJsonOrNull(response);
   if (!response.ok) {
+    if (asRecord(payload).error === "invalid_grant") throw providerAuthFailed();
     mapEbayHttpError(response.status);
   }
   const record = asRecord(payload);
   const accessToken = asString(record.access_token);
-  const refreshToken = asString(record.refresh_token);
+  const refreshToken = asString(record.refresh_token) ?? (body.grant_type === "refresh_token" ? body.refresh_token : null);
   const expiresIn = asNumber(record.expires_in);
   if (!accessToken || !refreshToken || expiresIn == null) {
     throw providerResponseInvalid();
@@ -137,7 +141,7 @@ async function ebayJson(
   if (input.marketplaceId) {
     headers["X-EBAY-C-MARKETPLACE-ID"] = input.marketplaceId;
   }
-  const response = await fetchImpl(input.url, { headers });
+  const response = await fetchImpl(input.url, { headers, signal: AbortSignal.timeout(20_000) });
   const payload = await parseJsonOrNull(response);
   if (!response.ok) {
     mapEbayHttpError(response.status);
@@ -195,6 +199,10 @@ export function parseOrder(payload: unknown): EbayOrder | null {
     orderFulfillmentStatus: asString(record.orderFulfillmentStatus),
     orderPaymentStatus: asString(record.orderPaymentStatus),
     sellerId: asString(record.sellerId),
+    requiresPhysicalFulfillment: instructions.some(value=>{
+      const instruction=asRecord(value);
+      return instruction.fulfillmentInstructionsType === "SHIP_TO" || Object.keys(asRecord(asRecord(instruction.shippingStep).shipTo)).length>0;
+    }),
     cancelState: asString(cancel.cancelState),
     buyerUsername: asString(buyer.username),
     total: parseMoney(pricing.total) ?? parseMoney(record.total),
@@ -219,6 +227,8 @@ function parseLineItem(value: unknown): EbayOrderLineItem | null {
     title,
     quantity: asNumber(record.quantity),
     lineItemCost: parseMoney(record.lineItemCost) ?? parseMoney(record.total),
+    fulfillmentStatus: asString(record.lineItemFulfillmentStatus),
+
   };
 }
 

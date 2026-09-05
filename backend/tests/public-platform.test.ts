@@ -1,3 +1,4 @@
+import { previewDisclosure, createDisclosureGrant } from "../src/domain/disclosure.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createHarness, createUser, auth, type TestHarness } from "./helpers.js";
@@ -127,12 +128,16 @@ describe("public partner platform", () => {
         .set("Idempotency-Key", key)
         .send(body);
     expect((await mutate("finalize", "premature")).status).toBe(422);
+    const bytes=await readFile(new URL("./fixtures/camera-recording.mp4",import.meta.url));
+    const camera=await mutate("capture-sessions","camera-session",{client:"WEB_CAMERA"});
+    expect(camera.status).toBe(201);
+    expect((await mutate(`capture-sessions/${camera.body.id}/complete`,"camera-complete",{sha256:sha256Hex(bytes),byteSize:bytes.length,contentType:"video/mp4"})).status).toBe(200);
     const init = await mutate("evidence", "video", {
       contentType: "video/mp4",
       evidenceType: "FULFILLMENT_CAPTURE",
+      captureSessionId: camera.body.id,
     });
     expect(init.status, JSON.stringify(init.body)).toBe(201);
-    const bytes = Buffer.from("packing-video-fixture");
     const partPath = `/v1/proofs/${id}/evidence/${init.body.evidenceId}/parts`;
     expect((await request(app).get(partPath).set(auth(t.key))).body.parts).toEqual([]);
     const part = await request(app)
@@ -220,6 +225,26 @@ describe("public partner platform", () => {
     const link = await mutate("access-links", "viewer");
     expect(link.status, JSON.stringify(link.body)).toBe(201);
     expect(link.body.expiresAt).toBe("2026-09-05T13:00:00.000Z");
+    const storedLinkResponse = await h.db.query<{ response: unknown }>(
+      "SELECT response FROM api_idempotency WHERE tenant_id=$1 AND operation=$2 AND key_hash=$3",
+      [t.id, `POST /proofs/${id}/access-links`, sha256Hex("viewer")],
+    );
+    expect(storedLinkResponse.rows[0].response).toHaveProperty("encrypted");
+    expect(JSON.stringify(storedLinkResponse.rows)).not.toContain(link.body.token);
+    const replayedLink = await mutate("access-links", "viewer");
+    expect(replayedLink.headers["idempotency-replayed"]).toBe("true");
+    expect(replayedLink.body).toEqual(link.body);
+    await h.db.query(
+      "UPDATE api_idempotency SET response=$4::jsonb WHERE tenant_id=$1 AND operation=$2 AND key_hash=$3",
+      [t.id, `POST /proofs/${id}/access-links`, sha256Hex("viewer"), JSON.stringify(link.body)],
+    );
+    const legacyReplay = await mutate("access-links", "viewer");
+    expect(legacyReplay.body).toEqual(link.body);
+    const migratedCache = await h.db.query<{ response: unknown }>(
+      "SELECT response FROM api_idempotency WHERE tenant_id=$1 AND operation=$2 AND key_hash=$3",
+      [t.id, `POST /proofs/${id}/access-links`, sha256Hex("viewer")],
+    );
+    expect(migratedCache.rows[0].response).toHaveProperty("encrypted");
     expect(
       (await request(app).get(new URL(link.body.url).pathname.replace("/p/", "/public/proofs/")))
         .status,
@@ -228,9 +253,11 @@ describe("public partner platform", () => {
       (await request(app).get(`/public/proofs/${link.body.token}/evidence/${init.body.evidenceId}`))
         .status,
     ).toBe(403);
-    const mediaLink = await mutate("access-links", "media-viewer", {
-      scope: "EVIDENCE_VIEW",
-    });
+    const historicalMediaLink = await mutate("access-links", "media-viewer", { scope: "EVIDENCE_VIEW" });
+    expect((await request(app).get(`/public/proofs/${historicalMediaLink.body.token}`)).body.evidence).toEqual([]);
+    const disclosure = {purpose:"CLAIMS_REVIEW",fields:["status","evidence"],media:[{evidenceId:init.body.evidenceId,representation:"ORIGINAL"}],originalsReviewed:true,publicWebBaseUrl:"https://example.test"};
+    const preview = await previewDisclosure(h.db,t.owner,id,disclosure);
+    const mediaLink = {body:await createDisclosureGrant(h.db,clock,t.owner,id,{...disclosure,previewHash:preview.disclosure.viewHash})};
     const publicView = await request(app).get(`/public/proofs/${mediaLink.body.token}`);
     expect(publicView.body.evidence[0].evidenceId).toBe(init.body.evidenceId);
     expect(JSON.stringify(publicView.body)).not.toContain("objectKey");
@@ -270,6 +297,35 @@ describe("public partner platform", () => {
       t.id,
     ]);
     expect(audit.rows.map((a) => a.operation)).toContain("POST /proofs/:id/lifecycle/receiver");
+  });
+  it("fails closed for unencrypted partner link responses without disabling ordinary API commands", async () => {
+    const t = await tenant();
+    const withoutEncryption = createServerApp({
+      ...h,
+      auth: new BearerUserAdapter(h.db),
+      publicBaseUrl: "http://127.0.0.1",
+      devAuth: true,
+      webhookConfig: { encryptionKey: "", allowedHosts: [] },
+    });
+    const created = await request(withoutEncryption).post("/v1/proofs")
+      .set(auth(t.key)).set("Idempotency-Key", "plain-create").send(order);
+    expect(created.status).toBe(201);
+    const id = created.body.proof.proofId;
+    const denied = await request(withoutEncryption).post(`/v1/proofs/${id}/access-links`)
+      .set(auth(t.key)).set("Idempotency-Key", "plain-link").send({});
+    expect(denied.status).toBe(503);
+    expect(denied.body.error.code).toBe("ACCESS_LINKS_UNAVAILABLE");
+    expect((await h.db.query("SELECT id FROM proof_access_links WHERE proof_id=$1", [id])).rows).toHaveLength(0);
+    expect((await request(withoutEncryption).get(`/v1/proofs/${id}`).set(auth(t.key))).status).toBe(200);
+    const upload = await request(withoutEncryption).post(`/v1/proofs/${id}/evidence`)
+      .set(auth(t.key)).set("Idempotency-Key", "plain-upload").send({ contentType: "video/mp4" });
+    expect(upload.status).toBe(201);
+    const finalize = await request(withoutEncryption).post(`/v1/proofs/${id}/finalize`)
+      .set(auth(t.key)).set("Idempotency-Key", "plain-finalize").send({});
+    expect(finalize.status).toBe(422);
+    const nativeLink = await request(withoutEncryption).post(`/proofs/${id}/access-links`)
+      .set(auth(t.owner)).send({ scope: "SUMMARY" });
+    expect(nativeLink.status).toBe(201);
   });
   it("publishes a contract covering every JSON route and binary transport route", async () => {
     const spec = await request(app).get("/v1/openapi.json");

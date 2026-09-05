@@ -1,3 +1,4 @@
+import { loadCaptureSession, assertCaptureRecoverable } from "./capture-sessions.js";
 import type { Database } from "../db/database.js";
 import type { Clock } from "../clock.js";
 import type { ObjectStore } from "../s3/object-store.js";
@@ -112,6 +113,7 @@ export async function storeUploadPart(
   const digest = sha256Hex(bytes);
   return db.transaction(async (tx) => {
     const evidence = await pendingEvidence(tx, userId, proofId, evidenceId, true);
+    if (evidence.capture_session_id) assertCaptureRecoverable(await loadCaptureSession(tx,userId,proofId,evidence.capture_session_id),clock);
     const existing = await tx.query<{ sha256: string }>(
       "SELECT sha256 FROM evidence_upload_parts WHERE evidence_id=$1 AND part_number=$2",
       [evidenceId, partNumber],

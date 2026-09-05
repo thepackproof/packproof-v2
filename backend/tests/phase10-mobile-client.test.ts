@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
@@ -120,20 +122,24 @@ describe("Phase 10 mobile V2 API client", () => {
     const buyerProof = await buyerAfterRestart.getProof(proof1.proofId);
     expect(buyerProof.participants.find((p) => p.role === "BUYER")?.userId).toBe(buyerLogin.userId);
 
-    const bytes = new Uint8Array(Buffer.from("phase10-seller-evidence"));
+    const capture = await ctx.seller.createCaptureSession(proof1.proofId, "native-session-1");
+    const bytes = new Uint8Array(await readFile(new URL("./fixtures/camera-recording.mp4", import.meta.url)));
+    await ctx.seller.completeCaptureSession(proof1.proofId, capture.id, { sha256: createHash("sha256").update(bytes).digest("hex"), byteSize: bytes.length, contentType: "video/mp4" });
     const idempotencyKey = "seller-capture-1";
     const afterUpload1 = await ctx.seller.submitEvidence({
       proofId: proof1.proofId,
       bytes,
-      contentType: "image/jpeg",
+      contentType: "video/mp4",
       evidenceType: "FULFILLMENT_CAPTURE",
+      captureSessionId: capture.id,
       idempotencyKey,
     });
     const afterUpload2 = await ctx.seller.submitEvidence({
       proofId: proof1.proofId,
       bytes,
-      contentType: "image/jpeg",
+      contentType: "video/mp4",
       evidenceType: "FULFILLMENT_CAPTURE",
+      captureSessionId: capture.id,
       idempotencyKey,
     });
     expect(afterUpload2.evidence).toHaveLength(1);
@@ -222,12 +228,15 @@ describe("Phase 10 mobile V2 API client", () => {
       "FX999",
     );
 
-    const bytes = new Uint8Array(Buffer.from("ctx-client-evidence"));
+    const capture = await ctx.seller.createCaptureSession(proof.proofId, "native-session-context");
+    const bytes = new Uint8Array(await readFile(new URL("./fixtures/camera-recording.mp4", import.meta.url)));
+    await ctx.seller.completeCaptureSession(proof.proofId, capture.id, { sha256: createHash("sha256").update(bytes).digest("hex"), byteSize: bytes.length, contentType: "video/mp4" });
     const submitted = await ctx.seller.submitEvidence({
       proofId: proof.proofId,
       bytes,
-      contentType: "image/jpeg",
+      contentType: "video/mp4",
       evidenceType: "FULFILLMENT_CAPTURE",
+      captureSessionId: capture.id,
       idempotencyKey: "ctx-capture",
     });
     await ctx.seller.createAttestation(proof.proofId, {
@@ -307,6 +316,16 @@ describe("Phase 10 mobile V2 API client", () => {
     expect(created.assets).toHaveLength(2);
     expect(created.nextAction?.type).toBe("CAPTURE_ASSET");
     expect(created.nextAction?.title).toContain("Document item 1 of 2");
+
+    // Existing grading packing keeps its own recipe/actor validation and origin.
+    // A commerce capture-session identifier must not be invented for this path.
+    const gradingType = captureEvidenceType({ workflowType: created.workflowType, captureRecipe: "PACKING_STANDARD_V1" });
+    expect(gradingType).toBe("PACKING_CAPTURE");
+    const bytes = new Uint8Array(await readFile(new URL("./fixtures/camera-recording.mp4", import.meta.url)));
+    const packed = await ctx.seller.submitEvidence({ proofId: created.proofId, bytes, contentType: "video/mp4", evidenceType: gradingType, idempotencyKey: "grading-compatibility-packing" });
+    expect(packed.evidence.some(e => e.evidenceType === "PACKING_CAPTURE" && e.validationStatus === "COMMITTED")).toBe(true);
+    const captureBinding = await ctx.harness.db.query<{ capture_session_id: string | null }>("SELECT capture_session_id FROM evidence WHERE proof_id=$1 AND evidence_type='PACKING_CAPTURE'", [created.proofId]);
+    expect(captureBinding.rows[0].capture_session_id).toBeNull();
 
     const link = await ctx.seller.createAccessLink(created.proofId, { scope: "SUMMARY" });
     expect(link.url).toMatch(/\/p\//);

@@ -79,6 +79,10 @@ export class IntegrationAdapterRegistry {
     return adapter;
   }
 
+  registerCommerce(adapter: CommerceFulfillmentAdapter): void {
+    this.commerceAdapters.set(adapter.adapterKey,adapter);
+  }
+
   hasCommerce(adapterKey: string): boolean {
     return this.commerceAdapters.has(adapterKey);
   }

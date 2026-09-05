@@ -4,6 +4,8 @@ import { ApiError } from "../api/types";
 import {
   CognitoAuthError,
   cognitoConfirmSignUp,
+  cognitoForgotPassword,
+  cognitoConfirmForgotPassword,
   cognitoResendConfirmationCode,
   cognitoSignIn,
   cognitoSignUp,
@@ -18,14 +20,15 @@ import {
   type WebSession,
 } from "../auth/session";
 
-type AuthView = "sign-in" | "create-account" | "confirm-account" | "verified";
+type AuthView = "sign-in" | "create-account" | "confirm-account" | "verified" | "forgot-password" | "reset-password";
 
 export function SignInScreen(props: {
+  initialView?: "sign-in" | "create-account";
   onSignedIn: (session: WebSession) => void;
   onGo: (path: string) => void;
 }) {
   const allowDevAuth = isDevAuthAvailable();
-  const [view, setView] = useState<AuthView>("sign-in");
+  const [view, setView] = useState<AuthView>(props.initialView ?? "sign-in");
   const [apiBaseUrl, setApiBaseUrl] = useState(defaultApiBaseUrl());
   const [useDevAuth, setUseDevAuth] = useState(false);
   const [subject, setSubject] = useState("seller-1");
@@ -74,6 +77,7 @@ export function SignInScreen(props: {
       username: me.username,
       displayName: me.displayName,
       token: tokens.accessToken,
+      idToken: tokens.idToken,
       refreshToken: tokens.refreshToken,
       accessExpiresAt: tokens.expiresAt,
       subject: input.email,
@@ -216,10 +220,40 @@ export function SignInScreen(props: {
     goTo("create-account");
   }
 
+  async function resetPassword(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setInfo(null);
+    setBusy(true);
+    try {
+      if (view === "forgot-password") {
+        await cognitoForgotPassword(defaultCognitoConfig(), email);
+        clearSecrets();
+        setView("reset-password");
+        setInfo("If this account is eligible for recovery, a reset code is on its way to your email.");
+      } else {
+        if (password !== confirmPassword) { setError("Passwords do not match."); return; }
+        await cognitoConfirmForgotPassword(defaultCognitoConfig(), { email, code: confirmationCode, password });
+        clearSecrets();
+        setView("sign-in");
+        setInfo("Your password has been reset. Sign in with your new password.");
+      }
+    } catch (caught) {
+      // Do not reveal whether an email is registered during recovery.
+      if (view === "forgot-password" && caught instanceof CognitoAuthError && caught.code === "UserNotFoundException") {
+        clearSecrets();
+        setView("reset-password");
+        setInfo("If this account is eligible for recovery, a reset code is on its way to your email.");
+      } else setError(formatCognitoError(caught));
+    } finally { setBusy(false); }
+  }
+
   return (
     <main className="page page-narrow">
       <img className="auth-logo" src="/packproof-logo.png" alt="" width={72} height={72} />
-      {view === "confirm-account" ? (
+      {view === "forgot-password" || view === "reset-password" ? (
+        <><h1>{view === "forgot-password" ? "Forgot your password?" : "A fresh start."}</h1><p className="lede">{view === "forgot-password" ? "Enter your email to request a password reset code." : "Enter the code from your email and choose a new password."}</p></>
+      ) : view === "confirm-account" ? (
         <>
           <h1>Check your email</h1>
           <p className="lede">We sent a verification code to {normalizeEmail(email)}.</p>
@@ -231,18 +265,18 @@ export function SignInScreen(props: {
         </>
       ) : view === "create-account" ? (
         <>
-          <h1>PackProof</h1>
+          <h1>Start your story.</h1>
           <p className="lede">Create an account to start a PackProof record.</p>
         </>
       ) : (
         <>
-          <h1>PackProof</h1>
+          <h1>Welcome back.</h1>
           <p className="lede">Sign in to view and continue your PackProof records.</p>
         </>
       )}
 
       {view === "sign-in" || view === "create-account" ? (
-        <div className="auth-switch" role="tablist" aria-label="Account">
+        <div className={`auth-switch ${view === "create-account" ? "auth-switch-create" : ""}`} role="tablist" aria-label="Account">
           <button
             type="button"
             role="tab"
@@ -264,6 +298,7 @@ export function SignInScreen(props: {
 
       {view === "sign-in" ? (
         <form className="section stack" onSubmit={(event) => void submitSignIn(event)}>
+          {info ? <div className="banner banner-info" role="status">{info}</div> : null}
           {allowDevAuth && useDevAuth ? (
             <label className="field" htmlFor="dev-subject">
               <span>Development subject</span>
@@ -316,6 +351,7 @@ export function SignInScreen(props: {
           <button className="btn" type="submit" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </button>
+          {!useDevAuth ? <button type="button" className="link-button forgot-link" onClick={() => { clearSecrets(); goTo("forgot-password"); }}>Forgot password?</button> : null}
           {!useDevAuth ? (
             <p className="auth-alt">
               Need an account?{" "}
@@ -324,6 +360,21 @@ export function SignInScreen(props: {
               </button>
             </p>
           ) : null}
+        </form>
+      ) : null}
+
+      {view === "forgot-password" || view === "reset-password" ? (
+        <form className="section stack" onSubmit={event => void resetPassword(event)}>
+          {view === "forgot-password" ? <label className="field"><span>Email</span><input type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></label> : <>
+            <label className="field"><span>Reset code</span><input autoComplete="one-time-code" inputMode="numeric" required value={confirmationCode} onChange={e => setConfirmationCode(e.target.value)} /></label>
+            <label className="field"><span>New password</span><input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} /></label>
+            <label className="field"><span>Confirm new password</span><input type="password" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
+          </>}
+          {info ? <div className="banner banner-info" role="status">{info}</div> : null}
+          {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
+          <button className="btn" type="submit" disabled={busy}>{busy ? "Please wait…" : view === "forgot-password" ? "Send reset code" : "Reset password"}</button>
+          {view === "reset-password" ? <button className="link-button" type="button" onClick={() => { clearSecrets(); goTo("forgot-password"); }}>Request another code</button> : null}
+          <button className="link-button" type="button" onClick={() => { clearSecrets(); goTo("sign-in"); }}>Back to sign in</button>
         </form>
       ) : null}
 

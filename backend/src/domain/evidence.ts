@@ -1,3 +1,5 @@
+import { eligibleCaptureSession, loadCaptureSession, assertCaptureRecoverable } from "./capture-sessions.js";
+import { validateCapturedMedia } from "./capture-media.js";
 import { sha256Hex } from "../hash.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
@@ -38,6 +40,8 @@ export interface EvidenceCommitView {
   proof: ProofView;
 }
 
+export const MAX_EVIDENCE_BYTES = 200 * 1024 * 1024;
+
 function objectKeyFor(proofId: string, evidenceId: string): string {
   return evidenceObjectKey(proofId, evidenceId);
 }
@@ -51,6 +55,7 @@ export async function initializeEvidenceUpload(
   input: {
     contentType: string;
     evidenceType?: string;
+    captureSessionId?: string;
     idempotencyKey: string;
   },
 ): Promise<EvidenceUploadView> {
@@ -89,6 +94,7 @@ export async function initializeEvidenceUpload(
     );
     if (existing.rows[0]) {
       const row = existing.rows[0];
+      assertUploadReplay(row, actorUserId, contentType, evidenceType, input.captureSessionId);
       if (row.validation_status === "REJECTED") {
         throw new DomainError(
           "EVIDENCE_UPLOAD_DISCARDED",
@@ -103,6 +109,7 @@ export async function initializeEvidenceUpload(
           409,
         );
       }
+      if (evidenceType === "FULFILLMENT_CAPTURE") await eligibleCaptureSession(tx,clock,actorUserId,proofId,input.captureSessionId,contentType);
       const upload = await objectStore.createUploadTarget({
         key: row.object_key,
         contentType: row.content_type,
@@ -110,6 +117,10 @@ export async function initializeEvidenceUpload(
       return toUploadView(row, upload);
     }
 
+    const capture = evidenceType === "FULFILLMENT_CAPTURE"
+      ? await eligibleCaptureSession(tx,clock,actorUserId,proofId,input.captureSessionId,contentType) : null;
+    if (capture?.evidence_id) throw new DomainError("CAPTURE_SESSION_ALREADY_USED", "This recording is already bound to another upload", 409);
+    if (input.captureSessionId && !capture) throw new DomainError("CAPTURE_SESSION_CONFLICT", "Packing sessions are only used for primary packing capture", 409);
     const evidenceId = newId("evd");
     const objectKey = objectKeyFor(proofId, evidenceId);
     const now = clock.now().toISOString();
@@ -118,8 +129,8 @@ export async function initializeEvidenceUpload(
       await tx.query(
         `INSERT INTO evidence (
            id, proof_id, submitted_by, object_key, content_type, created_at,
-           validation_status, evidence_type, idempotency_key
-         ) VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)`,
+           validation_status, evidence_type, idempotency_key, capture_session_id, capture_origin
+         ) VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10)`,
         [
           evidenceId,
           proofId,
@@ -129,6 +140,8 @@ export async function initializeEvidenceUpload(
           now,
           evidenceType,
           input.idempotencyKey,
+          capture?.id ?? null,
+          capture ? "AUTHORIZED_CAPTURE_SESSION" : "UPLOADED_ATTACHMENT",
         ],
       );
     } catch (error) {
@@ -138,6 +151,14 @@ export async function initializeEvidenceUpload(
           [proofId, input.idempotencyKey],
         );
         if (raced.rows[0]) {
+          assertUploadReplay(raced.rows[0], actorUserId, contentType, evidenceType, input.captureSessionId);
+          if (raced.rows[0].validation_status === "REJECTED") {
+            throw new DomainError(
+              "EVIDENCE_UPLOAD_DISCARDED",
+              "Start a new upload for a replacement recording",
+              409,
+            );
+          }
           if (raced.rows[0].validation_status === "COMMITTED") {
             throw new DomainError(
               "EVIDENCE_ALREADY_COMMITTED",
@@ -155,6 +176,7 @@ export async function initializeEvidenceUpload(
       throw error;
     }
 
+    if (capture) await tx.query("UPDATE capture_sessions SET state='UPLOADING', evidence_id=$2 WHERE id=$1", [capture.id,evidenceId]);
     await appendAudit(tx, {
       proofId,
       actorUserId,
@@ -180,6 +202,32 @@ export async function initializeEvidenceUpload(
   });
 }
 
+function assertUploadReplay(
+  row: EvidenceRow,
+  actorUserId: string,
+  contentType: string,
+  evidenceType: string,
+  captureSessionId?: string,
+): void {
+  if (row.submitted_by !== actorUserId) {
+    throw new DomainError(
+      "PARTICIPANT_NOT_AUTHORIZED",
+      "This upload belongs to another participant",
+      403,
+    );
+  }
+  if ((row.capture_session_id ?? undefined) !== captureSessionId) {
+    throw new DomainError("EVIDENCE_UPLOAD_CONFLICT", "An upload retry cannot change its recording", 409);
+  }
+  if (row.content_type !== contentType || row.evidence_type !== evidenceType) {
+    throw new DomainError(
+      "IDEMPOTENCY_CONFLICT",
+      "This upload key already identifies different evidence metadata",
+      409,
+    );
+  }
+}
+
 function toUploadView(row: EvidenceRow, upload: UploadTarget): EvidenceUploadView {
   return {
     evidenceId: row.id,
@@ -202,7 +250,7 @@ export async function commitEvidence(
   clientSha256?: string,
 ): Promise<EvidenceCommitView> {
   const prepared = await db.transaction(async (tx) => {
-    return loadEvidenceForCommit(tx, actorUserId, proofId, evidenceId);
+    return loadEvidenceForCommit(tx, clock, actorUserId, proofId, evidenceId);
   });
   if (prepared.committed) {
     return prepared.committed;
@@ -211,6 +259,14 @@ export async function commitEvidence(
   const committedObject = await objectStore.commitUpload(prepared.objectKey);
   if (!committedObject) {
     throw new DomainError("EVIDENCE_OBJECT_MISSING", "Uploaded object was not found", 409);
+  }
+  if (!Number.isSafeInteger(committedObject.byteSize) || committedObject.byteSize < 1 ||
+    committedObject.byteSize > MAX_EVIDENCE_BYTES) {
+    throw new DomainError(
+      "INVALID_EVIDENCE_SIZE",
+      "Evidence must contain between 1 byte and 200 MiB",
+      422,
+    );
   }
   if (!contentTypesCompatible(committedObject.contentType, prepared.contentType)) {
     throw new DomainError(
@@ -227,8 +283,19 @@ export async function commitEvidence(
     );
   }
 
+  let capturedDurationMs: number | null = null;
+  if (prepared.captureSessionId) {
+    const session = await loadCaptureSession(db,actorUserId,proofId,prepared.captureSessionId);
+    if (committedObject.sha256 !== session.expected_sha256 || committedObject.byteSize !== Number(session.expected_byte_size))
+      throw new DomainError("CAPTURE_RECORDING_MISMATCH", "Uploaded bytes differ from the recording registered to this session", 422);
+    const original = await objectStore.get(committedObject.key);
+    if (!original || sha256Hex(original.body) !== committedObject.sha256 || original.body.length !== committedObject.byteSize)
+      throw new DomainError("EVIDENCE_INTEGRITY_FAILURE", "The stored original failed integrity verification", 409);
+    capturedDurationMs = (await validateCapturedMedia(original.body, prepared.contentType)).durationMs;
+  }
+
   return db.transaction(async (tx) => {
-    const current = await loadEvidenceForCommit(tx, actorUserId, proofId, evidenceId);
+    const current = await loadEvidenceForCommit(tx, clock, actorUserId, proofId, evidenceId);
     if (current.committed) {
       return current.committed;
     }
@@ -240,11 +307,13 @@ export async function commitEvidence(
               sha256 = $3,
               byte_size = $4,
               committed_at = $5,
-              validation_status = 'COMMITTED'
+              validation_status = 'COMMITTED',
+              captured_duration_ms = $6
         WHERE id = $1 AND committed_at IS NULL`,
-      [evidenceId, committedObject.key, committedObject.sha256, committedObject.byteSize, now],
+      [evidenceId, committedObject.key, committedObject.sha256, committedObject.byteSize, now, capturedDurationMs],
     );
 
+    if (current.captureSessionId) await tx.query("UPDATE capture_sessions SET state='COMMITTED',verified_duration_ms=$2 WHERE id=$1",[current.captureSessionId,capturedDurationMs]);
     if (current.proofStatus === "READY_FOR_EVIDENCE") {
       await tx.query(
         `UPDATE proofs SET status = 'EVIDENCE_COMMITTED', updated_at = $2 WHERE id = $1`,
@@ -281,6 +350,7 @@ export async function commitEvidence(
 
 async function loadEvidenceForCommit(
   tx: Database,
+  clock: Clock,
   actorUserId: string,
   proofId: string,
   evidenceId: string,
@@ -290,12 +360,14 @@ async function loadEvidenceForCommit(
       objectKey?: never;
       contentType?: never;
       proofStatus?: never;
+      captureSessionId?: never;
     }
   | {
       committed: null;
       objectKey: string;
       contentType: string;
       proofStatus: string;
+      captureSessionId: string | null;
     }
 > {
   const proof = await loadProof(tx, proofId, true);
@@ -355,8 +427,15 @@ async function loadEvidenceForCommit(
     );
   }
 
+  if (evidence.evidence_type === "FULFILLMENT_CAPTURE") {
+    if (!evidence.capture_session_id) throw new DomainError("CAPTURE_SESSION_REQUIRED", "An old unfinished upload cannot be relabeled as direct capture; start a new recording", 422);
+    const session=await loadCaptureSession(tx,actorUserId,proofId,evidence.capture_session_id,true);
+    assertCaptureRecoverable(session,clock);
+    if (session.evidence_id !== evidence.id) throw new DomainError("CAPTURE_SESSION_CONFLICT", "Capture belongs to another evidence upload",409);
+  }
   return {
     committed: null,
+    captureSessionId: evidence.capture_session_id ?? null,
     objectKey: evidence.object_key,
     contentType: evidence.content_type,
     proofStatus: proof.status,

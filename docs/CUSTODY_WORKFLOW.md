@@ -47,6 +47,7 @@ Recipes describe required slots. They do not create a second evidence store.
 | `RECEIPT_STANDARD_V1` | `RECEIPT_CAPTURE` | PACKAGE, ITEM_FRONT, ITEM_BACK |
 
 Commerce packing must keep `FULFILLMENT_CAPTURE` even if a packing recipe is shown. Grading packing uses `PACKING_CAPTURE`.
+Both grading participants may submit `PACKING_CAPTURE`: the originator records outbound packing and the receiver records return packing. Each pending upload remains owned by its original submitter; retrying its key with another actor or changed media metadata cannot issue an upload authorization.
 
 ## Orchestration
 
@@ -70,6 +71,8 @@ POST /proofs/:id/actions/final-receipt
 Handoff opens a transfer. Receive closes it. Compare writes a versioned continuity row; it never mutates source evidence.
 
 Continuity vocabulary: `NOT_EVALUATED`, `CONSISTENT`, `INCONCLUSIVE`, `MATERIAL_DIFFERENCE`.
+
+The default `visual-slot-completeness/v2` check only establishes which captures are available. Even a complete set of matching slot names returns `INCONCLUSIVE`; it performs no visual comparison. `CONSISTENT` and `MATERIAL_DIFFERENCE` are explicit participant findings, attributed to the recording participant and stored separately from automatic checks. A later participant finding cannot silently replay an earlier automatic result. Existing observations and finalized manifests remain immutable.
 
 Safe summaries:
 
@@ -101,6 +104,8 @@ Web path: `/p/:token`. Guest projection schema: `packproof.proof.public/v1`.
 Commerce manifests do not gain custody keys unless the Proof is not `COMMERCE_SALE` or custody observations exist.
 
 After `FINALIZED`, custody mutation is rejected. Deterministic SHA-256 of the canonical JSON remains the integrity seal.
+
+Grading finalization requires committed evidence and origin observations covering every asset with both FRONT and BACK captures, in addition to the applicable packing, handoff and return requirements. Empty pack/handoff assertions cannot finalize an undocumented grading record. Core evidence commitments accept nonempty objects up to 200 MiB, matching the resumable upload and commerce lifecycle limit.
 
 ## Migration
 

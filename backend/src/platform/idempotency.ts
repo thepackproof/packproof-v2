@@ -39,11 +39,19 @@ export async function idempotent<T>(
         "This key was already used with a different request",
         409,
       );
-    if (row.response !== null)
+    if (row.response !== null) {
+      const value = (protection ? protection.open(row.response) : row.response) as T;
+      if (protection) {
+        await tx.query(
+          `UPDATE api_idempotency SET response=$4::jsonb WHERE tenant_id=$1 AND operation=$2 AND key_hash=$3`,
+          [tenantId, operation, keyHash, JSON.stringify(protection.seal(value))],
+        );
+      }
       return {
-        value: (protection ? protection.open(row.response) : row.response) as T,
+        value,
         replayed: true,
       };
+    }
     const value = await run(tx);
     await tx.query(
       `UPDATE api_idempotency SET response=$4::jsonb WHERE tenant_id=$1 AND operation=$2 AND key_hash=$3`,

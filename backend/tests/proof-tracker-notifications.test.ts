@@ -10,6 +10,15 @@ import {
 } from "../src/domain/proof-notifications.js";
 import { auth, commitFulfillmentAndAttest, createHarness, login, type TestHarness } from "./helpers.js";
 
+import { setReceiptPreference } from "../src/domain/buyer-receipt.js";
+
+async function optInVerifiedBuyer(harness:TestHarness,proofId:string,email:string) {
+  const buyer=await login(harness.app,`verified-${email}`);
+  await harness.db.query("INSERT INTO commerce_receivers(proof_id,user_id,invited_by,created_at) SELECT $1,$2,user_id,$3 FROM proof_participants WHERE proof_id=$1 AND role='SELLER'",[proofId,buyer,harness.clock.now().toISOString()]);
+  await harness.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,$2,$3,'COGNITO')",[buyer,email,harness.clock.now().toISOString()]);
+  await setReceiptPreference(harness.db,harness.clock,buyer,proofId,true);
+}
+
 const TRACKER_SECRET = "test-packproof-tracker-secret-with-at-least-32-bytes";
 
 class RecordingEmailDelivery implements EmailDelivery {
@@ -44,6 +53,7 @@ describe("live Proof tracker and email notifications", () => {
       .set(auth(seller));
     const proofId = proof.body.proofId as string;
 
+    await optInVerifiedBuyer(harness,proofId,"buyer@example.com");
     const subscription = await createProofEmailSubscription(
       harness.db,
       harness.clock,
@@ -62,7 +72,8 @@ describe("live Proof tracker and email notifications", () => {
 
     const publicView = await request(harness.app).get(`/public/proofs/${encodeURIComponent(token)}`);
     expect(publicView.status).toBe(200);
-    expect(publicView.body.tracker.reference).toBe("ORDER-4242");
+    expect(publicView.body.tracker.reference).toBeNull();
+    expect(publicView.body.tracker.shipment.trackingNumber).toBeNull();
     expect(publicView.body.tracker.shipment.carrier).toBe("UPS");
     expect(publicView.body.tracker.milestones[0]).toMatchObject({
       code: "PROOF_CREATED",
@@ -87,6 +98,7 @@ describe("live Proof tracker and email notifications", () => {
       .set(auth(seller));
     const proofId = proof.body.proofId as string;
 
+    await optInVerifiedBuyer(harness,proofId,"recipient@example.com");
     const subscription = await createProofEmailSubscription(
       harness.db,
       harness.clock,
@@ -171,6 +183,7 @@ describe("live Proof tracker and email notifications", () => {
       .set(auth(seller));
     const proofId = proof.body.proofId as string;
 
+    await optInVerifiedBuyer(harness,proofId,"observer@example.com");
     const created = await request(harness.app)
       .post(`/proofs/${proofId}/email-subscriptions`)
       .set(auth(seller))

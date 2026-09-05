@@ -1,3 +1,6 @@
+import { OverviewScreen } from "./screens/OverviewScreen";
+import { clearViewState, saveNavigationContext } from "./navigation-context";
+import { ConnectedAccountsPanel } from "./screens/ConnectedAccountsPanel";
 import { preserveCapture, recoverCapture, captureQueueKey } from "./capture-queue";
 import { ReceiptScreen } from "./screens/ReceiptScreen";
 import { DeveloperScreen } from "./screens/DeveloperScreen";
@@ -5,6 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
 import { captureEvidenceType } from "@packproof/copy/custody";
 import { PackProofApi } from "./api/client";
+import { createSessionTokenProvider } from "./auth/token-provider";
+import { cognitoRefresh, defaultCognitoConfig } from "./auth/cognito";
 import { ApiError } from "./api/types";
 import type {
   CanonicalProof,
@@ -21,6 +26,7 @@ import type {
 } from "./api/types";
 import {
   clearSession,
+  defaultApiBaseUrl,
   isProfileComplete,
   loadSession,
   saveSession,
@@ -47,6 +53,7 @@ import { LegalScreen } from "./screens/LegalScreen";
 import { ProfileSetupScreen } from "./screens/ProfileSetupScreen";
 import { ScanCreateScreen } from "./screens/ScanCreateScreen";
 import { SignInScreen } from "./screens/SignInScreen";
+import { AuthFrame } from "./site/PublicSite";
 
 type Route =
   | { name: "home" }
@@ -65,7 +72,7 @@ type Route =
   | { name: "invitation"; invitationId: string }
   | { name: "fulfillment" }
   | { name: "fulfillment-detail"; proofId: string }
-  | { name: "station"; reference?: string }
+  | { name: "station"; reference?: string; proofId?: string }
   | { name: "stores" }
   | { name: "privacy" }
   | { name: "terms" }
@@ -101,7 +108,7 @@ function parseHref(href: string): Route {
   }
   if (pathname === "/station") {
     const reference = url.searchParams.get("reference")?.trim() || undefined;
-    return { name: "station", reference };
+    return { name: "station", reference, proofId: url.searchParams.get("proof") || undefined };
   }
   if (pathname === "/stores") {
     return { name: "stores" };
@@ -170,7 +177,9 @@ function routeProofId(route: Route): string | null {
 function writePath(path: string) {
   const current = `${window.location.pathname}${window.location.search}`;
   if (current !== path) {
-    window.history.pushState(null, "", path);
+    saveNavigationContext();
+    window.history.pushState({ ppContext: crypto.randomUUID(), ppFrom: current }, "", path);
+    window.dispatchEvent(new Event("packproof:navigate"));
   }
 }
 
@@ -277,7 +286,7 @@ function needsProof(name: Route["name"]): boolean {
   );
 }
 
-function PackProofApp() {
+function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "create-account" }) {
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -306,6 +315,17 @@ function PackProofApp() {
   const [displayNameInput, setDisplayNameInput] = useState(() => loadSession()?.displayName ?? "");
   const [usernameInput, setUsernameInput] = useState(() => loadSession()?.username ?? "");
   const tokenRef = useRef<string | null>(session?.token ?? null);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const getSessionToken = useMemo(() => createSessionTokenProvider({
+    getSession: () => sessionRef.current,
+    onSession: (updated) => {
+      sessionRef.current = updated;
+      tokenRef.current = updated.token;
+      setSession(updated);
+    },
+    refresh: (token) => cognitoRefresh(defaultCognitoConfig(), token),
+  }), []);
   const proofIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -315,11 +335,13 @@ function PackProofApp() {
   const api = useMemo(
     () =>
       new PackProofApi({
-        baseUrl: session?.apiBaseUrl ?? "",
-        getToken: () => tokenRef.current,
+        baseUrl: session?.apiBaseUrl ?? defaultApiBaseUrl(),
+        getToken: getSessionToken,
+        getIdentityToken: () => sessionRef.current?.idToken ?? null,
       }),
-    [session?.apiBaseUrl],
+    [session?.apiBaseUrl, getSessionToken],
   );
+  const loadPublicProof = useCallback((token: string) => api.getPublicProof(token), [api]);
 
   const loadProofEvidence = useCallback(
     async (evidenceId: string) => {
@@ -332,8 +354,10 @@ function PackProofApp() {
   );
 
   function signOut() {
+    sessionRef.current = null;
     tokenRef.current = null;
     clearSession();
+    clearViewState();
     setSession(null);
     setProofs([]);
     setInvitations([]);
@@ -350,6 +374,7 @@ function PackProofApp() {
   }
 
   function go(path: string) {
+    if (path === "/" && !isLegalRoute(route)) path = "/app";
     const next = parseHref(path);
     setError(null);
     setShareNotice(null);
@@ -365,6 +390,11 @@ function PackProofApp() {
     }
     writePath(path);
     setRoute(next);
+  }
+
+  function goBack(fallback: string) {
+    if (window.history.state?.ppFrom) { saveNavigationContext(); window.history.back(); }
+    else go(fallback);
   }
 
   function handleError(caught: unknown): string {
@@ -456,16 +486,28 @@ function PackProofApp() {
     if (!session || !isProfileComplete(session)) {
       return;
     }
+    let cancelled = false;
+    const fail = (caught: unknown) => {
+      if (!cancelled) setError(handleError(caught));
+    };
+    const finished = () => {
+      if (!cancelled) setLoading(false);
+    };
     if (route.name === "home" || route.name === "proofs" || route.name === "activity") {
       setLoading(true);
       setError(null);
-      void Promise.all([api.listMyProofs(), api.listInvitations()])
-        .then(([listed, inbox]) => {
+      void Promise.all([api.listMyProofs(), api.listInvitations(), ...(route.name === "home" ? [api.listFulfillmentQueue("ready"), api.listCommerceConnections()] : [])])
+        .then(([listedRaw, inboxRaw, queueRaw, connectionsRaw]) => {
+          const listed = listedRaw as { proofs: ProofCollectionItem[] };
+          const inbox = inboxRaw as { invitations: InvitationInboxView[] };
+          if (queueRaw) setQueue((queueRaw as { items: FulfillmentQueueItem[] }).items);
+          if (connectionsRaw) setConnections((connectionsRaw as { connections: CommerceConnectionView[] }).connections);
+          if (cancelled) return;
           setProofs(listed.proofs);
           setInvitations(inbox.invitations);
         })
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .catch(fail)
+        .finally(finished);
     }
     if (route.name === "account") {
       setLoading(true);
@@ -476,14 +518,15 @@ function PackProofApp() {
         api.listConnectedAccounts(),
       ])
         .then(([inbox, listed, marketplaces, connected]) => {
+          if (cancelled) return;
           setInvitations(inbox.invitations);
           setConnections(listed.connections);
           setEbay(pickEbay(marketplaces));
           setConnectedAccounts(connected.accounts);
           setConnectedProviders(connected.providers);
         })
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .catch(fail)
+        .finally(finished);
     }
     if (needsProof(route.name)) {
       const proofId = routeProofId(route);
@@ -495,13 +538,15 @@ function PackProofApp() {
         void api
           .getProof(proofId)
           .then(async (loaded) => {
+            if (cancelled) return;
             proofIdRef.current = loaded.proofId;
             setProof(loaded);
             const integrity = await api.getShipmentIntegrity(loaded.proofId);
+            if (cancelled) return;
             setShipmentIntegrity(integrity);
           })
-          .catch((caught) => setError(handleError(caught)))
-          .finally(() => setLoading(false));
+          .catch(fail)
+          .finally(finished);
       } else {
         setLoading(false);
       }
@@ -510,9 +555,9 @@ function PackProofApp() {
       setLoading(true);
       void api
         .listInvitations()
-        .then((inbox) => setInvitations(inbox.invitations))
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .then((inbox) => { if (!cancelled) setInvitations(inbox.invitations); })
+        .catch(fail)
+        .finally(finished);
     }
     if (
       route.name === "fulfillment" ||
@@ -523,27 +568,31 @@ function PackProofApp() {
       setError(null);
       void api
         .listFulfillmentQueue(route.name === "fulfillment-detail" ? "all" : "ready")
-        .then((result) => setQueue(result.items))
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .then((result) => { if (!cancelled) setQueue(result.items); })
+        .catch(fail)
+        .finally(finished);
     }
     if (route.name === "stores") {
       setLoading(true);
-      void Promise.all([api.listCommerceConnections(), api.listMarketplaces()])
-        .then(([listed, marketplaces]) => {
+      void Promise.all([api.listCommerceConnections(), api.listMarketplaces(), api.listConnectedAccounts()])
+        .then(([listed, marketplaces, accounts]) => {
+          if (cancelled) return;
           setConnections(listed.connections);
           setEbay(pickEbay(marketplaces));
+          setConnectedAccounts(accounts.accounts);
+          setConnectedProviders(accounts.providers);
         })
-        .catch((caught) => setError(handleError(caught)))
-        .finally(() => setLoading(false));
+        .catch(fail)
+        .finally(finished);
     }
     if (route.name === "create") {
       void api
         .listMarketplaces()
-        .then((marketplaces) => setEbay(pickEbay(marketplaces)))
+        .then((marketplaces) => { if (!cancelled) setEbay(pickEbay(marketplaces)); })
         .catch(() => undefined);
     }
-  }, [api, route, session]);
+    return () => { cancelled = true; };
+  }, [api, route, session?.userId, session?.username, session?.displayName]);
 
   if (isLegalRoute(route)) {
     return <LegalScreen kind={route.name} onGo={go} />;
@@ -552,8 +601,10 @@ function PackProofApp() {
   if (isPublicRoute(route)) {
     return (
       <PublicProofScreen
+        key={route.token}
+        apiBaseUrl={session?.apiBaseUrl ?? defaultApiBaseUrl()}
         token={route.token}
-        load={(token) => api.getPublicProof(token)}
+        load={loadPublicProof}
         loadMedia={(id) => api.getPublicEvidence(route.token, id)}
         onSignIn={() => go("/")}
       />
@@ -562,34 +613,27 @@ function PackProofApp() {
 
   if (!session) {
     return (
-      <div className="app-shell">
-        <header className="topbar">
-          <span className="brand">
-            <img src="/packproof-logo.png" alt="" width={28} height={28} />
-            PackProof
-          </span>
-        </header>
+      <AuthFrame>
         <SignInScreen
+          initialView={authInitialView}
           onGo={go}
           onSignedIn={(next) => {
+            sessionRef.current = next;
             tokenRef.current = next.token;
             setSession(next);
-            go("/");
+            if (["/login", "/signup", "/"].includes(window.location.pathname)) go("/app");
+            // Keep the requested Proof or receiver invitation through sign-in.
+            // The current route is already guarded until the session/profile is ready.
+            setError(null);
           }}
         />
-      </div>
+      </AuthFrame>
     );
   }
 
   if (!isProfileComplete(session)) {
     return (
-      <div className="app-shell">
-        <header className="topbar">
-          <span className="brand">
-            <img src="/packproof-logo.png" alt="" width={28} height={28} />
-            PackProof
-          </span>
-        </header>
+      <AuthFrame>
         <ProfileSetupScreen
           session={session}
           onGo={go}
@@ -602,11 +646,10 @@ function PackProofApp() {
             });
           }}
         />
-      </div>
+      </AuthFrame>
     );
   }
 
-  const showLibraryChrome = route.name === "home" || route.name === "proofs";
   const libraryProps = {
     proofs,
     invitations,
@@ -619,17 +662,18 @@ function PackProofApp() {
   };
 
   return (
-    <div className="app-shell">
-      {showLibraryChrome ? (
+    <div className="app-shell workspace-shell">
         <AppNav
           session={session}
           invitationCount={invitations.length}
+          currentRoute={route.name}
+          onGo={go}
           onGoHome={() => go("/")}
           onOpenAccount={() => go("/account")}
         />
-      ) : null}
 
-      {route.name === "home" || route.name === "proofs" ? <HomeScreen {...libraryProps} /> : null}
+      {route.name === "home" ? <OverviewScreen proofs={proofs} orders={queue} connections={connections} loading={loading} error={error} onGo={go} /> : null}
+      {route.name === "proofs" ? <HomeScreen {...libraryProps} /> : null}
 
       {route.name === "activity" ? (
         <ActivityScreen
@@ -644,14 +688,15 @@ function PackProofApp() {
 
       {route.name === "receipt" ? (
         <ReceiptScreen
+          userId={session.userId}
           key={route.proofId}
           api={api}
           proofId={route.proofId}
-          onBack={() => go("/")}
+          onBack={() => goBack("/")}
         />
       ) : null}
       {route.name === "developer" ? (
-        <DeveloperScreen api={api} onBack={() => go("/account")} />
+        <DeveloperScreen api={api} onBack={() => goBack("/account")} />
       ) : null}
 
       {route.name === "account" ? (
@@ -693,7 +738,7 @@ function PackProofApp() {
           onOpenFulfillment={() => go("/fulfillment")}
           onOpenPrivacy={() => go("/new/privacy")}
           onOpenTerms={() => go("/new/terms")}
-          onBack={() => go("/")}
+          onBack={() => goBack("/")}
           onConnectAccount={(provider, extra) => {
             setBusy(true);
             setError(null);
@@ -823,7 +868,7 @@ function PackProofApp() {
         <ScanCreateScreen
           busy={busy}
           error={error}
-          onBack={() => go("/new")}
+          onBack={() => goBack("/new")}
           onIdentify={(reference) => {
             setBusy(true);
             setError(null);
@@ -861,7 +906,7 @@ function PackProofApp() {
           invite={invitations.find((item) => item.invitationId === route.invitationId) ?? null}
           busy={busy}
           error={error}
-          onBack={() => go("/")}
+          onBack={() => goBack("/")}
           onReview={() => acceptInvitation(route.invitationId)}
         />
       ) : null}
@@ -877,6 +922,7 @@ function PackProofApp() {
           )}
           error={error}
           initialReference={route.reference}
+          initialProofId={route.proofId}
           onAuthExpired={signOut}
           onLeave={() => go("/")}
         />
@@ -891,7 +937,7 @@ function PackProofApp() {
           )}
           loading={loading}
           error={error}
-          onBack={() => go("/account")}
+          onBack={() => goBack("/account")}
           onOpen={(proofId) => go(`/fulfillment/${encodeURIComponent(proofId)}`)}
         />
       ) : null}
@@ -961,13 +1007,17 @@ function PackProofApp() {
           onOpenStation={() => {
             const current = queue.find((item) => item.proofId === route.proofId);
             const reference = current?.externalReference || current?.externalOrderId || "";
-            go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
+            go(`/station?proof=${encodeURIComponent(routeProofId(route) || "")}&reference=${encodeURIComponent(reference)}`);
           }}
         />
       ) : null}
 
       {route.name === "stores" ? (
         <ConnectedStoresScreen
+          connectionPanel={<ConnectedAccountsPanel accounts={connectedAccounts} providers={connectedProviders} notice={connectedNotice} busy={busy}
+            onConnect={(provider, extra) => { setBusy(true); void api.startConnectedAccountConnect(provider, extra).then(result => window.location.assign(result.authorizationUrl)).catch(caught => { setError(handleError(caught)); setBusy(false); }); }}
+            onReauthorize={accountId => { setBusy(true); void api.reauthorizeConnectedAccount(accountId).then(result => window.location.assign(result.authorizationUrl)).catch(caught => { setError(handleError(caught)); setBusy(false); }); }}
+            onDisconnect={accountId => { setBusy(true); void api.disconnectConnectedAccount(accountId).then(() => api.listConnectedAccounts()).then(result => { setConnectedAccounts(result.accounts); setConnectedProviders(result.providers); }).catch(caught => setError(handleError(caught))).finally(() => setBusy(false)); }} />}
           connections={connections}
           lastSync={lastSync}
           loading={loading}
@@ -975,7 +1025,7 @@ function PackProofApp() {
           busy={busy}
           development={import.meta.env.DEV}
           ebay={ebay}
-          onBack={() => go("/account")}
+          onBack={() => goBack("/account")}
           onConnectEbay={() => {
             setBusy(true);
             setError(null);
@@ -1010,6 +1060,7 @@ function PackProofApp() {
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
+          onAutomation={(connectionId,enabled)=>{setBusy(true);setError(null);void api.setCommerceAutomation(connectionId,enabled).then(()=>api.listCommerceConnections()).then(result=>setConnections(result.connections)).catch(e=>setError(handleError(e))).finally(()=>setBusy(false));}}
           onSync={(connectionId) => {
             setBusy(true);
             setError(null);
@@ -1042,7 +1093,7 @@ function PackProofApp() {
             const url = URL.createObjectURL(blob),
               anchor = document.createElement("a");
             anchor.href = url;
-            anchor.download = `${route.proofId}.pkpr`;
+            anchor.download = `${route.proofId}.zip`;
             anchor.click();
             window.setTimeout(() => URL.revokeObjectURL(url), 1000);
           }}
@@ -1054,7 +1105,7 @@ function PackProofApp() {
           busy={busy}
           development={import.meta.env.DEV}
           shareNotice={shareNotice}
-          onBack={() => go("/")}
+          onBack={() => goBack("/")}
           onOpenInvite={() => go(`/proofs/${encodeURIComponent(route.proofId)}/invite`)}
           onOpenFinalize={() => go(`/proofs/${encodeURIComponent(route.proofId)}/finalize`)}
           onOpenEvent={(event) =>
@@ -1064,7 +1115,7 @@ function PackProofApp() {
           }
           onOpenStation={() => {
             const reference = proof?.transaction.externalReference || "";
-            go(reference ? `/station?reference=${encodeURIComponent(reference)}` : "/station");
+            go(`/station?proof=${encodeURIComponent(routeProofId(route) || "")}&reference=${encodeURIComponent(reference)}`);
           }}
           onShare={(scope = "SUMMARY") => {
             if (!proof) {
@@ -1211,7 +1262,7 @@ function PackProofApp() {
           proof={proof?.proofId === route.proofId ? proof : null}
           busy={busy}
           error={error}
-          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onBack={() => goBack(`/proofs/${encodeURIComponent(route.proofId)}`)}
           onSearchUsers={searchProofUsers}
           onInvite={inviteProofUser}
           onShare={() => {
@@ -1228,7 +1279,7 @@ function PackProofApp() {
           proof={proof?.proofId === route.proofId ? proof : null}
           busy={busy}
           error={error}
-          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onBack={() => goBack(`/proofs/${encodeURIComponent(route.proofId)}`)}
           onFinalize={() => {
             if (!proof) {
               return;
@@ -1259,17 +1310,17 @@ function PackProofApp() {
       {route.name === "event" ? (
         <EventDetailScreen
           event={proof?.chronology?.find((entry) => entry.id === route.eventId) ?? null}
-          onBack={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
+          onBack={() => goBack(`/proofs/${encodeURIComponent(route.proofId)}`)}
         />
       ) : null}
     </div>
   );
 }
 
-export function App() {
+export function App({ authInitialView }: { authInitialView?: "sign-in" | "create-account" } = {}) {
   return (
     <ThemeProvider>
-      <PackProofApp />
+      <PackProofApp authInitialView={authInitialView} />
     </ThemeProvider>
   );
 }

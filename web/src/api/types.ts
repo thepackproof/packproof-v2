@@ -447,6 +447,9 @@ export interface FulfillmentQueueItem {
 }
 
 export interface CommerceConnectionView {
+  autoSyncEnabled?: boolean;
+  sync?: {runStatus?:string;initialSyncCompletedAt?:string;nextRunAt?:string;lastSyncAt?:string};
+  orderPolicy?: string;
   connectionId: string;
   adapterKey: string;
   provider: string;
@@ -546,11 +549,16 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
+  disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[]};
+  receipt?: {mode:string;carrierReportedDelivered:boolean;buyerReportedReceived:boolean;contributionUrl:string;message:string};
   evidence?: Array<{
     evidenceId: string;
     slot: string;
     committed: true;
     contentType?: string;
+    representation?: "ORIGINAL" | "DERIVATIVE";
+    derivativeId?: string | null;
+    label?: string;
   }>;
   schema?: "packproof.proof.public/v1" | string;
   proofId: string;

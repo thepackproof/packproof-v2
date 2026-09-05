@@ -22,5 +22,5 @@
       "@packproof/theme/*": ["../mobile/src/theme/*"]
     }
   },
-  "include": ["src", "../mobile/src/packing-station/**/*.ts", "../mobile/src/copy/**/*.ts", "../mobile/src/theme/**/*.ts"]
+  "include": ["src", "../mobile/src/packing-station/**/*.ts", "../mobile/src/copy/**/*.ts", "../mobile/src/theme/tokens.ts", "../mobile/src/theme/appearance.ts", "../mobile/src/theme/motion.ts"]
 }

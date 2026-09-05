@@ -83,6 +83,7 @@ export function commerceLifecycleRouter(deps: AppDependencies) {
           req.params.stageId,
           {
             contentType: req.body?.contentType,
+            captureSessionId: req.body?.captureSessionId,
             idempotencyKey: req.header("Idempotency-Key") ?? req.body?.idempotencyKey,
           },
         ),

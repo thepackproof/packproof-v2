@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import request from "supertest";
 import { loadConfig } from "../src/config.js";
 import { refreshConnectedAccountCredentials } from "../src/domain/connected-accounts.js";
@@ -9,6 +10,7 @@ import { auth, createHarness, login, type TestHarness } from "./helpers.js";
 import { FakeEbayClient } from "./fixtures/ebay.js";
 import {
   FakeShopifyClient,
+  createScriptedFetch,
   facebookScriptedFetch,
   googleScriptedFetch,
 } from "./fixtures/connected-accounts.js";
@@ -20,6 +22,13 @@ import type { GoogleOAuthRuntime } from "../src/integrations/connected-accounts/
 import type { FacebookOAuthRuntime } from "../src/integrations/connected-accounts/providers/facebook.js";
 import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
 import type { IntegrationCredentials } from "../src/integrations/credentials.js";
+import { createHttpShopifyClient } from "../src/integrations/shopify/client.js";
+import { SHOPIFY_API_VERSION } from "../src/integrations/shopify/constants.js";
+
+function signedShopifyCallback(query: Record<string, string>): Record<string, string> {
+  const message = Object.keys(query).sort().map((key) => `${key}=${query[key]}`).join("&");
+  return { ...query, hmac: createHmac("sha256", "shopify-secret").update(message).digest("hex") };
+}
 
 const SECRETS = [
   "test-cert-id",
@@ -113,11 +122,18 @@ async function connectProvider(
   expect(JSON.stringify(started.body)).not.toMatch(/secret|token|verifier/i);
   const url = new URL(started.body.authorizationUrl);
   const callbackPath = provider === "ebay" ? "/oauth/ebay/callback" : `/oauth/${provider}/callback`;
-  const callback = await request(harness.app).get(callbackPath).query({
+  const callbackQuery: Record<string, string> = {
     code,
-    state: url.searchParams.get("state"),
-    shop: typeof body.shop === "string" ? body.shop : undefined,
-  });
+    state: url.searchParams.get("state")!,
+  };
+  if (provider === "shopify") {
+    callbackQuery.shop = url.hostname;
+    callbackQuery.host = Buffer.from(`admin.shopify.com/store/packproof-test`).toString("base64");
+    callbackQuery.timestamp = String(Math.floor(harness.clock.now().getTime() / 1000));
+  }
+  const callback = await request(harness.app).get(callbackPath).query(
+    provider === "shopify" ? signedShopifyCallback(callbackQuery) : callbackQuery,
+  );
   expect(callback.status).toBe(302);
   const location = String(callback.headers.location);
   expect(location).toMatch(/connected=|ebay=connected/);
@@ -318,6 +334,100 @@ describe("connected accounts", () => {
   });
 
   describe("Shopify", () => {
+    it("imports an eligible order beyond 50 GraphQL results and clears the completed cursor", async () => {
+      const shopify = new FakeShopifyClient();
+      const pageRequests: Array<string | null> = [];
+      const updatedAt = "2026-09-05T00:00:00.000Z";
+      const httpClient = createHttpShopifyClient(createScriptedFetch((raw, init) => {
+        expect(raw).toBe(`https://packproof-test.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/graphql.json`);
+        expect(init?.method).toBe("POST");
+        const { query, variables } = JSON.parse(String(init?.body));
+        const operation = /query (\w+)/.exec(query)?.[1];
+        if (operation === "PackProofOrders") {
+          pageRequests.push(variables.after);
+          const offset = variables.after ? Number(String(variables.after).replace("orders:", "")) : 0;
+          const count = Math.min(variables.first, 51 - offset);
+          const next = offset + count;
+          return Response.json({ data: { orders: {
+            nodes: Array.from({ length: count }, (_, index) => ({ id: `gid://shopify/Order/${5001 + offset + index}`, updatedAt })),
+            pageInfo: { hasNextPage: next < 51, endCursor: next < 51 ? `orders:${next}` : null },
+          } } });
+        }
+        const id = String(variables.id).split("/").at(-1)!;
+        if (operation === "PackProofOrderRevision") {
+          return Response.json({ data: { order: { id: variables.id, updatedAt } } });
+        }
+        if (operation === "PackProofOrder") {
+          const eligible = id === "5051";
+          return Response.json({ data: { order: {
+            id: variables.id, legacyResourceId: id, name: `#${id}`, createdAt: updatedAt, updatedAt,
+            cancelledAt: null, displayFinancialStatus: "PAID", displayFulfillmentStatus: eligible ? "UNFULFILLED" : "FULFILLED",
+            currentTotalPriceSet: { shopMoney: { amount: "25.00", currencyCode: "USD" } },
+            fulfillments: [], lineItems: {
+              nodes: [{ id: `gid://shopify/LineItem/${7000 + Number(id)}`, title: "Test card", sku: null,
+                quantity: 1, currentQuantity: 1, unfulfilledQuantity: eligible ? 1 : 0, variantTitle: null, requiresShipping: true,
+                originalUnitPriceSet: { shopMoney: { amount: "25.00", currencyCode: "USD" } } }],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          } } });
+        }
+        throw new Error(`Unexpected Shopify GraphQL operation ${operation}`);
+      }));
+      shopify.listOrdersPage = httpClient.listOrdersPage!;
+      await boot({ shopify });
+      const userId = await login(harness.app, "shopify-paged-owner");
+      await connectProvider(harness, userId, "shopify", "valid-shopify-code", { shop: "packproof-test" });
+      const connections = await request(harness.app).get("/me/integration-connections").set(auth(userId));
+      const connectionId = connections.body.connections.find((row: { provider: string }) => row.provider === "shopify").connectionId;
+      const synced = await request(harness.app).post(`/me/commerce-connections/${connectionId}/sync`).set(auth(userId)).send({});
+      expect(synced.status).toBe(200);
+      expect(synced.body).toMatchObject({ discoveredCount: 51, eligibleCount: 1, createdProofCount: 1, cursor: null, complete: true });
+      expect(pageRequests).toEqual([null, "orders:10", "orders:20", "orders:30", "orders:40", "orders:50"]);
+      const state = await harness.db.query<{ provider_cursor: string | null }>("SELECT provider_cursor FROM commerce_connection_sync_states WHERE connection_id=$1", [connectionId]);
+      expect(state.rows[0].provider_cursor).toBeNull();
+      const retried = await request(harness.app).post(`/me/commerce-connections/${connectionId}/sync`).set(auth(userId)).send({});
+      expect(retried.status).toBe(200);
+      expect(retried.body).toMatchObject({ discoveredCount: 51, createdProofCount: 0, existingProofCount: 1, cursor: null, complete: true });
+      expect(pageRequests.slice(6)).toEqual(pageRequests.slice(0, 6));
+      expect((await harness.db.query("SELECT id FROM proofs")).rows).toHaveLength(1);
+      expect((await harness.db.query("SELECT id FROM commerce_order_records")).rows).toHaveLength(51);
+    });
+
+    it("rejects unsigned or tampered callbacks without consuming state or exchanging credentials", async () => {
+      const { shopifyClient } = await boot();
+      const userId = await login(harness.app, "shopify-signature-owner");
+      const started = await request(harness.app).post("/me/connected-accounts/shopify/connect")
+        .set(auth(userId)).send({ shop: "packproof-test" });
+      const state = new URL(started.body.authorizationUrl).searchParams.get("state")!;
+      const query = { code: "valid-shopify-code", state, shop: "packproof-test.myshopify.com", host: "signed-host" };
+      for (const invalid of [query, { ...signedShopifyCallback(query), host: "tampered-host" }, { ...signedShopifyCallback(query), code: [query.code, "second-code"] }]) {
+        const rejected = await request(harness.app).get("/oauth/shopify/callback").query(invalid);
+        expect(rejected.headers.location).toContain("OAUTH_SIGNATURE_INVALID");
+        expect(shopifyClient.tokenSeq).toBe(0);
+        const attempt = await harness.db.query<{ consumed_at: unknown }>("SELECT consumed_at FROM oauth_authorization_attempts WHERE state=$1", [state]);
+        expect(attempt.rows[0].consumed_at).toBeNull();
+      }
+      const valid = await request(harness.app).get("/oauth/shopify/callback").query(signedShopifyCallback(query));
+      expect(valid.headers.location).toContain("connected=shopify");
+      expect(shopifyClient.tokenSeq).toBe(1);
+      const replay = await request(harness.app).get("/oauth/shopify/callback").query(signedShopifyCallback(query));
+      expect(replay.headers.location).toContain("OAUTH_STATE_REUSED");
+    });
+
+    it("rejects a signed callback for a different shop from the state-bound shop", async () => {
+      const { shopifyClient } = await boot();
+      const userId = await login(harness.app, "shopify-shop-owner");
+      const started = await request(harness.app).post("/me/connected-accounts/shopify/connect")
+        .set(auth(userId)).send({ shop: "expected-shop" });
+      const callback = await request(harness.app).get("/oauth/shopify/callback").query(signedShopifyCallback({
+        code: "valid-shopify-code",
+        state: new URL(started.body.authorizationUrl).searchParams.get("state")!,
+        shop: "packproof-test.myshopify.com",
+      }));
+      expect(callback.headers.location).toContain("OAUTH_SHOP_MISMATCH");
+      expect(shopifyClient.tokenSeq).toBe(0);
+    });
+
     it("requires a myshopify shop and persists shop identity", async () => {
       const { shopifyClient } = await boot();
       const userId = await login(harness.app, "seller-1");

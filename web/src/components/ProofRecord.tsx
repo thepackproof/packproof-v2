@@ -1,5 +1,6 @@
 import { CARRIER_DISCLOSURE, SOURCE_DISCLOSURE } from "@packproof/copy/errors";
-import { chronologyCategoryLabel } from "@packproof/copy/chronology";
+import { ProofTimeline } from "./ProofTimeline";
+import { Glyph } from "../site/Brand";
 import {
   formatDate,
   moneyLabel,
@@ -244,10 +245,9 @@ export function EventTimeline(props: {
 }) {
   const entries = props.proof.chronology ?? [];
   const finalizedAt = props.proof.finalizedAt;
-  let sawCoreFinalized = false;
   return (
-    <section className="section">
-      <h2>Proof record</h2>
+    <section className="section timeline-section" id="proof-timeline">
+      <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="clock" size={15} /> THE COMPLETE PICTURE</span><h2>Proof record</h2></div><span className="timeline-event-count">{entries.length} events</span></div>
       <p className="note">{SOURCE_DISCLOSURE}</p>
       {props.proof.status === "FINALIZED" && props.proof.integrity?.manifestSha256 ? (
         <p className="note chronology-frozen-note">
@@ -256,49 +256,7 @@ export function EventTimeline(props: {
           <span className="digest">{props.proof.integrity.manifestSha256}</span>.
         </p>
       ) : null}
-      {entries.length === 0 ? (
-        <p className="empty">No chronology is available on this Proof.</p>
-      ) : (
-        <ol className="timeline">
-          {entries.map((entry) => {
-            const isCoreFinalized = entry.eventType === "PROOF_FINALIZED";
-            if (isCoreFinalized) {
-              sawCoreFinalized = true;
-            }
-            const afterCore = sawCoreFinalized && !isCoreFinalized && entry.category === "SHIPMENT";
-            const className = [
-              `chronology-${entry.category.toLowerCase()}`,
-              isCoreFinalized ? "chronology-core" : "",
-              afterCore ? "chronology-after-core" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            const body = (
-              <>
-                <div className="row">
-                  <strong>{entry.title}</strong>
-                  <span className={`badge badge-chronology badge-chronology-${entry.category.toLowerCase()}`}>
-                    {chronologyCategoryLabel(entry.category, entry.source, entry.provider)}
-                  </span>
-                </div>
-                {entry.description ? <span>{entry.description}</span> : null}
-                <span className="meta">{formatWhen(entry.occurredAt)}</span>
-              </>
-            );
-            return (
-              <li key={entry.id} className={className}>
-                {props.onSelect ? (
-                  <button type="button" className="timeline-event" onClick={() => props.onSelect?.(entry)}>
-                    {body}
-                  </button>
-                ) : (
-                  body
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      <ProofTimeline entries={entries} finalizedAt={finalizedAt} onSelect={props.onSelect} />
     </section>
   );
 }

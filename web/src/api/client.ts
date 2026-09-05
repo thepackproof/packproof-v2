@@ -1,3 +1,4 @@
+import { withRequestTimeout } from "./timeout";
 import {
   ApiError,
   type CanonicalProof,
@@ -43,10 +44,32 @@ export class PackProofApi {
   constructor(
     private readonly options: {
       baseUrl: string;
-      getToken: () => string | null;
+      getToken: () => string | null | Promise<string | null>;
+      getIdentityToken?: () => string | null;
     },
   ) {}
 
+  get recoveryScope(): string { return new URL(this.options.baseUrl || "/api", location.origin).href.replace(/\/$/, ""); }
+
+  async setReceiptPreference(proofId:string,optedIn:boolean) {
+    await this.options.getToken();
+    const token=this.options.getIdentityToken?.();
+    if(!token) throw new Error("Sign in again with your verified buyer email before choosing receipt updates.");
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/disclosure/receipt-preference`, {method:"POST",auth:false,headers:{Authorization:`Bearer ${token}`},body:{optedIn}});
+  }
+  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string}> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, { method: "POST", body: {client:"WEB_CAMERA",idempotencyKey,stageId} });
+  }
+  async completeCaptureSession(proofId: string, sessionId: string, body: {sha256:string;byteSize:number;contentType:string;interrupted?:boolean;recordedDurationMs?:number}) {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/complete`, {method:"POST",body});
+  }
+  async recoverCaptureSession(proofId:string, sessionId:string) { return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/recover`, {method:"POST",body:{}}); }
+  async featureRequest<T>(proofId:string, path:string, method = "GET", body?:unknown): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/${path}`, {method,body});
+  }
+  async featureDownload(proofId:string,path:string): Promise<Blob> { return this.download(`/proofs/${encodeURIComponent(proofId)}/${path}`); }
+  async setCommerceAutomation(connectionId:string,enabled:boolean) { return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/automation`, {method:"POST",body:{enabled}}); }
+  async relayRequest<T>(path:string,method="GET",body?:unknown,token?:string): Promise<T> { return this.request(`/me/packing-relay${path}`,{method,body,headers:token?{"X-PackProof-Station-Token":token}:undefined}); }
   async loginDev(subject: string): Promise<{ userId: string; token: string }> {
     return this.request("/auth/dev/login", {
       method: "POST",
@@ -230,14 +253,7 @@ export class PackProofApi {
   }
 
   async exportProofPackage(proofId: string): Promise<Blob> {
-    const response = await fetch(
-      joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/package`),
-      {
-        headers: { Authorization: `Bearer ${this.options.getToken()}` },
-      },
-    );
-    if (!response.ok) throw await errorFromResponse(response);
-    return response.blob();
+    return this.download(`/proofs/${encodeURIComponent(proofId)}/package`);
   }
 
   async createTransaction(input: TransactionWriteInput = {}): Promise<TransactionView> {
@@ -363,15 +379,7 @@ export class PackProofApi {
     });
   }
   async getPublicEvidence(token: string, evidenceId: string): Promise<Blob> {
-    const response = await fetch(
-      joinUrl(
-        this.options.baseUrl,
-        `/public/proofs/${encodeURIComponent(token)}/evidence/${encodeURIComponent(evidenceId)}`,
-      ),
-      { referrerPolicy: "no-referrer" },
-    );
-    if (!response.ok) throw await errorFromResponse(response);
-    return response.blob();
+    return this.download(`/public/proofs/${encodeURIComponent(token)}/evidence/${encodeURIComponent(evidenceId)}`, false);
   }
 
   async runProofAction(
@@ -431,6 +439,7 @@ export class PackProofApi {
       contentType: string;
       evidenceType?: string;
       idempotencyKey: string;
+      captureSessionId?: string;
     },
   ): Promise<EvidenceUploadView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/uploads`, {
@@ -438,36 +447,38 @@ export class PackProofApi {
       headers: { "Idempotency-Key": input.idempotencyKey },
       body: {
         contentType: input.contentType,
+        captureSessionId: input.captureSessionId,
         evidenceType: input.evidenceType ?? "SELLER_EVIDENCE",
       },
     });
   }
 
   async getEvidenceBlob(proofId: string, evidenceId: string): Promise<Blob> {
-    const token = this.options.getToken();
-    if (!token) {
-      throw new ApiError("UNAUTHENTICATED", "Missing bearer token", 401);
+    return this.download(`/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`);
+  }
+
+  private async download(path: string, auth = true): Promise<Blob> {
+    const headers: Record<string, string> = {};
+    if (auth) {
+      const token = await this.options.getToken();
+      if (!token) throw new ApiError("UNAUTHENTICATED", "Missing bearer token", 401);
+      headers.Authorization = `Bearer ${token}`;
     }
-    const response = await fetch(
-      joinUrl(
-        this.options.baseUrl,
-        `/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`,
-      ),
-      {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
-    return response.blob();
+    return withRequestTimeout(async (signal) => {
+      const response = await fetch(joinUrl(this.options.baseUrl, path), {
+        method: "GET", headers, signal, referrerPolicy: "no-referrer",
+      });
+      if (!response.ok) throw await errorFromResponse(response);
+      return response.blob();
+    }, 120_000);
   }
 
   async uploadObject(target: UploadTarget, body: Blob, contentType: string): Promise<void> {
     const url = resolveUploadUrl(this.options.baseUrl, target.url);
+    await withRequestTimeout(async (signal) => {
     const response = await fetch(url, {
       method: target.method,
+      signal,
       headers: {
         ...target.headers,
         "Content-Type": contentType,
@@ -477,6 +488,7 @@ export class PackProofApi {
     if (!response.ok) {
       throw await errorFromResponse(response);
     }
+    }, 600_000);
   }
 
   async discardUpload(proofId: string, idempotencyKey: string): Promise<void> {
@@ -496,12 +508,14 @@ export class PackProofApi {
       partSize: number;
       parts: Array<{ partNumber: number; sha256: string }>;
     }>(path);
-    const token = this.options.getToken();
-    if (!token) throw new ApiError("UNAUTHENTICATED", "Sign in to resume the recording", 401);
     for (let offset = 0, part = 1; offset < file.size; offset += state.partSize, part++) {
       if (!state.parts.some((p) => p.partNumber === part)) {
+        const token = await this.options.getToken();
+        if (!token) throw new ApiError("UNAUTHENTICATED", "Sign in to resume the recording", 401);
+        await withRequestTimeout(async (signal) => {
         const response = await fetch(joinUrl(this.options.baseUrl, `${path}/${part}`), {
           method: "PUT",
+          signal,
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/octet-stream",
@@ -509,6 +523,7 @@ export class PackProofApi {
           body: file.slice(offset, offset + state.partSize),
         });
         if (!response.ok) throw await errorFromResponse(response);
+        }, 600_000);
       }
       progress(Math.round((Math.min(offset + state.partSize, file.size) / file.size) * 95));
     }
@@ -577,14 +592,16 @@ export class PackProofApi {
       headers["Content-Type"] = "application/json";
     }
     if (init.auth !== false) {
-      const token = this.options.getToken();
+      const token = await this.options.getToken();
       if (!token) {
         throw new ApiError("UNAUTHENTICATED", "Missing bearer token", 401);
       }
       headers.Authorization = `Bearer ${token}`;
     }
+    return withRequestTimeout(async (signal) => {
     const response = await fetch(joinUrl(this.options.baseUrl, path), {
       method: init.method ?? "GET",
+      signal,
       headers,
       body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
     });
@@ -599,6 +616,7 @@ export class PackProofApi {
       return undefined as T;
     }
     return JSON.parse(text) as T;
+    });
   }
 }
 

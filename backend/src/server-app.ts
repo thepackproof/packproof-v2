@@ -1,14 +1,17 @@
+import { disclosureContextForLink } from "./domain/disclosure.js";
 import express, { type Express, type Request, type Response } from "express";
 import { createApp, type AppDependencies } from "./app.js";
+import { httpBoundary, requestBodyErrors } from "./http/boundary.js";
 import { DomainError } from "./domain/errors.js";
 import { requireParticipant } from "./domain/proof-access.js";
-import { resolveAccessToken } from "./domain/access-links.js";
+import { assertPublicProofRateLimit, resolveAccessToken } from "./domain/access-links.js";
 import { appendAudit } from "./domain/audit.js";
 import {
   createProofEmailSubscription,
   dispatchPendingProofEmails,
   listProofEmailSubscriptions,
   reconcileAllProofNotifications,
+  reconcileProofNotifications,
   revokeProofEmailSubscription,
   type NotificationPreference,
 } from "./domain/proof-notifications.js";
@@ -49,6 +52,15 @@ export interface ServerAppDependencies extends AppDependencies {
 export function createServerApp(deps: ServerAppDependencies): Express {
   const server = express();
   server.disable("x-powered-by");
+  server.use(httpBoundary(deps.corsOrigins ?? []));
+  server.use("/public/proofs/:token/email-subscription", (req, _res, next) => {
+    try {
+      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
 
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
   const ebay = deps.ebay ?? disabledEbayRuntime();
@@ -114,6 +126,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
           req.params.id,
           {
             email: req.body?.email,
+            recipientGrantId: req.body?.recipientGrantId,
             preference: req.body?.preference,
             scope: req.body?.scope,
             publicWebBaseUrl,
@@ -174,6 +187,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
   server.get("/public/proofs/:token/email-subscription", async (req, res) => {
     try {
       const access = await resolveAccessToken(deps.db, deps.clock, req.params.token);
+      await disclosureContextForLink(deps.db,access,deps.clock.now());
       const subscription = await findRecipientSubscription(deps, access.id);
       res.json({
         subscription: {
@@ -193,6 +207,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
       try {
         const preference = parseRecipientPreference(req.body?.preference);
         const access = await resolveAccessToken(deps.db, deps.clock, req.params.token);
+      await disclosureContextForLink(deps.db,access,deps.clock.now());
         const subscription = await findRecipientSubscription(deps, access.id);
         const now = deps.clock.now();
         await deps.db.query(
@@ -223,6 +238,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
   server.delete("/public/proofs/:token/email-subscription", async (req, res) => {
     try {
       const access = await resolveAccessToken(deps.db, deps.clock, req.params.token);
+      await disclosureContextForLink(deps.db,access,deps.clock.now());
       const subscription = await findRecipientSubscription(deps, access.id);
       const now = deps.clock.now();
       await deps.db.transaction(async (tx) => {
@@ -240,6 +256,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
               AND cancelled_at IS NULL`,
           [subscription.id, now.toISOString()],
         );
+        await tx.query("UPDATE proof_receipt_preferences SET opted_in=FALSE,updated_at=$2 WHERE proof_id=$3 AND user_id IN (SELECT recipient_user_id FROM proof_notification_subscriptions WHERE id=$1)", [subscription.id,now.toISOString(),access.proof_id]);
         await appendAudit(tx, {
           proofId: access.proof_id,
           actorUserId: null,
@@ -261,18 +278,23 @@ export function createServerApp(deps: ServerAppDependencies): Express {
   // retryable; load-balancer health traffic is enough to retry a transient SMTP
   // failure even when no user is actively changing a Proof.
   let lastMaintenanceAt = 0;
+  let maintenanceRunning = false;
   server.use((req, res, next) => {
     const mutation = ["POST", "PUT", "PATCH", "DELETE"].includes(req.method);
     const due = Date.now() - lastMaintenanceAt >= 60_000;
+    const proofId = /^(?:\/v1)?\/proofs\/([^/]+)(?:\/|$)/.exec(req.path)?.[1];
     if (due) lastMaintenanceAt = Date.now();
     res.on("finish", () => {
-      if (res.statusCode >= 400 || (!mutation && !due)) return;
+      if (res.statusCode >= 400 || (!due && !(mutation && proofId)) || maintenanceRunning || !emailDelivery.enabled) return;
+      maintenanceRunning = true;
       void runNotificationMaintenance(
         deps,
         emailDelivery,
         publicWebBaseUrl,
         trackerLinkSecret,
-      ).catch((error) => console.error("PackProof notification maintenance failed", error));
+        due ? undefined : proofId,
+      ).catch(() => console.error("PackProof notification maintenance failed"))
+        .finally(() => { maintenanceRunning = false; });
     });
     next();
   });
@@ -285,6 +307,10 @@ export function createServerApp(deps: ServerAppDependencies): Express {
     }),
   );
 
+  server.use(requestBodyErrors);
+  server.use((error: unknown, _req: Request, res: Response, _next: import("express").NextFunction) => {
+    sendBoundaryError(error, res);
+  });
   return server;
 }
 
@@ -337,15 +363,18 @@ async function runNotificationMaintenance(
   emailDelivery: EmailDelivery,
   publicWebBaseUrl: string,
   trackerLinkSecret: string,
+  proofId?: string,
 ): Promise<void> {
   if (!trackerLinkSecret) return;
-  await reconcileAllProofNotifications(deps.db, deps.clock);
+  if (proofId) await reconcileProofNotifications(deps.db, deps.clock, proofId);
+  else await reconcileAllProofNotifications(deps.db, deps.clock);
   await dispatchPendingProofEmails(
     deps.db,
     deps.clock,
     emailDelivery,
     publicWebBaseUrl,
     trackerLinkSecret,
+    proofId,
   );
 }
 

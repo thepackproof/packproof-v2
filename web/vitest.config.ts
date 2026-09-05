@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  esbuild: { tsconfigRaw: JSON.stringify({ compilerOptions: { jsx: "react-jsx", useDefineForClassFields: true } }) },
   resolve: {
     alias: {
       "@packproof/station": path.resolve(__dirname, "../mobile/src/packing-station"),
