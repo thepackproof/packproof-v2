@@ -22,7 +22,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
-    "@vitejs/plugin-react": "^5.0.2",
+    "@vitejs/plugin-react": "^6.1.1",
     "fake-indexeddb": "^6.2.2",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.2",
