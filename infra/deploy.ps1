@@ -146,7 +146,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Create)
 try {
   Get-ChildItem $stage -Recurse -File | ForEach-Object {
-    $relative = $_.FullName.Substring($stage.Length + 1).Replace("\", "/")
+    $relative = [System.IO.Path]::GetRelativePath($stage, $_.FullName).Replace("\", "/")
     [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $_.FullName, $relative)
   }
 } finally {
