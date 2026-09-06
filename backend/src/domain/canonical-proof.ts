@@ -1,3 +1,4 @@
+import { getCaptureShipping } from './capture-shipping.js';
 import { readCaptureClientContext, type ClientCaptureContext } from "./capture-sessions.js";
 import type { Database } from "../db/database.js";
 import { listAuditEvents, type AuditEventView } from "./audit.js";
@@ -160,6 +161,7 @@ export interface CanonicalProof {
   };
   shipmentObservations: ShipmentObservationsView;
   shipmentSync: ShipmentSyncAvailability;
+  captureShipping: Awaited<ReturnType<typeof getCaptureShipping>>;
   chronology: ChronologyEntry[];
   workflowType: string;
   workflowStage: string;
@@ -331,6 +333,7 @@ export async function getCanonicalProof(
     },
     shipmentObservations,
     shipmentSync,
+    captureShipping: await getCaptureShipping(db, proofId),
     chronology: buildChronology({
       transaction,
       events,

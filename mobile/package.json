@@ -9,7 +9,9 @@
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
     "build:android:internal": "npx --yes eas-cli build --platform android --profile internal-staging --non-interactive",
-    "test:api": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts"
+    "test:api": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts",
+    "test:camera-spike": "node --experimental-strip-types --test tests/camera-spike-model.test.ts",
+    "test:proof-record": "node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",

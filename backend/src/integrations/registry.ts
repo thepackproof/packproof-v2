@@ -11,6 +11,8 @@ import { createTrustedDemoCarrierAdapter } from "./trusted-demo-carrier.js";
 import type { TrustedShipmentAdapter } from "./trusted-shipment-adapter.js";
 import { createEasyPostShipmentAdapter } from "./easypost/adapter.js";
 import type { EasyPostTrackerClient } from "./easypost/client.js";
+import { createShippoShipmentAdapter } from "./shippo/adapter.js";
+import type { ShippoTrackingClient } from "./shippo/client.js";
 import { createShopifyCommerceAdapter } from "./shopify/adapter.js";
 import { createHttpShopifyClient } from "./shopify/client.js";
 import type { ShopifyClient } from "./shopify/types.js";
@@ -94,12 +96,13 @@ export class IntegrationAdapterRegistry {
 
 export function createDefaultIntegrationRegistry(
   clock: Clock,
-  options: { easypostClient?: EasyPostTrackerClient; shopifyClient?: ShopifyClient } = {},
+  options: { easypostClient?: EasyPostTrackerClient; shippoClient?: ShippoTrackingClient; shopifyClient?: ShopifyClient } = {},
 ): IntegrationAdapterRegistry {
   const demo = createDemoMarketplaceAdapter(clock);
   const carrier = createDemoCarrierAdapter(clock);
   const trusted = createTrustedDemoCarrierAdapter();
   const easypost = createEasyPostShipmentAdapter(options.easypostClient);
+  const shippo = createShippoShipmentAdapter(options.shippoClient);
   const storefront = createDemoStorefrontAdapter();
   const shopify = createShopifyCommerceAdapter(options.shopifyClient ?? createHttpShopifyClient());
   return new IntegrationAdapterRegistry(
@@ -108,6 +111,7 @@ export function createDefaultIntegrationRegistry(
     new Map([
       [trusted.adapterKey, trusted],
       [easypost.adapterKey, easypost],
+      [shippo.adapterKey, shippo],
     ]),
     new Map([
       [storefront.adapterKey, storefront],

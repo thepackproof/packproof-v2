@@ -18,6 +18,12 @@
         "EXPO_PUBLIC_COGNITO_CLIENT_ID": "34pnucunllka2jcs8hsq762m5e",
         "EXPO_PUBLIC_COGNITO_REGION": "us-east-1"
       }
+    },
+    "shipping-integration": {
+      "extends": "internal-staging",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true"
+      }
     }
   },
   "submit": {

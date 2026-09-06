@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { RecordedVideo } from "../ui/RecordedVideo";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import { captureGradingPhoto } from "../capture";
@@ -15,19 +14,9 @@ import {
   participantFacingRole,
   workflowActionFor,
 } from "../copy/custody";
-import { CARRIER_DISCLOSURE, SOURCE_DISCLOSURE } from "../copy/errors";
 import {
-  chronologyCategoryLabel,
-  humanChronologyTitle,
-  isShipmentAfterFinalization,
-  timelineIconFor,
-} from "../copy/chronology";
-import {
-  formatDate,
   formatDateTime,
-  formatTime,
   moneyLabel,
-  orderReferenceLabel,
   quantityLabel,
   shippingSummary,
 } from "../copy/format";
@@ -46,8 +35,7 @@ import { Button, IconButton } from "../ui/Button";
 import { BottomSheet, TechnicalDetailsSheet } from "../ui/Sheets";
 import { ErrorBanner, OfflineBanner } from "../ui/EmptyState";
 import { InfoCard } from "../ui/ProofCard";
-import { StatusBadge, statusTone } from "../ui/StatusBadge";
-import { Timeline } from "../ui/Timeline";
+import { ProofRecord } from "../ui/ProofRecord";
 import { ProofRecordSkeleton } from "../ui/Skeleton";
 
 type SlotCapture = { uri: string; contentType: string };
@@ -124,29 +112,6 @@ export function ProofDetailScreen() {
   const canEdit = !locked && app.role === "SELLER" && !grading;
   const roleLabel = participantFacingRole(proof.workflowType, app.role);
   const yourRole = roleLabel ? (app.role ? `You • ${roleLabel}` : roleLabel) : "";
-  const events = (proof.chronology ?? []).map((entry) => ({
-    id: entry.id,
-    title: humanChronologyTitle(entry.eventType, entry.title),
-    description: entry.description,
-    timeLabel: formatTime(entry.occurredAt),
-    dateLabel: formatDate(entry.occurredAt),
-    category: entry.category,
-    sourceLabel: chronologyCategoryLabel(
-      entry.category,
-      entry.source,
-      entry.provider,
-      entry.eventType,
-    ),
-    eventType: entry.eventType,
-    relatedEntityId: entry.relatedEntityId,
-    occurredAt: entry.occurredAt,
-    afterFinalization: isShipmentAfterFinalization(
-      entry.occurredAt,
-      proof.finalizedAt,
-      entry.category,
-    ),
-    icon: timelineIconFor(entry.eventType, entry.category),
-  }));
   const summaryLine = [
     moneyLabel(txn.transactionValue, txn.currency),
     quantityLabel(txn.quantity),
@@ -296,15 +261,9 @@ export function ProofDetailScreen() {
   ];
 
   return (
-    <AppScreen
-      extraBottom={24}
-      onRefresh={() =>
-        void app.run(async () => app.refreshProof(proof.proofId).then(() => undefined))
-      }
-      refreshing={app.busy}
-    >
+    <AppScreen scroll={false} extraBottom={0}>
       <AppHeader
-        title={txn.itemTitle || "PackProof"}
+        title="Proof"
         onBack={app.goBack}
         right={
           <IconButton label="Proof actions" onPress={() => setMenuOpen(true)}>
@@ -322,19 +281,12 @@ export function ProofDetailScreen() {
         }
       />
 
-      <View style={styles.headerBlock}>
-        {summaryLine ? (
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{summaryLine}</Text>
-        ) : null}
-        {txn.externalReference ? (
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {orderReferenceLabel(txn.externalReference)}
-          </Text>
-        ) : null}
-        <StatusBadge label={statusLabel} tone={statusTone(statusLabel)} />
-      </View>
-
-      {showActionCard && (actionTitle || actionHint) ? (
+      <ProofRecord
+        key={proof.proofId}
+        statusLabel={statusLabel}
+        summaryLine={summaryLine}
+        action={<>
+{showActionCard && (actionTitle || actionHint) ? (
         <InfoCard>
           <Text style={[styles.kicker, { color: colors.accent }]}>Next step</Text>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
@@ -380,8 +332,16 @@ export function ProofDetailScreen() {
           </Text>
         </InfoCard>
       ) : null}
-
-      {proof.assets && proof.assets.length > 0 ? (
+{app.localCapture && app.session.captureProofId && !captureBelongs ? (
+        <Button
+          label="Return to saved recording"
+          variant="secondary"
+          onPress={() => void app.run(() => app.openProof(app.session!.captureProofId!))}
+        />
+      ) : null}
+        </>}
+        supplementary={<>
+{proof.assets && proof.assets.length > 0 ? (
         <>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Items</Text>
           <InfoCard>
@@ -409,62 +369,17 @@ export function ProofDetailScreen() {
           </InfoCard>
         </>
       ) : null}
-
-      <Button label="Replay, ask, or build a case packet" variant="secondary" onPress={() => app.go("signature")} />
-      <ContinuityCompare
+<ContinuityCompare
         proof={proof}
         token={app.session?.token ?? null}
         contentUrl={(evidenceId) => app.client.evidenceContentUrl(proof.proofId, evidenceId)}
       />
-
-      {committed
-        .filter((e) => e.contentType?.startsWith("video/"))
-        .map((e) => (
-          <RecordedVideo
-            key={e.evidenceId}
-            uri={app.client.evidenceContentUrl(proof.proofId, e.evidenceId)}
-            token={app.session!.token}
-          />
-        ))}
-      {!grading && proof.status === "FINALIZED" ? (
-        <Button
-          label="Document receipt or return"
-          variant="secondary"
-          onPress={() => app.openReceipt(proof.proofId)}
-        />
-      ) : null}
-      {app.localCapture && app.session.captureProofId && !captureBelongs ? (
-        <Button
-          label="Return to saved recording"
-          variant="secondary"
-          onPress={() => void app.run(() => app.openProof(app.session!.captureProofId!))}
-        />
-      ) : null}
-      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Proof record</Text>
-      <Text style={[styles.note, { color: colors.textSecondary }]}>{SOURCE_DISCLOSURE}</Text>
-      <Timeline
-        events={events}
-        emptyLabel="This Proof record will fill in as events are recorded."
-        onSelect={(event) => {
-          const original = (proof.chronology ?? []).find((row) => row.id === event.id) ?? null;
-          app.setSelectedEvent(original);
-          app.go("event");
-        }}
+        </>}
       />
-      <Text style={[styles.note, { color: colors.textSecondary }]}>{CARRIER_DISCLOSURE}</Text>
-
-      <Pressable
-        onPress={() => app.setTechnicalOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Technical details"
-        style={[styles.techRow, { borderTopColor: colors.divider }]}
-      >
-        <Ionicons name="information-circle-outline" size={20} color={colors.accent} />
-        <Text style={[styles.techLabel, { color: colors.textPrimary }]}>Technical details</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
-      </Pressable>
 
       <BottomSheet visible={menuOpen} title="Proof actions" onClose={() => setMenuOpen(false)}>
+        <Button label="Replay, ask, or build a case packet" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
+        {!grading && proof.status === "FINALIZED" ? <Button label="Receipt and returns" variant="secondary" onPress={() => { setMenuOpen(false); app.openReceipt(proof.proofId); }} /> : null}
         {app.role === "SELLER" ? <Button
           label="Share viewing link"
           variant="secondary"
@@ -507,7 +422,7 @@ export function ProofDetailScreen() {
         {proof.shipmentSync?.available ? (
           <Button
             label={
-              proof.shipmentSync.provider === "easypost"
+              ["easypost", "shippo"].includes(proof.shipmentSync.provider ?? "")
                 ? "Update tracking"
                 : "Update shipment observations"
             }

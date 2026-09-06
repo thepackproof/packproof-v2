@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.CAMERA" />
+  <!-- RECORD_AUDIO is added by the app only for the opt-in camera spike build. -->
+</manifest>

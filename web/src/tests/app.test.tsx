@@ -325,7 +325,8 @@ describe("PackProof web reference client", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("8af291d4deadbeefcafebabef00d000011112222333344445555666677778888"))
       .toBeInTheDocument();
-    const history = screen.getByRole("heading", { name: "Proof record" }).closest("section");
+    await user.click(screen.getByRole("tab", { name: "Timeline" }));
+    const history = screen.getByRole("tabpanel", { name: "Timeline" });
     expect(history).toBeTruthy();
     const events = within(history as HTMLElement).getAllByRole("listitem");
     expect(events[0]).toHaveTextContent("Proof created");
@@ -811,7 +812,7 @@ describe("PackProof web reference client", () => {
     expect(screen.getByText("Nikon F3 Camera")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Create PackProof" }));
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Proof record" })).toBeInTheDocument();
+      expect(screen.getByRole("article", { name: "Proof record" })).toBeInTheDocument();
     });
     expect(screen.getByRole("heading", { name: "Nikon F3 Camera" })).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/integrations/transactions/import"))).toBe(
@@ -906,6 +907,7 @@ describe("PackProof web reference client", () => {
       }),
     );
     render(<App />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Tracking" }));
     expect(await screen.findByRole("heading", { name: "Shipment record" })).toBeInTheDocument();
     expect(screen.getByText("2 shipment observations")).toBeInTheDocument();
     expect(screen.getByText("✓ Linked to finalized PackProof")).toBeInTheDocument();
@@ -1405,6 +1407,8 @@ describe("PackProof web reference client", () => {
     expect(screen.getByText(/Choose an order or scan/)).toBeInTheDocument();
     expect(screen.queryByText(/SHA-256|manifest|object store/i)).not.toBeInTheDocument();
 
+    // READY is rendered while the local capture journal is still being checked.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scan Order / Label" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Scan Order / Label" }));
     expect(await screen.findByText("SCAN")).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "NOPE");
@@ -1698,7 +1702,7 @@ describe("PackProof web reference client", () => {
     );
     render(<App />);
     expect(await screen.findByRole("heading", { name: "View Proof" })).toBeInTheDocument();
-    expect(screen.getByText("Waiting for receipt")).toBeInTheDocument();
+    expect(await screen.findByText("Waiting for receipt")).toBeInTheDocument();
     expect(screen.getAllByText("Handed off").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Join PackProof" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();

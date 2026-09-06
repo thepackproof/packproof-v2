@@ -37,6 +37,8 @@ export interface TrustedShipmentSyncResult {
   connectionId: string;
   adapterKey: string;
   provider: string;
+  carrier?: string | null;
+  mode?: string | null;
   createdCount: number;
   eventCount: number;
   events: ShipmentEventView[];
@@ -148,7 +150,7 @@ export async function executeTrustedShipmentSync(
     mode: snapshot.mode ?? undefined,
     durationMs: Date.now() - started,
   });
-  return toSyncResult(connection, adapter, imported, false);
+  return { ...toSyncResult(connection, adapter, imported, false), carrier: snapshot.carrier, mode: snapshot.mode };
 }
 
 export function toTrustedImportedEvents(

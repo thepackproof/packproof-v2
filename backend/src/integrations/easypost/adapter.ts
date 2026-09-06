@@ -31,6 +31,7 @@ export function createEasyPostShipmentAdapter(
         apiKey: credentials.apiKey,
       });
       assertTrackerMode(tracker, credentials.mode);
+      if (tracker.tracking_code?.replace(/[ \t\r\n-]/g, "").toUpperCase() !== input.trackingNumber.replace(/[ \t\r\n-]/g, "").toUpperCase()) throw providerResponseInvalid();
       return normalizeEasyPostTracker(tracker, input.carrier);
     },
     async verifyWebhook(input) {
@@ -111,17 +112,17 @@ function isTrackingMiss(error: unknown): boolean {
 
 function assertTrackerMode(tracker: EasyPostTracker, expected: "test" | "production"): void {
   const mode = typeof tracker.mode === "string" ? tracker.mode.trim().toLowerCase() : "";
-  if (!mode) {
+  if (!mode && expected === "test") {
     return;
   }
-  if (expected === "test" && mode === "production") {
+  if ((mode && mode !== expected) || (expected === "production" && mode !== "production")) {
     throw providerResponseInvalid();
   }
 }
 
 function assertEventMode(event: EasyPostEvent, expected: "test" | "production"): void {
   const mode = typeof event.mode === "string" ? event.mode.trim().toLowerCase() : "";
-  if (expected === "test" && mode === "production") {
+  if ((mode && mode !== expected) || (expected === "production" && mode !== "production")) {
     throw providerResponseInvalid();
   }
 }

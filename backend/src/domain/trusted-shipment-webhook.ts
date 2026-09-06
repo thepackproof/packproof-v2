@@ -6,6 +6,7 @@ import type { IntegrationCredentialStore } from "../integrations/credentials.js"
 import { logIntegrationEvent } from "../integrations/log.js";
 import type { IntegrationAdapterRegistry } from "../integrations/registry.js";
 import type { VerifiedWebhookResult } from "../integrations/trusted-shipment-adapter.js";
+import { shippoCarrier } from "../integrations/shippo/adapter.js";
 import { appendAudit } from "./audit.js";
 import { isUniqueViolation } from "./errors.js";
 import {
@@ -94,6 +95,13 @@ export async function ingestTrustedShipmentWebhook(
       if (!matched || matched.connection.id !== candidate.id) {
         lastError = trackingNotFound();
         continue;
+      }
+      if (adapter.provider === 'shippo') {
+        const shipping = (await db.query<{carrier:string|null}>('SELECT carrier FROM transaction_shipping WHERE transaction_id=$1',[matched.transactionId])).rows[0];
+        if (result.carrier !== shippoCarrier(trackingNumber,shipping?.carrier)) {
+          lastError = trackingNotFound();
+          continue;
+        }
       }
       verified = result;
       bound = matched.connection;
