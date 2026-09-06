@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { initialProofRecordView, orderedRecordEvents, originalBookmarks, receiptAcknowledgment, recordEventFilters } from "../src/copy/proof-record.ts";
+import { committedRecordEvidence, initialProofRecordView, orderedRecordEvents, originalBookmarks, receiptAcknowledgment, recordActivityEvents, recordEventFilters, recordEvidenceKey, recordNextStepCopy, recordProofStatus } from "../src/copy/proof-record.ts";
 import type { ReceiptRecordSummary } from "../src/copy/proof-record.ts";
+import type { NextAction } from "../src/copy/next-action.ts";
 import type { EvidenceAnchor } from "../src/signature.ts";
 import type { ChronologyEntry, ProofView } from "../src/v2-api.ts";
 
@@ -44,5 +45,59 @@ test("new proof view state starts independent tab offsets", () => {
   const first = initialProofRecordView(), second = initialProofRecordView();
   first.tab = "Timeline"; first.offsets.Timeline = 440;
   assert.equal(second.tab, "Evidence");
+  assert.equal(second.timelineFilter, "MILESTONES");
   assert.deepEqual(second.offsets, { Evidence: 0, Timeline: 0, Tracking: 0, Receipt: 0 });
+});
+
+test("activity highlights keep shipment and evidence milestones while detailed history retains every access", () => {
+  const entries = [
+    { ...event("view", "PROOF", "2026-09-02T01:00:00Z"), eventType: "PROOF_ACCESSED" },
+    { ...event("saved", "PROOF", "2026-09-01T01:00:00Z"), eventType: "EVIDENCE_COMMITTED" },
+    { ...event("guest", "PROOF", "2026-09-02T02:00:00Z"), eventType: "PROOF_VIEWED_VIA_ACCESS_LINK" },
+    { ...event("delivered", "SHIPMENT", "2026-09-02T00:00:00Z"), eventType: "DELIVERED" },
+    { ...event("return", "PROOF", "2026-09-03T00:00:00Z"), eventType: "RETURN_PACKING_FINALIZED" },
+  ];
+  const snapshot = structuredClone(entries);
+  assert.deepEqual(recordActivityEvents(entries).map(item => item.id), ["saved", "delivered", "return"]);
+  assert.deepEqual(recordActivityEvents(entries, true).map(item => item.id), ["saved", "delivered", "view", "guest", "return"]);
+  assert.deepEqual(entries, snapshot);
+});
+
+test("ordinary Proof finalization guidance cannot be overwritten by a stale server capture instruction", () => {
+  const finalize: NextAction = { key: "finalize", label: "Finalize Proof", hint: "Review and seal", kind: "primary", enabled: true };
+  const staleServer = { title: "Record packing", hint: "Record the item being packed and the package being sealed." };
+  const copy = recordNextStepCopy(finalize, staleServer, false);
+  assert.equal(copy.title, "Finalize Proof");
+  assert.match(copy.hint, /recording is saved/);
+  assert.doesNotMatch(copy.hint, /Record the item/);
+  assert.deepEqual(recordNextStepCopy(finalize, staleServer, true), staleServer);
+});
+
+test("Proof completion labels reflect canonical state and do not expose internal enums", () => {
+  assert.equal(recordProofStatus("READY_FOR_EVIDENCE"), "Recording needed");
+  assert.equal(recordProofStatus("EVIDENCE_COMMITTED"), "Ready to finalize");
+  assert.equal(recordProofStatus("FINALIZED"), "Proof finalized");
+  assert.equal(recordProofStatus("UNKNOWN_STATE"), "In progress");
+});
+
+test("the same Proof includes committed receipt and return originals without mixing stage identities", () => {
+  const proof: Pick<ProofView, "evidence" | "commerceStages"> = {
+    evidence: [original, { ...original, evidenceId: "pending-root", validationStatus: "PENDING", sha256: null }],
+    commerceStages: [{
+      stageId: "receipt", type: "RECEIPT", actorUserId: "buyer", createdAt: "2026-09-02T00:00:00Z", finalizedAt: null, sha256: null,
+      evidence: [
+        { evidenceId: "ev1", contentType: "video/mp4", sha256: "abc", byteSize: "123", committedAt: "2026-09-02T00:00:00Z" },
+        { evidenceId: "pending-stage", contentType: "video/mp4", sha256: null, byteSize: null, committedAt: null },
+      ],
+    }],
+  };
+  const snapshot = structuredClone(proof);
+  const media = committedRecordEvidence(proof);
+  assert.deepEqual(media.map(recordEvidenceKey), ["ev1", "receipt:ev1"]);
+  assert.equal(media[1].stageId, "receipt");
+  assert.equal(media[1].byteSize, 123);
+  assert.equal(media[1].sha256, "abc");
+  assert.equal(originalBookmarks(media[1], [bookmark("root-anchor")]).length, 0);
+  assert.equal(originalBookmarks(media[0], [bookmark("root-anchor")]).length, 1);
+  assert.deepEqual(proof, snapshot);
 });

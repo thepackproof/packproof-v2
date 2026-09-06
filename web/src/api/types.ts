@@ -118,6 +118,12 @@ export interface CanonicalProof {
     acceptedAt: string | null;
     expiresAt: string | null;
   }>;
+  commerceStages?: Array<{
+    stageId: string;
+    type: string;
+    finalizedAt: string | null;
+    evidence: Array<{ evidenceId: string; contentType: string; byteSize: number; sha256: string | null; committedAt: string | null }>;
+  }>;
   evidence: Array<{
     evidenceId: string;
     evidenceType: string;
@@ -554,10 +560,11 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
-  disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[]};
+  disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[];liveProof?:boolean;sharingNotice?:string};
   receipt?: {mode:string;carrierReportedDelivered:boolean;buyerReportedReceived:boolean;contributionUrl:string;message:string};
   evidence?: Array<{
     evidenceId: string;
+    stageId?: string | null;
     slot: string;
     committed: true;
     contentType?: string;

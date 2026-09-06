@@ -23,10 +23,14 @@ import { motionDuration, shouldUseLargeMotion } from "../../mobile/src/theme/mot
 import { shouldRestoreCachedSession } from "../../mobile/src/runtime-config.ts";
 
 describe("mobile appearance and theme tokens", () => {
-  it("defaults an unknown preference to system", () => {
-    expect(parseAppearancePreference(null)).toBe("system");
-    expect(parseAppearancePreference("sepia")).toBe("system");
+  it("defaults unselected or invalid appearance to light and preserves explicit choices", () => {
+    expect(parseAppearancePreference(null)).toBe("light");
+    expect(parseAppearancePreference(undefined)).toBe("light");
+    expect(parseAppearancePreference("sepia")).toBe("light");
     expect(parseAppearancePreference("dark")).toBe("dark");
+    expect(parseAppearancePreference("light")).toBe("light");
+    expect(parseAppearancePreference("system")).toBe("system");
+    expect(resolveColorScheme(parseAppearancePreference(null), "dark")).toBe("light");
   });
 
   it("resolves system, light, and dark without mixing them", () => {
@@ -36,32 +40,36 @@ describe("mobile appearance and theme tokens", () => {
     expect(resolveColorScheme("dark", "light")).toBe("dark");
   });
 
-  it("keeps the existing light PackProof surfaces", () => {
+  it("uses neutral light surfaces and a green primary action", () => {
     const colors = colorsForScheme("light");
-    expect(colors.background).toBe("#F4F6F8");
+    expect(colors.background).toBe("#F6F7F5");
     expect(colors.surface).toBe("#FFFFFF");
-    expect(colors.textPrimary).toBe("#142735");
-    expect(colors.accent).toBe("#13A8E8");
-    expect(colors.primary).toBe("#142735");
-    expect(colors.success).toBe("#0DCE70");
+    expect(colors.textPrimary).toBe("#232927");
+    expect(colors.primary).toBe("#137548");
     expect(colors).toEqual(lightColors);
   });
 
-  it("uses the specified navy PackProof dark palette rather than inverted white", () => {
+  it("offers a neutral charcoal dark palette", () => {
     const colors = colorsForScheme("dark");
-    expect(colors.background).toBe("#0B1220");
-    expect(colors.surfaceElevated).toBe("#111B2E");
-    expect(colors.surface).toBe("#16243A");
-    expect(colors.textPrimary).toBe("#F3F7FC");
-    expect(colors.textSecondary).toBe("#9FB0C6");
-    expect(colors.border).toBe("#24354D");
-    expect(colors.accent).toBe("#27B4F3");
-    expect(colors.accentPressed).toBe("#0F8FD1");
-    expect(colors.success).toBe("#43D17A");
-    expect(colors.warning).toBe("#F5B942");
-    expect(colors.error).toBe("#F26D6D");
-    expect(colors.background).not.toBe("#000000");
+    expect(colors.background).toBe("#171B19");
+    expect(colors.surface).toBe("#222824");
+    expect(colors.textPrimary).toBe("#F3F5F1");
     expect(colors).toEqual(darkColors);
+  });
+
+  it("keeps body text and primary button labels readable in both appearances", () => {
+    const luminance = (hex: string) => {
+      const channels = hex.slice(1).match(/.{2}/g)!.map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+    };
+    const contrast = (a: string, b: string) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+    for (const colors of [lightColors, darkColors]) {
+      for (const surface of [colors.background, colors.surface, colors.surfaceElevated]) {
+        expect(contrast(colors.textPrimary, surface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(colors.textSecondary, surface)).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(colors.textOnPrimary, colors.primary)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("stores appearance separately from the authenticated session", () => {
@@ -70,9 +78,9 @@ describe("mobile appearance and theme tokens", () => {
   });
 
   it("uses matching system-bar colors and inverted icons for each scheme", () => {
-    expect(systemBarBackground(lightColors, false)).toBe("#F4F6F8");
+    expect(systemBarBackground(lightColors, false)).toBe("#F6F7F5");
     expect(systemBarContent("light", false)).toBe("dark");
-    expect(systemBarBackground(darkColors, false)).toBe("#0B1220");
+    expect(systemBarBackground(darkColors, false)).toBe("#171B19");
     expect(systemBarContent("dark", false)).toBe("light");
     expect(systemBarBackground(lightColors, true)).toBe(lightColors.scanBackground);
     expect(systemBarContent("light", true)).toBe("light");

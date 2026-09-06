@@ -16,14 +16,16 @@ export function ProofTimeline({ entries, finalizedAt, onSelect }: {
   onSelect?: (entry: ChronologyEntry) => void;
 }) {
   const [filter, setFilter] = useViewState(`timeline.${window.location.pathname}.filter`, "ALL");
-  const ordered = sortedChronology(entries);
+  const [showAccess, setShowAccess] = useViewState(`timeline.${window.location.pathname}.access`, false);
+  const isAccess = (entry: ChronologyEntry) => /(?:ACCESSED|VIEWED|DOWNLOADED)$/.test(entry.eventType) || ["DISCLOSURE_SCOPE_REVIEWED", "PROOF_VIEWED_VIA_ACCESS_LINK", "EVIDENCE_UPLOAD_CREATED", "CASE_PACKET_PREVIEWED"].includes(entry.eventType);
+  const ordered = sortedChronology(showAccess ? entries : entries.filter(entry => !isAccess(entry)));
   const categories = ["ALL", ...new Set(ordered.map(entry => entry.category))];
   const selected = categories.includes(filter) ? filter : "ALL";
   const visible = ordered.filter(entry => selected === "ALL" || entry.category === selected);
   const labels: Record<string, string> = { ALL: "All events", PROOF: "Proof", SHIPMENT: "Shipment", COMMERCE: "Order" };
   return <div className="proof-timeline">
-    {entries.length > 0 && <div className="timeline-filters" aria-label="Timeline filters">{categories.map(category => <button key={category} aria-pressed={selected === category} onClick={() => setFilter(category)}>{labels[category] || category}<span>{category === "ALL" ? entries.length : entries.filter(entry => entry.category === category).length}</span></button>)}</div>}
-    {visible.length === 0 ? <div className="timeline-empty"><Glyph name="clock" size={25} /><strong>Your story starts here.</strong><p>Recorded events will appear in this timeline.</p></div> : <ol className="proof-timeline-list">
+    {entries.length > 0 && <div className="timeline-filters" aria-label="Timeline filters">{categories.map(category => <button key={category} aria-pressed={selected === category} onClick={() => setFilter(category)}>{labels[category] || category}<span>{category === "ALL" ? ordered.length : ordered.filter(entry => entry.category === category).length}</span></button>)}</div>}
+    {visible.length === 0 ? <div className="timeline-empty"><Glyph name="clock" size={25} /><strong>No activity recorded yet.</strong></div> : <ol className="proof-timeline-list">
       {visible.map((entry, index) => {
         const date = new Date(entry.occurredAt);
         const validDate = Number.isFinite(date.getTime());
@@ -40,6 +42,6 @@ export function ProofTimeline({ entries, finalizedAt, onSelect }: {
         </li>;
       })}
     </ol>}
-    <div className="timeline-end"><span /><span>Every recorded step, in order.</span></div>
+    {entries.some(isAccess) && <button className="text-link" aria-pressed={showAccess} onClick={() => setShowAccess(!showAccess)}>{showAccess ? "Show milestones only" : "View access history"}</button>}
   </div>;
 }

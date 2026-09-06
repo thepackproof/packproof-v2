@@ -59,8 +59,11 @@ export function ShipmentTracking({ events, carrier, trackingNumber, demo = false
   const stale=selected&&!demo&&Date.now()-Date.parse(selected.occurredAt)>48*60*60*1000;
   const location = selected?.location || (point ? `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}` : "Location not reported");
   const locationSearch = selected?.location ? `https://www.openstreetmap.org/search?${new URLSearchParams({ query: selected.location })}` : null;
+  if (!ordered.length) return <section className="shipment-tracking tracking-compact-empty" aria-label="Shipment tracking">
+    <Glyph name="pin" size={23} /><div><h3>{carrier || "Shipment tracking"}</h3><p>Waiting for the first carrier update.</p>{trackingNumber && <p className="tracking-number">{trackingNumber}</p>}{refreshError && <p role="status">{refreshError}</p>}</div>
+  </section>;
   return <section className={`section shipment-tracking ${expanded ? "tracking-expanded" : ""}`} aria-label="Shipment tracking">
-    <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="pin" size={15} /> {demo ? "ILLUSTRATIVE SHIPMENT" : "THE SHIPMENT STORY"}</span><h2>Shipment tracking</h2></div><span className="tracking-status"><span />{selected ? eventLabel(selected.eventType) : "Awaiting updates"}</span></div>
+    <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="pin" size={15} /> {demo ? "ILLUSTRATIVE SHIPMENT" : "CARRIER UPDATES"}</span><h2>Shipment tracking</h2></div><span className="tracking-status"><span />{selected ? eventLabel(selected.eventType) : "Awaiting updates"}</span></div>
     {refreshError&&<p role="status" className="map-unavailable">Tracking refresh failed. Previously recorded observations remain visible. {refreshError}</p>}
     {events.some(event=>event.eventData.test===true)&&<p role="status" className="map-unavailable">Test tracking data · simulated shipment events, not real carrier evidence.</p>}
     {stale&&<p className="tracking-age">This selected report is more than 48 hours old. It is historical context, not a current location.</p>}

@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-describe("live four-tab Proof record", () => {
+describe("simplified live Proof record", () => {
   it("opens the committed original under StrictMode and binds bookmarks to its hash and range", async () => {
     const api = apiStub([
       { ...anchor, anchorId: "old", label: "Old wording" },
@@ -65,17 +65,17 @@ describe("live four-tab Proof record", () => {
     const first = render(<WorkspaceProofRecord {...props} />);
     const player = await screen.findByLabelText("Recorded packing evidence") as HTMLVideoElement;
     fireEvent.timeUpdate(player, { target: { currentTime: 12 } });
-    await userEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     expect(screen.queryByLabelText("Recorded packing evidence")).not.toBeInTheDocument();
     first.unmount();
     const second = render(<WorkspaceProofRecord {...props} />);
-    expect(screen.getByRole("tab", { name: "Timeline" })).toHaveAttribute("aria-selected", "true");
-    screen.getByRole("tab", { name: "Timeline" }).focus();
+    expect(screen.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
+    screen.getByRole("tab", { name: "Activity" }).focus();
     await userEvent.keyboard("{ArrowLeft}");
     const restored = await screen.findByLabelText("Recorded packing evidence") as HTMLVideoElement;
     fireEvent.loadedMetadata(restored);
     expect(restored.currentTime).toBe(12);
-    expect(screen.getByRole("tab", { name: "Evidence" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Recording" })).toHaveFocus();
     second.unmount();
     render(<WorkspaceProofRecord {...props} currentUserId="different-user" />);
     const other = await screen.findByLabelText("Recorded packing evidence") as HTMLVideoElement;
@@ -86,8 +86,8 @@ describe("live four-tab Proof record", () => {
   it("uses recorded chronology and carrier reports in their own tabs", async () => {
     const selectEvent = vi.fn();
     render(<WorkspaceProofRecord proof={proof} currentUserId={userId} onOpenEvent={selectEvent} />);
-    await userEvent.click(screen.getByRole("tab", { name: "Timeline" }));
-    const timeline = screen.getByRole("tabpanel", { name: "Timeline" });
+    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
+    const timeline = screen.getByRole("tabpanel", { name: "Activity" });
     expect(within(timeline).getByText("Proof created")).toBeInTheDocument();
     const firstEvent = within(timeline).getAllByRole("listitem")[0];
     await userEvent.click(within(firstEvent).getByRole("button"));
@@ -96,37 +96,22 @@ describe("live four-tab Proof record", () => {
     const tracking = screen.getByRole("tabpanel", { name: "Tracking" });
     expect(within(tracking).getByText("UPS")).toBeInTheDocument();
     expect(within(tracking).getByText("1Z999")).toBeInTheDocument();
-    expect(within(tracking).getByText("Reported observations · not live GPS")).toBeInTheDocument();
+    expect(within(tracking).getByText("Waiting for the first carrier update.")).toBeInTheDocument();
     expect(screen.queryByText(/Fictional|Illustrative stock|DEMO-1042/)).not.toBeInTheDocument();
   });
 
-  it("shows real buyer receipt state without recording acknowledgment on view", async () => {
-    const api = apiStub([], [{ stageId: "receipt", type: "RECEIPT", finalizedAt: "2026-09-06T12:00:00Z" }]);
-    const onOpen = vi.fn(), onSharing = vi.fn();
-    render(<WorkspaceProofRecord proof={finalized} currentUserId="user_buyer" role="BUYER" api={api as unknown as PackProofApi} onOpenReceipt={onOpen} onReviewSharing={onSharing} />);
-    expect(api.lifecycleRequest).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("tab", { name: "Receipt" }));
-    expect(await screen.findByText(/Receipt recorded Sep/)).toBeInTheDocument();
-    expect(api.lifecycleRequest).toHaveBeenCalledWith(proof.proofId, "");
-    expect(screen.getByText(/Viewing a receipt does not acknowledge delivery/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Choose evidence for the buyer receipt" })).not.toBeInTheDocument();
-    expect(onOpen).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Document receipt or return" }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps receipt creation behind finalization and participant permissions", async () => {
-    const api = apiStub(), onOpen = vi.fn(), onSharing = vi.fn();
-    const first = render(<WorkspaceProofRecord proof={proof} currentUserId={userId} role="SELLER" api={api as unknown as PackProofApi} onOpenReceipt={onOpen} onReviewSharing={onSharing} />);
-    await userEvent.click(screen.getByRole("tab", { name: "Receipt" }));
-    expect(screen.getByText(/becomes available after the packing Proof is finalized/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Manage receipt/ })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Choose evidence for the buyer receipt" }));
-    expect(onSharing).toHaveBeenCalledTimes(1);
-    first.unmount();
-    render(<WorkspaceProofRecord proof={finalized} currentUserId="observer" role="OBSERVER" api={api as unknown as PackProofApi} onOpenReceipt={onOpen} />);
-    await userEvent.click(screen.getByRole("tab", { name: "Receipt" }));
-    expect(screen.queryByRole("button", { name: /Document receipt|Manage receipt/ })).not.toBeInTheDocument();
-    await waitFor(() => expect(api.lifecycleRequest).not.toHaveBeenCalled());
+  it("keeps receipt workflows out of the record tabs and shows committed stage recordings", async () => {
+    const api = { ...apiStub(), featureDownload: vi.fn(async () => new Blob(["receipt"], { type: "video/mp4" })) };
+    const stage = { stageId: "stage_receipt", type: "RECEIPT", finalizedAt: null, evidence: [
+      { evidenceId: "receipt", contentType: "video/mp4", byteSize: 7, sha256: "a", committedAt: "2026-09-06T12:00:00Z" },
+      { evidenceId: "pending", contentType: "video/mp4", byteSize: 7, sha256: null, committedAt: null },
+    ] };
+    render(<WorkspaceProofRecord proof={{ ...finalized, commerceStages: [stage] }} currentUserId="user_buyer" role="BUYER" api={api as unknown as PackProofApi} loadEvidence={async () => new Blob(["packing"], { type: "video/mp4" })} />);
+    expect(screen.queryByRole("tab", { name: "Receipt" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map(item => item.textContent)).toEqual(["Recording", "Activity", "Tracking"]);
+    await screen.findByLabelText("Recorded packing evidence");
+    await userEvent.click(screen.getByRole("button", { name: "Video 2" }));
+    await waitFor(() => expect(api.featureDownload).toHaveBeenCalledWith(proof.proofId, "lifecycle/stages/stage_receipt/evidence/receipt"));
+    expect(screen.queryByRole("button", { name: "Video 3" })).not.toBeInTheDocument();
   });
 });

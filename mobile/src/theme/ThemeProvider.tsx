@@ -29,7 +29,7 @@ function schemeFromSystem(value: ColorSchemeName): ColorScheme {
 }
 
 export function ThemeProvider(props: { children: ReactNode }) {
-  const [preference, setPreferenceState] = useState<AppearancePreference>("system");
+  const [preference, setPreferenceState] = useState<AppearancePreference>("light");
   const [systemScheme, setSystemScheme] = useState<ColorScheme>(() => schemeFromSystem(Appearance.getColorScheme()));
   const [reducedMotion, setReducedMotion] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -44,6 +44,9 @@ export function ThemeProvider(props: { children: ReactNode }) {
           setPreferenceState(next);
           Appearance.setColorScheme(next === "system" ? null : next);
         }
+      } catch {
+        // A storage failure still leaves the app in its light default.
+        if (!cancelled) Appearance.setColorScheme("light");
       } finally {
         if (!cancelled) {
           setHydrated(true);

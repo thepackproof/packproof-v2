@@ -29,16 +29,28 @@ export function AppScreen(props: {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const background = props.background ?? colors.background;
-  const paddingBottom =
-    (props.bottomInset === false ? spacing.lg : Math.max(insets.bottom, spacing.lg)) + (props.extraBottom ?? 0);
+  // Insets belong to the viewport. Content padding scrolls away and lets controls
+  // move beneath Android's status and navigation bars on edge-to-edge devices.
+  const viewportStyle = {
+    backgroundColor: background,
+    paddingTop: insets.top,
+    paddingBottom: props.bottomInset === false ? 0 : insets.bottom,
+    paddingLeft: insets.left,
+    paddingRight: insets.right,
+  };
+  const paddingBottom = spacing.lg + (props.extraBottom ?? 0);
   const contentStyle = [
     styles.content,
     props.padded === false ? null : styles.padded,
-    { paddingBottom, paddingTop: props.padded === false ? 0 : Math.max(insets.top, spacing.sm) },
+    { paddingBottom, paddingTop: props.padded === false ? 0 : spacing.sm },
   ];
 
   if (props.scroll === false) {
-    return <View style={[styles.root, { backgroundColor: background }, props.style, contentStyle]}>{props.children}</View>;
+    return (
+      <View style={[styles.root, props.style, viewportStyle]}>
+        <View style={[styles.root, contentStyle]}>{props.children}</View>
+      </View>
+    );
   }
 
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
@@ -46,8 +58,11 @@ export function AppScreen(props: {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: background }, props.style]}>
+    <View style={[styles.root, props.style, viewportStyle]}>
       <ScrollView
+        style={styles.root}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
         contentContainerStyle={contentStyle}
         contentOffset={props.contentOffsetY ? { x: 0, y: props.contentOffsetY } : undefined}
         keyboardShouldPersistTaps="handled"

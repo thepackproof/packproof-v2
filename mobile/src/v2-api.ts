@@ -229,6 +229,21 @@ export interface ProofView {
     contentType?: string;
     digest?: { algorithm: string; sha256: string } | null;
   }>;
+  commerceStages?: Array<{
+    stageId: string;
+    type: string;
+    actorUserId: string;
+    createdAt: string;
+    finalizedAt: string | null;
+    sha256: string | null;
+    evidence: Array<{
+      evidenceId: string;
+      contentType: string;
+      committedAt: string | null;
+      sha256: string | null;
+      byteSize: number | string | null;
+    }>;
+  }>;
   attestations?: Array<{
     kind: "ATTESTATION" | string;
     attestationId: string;

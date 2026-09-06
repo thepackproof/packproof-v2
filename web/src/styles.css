@@ -1,31 +1,31 @@
 :root {
-  --navy: #142735;
-  --blue: #13a8e8;
-  --green: #0dce70;
-  --slate: #66737d;
-  --bg: #f4f6f8;
+  --navy: #232927;
+  --blue: #137548;
+  --green: #137548;
+  --slate: #606B64;
+  --bg: #F6F7F5;
   --border: #e2e7ea;
   --white: #ffffff;
   --surface: #ffffff;
-  --text: #142735;
-  --text-secondary: #66737d;
+  --text: #232927;
+  --text-secondary: #606B64;
   --text-muted: #8a959e;
   --text-on-primary: #ffffff;
   --danger: #b42318;
   --danger-bg: #fdecec;
   --navy-muted: #1e3a4c;
-  --blue-soft: #e8f6fc;
+  --blue-soft: #EDF6EE;
   --green-soft: #e7f9ef;
-  --accent-soft-border: #c5e8f6;
-  --accent-text: #0b6f99;
+  --accent-soft-border: #CCE4D2;
+  --accent-text: #137548;
   --success-text: #0a8a4b;
   --success-soft-border: #b7e8cb;
   --warning: #c47f12;
   --warning-soft: #fff6e8;
   --warning-soft-border: #f0d7a8;
   --warning-text: #8a5a10;
-  --primary: #142735;
-  --fab: #13a8e8;
+  --primary: #137548;
+  --fab: #137548;
   --input-bg: #ffffff;
   --scan-bg: #0e1a22;
   --overlay: rgba(20, 39, 53, 0.48);
@@ -570,7 +570,7 @@ h2 {
 .btn {
   border: 1px solid var(--blue);
   background: var(--blue);
-  color: var(--white);
+  color: var(--text-on-primary);
   border-radius: 10px;
   padding: 0.7rem 1rem;
   font-weight: 700;
@@ -868,7 +868,7 @@ h2 {
   justify-items: start;
   gap: 1.25rem;
   padding: 3rem 1.5rem 4rem;
-  background: var(--navy);
+  background: var(--scan-bg);
   color: #fff;
 }
 
@@ -876,13 +876,13 @@ h2 {
 .station-ready,
 .station-identifying,
 .station-ready_to_record {
-  background: var(--navy);
+  background: var(--scan-bg);
 }
 
 .station-recording,
 .station-finish_scanning,
 .station-verifying_finish_scan {
-  background: var(--navy-muted);
+  background: var(--scan-bg);
 }
 
 .station-processing {
@@ -894,7 +894,7 @@ h2 {
 }
 
 .station-recovery {
-  background: #243444;
+  background: var(--scan-bg);
 }
 
 .station-phase {

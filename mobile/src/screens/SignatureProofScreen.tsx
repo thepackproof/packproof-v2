@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { PressableScale, FadeSlideIn } from "../ui/motion";
 import * as FileSystem from "expo-file-system";
 import { usePackProof } from "../app/PackProofProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -26,6 +27,14 @@ const templates = [
   ["WRONG_ITEM", "Reported wrong item"],
   ["CONDITION_RETURN", "Reported condition / return difference"],
 ] as const;
+const proofTools = [
+  { key: "replay", label: "Recordings" },
+  { key: "ask", label: "Questions" },
+  { key: "case", label: "Case packet" },
+  { key: "compare", label: "Compare" },
+] as const;
+type ProofTool = typeof proofTools[number]["key"];
+
 const prompts = [
   "What item is in this order?",
   "What does the carrier report?",
@@ -36,6 +45,13 @@ export function SignatureProofScreen() {
   const app = usePackProof(),
     { colors } = useTheme(),
     proofId = app.proof?.proofId;
+  const [tool, setTool] = useState<ProofTool>("replay");
+  const [returnToAnswer, setReturnToAnswer] = useState(false);
+  const toolOffsets = useRef<Record<ProofTool, number>>({ replay: 0, ask: 0, case: 0, compare: 0 });
+  function selectTool(next: ProofTool) {
+    setReturnToAnswer(false);
+    setTool(next);
+  }
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [record, setRecord] = useState<SignatureView | null>(null),
     [error, setError] = useState<string | null>(null),
@@ -134,7 +150,7 @@ export function SignatureProofScreen() {
   if (!proofId || !app.session)
     return (
       <AppScreen>
-        <AppHeader title="Explore the Proof" onBack={app.goBack} />
+        <AppHeader title="Proof tools" onBack={app.goBack} />
       </AppScreen>
     );
   const videos =
@@ -149,6 +165,9 @@ export function SignatureProofScreen() {
       (item) => item.evidenceId === (anchor?.evidenceId ?? citation.id),
     );
     if (media) {
+      toolOffsets.current.replay = 0;
+      selectTool("replay");
+      setReturnToAnswer(true);
       setSource(media);
       setSelected(anchor ?? null);
     } else {
@@ -164,38 +183,27 @@ export function SignatureProofScreen() {
     }
   }
   return (
-    <AppScreen>
-      <AppHeader title="Explore the Proof" onBack={app.goBack} />
+    <AppScreen scroll={false}>
+      <AppHeader title="Proof tools" onBack={app.goBack} />
+      <View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} accessibilityRole="tablist" accessibilityLabel="Proof tools">
+          {proofTools.map(item => <PressableScale key={item.key} accessibilityRole="tab" accessibilityState={{ selected: tool === item.key }} onPress={() => selectTool(item.key)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: tool === item.key ? colors.accent : "transparent" }}>
+            <Text style={{ color: tool === item.key ? colors.accentText : colors.textSecondary, fontWeight: tool === item.key ? "700" : "400" }}>{item.label}</Text>
+          </PressableScale>)}
+        </ScrollView>
+      </View>
+      <FadeSlideIn key={tool} style={{ flex: 1, minHeight: 0 }}>
+      <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 20 }} contentOffset={{ x: 0, y: toolOffsets.current[tool] }} onScroll={event => { toolOffsets.current[tool] = Math.max(0, event.nativeEvent.contentOffset.y); }} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={busy} onRefresh={() => void run(reload)} tintColor={colors.accent} colors={[colors.accent]} />}>
       {error ? (
         <Text accessibilityRole="alert" style={{ color: colors.error }}>
           {error}
         </Text>
       ) : null}
-      <Text style={{ color: colors.textSecondary }}>
-        Find an original moment, ask a sourced question, or assemble a factual
-        case packet. Assistance does not decide fault.
-      </Text>
-      <Button
-        label="Refresh available evidence"
-        variant="secondary"
-        loading={busy}
-        onPress={() => void run(reload)}
-      />
       {record ? (
         <>
-          <Text style={{ color: colors.textSecondary }}>
-            Snapshot {record.snapshot.snapshotId} ·{" "}
-            {new Date(record.snapshot.createdAt).toLocaleString()}
-          </Text>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontSize: 22,
-              fontWeight: "600",
-            }}
-          >
-            Instant Proof Replay
-          </Text>
+          {tool === "replay" ? <>
+          {returnToAnswer ? <Button label="Back to answer" variant="tertiary" onPress={() => selectTool("ask")} /> : null}
+          <Text style={{ color: colors.textSecondary }}>Review original recordings and bookmark useful moments.</Text>
           {videos.map((media, index) => (
             <Button
               key={media.evidenceId}
@@ -242,7 +250,7 @@ export function SignatureProofScreen() {
             />
           ) : (
             <Text style={{ color: colors.textSecondary }}>
-              No committed video is available in this view.
+              No saved recording is available yet.
             </Text>
           )}
           {mark ? (
@@ -299,6 +307,8 @@ export function SignatureProofScreen() {
               />
             </InfoCard>
           ) : null}
+          </> : null}
+          {tool === "ask" ? <>
           <InfoCard>
             <Text
               style={{
@@ -307,12 +317,12 @@ export function SignatureProofScreen() {
                 fontWeight: "600",
               }}
             >
-              Ask the Proof
+              Find evidence
             </Text>
             <Text style={{ color: colors.textSecondary }}>
               {record.capabilities?.ask === false
                 ? "Questions are temporarily unavailable. Original evidence is still accessible."
-                : "Structured evidence lookup. Unsupported questions remain unanswered."}
+                : "Ask a question about this Proof. Answers link to the available evidence."}
             </Text>
             {prompts.map((prompt) => (
               <Button
@@ -324,7 +334,7 @@ export function SignatureProofScreen() {
               />
             ))}
             <FormField
-              label="Question about this snapshot"
+              label="Your question"
               value={question}
               onChangeText={setQuestion}
             />
@@ -387,6 +397,8 @@ export function SignatureProofScreen() {
               />
             </InfoCard>
           ) : null}
+          </> : null}
+          {tool === "case" ? <>
           <InfoCard>
             <Text
               style={{
@@ -530,6 +542,8 @@ export function SignatureProofScreen() {
               </View>
             ) : null}
           </InfoCard>
+          </> : null}
+          {tool === "compare" ? <>
           <InfoCard>
             <Text
               style={{
@@ -538,7 +552,7 @@ export function SignatureProofScreen() {
                 fontWeight: "600",
               }}
             >
-              Return Compare
+              Compare recordings
             </Text>
             <Text style={{ color: colors.textSecondary }}>
               Select both originals to inspect. Different light, glare, or
@@ -593,9 +607,7 @@ export function SignatureProofScreen() {
                       onPress={() => setInboundAnchor(anchor)}
                     />
                   ))}
-                <Text style={{ color: colors.textSecondary }}>
-                  Use Replay above to add a missing bookmark in either original.
-                </Text>
+                <Button label="Manage recording bookmarks" variant="tertiary" onPress={() => selectTool("replay")} />
                 {outboundAnchor?.evidenceId === left.evidenceId &&
                 inboundAnchor?.evidenceId === right.evidenceId ? (
                   <>
@@ -719,14 +731,17 @@ export function SignatureProofScreen() {
                 ) : null}
               </View>
             ))}
-            <Button
+            {app.proof?.status === "FINALIZED" ? <Button
               label="Document receipt or return"
               variant="secondary"
               onPress={() => app.openReceipt(proofId)}
-            />
+            /> : null}
           </InfoCard>
+          </> : null}
         </>
-      ) : null}
+      ) : !busy && !error ? <Text style={{ color: colors.textSecondary }}>No evidence is available yet.</Text> : null}
+      </ScrollView>
+      </FadeSlideIn>
     </AppScreen>
   );
 }

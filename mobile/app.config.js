@@ -40,16 +40,16 @@ module.exports = {
     name: isCameraSpike ? "PackProof Camera Test" : "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
-    version: "0.3.3",
+    version: "0.3.4",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
-      backgroundColor: "#F4F6F8",
+      backgroundColor: "#F6F7F5",
       barStyle: "dark-content",
       translucent: false,
     },
     androidNavigationBar: {
-      backgroundColor: "#F4F6F8",
+      backgroundColor: "#F6F7F5",
       barStyle: "dark-content",
     },
     icon: "./assets/icon.png",
@@ -63,11 +63,11 @@ module.exports = {
     },
     android: {
       package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
-      versionCode: 32,
+      versionCode: 33,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
-        backgroundColor: "#F4F6F8",
+        backgroundColor: "#F6F7F5",
       },
       permissions: isCameraSpike ? ["CAMERA", "RECORD_AUDIO"] : ["CAMERA"],
     },

@@ -315,6 +315,9 @@ describe("PackProof web reference client", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
+    expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Proof actions" }));
+    await user.click(screen.getByRole("button", { name: "Proof tools and details" }));
     expect(screen.getAllByText("PackProof fact").length).toBeGreaterThan(0);
     expect(screen.getAllByText("User attestation").length).toBeGreaterThan(0);
     expect(screen.getAllByText("External data").length).toBeGreaterThan(0);
@@ -325,8 +328,8 @@ describe("PackProof web reference client", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("8af291d4deadbeefcafebabef00d000011112222333344445555666677778888"))
       .toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Timeline" }));
-    const history = screen.getByRole("tabpanel", { name: "Timeline" });
+    await user.click(screen.getByRole("tab", { name: "Activity" }));
+    const history = screen.getByRole("tabpanel", { name: "Activity" });
     expect(history).toBeTruthy();
     const events = within(history as HTMLElement).getAllByRole("listitem");
     expect(events[0]).toHaveTextContent("Proof created");
@@ -427,6 +430,8 @@ describe("PackProof web reference client", () => {
     window.history.replaceState(null, "", "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE");
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Proof actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Proof tools and details" }));
     const digest = await screen.findByText(
       "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888",
     );
@@ -1701,8 +1706,9 @@ describe("PackProof web reference client", () => {
       }),
     );
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "View Proof" })).toBeInTheDocument();
-    expect(await screen.findByText("Waiting for receipt")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Proof" })).toBeInTheDocument();
+    expect(await screen.findByText("Ready to finalize")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     expect(screen.getAllByText("Handed off").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Join PackProof" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
@@ -1791,8 +1797,10 @@ describe("PackProof web reference client", () => {
     await user.type(screen.getByLabelText("Item count"), "2");
     await user.click(screen.getByRole("button", { name: "Create grading Proof" }));
     expect(await screen.findByText("Document item 1 of 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Proof actions" }));
+    await user.click(screen.getByRole("button", { name: "Proof tools and details" }));
     expect(screen.getByText("Item 1")).toBeInTheDocument();
-    expect(screen.getByText("You are the Originator")).toBeInTheDocument();
+    expect(screen.getByText("Originator")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Proof actions" }));
     expect(screen.getByRole("button", { name: "Add receiving participant" })).toBeInTheDocument();
   });
@@ -1896,6 +1904,8 @@ describe("PackProof web reference client", () => {
     );
     window.history.replaceState(null, "", "/proofs/proof_compare");
     render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Proof actions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Proof tools and details" }));
     expect(await screen.findByRole("heading", { name: "Before sending versus when received" })).toBeInTheDocument();
     expect(screen.getByText("Consistent")).toBeInTheDocument();
     expect(screen.getByText("The available observations are materially consistent.")).toBeInTheDocument();
@@ -2000,8 +2010,8 @@ describe("PackProof web reference client", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: "Proof actions" }));
-    await user.click(await screen.findByRole("button", { name: "Preview sharing" }));
-    expect(await screen.findByRole("heading",{name:"Preview as recipient"})).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Share Proof" }));
+    expect(await screen.findByRole("heading",{name:"Share Proof"})).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(call=>String(call[0]).endsWith("/access-links")&&call[1]?.method==="POST")).toBe(false);
     expect(writeText).not.toHaveBeenCalled();
   });

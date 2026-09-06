@@ -26,7 +26,8 @@ import {
   isCompletedAction,
   shouldShowRequiredAction,
 } from "../copy/next-action";
-import { humanProofStatus, proofStatusLabel } from "../copy/status";
+import { proofStatusLabel } from "../copy/status";
+import { recordNextStepCopy, recordProofStatus } from "../copy/proof-record";
 import { spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
@@ -44,6 +45,7 @@ export function ProofDetailScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [workflowDetailsOpen, setWorkflowDetailsOpen] = useState(false);
   const [slotCaptures, setSlotCaptures] = useState<Record<string, SlotCapture>>({});
   const proof = app.proof;
   const txn = app.transactionDetail ?? proof?.transaction;
@@ -67,17 +69,16 @@ export function ProofDetailScreen() {
     committedEvidenceCount: committed.length,
     pendingEvidenceCount: pending.length,
     captureStatus: app.captureStatus,
-    hasLocalCapture: Boolean(app.localCapture),
+    hasLocalCapture: Boolean(app.localCapture) && !(app.captureStatus === "committed" && committed.length > 0),
     captureBelongsToProof: captureBelongs,
     uploadPercent: app.uploadPercent,
     offline: app.offline,
   });
   const serverAction = proof.nextAction ?? null;
-  const actionTitle = serverAction?.title || localAction.label || "";
-  const actionHint = serverAction?.hint || localAction.hint || "";
+  const { title: actionTitle, hint: actionHint } = recordNextStepCopy(localAction, serverAction, grading);
   const showActionCard = grading
     ? Boolean(serverAction && serverAction.type !== "COMPLETE")
-    : shouldShowRequiredAction(localAction) || Boolean(serverAction?.title || serverAction?.hint);
+    : shouldShowRequiredAction(localAction);
   const actionEnabled = grading
     ? Boolean(
         serverAction &&
@@ -97,15 +98,7 @@ export function ProofDetailScreen() {
   const slotsReady = imageSlots
     .filter((slot) => slot.required)
     .every((slot) => Boolean(slotCaptures[slot.slot]));
-  const latestShipment = proof.shipmentObservations?.latest?.eventType ?? null;
-  const statusLabel = humanProofStatus({
-    proofStatus: proof.status,
-    captureStatus: app.captureStatus,
-    hasLocalCapture: Boolean(app.localCapture),
-    captureBelongsToProof: captureBelongs,
-    latestShipmentEventType: latestShipment,
-    hasShipping: Boolean(txn.shipping?.carrier || txn.shipping?.trackingNumber),
-  });
+  const statusLabel = recordProofStatus(proof.status);
   const seller = proof.participants.find((p) => p.role === "SELLER");
   const buyer = proof.participants.find((p) => p.role === "BUYER");
   const locked = fieldsLocked(proof.status);
@@ -266,7 +259,7 @@ export function ProofDetailScreen() {
         title="Proof"
         onBack={app.goBack}
         right={
-          <IconButton label="Proof actions" onPress={() => setMenuOpen(true)}>
+          <IconButton label="More actions" onPress={() => setMenuOpen(true)}>
             <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
           </IconButton>
         }
@@ -285,11 +278,11 @@ export function ProofDetailScreen() {
         key={proof.proofId}
         statusLabel={statusLabel}
         summaryLine={summaryLine}
-        action={<>
+        actionInContent={usesImageCapture}
+        action={showActionCard || (!grading && isCompletedAction(localAction) && (app.role === "SELLER" || app.role === "BUYER")) || (app.localCapture && app.session.captureProofId && !captureBelongs) ? <>
 {showActionCard && (actionTitle || actionHint) ? (
-        <InfoCard>
-          <Text style={[styles.kicker, { color: colors.accent }]}>Next step</Text>
-          <Text style={[styles.body, { color: colors.textPrimary }]}>
+        <View style={styles.action}>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
             {actionHint || actionTitle}
           </Text>
           {usesImageCapture ? (
@@ -320,17 +313,11 @@ export function ProofDetailScreen() {
           ) : (
             renderPrimaryButton()
           )}
-        </InfoCard>
-      ) : !grading && isCompletedAction(localAction) ? (
-        <InfoCard>
-          <View style={styles.row}>
-            <Ionicons name="lock-closed" size={16} color={colors.success} />
-            <Text style={[styles.success, { color: colors.success }]}>PackProof finalized</Text>
-          </View>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            Evidence record secured
-          </Text>
-        </InfoCard>
+        </View>
+      ) : !grading && isCompletedAction(localAction) && app.role === "SELLER" ? (
+        <Button label="Share Proof" icon="share-outline" onPress={() => void app.shareProofLink()} />
+      ) : !grading && isCompletedAction(localAction) && app.role === "BUYER" ? (
+        <Button label="Document receipt or return" onPress={() => app.openReceipt(proof.proofId)} />
       ) : null}
 {app.localCapture && app.session.captureProofId && !captureBelongs ? (
         <Button
@@ -339,8 +326,80 @@ export function ProofDetailScreen() {
           onPress={() => void app.run(() => app.openProof(app.session!.captureProofId!))}
         />
       ) : null}
-        </>}
-        supplementary={<>
+        </> : null}
+      />
+
+      <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
+        <Button label="Evidence and claim tools" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
+        {!grading && proof.status === "FINALIZED" ? <Button label="Receipt and returns" variant="secondary" onPress={() => { setMenuOpen(false); app.openReceipt(proof.proofId); }} /> : null}
+        {app.role === "SELLER" ? <Button
+          label="Share Proof"
+          variant="secondary"
+          loading={app.busy}
+          onPress={() => {
+            setMenuOpen(false);
+            void app.shareProofLink();
+          }}
+        /> : null}
+        {app.role === "SELLER" && !buyer && proof.status !== "FINALIZED" ? (
+          <Button
+            label={inviteParticipantTitle(proof.workflowType)}
+            variant="secondary"
+            onPress={() => {
+              setMenuOpen(false);
+              app.go("invite");
+            }}
+          />
+        ) : null}
+        {canEdit ? (
+          <Button
+            label="Edit order details"
+            variant="secondary"
+            onPress={() => {
+              setMenuOpen(false);
+              app.go("editPurchase");
+            }}
+          />
+        ) : null}
+        {canEdit ? (
+          <Button
+            label="Edit shipping information"
+            variant="secondary"
+            onPress={() => {
+              setMenuOpen(false);
+              app.go("editShipping");
+            }}
+          />
+        ) : null}
+        {proof.shipmentSync?.available ? (
+          <Button
+            label={
+              ["easypost", "shippo"].includes(proof.shipmentSync.provider ?? "")
+                ? "Update tracking"
+                : "Update shipment observations"
+            }
+            variant="secondary"
+            loading={app.busy}
+            onPress={() => {
+              setMenuOpen(false);
+              void app.syncShipment();
+            }}
+          />
+        ) : null}
+        {grading || Boolean(proof.assets?.length || proof.observations?.length || proof.continuityObservations?.length) ? <Button label="Items and custody details" variant="secondary" onPress={() => { setMenuOpen(false); setWorkflowDetailsOpen(true); }} /> : null}
+        <Button
+          label="Technical details"
+          variant="tertiary"
+          onPress={() => {
+            setMenuOpen(false);
+            app.setTechnicalOpen(true);
+          }}
+        />
+      </BottomSheet>
+
+      <BottomSheet visible={workflowDetailsOpen} title="Items and custody details" onClose={() => setWorkflowDetailsOpen(false)}>
+        <View style={styles.workflowDetails}>
+
 {proof.assets && proof.assets.length > 0 ? (
         <>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Items</Text>
@@ -374,74 +433,8 @@ export function ProofDetailScreen() {
         token={app.session?.token ?? null}
         contentUrl={(evidenceId) => app.client.evidenceContentUrl(proof.proofId, evidenceId)}
       />
-        </>}
-      />
 
-      <BottomSheet visible={menuOpen} title="Proof actions" onClose={() => setMenuOpen(false)}>
-        <Button label="Replay, ask, or build a case packet" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
-        {!grading && proof.status === "FINALIZED" ? <Button label="Receipt and returns" variant="secondary" onPress={() => { setMenuOpen(false); app.openReceipt(proof.proofId); }} /> : null}
-        {app.role === "SELLER" ? <Button
-          label="Share viewing link"
-          variant="secondary"
-          loading={app.busy}
-          onPress={() => {
-            setMenuOpen(false);
-            void app.shareProofLink();
-          }}
-        /> : null}
-        {app.role === "SELLER" && !buyer && proof.status !== "FINALIZED" ? (
-          <Button
-            label={inviteParticipantTitle(proof.workflowType)}
-            variant="secondary"
-            onPress={() => {
-              setMenuOpen(false);
-              app.go("invite");
-            }}
-          />
-        ) : null}
-        {canEdit ? (
-          <Button
-            label="Add purchase details"
-            variant="secondary"
-            onPress={() => {
-              setMenuOpen(false);
-              app.go("editPurchase");
-            }}
-          />
-        ) : null}
-        {canEdit ? (
-          <Button
-            label="Add shipping information"
-            variant="secondary"
-            onPress={() => {
-              setMenuOpen(false);
-              app.go("editShipping");
-            }}
-          />
-        ) : null}
-        {proof.shipmentSync?.available ? (
-          <Button
-            label={
-              ["easypost", "shippo"].includes(proof.shipmentSync.provider ?? "")
-                ? "Update tracking"
-                : "Update shipment observations"
-            }
-            variant="secondary"
-            loading={app.busy}
-            onPress={() => {
-              setMenuOpen(false);
-              void app.syncShipment();
-            }}
-          />
-        ) : null}
-        <Button
-          label="Technical details"
-          variant="tertiary"
-          onPress={() => {
-            setMenuOpen(false);
-            app.setTechnicalOpen(true);
-          }}
-        />
+        </View>
       </BottomSheet>
 
       <TechnicalDetailsSheet
@@ -455,7 +448,8 @@ export function ProofDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerBlock: { gap: spacing.sm },
+  action: { gap: spacing.sm },
+  workflowDetails: { gap: spacing.md, paddingBottom: spacing.lg },
   row: {
     flexDirection: "row",
     alignItems: "center",

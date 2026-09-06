@@ -1,3 +1,4 @@
+import { MediaPrivacyTools } from "../components/MediaPrivacyTools";
 import { SignatureWorkbench } from "../components/SignatureWorkbench";
 import { PrivacySharePanel } from "../components/PrivacySharePanel";
 import { WorkspaceProofRecord } from "../components/WorkspaceProofRecord";
@@ -75,7 +76,8 @@ export function ProofScreen(props: {
   onConnectTrustedDemo?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [detailed, setDetailed] = useViewState(`proof.${window.location.pathname}.detailed`, false);
+  const opensEvidenceTools = new URLSearchParams(location.search).has("historyShare") || new URLSearchParams(location.search).has("snapshot") || /(?:anchor|evidence)=/.test(location.hash);
+  const [detailed, setDetailed] = useViewState(`proof.${window.location.pathname}.detailed`, opensEvidenceTools);
   const proof = props.proof;
   const role = proof?.participants.find(
     (participant) => participant.userId === props.currentUserId,
@@ -96,8 +98,8 @@ export function ProofScreen(props: {
       })
     : null;
   const serverAction = proof?.nextAction ?? null;
-  const actionTitle = serverAction?.title || localAction?.label || "";
-  const actionHint = serverAction?.hint || localAction?.hint || "";
+  const actionTitle = (grading ? serverAction?.title : localAction?.label) || "";
+  const actionHint = (grading ? serverAction?.hint : localAction?.hint) || "";
   const actionEnabled = grading
     ? Boolean(
         serverAction &&
@@ -195,7 +197,7 @@ export function ProofScreen(props: {
   return (
     <main className="page stack">
       <PageHeader
-        title={proof.transaction.itemTitle?.trim() || "PackProof"}
+        title="Proof"
         onBack={props.onBack}
         right={
           <button
@@ -211,7 +213,7 @@ export function ProofScreen(props: {
       />
       {menuOpen ? (
         <div className="action-sheet" role="menu">
-          {props.onShare ? (
+          {props.api && role === "SELLER" ? (
             <button
               className="btn btn-secondary"
               type="button"
@@ -220,21 +222,11 @@ export function ProofScreen(props: {
                 reviewSharing();
               }}
             >
-              Preview sharing
+              Share Proof
             </button>
           ) : null}
-          {props.onShare ? (
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={props.busy}
-              onClick={() => {
-                reviewSharing();
-              }}
-            >
-              Choose shared evidence
-            </button>
-          ) : null}
+          <button className="btn btn-secondary" onClick={() => { setMenuOpen(false); setDetailed(true); requestAnimationFrame(() => document.getElementById("proof-tools")?.scrollIntoView({ block: "start", behavior: "smooth" })); }}>Proof tools and details</button>
+          {!grading && ["SELLER", "BUYER"].includes(role || "") && proof.status === "FINALIZED" && props.onOpenReceipt && <button className="btn btn-secondary" onClick={() => { setMenuOpen(false); props.onOpenReceipt?.(); }}>Document receipt or return</button>}
           {canInvite ? (
             <button
               className="btn btn-secondary"
@@ -268,7 +260,7 @@ export function ProofScreen(props: {
         onOpenEvent={props.onOpenEvent}
         onOpenReceipt={props.onOpenReceipt}
         onReviewSharing={props.api && role === "SELLER" ? reviewSharing : undefined}
-        trackingTools={<>
+        trackingTools={<details className="record-order-details"><summary>Shipping details and tools</summary>
       {proof.captureShipping ? <section className="panel stack" aria-label="Captured shipping label">
         <h2>Shipping label captured during packing</h2>
         <p>{proof.captureShipping.observations[0]?.trackingNumber} · {Math.floor((proof.captureShipping.observations[0]?.detectedAtMs??0)/1000)}s into the recording</p>
@@ -288,7 +280,6 @@ export function ProofScreen(props: {
           <section className="section">
             <h2>Shipping</h2>
             <p className="meta">{shippingLine(proof)}</p>
-            <p className="note">Carrier observations will appear here after they are recorded.</p>
           </section>
         )}
         {canImportDemoCarrier ? (
@@ -372,13 +363,12 @@ export function ProofScreen(props: {
         ) : null}
       </div>
 
-        </>}
+        </details>}
       />
 
       {actionTitle || actionHint ? (
-        <section className="section">
-          <p className="kicker">Next step</p>
-          <p className="card-title">{actionTitle}</p>
+        <section className="proof-next-action">
+          {grading && <p className="card-title">{actionTitle}</p>}
           {actionHint ? <p>{actionHint}</p> : null}
           {grading && nextActionNeedsCapture(serverAction?.type) ? (
             <GradingCapturePanel
@@ -411,35 +401,14 @@ export function ProofScreen(props: {
       ) : null}
 
       {!grading && role === "SELLER" && proof.status !== "FINALIZED" && !actionEnabled ? <section className="section stack"><h2>Record your packing</h2><p>Use the PackProof camera to show the item, packing, and seal. Unfinished recordings stay on this device for recovery.</p><button className="btn" onClick={props.onOpenStation}>Open camera</button></section> : null}
-      {!grading && proof.status === "FINALIZED" && props.onOpenReceipt ? (
-        <button className="btn btn-secondary" onClick={props.onOpenReceipt}>
-          Document receipt or return
-        </button>
-      ) : null}
-      {props.api && <details className="proof-supporting-tools" onToggle={event => { if (!event.currentTarget.open) event.currentTarget.querySelectorAll<HTMLMediaElement>("video,audio").forEach(media => media.pause()); }} open={new URLSearchParams(location.search).has("historyShare") || new URLSearchParams(location.search).has("snapshot") || /(?:anchor|evidence)=/.test(location.hash) ? true : undefined}>
-        <summary>Explore this Proof · Replay, Ask, Case, Compare and History</summary>
+      {detailed && props.api && <details id="proof-tools" className="proof-supporting-tools" onToggle={event => { if (!event.currentTarget.open) event.currentTarget.querySelectorAll<HTMLMediaElement>("video,audio").forEach(media => media.pause()); }} open={new URLSearchParams(location.search).has("historyShare") || new URLSearchParams(location.search).has("snapshot") || /(?:anchor|evidence)=/.test(location.hash) ? true : undefined}>
+        <summary>Evidence tools</summary>
         <SignatureWorkbench key={proof.proofId} api={props.api} proof={proof} />
       </details>}
       {props.api && role === "SELLER" && <details className="proof-supporting-tools">
-        <summary>Buyer receipt and sharing</summary>
+        <summary>Share Proof</summary>
         <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} /></div>
       </details>}
-      <div className="review-mode" role="group" aria-label="Proof detail level">
-        <button
-          className={detailed ? "btn btn-secondary" : "btn"}
-          onClick={() => setDetailed(false)}
-          aria-pressed={!detailed}
-        >
-          Summary
-        </button>
-        <button
-          className={detailed ? "btn" : "btn btn-secondary"}
-          onClick={() => setDetailed(true)}
-          aria-pressed={detailed}
-        >
-          Claims and evidence
-        </button>
-      </div>
       {detailed ? (
         <EvidenceReviewPanel
           key={proof.proofId}
@@ -451,7 +420,7 @@ export function ProofScreen(props: {
       {detailed && props.api ? (
         <RetentionPanel api={props.api} proofId={proof.proofId} userId={props.currentUserId} />
       ) : null}
-      {proof.assets && proof.assets.length > 0 ? (
+      {detailed && proof.assets && proof.assets.length > 0 ? (
         <section className="section">
           <h2>Items</h2>
           <ul className="card-list">
@@ -464,7 +433,7 @@ export function ProofScreen(props: {
         </section>
       ) : null}
 
-      {proof.observations && proof.observations.length > 0 ? (
+      {detailed && proof.observations && proof.observations.length > 0 ? (
         <section className="section">
           <h2>Progress</h2>
           <ul className="card-list">
@@ -479,21 +448,22 @@ export function ProofScreen(props: {
         </section>
       ) : null}
 
-      <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
+      {detailed && <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />}
 
 
-      <div>
+      {detailed && <div>
         <ProofOverview proof={proof} />
         <ParticipantList proof={proof} currentUserId={props.currentUserId} />
-      </div>
+      </div>}
 
-      <div className="stack">
+      {detailed && <div className="stack">
         <EvidenceList proof={proof} />
         <AttestationList proof={proof} />
-      </div>
+      </div>}
 
 
-      {detailed ? <TechnicalDetails proof={proof} /> : null}
+      {detailed && props.api && <MediaPrivacyTools api={props.api} proof={proof} />}
+      {detailed ? <><TechnicalDetails proof={proof} /><button className="btn btn-secondary" onClick={() => setDetailed(false)}>Close details</button></> : null}
     </main>
   );
 }

@@ -157,24 +157,31 @@ test("native camera session, retry identity, original replay and reviewed case e
     );
     assert.equal(exported.previewSha256, packet.sha256);
     const preview = await client.disclosureRequest<{
-      disclosure: { viewHash: string };
-      evidence: unknown[];
-    }>(proof.proofId, "/preview", "POST", {
-      purpose: "BUYER_RECEIPT",
-      fields: ["status", "order", "shipping"],
-      media: [],
-    });
-    assert.equal(preview.evidence.length, 0);
+      proofId: string;
+      disclosure: { viewHash: string; liveProof: boolean; fields: string[] };
+      evidence: Array<{ evidenceId: string; representation: string; stageId: string | null }>;
+    }>(proof.proofId, "/preview", "POST", { purpose: "SHARED_PROOF" });
+    assert.equal(preview.proofId, proof.proofId);
+    assert.equal(preview.disclosure.liveProof, true);
+    assert.equal(preview.evidence.length, 1);
+    assert.equal(preview.evidence[0].evidenceId, init.evidenceId);
+    assert.equal(preview.evidence[0].representation, "ORIGINAL");
+    assert.equal(preview.evidence[0].stageId, null);
+    const sharingApproval = {
+      purpose: "SHARED_PROOF",
+      previewHash: preview.disclosure.viewHash,
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    };
+    await assert.rejects(client.disclosureRequest(proof.proofId, "/grants", "POST", sharingApproval));
+    await assert.rejects(client.disclosureRequest(proof.proofId, "/grants", "POST", {
+      ...sharingApproval,
+      originalsReviewed: true,
+      previewHash: "stale-preview",
+    }));
     const grant = await client.disclosureRequest<{
       accessLinkId: string;
       url: string;
-    }>(proof.proofId, "/grants", "POST", {
-      purpose: "BUYER_RECEIPT",
-      fields: ["status", "order", "shipping"],
-      media: [],
-      previewHash: preview.disclosure.viewHash,
-      expiresAt: new Date(Date.now() + 86400000).toISOString(),
-    });
+    }>(proof.proofId, "/grants", "POST", { ...sharingApproval, originalsReviewed: true });
     assert(grant.url);
     await client.revokeAccessLink(proof.proofId, grant.accessLinkId);
     assert(
