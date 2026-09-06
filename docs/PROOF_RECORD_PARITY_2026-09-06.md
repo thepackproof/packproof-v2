@@ -17,6 +17,7 @@ The Android Proof detail and authenticated web workspace now use the website sam
 - Native TypeScript and ten new Proof-record/tracking tests pass. Existing presentation/theme/Android Back/shipping queue suites pass (62 tests).
 - Final Android Metro export passes: 766 modules, Hermes bundle, in-video shipping enabled. A temporary local Metro configuration allowed the retained dependency directory to be watched; it is not part of the source release.
 - Workflow YAML parses. Android identity is `com.packproof.mobile`, version `0.3.3`, code `32`. The normal AAB workflow now uses `shipping-integration` and derives artifact names from the actual release identity; existing remote Play signing credentials are retained.
+- The first combined GitHub build exposed a DOM/native fetch type mismatch when the web compiler checked the new native presentation imports. The upload adapter now supplies an exact ArrayBuffer view, with a regression proving sliced evidence bytes exclude surrounding backing-buffer data. Both client compilers pass after the correction.
 - Website source `bcd77e7119e8b63068724f3cf74c07024be0cf64` was published as Sites version 7. Deployment `appgdep_6a9daf0524f48191821af11f19aa970f` succeeded; returned URL https://packproof-experience.packproof.chatgpt.site. The selected site's custom domain is thepackproof.com.
 
 ## Remaining release limits

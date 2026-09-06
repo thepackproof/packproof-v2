@@ -1127,8 +1127,17 @@ export function resolveUploadUrl(baseUrl: string, targetUrl: string): string {
   return target.toString();
 }
 
-function toFetchBody(body: Uint8Array): Uint8Array {
-  return body;
+function toFetchBody(body: Uint8Array): ArrayBuffer {
+  // DOM and native fetch both accept an ArrayBuffer. Preserve exactly the view's
+  // bytes, including sliced arrays, without exposing unrelated backing bytes.
+  if (body.buffer instanceof ArrayBuffer) {
+    return body.byteOffset === 0 && body.byteLength === body.buffer.byteLength
+      ? body.buffer
+      : body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
+  }
+  const copy = new ArrayBuffer(body.byteLength);
+  new Uint8Array(copy).set(body);
+  return copy;
 }
 
 async function errorFromResponse(response: Response): Promise<ApiError> {

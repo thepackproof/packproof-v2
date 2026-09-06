@@ -6,6 +6,19 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 const client = () => new PackProofV2Client({ baseUrl: "https://api.example", getToken: () => "token" });
 
 describe("mobile request deadlines", () => {
+  it("uploads exactly a byte view without surrounding backing-buffer data", async () => {
+    const sent: number[][] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url, init) => {
+      expect(init.body).toBeInstanceOf(ArrayBuffer);
+      sent.push([...new Uint8Array(init.body)]);
+      return new Response(null, { status: 200 });
+    }));
+    const target = { method: "PUT" as const, url: "https://uploads.example/original", headers: {} };
+    await client().uploadObject(target, new Uint8Array([1, 2, 3]), "video/mp4");
+    await client().uploadObject(target, new Uint8Array([99, 4, 5, 88]).subarray(1, 3), "video/mp4");
+    expect(sent).toEqual([[1, 2, 3], [4, 5]]);
+  });
+
   it("aborts and rejects a request even if the transport ignores cancellation", async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | undefined;
