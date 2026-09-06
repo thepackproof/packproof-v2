@@ -1407,6 +1407,8 @@ describe("PackProof web reference client", () => {
     expect(screen.getByText(/Choose an order or scan/)).toBeInTheDocument();
     expect(screen.queryByText(/SHA-256|manifest|object store/i)).not.toBeInTheDocument();
 
+    // READY is rendered while the local capture journal is still being checked.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scan Order / Label" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Scan Order / Label" }));
     expect(await screen.findByText("SCAN")).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "NOPE");
