@@ -345,6 +345,7 @@ function CameraSession({
               {detectingShipping ? 'Barcode detected · attaching tracking…'
                 : shipping?.status==='BOUND' ? `Label attached · ${shipping.trackingNumber} · tracking update queued`
                 : shipping?.status==='QUEUED' ? 'Label saved on this device · waiting to attach'
+                : shipping?.status==='UNAVAILABLE' ? 'Tracking autofill is not available yet. Add shipping details to this Proof.'
                 : shipping?.status==='CONFLICT' ? 'Different label detected. Check that this is the correct package.'
                 : shipping?.status==='NEEDS_CONFIRMATION' ? `Is ${shipping.trackingNumber} the shipping tracking number?`
                 : 'Show the shipping barcode while recording to attach tracking.'}

@@ -6,7 +6,7 @@ export interface ShippingScan {
   confirmed?: boolean;
 }
 export interface ShippingScanResult {
-  status: 'BOUND' | 'NEEDS_CONFIRMATION' | 'UNRECOGNIZED' | 'QUEUED' | 'CONFLICT';
+  status: 'BOUND' | 'NEEDS_CONFIRMATION' | 'UNRECOGNIZED' | 'QUEUED' | 'CONFLICT' | 'UNAVAILABLE';
   trackingNumber?: string;
   carrierHint?: string | null;
   observationId?: string;
@@ -38,7 +38,11 @@ export function createShippingScanQueue(input: {
     try { entry.result = await input.bind(entry.scan); }
     catch (error) {
       const code = (error as {code?:string})?.code;
-      entry.result = {status: code === 'SHIPPING_LABEL_CONFLICT' || code === 'SHIPPING_SCAN_CONFLICT' ? 'CONFLICT' : 'QUEUED'};
+      // An older API has no label route and returns an unstructured 404. Keep
+      // the local scan, but do not make optional autofill block the video upload.
+      // Structured authorization/session errors and network failures still queue.
+      const routeUnavailable = code==='HTTP_ERROR' && (error as {status?:number})?.status===404;
+      entry.result = {status: routeUnavailable ? 'UNAVAILABLE' : code === 'SHIPPING_LABEL_CONFLICT' || code === 'SHIPPING_SCAN_CONFLICT' ? 'CONFLICT' : 'QUEUED'};
     }
     await save();
     return entry.result;
@@ -71,7 +75,7 @@ export function createShippingScanQueue(input: {
       return run(entry);
     },
     async retry() {
-      for (const entry of input.journal.entries) if (entry.result.status==='QUEUED') await run(entry);
+      for (const entry of input.journal.entries) if (entry.result.status==='QUEUED' || entry.result.status==='UNAVAILABLE') await run(entry);
       return input.journal.entries;
     },
     flush: () => writes,

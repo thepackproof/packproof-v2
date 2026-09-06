@@ -1,5 +1,7 @@
 # In-video shipping → Shippo → Proof
 
+Android release 0.3.1 / version code 30 uses the `shipping-integration` EAS profile to enable the unified recorder and label integration. Against an older API without the label route, the recorder shows that autofill is unavailable and allows video submission; it does not claim the label was attached. Authentication, session, and network failures retain the normal retry behavior. Shippo carrier enrichment still requires the updated backend and its server-side credentials.
+
 The user reported successful S24 Ultra simultaneous video/barcode capture with haptic and visual feedback on September 5, 2026. This implementation connects that recorder to the normal server-authorized packing flow. The standalone diagnostic APK remains separate.
 
 ## Behavior

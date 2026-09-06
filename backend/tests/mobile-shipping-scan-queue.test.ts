@@ -24,4 +24,16 @@ describe('durable native label queue',()=>{
     expect((await q.confirm(scan.rawValue)).status).toBe('CONFLICT');await q.retry();expect(calls).toBe(2);
     expect(j.entries[0].scan.idempotencyKey).toBe('one:confirmed');
   });
+  it('keeps unsupported autofill from blocking video but preserves authorization and offline failures',async()=>{
+    let failure:unknown={code:'HTTP_ERROR',status:404};
+    const j=journal();
+    const q=createShippingScanQueue({journal:j,persist:async()=>{},bind:async()=>{if(failure)throw failure;return {status:'BOUND'};}});
+    expect((await q.detect(scan)).status).toBe('UNAVAILABLE');
+    expect((await q.retry()).some(e=>e.result.status==='QUEUED')).toBe(false);
+    expect(j.entries[0].scan).toEqual(scan);
+    failure={code:'CAPTURE_SESSION_NOT_FOUND',status:404};
+    expect((await q.retry())[0].result.status).toBe('QUEUED');
+    failure=new Error('offline');expect((await q.retry())[0].result.status).toBe('QUEUED');
+    failure=null;expect((await q.retry())[0].result.status).toBe('BOUND');
+  });
 });
