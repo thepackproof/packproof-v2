@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, Linking, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
+import { uuid } from "expo-modules-core";
 import * as Sharing from "expo-sharing";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -107,10 +108,11 @@ export function CameraSpikeScreen() {
     if (!camera.current || !cameraReady || phaseRef.current !== "READY" || !foreground) return;
     changePhase("STARTING");
     setNotice(null); setLastScan(null); setScanCount(0); setElapsed(0);
-    const id = `spike-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
-    const current = createSpikeSession(id, audio);
-    session.current = current;
+    let current: ReturnType<typeof createSpikeSession> | null = null;
     try {
+      const id = `spike-${Date.now()}-${uuid.v4()}`;
+      current = createSpikeSession(id, audio);
+      session.current = current;
       // First checkpoint must succeed before recording; later note failures never stop video.
       await saveSpikeReport(serializeSpikeReport(current));
       if (AppState.currentState !== "active" || !["STARTING"].includes(phaseRef.current)) {
@@ -128,9 +130,11 @@ export function CameraSpikeScreen() {
         setElapsed(recording.durationMs);
       }
     } catch {
-      current.interrupted = true;
-      stopSpikeDetection(current);
-      await checkpoint();
+      if (current) {
+        current.interrupted = true;
+        stopSpikeDetection(current);
+        await checkpoint();
+      }
       if (mounted.current) setNotice("This recording did not finish successfully. Any camera file was kept; check Saved tests.");
     } finally {
       changePhase("READY");
