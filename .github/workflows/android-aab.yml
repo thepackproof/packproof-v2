@@ -2,7 +2,7 @@ name: Android AAB
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/proof-record-parity]
     paths:
       - "mobile/**"
       - ".github/workflows/android-aab.yml"
@@ -36,7 +36,7 @@ jobs:
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::error::Android 0.3.0 (version code 29) was not built because the EXPO_TOKEN repository secret is not configured. Configure an authorized Expo automation token and re-run this workflow; the existing EAS remote Play signing credentials will be reused."
+            echo "::error::The signed Android App Bundle was not built because EXPO_TOKEN is not configured. Configure the authorized Expo automation token and re-run; the existing EAS remote Play signing credentials will be reused."
             exit 1
           else
             echo "available=true" >> "$GITHUB_OUTPUT"
@@ -51,31 +51,46 @@ jobs:
         if: steps.expo-auth.outputs.available == 'true'
         run: npm install --global eas-cli@latest
 
+      - name: Validate mobile and resolve release identity
+        id: release
+        working-directory: mobile
+        run: |
+          npm run typecheck
+          npm run test:proof-record
+          node <<'NODE'
+          const fs = require('fs');
+          const { expo } = require('./app.config.js');
+          if (expo.android.package !== 'com.packproof.mobile') throw new Error('Unexpected Android package');
+          if (!/^\d+\.\d+\.\d+$/.test(expo.version) || !Number.isSafeInteger(expo.android.versionCode)) throw new Error('Invalid release identity');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact=packproof-${expo.version}-${expo.android.versionCode}\n`);
+          NODE
+
       - name: Build signed Android App Bundle
         if: steps.expo-auth.outputs.available == 'true'
         working-directory: mobile
         run: |
+          set -euo pipefail
           mkdir -p dist
-          eas build --platform android --profile internal-staging --non-interactive --wait --json > dist/eas-build.json
+          eas build --platform android --profile shipping-integration --non-interactive --wait --json > dist/eas-build.json
           node <<'NODE'
           const fs = require('fs');
           const payload = JSON.parse(fs.readFileSync('dist/eas-build.json', 'utf8'));
           const build = Array.isArray(payload) ? payload[0] : payload;
           const url = build?.artifacts?.buildUrl || build?.artifactUrl;
-          if (!url) {
-            console.error('EAS did not return an Android build artifact URL.');
+          if (build?.status !== 'FINISHED' || !url) {
+            console.error('EAS did not finish a signed Android App Bundle.');
             process.exit(1);
           }
           fs.writeFileSync('dist/aab-url.txt', url + '\n');
           NODE
-          curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-v2-internal-29.aab
-          test -s dist/packproof-v2-internal-29.aab
+          curl --fail --location "$(cat dist/aab-url.txt)" --output "dist/${{ steps.release.outputs.artifact }}.aab"
+          test -s "dist/${{ steps.release.outputs.artifact }}.aab"
 
       - name: Upload AAB artifact
         if: steps.expo-auth.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: packproof-v2-internal-29-aab
-          path: mobile/dist/packproof-v2-internal-29.aab
+          name: ${{ steps.release.outputs.artifact }}-aab
+          path: mobile/dist/${{ steps.release.outputs.artifact }}.aab
           if-no-files-found: error
           retention-days: 30

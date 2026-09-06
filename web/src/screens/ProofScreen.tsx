@@ -1,7 +1,6 @@
 import { SignatureWorkbench } from "../components/SignatureWorkbench";
 import { PrivacySharePanel } from "../components/PrivacySharePanel";
-import { ShipmentTracking } from "../components/ShipmentTracking";
-import { EvidencePlayer } from "../components/EvidencePlayer";
+import { WorkspaceProofRecord } from "../components/WorkspaceProofRecord";
 import { EvidenceReviewPanel } from "../components/EvidenceReviewPanel";
 import { useState } from "react";
 import { useViewState } from "../navigation-context";
@@ -15,30 +14,20 @@ import {
   isGradingWorkflow,
   nextActionNeedsCapture,
   observationProgressLabel,
-  participantFacingRole,
   workflowActionFor,
 } from "@packproof/copy/custody";
-import {
-  moneyLabel,
-  orderReferenceLabel,
-  quantityLabel,
-  shippingSummary,
-} from "@packproof/copy/format";
-import { humanProofStatus } from "@packproof/copy/status";
 import type { CanonicalProof, ChronologyEntry, ShipmentIntegrityView } from "../api/types";
 import { ContinuityCompare } from "../components/ContinuityCompare";
 import { IconMore } from "../components/Icons";
 import { PageHeader } from "../components/PageHeader";
 import {
   AttestationList,
-  EventTimeline,
   EvidenceList,
   ParticipantList,
   ProofOverview,
   ShipmentIntegrityPanel,
   TechnicalDetails,
 } from "../components/ProofRecord";
-import { StatusBadge } from "../components/StatusBadge";
 import { GradingCapturePanel } from "./GradingCapturePanel";
 
 export function ProofScreen(props: {
@@ -195,13 +184,13 @@ export function ProofScreen(props: {
     }
   }
 
-  const summaryLine = [
-    moneyLabel(proof.transaction.transactionValue, proof.transaction.currency),
-    quantityLabel(proof.transaction.quantity),
-    shippingSummary(proof.transaction.shipping ?? {}),
-  ]
-    .filter(Boolean)
-    .join(" • ");
+  function reviewSharing() {
+    setMenuOpen(false);
+    const sharing = document.getElementById("sharing");
+    const details = sharing?.closest("details");
+    if (details) details.open = true;
+    sharing?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 
   return (
     <main className="page stack">
@@ -228,8 +217,7 @@ export function ProofScreen(props: {
               type="button"
               disabled={props.busy}
               onClick={() => {
-                setMenuOpen(false);
-                document.getElementById("sharing")?.scrollIntoView({block:"start",behavior:"smooth"});
+                reviewSharing();
               }}
             >
               Preview sharing
@@ -241,8 +229,7 @@ export function ProofScreen(props: {
               type="button"
               disabled={props.busy}
               onClick={() => {
-                setMenuOpen(false);
-                document.getElementById("sharing")?.scrollIntoView({block:"start",behavior:"smooth"});
+                reviewSharing();
               }}
             >
               Choose shared evidence
@@ -262,28 +249,6 @@ export function ProofScreen(props: {
           ) : null}
         </div>
       ) : null}
-      <div className="header-block">
-        {summaryLine ? <p className="meta">{summaryLine}</p> : null}
-        {proof.transaction.externalReference ? (
-          <p className="meta">{orderReferenceLabel(proof.transaction.externalReference)}</p>
-        ) : null}
-        <div className="row">
-          <StatusBadge
-            label={humanProofStatus({
-              proofStatus: proof.status,
-              latestShipmentEventType: proof.shipmentObservations?.latest?.eventType,
-              hasShipping: Boolean(
-                proof.transaction.shipping?.carrier || proof.transaction.shipping?.trackingNumber,
-              ),
-            })}
-          />
-          {role ? (
-            <span className="meta">
-              You are the {participantFacingRole(proof.workflowType, role)}
-            </span>
-          ) : null}
-        </div>
-      </div>
       {props.error ? (
         <div className="banner banner-error" role="alert">
           {props.error}
@@ -292,107 +257,18 @@ export function ProofScreen(props: {
       {props.shareNotice ? <p className="note">{props.shareNotice}</p> : null}
       {props.shareLink ? <SharingCode url={props.shareLink} /> : null}
 
-      {actionTitle || actionHint ? (
-        <section className="section">
-          <p className="kicker">Next step</p>
-          <p className="card-title">{actionTitle}</p>
-          {actionHint ? <p>{actionHint}</p> : null}
-          {grading && nextActionNeedsCapture(serverAction?.type) ? (
-            <GradingCapturePanel
-              recipe={serverAction?.captureRecipe}
-              busy={props.busy}
-              onCommit={async (files) => {
-                const committedSlots = await props.onCommitCapture?.(files);
-                const actionName = workflowActionFor(serverAction?.type);
-                if (!actionName || !committedSlots) {
-                  return;
-                }
-                await props.onWorkflowAction?.(actionName, {
-                  assetId: serverAction?.assetId,
-                  transferId: serverAction?.transferId,
-                  recipe: serverAction?.captureRecipe,
-                  evidence: committedSlots,
-                });
-              }}
-            />
-          ) : actionEnabled ? (
-            <div className="btn-row" style={{ marginTop: "0.75rem" }}>
-              <button className="btn" type="button" disabled={props.busy} onClick={handlePrimary}>
-                {actionTitle}
-              </button>
-            </div>
-          ) : localAction?.kind === "success" ? (
-            <p className="integrity-mark">{actionTitle}</p>
-          ) : null}
-        </section>
-      ) : null}
-
-      {!grading && role === "SELLER" && proof.status !== "FINALIZED" && !actionEnabled ? <section className="section stack"><h2>Record your packing</h2><p>Use the PackProof camera to show the item, packing, and seal. Unfinished recordings stay on this device for recovery.</p><button className="btn" onClick={props.onOpenStation}>Open camera</button></section> : null}
-      {!grading && proof.status === "FINALIZED" && props.onOpenReceipt ? (
-        <button className="btn btn-secondary" onClick={props.onOpenReceipt}>
-          Document receipt or return
-        </button>
-      ) : null}
-      {props.api && <SignatureWorkbench key={proof.proofId} api={props.api} proof={proof} />}
-      {props.api && role === "SELLER" && <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} /></div>}
-      <EvidencePlayer key={`evidence-${proof.proofId}`} proof={proof} load={props.onLoadEvidence} />
-      <div className="review-mode" role="group" aria-label="Proof detail level">
-        <button
-          className={detailed ? "btn btn-secondary" : "btn"}
-          onClick={() => setDetailed(false)}
-          aria-pressed={!detailed}
-        >
-          Summary
-        </button>
-        <button
-          className={detailed ? "btn" : "btn btn-secondary"}
-          onClick={() => setDetailed(true)}
-          aria-pressed={detailed}
-        >
-          Claims and evidence
-        </button>
-      </div>
-      {detailed ? (
-        <EvidenceReviewPanel
-          key={proof.proofId}
-          proof={proof}
-          onVerify={props.onVerify}
-          onExport={props.onExport}
-        />
-      ) : null}
-      {detailed && props.api ? (
-        <RetentionPanel api={props.api} proofId={proof.proofId} userId={props.currentUserId} />
-      ) : null}
-      {proof.assets && proof.assets.length > 0 ? (
-        <section className="section">
-          <h2>Items</h2>
-          <ul className="card-list">
-            {proof.assets.map((asset) => (
-              <li key={asset.assetId}>
-                <div className="card-title">{assetItemLabel(asset)}</div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {proof.observations && proof.observations.length > 0 ? (
-        <section className="section">
-          <h2>Progress</h2>
-          <ul className="card-list">
-            {proof.observations.map((observation) => (
-              <li key={observation.observationId}>
-                <div className="card-title">
-                  {observation.label || observationProgressLabel(observation.type)}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
-
+      <WorkspaceProofRecord
+        key={`${proof.proofId}.${props.currentUserId}.${props.api?.recoveryScope || location.origin}`}
+        proof={proof}
+        currentUserId={props.currentUserId}
+        role={role}
+        api={props.api}
+        busy={props.busy}
+        loadEvidence={props.onLoadEvidence}
+        onOpenEvent={props.onOpenEvent}
+        onOpenReceipt={props.onOpenReceipt}
+        onReviewSharing={props.api && role === "SELLER" ? reviewSharing : undefined}
+        trackingTools={<>
       {proof.captureShipping ? <section className="panel stack" aria-label="Captured shipping label">
         <h2>Shipping label captured during packing</h2>
         <p>{proof.captureShipping.observations[0]?.trackingNumber} · {Math.floor((proof.captureShipping.observations[0]?.detectedAtMs??0)/1000)}s into the recording</p>
@@ -405,19 +281,6 @@ export function ProofScreen(props: {
             : proof.captureShipping.registration.state==='FAILED' ? 'Tracking number attached · carrier lookup needs attention'
             : 'Tracking number attached · carrier update pending'}</p>
       </section> : null}
-      <ShipmentTracking key={`tracking-${proof.proofId}`} events={proof.shipmentObservations?.events ?? []} carrier={proof.transaction.shipping?.carrier} trackingNumber={proof.transaction.shipping?.trackingNumber} />
-      <EventTimeline proof={proof} onSelect={props.onOpenEvent} />
-
-      <div>
-        <ProofOverview proof={proof} />
-        <ParticipantList proof={proof} currentUserId={props.currentUserId} />
-      </div>
-
-      <div className="stack">
-        <EvidenceList proof={proof} />
-        <AttestationList proof={proof} />
-      </div>
-
       <div className="stack">
         {proof.status === "FINALIZED" ? (
           <ShipmentIntegrityPanel integrity={props.shipmentIntegrity} />
@@ -508,6 +371,127 @@ export function ProofScreen(props: {
           </section>
         ) : null}
       </div>
+
+        </>}
+      />
+
+      {actionTitle || actionHint ? (
+        <section className="section">
+          <p className="kicker">Next step</p>
+          <p className="card-title">{actionTitle}</p>
+          {actionHint ? <p>{actionHint}</p> : null}
+          {grading && nextActionNeedsCapture(serverAction?.type) ? (
+            <GradingCapturePanel
+              recipe={serverAction?.captureRecipe}
+              busy={props.busy}
+              onCommit={async (files) => {
+                const committedSlots = await props.onCommitCapture?.(files);
+                const actionName = workflowActionFor(serverAction?.type);
+                if (!actionName || !committedSlots) {
+                  return;
+                }
+                await props.onWorkflowAction?.(actionName, {
+                  assetId: serverAction?.assetId,
+                  transferId: serverAction?.transferId,
+                  recipe: serverAction?.captureRecipe,
+                  evidence: committedSlots,
+                });
+              }}
+            />
+          ) : actionEnabled ? (
+            <div className="btn-row" style={{ marginTop: "0.75rem" }}>
+              <button className="btn" type="button" disabled={props.busy} onClick={handlePrimary}>
+                {actionTitle}
+              </button>
+            </div>
+          ) : localAction?.kind === "success" ? (
+            <p className="integrity-mark">{actionTitle}</p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {!grading && role === "SELLER" && proof.status !== "FINALIZED" && !actionEnabled ? <section className="section stack"><h2>Record your packing</h2><p>Use the PackProof camera to show the item, packing, and seal. Unfinished recordings stay on this device for recovery.</p><button className="btn" onClick={props.onOpenStation}>Open camera</button></section> : null}
+      {!grading && proof.status === "FINALIZED" && props.onOpenReceipt ? (
+        <button className="btn btn-secondary" onClick={props.onOpenReceipt}>
+          Document receipt or return
+        </button>
+      ) : null}
+      {props.api && <details className="proof-supporting-tools" onToggle={event => { if (!event.currentTarget.open) event.currentTarget.querySelectorAll<HTMLMediaElement>("video,audio").forEach(media => media.pause()); }} open={new URLSearchParams(location.search).has("historyShare") || new URLSearchParams(location.search).has("snapshot") || /(?:anchor|evidence)=/.test(location.hash) ? true : undefined}>
+        <summary>Explore this Proof · Replay, Ask, Case, Compare and History</summary>
+        <SignatureWorkbench key={proof.proofId} api={props.api} proof={proof} />
+      </details>}
+      {props.api && role === "SELLER" && <details className="proof-supporting-tools">
+        <summary>Buyer receipt and sharing</summary>
+        <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} /></div>
+      </details>}
+      <div className="review-mode" role="group" aria-label="Proof detail level">
+        <button
+          className={detailed ? "btn btn-secondary" : "btn"}
+          onClick={() => setDetailed(false)}
+          aria-pressed={!detailed}
+        >
+          Summary
+        </button>
+        <button
+          className={detailed ? "btn" : "btn btn-secondary"}
+          onClick={() => setDetailed(true)}
+          aria-pressed={detailed}
+        >
+          Claims and evidence
+        </button>
+      </div>
+      {detailed ? (
+        <EvidenceReviewPanel
+          key={proof.proofId}
+          proof={proof}
+          onVerify={props.onVerify}
+          onExport={props.onExport}
+        />
+      ) : null}
+      {detailed && props.api ? (
+        <RetentionPanel api={props.api} proofId={proof.proofId} userId={props.currentUserId} />
+      ) : null}
+      {proof.assets && proof.assets.length > 0 ? (
+        <section className="section">
+          <h2>Items</h2>
+          <ul className="card-list">
+            {proof.assets.map((asset) => (
+              <li key={asset.assetId}>
+                <div className="card-title">{assetItemLabel(asset)}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {proof.observations && proof.observations.length > 0 ? (
+        <section className="section">
+          <h2>Progress</h2>
+          <ul className="card-list">
+            {proof.observations.map((observation) => (
+              <li key={observation.observationId}>
+                <div className="card-title">
+                  {observation.label || observationProgressLabel(observation.type)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
+
+
+      <div>
+        <ProofOverview proof={proof} />
+        <ParticipantList proof={proof} currentUserId={props.currentUserId} />
+      </div>
+
+      <div className="stack">
+        <EvidenceList proof={proof} />
+        <AttestationList proof={proof} />
+      </div>
+
 
       {detailed ? <TechnicalDetails proof={proof} /> : null}
     </main>

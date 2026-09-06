@@ -1,0 +1,72 @@
+.workspace-proof-record {
+  min-width: 0;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  box-shadow: 0 20px 70px #1c4b6711;
+  overflow: hidden;
+}
+.record-top { display: flex; align-items: center; gap: 16px; padding: 25px; border-bottom: 1px solid var(--border); }
+.record-top > div { flex: 1; min-width: 0; }
+.record-top h2 { font-size: 17px; line-height: 1.5; margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.record-top p { font-size: 13px; color: var(--text-secondary); margin: 5px 0 0; }
+.record-top > .status-badge { flex-shrink: 0; }
+.record-tabs { display: flex; gap: 26px; padding: 9px 25px 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; border-bottom: 1px solid var(--border); }
+.record-tabs button { flex: 0 0 auto; min-height: 48px; padding: 12px 8px 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--text-secondary); font-size: 14px; transition: color 160ms ease, border-color 160ms ease, background 160ms ease; }
+.record-tabs button[aria-selected="true"] { color: var(--accent-text); border-bottom-color: var(--blue); }
+.record-tabs button:hover { color: var(--accent-text); background: var(--blue-soft); }
+.record-tabs button:focus-visible { outline-offset: -3px; }
+.record-body { min-height: 300px; padding: 25px; animation: pp-enter var(--motion-page, 220ms) var(--motion-ease, ease-out) both; }
+.record-body > .stack { gap: 16px; }
+.record-body .shipment-tracking { margin: 0; padding: 0 !important; box-shadow: none; border: 0; background: transparent; }
+.record-body .tracking-layout { grid-template-columns: 1fr; }
+.record-body .tracking-details { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+.record-body .tracking-identity { border: 0; }
+.record-body .tracking-status { white-space: normal; }
+.record-body .map-frame { min-height: 320px; }
+.record-body .tracking-map-heading strong { font-size: 14px; }
+.record-body .timeline-filters { margin-top: 8px; }
+.record-body .proof-timeline-entry { grid-template-columns: 83px 34px minmax(0, 1fr); column-gap: 12px; }
+.record-body .proof-timeline-entry::after { left: 111px; }
+.record-body .timeline-end { margin-left: 106px; gap: 22px; }
+.record-source-note { margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--border); }
+.record-chapters { display: flex; flex-wrap: wrap; gap: 8px; }
+.record-chapters button { min-height: 44px; padding: 11px 15px; color: var(--text); background: var(--blue-soft); border: 1px solid var(--accent-soft-border); border-radius: 9px; text-align: left; overflow-wrap: anywhere; transition: border-color 160ms ease, background 160ms ease; }
+.record-chapters button:hover { border-color: var(--blue); }
+.record-receipt { max-width: 720px; }
+.record-receipt h3 { font-size: clamp(24px, 3vw, 32px); line-height: 1.3; margin: 0; letter-spacing: -.7px; }
+.record-receipt > .panel-eyebrow { margin: 0; }
+.record-receipt > p { margin: 0; }
+.record-receipt-details { display: grid; gap: 18px; margin: 15px 0; }
+.record-receipt-details dt { color: var(--text-secondary); font-size: 14px; }
+.record-receipt-details dd { margin: 5px 0 0 24px; overflow-wrap: anywhere; }
+.record-receipt-details dd > span { display: block; margin-top: 5px; }
+.record-receipt .btn { white-space: normal; text-align: center; }
+.proof-supporting-tools { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; overflow: hidden; }
+.proof-supporting-tools > summary { padding: 18px 22px; cursor: pointer; font-weight: 600; }
+.proof-supporting-tools > .section, .proof-supporting-tools > div > .section { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
+@media (max-width: 700px) {
+  .record-top { padding: 22px 18px; flex-wrap: wrap; gap: 12px; }
+  .record-top h2 { font-size: 15px; }
+  .record-top p { font-size: 12px; }
+  .record-top > .status-badge { font-size: 11px; }
+  .record-tabs { gap: 16px; padding-inline: 14px; }
+  .record-tabs button { font-size: 13px; padding-inline: 5px; }
+  .record-body { padding: 20px 14px; }
+  .record-body .tracking-details { grid-template-columns: 1fr; gap: 12px; }
+  .record-body .map-frame { min-height: 270px; }
+  .record-body .proof-timeline-entry { grid-template-columns: 30px minmax(0, 1fr); gap: 9px 12px; padding-bottom: 22px; }
+  .record-body .proof-timeline-entry::after { left: 14px; top: 35px; }
+  .record-body .timeline-end { margin-left: 9px; gap: 20px; }
+  .record-body .document-toolbar { padding: 14px 12px; }
+  .record-body .document-canvas { padding: 12px; }
+  .record-body .tracking-map-heading { padding: 13px; }
+  .record-body .tracking-map-heading strong { font-size: 13px; }
+  .record-chapters button { padding: 10px 13px; font-size: 14px; }
+  .record-receipt-details dd { margin-left: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .record-body { animation: none; }
+  .record-tabs button, .record-chapters button { transition: none; }
+}

@@ -11,6 +11,7 @@ export interface EvidenceAnchor {
   sourceType: "USER_MARKED" | "SCANNER_TRIGGERED";
   recipeVersion?: string | null;
   sourceCategory: string;
+  supersedesId?: string | null;
   createdAt: string;
 }
 export interface SignatureEvidence {

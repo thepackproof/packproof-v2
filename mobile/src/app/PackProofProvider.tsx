@@ -1,4 +1,5 @@
 import type { IntakePreview } from "../copy/order-intake";
+import { initialProofRecordView, type ProofRecordViewState } from "../copy/proof-record";
 import {
   createContext,
   useCallback,
@@ -147,6 +148,8 @@ export interface PackProofContextValue {
   errorDetail: UserFacingError | null;
   route: AppRoute;
   proofsLibrary: ProofsLibraryState;
+  readProofRecordView: (proofId: string) => ProofRecordViewState;
+  saveProofRecordView: (proofId: string, state: ProofRecordViewState) => void;
   session: CachedClientState | null;
   proof: ProofView | null;
   transactionDetail: TransactionView | null;
@@ -289,6 +292,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [receiptProofId, setReceiptProofId] = useState<string | null>(null);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
   const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(DEFAULT_PROOFS_LIBRARY);
+  // View preferences live only for this provider session; scroll updates do not rerender the app.
+  const proofRecordViews = useRef(new Map<string, ProofRecordViewState>());
   const [authPane, setAuthPane] = useState<AuthPane>("signIn");
   const [apiBaseUrl, setApiBaseUrl] = useState(INITIAL_RUNTIME.apiBaseUrl);
   const [authMode, setAuthMode] = useState<AuthMode>(INITIAL_RUNTIME.authMode);
@@ -915,6 +920,15 @@ export function PackProofProvider(props: { children: ReactNode }) {
     errorDetail,
     route,
     proofsLibrary,
+    readProofRecordView: (proofId) => proofRecordViews.current.get(`${apiBaseUrl}:${session?.userId}:${proofId}`) ?? initialProofRecordView(),
+    saveProofRecordView: (proofId, state) => {
+      const key = `${apiBaseUrl}:${session?.userId}:${proofId}`;
+      proofRecordViews.current.set(key, state);
+      if (proofRecordViews.current.size > 40) {
+        const oldest = proofRecordViews.current.keys().next().value;
+        if (oldest) proofRecordViews.current.delete(oldest);
+      }
+    },
     session,
     proof,
     transactionDetail,
@@ -1094,6 +1108,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         tokenRef.current = null;
         sessionRef.current = null;
         await clearCachedState();
+        proofRecordViews.current.clear();
         setSession(null);
         setProof(null);
         setConnections([]);
