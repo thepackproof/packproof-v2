@@ -21,6 +21,13 @@ export function ebayApiBaseUrl(environment: EbayEnvironment): string {
     : "https://api.sandbox.ebay.com";
 }
 
+/** Identity is hosted on apiz, unlike OAuth tokens and Sell Fulfillment. */
+export function ebayIdentityBaseUrl(environment: EbayEnvironment): string {
+  return environment === "production"
+    ? "https://apiz.ebay.com"
+    : "https://apiz.sandbox.ebay.com";
+}
+
 export function ebayScopeParam(scopes: readonly string[] = EBAY_SCOPES): string {
   return scopes.join(" ");
 }

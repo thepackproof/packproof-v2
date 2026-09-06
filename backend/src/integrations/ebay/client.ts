@@ -2,7 +2,8 @@ import {
   providerResponseInvalid,
   providerAuthFailed,
 } from "../../domain/integration-errors.js";
-import { ebayApiBaseUrl, type EbayEnvironment } from "./constants.js";
+import { DomainError } from "../../domain/errors.js";
+import { ebayApiBaseUrl, ebayIdentityBaseUrl, type EbayEnvironment } from "./constants.js";
 import { basicAuthHeader, ebayTokenUrl } from "./oauth.js";
 import { mapEbayHttpError } from "./credentials.js";
 import type {
@@ -32,7 +33,7 @@ export function createHttpEbayClient(fetchImpl: typeof fetch = fetch): EbayClien
     },
     async getUser(input) {
       const payload = await ebayJson(fetchImpl, {
-        url: `${ebayApiBaseUrl(input.environment)}/commerce/identity/v1/user/`,
+        url: `${ebayIdentityBaseUrl(input.environment)}/commerce/identity/v1/user/`,
         accessToken: input.accessToken,
       });
       const record = asRecord(payload);
@@ -110,7 +111,18 @@ async function tokenRequest(
   });
   const payload = await parseJsonOrNull(response);
   if (!response.ok) {
-    if (asRecord(payload).error === "invalid_grant") throw providerAuthFailed();
+    const oauthError = asRecord(payload).error;
+    if (oauthError === "invalid_grant") throw providerAuthFailed();
+    if (oauthError === "invalid_client") throw new DomainError(
+      "EBAY_APPLICATION_NOT_CONFIGURED",
+      "eBay rejected PackProof's application credentials. The server connection settings need attention; changing your eBay password will not fix this.",
+      503,
+    );
+    if (oauthError === "invalid_scope") throw new DomainError(
+      "EBAY_SCOPE_NOT_AVAILABLE",
+      "PackProof's eBay application does not have the required permissions in this environment. The application settings need attention.",
+      503,
+    );
     mapEbayHttpError(response.status);
   }
   const record = asRecord(payload);
