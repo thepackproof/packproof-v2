@@ -243,18 +243,19 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       return
     }
     if (!sessionId.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,95}"))) {
-      promise.reject("INVALID_CAPTURE_SESSION", "The camera test session identifier is invalid.", null)
+      promise.reject("INVALID_CAPTURE_SESSION", "The capture session identifier is invalid.", null)
       return
     }
     try {
-      val root = File(context.filesDir, "packproof-camera-spike")
+      val proofCapture = sessionId.startsWith("cap_")
+      val root = File(context.filesDir, if (proofCapture) "packproof-captures" else "packproof-camera-spike")
       if (!root.exists() && !root.mkdirs()) throw IllegalStateException("Capture directory unavailable")
       val directory = File(root, sessionId)
       // The JS report may already exist here. Reserve only the video path atomically.
       if (!directory.exists() && !directory.mkdir()) throw IllegalStateException("Session directory unavailable")
       val output = File(directory, "video.mp4")
       if (!output.createNewFile()) {
-        promise.reject("CAPTURE_SESSION_EXISTS", "Start a new camera test session to record another video.", null)
+        promise.reject("CAPTURE_SESSION_EXISTS", "Start a new capture session to record another video.", null)
         return
       }
       val current = CaptureSession(output, promise)
@@ -263,8 +264,8 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       recentCodes.clear()
       releaseAfterFinalize = false
       val options = FileOutputOptions.Builder(output)
-        .setDurationLimitMillis(10 * 60 * 1000L)
-        .setFileSizeLimit(512 * 1024 * 1024L)
+        .setDurationLimitMillis(if (proofCapture) 180 * 1000L else 10 * 60 * 1000L)
+        .setFileSizeLimit(if (proofCapture) 195 * 1024 * 1024L else 512 * 1024 * 1024L)
         .build()
       var pending = videoCapture!!.output.prepareRecording(context, options)
       if (audioEnabled) pending = pending.withAudioEnabled()

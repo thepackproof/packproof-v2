@@ -1,3 +1,7 @@
+import * as Haptics from "expo-haptics";
+import { UnifiedCameraView, isUnifiedCameraAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
+import { newIdempotencyKey } from "../v2-api";
+import type { ShippingScanResult } from "../capture/shipping-scan-queue";
 import { useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -118,6 +122,43 @@ function CameraSession({
   onFinish: (result: LocalCapture | null) => void;
 }) {
   const camera = useRef<CameraView>(null);
+  const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
+  const useUnified = process.env.EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING === "true" && isUnifiedCameraAvailable() && Boolean(request.captureSessionId && request.onShippingBarcode) && !request.stageType;
+  const [shipping, setShipping] = useState<ShippingScanResult|null>(null);
+  const [detectingShipping,setDetectingShipping] = useState(false);
+  const [shippingError,setShippingError] = useState<string|null>(null);
+  const candidateRaw = useRef<string|null>(null);
+  const notified = useRef(new Set<string>());
+  const observed = useRef(new Set<string>());
+  async function detected(event: UnifiedBarcodeDetection) {
+    if (!recordingRef.current || !request.onShippingBarcode) return;
+    if (/EAN|UPC/i.test(event.format) || !/^[a-z0-9 \t\r\n-]{10,64}$/i.test(event.rawValue)) return;
+    const key=event.rawValue.replace(/[ \t\r\n-]/g,'').toUpperCase();
+    if(observed.current.has(key) || observed.current.size>=8) return;
+    observed.current.add(key);
+    setDetectingShipping(true);
+    void Haptics.selectionAsync().catch(()=>undefined);
+    try {
+      const result = await request.onShippingBarcode({rawValue:event.rawValue,format:event.format,detectedAtMs:event.detectedAtMs,idempotencyKey:newIdempotencyKey()});
+      if (result.status==='UNRECOGNIZED') return;
+      candidateRaw.current = event.rawValue;
+      setShipping(result);
+      if (result.status==='BOUND' && !notified.current.has(result.observationId!)) {
+        notified.current.add(result.observationId!);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(()=>undefined);
+      }
+    } catch {
+      setShippingError('The label could not be saved. Keep recording; you can add shipping information afterward.');
+    } finally {setDetectingShipping(false);}
+  }
+  async function confirmShipping() {
+    if (!candidateRaw.current || !request.onConfirmShipping) return;
+    try {
+      const result = await request.onConfirmShipping(candidateRaw.current);
+      setShipping(result);
+      if(result.status==='BOUND') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(()=>undefined);
+    } catch {setShippingError('The label could not be saved. Keep recording and check shipping afterward.');}
+  }
   const recipe =
     request.stageType && request.stageType !== "RETURN_PACKING"
       ? receivingRecipe
@@ -147,13 +188,14 @@ function CameraSession({
     const listener = AppState.addEventListener("change", (state) => {
       if (state !== "active" && recordingRef.current) {
         interrupted.current = true;
-        camera.current?.stopRecording();
+        if (useUnified) void unifiedCamera.current?.stopRecording().catch(()=>undefined);
+        else camera.current?.stopRecording();
       }
     });
     return () => listener.remove();
   }, []);
   async function start() {
-    if (!camera.current || !ready || recordingRef.current) return;
+    if (!(useUnified ? unifiedCamera.current : camera.current) || !ready || recordingRef.current) return;
     if (request.expiresAt && Date.now() >= Date.parse(request.expiresAt)) {
       setError(
         "This camera authorization expired before recording began. Cancel and reopen the camera to continue.",
@@ -167,17 +209,19 @@ function CameraSession({
     recordingRef.current = true;
     setRecording(true);
     try {
-      const video = await camera.current.recordAsync({ maxDuration: 180 });
+      const video = useUnified
+        ? await unifiedCamera.current!.startRecording(request.captureSessionId!, false)
+        : await camera.current!.recordAsync({ maxDuration: 180 });
       setSaving(true);
       if (!video?.uri)
         throw new Error(
           "The camera returned no recording. No save was confirmed.",
         );
-      const durationMs = Math.max(1, Date.now() - started.current);
+      const durationMs = video && "durationMs" in video && typeof video.durationMs === "number" ? video.durationMs : Math.max(1, Date.now() - started.current);
       onFinish({
         uri: video.uri,
         contentType: Platform.OS === "ios" ? "video/quicktime" : "video/mp4",
-        byteSize: null,
+        byteSize: "byteSize" in video && typeof video.byteSize === "number" ? video.byteSize : null,
         durationMs,
         bookmarks: bookmarks.current
           .filter((bookmark) => bookmark.startMs < durationMs)
@@ -185,7 +229,7 @@ function CameraSession({
             ...bookmark,
             endMs: Math.min(bookmark.endMs, durationMs),
           })),
-        interrupted: interrupted.current,
+        interrupted: interrupted.current || ("interrupted" in video && video.interrupted === true),
       });
     } catch (e) {
       setError(
@@ -213,7 +257,8 @@ function CameraSession({
   const stop = () => {
     if (recordingRef.current) {
       setSaving(true);
-      camera.current?.stopRecording();
+      if (useUnified) void unifiedCamera.current?.stopRecording().catch(()=>setError("Could not request camera stop. Close the camera to preserve the recording."));
+      else camera.current?.stopRecording();
     }
   };
   return (
@@ -256,7 +301,19 @@ function CameraSession({
           </Text>
         </View>
         <View style={styles.camera}>
-          <CameraView
+          {useUnified ? <UnifiedCameraView
+            ref={unifiedCamera}
+            style={StyleSheet.absoluteFill}
+            active
+            torchEnabled={false}
+            onReady={()=>setReady(true)}
+            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;}}
+            onBarcodeDetected={({nativeEvent})=>{void detected(nativeEvent);}}
+            onCaptureError={({nativeEvent})=>{
+              if (recordingRef.current) setShippingError('Label scanning is unavailable. Your recording is continuing.');
+              else {setReady(false);setError(nativeEvent.message);}
+            }}
+          /> : <CameraView
             ref={camera}
             style={StyleSheet.absoluteFill}
             mode="video"
@@ -269,6 +326,7 @@ function CameraSession({
               setError(event.message);
             }}
           />
+          }
           {request.guide ? (
             <View pointerEvents="none" style={StyleSheet.absoluteFill}>
               <Image
@@ -282,6 +340,18 @@ function CameraSession({
           {coach ? <View pointerEvents="none" style={styles.frame} /> : null}
         </View>
         <ScrollView contentContainerStyle={styles.controls}>
+          {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
+            <Text style={{color:shipping?.status==='BOUND'?colors.success:colors.textSecondary}}>
+              {detectingShipping ? 'Barcode detected · attaching tracking…'
+                : shipping?.status==='BOUND' ? `Label attached · ${shipping.trackingNumber} · tracking update queued`
+                : shipping?.status==='QUEUED' ? 'Label saved on this device · waiting to attach'
+                : shipping?.status==='CONFLICT' ? 'Different label detected. Check that this is the correct package.'
+                : shipping?.status==='NEEDS_CONFIRMATION' ? `Is ${shipping.trackingNumber} the shipping tracking number?`
+                : 'Show the shipping barcode while recording to attach tracking.'}
+            </Text>
+            {shipping?.status==='NEEDS_CONFIRMATION' ? <Button label="Use this tracking number" variant="secondary" onPress={()=>void confirmShipping()} /> : null}
+            {shippingError ? <Text style={{color:colors.error}}>{shippingError}</Text> : null}
+          </View> : null}
           {request.guide ? (
             <Text style={{ color: colors.textSecondary }}>
               Match the translucent outbound view where practical. The guide

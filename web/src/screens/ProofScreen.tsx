@@ -393,6 +393,16 @@ export function ProofScreen(props: {
 
       <ContinuityCompare proof={proof} loadEvidence={props.onLoadEvidence} />
 
+      {proof.captureShipping ? <section className="panel stack" aria-label="Captured shipping label">
+        <h2>Shipping label captured during packing</h2>
+        <p>{proof.captureShipping.observations[0]?.trackingNumber} · {Math.floor((proof.captureShipping.observations[0]?.detectedAtMs??0)/1000)}s into the recording</p>
+        <p className="muted">Label recognition and timing are reported by the recording device. Carrier observations appear separately below.</p>
+        <p>{proof.captureShipping.registration.mode==='test' ? 'Test tracking data · ' : ''}
+          {proof.captureShipping.registration.state==='REGISTERED' ? `${proof.captureShipping.registration.carrier??'Carrier'} tracking connected`
+            : proof.captureShipping.registration.state==='WAITING_FOR_CONNECTION' ? 'Tracking number attached · carrier connection needed'
+            : proof.captureShipping.registration.state==='FAILED' ? 'Tracking number attached · carrier lookup needs attention'
+            : 'Tracking number attached · carrier update pending'}</p>
+      </section> : null}
       <ShipmentTracking key={`tracking-${proof.proofId}`} events={proof.shipmentObservations?.events ?? []} carrier={proof.transaction.shipping?.carrier} trackingNumber={proof.transaction.shipping?.trackingNumber} />
       <EventTimeline proof={proof} onSelect={props.onOpenEvent} />
 

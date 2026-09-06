@@ -19,7 +19,7 @@ function isReleaseSafeApiUrl(url) {
 
 const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
-const isPlayRelease = easProfile === "internal-staging";
+const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
 const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isPlayRelease ? "cognito" : "dev");
 

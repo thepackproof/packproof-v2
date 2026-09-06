@@ -1,3 +1,5 @@
+import { shippingQueue, readShippingJournal, releaseShippingQueue } from "./capture/shipping-scan-storage";
+import type { ShippingScan, ShippingScanResult, ShippingScanJournal } from "./capture/shipping-scan-queue";
 import { sha256 } from "@noble/hashes/sha256";
 import { toByteArray } from "base64-js";
 import * as FileSystem from "expo-file-system";
@@ -27,10 +29,11 @@ export interface LocalCapture {
   uploadEvidenceId?: string;
   bookmarks?: CaptureBookmark[];
   interrupted?: boolean;
+  shippingBinding?: ShippingScanResult;
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -87,12 +90,19 @@ export async function recordPackingEvidence(input: {
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
   // Authorization exists before a frame is recorded. No gallery or camera-error file path.
   const session = await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId);
-  const captured = await nativeRecorder({ proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide });
+  const journal: ShippingScanJournal = {proofId:input.proofId,sessionId:session.id,userId:input.userId,entries:[]};
+  const queue = shippingQueue(input.client,journal);
+  const captured = await nativeRecorder({ proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+    ...(!input.stageId ? {onShippingBarcode:queue.detect,onConfirmShipping:queue.confirm} : {}),
+  });
+  await queue.flush();
   if (!captured) {
+    releaseShippingQueue(session.id);
     await input.client.cancelCaptureSession(input.proofId, session.id).catch(() => undefined);
     return null;
   }
-  return persistLocalCapture({ ...captured, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
+  return persistLocalCapture({ ...captured, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
 }
 
 /** Existing grading recipes retain their original actor/recipe checks and evidence origin.
@@ -111,6 +121,14 @@ export async function recordGradingPackingEvidence(input: {
 export async function bindRecordedCapture(client: PackProofV2Client, capture: LocalCapture, proofId: string, userId: string, stageId?: string): Promise<void> {
   if (!capture.captureSessionId || capture.captureProofId !== proofId || capture.captureUserId !== userId || capture.captureStageId !== stageId)
     throw new Error("This saved recording has no eligible session for this account and Proof. It remains on this device; record a new packing video to meet the current policy.");
+  if (!stageId) {
+    const journal = await readShippingJournal(capture.captureSessionId);
+    if (journal) {
+      if (journal.proofId!==proofId || journal.userId!==userId) throw new Error("This saved label belongs to another account or Proof.");
+      const entries = await shippingQueue(client,journal).retry();
+      if (entries.some(e=>e.result.status==="QUEUED")) throw new Error("Your video and label are saved on this device. Reconnect and retry to attach the tracking number before finishing this Proof.");
+    }
+  }
   const info = await FileSystem.getInfoAsync(capture.uri);
   if (!info.exists || info.isDirectory || !("size" in info) || info.size <= 0) throw new Error("The original recording is unavailable or empty.");
   const hash = sha256.create();
@@ -128,6 +146,7 @@ export async function bindRecordedCapture(client: PackProofV2Client, capture: Lo
     ...(typeof capture.interrupted === "boolean" ? { interrupted: capture.interrupted } : {}),
     ...(recordedDurationMs !== undefined ? { recordedDurationMs } : {}),
   });
+  releaseShippingQueue(capture.captureSessionId);
 }
 
 /** Bookmarks are an optional index. An index failure must never invalidate committed bytes. */

@@ -26,6 +26,10 @@ export async function readCaptureClientContext(db:Database,sessionId:string):Pro
 }
 async function appendCaptureClientReport(db:Database,clock:Clock,actor:string,proofId:string,sessionId:string,input:{interrupted?:boolean;recordedDurationMs?:number}) {
   if(input.interrupted===undefined && input.recordedDurationMs===undefined) return;
+  if (input.recordedDurationMs !== undefined) {
+    const last = (await db.query<{offset:number|null}>('SELECT MAX(detected_at_ms) AS offset FROM capture_shipping_labels WHERE session_id=$1',[sessionId])).rows[0]?.offset;
+    if (last != null && last > input.recordedDurationMs) throw new DomainError('CAPTURE_CONTEXT_CONFLICT','The reported video duration must include its attached label observation',409);
+  }
   const previous=await readCaptureClientContext(db,sessionId);
   if(previous?.recordedDurationMs!=null && input.recordedDurationMs!==undefined && previous.recordedDurationMs!==input.recordedDurationMs)
     throw new DomainError("CAPTURE_CONTEXT_CONFLICT","A retry cannot change the previously reported recording duration",409);

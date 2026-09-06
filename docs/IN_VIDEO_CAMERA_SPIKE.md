@@ -1,6 +1,6 @@
 # In-video shipping labels: camera gate
 
-This change implements the **Phase 1 camera spike** from [the supplied plan](IN_VIDEO_SHIPPING_LABEL_PLAN.md). The full shipping feature is not complete. Section 32 explicitly requires reliable simultaneous operation on the S24 Ultra before backend changes. That physical gate remains open; automated tests and a successful APK build cannot close it.
+This change implements the **Phase 1 camera spike** from [the supplied plan](IN_VIDEO_SHIPPING_LABEL_PLAN.md). The full shipping feature is not complete. Section 32 explicitly requires reliable simultaneous operation on the S24 Ultra before backend changes. The user reported successful S24 Ultra recording with seamless barcode detection, haptics, and visual feedback on September 5, 2026. This closes the initial simultaneous-recording feasibility gate and authorizes the carrier integration work. The detailed acceptance matrix below remains unexecuted unless explicitly recorded.
 
 ## What changed
 
@@ -70,7 +70,7 @@ Record device model, Android version, APK commit/hash, duration, visible issues,
 5. Persist and replay pending bindings across network/auth recovery; surface shipping identity and jump-to-label in Proof review.
 6. Run the complete backend/mobile regression and S24/A16 matrix. Remove mandatory finish rescan only after hardware validation.
 
-Production EasyPost credentials, webhook verification/configuration, operational smoke tests, and production rollout remain separate gates. No backend, manifest, transaction, carrier, website, or production capture rules are changed by this spike.
+Production EasyPost credentials, webhook verification/configuration, operational smoke tests, and production rollout remain separate gates. The standalone spike keeps its diagnostic behavior. Follow-on backend and normal-app changes are documented separately in [capture shipping integration](CAPTURE_SHIPPING_INTEGRATION.md).
 
 ## Validation status — September 5, 2026
 
@@ -83,4 +83,5 @@ Production EasyPost credentials, webhook verification/configuration, operational
 - Native Gradle compilation / installable APK: **passed** in [Android build 33998320266](https://github.com/thepackproof/packproof-v2/actions/runs/33998320266), from source commit `334f170b7a67bab2325dcb5d166c24aa1961fc93`. An earlier run compiled successfully but its inspection step required `rg`, absent from the runner. The inspection now uses Node's standard library; the corrected workflow completed successfully.
 - Artifact identity: `com.packproof.mobile.cameraspike`, version `0.3.0`, code `29`; APK Signature Scheme v2 verification passed. JavaScript is bundled. APK size is **85,805,807 bytes**. Its SHA-256 is `a877a4f46696f5fa48a417aa7da99e8a661e2bc4f3b16396c113982b9d2489c5`; the downloaded archive and extracted APK match their CI checksums, and ZIP integrity checks pass.
 - Source publication: explicitly authorized and published on `codex/in-video-camera-spike`; [draft PR #30](https://github.com/thepackproof/packproof-v2/pull/30). CI and CodeQL both passed for the APK source commit. Subsequent documentation updates do not change the built application.
-- S24 Ultra / A16 hardware matrix: **not run**. This remains the plan's required gate before backend implementation.
+- S24 Ultra basic simultaneous recording / recognition / haptic and visual feedback: **passed, user-reported**. Device OS, recording duration, and individual carrier labels were not supplied. A16 and the extended hardware matrix remain untested.
+- Follow-on integration: see [capture shipping integration](CAPTURE_SHIPPING_INTEGRATION.md).

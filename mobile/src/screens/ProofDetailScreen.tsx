@@ -381,6 +381,23 @@ export function ProofDetailScreen() {
         </InfoCard>
       ) : null}
 
+      {proof.captureShipping ? <InfoCard>
+        <Text style={[styles.kicker,{color:colors.accent}]}>Shipping label</Text>
+        <Text style={[styles.body,{color:colors.textPrimary}]}>{proof.captureShipping.observations[0]?.trackingNumber}</Text>
+        <Text style={[styles.meta,{color:colors.textSecondary}]}>
+          Captured during packing at {Math.floor((proof.captureShipping.observations[0]?.detectedAtMs??0)/1000)}s · reported by this device
+        </Text>
+        <Text style={[styles.meta,{color:colors.textSecondary}]}>
+          {proof.captureShipping.registration.mode==='test' ? 'Test tracking data · ' : ''}
+          {proof.captureShipping.registration.state==='REGISTERED'
+            ? `${proof.captureShipping.registration.carrier??'Carrier'} tracking connected`
+            : proof.captureShipping.registration.state==='WAITING_FOR_CONNECTION' ? 'Tracking number attached · carrier connection needed'
+            : proof.captureShipping.registration.state==='FAILED' ? 'Tracking number attached · carrier lookup needs attention'
+            : 'Tracking number attached · carrier update pending'}
+        </Text>
+        {proof.shipmentObservations?.latest ? <Text style={[styles.body,{color:colors.textPrimary}]}>Carrier reported: {proof.shipmentObservations.latest.eventType.replace(/_/g,' ').toLowerCase()}</Text> : null}
+      </InfoCard> : null}
+
       {proof.assets && proof.assets.length > 0 ? (
         <>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Items</Text>
@@ -422,6 +439,7 @@ export function ProofDetailScreen() {
         .map((e) => (
           <RecordedVideo
             key={e.evidenceId}
+            labelOffsetMs={proof.captureShipping?.observations.find(o=>o.evidenceId===e.evidenceId)?.detectedAtMs}
             uri={app.client.evidenceContentUrl(proof.proofId, e.evidenceId)}
             token={app.session!.token}
           />

@@ -28,6 +28,7 @@ export function isUniqueViolation(error: unknown): boolean {
 export function errorCodeFromSql(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error);
   const codes = [
+    "CAPTURE_SHIPPING_IMMUTABLE",
     "CAPTURE_SESSION_IMMUTABLE",
     "CAPTURE_REPORT_IMMUTABLE",
     "PLATFORM_RECORD_IMMUTABLE",

@@ -175,6 +175,11 @@ export interface CanonicalProof {
     evidence: Array<{ evidenceId: string; sha256: string }>;
     manifestSha256: string | null;
   };
+  captureShipping?: {
+    source: "PACKPROOF_CAPTURE";
+    observations: Array<{ observationId: string; sessionId: string; evidenceId: string | null; trackingNumber: string; carrierHint: string | null; detectedAtMs: number; participantConfirmed: boolean }>;
+    registration: {state: string; carrier: string | null; mode: string | null; errorCode: string | null; registeredAt: string | null};
+  } | null;
   shipmentObservations?: {
     shippingId: string | null;
     identity: ShippingView | null;

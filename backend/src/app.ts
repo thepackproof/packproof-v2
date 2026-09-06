@@ -742,6 +742,7 @@ export function createApp(deps: AppDependencies): Express {
         rawBody,
         { integrations, credentials: credentialStore },
       );
+      await deps.db.query(`UPDATE capture_shipment_jobs SET state='REGISTERED',attempts=0,last_error_code=NULL,carrier=$2,provider_mode=$3,registered_at=COALESCE(registered_at,$4),updated_at=$4,next_run_at=$5 WHERE transaction_id=$1`,[req.params.id,result.carrier??null,result.mode??null,deps.clock.now().toISOString(),new Date(deps.clock.now().getTime()+6*3600000).toISOString()]);
       res.status(result.createdCount > 0 ? 201 : 200).json(publicSyncResult(result));
     }),
   );
