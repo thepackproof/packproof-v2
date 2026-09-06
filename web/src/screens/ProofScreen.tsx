@@ -399,6 +399,8 @@ export function ProofScreen(props: {
         <p className="muted">Label recognition and timing are reported by the recording device. Carrier observations appear separately below.</p>
         <p>{proof.captureShipping.registration.mode==='test' ? 'Test tracking data · ' : ''}
           {proof.captureShipping.registration.state==='REGISTERED' ? `${proof.captureShipping.registration.carrier??'Carrier'} tracking connected`
+            : proof.captureShipping.registration.errorCode==='SHIPPO_TEST_TRACKING_ONLY' ? 'Tracking number attached · live Shippo access needed for this package'
+            : proof.captureShipping.registration.errorCode==='SHIPMENT_CARRIER_REQUIRED' ? 'Tracking number attached · choose a carrier in shipping information'
             : proof.captureShipping.registration.state==='WAITING_FOR_CONNECTION' ? 'Tracking number attached · carrier connection needed'
             : proof.captureShipping.registration.state==='FAILED' ? 'Tracking number attached · carrier lookup needs attention'
             : 'Tracking number attached · carrier update pending'}</p>

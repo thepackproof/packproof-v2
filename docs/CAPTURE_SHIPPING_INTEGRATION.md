@@ -1,4 +1,4 @@
-# In-video shipping → EasyPost → Proof
+# In-video shipping → Shippo → Proof
 
 The user reported successful S24 Ultra simultaneous video/barcode capture with haptic and visual feedback on September 5, 2026. This implementation connects that recorder to the normal server-authorized packing flow. The standalone diagnostic APK remains separate.
 
@@ -14,22 +14,22 @@ The user reported successful S24 Ultra simultaneous video/barcode capture with h
 
 ## Carrier processing
 
-Migration `032_capture_shipping` adds a durable job per transaction. The worker runs every 15 seconds, with a two-minute PostgreSQL lease across replicas. It reuses an existing bound integration, otherwise the seller's sole active EasyPost connection, otherwise an explicitly configured server credential reference. It never silently chooses between multiple seller connections or rebinds an existing transaction connection.
+Migration `032_capture_shipping` adds a durable job per transaction. The worker runs every 15 seconds, with a two-minute PostgreSQL lease across replicas. It reuses an existing bound integration, otherwise the seller's sole active Shippo connection, otherwise an explicitly configured server Shippo credential reference. An explicitly configured legacy EasyPost reference remains supported when no Shippo reference is configured. It never silently chooses between multiple seller connections or rebinds an existing transaction connection.
 
-Provider calls run outside database transactions and outside recording. Temporary failures back off, with eight attempts before attention is required. Missing credentials/connections wait and retry hourly without exhausting that budget. Successful nonterminal trackers refresh every six hours; existing authenticated EasyPost webhooks provide intervening updates. The normal **Update tracking** action can retry a failed lookup once an integration is bound.
+Provider calls run outside database transactions and outside recording. Temporary failures back off, with eight attempts before attention is required. Missing credentials/connections, test-only access for a real label, and missing carriers wait and retry hourly without exhausting that budget. Successful nonterminal trackers refresh every six hours. Shippo polling works without webhook setup; authenticated webhooks can provide intervening updates after account configuration. Returns continue refreshing because Shippo's RETURNED status also covers packages still heading back. The normal **Update tracking** action can retry a failed lookup once an integration is bound.
 
-EasyPost's Tracker API supports labels purchased elsewhere, carrier detection when no carrier is supplied, tracking history and later webhook updates. Returned tracking identity and production/test mode are checked before import. Status, scan time/location, available estimated delivery and carrier-reported weight use the existing append-only `shipment_events` and shipment integrity supplement. Carrier observations arriving later do not modify the frozen core manifest. Tracker registration alone does not prove carrier possession or delivery.
+Shippo's tracking API supports individual lookups for supported labels purchased elsewhere. Returned tracking identity, carrier and production/test mode are checked before import. UPS and USPS have conservative barcode-based carrier detection; ambiguous numbers require an explicitly selected supported carrier in shipping information. Status, scan time/location and available estimated delivery use the existing append-only `shipment_events` and shipment integrity supplement. Optional carrier-reported weight is imported when present; Shippo documents package details for UPS/FedEx tracking POST responses only, so polling alone does not promise weight. Carrier observations arriving later do not modify the frozen core manifest. A successful lookup alone does not prove carrier possession or delivery.
 
-References: [EasyPost Tracker API](https://docs.easypost.com/docs/trackers), [USPS concatenated routing barcode standards](https://pe.usps.com/text/dmm300/204.htm).
+References: [Shippo tracking](https://docs.goshippo.com/tracking/tracking), [Shippo integration runbook](SHIPPO_TRACKING_INTEGRATION.md), [USPS concatenated routing barcode standards](https://pe.usps.com/text/dmm300/204.htm).
 
 ## Activation
 
 1. Deploy the backend/migration and web changes using the repository's reviewed staging deployment path.
-2. Provision the EasyPost credential material in the existing server credential store. For an existing deployment, prefer its Secrets Manager reference. For a local environment the existing `env:` store accepts JSON containing `apiKey`, `mode` (`test` or `production`), and `webhookSecret`. No key belongs in the mobile bundle, source, or a client request.
-3. Set `PACKPROOF_CAPTURE_EASYPOST_CREDENTIAL_REFERENCE` to that server-side reference (for example `packproof/staging/integrations/easypost`). This is optional when the seller already has exactly one active EasyPost connection. `PACKPROOF_CAPTURE_SHIPMENT_WORKER=false` disables the new background worker.
-4. Configure and verify EasyPost's signed webhook at `/integrations/webhooks/easypost-tracker`, following [the existing integration runbook](EASYPOST_TRACKING_INTEGRATION.md).
+2. Provision the Shippo credential material in the existing server credential store. Prefer the deployment's Secrets Manager reference. For local development the `env:` store accepts JSON containing `apiKey` and `mode` (`test` or `production`). No key belongs in the mobile bundle, source, or a client request.
+3. Set `PACKPROOF_CAPTURE_SHIPPO_CREDENTIAL_REFERENCE` to that server-side reference (for example `packproof/staging/integrations/shippo`). This is optional when the seller already has exactly one active Shippo connection. `PACKPROOF_CAPTURE_SHIPMENT_WORKER=false` disables the background worker.
+4. Polling requires no webhook. Optionally configure Shippo's signed webhook at `/integrations/webhooks/shippo-tracker`, following [the Shippo runbook](SHIPPO_TRACKING_INTEGRATION.md).
 5. Build the full app with `eas build --platform android --profile shipping-integration`. This opt-in profile inherits the normal Play package, Cognito/API configuration, remote signing credentials, and **AAB** format. Increment the Android version code before a new Play upload if code 29 is already used. The normal `internal-staging` profile keeps the feature off. Never enable the standalone camera-spike flag for either Play profile.
-6. Run a real-label smoke test with the configured EasyPost account, then complete the S24/A16 extended matrix before wider rollout. EasyPost test responses must remain visibly marked as test data.
+6. Run a real-label smoke test with live Shippo credentials, then complete the S24/A16 extended matrix before wider rollout. Shippo test responses remain visibly marked as simulated data; the supplied test token cannot enrich a real captured label.
 
 ## Validation / remaining external gates
 
@@ -38,6 +38,6 @@ References: [EasyPost Tracker API](https://docs.easypost.com/docs/trackers), [US
 - Native HTTP contract test includes the new shipping endpoint, original capture upload/retry, replay, and case export: passed.
 - Backend and mobile TypeScript: passed.
 - Web production build and normal Android Metro export with the shipping flag enabled: passed.
-- The integration has not been exercised against a live EasyPost account. This workspace has no configured EasyPost credential, AWS runtime credential, or Expo automation token. Deployment, actual provider smoke testing, and a newly signed full-app AAB remain external configuration gates. The previously tested APK is the standalone camera diagnostic, not this integration build.
+- Shippo test API access was verified on 2026-09-06. The actual sandbox response was imported into a disposable local Proof through the normal shipment-sync HTTP route. Production API access, deployed server credential configuration, and a newly signed full-app AAB remain rollout gates. The previously tested APK is the standalone camera diagnostic, not this integration build.
 
 Crash recovery guarantees apply to a saved capture and its persisted journal. A process killed before MP4 finalization may leave an incomplete recording; this feature does not claim continuous capture through process death. Full label images, addresses, provider keys and raw provider response bodies are not stored in the scan observation or application logs.

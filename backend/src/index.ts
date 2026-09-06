@@ -71,7 +71,7 @@ const stopCommerceWorker=process.env.PACKPROOF_COMMERCE_WORKER!=="false"
   ? startCommerceWorker(opened.db,systemClock,{integrations,credentials:credentialStore}) : async()=>{};
 
 const stopCaptureShipmentWorker = process.env.PACKPROOF_CAPTURE_SHIPMENT_WORKER !== "false"
-  ? startCaptureShipmentWorker(opened.db,systemClock,{integrations,credentials:credentialStore,defaultEasyPostCredentialReference:process.env.PACKPROOF_CAPTURE_EASYPOST_CREDENTIAL_REFERENCE}) : async()=>{};
+  ? startCaptureShipmentWorker(opened.db,systemClock,{integrations,credentials:credentialStore,defaultShippoCredentialReference:process.env.PACKPROOF_CAPTURE_SHIPPO_CREDENTIAL_REFERENCE,defaultEasyPostCredentialReference:process.env.PACKPROOF_CAPTURE_EASYPOST_CREDENTIAL_REFERENCE}) : async()=>{};
 
 const stopMediaWorker=process.env.PACKPROOF_MEDIA_WORKER!=="false"
   ? startMediaWorker(opened.db,systemClock,objectStore) : async()=>{};

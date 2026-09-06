@@ -391,11 +391,17 @@ export function ProofDetailScreen() {
           {proof.captureShipping.registration.mode==='test' ? 'Test tracking data · ' : ''}
           {proof.captureShipping.registration.state==='REGISTERED'
             ? `${proof.captureShipping.registration.carrier??'Carrier'} tracking connected`
+            : proof.captureShipping.registration.errorCode==='SHIPPO_TEST_TRACKING_ONLY' ? 'Tracking number attached · live Shippo access needed for this package'
+            : proof.captureShipping.registration.errorCode==='SHIPMENT_CARRIER_REQUIRED' ? 'Tracking number attached · choose a carrier in shipping information'
             : proof.captureShipping.registration.state==='WAITING_FOR_CONNECTION' ? 'Tracking number attached · carrier connection needed'
             : proof.captureShipping.registration.state==='FAILED' ? 'Tracking number attached · carrier lookup needs attention'
             : 'Tracking number attached · carrier update pending'}
         </Text>
         {proof.shipmentObservations?.latest ? <Text style={[styles.body,{color:colors.textPrimary}]}>Carrier reported: {proof.shipmentObservations.latest.eventType.replace(/_/g,' ').toLowerCase()}</Text> : null}
+      </InfoCard> : null}
+
+      {proof.shipmentObservations?.events.some(event=>event.eventData.test===true) ? <InfoCard>
+        <Text style={[styles.meta,{color:colors.textSecondary}]}>Test tracking data · simulated shipment events, not real carrier evidence</Text>
       </InfoCard> : null}
 
       {proof.assets && proof.assets.length > 0 ? (
@@ -525,7 +531,7 @@ export function ProofDetailScreen() {
         {proof.shipmentSync?.available ? (
           <Button
             label={
-              proof.shipmentSync.provider === "easypost"
+              ["easypost", "shippo"].includes(proof.shipmentSync.provider ?? "")
                 ? "Update tracking"
                 : "Update shipment observations"
             }
