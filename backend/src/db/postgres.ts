@@ -6,7 +6,7 @@ function toResult<Row>(result: pg.QueryResult): QueryResult<Row> {
   return { rows: result.rows as Row[], rowCount: result.rowCount ?? 0 };
 }
 
-function sslConfigFromConnectionString(connectionString: string): pg.PoolConfig["ssl"] {
+export function sslConfigFromConnectionString(connectionString: string): boolean | { rejectUnauthorized: boolean } | undefined {
   try {
     const sslmode = new URL(connectionString).searchParams.get("sslmode")?.toLowerCase();
     if (!sslmode || sslmode === "disable") return undefined;
