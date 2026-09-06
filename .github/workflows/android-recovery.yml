@@ -1,0 +1,61 @@
+name: Android recovery AAB
+
+on:
+  push:
+    branches: [codex/android-recovery-2026-09-06]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android-recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-recovery-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Validate signing access
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN is not configured. No signed AAB was created. Re-run after configuring the authorized Expo automation token."
+            exit 1
+          fi
+      - name: Install and check mobile
+        working-directory: mobile
+        run: npm ci && npm run typecheck
+      - name: Build signed camera-enabled App Bundle
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          npx --yes eas-cli@latest build --platform android --profile shipping-integration --non-interactive --wait --json > dist/eas-build.json
+          node <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync('dist/eas-build.json', 'utf8'));
+          const build = Array.isArray(payload) ? payload[0] : payload;
+          const url = build?.artifacts?.buildUrl || build?.artifactUrl;
+          if (build?.status !== 'FINISHED' || !url) throw new Error('EAS did not finish a signed AAB.');
+          fs.writeFileSync('dist/aab-url.txt', url + '\n');
+          NODE
+          curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-0.3.2-31.aab
+          test -s dist/packproof-0.3.2-31.aab
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-0.3.2-31-aab
+          path: mobile/dist/packproof-0.3.2-31.aab
+          if-no-files-found: error
+          retention-days: 30

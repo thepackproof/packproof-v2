@@ -21,6 +21,7 @@ export const EBAY_CONNECTED_LIMITATIONS = [
   "Seller Sell Fulfillment order import is supported through the existing eBay marketplace path.",
   "Buyer purchase import is not implemented.",
   "Dedicated carrier shipping APIs are not part of the eBay connection.",
+  "The eBay Sandbox Identity API returns mock data; it is not real-world identity verification.",
 ];
 
 export function createEbayConnectedAccountProvider(input: {
@@ -46,6 +47,20 @@ export function createEbayConnectedAccountProvider(input: {
     },
     async getAuthorizationUrl(start) {
       requireEbay(runtime);
+      // Fail before sending the user to eBay when PackProof cannot perform the
+      // token exchange. A successful user login cannot repair missing app keys.
+      try {
+        parseEbayAppSecret(await credentials.getCredentials({
+          adapterKey: "ebay",
+          credentialReference: runtime.appCredentialReference,
+        }));
+      } catch {
+        throw new DomainError(
+          "EBAY_APPLICATION_NOT_CONFIGURED",
+          "PackProof's eBay application credentials are missing or unavailable. The server connection setup needs attention; changing your eBay password will not fix this.",
+          503,
+        );
+      }
       return {
         authorizationUrl: buildEbayAuthorizationUrl({
           environment: runtime.environment,
