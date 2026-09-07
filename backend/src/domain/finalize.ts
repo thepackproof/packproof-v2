@@ -306,6 +306,7 @@ export async function finalizeProof(
         attestationId: row.id,
         attestedBy: row.attested_by,
         statement: row.statement,
+        ...(row.authorization_json ? { authorization: row.authorization_json } : {}),
         relatedEvidenceId: row.related_evidence_id,
         createdAt: asRequiredIso(row.created_at),
         sha256: row.sha256,

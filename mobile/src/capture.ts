@@ -146,6 +146,9 @@ export async function bindRecordedCapture(client: PackProofV2Client, capture: Lo
     ...(typeof capture.interrupted === "boolean" ? { interrupted: capture.interrupted } : {}),
     ...(recordedDurationMs !== undefined ? { recordedDurationMs } : {}),
   });
+  // The server has accepted this digest for the capture session. Signing uses
+  // the freshly computed original hash, never a cached or client-selected hash.
+  capture.captureSha256 = digest;
   releaseShippingQueue(capture.captureSessionId);
 }
 

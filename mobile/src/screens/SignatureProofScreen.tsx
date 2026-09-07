@@ -11,6 +11,7 @@ import { FormField } from "../ui/FormField";
 import { InfoCard } from "../ui/ProofCard";
 import { PairedReturnPlayer } from "../ui/PairedReturnPlayer";
 import { SignaturePlayer } from "../ui/SignaturePlayer";
+import { RestoringScrollView } from "../ui/RestoringScrollView";
 import { newIdempotencyKey } from "../v2-api";
 import {
   elapsedLabel,
@@ -193,7 +194,7 @@ export function SignatureProofScreen() {
         </ScrollView>
       </View>
       <FadeSlideIn key={tool} style={{ flex: 1, minHeight: 0 }}>
-      <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 20 }} contentOffset={{ x: 0, y: toolOffsets.current[tool] }} onScroll={event => { toolOffsets.current[tool] = Math.max(0, event.nativeEvent.contentOffset.y); }} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={busy} onRefresh={() => void run(reload)} tintColor={colors.accent} colors={[colors.accent]} />}>
+      <RestoringScrollView contentContainerStyle={{ gap: 16, paddingBottom: 20 }} initialOffsetY={toolOffsets.current[tool]} restorationReady={record !== null} onScrollOffset={offset => { toolOffsets.current[tool] = offset; }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={busy} onRefresh={() => void run(reload)} tintColor={colors.accent} colors={[colors.accent]} />}>
       {error ? (
         <Text accessibilityRole="alert" style={{ color: colors.error }}>
           {error}
@@ -740,7 +741,7 @@ export function SignatureProofScreen() {
           </> : null}
         </>
       ) : !busy && !error ? <Text style={{ color: colors.textSecondary }}>No evidence is available yet.</Text> : null}
-      </ScrollView>
+      </RestoringScrollView>
       </FadeSlideIn>
     </AppScreen>
   );

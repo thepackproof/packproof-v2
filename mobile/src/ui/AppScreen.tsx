@@ -1,17 +1,15 @@
 import type { ReactNode } from "react";
 import {
   RefreshControl,
-  ScrollView,
   StyleSheet,
   View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
+import { RestoringScrollView } from "./RestoringScrollView";
 
 export function AppScreen(props: {
   children: ReactNode;
@@ -22,7 +20,7 @@ export function AppScreen(props: {
   background?: string;
   bottomInset?: boolean;
   extraBottom?: number;
-  contentOffsetY?: number;
+  initialOffsetY?: number;
   onScrollOffset?: (offset: number) => void;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -53,22 +51,17 @@ export function AppScreen(props: {
     );
   }
 
-  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    props.onScrollOffset?.(event.nativeEvent.contentOffset.y);
-  }
-
   return (
     <View style={[styles.root, props.style, viewportStyle]}>
-      <ScrollView
+      <RestoringScrollView
         style={styles.root}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
         contentContainerStyle={contentStyle}
-        contentOffset={props.contentOffsetY ? { x: 0, y: props.contentOffsetY } : undefined}
+        initialOffsetY={props.initialOffsetY}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        scrollEventThrottle={16}
-        onScroll={props.onScrollOffset ? handleScroll : undefined}
+        onScrollOffset={props.onScrollOffset}
         refreshControl={
           props.onRefresh ? (
             <RefreshControl
@@ -82,7 +75,7 @@ export function AppScreen(props: {
         }
       >
         {props.children}
-      </ScrollView>
+      </RestoringScrollView>
     </View>
   );
 }

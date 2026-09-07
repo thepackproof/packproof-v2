@@ -15,6 +15,8 @@ import { PressableScale } from "./motion";
 import { ProofEvidencePreview } from "./ProofEvidencePreview";
 import { ProofRecordTimeline } from "./ProofRecordTimeline";
 import { ProofTrackingPanel } from "./ProofTrackingPanel";
+import { SELLER_SHIPPING_STATEMENT } from "../attestation/statement";
+import { RestoringScrollView, type RestoringScrollViewHandle } from "./RestoringScrollView";
 
 const tabs: Array<{ key: ProofRecordTab; label: string }> = [{ key: "Evidence", label: "Recording" }, { key: "Timeline", label: "Activity" }, { key: "Tracking", label: "Tracking" }];
 
@@ -36,8 +38,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   const [anchors, setAnchors] = useState<EvidenceAnchor[]>([]), [bookmarkError, setBookmarkError] = useState(false);
   const [bookmarksLoading, setBookmarksLoading] = useState(true);
   const [reload, setReload] = useState(0);
-  const scroll = useRef<ScrollView>(null), pendingOffset = useRef<number | null>(saved.current.offsets[tab]);
-  const contentHeight = useRef(0), viewportHeight = useRef(0);
+  const scroll = useRef<RestoringScrollViewHandle>(null);
   const tabScroll = useRef<ScrollView>(null), tabPositions = useRef<Record<string, number>>({});
   const fade = useRef(new Animated.Value(1)).current;
   const committed = committedRecordEvidence(proof);
@@ -45,6 +46,10 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   const grading = isGradingWorkflow(proof.workflowType);
   const hasVideo = committed.some(item => item.contentType?.startsWith("video/"));
   const client = app.client;
+  const sellerAttestation = selectedEvidence && !selectedEvidence.stageId ? proof.attestations?.find(row =>
+    row.statement === "PACKED_DESCRIBED_ITEM" && row.relatedEvidenceId === selectedEvidence.evidenceId &&
+    row.authorization?.signatureVerification === "SERVER_VERIFIED" && row.authorization.method === "ANDROID_BIOMETRIC_STRONG" &&
+    proof.participants.some(person => person.role === "SELLER" && person.userId === row.attestedBy)) : undefined;
 
   useEffect(() => {
     let current = true;
@@ -60,15 +65,12 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   }, [client, proof.proofId, proof.version, hasVideo, reload]);
 
   function saveOffset(offset: number) {
-    if (pendingOffset.current !== null) return;
     // Native scroll events only update this presentation ref, avoiding render work during a fling.
     saved.current = { ...saved.current, offsets: { ...saved.current.offsets, [tab]: Math.max(0, offset) } };
     app.saveProofRecordView(proof.proofId, saved.current);
   }
   function selectTab(next: ProofRecordTab) {
     if (next === tab) return;
-    pendingOffset.current = saved.current.offsets[next];
-    contentHeight.current = 0;
     saved.current = { ...saved.current, tab: next };
     app.saveProofRecordView(proof.proofId, saved.current);
     setTab(next);
@@ -97,15 +99,6 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     app.saveProofRecordView(proof.proofId, saved.current);
     setFilter(next); scroll.current?.scrollTo({ y: 0, animated: !reducedMotion });
   }
-  function restoreOffset() {
-    if (pendingOffset.current === null || contentHeight.current <= 0 || viewportHeight.current <= 0) return;
-    const waiting = tab === "Evidence" && hasVideo && bookmarksLoading;
-    if (pendingOffset.current > 0 && waiting) return;
-    const offset = Math.min(pendingOffset.current, Math.max(0, contentHeight.current - viewportHeight.current));
-    pendingOffset.current = null;
-    scroll.current?.scrollTo({ y: offset, animated: false });
-  }
-  useEffect(() => { restoreOffset(); }, [tab, bookmarksLoading]);
   function refresh() {
     void app.run(async () => {
       await app.refreshProof(proof.proofId);
@@ -116,7 +109,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   const reports = proof.shipmentObservations?.events ?? [];
   function toggleDetails() {
     const next = !detailsExpanded;
-    saved.current = { ...saved.current, detailsExpanded: next };
+    saved.current = { ...saved.current, detailsExpanded: next, offsets: next ? { ...saved.current.offsets, [tab]: 0 } : saved.current.offsets };
     app.saveProofRecordView(proof.proofId, saved.current);
     setDetailsExpanded(next);
     if (next) scroll.current?.scrollTo({ y: 0, animated: !reducedMotion });
@@ -140,7 +133,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
       </ScrollView>
     </View>
     <Animated.View style={[styles.panel, { opacity: fade }]}>
-      <ScrollView key={tab} ref={scroll} contentContainerStyle={styles.body} contentOffset={{ x: 0, y: saved.current.offsets[tab] }} onLayout={event => { viewportHeight.current = event.nativeEvent.layout.height; restoreOffset(); }} onContentSizeChange={(_width, height) => { contentHeight.current = height; restoreOffset(); }} onScroll={event => saveOffset(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={app.busy} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />}>
+      <RestoringScrollView key={tab} ref={scroll} contentContainerStyle={styles.body} initialOffsetY={saved.current.offsets[tab]} restorationReady={tab !== "Evidence" || !hasVideo || !bookmarksLoading} onScrollOffset={saveOffset} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={app.busy} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />}>
         {detailsExpanded ? <View style={[styles.details, { borderBottomColor: colors.divider }]}>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>Order details</Text>
           <Text selectable style={[styles.text, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
@@ -155,6 +148,11 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
           </View> : <>
             {committed.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectors} accessibilityLabel="Choose original evidence">{committed.map((item, index) => <PressableScale key={recordEvidenceKey(item)} onPress={() => selectEvidence(item)} accessibilityRole="button" accessibilityState={{ selected: selectedEvidence === item }} style={[styles.selector, { backgroundColor: selectedEvidence === item ? colors.accentSoft : colors.surface, borderColor: selectedEvidence === item ? colors.accentSoftBorder : colors.border }]}><Text style={[styles.subtitle, { color: colors.textPrimary }]}>{recordEvidenceLabel(item)} {index + 1}</Text></PressableScale>)}</ScrollView> : null}
             {selectedEvidence ? <ProofEvidencePreview key={recordEvidenceKey(selectedEvidence)} evidence={selectedEvidence} title={recordEvidenceLabel(selectedEvidence)} bookmarks={originalBookmarks(selectedEvidence, anchors)} initialTime={saved.current.playbackTimes?.[recordEvidenceKey(selectedEvidence)] ?? 0} onTime={seconds => savePlayback(recordEvidenceKey(selectedEvidence), seconds)} labelOffsetMs={selectedEvidence.stageId ? undefined : proof.captureShipping?.observations.find(item => item.evidenceId === selectedEvidence.evidenceId)?.detectedAtMs} /> : null}
+            {sellerAttestation ? <View style={[styles.info, { borderColor: colors.accentSoftBorder }]}>
+              <Text style={[styles.heading, { color: colors.accentText }]}>Seller attestation</Text>
+              <Text style={[styles.text, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
+              <Text style={[styles.note, { color: colors.textSecondary }]}>Recorded {formatDateTime(sellerAttestation.createdAt)} · Signature verified</Text>
+            </View> : null}
             {bookmarkError ? <Text style={[styles.note, { color: colors.textSecondary }]}>Saved bookmarks could not be loaded. Pull down to refresh; the original recording remains available.</Text> : null}
           </>}
           {actionInContent ? action : null}
@@ -170,7 +168,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
           {proof.shipmentSync?.available ? <Button label="Update tracking" variant="secondary" loading={app.busy} onPress={() => void app.syncShipment()} /> : null}
           {!grading && app.role === "SELLER" && proof.status !== "FINALIZED" ? <Button label="Edit shipping information" variant="secondary" onPress={() => app.go("editShipping")} /> : null}
         </> : null}
-      </ScrollView>
+      </RestoringScrollView>
     </Animated.View>
     {tab === "Evidence" && !actionInContent && action ? <View style={[styles.actionFooter, { borderTopColor: colors.divider }]}>{action}</View> : null}
   </View>;

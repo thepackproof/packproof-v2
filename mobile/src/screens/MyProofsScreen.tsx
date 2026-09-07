@@ -63,7 +63,7 @@ export function MyProofsScreen() {
         refreshing={app.busy}
         extraBottom={108}
         bottomInset={false}
-        contentOffsetY={library.scrollOffset}
+        initialOffsetY={app.readProofsScrollOffset()}
         onScrollOffset={app.setProofsScrollOffset}
       >
         <View style={styles.topBar}>

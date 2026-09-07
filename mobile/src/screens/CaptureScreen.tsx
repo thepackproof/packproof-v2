@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePackProof } from "../app/PackProofProvider";
 import { OFFLINE_CAPTURE_MESSAGE } from "../copy/errors";
@@ -10,6 +10,8 @@ import { ProgressState } from "../ui/EvidenceCard";
 import { InfoCard } from "../ui/ProofCard";
 import { ErrorBanner } from "../ui/EmptyState";
 import { VideoReview } from "../ui/VideoReview";
+import { SellerAttestation } from "../ui/SellerAttestation";
+import { isGradingWorkflow } from "../copy/custody";
 
 export function CaptureScreen() {
   const app = usePackProof();
@@ -23,6 +25,7 @@ export function CaptureScreen() {
   const inFlight = preparing || uploading || securing || committed;
   const belongs = app.session?.captureProofId === app.proof?.proofId;
   const reviewing = Boolean(app.localCapture) && belongs && !inFlight;
+  const sellerAttestation = Platform.OS === "android" && app.role === "SELLER" && !isGradingWorkflow(app.proof?.workflowType);
 
   const progressLabel = preparing
     ? "Preparing…"
@@ -35,8 +38,9 @@ export function CaptureScreen() {
           : "";
 
   return (
-    <View
-      style={[
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.scanBackground }}
+      contentContainerStyle={[
         styles.root,
         {
           paddingTop: Math.max(insets.top, 20),
@@ -52,7 +56,9 @@ export function CaptureScreen() {
         {inFlight
           ? "PackProof is uploading and committing this recording. It is not secured until the server confirms."
           : reviewing
-            ? "Use this recording or retake it. It stays on this device until it is secured."
+            ? sellerAttestation
+              ? "Review your recording, then authenticate to confirm your statement and submit."
+              : "Use this recording or retake it. It stays on this device until it is secured."
             : "Keep the item and package in frame."}
       </Text>
       {txn ? (
@@ -94,12 +100,15 @@ export function CaptureScreen() {
           <Text style={[styles.item, { color: colors.scanText }]}>
             {formatDuration(app.localCapture.durationMs)} recording{app.localCapture.interrupted ? " · interrupted segment" : ""}
           </Text>
-          <Button
+          {sellerAttestation ? <SellerAttestation
+            onPress={() => void app.submitCapture()}
+            loading={app.busy}
+          /> : <Button
             label={app.captureStatus === "retry" ? "Try again" : "Use recording"}
             onPress={() => void app.submitCapture()}
             loading={app.busy}
             haptic="medium"
-          />
+          />}
           <Button
             label="Retake"
             onPress={() => void app.startCapture()}
@@ -128,14 +137,14 @@ export function CaptureScreen() {
         label="Back"
         onPress={app.goBack}
         variant="tertiary"
-        disabled={app.busy && inFlight}
+        disabled={app.busy}
       />
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: spacing.lg, gap: spacing.md },
+  root: { flexGrow: 1, paddingHorizontal: spacing.lg, gap: spacing.md },
   title: { ...typography.pageTitle },
   prompt: { ...typography.body },
   item: { ...typography.cardTitle },

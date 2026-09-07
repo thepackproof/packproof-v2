@@ -41,7 +41,6 @@ export interface ProofsLibraryState {
   sort: ProofsSort;
   role: ProofsRoleFilter;
   carrier: string | null;
-  scrollOffset: number;
 }
 
 export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
@@ -50,7 +49,6 @@ export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
   sort: "newest",
   role: "all",
   carrier: null,
-  scrollOffset: 0,
 };
 
 /** @deprecated Use home. Kept so older session restore paths can be remapped. */

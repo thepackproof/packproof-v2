@@ -106,6 +106,21 @@ export interface ManifestRow {
 
 export type AttestationStatement = "PACKED_DESCRIBED_ITEM" | "RECEIVED_PACKAGE";
 
+/** No biometric samples or templates: this is a signature and its public verification material. */
+export interface AttestationAuthorization {
+  version: 1;
+  method: "ANDROID_BIOMETRIC_STRONG";
+  biometricMethodProvenance: "CLIENT_ASSERTED_NOT_INDEPENDENTLY_VERIFIED";
+  signatureVerification: "SERVER_VERIFIED";
+  algorithm: "ECDSA_SHA256";
+  challengeId: string;
+  payload: string;
+  signature: string;
+  publicKey: string;
+  publicKeySha256: string;
+  verifiedAt: string;
+}
+
 export type ExternalReferenceSource = "PARTICIPANT_SUPPLIED" | "INTEGRATION";
 
 export interface AttestationRow {
@@ -118,6 +133,7 @@ export interface AttestationRow {
   related_event_id: string | null;
   sha256: string;
   created_at: Date | string;
+  authorization_json?: AttestationAuthorization | null;
 }
 
 export interface ProofExternalReferenceRow {

@@ -46,6 +46,7 @@ import {
   searchUsersForProof,
 } from "./domain/invitations.js";
 import { commitAttestation } from "./domain/attestations.js";
+import { createAttestationChallenge } from "./domain/attestation-authorization.js";
 import { listMyProofs } from "./domain/proof-collection.js";
 import { listLinkedIdentities, unlinkIdentity } from "./domain/external-identities.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
@@ -1606,13 +1607,17 @@ export function createApp(deps: AppDependencies): Express {
   );
 
   app.post(
+    "/proofs/:id/attestation-challenges",
+    asyncRoute(async (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.status(201).json(await createAttestationChallenge(deps.db, deps.clock, bearerUser(req), req.params.id, req.body));
+    }),
+  );
+
+  app.post(
     "/proofs/:id/attestations",
     asyncRoute(async (req, res) => {
-      const result = await commitAttestation(deps.db, deps.clock, bearerUser(req), req.params.id, {
-        statement: req.body?.statement == null ? undefined : String(req.body.statement),
-        relatedEvidenceId:
-          req.body?.relatedEvidenceId == null ? undefined : String(req.body.relatedEvidenceId),
-      });
+      const result = await commitAttestation(deps.db, deps.clock, bearerUser(req), req.params.id, req.body);
       res.status(201).json(result);
     }),
   );

@@ -1,6 +1,23 @@
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
 import { withRequestTimeout } from "./request-timeout";
 
+export interface SellerAttestationAuthorization {
+  challengeId: string;
+  signature: string;
+}
+
+export interface SellerAttestationReceipt extends SellerAttestationAuthorization {
+  version: 1;
+  method: "ANDROID_BIOMETRIC_STRONG";
+  biometricMethodProvenance: "CLIENT_ASSERTED_NOT_INDEPENDENTLY_VERIFIED";
+  signatureVerification: "SERVER_VERIFIED";
+  algorithm: "ECDSA_SHA256";
+  payload: string;
+  publicKey: string;
+  publicKeySha256: string;
+  verifiedAt: string;
+}
+
 export type ProofStatus =
   | "OPEN"
   | "AWAITING_PARTICIPANT"
@@ -252,6 +269,7 @@ export interface ProofView {
     relatedEvidenceId: string | null;
     createdAt: string;
     digest: { algorithm: string; sha256: string };
+    authorization?: SellerAttestationReceipt;
   }>;
   events?: Array<{
     eventId: string;
@@ -939,9 +957,19 @@ export class PackProofV2Client {
 
   async createAttestation(
     proofId: string,
-    input: { statement: string; relatedEvidenceId?: string },
+    input: { statement: string; relatedEvidenceId?: string; authorization?: SellerAttestationAuthorization },
   ): Promise<{ attestation: unknown; proof: ProofView }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/attestations`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  async createAttestationChallenge(
+    proofId: string,
+    input: { captureSessionId: string; sha256: string; publicKey: string },
+  ): Promise<{ challengeId: string; payload: string; expiresAt: string }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/attestation-challenges`, {
       method: "POST",
       body: input,
     });

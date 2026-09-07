@@ -7,6 +7,26 @@ export interface UserFacingError {
 }
 
 const CODE_MESSAGES: Record<string, { title: string; message: string; action?: UserFacingError["action"] }> = {
+  BIOMETRIC_CANCELLED: {
+    title: "Attestation cancelled.",
+    message: "Your recording is kept. Authenticate when you are ready to submit.",
+    action: "retry",
+  },
+  BIOMETRIC_LOCKED_OUT: {
+    title: "Biometrics are locked.",
+    message: "Unlock your device to re-enable biometrics, then return and try again. Your recording is kept.",
+    action: "retry",
+  },
+  BIOMETRIC_NOT_ENROLLED: {
+    title: "Set up device biometrics.",
+    message: "Add a fingerprint in Android Settings, then return to attest and submit. Your recording is kept.",
+    action: "retry",
+  },
+  ATTESTATION_CHALLENGE_EXPIRED: {
+    title: "Authenticate again.",
+    message: "This attestation request expired. Your recording is kept; retry to create a fresh request.",
+    action: "retry",
+  },
   REQUEST_TIMEOUT: {
     title: "The connection took too long.",
     message: "Try again. Any saved recording is kept on this device.",

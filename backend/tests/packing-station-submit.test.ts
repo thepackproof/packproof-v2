@@ -167,6 +167,7 @@ describe("packing station submit", () => {
       actorUserId: "seller",
       capture,
       idempotencyKey: "idem_committed",
+      evidenceId: "evd_committed",
       deps: { api, upload, newIdempotencyKey: () => "unused" },
     });
 
@@ -220,5 +221,143 @@ describe("packing station submit", () => {
         deps: { api, upload: async () => undefined, newIdempotencyKey: () => "x" },
       }),
     ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
+  it("does not initialize or upload evidence when seller authorization is cancelled", async () => {
+    const api = apiMock([snapshot()]);
+    const upload = vi.fn();
+    const prepareAttestation = vi.fn(async () => {
+      throw { code: "BIOMETRIC_CANCELLED", message: "Fingerprint confirmation was cancelled." };
+    });
+
+    await expect(submitStationSession({
+      proof: snapshot(), actorUserId: "seller", capture,
+      deps: { api, upload, prepareAttestation, newIdempotencyKey: () => "cancelled" },
+    })).rejects.toMatchObject({ code: "BIOMETRIC_CANCELLED" });
+
+    expect(prepareAttestation).toHaveBeenCalledOnce();
+    expect(upload).not.toHaveBeenCalled();
+    expect(api.calls).toEqual([]);
+  });
+
+  it.each(["COUNTERPARTY_OPTIONAL", "COUNTERPARTY_REQUIRED"])(
+    "authorizes before upload and signs this exact evidence under %s despite a prior attestation",
+    async (participationPolicy) => {
+      const initial = snapshot({ participationPolicy });
+      const committed = snapshot({
+        participationPolicy,
+        status: "EVIDENCE_COMMITTED",
+        evidence: [{ evidenceId: "evd_1", validationStatus: "COMMITTED" }],
+        attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "seller" }],
+      });
+      const api = apiMock([initial, committed]);
+      const sequence: string[] = [];
+      const signedAttestation = vi.fn(async (proofId: string, evidenceId: string) => {
+        sequence.push(`signed:${proofId}:${evidenceId}`);
+        expect(api.calls).toContain("commit:proof_1");
+        return { proof: committed };
+      });
+      const prepareAttestation = vi.fn(async () => {
+        expect(api.calls).toEqual([]);
+        sequence.push("authorize");
+        return signedAttestation;
+      });
+      const upload = vi.fn(async () => { sequence.push("upload"); });
+
+      await submitStationSession({
+        proof: initial, actorUserId: "seller", capture,
+        deps: { api, upload, prepareAttestation, newIdempotencyKey: () => "signed" },
+      });
+
+      expect(sequence).toEqual(["authorize", "upload", "signed:proof_1:evd_1"]);
+      expect(signedAttestation).toHaveBeenCalledExactlyOnceWith("proof_1", "evd_1");
+      expect(api.calls.some((call) => call.startsWith("attest:"))).toBe(false);
+    },
+  );
+
+  it("retains committed evidence and does not finalize if its signed attestation fails", async () => {
+    const api = apiMock([snapshot()]);
+    const signedAttestation = vi.fn(async () => {
+      throw { code: "ATTESTATION_SIGNATURE_INVALID", message: "Authorization could not be verified." };
+    });
+    await expect(submitStationSession({
+      proof: snapshot(), actorUserId: "seller", capture,
+      deps: {
+        api, upload: async () => undefined, newIdempotencyKey: () => "rejected",
+        prepareAttestation: async () => signedAttestation,
+      },
+    })).rejects.toMatchObject({ code: "ATTESTATION_SIGNATURE_INVALID" });
+
+    expect(api.calls).toContain("commit:proof_1");
+    expect(api.calls.some((call) => call.startsWith("finalize:"))).toBe(false);
+    expect(api.calls.some((call) => call.startsWith("attest:"))).toBe(false);
+  });
+
+  it("retries signed attestation for its persisted committed evidence without uploading again", async () => {
+    const recovered = snapshot({
+      status: "EVIDENCE_COMMITTED",
+      evidence: [{ evidenceId: "evd_committed", validationStatus: "COMMITTED" }],
+    });
+    const api = apiMock([recovered]);
+    const upload = vi.fn();
+    const signedAttestation = vi.fn(async () => ({ proof: recovered }));
+
+    const result = await submitStationSession({
+      proof: recovered, actorUserId: "seller", capture,
+      evidenceId: "evd_committed", idempotencyKey: "same-capture",
+      deps: {
+        api, upload, newIdempotencyKey: () => "unused",
+        prepareAttestation: async () => signedAttestation,
+      },
+    });
+
+    expect(result.evidenceId).toBe("evd_committed");
+    expect(signedAttestation).toHaveBeenCalledExactlyOnceWith("proof_1", "evd_committed");
+    expect(upload).not.toHaveBeenCalled();
+    expect(api.calls.some((call) => call.startsWith("init:") || call.startsWith("commit:"))).toBe(false);
+  });
+
+  it("recovers a completed exact-evidence submission without creating a fresh authorization", async () => {
+    const completed = snapshot({
+      status: "FINALIZED",
+      evidence: [{ evidenceId: "evd_committed", validationStatus: "COMMITTED" }],
+    });
+    const api = apiMock([completed]);
+    const upload = vi.fn();
+    const prepareAttestation = vi.fn();
+
+    const result = await submitStationSession({
+      proof: completed, actorUserId: "seller", capture, evidenceId: "evd_committed",
+      deps: { api, upload, prepareAttestation, newIdempotencyKey: () => "recovered" },
+    });
+
+    expect(result.completion).toBe("FINALIZED");
+    expect(prepareAttestation).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+    expect(api.calls).toEqual(["get:proof_1"]);
+  });
+
+  it("does not recover or attest another committed video when the evidence identity is missing", async () => {
+    const api = apiMock([snapshot()]);
+    api.initializeEvidenceUpload = async () => {
+      throw { code: "EVIDENCE_ALREADY_COMMITTED", message: "Already committed" };
+    };
+    api.getProof = async () => snapshot({
+      status: "EVIDENCE_COMMITTED",
+      evidence: [{ evidenceId: "another-video", validationStatus: "COMMITTED" }],
+    });
+    const signedAttestation = vi.fn();
+    const upload = vi.fn();
+
+    await expect(submitStationSession({
+      proof: snapshot(), actorUserId: "seller", capture,
+      deps: {
+        api, upload, newIdempotencyKey: () => "unknown-video",
+        prepareAttestation: async () => signedAttestation,
+      },
+    })).rejects.toMatchObject({ code: "EVIDENCE_ALREADY_COMMITTED" });
+
+    expect(signedAttestation).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
   });
 });

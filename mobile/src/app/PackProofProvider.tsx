@@ -10,7 +10,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppState, Linking } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
+import { authorizeSellerCapture, attestSellerCapture } from "../attestation/seller-attestation";
 import {
   PackProofV2Client,
   ApiError,
@@ -148,6 +149,7 @@ export interface PackProofContextValue {
   errorDetail: UserFacingError | null;
   route: AppRoute;
   proofsLibrary: ProofsLibraryState;
+  readProofsScrollOffset: () => number;
   readProofRecordView: (proofId: string) => ProofRecordViewState;
   saveProofRecordView: (proofId: string, state: ProofRecordViewState) => void;
   session: CachedClientState | null;
@@ -292,6 +294,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [receiptProofId, setReceiptProofId] = useState<string | null>(null);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
   const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(DEFAULT_PROOFS_LIBRARY);
+  // Scroll is native interaction state, not application state. Publishing every
+  // offset would rerender every context consumer during an Android fling.
+  const proofsScrollOffset = useRef(0);
+  const readProofsScrollOffset = useCallback(() => proofsScrollOffset.current, []);
+  const setProofsScrollOffset = useCallback((offset: number) => {
+    proofsScrollOffset.current = Number.isFinite(offset) ? Math.max(0, offset) : 0;
+  }, []);
   // View preferences live only for this provider session; scroll updates do not rerender the app.
   const proofRecordViews = useRef(new Map<string, ProofRecordViewState>());
   const [authPane, setAuthPane] = useState<AuthPane>("signIn");
@@ -920,6 +929,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     errorDetail,
     route,
     proofsLibrary,
+    readProofsScrollOffset,
     readProofRecordView: (proofId) => proofRecordViews.current.get(`${apiBaseUrl}:${session?.userId}:${proofId}`) ?? initialProofRecordView(),
     saveProofRecordView: (proofId, state) => {
       const key = `${apiBaseUrl}:${session?.userId}:${proofId}`;
@@ -997,8 +1007,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setProofsSort: (sort) => setProofsLibrary((current) => ({ ...current, sort })),
     setProofsRoleFilter: (role) => setProofsLibrary((current) => ({ ...current, role })),
     setProofsCarrierFilter: (carrier) => setProofsLibrary((current) => ({ ...current, carrier })),
-    setProofsScrollOffset: (scrollOffset) =>
-      setProofsLibrary((current) => ({ ...current, scrollOffset })),
+    setProofsScrollOffset,
     setError,
     setAuthPane,
     setAuthMode,
@@ -1109,6 +1118,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         sessionRef.current = null;
         await clearCachedState();
         proofRecordViews.current.clear();
+        proofsScrollOffset.current = 0;
         setSession(null);
         setProof(null);
         setConnections([]);
@@ -1437,7 +1447,6 @@ export function PackProofProvider(props: { children: ReactNode }) {
           await retireSupersededUploads();
           const key = sessionRef.current.evidenceIdempotencyKey ?? newIdempotencyKey();
           await persistCapture(localCapture, key);
-          setCaptureStatus("preparing");
           setUploadPercent(null);
           const evidenceType = captureEvidenceType({
             workflowType: proof.workflowType,
@@ -1447,24 +1456,44 @@ export function PackProofProvider(props: { children: ReactNode }) {
           const serverAction = proof.nextAction;
           try {
             const savedEvidenceId = sessionRef.current?.uploadEvidenceId;
+            localCapture.uploadEvidenceId = savedEvidenceId ?? undefined;
+            const submittingUserId = sessionRef.current!.userId;
+            const assertSubmissionContext = () => {
+              if (sessionRef.current?.userId !== submittingUserId || sessionRef.current?.captureProofId !== proof.proofId || sessionRef.current?.captureUri !== localCapture.uri)
+                throw new Error("Your account or recording changed. Open the original Proof and authenticate again.");
+            };
+            const needsSellerAttestation = Platform.OS === "android" && evidenceType === "FULFILLMENT_CAPTURE" &&
+              proof.participants.some(item => item.role === "SELLER" && item.userId === submittingUserId);
+            // No upload is initialized until the system has authorized the exact declaration.
+            // Canceling or failing this step leaves the original recording available for retry.
+            const authorization = needsSellerAttestation
+              ? await authorizeSellerCapture({ client, capture: localCapture, proofId: proof.proofId, userId: submittingUserId })
+              : undefined;
+            assertSubmissionContext();
+            setCaptureStatus("preparing");
             const currentProof = savedEvidenceId ? await client.getProof(proof.proofId) : null;
+            assertSubmissionContext();
             const alreadyCommitted = currentProof?.evidence.some(
               (e) => e.evidenceId === savedEvidenceId && e.validationStatus === "COMMITTED",
             );
             let evidenceId = savedEvidenceId;
             if (!alreadyCommitted) {
-              if (evidenceType === "FULFILLMENT_CAPTURE") await bindRecordedCapture(client, localCapture, proof.proofId, sessionRef.current!.userId);
+              if (evidenceType === "FULFILLMENT_CAPTURE" && !authorization) await bindRecordedCapture(client, localCapture, proof.proofId, sessionRef.current!.userId);
+              assertSubmissionContext();
               const initialized = await client.initializeEvidenceUpload(proof.proofId, {
                 ...(evidenceType === "FULFILLMENT_CAPTURE" ? { captureSessionId: localCapture.captureSessionId } : {}),
                 contentType: localCapture.contentType,
                 evidenceType,
                 idempotencyKey: key,
               });
+              assertSubmissionContext();
               evidenceId = initialized.evidenceId;
+              localCapture.uploadEvidenceId = evidenceId;
               await persist({
                 ...sessionRef.current!,
                 uploadEvidenceId: evidenceId,
               });
+              assertSubmissionContext();
               setCaptureStatus("uploading");
               setUploadPercent(0);
               await uploadCaptureResumable({
@@ -1475,9 +1504,15 @@ export function PackProofProvider(props: { children: ReactNode }) {
                 fileUri: localCapture.uri,
                 onProgress: setUploadPercent,
               });
+              assertSubmissionContext();
             }
             setCaptureStatus("uploaded");
             const committedEvidence = await client.commitEvidence(proof.proofId, evidenceId!);
+            assertSubmissionContext();
+            if (authorization) {
+              await attestSellerCapture({ client, proofId: proof.proofId, evidenceId: committedEvidence.evidenceId, authorization });
+              assertSubmissionContext();
+            }
             if (
               isGradingWorkflow(proof.workflowType) &&
               serverAction &&
@@ -1500,9 +1535,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
               }
             }
             if (localCapture.captureSessionId) await saveCaptureBookmarks(client, proof.proofId, committedEvidence.evidenceId, localCapture).catch(() => { setError("Recording saved. Some replay bookmarks are unavailable; original playback still works."); });
+            assertSubmissionContext();
             setCaptureStatus("committed");
             void haptic("success");
             await discardLocalCapture(localCapture.uri);
+            assertSubmissionContext();
             await persistCapture(null, null);
             setUploadPercent(null);
             await refreshProof(proof.proofId);

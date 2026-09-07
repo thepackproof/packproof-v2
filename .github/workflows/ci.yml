@@ -81,6 +81,38 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:proof-record
 
+  native-attestation:
+    name: Android attestation Kotlin
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Install Android compile SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125'
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install
+      - name: Compile native attestation against Android and Expo
+        working-directory: mobile/android
+        run: ./gradlew :packproof-attestation:compileReleaseKotlin --no-daemon --console=plain
+
   migrations-postgres:
     name: PostgreSQL migration concurrency
     runs-on: ubuntu-latest

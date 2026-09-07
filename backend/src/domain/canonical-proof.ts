@@ -22,6 +22,7 @@ import {
   asIso,
   asRequiredIso,
   type AttestationRow,
+  type AttestationAuthorization,
   type EvidenceRow,
   type InvitationRow,
   type ManifestRow,
@@ -96,6 +97,7 @@ export interface CanonicalAttestation {
   relatedEvidenceId: string | null;
   relatedEventId: string | null;
   createdAt: string;
+  authorization?: AttestationAuthorization;
   digest: {
     algorithm: typeof DIGEST_ALGORITHM;
     sha256: string;
@@ -242,6 +244,7 @@ export async function getCanonicalProof(
       participantId: row.participant_id,
       attestedBy: row.attested_by,
       statement: row.statement,
+      ...(row.authorization_json ? { authorization: row.authorization_json } : {}),
       relatedEvidenceId: row.related_evidence_id,
       relatedEventId: row.related_event_id,
       createdAt: asRequiredIso(row.created_at),
