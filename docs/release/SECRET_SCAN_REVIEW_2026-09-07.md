@@ -14,3 +14,21 @@ The original run `34086025661` reported the first five findings before the Strip
 `.gitleaks.toml` retains the complete built-in Gitleaks rules through `useDefault = true`. Each of its four exceptions requires both the exact anchored source path and exact anchored reviewed value, and is restricted to the reported rule ID. There are no commit exclusions, whole-file exemptions, blanket fixture directories or history rewrites. New values in these files, the same values in production files, and other detector rules remain in scope. The configuration is supplied explicitly by CI to pinned Gitleaks `v8.30.1`; findings continue to be fully redacted.
 
 Validation completed locally: TOML parsing, four expected exception entries, retained default rules, exact positive matches and negative checks for a different source path or credential value. A successful hosted Gitleaks history scan is the final validation gate; local structural checks do not establish that result. None of the reviewed findings establishes a real exposed credential requiring rotation. Any subsequent distinct finding requires its own review and, if genuine, credential removal and rotation rather than another fixture exception.
+
+## Subsequent exact-source scan
+
+Hosted run `34091018206`, job `101644328180`, at remote source `d80a6ea4583f10e496f1109514d0a3fc0812c424` reported seven new `generic-api-key` findings in `docs/program-2026-09-07/acceptance-evidence-register.v1.json`. The earlier six findings were absent, confirming the original targeted exceptions were applied.
+
+| Line | Reviewed content | Evidence and scope |
+| --- | --- | --- |
+| 1630 | Prose listing five signing-key trust states | Ordinary status terminology in `implementedBehavior`; one exact value exception limited to the register and the generic rule. |
+| 2669 | Digest of `backend/migrations/044_support_access.sql` | SHA-256 recomputed from the named tracked file and matched exactly. |
+| 2690 | Digest of `backend/src/domain/access-links.ts` | SHA-256 recomputed from the named tracked file and matched exactly. |
+| 2705 | Digest of `backend/src/domain/proof-access.ts` | SHA-256 recomputed from the named tracked file and matched exactly. |
+| 2725 | Digest of `backend/src/support/access.ts` | SHA-256 recomputed from the named tracked file and matched exactly. |
+| 2735 | Digest of `backend/tests/database-credential-rotation.test.ts` | SHA-256 recomputed from the named tracked file and matched exactly. |
+| 2768 | Digest of `backend/tests/support-access.test.ts` | SHA-256 recomputed from the named tracked file and matched exactly. |
+
+The six digest exceptions match an entire anchored JSON line containing the exact file path and exact reviewed checksum, within this one register file and detector rule. They do not accept arbitrary hexadecimal strings or future digest values. The scan's keyword matching interpreted access/credential words in the inventory keys as credential labels. Two additional allowlist entries cover these seven findings, preserving the original four entries and all built-in rules. No source history was rewritten and no genuine credential was identified.
+
+Local validation parsed the final TOML, recomputed all six checksums, and passed 39 positive/negative scope checks, including changed values, changed inventory keys, another source file, and extra trailing credential material. The cached official `v8.30.1` generic rule also reproduced all seven reported matches. The actual Gitleaks binary remains unavailable locally; the subsequent hosted scan is still the final acceptance gate.

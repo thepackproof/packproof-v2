@@ -37,3 +37,27 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''^backend/tests/program\-metrics\-stripe\.test\.ts$''']
 regexes = ['''^rk_test_syntheticfixtureonly0000000$''']
+
+# Additional reviewed findings: run34091018206, job101644328180.
+[[allowlists]]
+description = "Exact source-file digest inventory entries, recomputed against their named tracked files."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/program\-2026\-09\-07/acceptance\-evidence\-register\.v1\.json$''']
+regexes = [
+  '''^[ \t]*"backend/migrations/044_support_access\.sql"[ \t]*:[ \t]*"0877a7bafb8d37146dd4165804a4daf4d2f9f20e855c719021263bdaba5f465a",?[ \t]*$''',
+  '''^[ \t]*"backend/src/domain/access\-links\.ts"[ \t]*:[ \t]*"b7e2bc4c629d033ae7996caaf3225a8568f341040c8c51fc99e10b8591845f77",?[ \t]*$''',
+  '''^[ \t]*"backend/src/domain/proof\-access\.ts"[ \t]*:[ \t]*"72eeef31ba8457a1ba692be1c2ecc8403d1bfc63dbdcb432b361cdd51b7c5316",?[ \t]*$''',
+  '''^[ \t]*"backend/src/support/access\.ts"[ \t]*:[ \t]*"2a8ac30439cc1876514a02a731b3ee65ba2c3ceca95e3ccc113bddfb741f93d2",?[ \t]*$''',
+  '''^[ \t]*"backend/tests/database\-credential\-rotation\.test\.ts"[ \t]*:[ \t]*"f9e5ef48519c82493e223cc9760052c9b948719e2c4d757e612f401d58b2e522",?[ \t]*$''',
+  '''^[ \t]*"backend/tests/support\-access\.test\.ts"[ \t]*:[ \t]*"66dd551b25aa36d97445cb4ce6bbb46355c5903de350f9b636a12fd437281c43",?[ \t]*$''',
+ ]
+
+[[allowlists]]
+description = "Ordinary prose enumerating signing-key states; no authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/program\-2026\-09\-07/acceptance\-evidence\-register\.v1\.json$''']
+regexes = ['''^retired/revoked/compromised/unknown/stale$''']

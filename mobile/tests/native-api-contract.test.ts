@@ -37,8 +37,13 @@ test("native camera session, retry identity, original replay and reviewed case e
     const label = await client.bindCaptureShipping(proof.proofId, session.id, {
       rawValue: "1Z999AA10123456784", format: "CODE_128", detectedAtMs: 100, idempotencyKey: "native-label",
     });
-    assert.equal(label.status,"BOUND");
-    assert.equal(label.proofId,proof.proofId);
+    assert.equal(label.status,"NEEDS_CONFIRMATION");
+    const confirmedLabel = await client.bindCaptureShipping(proof.proofId, session.id, {
+      rawValue: "1Z999AA10123456784", format: "CODE_128", detectedAtMs: 100,
+      idempotencyKey: "native-label:confirmed", confirmed: true,
+    });
+    assert.equal(confirmedLabel.status,"BOUND");
+    assert.equal(confirmedLabel.proofId,proof.proofId);
     const sameSession = await client.createCaptureSession(
       proof.proofId,
       "before-recording",
