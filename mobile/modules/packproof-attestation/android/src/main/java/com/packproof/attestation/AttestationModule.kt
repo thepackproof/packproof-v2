@@ -298,7 +298,7 @@ class AttestationModule : Module() {
     }.also { mainHandler.postDelayed(it, 90_000L) }
 
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-      .setTitle("Attest and submit Proof")
+      .setTitle("Confirm and submit")
       .setDescription("The item shown and attached in this Proof is the item I am shipping")
       .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
       .setConfirmationRequired(true)

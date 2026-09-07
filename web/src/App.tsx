@@ -1,4 +1,8 @@
+import { UsagePanel } from "./components/UsagePanel";
+import { randomId } from "./random-id";
 import { OverviewScreen } from "./screens/OverviewScreen";
+import { PackingRequestsPanel } from "./components/PackingRequestsPanel";
+import { LocalRecordingRecovery } from "./components/LocalRecordingRecovery";
 import { clearViewState, saveNavigationContext } from "./navigation-context";
 import { ConnectedAccountsPanel } from "./screens/ConnectedAccountsPanel";
 import { preserveCapture, recoverCapture, captureQueueKey } from "./capture-queue";
@@ -178,7 +182,7 @@ function writePath(path: string) {
   const current = `${window.location.pathname}${window.location.search}`;
   if (current !== path) {
     saveNavigationContext();
-    window.history.pushState({ ppContext: crypto.randomUUID(), ppFrom: current }, "", path);
+    window.history.pushState({ ppContext: randomId(), ppFrom: current }, "", path);
     window.dispatchEvent(new Event("packproof:navigate"));
   }
 }
@@ -336,10 +340,14 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     () =>
       new PackProofApi({
         baseUrl: session?.apiBaseUrl ?? defaultApiBaseUrl(),
-        getToken: getSessionToken,
-        getIdentityToken: () => sessionRef.current?.idToken ?? null,
+        getToken: async () => {
+          if (sessionRef.current?.userId !== session?.userId || sessionRef.current?.apiBaseUrl !== session?.apiBaseUrl) return null;
+          const token = await getSessionToken();
+          return sessionRef.current?.userId === session?.userId && sessionRef.current?.apiBaseUrl === session?.apiBaseUrl ? token : null;
+        },
+        getIdentityToken: () => sessionRef.current?.userId === session?.userId && sessionRef.current?.apiBaseUrl === session?.apiBaseUrl ? sessionRef.current?.idToken ?? null : null,
       }),
-    [session?.apiBaseUrl, getSessionToken],
+    [session?.apiBaseUrl, session?.userId, getSessionToken],
   );
   const loadPublicProof = useCallback((token: string) => api.getPublicProof(token), [api]);
 
@@ -672,8 +680,10 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           onOpenAccount={() => go("/account")}
         />
 
+      <LocalRecordingRecovery key={session.userId} api={api} userId={session.userId} onOpen={id => go(`/proofs/${encodeURIComponent(id)}`)} />
+
       {route.name === "home" ? <OverviewScreen proofs={proofs} orders={queue} connections={connections} loading={loading} error={error} onGo={go} /> : null}
-      {route.name === "proofs" ? <HomeScreen {...libraryProps} /> : null}
+      {route.name === "proofs" ? <><HomeScreen {...libraryProps} /><PackingRequestsPanel api={api} userId={session.userId} proofs={proofs} onOpen={id=>go(`/proofs/${encodeURIComponent(id)}`)} /></> : null}
 
       {route.name === "activity" ? (
         <ActivityScreen
@@ -781,6 +791,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           onSignOut={signOut}
         />
       ) : null}
+
+      {route.name === "account" ? <UsagePanel api={api} userId={session.userId} /> : null}
 
       {route.name === "create" ? (
         <CreateProofScreen
@@ -973,7 +985,12 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             setError(null);
             void api
               .finalizeProof(current.proofId)
-              .then(() => api.listFulfillmentQueue("all"))
+              .then(async (result) => {
+                if (result.proof.status !== "FINALIZED") throw new Error("Finalization is being preserved. Keep your local recording and check this Proof shortly.");
+                const recovery = await api.getRecoveryStatus(current.proofId);
+                if (recovery.finalization.status !== "PRESERVED" || !recovery.finalization.receipt) throw new Error("The record is finalized; durable preservation is still pending.");
+                return api.listFulfillmentQueue("all");
+              })
               .then((result) => {
                 setQueue(result.items);
                 go("/fulfillment");
@@ -990,7 +1007,11 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             setError(null);
             void api
               .finalizeProof(current.proofId)
-              .then(() => api.listFulfillmentQueue("ready"))
+              .then(async (result) => {
+                const recovery = await api.getRecoveryStatus(current.proofId);
+                if (result.proof.status !== "FINALIZED" || recovery.finalization.status !== "PRESERVED" || !recovery.finalization.receipt) throw new Error("Finalization is being preserved. Keep your local recording and check this Proof shortly.");
+                return api.listFulfillmentQueue("ready");
+              })
               .then((result) => {
                 setQueue(result.items);
                 const next = result.items[0];
@@ -1153,7 +1174,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             try {
               const result = await api.runProofAction(proof.proofId, action, {
                 ...body,
-                idempotencyKey: crypto.randomUUID(),
+                idempotencyKey: randomId(),
               });
               setProof(result.proof);
             } catch (caught) {
@@ -1302,6 +1323,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {route.name === "complete" ? (
         <CompletionScreen
           proofId={route.proofId}
+          api={api}
           onViewProof={() => go(`/proofs/${encodeURIComponent(route.proofId)}`)}
           onGoHome={() => go("/")}
         />

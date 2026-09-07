@@ -1,4 +1,7 @@
+import { createReadiness, liveness, type DependencyProbe } from "./operations/readiness.js";
+import { getAccountUsageSummary } from "./billing/usage-ledger.js";
 import { appendAudit } from "./domain/audit.js";
+import { pipeline } from "node:stream/promises";
 import express, {
   type ErrorRequestHandler,
   type Express,
@@ -12,11 +15,12 @@ import type { Database } from "./db/database.js";
 import { createOrGetProof, createProof } from "./domain/create-proof.js";
 import { requireParticipationPolicy } from "./domain/participation.js";
 import { requireWorkflowType } from "./domain/workflow.js";
-import { DomainError, errorCodeFromSql } from "./domain/errors.js";
+import { DomainError } from "./domain/errors.js";
 import {
   commitEvidence,
   initializeEvidenceUpload,
   readCommittedEvidence,
+  readCommittedEvidenceStream,
 } from "./domain/evidence.js";
 import { finalizeProof, getManifest } from "./domain/finalize.js";
 import { createProofAssets, listProofAssets, updateAssetCatalog } from "./domain/assets.js";
@@ -32,7 +36,6 @@ import {
   receiveAssets,
 } from "./domain/orchestration.js";
 import {
-  assertPublicProofRateLimit,
   createAccessLink,
   listAccessLinks,
   revokeAccessLink,
@@ -164,12 +167,11 @@ import { previewOrderIntake } from "./intake/order-intake.js";
 import { exportEvidencePackage, getEvidenceReview } from "./domain/evidence-review.js";
 import {
   listUploadParts,
-  storeUploadPart,
   completeUploadParts,
   discardPendingUpload,
 } from "./domain/resumable-upload.js";
 import { commerceLifecycleRouter } from "./http/commerce-lifecycle-router.js";
-import { httpBoundary, requestBodyErrors } from "./http/boundary.js";
+import { httpBoundary, requestBodyErrors, requestCorrelation, configureTrustedProxy, distributedRateLimit, safeHttpError } from "./http/boundary.js";
 import { captureSessionRouter, packingRelayRouter } from "./http/capture-router.js";
 import { signatureRouter } from "./http/signature-router.js";
 import { disclosureRouter, sendPrivateMedia } from "./http/disclosure-router.js";
@@ -185,6 +187,15 @@ import {
 } from "./domain/retention-controls.js";
 
 import type { ManifestSigningRuntime } from "./integrity/signing-runtime.js";
+import { captureCapabilities } from "./http/capabilities.js";
+import { getProofRecoveryStatus } from "./domain/recovery-journal.js";
+import { receiveAdmittedUpload } from "./domain/media-admission.js";
+import { readDisclosedMediaStream } from "./domain/disclosure-stream.js";
+import { receiveAdmittedUploadPart } from "./domain/resumable-upload.js";
+import { packingRequestsRouter, parcelScopeRouter } from "./http/packing-requests-router.js";
+import { recipientExportsRouter } from "./http/recipient-exports-router.js";
+import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proof-supplements.js";
+import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 
 export interface AppDependencies {
   db: Database;
@@ -205,6 +216,8 @@ export interface AppDependencies {
   facebook?: FacebookOAuthRuntime;
   webhookConfig?: WebhookConfig;
   manifestSigning?: ManifestSigningRuntime;
+  requireDurableReceipts?: boolean;
+  readinessProbes?: DependencyProbe[];
 }
 
 function asyncRoute(
@@ -234,6 +247,9 @@ declare global {
 export function createApp(deps: AppDependencies): Express {
   const app = express();
   app.disable("x-powered-by");
+  configureTrustedProxy(app);
+  app.use(requestCorrelation);
+  app.use("/public",distributedRateLimit(deps.db,{scope:"public-proof",limit:120,windowMs:60_000}));
   const corsOrigins = deps.corsOrigins ?? [];
   const integrations = deps.integrations ?? createDefaultIntegrationRegistry(deps.clock);
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
@@ -256,29 +272,45 @@ export function createApp(deps: AppDependencies): Express {
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
   app.use(httpBoundary(corsOrigins));
+  // Admission must happen before a body parser can buffer or accept upload bytes.
+  app.put("/upload/:token", asyncRoute(async (req, res) => {
+    const result = await receiveAdmittedUpload(deps.db, deps.clock, deps.objectStore, req.params.token, req);
+    res.json({objectKey:result.key,evidenceId:result.evidenceId});
+  }));
+  app.put("/proofs/:id/evidence/:evidenceId/parts/:partNumber", asyncRoute(async (req, res) => {
+    const actor = await deps.auth.authenticate(req.headers);
+    req.packproofUserId = actor.userId;
+    res.json(await receiveAdmittedUploadPart(deps.db, deps.clock, deps.objectStore, actor.userId,
+      req.params.id, req.params.evidenceId, Number(req.params.partNumber), req));
+  }));
   app.use("/integrations/webhooks", express.raw({ type: () => true, limit: "256kb" }));
   app.use((req, res, next) => {
-    if (Buffer.isBuffer(req.body)) {
+    if (Buffer.isBuffer(req.body) || (req.method === "PUT" && /^\/v1\/proofs\/[^/]+\/evidence\/[^/]+\/parts\/[^/]+$/.test(req.path))) {
       next();
       return;
     }
     express.json({ limit: "2mb" })(req, res, next);
   });
-  app.use(
-    express.raw({
-      type: ["application/octet-stream", "video/*", "image/*", "audio/*"],
-      limit: "100mb",
-    }),
-  );
+  app.use((req,res,next) => {
+    if (req.method === "PUT" && /^\/v1\/proofs\/[^/]+\/evidence\/[^/]+\/parts\/[^/]+$/.test(req.path)) { next(); return; }
+    express.raw({type:["application/octet-stream","video/*","image/*","audio/*"],limit:"100mb"})(req,res,next);
+  });
+
+  app.get("/live", liveness);
+  app.get("/ready", createReadiness(deps.readinessProbes ?? [{name:"database",check:()=>deps.db.query("SELECT 1")}]).handler);
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
+  app.get("/capabilities", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(captureCapabilities(releaseIdentity, deps.requireDurableReceipts === true));
+  });
+
   app.get(
     "/public/proofs/:token",
     asyncRoute(async (req, res) => {
-      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Referrer-Policy", "no-referrer");
       const result = await getPublicProof(deps.db, deps.clock, req.params.token);
@@ -289,23 +321,22 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/public/proofs/:token/evidence/:evidenceId",
     asyncRoute(async (req, res) => {
-      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
-      const { readPublicEvidence } = await import("./domain/public-proof.js");
-      const media = await readPublicEvidence(
+      const media = await readDisclosedMediaStream(
         deps.db,
         deps.clock,
         deps.objectStore,
         req.params.token,
         req.params.evidenceId,
+        req.header("range"),
       );
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Referrer-Policy", "no-referrer");
-      sendPrivateMedia(req, res, media);
+      res.status(media.status).set(media.headers);
+      if (media.body) await pipeline(media.body,res); else res.end();
     }),
   );
 
   app.get("/public/proofs/:token/package", asyncRoute(async (req, res) => {
-    assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
     const bytes = await exportDisclosurePackage(deps.db, deps.clock, deps.objectStore, req.params.token);
@@ -352,18 +383,6 @@ export function createApp(deps: AppDependencies): Express {
     );
   }
 
-  app.put(
-    "/upload/:token",
-    asyncRoute(async (req, res) => {
-      const body = Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(typeof req.body === "string" ? req.body : "");
-      const contentType = req.header("content-type") ?? undefined;
-      const result = await deps.objectStore.putUpload(req.params.token, body, contentType);
-      res.json({ objectKey: result.key });
-    }),
-  );
-
   app.use("/v1", createPlatformRouter(deps));
 
   app.use((req, _res, next) => {
@@ -395,6 +414,24 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/me/packing-relay", packingRelayRouter(deps));
   app.use("/proofs/:id/signature", signatureRouter(deps));
   app.use("/proofs/:id/disclosure", disclosureRouter(deps));
+  app.use("/packing-requests", packingRequestsRouter(deps));
+  app.use("/proofs/:id/parcel-scope", parcelScopeRouter(deps));
+  app.use("/proofs/:id/recipient-exports", recipientExportsRouter(deps));
+  app.get("/proofs/:id/supplements", asyncRoute(async (req,res)=>{
+    await requireCommerceAccess(deps.db,req.params.id,bearerUser(req));
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await getProofSupplementSnapshot(deps.db,req.params.id));
+  }));
+  app.post("/proofs/:id/supplements", asyncRoute(async (req,res)=>{
+    if (!deps.manifestSigning?.signer) throw new DomainError("MANIFEST_SIGNING_UNAVAILABLE","Signing is temporarily unavailable. Retry shortly.",503);
+    res.status(201).json(await appendProofSupplement(deps.db,deps.clock,deps.manifestSigning.signer,bearerUser(req),req.params.id,req.body));
+  }));
+  app.get("/me/usage", asyncRoute(async (req,res) => { res.setHeader("Cache-Control","private, no-store"); res.json(await getAccountUsageSummary(deps.db,deps.clock,bearerUser(req))); }));
+
+  app.get("/proofs/:id/recovery", asyncRoute(async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await getProofRecoveryStatus(deps.db, bearerUser(req), req.params.id));
+  }));
   app.get(
     "/proofs/:id/retention",
     asyncRoute(async (req, res) => {
@@ -494,25 +531,6 @@ export function createApp(deps: AppDependencies): Express {
           bearerUser(req),
           req.params.id,
           req.body?.idempotencyKey,
-        ),
-      );
-    }),
-  );
-  app.put(
-    "/proofs/:id/evidence/:evidenceId/parts/:partNumber",
-    asyncRoute(async (req, res) => {
-      if (!Buffer.isBuffer(req.body))
-        throw new DomainError("INVALID_UPLOAD_PART", "Send binary bytes", 400);
-      res.json(
-        await storeUploadPart(
-          deps.db,
-          deps.clock,
-          deps.objectStore,
-          bearerUser(req),
-          req.params.id,
-          req.params.evidenceId,
-          Number(req.params.partNumber),
-          req.body,
         ),
       );
     }),
@@ -741,7 +759,7 @@ export function createApp(deps: AppDependencies): Express {
         req.params.adapterKey,
         req.headers,
         rawBody,
-        { integrations, credentials: credentialStore },
+        { integrations, credentials: credentialStore, manifestSigning: deps.manifestSigning },
       );
       await deps.db.query(`UPDATE capture_shipment_jobs SET state='REGISTERED',attempts=0,last_error_code=NULL,carrier=$2,provider_mode=$3,registered_at=COALESCE(registered_at,$4),updated_at=$4,next_run_at=$5 WHERE transaction_id=$1`,[req.params.id,result.carrier??null,result.mode??null,deps.clock.now().toISOString(),new Date(deps.clock.now().getTime()+6*3600000).toISOString()]);
       res.status(result.createdCount > 0 ? 201 : 200).json(publicSyncResult(result));
@@ -757,7 +775,7 @@ export function createApp(deps: AppDependencies): Express {
         deps.clock,
         bearerUser(req),
         req.params.id,
-        { integrations, credentials: credentialStore },
+        { integrations, credentials: credentialStore, manifestSigning: deps.manifestSigning },
       );
       res.status(result.createdCount > 0 ? 201 : 200).json(publicSyncResult(result));
     }),
@@ -1561,6 +1579,7 @@ export function createApp(deps: AppDependencies): Express {
           contentType: String(req.body?.contentType ?? ""),
           evidenceType: req.body?.evidenceType,
           captureSessionId: req.body?.captureSessionId,
+          byteSize: req.body?.byteSize,
           idempotencyKey,
         },
       );
@@ -1571,22 +1590,25 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/proofs/:id/evidence/:evidenceId",
     asyncRoute(async (req, res) => {
-      const result = await readCommittedEvidence(
+      const result = await readCommittedEvidenceStream(
         deps.db,
         deps.objectStore,
         bearerUser(req),
         req.params.id,
         req.params.evidenceId,
+        req.header("range"),
       );
       res.setHeader("Content-Type", result.contentType);
-      await appendAudit(deps.db, {
+      try { await appendAudit(deps.db, {
         proofId: req.params.id,
         actorUserId: bearerUser(req),
         eventType: "PROOF_ACCESSED",
         eventData: { channel: "evidence_playback", evidenceId: req.params.evidenceId },
         at: deps.clock.now(),
       });
-      sendPrivateMedia(req, res, result);
+      } catch(error) { result.body?.destroy(); throw error; }
+      res.status(result.status).set(result.headers);
+      if (result.body) await pipeline(result.body, res); else res.end();
     }),
   );
 
@@ -1625,8 +1647,8 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/finalize",
     asyncRoute(async (req, res) => {
-      const result = await finalizeProof(deps.db, deps.clock, bearerUser(req), req.params.id, deps.manifestSigning?.signer);
-      res.json(result);
+      const result = await finalizeProof(deps.db, deps.clock, bearerUser(req), req.params.id, deps.manifestSigning?.signer, {requireDurableReceipts:deps.requireDurableReceipts === true});
+      res.status(result.proof.status === "FINALIZED" ? 200 : 202).json(result);
     }),
   );
 
@@ -1639,39 +1661,7 @@ export function createApp(deps: AppDependencies): Express {
   );
 
   app.use(requestBodyErrors);
-  const errors: ErrorRequestHandler = (error, _req, res, _next) => {
-    if (error instanceof IntegrationError) {
-      res.status(error.httpStatus).json({
-        error: {
-          code: error.code,
-          message: error.message,
-          retryable: error.retryable,
-        },
-      });
-      return;
-    }
-    if (error instanceof DomainError) {
-      res.status(error.httpStatus).json({
-        error: { code: error.code, message: error.message },
-      });
-      return;
-    }
-    const sqlCode = errorCodeFromSql(error);
-    if (sqlCode) {
-      const status = sqlCode === "PROOF_ALREADY_FINALIZED" ? 409 : 409;
-      res.status(status).json({
-        error: {
-          code: sqlCode,
-          message: error instanceof Error ? error.message : sqlCode,
-        },
-      });
-      return;
-    }
-    console.error(error);
-    res.status(500).json({
-      error: { code: "INTERNAL", message: "Internal server error" },
-    });
-  };
+  const errors: ErrorRequestHandler = (error, _req, res, _next) => safeHttpError(error,res);
   app.use(errors);
 
   return app;

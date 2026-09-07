@@ -1,4 +1,5 @@
 import { sha256Hex } from "../hash.js";
+import { assertSupportedParcelCapture } from "./parcel-scope.js";
 import { requireCommerceAccess } from "./commerce-lifecycle.js";
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
@@ -12,7 +13,8 @@ export const CAPTURE_POLICY_VERSION = 'packproof.direct-capture/v1';
 export const CAPTURE_ASSURANCE = 'An authenticated participant used an authorized PackProof capture session. Camera origin is not independently attested; a compromised device may inject media.';
 const ACQUISITION_MS = 30 * 60 * 1000;
 const RECOVERY_MS = 7 * 24 * 60 * 60 * 1000;
-export const CAPTURE_MAX_BYTES = 200 * 1024 * 1024;
+export const CAPTURE_MAX_BYTES = 250_000_000;
+export const CAPTURE_MAX_DURATION_MS = 300_000;
 export interface ClientCaptureContext {
   interrupted: boolean | null;
   recordedDurationMs: number | null;
@@ -89,17 +91,21 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
       if (existing.rows[0].client !== input.client || (existing.rows[0].stage_id ?? undefined)!==input.stageId) throw new DomainError('CAPTURE_SESSION_CONFLICT','Capture retry cannot change its client',409);
       return captureSessionView(existing.rows[0]);
     }
+    if (!input.stageId) {
+      const proof = await loadProof(tx, proofId);
+      await assertSupportedParcelCapture(tx, proof.transaction_id);
+    }
     const active = await tx.query<{count: string}>("SELECT COUNT(*) AS count FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND state IN ('ISSUED','RECORDED','UPLOADING') AND recover_until > $3",[proofId,actor,clock.now().toISOString()]);
     if (Number(active.rows[0].count) >= 20) throw new DomainError('CAPTURE_QUEUE_FULL','Finish or cancel pending recordings before starting another',409);
     const now=clock.now(); const id=newId('cap');
-    const result=await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,CAPTURE_POLICY_VERSION,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep]);
+    const result=await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step,max_duration_ms) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11,300000) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,CAPTURE_POLICY_VERSION,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep]);
     await appendAudit(tx,{proofId,actorUserId:actor,eventType:'CAPTURE_SESSION_ISSUED',eventData:{sessionId:id,client:input.client,policyVersion:CAPTURE_POLICY_VERSION,assurance:CAPTURE_ASSURANCE},at:now});
     return captureSessionView(result.rows[0]);
   });
 }
 export async function completeCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, sessionId: string, input: {sha256: string; byteSize: number; contentType: string; interrupted?: boolean; recordedDurationMs?: number}) {
   if (typeof input.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(input.sha256) || !Number.isSafeInteger(input.byteSize) || input.byteSize < 1 || input.byteSize > CAPTURE_MAX_BYTES)
-    throw new DomainError('INVALID_CAPTURE_RECORDING','A nonempty recording up to 200 MiB and its SHA-256 digest are required',400);
+    throw new DomainError('INVALID_CAPTURE_RECORDING','A nonempty recording up to 250 MB and its SHA-256 digest are required',413);
   if(input.interrupted!==undefined && typeof input.interrupted!=="boolean") throw new DomainError("INVALID_CAPTURE_CONTEXT","Interruption status must be a boolean",400);
   if(input.recordedDurationMs!==undefined && (!Number.isSafeInteger(input.recordedDurationMs) || input.recordedDurationMs<0 || input.recordedDurationMs>1800000)) throw new DomainError("INVALID_CAPTURE_CONTEXT","Reported recording duration must be an integer from 0 to 1800000 milliseconds",400);
   const contentType=String(input.contentType).split(';')[0].trim().toLowerCase();

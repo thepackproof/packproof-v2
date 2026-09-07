@@ -14,7 +14,7 @@ import { finalizeProof } from '../src/domain/finalize.js';
 import { sha256Hex } from '../src/hash.js';
 
 const tracking = '1Z999AA10123456784';
-const scan = {rawValue:tracking,format:'CODE_128',detectedAtMs:100,idempotencyKey:'scan-1'};
+const scan = {rawValue:tracking,format:'CODE_128',detectedAtMs:100,idempotencyKey:'scan-1',confirmed:true};
 describe('capture shipping identity and durable carrier registration',()=>{
   let h:TestHarness,seller:string,other:string,proofId:string,transactionId:string,sessionId:string;
   let now:Date,createCalls:number,getCalls:number,responseStatus:number,responseCode:string;
@@ -63,7 +63,7 @@ describe('capture shipping identity and durable carrier registration',()=>{
     expect(shippingBarcode('420902109400100000000000000000')).toMatchObject({trackingNumber:'9400100000000000000000',carrierHint:'USPS'});
     expect(shippingBarcode('https://example.com/address')).toBeNull();
     expect(shippingBarcode('9612345678901234567890123456789012')).toBeNull();
-    expect((await bind({rawValue:'123456789012'})).status).toBe('NEEDS_CONFIRMATION');
+    expect((await bind({rawValue:'123456789012',confirmed:false})).status).toBe('NEEDS_CONFIRMATION');
     expect(await getCaptureShipping(h.db,proofId)).toBeNull();
     expect((await bind({rawValue:'123456789012',confirmed:true})).status).toBe('BOUND');
     expect((await getCaptureShipping(h.db,proofId))?.observations[0].participantConfirmed).toBe(true);

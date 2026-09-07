@@ -1,3 +1,4 @@
+import { getProofSupplementSnapshot } from './proof-supplements.js';
 import type { Database } from "../db/database.js";
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
@@ -88,11 +89,12 @@ export interface SignatureSnapshotData {
   proofId: string;
   proofVersion: number;
   manifestSha256: string | null;
+  recordAsOf?: { sequence: number; sha256: string | null; snapshotAt: string };
   status: string;
   audience?: "PARTICIPANT" | "RECEIVER";
   sourceAccess?: { outboundOriginals: "AVAILABLE" | "WITHHELD_BY_SCOPE"; outboundView: string };
-  order: { itemTitle: string | null; itemDescription: string | null; quantity: number | null; source: string; fieldSources?: Record<string, string> };
-  shipping: { carrier: string | null; events: SignatureEvent[] };
+  order: { externalReference?:string|null; parcelId?:string|null; allocationAssurance?:string; itemTitle: string | null; itemDescription: string | null; quantity: number | null; source: string; fieldSources?: Record<string, string> };
+  shipping: { carrier: string | null; trackingNumber?:string|null; events: SignatureEvent[] };
   evidence: SignatureMedia[];
   statements: Array<{ attestationId: string; statement: string; source: string }>;
   anchors: SignatureAnchor[];
@@ -117,6 +119,7 @@ export interface SignatureEvent {
   occurredAt: string;
   source: string;
   provider: string | null;
+  providerEnvironment?: string | null;
   title: string;
   sourceHash?: string;
   sourceVersion?: string;
@@ -144,6 +147,7 @@ export interface SignatureCasePreview {
   snapshotId: string;
   snapshotSha256: string;
   coreManifestSha256: string | null;
+  recordAsOf?: { sequence: number; sha256: string | null; snapshotAt: string };
   scope: CaseScope;
   status: string | null;
   order: SignatureSnapshotData["order"] | null;
@@ -173,7 +177,7 @@ function signatureEvent(proof: CanonicalProof, event: ChronologyEntry): Signatur
   if (!original) fail("EVENT_SOURCE_NOT_FOUND", "Chronology entry has no original source", 409);
   const sourceHash = sha256Hex(canonicalize(original));
   return { eventId: event.id, eventType: event.eventType, occurredAt: event.occurredAt,
-    source: event.source, provider: event.provider ?? null, title: event.title,
+    source: event.source, provider: event.provider ?? null, providerEnvironment: ('eventData' in original && original.eventData && typeof original.eventData === 'object' && 'mode' in original.eventData) ? String(original.eventData.mode) : null, title: event.title,
     sourceHash, sourceVersion: `sha256:${sourceHash}` };
 }
 
@@ -312,13 +316,16 @@ export async function createSignatureSnapshot(db: Database, clock: Clock, userId
       ((imported.originalSource ?? imported.source).endsWith("_API")) ? "PROVIDER_REPORTED_FIELD" : "PARTICIPANT_SUPPLIED_STATEMENT";
     const fieldSources = Object.fromEntries((rootAccess ? ["itemTitle", "itemDescription", "quantity"] : ["itemTitle"]).map(field => [field, sourceOf(field)]));
     const orderSources = new Set(Object.values(fieldSources));
+    const parcelScope=rootAccess?(await tx.query<{parcel_id:string;assurance:string}>('SELECT parcel_id,assurance FROM proof_parcel_scopes WHERE proof_id=$1',[proofId])).rows[0]:null;
+    const supplementHead = rootAccess ? await getProofSupplementSnapshot(tx, proofId) : null;
     const data: SignatureSnapshotData = { schema: "packproof.signature-snapshot.v1", proofId,
       proofVersion: proof.version, manifestSha256: rootAccess ? proof.integrity.manifestSha256 : null, status: proof.status,
+      ...(supplementHead ? { recordAsOf: { sequence: supplementHead.sequence, sha256: supplementHead.sha256, snapshotAt: supplementHead.supplements.at(-1)?.createdAt ?? proof.finalizedAt ?? proof.updatedAt } } : {}),
       audience: rootAccess ? "PARTICIPANT" : "RECEIVER",
       sourceAccess: { outboundOriginals: rootAccess ? "AVAILABLE" : "WITHHELD_BY_SCOPE", outboundView: rootAccess ? "Participant original access" : "Open an explicitly authorized reviewed disclosure link to inspect shared outbound media. A receipt invitation does not grant original access." },
-      order: { itemTitle: proof.transaction.itemTitle, itemDescription: rootAccess ? proof.transaction.itemDescription : null,
+      order: { externalReference:rootAccess?proof.transaction.externalReference:null, parcelId:parcelScope?.parcel_id??null,allocationAssurance:parcelScope?.assurance??'NO_PARCEL_ALLOCATION_DECLARED',itemTitle: proof.transaction.itemTitle, itemDescription: rootAccess ? proof.transaction.itemDescription : null,
         quantity: rootAccess ? proof.transaction.quantity : null, source: orderSources.size === 1 ? [...orderSources][0] : "MIXED_PROVIDER_AND_PARTICIPANT_FIELDS", fieldSources },
-      shipping: { carrier: proof.transaction.shipping?.carrier ?? null,
+      shipping: { carrier: proof.transaction.shipping?.carrier ?? null, trackingNumber: rootAccess?proof.transaction.shipping?.trackingNumber??null:null,
         events: chronology.filter(e => proof.shipmentObservations.events.some(s => s.id === e.eventId)) },
       evidence, statements: rootAccess ? proof.attestations.map(a => ({ attestationId: a.attestationId, statement: a.statement, source: "PARTICIPANT_SUPPLIED_STATEMENT" })) : [],
       anchors: (await listAnchors(tx, proofId)).filter(a => rootAccess || (a.stageId != null && evidence.some(e => e.evidenceId === a.evidenceId && e.stageId === a.stageId))), chronology, observations,
@@ -427,6 +434,7 @@ export async function buildSignatureCase(db: Database, clock: Clock, userId: str
   const preview: SignatureCasePreview = { schema: "packproof.case-packet.v1", proofId, template, templateVersion: "1",
     title: descriptor.title, summary: `This packet organizes the selected record for review of ${descriptor.title.toLowerCase()}. It makes no finding about authenticity, fault, liability, or the outcome of a claim.`,
     snapshotId: snapshot.snapshotId, snapshotSha256: snapshot.sha256, coreManifestSha256: data.manifestSha256,
+    ...(data.recordAsOf ? { recordAsOf: data.recordAsOf } : {}),
     scope, status: includes("status") ? data.status : null, order: includes("order") ? data.order : null,
     shipping: includes("shipping") ? data.shipping : null, evidence, anchors,
     statements: includes("statements") ? data.statements : [], observations, notes: notes ? { text: notes, source: "USER_SUPPLIED_NOTE" } : null,

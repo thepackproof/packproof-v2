@@ -60,6 +60,7 @@ export interface ImportedTransaction {
     itemIds?: string[];
     environment?: string | null;
     marketplaceId?: string | null;
+    pilotCaptureExclusion?: string | null;
   } | null;
 }
 
@@ -89,6 +90,7 @@ export interface ParsedImportedTransaction {
     itemIds: string[];
     environment: string | null;
     marketplaceId: string | null;
+    pilotCaptureExclusion?: string | null;
   } | null;
 }
 
@@ -270,6 +272,7 @@ function parseProviderIdentifiers(
     itemIds,
     environment: normalizeOptionalText(record.environment, "providerIdentifiers.environment"),
     marketplaceId: normalizeOptionalText(record.marketplaceId, "providerIdentifiers.marketplaceId"),
+    ...(record.pilotCaptureExclusion ? {pilotCaptureExclusion: normalizeOptionalText(record.pilotCaptureExclusion,"providerIdentifiers.pilotCaptureExclusion")} : {}),
   };
   if (
     !identifiers.orderId &&

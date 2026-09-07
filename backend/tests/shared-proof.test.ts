@@ -40,7 +40,7 @@ describe('one live shared Proof', () => {
     const { seller, proofId } = await createProof();
     const first = await commitProofEvidence(h, seller, proofId, { contentType: 'image/jpeg', bytes: Buffer.from('first original') });
     const preview = await previewDisclosure(h.db, seller, proofId, input);
-    expect(preview.disclosure).toMatchObject({ purpose: 'SHARED_PROOF', liveProof: true, fields: ['status', 'order', 'shipping', 'evidence'] });
+    expect(preview.disclosure).toMatchObject({ purpose: 'SHARED_PROOF', liveProof: true, fields: ['status', 'order', 'shipping', 'evidence', 'statements'] });
     expect(preview.evidence.map(e => e.evidenceId)).toEqual([first.evidenceId]);
     expect(JSON.stringify(preview)).not.toContain('PRIVATE-');
     await expect(previewDisclosure(h.db, seller, proofId, { ...input, fields: ['status'], media: [] })).rejects.toMatchObject({ code: 'INVALID_DISCLOSURE' });
@@ -107,8 +107,8 @@ describe('one live shared Proof', () => {
     await acceptCommerceReceiver(h.db, h.clock, buyer, proofId);
     const stage = await createCommerceStage(h.db, h.clock, buyer, proofId, 'RECEIPT');
     const upload = await initializeStageEvidence(h.db, h.clock, h.objectStore, buyer, proofId, stage.stageId, { contentType: 'image/jpeg', idempotencyKey: 'receipt-original' });
-    const bytes = Buffer.from('original receipt photo');
-    await h.objectStore.putUpload(new URL(upload.upload.url).pathname.split('/').at(-1)!, bytes, 'image/jpeg');
+    const bytes = Buffer.concat([Buffer.from([255,216,255]),Buffer.from('original receipt photo')]);
+    await request(h.app).put(new URL(upload.upload.url).pathname).set('Content-Type','image/jpeg').send(bytes).expect(200);
     await expect(readDisclosedMedia(h.db, h.clock, h.objectStore, link.token, upload.evidenceId)).rejects.toMatchObject({ code: 'INSUFFICIENT_SCOPE' });
     await commitStageEvidence(h.db, h.clock, h.objectStore, buyer, proofId, stage.stageId, upload.evidenceId, undefined);
     const current = await getPublicProof(h.db, h.clock, link.token);

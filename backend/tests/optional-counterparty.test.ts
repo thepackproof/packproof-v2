@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createOrGetProof } from "../src/domain/create-proof.js";
@@ -141,15 +142,15 @@ describe("optional counterparty participation", () => {
       .set({ ...auth(seller), "Idempotency-Key": "p2p-evidence" })
       .send({ contentType: "video/mp4", evidenceType: "SELLER_EVIDENCE" });
     expect(upload.status).toBe(201);
-    const bytes = Buffer.from("p2p-required-evidence");
+    const bytes = await readFile(new URL("./fixtures/camera-recording.mp4", import.meta.url));
     await request(harness.app)
       .put(new URL(upload.body.upload.url as string).pathname)
       .set("Content-Type", "video/mp4")
-      .send(bytes);
+      .send(bytes).expect(200);
     await request(harness.app)
       .post(`/proofs/${created.body.proofId}/evidence/${upload.body.evidenceId}/commit`)
       .set(auth(seller))
-      .send({ sha256: sha256Hex(bytes) });
+      .send({ sha256: sha256Hex(bytes) }).expect(200);
     const blocked = await request(harness.app).post(`/proofs/${created.body.proofId}/finalize`).set(auth(seller));
     expect(blocked.body.error.code).toBe("FULFILLMENT_CAPTURE_REQUIRED");
     await commitFulfillmentAndAttest(harness,seller,created.body.proofId);

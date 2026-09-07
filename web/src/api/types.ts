@@ -561,6 +561,8 @@ export interface EbayOrderListView {
 
 export interface PublicProofView {
   disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[];liveProof?:boolean;sharingNotice?:string};
+  recordAsOf?: {supplementSequence:number;supplementSha256:string|null;scopeStatement:string};
+  statements?: Array<{attestationId:string;relatedEvidenceId:string|null;statement:string;attributedTo:string;createdAt:string;method:string;signatureVerification:string;biometricPolicy:string|null;hardwareOriginVerified:boolean;legalIdentityVerified:boolean}>;
   receipt?: {mode:string;carrierReportedDelivered:boolean;buyerReportedReceived:boolean;contributionUrl:string;message:string};
   evidence?: Array<{
     evidenceId: string;

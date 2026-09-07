@@ -9,6 +9,12 @@ class UnifiedCameraModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PackProofUnifiedCamera")
 
+    AsyncFunction("getHapticsEnabled") {
+      val context = appContext.reactContext
+      context != null && android.provider.Settings.System.getInt(context.contentResolver,
+        android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
+    }.runOnQueue(Queues.MAIN)
+
     View(UnifiedCameraView::class) {
       Events("onReady", "onBarcodeDetected", "onRecordingStarted", "onCaptureError")
 

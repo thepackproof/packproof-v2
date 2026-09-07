@@ -245,11 +245,7 @@ describe("receipt lifecycle and resumable capture", () => {
         .send({ contentType: "video/mp4", captureSessionId: recording.captureSessionId });
       expect(upload.status, JSON.stringify(upload.body)).toBe(201);
       const bytes = recording.bytes;
-      await h.objectStore.putUpload(
-        new URL(upload.body.upload.url).pathname.split("/").at(-1)!,
-        bytes,
-        "video/mp4",
-      );
+      await request(h.app).put(new URL(upload.body.upload.url).pathname).set("Content-Type","video/mp4").send(bytes).expect(200);
       const committed = await request(h.app)
         .post(`${base}/stages/${stageId}/evidence/${upload.body.evidenceId}/commit`)
         .set(auth(actor))

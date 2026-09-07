@@ -16,8 +16,8 @@ export function SellerAttestation({ onPress, disabled = false, loading = false }
   return <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <PressableScale
       accessibilityRole="button"
-      accessibilityLabel={`Attest and submit. ${SELLER_SHIPPING_STATEMENT}`}
-      accessibilityHint="Opens Android authentication. Submission requires successful biometric authentication."
+      accessibilityLabel={`Confirm and submit. ${SELLER_SHIPPING_STATEMENT}`}
+      accessibilityHint="Android requests a supported strong biometric, such as fingerprint or supported face authentication."
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={() => { void haptic("light"); onPress(); }}
@@ -27,9 +27,9 @@ export function SellerAttestation({ onPress, disabled = false, loading = false }
         {loading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="finger-print-outline" size={44} color={colors.accentText} />}
       </View>
       <Text style={[styles.statement, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
-      <Text style={[styles.instruction, { color: colors.accentText }]}>{loading ? "Preparing attestation…" : "Authenticate to attest and submit"}</Text>
+      <Text style={[styles.instruction, { color: colors.accentText }]}>{loading ? "Preparing attestation…" : "Confirm and submit"}</Text>
     </PressableScale>
-    <Text style={[styles.privacy, { color: colors.textSecondary }]}>Your device handles biometrics. PackProof never receives or stores your fingerprint.</Text>
+    <Text style={[styles.privacy, { color: colors.textSecondary }]}>Android requests a supported strong biometric. PackProof receives a signed statement, never biometric images or templates.</Text>
   </View>;
 }
 

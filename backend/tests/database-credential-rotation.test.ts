@@ -22,7 +22,7 @@ describe("RDS credential rotation", () => {
     expect(config.host).toBe("db.example");
     expect(config.database).toBe("packproof_v2");
     expect(config.user).toBe("packproof");
-    expect(config.ssl).toEqual({ rejectUnauthorized: true });
+    expect(config.ssl).toEqual({ rejectUnauthorized: true, minVersion: "TLSv1.2" });
     expect(JSON.stringify(config)).not.toContain("stale-password");
   });
 
@@ -44,7 +44,7 @@ describe("RDS credential rotation", () => {
   it("preserves the existing static-credential and TLS configuration path", () => {
     const config = postgresPoolConfig("postgres://user:password@localhost/db?sslmode=require");
     expect(config.connectionString).not.toContain("sslmode");
-    expect(config.ssl).toEqual({ rejectUnauthorized: false });
+    expect(config.ssl).toEqual({ rejectUnauthorized: true, minVersion: "TLSv1.2" });
     expect(config.password).toBeUndefined();
   });
 });

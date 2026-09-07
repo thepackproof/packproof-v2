@@ -1,6 +1,7 @@
 import type { Database } from "../db/database.js";
 import { DomainError } from "./errors.js";
 import type { ParticipantRow, ProofRow } from "./types.js";
+import { assertPolicyAccessSafe } from "./policy-recovery.js";
 
 export async function loadProof(
   db: Database,
@@ -38,6 +39,7 @@ export async function authorizeProofAccess(
   userId: string,
   role?: "SELLER" | "BUYER",
 ): Promise<ParticipantRow> {
+  await assertPolicyAccessSafe(db);
   const result = await db.query<ParticipantRow>(
     role
       ? `SELECT * FROM proof_participants WHERE proof_id = $1 AND user_id = $2 AND role = $3`

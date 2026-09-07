@@ -64,6 +64,7 @@ module.exports = {
     android: {
       package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
       versionCode: 35,
+      allowBackup: false,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",

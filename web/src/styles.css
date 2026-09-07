@@ -1382,3 +1382,11 @@ h2 {
 .secret-value { overflow-wrap:anywhere; }
 .review-mode { display:flex; gap:8px; flex-wrap:wrap; }
 .capture-preview { width: 100%; max-height: 360px; border-radius: 12px; background: #111; }
+
+.local-recovery-panel { margin: 1rem auto 0; padding: 1rem 1.25rem; width: min(100% - 2rem, 74rem); border: 1px solid #d8e0e8; border-radius: 12px; background: #f5f7fa; color: #243746; }
+.local-recovery-panel summary { cursor: pointer; font-weight: 650; min-height: 2rem; }
+.local-recovery-panel p { margin: .75rem 0; }
+.local-recovery-panel ul { padding: 0; list-style: none; }
+.local-recovery-panel li { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .75rem 0; border-top: 1px solid #d8e0e8; }
+.local-recovery-panel li span { flex: 1 1 20rem; }
+.preservation-status { min-height: 3rem; padding: .75rem 1.25rem; border-bottom: 1px solid #d8e0e8; color: #243746; background: #f5f7fa; }

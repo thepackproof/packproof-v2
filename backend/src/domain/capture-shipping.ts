@@ -1,3 +1,4 @@
+import { assertSupportedParcelCapture } from './parcel-scope.js';
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
 import { sha256Hex } from '../hash.js';
@@ -35,6 +36,15 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
     throw new DomainError('INVALID_SHIPPING_SCAN', 'A barcode format, video offset and retry key are required', 400);
   await requireParticipant(db, proofId, actor, 'SELLER');
   const proof = await loadProof(db, proofId);
+  // Preserve the observation independently of its subsequent association decision.
+  // A wrong-order label remains visible even when binding correctly rejects it.
+  const observed = shippingBarcode(input.rawValue);
+  if (observed && proof.status !== 'FINALIZED') {
+    const source = await loadCaptureSession(db, actor, proofId, sessionId);
+    if (source.client === 'NATIVE_CAMERA' && !source.stage_id && source.workflow_step === 'PACKING' && source.state !== 'CANCELLED' && clock.now().getTime() <= new Date(source.recover_until).getTime() && (source.client_reported_context?.recordedDurationMs == null || input.detectedAtMs <= source.client_reported_context.recordedDurationMs)) {
+      await db.query(`INSERT INTO capture_label_observations(id,proof_id,session_id,actor_user_id,tracking_number,carrier_hint,detected_at_ms,barcode_format,received_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(session_id,tracking_number) DO NOTHING`,[newId('scan'),proofId,sessionId,actor,observed.trackingNumber,observed.carrierHint,input.detectedAtMs,input.format,clock.now().toISOString()]);
+    }
+  }
   return db.transaction(async tx => {
     // Same lock order as shipping edits/finalization; never hold locks over HTTP.
     const context = await lockTransactionContext(tx, proof.transaction_id);
@@ -55,9 +65,10 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
       throw new DomainError('SHIPPING_SCAN_SESSION_EXPIRED', 'This Proof is no longer accepting packing scans', 409);
     if (session.client_reported_context?.recordedDurationMs != null && input.detectedAtMs > session.client_reported_context.recordedDurationMs)
       throw new DomainError('INVALID_SHIPPING_SCAN', 'The scan falls outside the reported recording', 400);
+    await assertSupportedParcelCapture(tx,proof.transaction_id);
     const current = context.shipping?.tracking_number;
     const normalizedCurrent = current?.replace(/[ \t\r\n-]/g, '').toUpperCase();
-    if (!candidate.distinctive && normalizedCurrent !== candidate.trackingNumber && !input.confirmed)
+    if (normalizedCurrent !== candidate.trackingNumber && !input.confirmed)
       return { status: 'NEEDS_CONFIRMATION' as const, ...candidate };
     if (normalizedCurrent && normalizedCurrent !== candidate.trackingNumber)
       throw new DomainError('SHIPPING_LABEL_CONFLICT', 'This label differs from the tracking number already attached to this Proof. Keep recording and check the package.', 409);

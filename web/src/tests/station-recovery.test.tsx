@@ -30,6 +30,7 @@ it("restores station bytes and finishes the exact committed recording after a re
   const api = {
     getProof: vi.fn(async () => proof), completeCaptureSession: vi.fn(async()=>({state:"RECORDED"})),
     initializeEvidenceUpload: vi.fn(), uploadObject: vi.fn(), commitEvidence: vi.fn(),
+    getRecoveryStatus:vi.fn(async()=>({proofId:ready.proofId,evidence:[{evidenceId:"saved-recording",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}})),
     createAttestation: vi.fn(async () => ({ proof })),
     finalizeProof: vi.fn(async () => { proof = { ...proof, status: "FINALIZED" }; return { proof }; }),
   };

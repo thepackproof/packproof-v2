@@ -1,3 +1,4 @@
+import type { ManifestSigningRuntime } from '../integrity/signing-runtime.js';
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import type { IntegrationCredentialStore } from "../integrations/credentials.js";
@@ -53,6 +54,7 @@ export async function executeTrustedShipmentSync(
   deps: {
     integrations: IntegrationAdapterRegistry;
     credentials: IntegrationCredentialStore;
+    manifestSigning?: ManifestSigningRuntime;
   },
 ): Promise<TrustedShipmentSyncResult> {
   const started = Date.now();
@@ -116,6 +118,7 @@ export async function executeTrustedShipmentSync(
     connection.owner_user_id,
     transactionId,
     observations,
+    deps.manifestSigning?.signer,
   );
   await recordShipmentSyncState(db, clock, {
     transactionId,

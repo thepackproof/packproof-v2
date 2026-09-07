@@ -35,6 +35,7 @@ export function SharedProofRecord({ proof, loadMedia }: {
       <div><h2>{tracker?.itemTitle || "Shared Proof"}</h2>{tracker?.reference && <p>{tracker.reference}</p>}</div>
       <StatusBadge label={recordProofStatus(proof.status)} />
     </header>
+    {proof.recordAsOf && <p className="record-source-note">{proof.recordAsOf.scopeStatement} Record update {proof.recordAsOf.supplementSequence}.</p>}
     <div className="record-tabs" role="tablist" aria-label="Proof record views">
       {tabs.map((name, index) => <button key={name} type="button" role="tab" ref={element => { buttons.current[index] = element; }}
         id={`shared-${proof.proofId}-${name}-tab`} aria-controls={`shared-${proof.proofId}-${name}-panel`}
@@ -48,6 +49,11 @@ export function SharedProofRecord({ proof, loadMedia }: {
       {tab === "Recording" && <div className="stack">
         {current && loadMedia ? <PublicMedia key={`${current.evidenceId}:${current.derivativeId || "original"}`} media={current} load={loadMedia} autoOpen /> : <p className="note">{current ? "Recording playback is unavailable." : "No recording is available through this link."}</p>}
         {(proof.evidence?.length ?? 0) > 1 && <div className="evidence-file-tabs" aria-label="Recordings">{proof.evidence!.map((item, index) => <button key={item.evidenceId} aria-pressed={current?.evidenceId === item.evidenceId} onClick={() => setSelected(item.evidenceId)}>{item.slot || "Recording"} {index + 1}</button>)}</div>}
+        {proof.statements?.filter(statement=>!statement.relatedEvidenceId||statement.relatedEvidenceId===current?.evidenceId).map(statement=><section key={statement.attestationId} aria-label="Participant statement">
+          <h3>{statement.attributedTo}</h3><p>{statement.statement}</p>
+          <p className="note">Recorded {formatWhen(statement.createdAt)}. {statement.signatureVerification==='SERVER_VERIFIED'?'Declaration signature verified.':'Participant statement recorded.'}</p>
+          {statement.biometricPolicy && <details><summary>Confirmation details</summary><p>{statement.biometricPolicy} This does not verify legal identity, package contents or hardware origin.</p></details>}
+        </section>)}
       </div>}
       {tab === "Activity" && (activity.length ? <ol className="shared-proof-activity">{activity.map(item => <li key={item.code}><strong>{item.label}</strong><time dateTime={item.occurredAt!}>{formatWhen(item.occurredAt)}</time></li>)}</ol> : <p className="note">No activity recorded yet.</p>)}
       {tab === "Tracking" && <div className="stack">

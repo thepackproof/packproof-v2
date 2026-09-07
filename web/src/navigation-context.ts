@@ -1,3 +1,4 @@
+import { randomId } from "./random-id";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
 type Context = { y: number; anchor?: string; offset?: number; focus?: string };
@@ -46,7 +47,7 @@ export function restoreNavigationContext() {
 export function installNavigationContext() {
   const original = window.history.scrollRestoration;
   window.history.scrollRestoration = "manual";
-  if (!window.history.state?.ppContext) window.history.replaceState({ ...window.history.state, ppContext: crypto.randomUUID() }, "");
+  if (!window.history.state?.ppContext) window.history.replaceState({ ...window.history.state, ppContext: randomId() }, "");
   activeKey = contextKey();
   window.addEventListener("scroll", saveNavigationContext, { passive: true });
   window.addEventListener("pagehide", saveNavigationContext);

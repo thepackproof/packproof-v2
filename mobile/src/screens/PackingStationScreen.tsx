@@ -1,19 +1,15 @@
+import { completeSavedCapture } from "../capture/completion";
+import { captureRecoveryLabel } from "../capture/recovery-model";
 import { PressableScale } from "../ui/motion";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { BackHandler, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { isAuthenticationFailure } from "../copy/errors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { authorizeSellerCapture, attestSellerCapture } from "../attestation/seller-attestation";
 import { SellerAttestation } from "../ui/SellerAttestation";
 import {
-  discardLocalCapture,
   localCaptureExists,
   recordPackingEvidence,
-  bindRecordedCapture,
-  persistCaptureMetadata,
   saveCaptureBookmarks,
-  uploadCaptureFile,
-  uploadCaptureResumable,
   type LocalCapture,
 } from "../capture";
 import {
@@ -28,7 +24,6 @@ import {
   stationPhaseLabel,
 } from "../packing-station/machine";
 import { normalizeStationReference } from "../packing-station/scan";
-import { submitStationSession } from "../packing-station/submit";
 import type { StationCandidate, StationState } from "../packing-station/types";
 import { PackProofV2Client, newIdempotencyKey, type ProofView } from "../v2-api";
 import { BarcodeScanView } from "./BarcodeScanView";
@@ -366,112 +361,24 @@ export function PackingStationScreen(props: {
         await persistFromState(stateRef.current, null);
         return;
       }
-      const proof = await props.client.getProof(order.proofId);
-      assertCurrentSubmission();
-      // A restored session may know the upload identity before capture metadata
-      // was saved. The helper needs that exact identity to recover signed state.
       captured.uploadEvidenceId ??= evidenceIdRef.current ?? undefined;
-      if (!biometricAttestation && !proof.evidence.some((media) =>
-        media.evidenceId === captured.uploadEvidenceId && media.validationStatus === "COMMITTED"))
-        await bindRecordedCapture(props.client, captured, order.proofId, props.userId);
-      assertCurrentSubmission();
-      const result = await submitStationSession({
-        proof,
-        actorUserId: props.userId,
-        capture: {
-          handle: captured.uri,
-          captureSessionId: captured.captureSessionId,
-          contentType: captured.contentType,
-          byteSize: captured.byteSize,
-          durationMs: captured.durationMs,
-        },
-        idempotencyKey: key,
-        evidenceId: captured.uploadEvidenceId ?? evidenceIdRef.current,
-        onEvidenceInitialized: async (evidenceId) => {
-          assertCurrentSubmission();
-          evidenceIdRef.current = evidenceId;
-          captured.uploadEvidenceId = evidenceId;
-          await persistCaptureMetadata(captured);
-          assertCurrentSubmission();
-          setHeldCapture({ ...captured });
-          await persistFromState(stateRef.current, captured);
-        },
-        deps: {
-          prepareAttestation: biometricAttestation ? async () => {
-            const authorization = await authorizeSellerCapture({
-              client: props.client,
-              capture: captured,
-              proofId: order.proofId,
-              userId: props.userId,
-            });
-            assertCurrentSubmission();
-            await persistCaptureMetadata(captured);
-            assertCurrentSubmission();
-            await persistFromState(stateRef.current, captured);
-            assertCurrentSubmission();
-            return (proofId, evidenceId) => {
-              assertCurrentSubmission();
-              return attestSellerCapture({ client: props.client, proofId, evidenceId, authorization });
-            };
-          } : undefined,
-          api: {
-            initializeEvidenceUpload: (proofId, input) => {
-              assertCurrentSubmission();
-              return props.client.initializeEvidenceUpload(proofId, { ...input, captureSessionId: captured.captureSessionId });
-            },
-            commitEvidence: (proofId, evidenceId) => {
-              assertCurrentSubmission();
-              return props.client.commitEvidence(proofId, evidenceId);
-            },
-            createAttestation: (proofId, input) => {
-              assertCurrentSubmission();
-              return props.client.createAttestation(proofId, input);
-            },
-            finalizeProof: (proofId) => {
-              assertCurrentSubmission();
-              return props.client.finalizeProof(proofId);
-            },
-            getProof: (proofId) => {
-              assertCurrentSubmission();
-              return props.client.getProof(proofId);
-            },
-          },
-          uploadEvidence: (proofId, evidenceId, _capture, onProgress) => {
-            assertCurrentSubmission();
-            return uploadCaptureResumable({
-              client: props.client,
-              baseUrl: props.apiBaseUrl,
-              proofId,
-              evidenceId,
-              fileUri: captured.uri,
-              onProgress,
-            });
-          },
-          newIdempotencyKey,
-          upload: async (target, _capture, onProgress) => {
-            assertCurrentSubmission();
-            await uploadCaptureFile({
-              baseUrl: props.apiBaseUrl,
-              target,
-              fileUri: captured.uri,
-              contentType: captured.contentType,
-              onProgress,
-            });
-          },
-        },
-        onProgress: (progress) => {
+      const completedProof = await completeSavedCapture({
+        client: props.client, capture: captured, userId: props.userId, interactive: true, idempotencyKey: key,
+        needsSellerAttestation: biometricAttestation, assertAccount: assertCurrentSubmission,
+        onProgress: percent => { if (isCurrentSubmission()) dispatch({ type: "PROCESSING_PROGRESS", submitStep: "upload", uploadPercent: percent }); },
+        onChange: capture => {
           if (!isCurrentSubmission()) return;
-          dispatch({
-            type: "PROCESSING_PROGRESS",
-            submitStep: progress.step,
-            uploadPercent: progress.uploadPercent,
-          });
+          evidenceIdRef.current = capture.uploadEvidenceId ?? null;
+          setHeldCapture({ ...capture });
+          const phase = capture.recovery?.phase;
+          dispatch({ type: "PROCESSING_PROGRESS", submitStep: phase === "UPLOADING" ? "upload" : phase === "FINALIZATION_PENDING" ? "finalize" : "commit", uploadPercent: null });
         },
       });
+      const result = { proof: completedProof, evidenceId: captured.uploadEvidenceId!, completion: "FINALIZED" as const };
       assertCurrentSubmission();
       await saveCaptureBookmarks(props.client, order.proofId, result.evidenceId, captured).catch(() => undefined);
       assertCurrentSubmission();
-      await discardLocalCapture(captured.uri);
+      // Completed local originals stay in Account until deliberate, receipt-checked cleanup.
       assertCurrentSubmission();
       setHeldCapture(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
@@ -568,9 +475,7 @@ export function PackingStationScreen(props: {
         ) : null}
         {state.phase === "PROCESSING" && state.submitStep !== null ? (
           <Text style={[styles.hint, { color: tone.muted }]}>
-            {state.submitStep === "attest" && state.uploadPercent == null
-              ? "Confirming your shipment"
-              : "Saving packing video"}
+            {heldCapture?.recovery ? captureRecoveryLabel(heldCapture.recovery.phase) : "Preparing your saved recording"}
             {state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}
           </Text>
         ) : null}
@@ -801,18 +706,11 @@ function toneForPhase(phase: StationState["phase"]): {
   muted: string;
 } {
   switch (phase) {
-    case "RECORDING":
-    case "FINISH_SCANNING":
-    case "VERIFYING_FINISH_SCAN":
-      return { background: "#10222E", ink: "#F4F6F8", muted: "#9AA8B2" };
-    case "PROCESSING":
-      return { background: "#142735", ink: "#F4F6F8", muted: "#9AA8B2" };
-    case "PROOF_CREATED":
-      return { background: "#0C2A1C", ink: "#F3FFF6", muted: "#B7E0C5" };
-    case "RECOVERY":
-      return { background: "#2A2414", ink: "#FFF8E8", muted: "#E0C88A" };
-    default:
-      return { background: "#0B1220", ink: "#F3F7FC", muted: "#9FB0C6" };
+    case "RECORDING": case "FINISH_SCANNING": case "VERIFYING_FINISH_SCAN":
+      return { background: "#F5F7FA", ink: "#102A43", muted: "#243746" };
+    case "PROOF_CREATED": return { background: "#F0FDF4", ink: "#166534", muted: "#243746" };
+    case "RECOVERY": return { background: "#FFFBEB", ink: "#78350F", muted: "#243746" };
+    default: return { background: "#FFFFFF", ink: "#102A43", muted: "#243746" };
   }
 }
 
@@ -859,20 +757,20 @@ const styles = StyleSheet.create({
   order: { fontSize: 28, fontWeight: "700" },
   item: { fontSize: 22, fontWeight: "600" },
   hint: { fontSize: 18, lineHeight: 26 },
-  error: { color: "#ffd0d0", fontSize: 16 },
+  error: { color: "#9F1239", fontSize: 16 },
   block: { gap: 12 },
   fallback: { gap: 8, marginTop: 8 },
   fallbackLabel: { fontSize: 14, fontWeight: "700", letterSpacing: 0.6 },
   input: {
     borderWidth: 2,
-    borderColor: "#24354D",
-    backgroundColor: "#16243A",
-    color: "#F3F7FC",
+    borderColor: "#D8E0E8",
+    backgroundColor: "#F5F7FA",
+    color: "#102A43",
     padding: 16,
     fontSize: 20,
   },
   button: {
-    backgroundColor: "#13A8E8",
+    backgroundColor: "#1769E0",
     paddingVertical: 18,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -880,7 +778,7 @@ const styles = StyleSheet.create({
   buttonSecondary: {
     backgroundColor: "transparent",
     borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: "#D8E0E8",
   },
   buttonDisabled: { opacity: 0.4 },
   buttonText: {
@@ -889,5 +787,5 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
   },
-  buttonSecondaryText: { color: "#FFFFFF" },
+  buttonSecondaryText: { color: "#102A43" },
 });

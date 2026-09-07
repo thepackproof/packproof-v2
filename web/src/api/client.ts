@@ -1,4 +1,6 @@
 import { withRequestTimeout } from "./timeout";
+import type { CaptureCapabilities } from "../capture-preflight";
+import type { RecoveryView } from "../components/PreservationStatus";
 import {
   ApiError,
   type CanonicalProof,
@@ -51,6 +53,19 @@ export class PackProofApi {
 
   get recoveryScope(): string { return new URL(this.options.baseUrl || "/api", location.origin).href.replace(/\/$/, ""); }
 
+  async getCapabilities(): Promise<CaptureCapabilities> {
+    return this.request("/capabilities", {auth:false});
+  }
+
+  async getRecoveryStatus(proofId: string): Promise<RecoveryView> {
+    const view = await this.request<RecoveryView>(`/proofs/${encodeURIComponent(proofId)}/recovery`);
+    if (view.proofId !== proofId || !Array.isArray(view.evidence) || !Array.isArray(view.declarations)
+      || !view.finalization || typeof view.finalization.status !== "string") {
+      throw new Error("Preservation status is unavailable. Keep your local recording and retry shortly.");
+    }
+    return view;
+  }
+
   async setReceiptPreference(proofId:string,optedIn:boolean) {
     await this.options.getToken();
     const token=this.options.getIdentityToken?.();
@@ -64,6 +79,10 @@ export class PackProofApi {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/complete`, {method:"POST",body});
   }
   async recoverCaptureSession(proofId:string, sessionId:string) { return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/recover`, {method:"POST",body:{}}); }
+  async getUsage<T>(): Promise<T> { return this.request("/me/usage"); }
+
+  async packingRequest<T>(path = "", method = "GET", body?: unknown): Promise<T> { return this.request(`/packing-requests${path}`, {method,body}); }
+
   async featureRequest<T>(proofId:string, path:string, method = "GET", body?:unknown): Promise<T> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/${path}`, {method,body});
   }
@@ -440,6 +459,7 @@ export class PackProofApi {
       evidenceType?: string;
       idempotencyKey: string;
       captureSessionId?: string;
+      byteSize?: number;
     },
   ): Promise<EvidenceUploadView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/uploads`, {

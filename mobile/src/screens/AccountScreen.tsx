@@ -1,5 +1,8 @@
+import * as Sharing from "expo-sharing";
+import { formatBytes } from "../capture";
+import { captureRecoveryLabel, mayCleanUpCapture } from "../capture/recovery-model";
 import { useEffect, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { displayName } from "../copy/format";
 import { ACCOUNT_DELETION_COPY, PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from "../copy/legal";
@@ -66,6 +69,21 @@ export function AccountScreen() {
         loading={app.busy}
       />
 
+      <SectionHeader title="Saved recordings" />
+      <Text style={[styles.body, { color: colors.textSecondary }]}>Local originals use {formatBytes(app.savedRecordings.reduce((sum, capture) => sum + (capture.byteSize ?? 0), 0))}. Pending recordings stay tied to this account. Uninstalling PackProof or losing this device can remove local-only work.</Text>
+      {app.savedRecordings.map(capture => <InfoCard key={capture.recovery!.operationId}>
+        <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{captureRecoveryLabel(capture.recovery!.phase)}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>{formatBytes(capture.byteSize)}</Text>
+        {capture.recovery?.lastError ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{capture.recovery.lastError.message}</Text> : null}
+        <Button label="Export local recording" variant="tertiary" loading={app.busy} onPress={() => void app.run(async () => { await Sharing.shareAsync(capture.uri, { mimeType: capture.contentType, dialogTitle: "Export your original local recording" }); })} />
+        {!mayCleanUpCapture(capture.recovery!) ? <Button label="Discard local recording" variant="tertiary" loading={app.busy} onPress={() => Alert.alert("Discard local recording?", "A local-only recording cannot be recovered after removal. This does not delete any committed server evidence.", [
+          { text: "Keep recording", style: "cancel" }, { text: "Discard local copy", style: "destructive", onPress: () => void app.discardSavedCapture(capture) },
+        ])} /> : null}
+        {mayCleanUpCapture(capture.recovery!) ? <Button label="Remove completed local copy" variant="secondary" loading={app.busy}
+          onPress={() => Alert.alert("Remove completed local copy?", "PackProof will recheck the preservation and finalization receipts first. The server Proof remains available.", [
+            { text: "Keep copy", style: "cancel" }, { text: "Remove local copy", onPress: () => void app.cleanUpSavedCapture(capture) },
+          ])} /> : <Button label="Open saved recording" variant="secondary" loading={app.busy} onPress={() => void app.resumeSavedCapture(capture)} />}
+      </InfoCard>)}
       <SectionHeader title="Appearance" />
       <View style={styles.appearance} accessibilityRole="radiogroup" accessibilityLabel="Appearance">
         {APPEARANCE_OPTIONS.map((option) => {
@@ -223,6 +241,7 @@ export function AccountScreen() {
 
       {__DEV__ ? <Button label="Developer tools" onPress={() => app.go("dev")} variant="tertiary" /> : null}
 
+      {app.savedRecordings.some(capture => capture.recovery?.phase !== "FINALIZED") ? <Text style={[styles.body, { color: colors.textSecondary }]}>Signing out pauses pending recordings. Sign in to this same account to resume them.</Text> : null}
       <Button
         label="Sign out"
         onPress={() => {

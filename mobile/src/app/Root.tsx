@@ -34,7 +34,7 @@ import { PackingStationScreen } from "../screens/PackingStationScreen";
 export function Root() {
   const app = usePackProof();
   const theme = useTheme();
-  const immersive = isImmersiveRoute(app.route);
+  const immersive = isImmersiveRoute(app.route) && app.route.name !== "capture" && app.route.name !== "station";
   const [sharedText, setSharedText] = useState<string | null>(null);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
 

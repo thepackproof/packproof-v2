@@ -38,6 +38,8 @@ export interface EbayOrder {
   lastModifiedDate: string | null;
   orderFulfillmentStatus: string | null;
   orderPaymentStatus: string | null;
+  fulfillmentInstructionCount?: number;
+  fulfillmentReferenceCount?: number;
   sellerId: string | null;
   requiresPhysicalFulfillment?: boolean;
   cancelState: string | null;

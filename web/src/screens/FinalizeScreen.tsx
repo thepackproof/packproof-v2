@@ -41,7 +41,7 @@ export function FinalizeScreen(props: {
         <Row label="Shipping" value={shippingSummary(txn.shipping ?? {}) || "No shipping details"} />
         <Row
           label="Evidence"
-          value={proof.evidence.some((item) => item.validationStatus === "COMMITTED") ? "Evidence secured" : "Not secured"}
+          value={proof.evidence.some((item) => item.validationStatus === "COMMITTED") ? "Recording received" : "No recording received"}
         />
       </article>
       <p className="note">{FINALIZE_DISCLOSURE}</p>

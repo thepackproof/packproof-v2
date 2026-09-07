@@ -1,5 +1,14 @@
+import type { ProofRecovery } from "./capture/recovery-model";
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
 import { withRequestTimeout } from "./request-timeout";
+
+export interface ApiCapabilities {
+  schemaVersion: number;
+  capture: { protocolVersions: number[]; maxBytes: number; maxDurationSeconds: number; maxActiveUploads: number };
+  sellerAttestation: { challengeVersions: number[]; statementVersion: number; methods: string[] };
+  preservation: { receiptVersions: number[]; durableReceiptsRequired: boolean };
+  release: { commit: string | null; version: string | null };
+}
 
 export interface SellerAttestationAuthorization {
   challengeId: string;
@@ -469,6 +478,7 @@ export interface ManifestView {
 }
 
 export interface UploadTarget {
+  received?: boolean;
   method: "PUT";
   url: string;
   headers: Record<string, string>;
@@ -609,6 +619,16 @@ export class PackProofV2Client {
       getIdToken?: () => string | null;
     },
   ) {}
+
+  get apiBaseUrl(): string { return this.options.baseUrl.replace(/\/+$/, ""); }
+
+  async getCapabilities(): Promise<ApiCapabilities> {
+    return this.request("/capabilities", { auth: false });
+  }
+
+  async getProofRecovery(proofId: string): Promise<ProofRecovery> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/recovery`);
+  }
 
   async login(subject: string): Promise<{ userId: string; token: string }> {
     return this.request("/auth/dev/login", {
@@ -1035,6 +1055,7 @@ export class PackProofV2Client {
     proofId: string,
     input: {
       contentType: string;
+      byteSize?: number;
       evidenceType?: string;
       captureSessionId?: string;
       idempotencyKey: string;
@@ -1045,6 +1066,7 @@ export class PackProofV2Client {
       headers: { "Idempotency-Key": input.idempotencyKey },
       body: {
         contentType: input.contentType,
+        ...(input.byteSize !== undefined ? { byteSize: input.byteSize } : {}),
         evidenceType: input.evidenceType ?? "SELLER_EVIDENCE",
         captureSessionId: input.captureSessionId,
       },

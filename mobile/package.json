@@ -11,7 +11,10 @@
     "build:android:internal": "npx --yes eas-cli build --platform android --profile internal-staging --non-interactive",
     "test:api": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts",
     "test:camera-spike": "node --experimental-strip-types --test tests/camera-spike-model.test.ts",
-    "test:proof-record": "node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts"
+    "test:proof-record": "node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts",
+    "test:recovery": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-recovery.test.ts",
+    "postinstall": "node scripts/secure-build-dependencies.cjs",
+    "test:build-security": "node --test tests/build-dependency-security.test.cjs"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",
@@ -54,6 +57,8 @@
     },
     "xcode": {
       "uuid": "11.1.1"
-    }
+    },
+    "tar": "7.5.22",
+    "image-size": "1.2.1"
   }
 }

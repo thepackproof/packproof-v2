@@ -1,10 +1,10 @@
 import { disclosureContextForLink } from "./domain/disclosure.js";
 import express, { type Express, type Request, type Response } from "express";
 import { createApp, type AppDependencies } from "./app.js";
-import { httpBoundary, requestBodyErrors } from "./http/boundary.js";
+import { httpBoundary, requestBodyErrors, requestCorrelation, configureTrustedProxy, distributedRateLimit, safeHttpError } from "./http/boundary.js";
 import { DomainError } from "./domain/errors.js";
 import { requireParticipant } from "./domain/proof-access.js";
-import { assertPublicProofRateLimit, resolveAccessToken } from "./domain/access-links.js";
+import { resolveAccessToken } from "./domain/access-links.js";
 import { appendAudit } from "./domain/audit.js";
 import {
   createProofEmailSubscription,
@@ -52,15 +52,10 @@ export interface ServerAppDependencies extends AppDependencies {
 export function createServerApp(deps: ServerAppDependencies): Express {
   const server = express();
   server.disable("x-powered-by");
+  configureTrustedProxy(server);
+  server.use(requestCorrelation);
   server.use(httpBoundary(deps.corsOrigins ?? []));
-  server.use("/public/proofs/:token/email-subscription", (req, _res, next) => {
-    try {
-      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
-      next();
-    } catch (error) {
-      next(error);
-    }
-  });
+  server.use("/public/proofs/:token/email-subscription", distributedRateLimit(deps.db,{scope:"public-subscription",limit:60,windowMs:60_000}));
 
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
   const ebay = deps.ebay ?? disabledEbayRuntime();
@@ -410,15 +405,4 @@ function parseJsonWebhook(req: Request): unknown {
   }
 }
 
-function sendBoundaryError(error: unknown, res: Response): void {
-  if (error instanceof DomainError) {
-    res.status(error.httpStatus).json({
-      error: { code: error.code, message: error.message },
-    });
-    return;
-  }
-  console.error(error);
-  res.status(500).json({
-    error: { code: "INTERNAL", message: "Internal server error" },
-  });
-}
+function sendBoundaryError(error: unknown, res: Response): void { safeHttpError(error,res); }

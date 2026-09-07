@@ -1,4 +1,7 @@
+import { randomId } from "../random-id";
 import { RelayStationPanel } from "../components/RelayStationPanel";
+import { capturePreflight } from "../capture-preflight";
+import { resumeStationRecording } from "../capture-queue";
 import { CaptureCoach, type CaptureBookmark } from "../components/CaptureCoach";
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { PackProofApi } from "../api/client";
@@ -11,10 +14,9 @@ import {
   stationPhaseLabel,
 } from "../../../mobile/src/packing-station/machine";
 import { normalizeStationReference } from "../../../mobile/src/packing-station/scan";
-import { submitStationSession } from "../../../mobile/src/packing-station/submit";
 import type { StationCandidate, StationEvent, StationState } from "../../../mobile/src/packing-station/types";
 import { detectWebScanAdapter } from "../packing-station/scan-adapter";
-import { clearStationCapture, recoverStationCapture, saveStationCapture, stationCaptureKey, type PendingStationCapture } from "../capture-queue";
+import { recoverStationCapture, saveStationCapture, stationCaptureKey, type PendingStationCapture } from "../capture-queue";
 
 const COMPLETED_HOLD_MS = 1600;
 
@@ -57,6 +59,8 @@ export function PackingStationScreen(props: {
   const bootstrapped = useRef(false);
   const finishingRef = useRef(false);
   const pendingRef = useRef<PendingStationCapture | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   orderRef.current = state.order;
   stateRef.current = state;
   heldBlobRef.current = heldBlob;
@@ -88,6 +92,7 @@ export function PackingStationScreen(props: {
     void recoverStationCapture(props.userId).then(async (pending) => {
       if (cancelled) return;
       if (pending) {
+        if (pending.apiScope && pending.apiScope !== props.api.recoveryScope) throw new Error("A recording is saved for the original server. Return there to finish it before starting another shipment.");
         const url = URL.createObjectURL(pending.file);
         pendingRef.current = pending;
         captureSessionRef.current = pending.captureSessionId;
@@ -199,6 +204,7 @@ export function PackingStationScreen(props: {
       setLocalError("This browser cannot record packing. Open PackProof on a supported phone and sign in to the same account. Your order is preserved."); setBusy(false); return;
     }
     try {
+      const capabilities = await capturePreflight(props.api);
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       streamRef.current = stream;
       const session = await props.api.createCaptureSession(orderRef.current.proofId, newIdempotencyKey());
@@ -208,19 +214,19 @@ export function PackingStationScreen(props: {
       chunksRef.current = []; setBookmarks([]); durationRef.current = 0; pendingRef.current = null;
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
       const mime = ["video/webm;codecs=vp8", "video/mp4", "video/webm"].find(type => MediaRecorder.isTypeSupported(type));
-      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      const recorder = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 2_000_000 });
       recorder.ondataavailable = event => {
         if (!event.data.size) return;
         chunksRef.current.push(event.data);
         const partial = new Blob(chunksRef.current, {type: recorder.mimeType || "video/webm"});
         durationRef.current = Math.max(1, Math.round(performance.now()-startedAt.current));
         journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
-        if (partial.size > 190*1024*1024 || durationRef.current > 29*60*1000) {
+        if (partial.size > capabilities.capture.maxBytes * 0.92 || durationRef.current >= capabilities.capture.maxDurationSeconds * 1000) {
           setLocalError("Recording reached this device’s safe limit. Saving the recorded segment now.");
-          if (!finishingRef.current) { finishingRef.current = true; void finishPacking(); }
+          if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); }
         }
       };
-      recorder.onerror = () => { interruptedRef.current=true; setLocalError("Camera recording was interrupted. Saved segments remain available on this device."); if (!finishingRef.current) { finishingRef.current = true; void finishPacking(); } };
+      recorder.onerror = () => { interruptedRef.current=true; setLocalError("Camera recording was interrupted. Saved segments remain available on this device."); if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); } };
       recorderRef.current = recorder; startedAt.current = performance.now();
       dispatch({type:"START_RECORDING",trigger:"MANUAL"}); recorder.start(2000); dispatch({type:"RECORDING_STARTED"});
       return session.id;
@@ -272,7 +278,7 @@ export function PackingStationScreen(props: {
     await processVideo(blob, blob.type || "video/webm", previewUrl ?? "blob:held");
   }
 
-  async function finishPacking(trigger: "MANUAL" | "RESCAN" = "MANUAL") {
+  async function finishPacking(trigger: "MANUAL" | "RESCAN" = "MANUAL", finishConfirmed = true) {
     const recorder = recorderRef.current;
     dispatch({ type: "FINISH_RECORDING", trigger });
     const blob = await new Promise<Blob>((resolve) => {
@@ -287,7 +293,7 @@ export function PackingStationScreen(props: {
     });
     await journalRef.current;
     stopLiveTracks();
-    await acceptLiveVideo(blob, blob.type || "video/webm", trigger);
+    await acceptLiveVideo(blob, blob.type || "video/webm", trigger, finishConfirmed);
   }
 
   async function preserveStation(file: Blob, finishConfirmed: boolean, interrupted = false) {
@@ -295,7 +301,7 @@ export function PackingStationScreen(props: {
     if (!order) throw new Error("Identify the order before saving this recording.");
     const previous = pendingRef.current;
     const pending: PendingStationCapture = {
-      key: stationCaptureKey(props.userId), file, order,
+      key: stationCaptureKey(props.userId), file, order, userId: props.userId, apiScope: props.api.recoveryScope,
       uploadKey: previous?.order.proofId === order.proofId ? previous.uploadKey : newIdempotencyKey(),
       evidenceId: previous?.order.proofId === order.proofId ? previous.evidenceId : undefined,
       finishConfirmed, captureSessionId: captureSessionRef.current, bookmarks: bookmarksRef.current, durationMs: durationRef.current, interrupted,
@@ -305,7 +311,7 @@ export function PackingStationScreen(props: {
     return pending;
   }
 
-  async function acceptLiveVideo(blob: Blob, contentType: string, trigger: "MANUAL" | "RESCAN") {
+  async function acceptLiveVideo(blob: Blob, contentType: string, trigger: "MANUAL" | "RESCAN", finishConfirmed = true) {
     if (blob.size < 8) {
       finishingRef.current = false;
       dispatch({ type: "CAPTURE_CANCELLED" });
@@ -322,10 +328,17 @@ export function PackingStationScreen(props: {
       durationMs: null,
     };
     dispatch({ type: "CAPTURE_READY", capture, trigger });
+    if (!finishConfirmed) {
+      try { await preserveStation(blob, false, true); }
+      catch (error) { setLocalError(error instanceof Error ? error.message : "Keep this page open to export the recording."); }
+      dispatch({ type: "PROCESSING_FAILED", error: { code: "CAPTURE_INTERRUPTED", message: "Recording stopped automatically. Review the saved segment before confirming; missing footage remains missing." }, canRetry: true });
+      finishingRef.current = false;
+      return;
+    }
     await processVideo(blob, contentType || "video/webm", capture.handle);
   }
 
-  async function processVideo(blob: Blob, contentType: string, handle: string) {
+  async function processVideo(blob: Blob, _contentType: string, _handle: string) {
     const order = orderRef.current;
     if (!order) {
       return;
@@ -336,53 +349,18 @@ export function PackingStationScreen(props: {
     try {
       const pending = await preserveStation(blob, true, interruptedRef.current);
       dispatch({ type: "PROCESSING_STARTED", idempotencyKey: pending.uploadKey, submitStep: "upload" });
-      const proof = await props.api.getProof(order.proofId);
-      if (!pending.captureSessionId) throw new Error("This older recording has no direct-capture session. It remains on this device; record a new packing session to finish this Proof.");
-      if (proof.status !== "FINALIZED") {
-        const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())), b => b.toString(16).padStart(2,"0")).join("");
-        await props.api.completeCaptureSession(order.proofId, pending.captureSessionId, {sha256,byteSize:blob.size,contentType,interrupted:pending.interrupted,recordedDurationMs:pending.durationMs});
-      }
-      const result = await submitStationSession({
-        proof,
-        actorUserId: props.userId,
-        capture: { handle, contentType, byteSize: blob.size, durationMs: pending.durationMs || null, captureSessionId: pending.captureSessionId },
-        idempotencyKey: pending.uploadKey,
-        evidenceId: pending.evidenceId,
-        onEvidenceInitialized: async (evidenceId) => {
-          pending.evidenceId = evidenceId;
-          await saveStationCapture(pending);
-        },
-        deps: {
-          api: props.api,
-          newIdempotencyKey,
-          upload: async (_target, _capture, onProgress) => {
-            const id = pending.evidenceId;
-            if (!id) throw new Error("Recording upload has not been initialized.");
-            await props.api.uploadResumable(order.proofId, id, blob, onProgress);
-            onProgress(100);
-          },
-        },
-        onProgress: (progress) => {
-          dispatch({
-            type: "PROCESSING_PROGRESS",
-            submitStep: progress.step,
-            uploadPercent: progress.uploadPercent,
-          });
-        },
+      // Both foreground submission and the app-level worker join one serialized accepted intent.
+      // PackProofApi is account-bound by App; its old token supplier returns null after an account change.
+      const result = await resumeStationRecording(props.api, props.userId, () => true, progress => {
+        if (mountedRef.current) dispatch({ type: "PROCESSING_PROGRESS", submitStep: progress.step, uploadPercent: progress.uploadPercent });
       });
-      const finalProof = await props.api.getProof(order.proofId);
-      const recordedEvidence = finalProof.evidence.find(e => e.evidenceId === pending.evidenceId && e.validationStatus === "COMMITTED");
-      if (recordedEvidence && pending.bookmarks?.length) {
-        try {
-          for (const mark of pending.bookmarks) await props.api.featureRequest(order.proofId, "signature/anchors", "POST", {evidenceId:recordedEvidence.evidenceId,startMs:mark.startMs,endMs:Math.min(mark.startMs+1000,pending.durationMs || mark.startMs+1000),label:mark.label,sourceType:mark.sourceType,recipeVersion:mark.recipeVersion,idempotencyKey:mark.id});
-        } catch { setLocalError("Your Proof is finished. Some optional chapter bookmarks could not be saved; the full recording remains available."); }
-      }
-      await clearStationCapture(props.userId);
+      if (!mountedRef.current) return;
       pendingRef.current = null;
       setHeldBlob(null);
       setPreviewUrl(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
     } catch (error) {
+      if (!mountedRef.current) return;
       if (error instanceof ApiError && error.status === 401) {
         dispatch({ type: "AUTH_FAILED" });
         props.onAuthExpired();
@@ -635,9 +613,4 @@ export function PackingStationScreen(props: {
   );
 }
 
-function newIdempotencyKey(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-  return `idem_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
+function newIdempotencyKey(): string { return randomId(); }

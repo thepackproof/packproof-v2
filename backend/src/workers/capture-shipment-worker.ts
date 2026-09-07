@@ -1,3 +1,4 @@
+import type { ManifestSigningRuntime } from '../integrity/signing-runtime.js';
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
 import { sha256Hex } from '../hash.js';
@@ -11,6 +12,7 @@ import { EASYPOST_TRACKER_ADAPTER_KEY, easypostCredentialReferenceAllowed } from
 import { SHIPPO_TRACKER_ADAPTER_KEY } from '../integrations/shippo/adapter.js';
 
 export interface CaptureShipmentDependencies {
+  manifestSigning?: ManifestSigningRuntime;
   integrations: IntegrationAdapterRegistry;
   credentials: IntegrationCredentialStore;
   /** Server configuration only. Never accepted from a camera or HTTP request. */
@@ -59,9 +61,12 @@ export async function dispatchCaptureShipments(db: Database, clock: Clock, deps:
       const result = await executeTrustedShipmentSync(db,clock,job.actor_user_id,job.transaction_id,deps);
       // RETURNED can mean still en route to sender. Continue refreshing it.
       const latest = result.events.filter(e=>e.eventType!=='WEIGHT_RECORDED').sort((a,b)=>Date.parse(b.occurredAt)-Date.parse(a.occurredAt))[0];
-      const terminal = latest && ['DELIVERED','CANCELLED'].includes(latest.eventType);
+      // Continue a bounded correction window after a terminal report so delayed
+      // carrier corrections and missing notifications can still reconcile.
+      const terminal = latest && ['DELIVERED','CANCELLED'].includes(latest.eventType) && Date.parse(latest.occurredAt) + 72*3600000 < clock.now().getTime();
       await db.query(`UPDATE capture_shipment_jobs SET state='REGISTERED',attempts=0,next_run_at=$3,lease_token=NULL,lease_until=NULL,last_error_code=NULL,carrier=$4,provider_mode=$5,registered_at=COALESCE(registered_at,$6),updated_at=$6 WHERE transaction_id=$1 AND lease_token=$2`,
         [job.transaction_id,token,terminal?null:new Date(clock.now().getTime()+6*3600000).toISOString(),result.carrier??null,result.mode??null,clock.now().toISOString()]);
+      await db.query("UPDATE shipment_notification_inbox SET state='RECONCILED',processed_at=$2 WHERE transaction_id=$1 AND state='QUEUED' AND received_at<=$3",[job.transaction_id,clock.now().toISOString(),now.toISOString()]);
       completed++;
     } catch (error) {
       const code = error instanceof DomainError ? error.code : 'PROVIDER_TEMPORARILY_UNAVAILABLE';

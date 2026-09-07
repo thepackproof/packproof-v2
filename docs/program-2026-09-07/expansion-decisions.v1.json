@@ -1,0 +1,181 @@
+{
+  "version": "packproof.expansion.v1",
+  "status": "explicitly_deferred_pending_demand",
+  "sourceNote": "W17 contains descriptive gates, not lettered acceptance IDs. These IDs belong to this decision register.",
+  "prerequisite": "G3 except a documented accessibility or committed-customer blocker",
+  "decisions": [
+    {
+      "id": "W17-ios_accessible_capture",
+      "status": "deferred",
+      "ownerRole": "Collin + relevant engineering owner",
+      "namedOwner": null,
+      "trigger": "Qualified prospects repeatedly excluded or committed customer requirement",
+      "demandEvidence": [],
+      "evidenceNeeded": "Measure excluded recurring volume and expected revenue",
+      "firstSlice": [
+        "native camera/permissions",
+        "account journal/recovery",
+        "secure keys and explicit declaration method",
+        "distribution/support"
+      ],
+      "acceptance": [
+        "representative physical iPhones",
+        "interruption/access/preservation/export",
+        "accurately labeled accessible alternative"
+      ],
+      "alternatives": [
+        "Current supported flow until demand is shown",
+        "Bounded modules/workers before service splits"
+      ],
+      "operatingCostEstimate": null,
+      "rollout": "Internal fixtures, consented pilot, gate review, supported release",
+      "rollback": "Gate new writes; preserve append-only history and supported historical readers",
+      "nextReviewAt": null
+    },
+    {
+      "id": "W17-teams_stations",
+      "status": "deferred",
+      "ownerRole": "Collin + relevant engineering owner",
+      "namedOwner": null,
+      "trigger": "Retained merchants need multiple operators on ordinary desktop hardware",
+      "demandEvidence": [],
+      "evidenceNeeded": "Document customer need and throughput baseline",
+      "firstSlice": [
+        "operator roles",
+        "station identity/parcel queue",
+        "capture leases and locked allocation",
+        "attributed handoff"
+      ],
+      "acceptance": [
+        "account/shift changes",
+        "unplugged hardware",
+        "concurrent last-item allocation",
+        "offline recovery without shared credentials"
+      ],
+      "alternatives": [
+        "Current supported flow until demand is shown",
+        "Bounded modules/workers before service splits"
+      ],
+      "operatingCostEstimate": null,
+      "rollout": "Internal fixtures, consented pilot, gate review, supported release",
+      "rollback": "Gate new writes; preserve append-only history and supported historical readers",
+      "nextReviewAt": null
+    },
+    {
+      "id": "W17-return_comparison",
+      "status": "deferred",
+      "ownerRole": "Collin + relevant engineering owner",
+      "namedOwner": null,
+      "trigger": "Recurring target cases require condition comparison",
+      "demandEvidence": [],
+      "evidenceNeeded": "Count cases and reviewer finding effort",
+      "firstSlice": [
+        "same-Proof return stage",
+        "item/parcel association",
+        "synchronized source-offset frames",
+        "attributed annotations"
+      ],
+      "acceptance": [
+        "immutable originals",
+        "opposing-participant isolation",
+        "both source moments findable"
+      ],
+      "alternatives": [
+        "Current supported flow until demand is shown",
+        "Bounded modules/workers before service splits"
+      ],
+      "operatingCostEstimate": null,
+      "rollout": "Internal fixtures, consented pilot, gate review, supported release",
+      "rollback": "Gate new writes; preserve append-only history and supported historical readers",
+      "nextReviewAt": null
+    },
+    {
+      "id": "W17-ai_assistance",
+      "status": "deferred",
+      "ownerRole": "Collin + relevant engineering owner",
+      "namedOwner": null,
+      "trigger": "Measured finding/summarization/quality effort justifies total cost",
+      "demandEvidence": [],
+      "evidenceNeeded": "Predeclare factuality/privacy/net-time targets",
+      "firstSlice": [
+        "source-referenced suggestions",
+        "editable generated text",
+        "no tools changing evidence or disputes",
+        "processing/retention terms"
+      ],
+      "acceptance": [
+        "human review/model provenance",
+        "untrusted input safety",
+        "no-model core flow",
+        "inference plus validation/support costs"
+      ],
+      "alternatives": [
+        "Current supported flow until demand is shown",
+        "Bounded modules/workers before service splits"
+      ],
+      "operatingCostEstimate": null,
+      "rollout": "Internal fixtures, consented pilot, gate review, supported release",
+      "rollback": "Gate new writes; preserve append-only history and supported historical readers",
+      "nextReviewAt": null
+    },
+    {
+      "id": "W17-partner_api",
+      "status": "deferred",
+      "ownerRole": "Collin + relevant engineering owner",
+      "namedOwner": null,
+      "trigger": "One partner demonstrates repeat demand and independent onboarding",
+      "demandEvidence": [],
+      "evidenceNeeded": "Document funded owner and support obligations",
+      "firstSlice": [
+        "versioned OpenAPI",
+        "scoped keys/quotas",
+        "idempotent commands",
+        "authenticated deduplicated webhooks",
+        "dead-letter tooling",
+        "SSRF-safe destinations"
+      ],
+      "acceptance": [
+        "independent create-through-export",
+        "duplicates/outages/token rotation",
+        "no founder intervention"
+      ],
+      "alternatives": [
+        "Current supported flow until demand is shown",
+        "Bounded modules/workers before service splits"
+      ],
+      "operatingCostEstimate": null,
+      "rollout": "Internal fixtures, consented pilot, gate review, supported release",
+      "rollback": "Gate new writes; preserve append-only history and supported historical readers",
+      "nextReviewAt": null
+    },
+    {
+      "id": "W17-enterprise_infrastructure",
+      "status": "deferred",
+      "ownerRole": "Collin + relevant engineering owner",
+      "namedOwner": null,
+      "trigger": "Retained demand identifies funded jobs and commitments",
+      "demandEvidence": [],
+      "evidenceNeeded": "Measure scaling/fault-isolation need before service split",
+      "firstSlice": [
+        "organization isolation",
+        "audit access",
+        "procurement/security responses",
+        "SSO as needed",
+        "retention/support/billing administration"
+      ],
+      "acceptance": [
+        "multiple-customer onboarding",
+        "tested service commitments",
+        "measured margin and support"
+      ],
+      "alternatives": [
+        "Current supported flow until demand is shown",
+        "Bounded modules/workers before service splits"
+      ],
+      "operatingCostEstimate": null,
+      "rollout": "Internal fixtures, consented pilot, gate review, supported release",
+      "rollback": "Gate new writes; preserve append-only history and supported historical readers",
+      "nextReviewAt": null
+    }
+  ]
+}

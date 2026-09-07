@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, stat, rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -7,13 +8,14 @@ import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
 import type { ObjectStore } from '../s3/object-store.js';
 import { newId } from '../ids.js';
-import { sha256Hex } from '../hash.js';
+import { sha256Hex, sha256HexFromStream } from '../hash.js';
 import { canonicalize } from '../canonical.js';
 import { requireParticipant } from './proof-access.js';
-import { readCommittedEvidence } from './evidence.js';
+import { spoolCommittedEvidence } from './media-files.js';
 import { DomainError } from './errors.js';
 import { appendAudit } from './audit.js';
 const exec = promisify(execFile);
+const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=120','--fsize=104857600','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C'}});
 const VERSION='opaque-mask-silent/v1';
 export interface RedactionMask { x:number;y:number;width:number;height:number }
 export interface RedactionTransform { masks:RedactionMask[]; removeAudio:true; stripMetadata:true; withheldIntervals:never[] }
@@ -34,10 +36,11 @@ export async function listRedactions(db:Database,userId:string,proofId:string) {
 async function performRedaction(db:Database,clock:Clock,store:ObjectStore,userId:string,proofId:string,evidenceId:string,input:unknown) {
   await requireParticipant(db,proofId,userId,'SELLER');
   const transform=transformInput(input);
-  const source=await readCommittedEvidence(db,store,userId,proofId,evidenceId);
-  if(source.body.length>100*1024*1024) throw new DomainError('REDACTION_LIMIT','This recording exceeds the 100 MB redaction limit',413);
-  if(!source.contentType.startsWith('video/')&&!source.contentType.startsWith('image/')) throw new DomainError('REDACTION_UNSUPPORTED','Only image and video sources can be redacted',400);
-  const digest=sha256Hex(source.body);
+  const source=(await db.query<{sha256:string;byte_size:number|string;content_type:string}>("SELECT sha256,byte_size,content_type FROM evidence WHERE id=$1 AND proof_id=$2 AND validation_status='COMMITTED'",[evidenceId,proofId])).rows[0];
+  if(!source)throw new DomainError('EVIDENCE_NOT_FOUND','Source recording is unavailable',404);
+  if(Number(source.byte_size)>250_000_000) throw new DomainError('REDACTION_LIMIT','This recording exceeds the 250 MB processing limit',413);
+  if(!source.content_type.startsWith('video/')&&!source.content_type.startsWith('image/')) throw new DomainError('REDACTION_UNSUPPORTED','Only image and video sources can be redacted',400);
+  const digest=source.sha256;
   let id=newId('pmd');
   const result=await db.query<DerivativeRow>('INSERT INTO proof_media_derivatives(id,proof_id,evidence_id,source_sha256,transform_version,transform,status,created_by_user_id,created_at,lease_until) VALUES($1,$2,$3,$4,$5,$6::jsonb,\'PENDING\',$7,$8,$9) ON CONFLICT(proof_id,evidence_id,source_sha256,transform_version,transform) DO NOTHING RETURNING *',[id,proofId,evidenceId,digest,VERSION,canonicalize(transform),userId,clock.now().toISOString(),new Date(clock.now().getTime()+180000).toISOString()]);
   if(!result.rows[0]) {
@@ -49,21 +52,22 @@ async function performRedaction(db:Database,clock:Clock,store:ObjectStore,userId
   }
   const dir=await mkdtemp(path.join(os.tmpdir(),'packproof-redact-'));
   try {
-    await writeFile(path.join(dir,'input'),source.body,{mode:0o600});
-    const metadata=await exec('ffprobe',['-v','error','-protocol_whitelist','file,pipe','-select_streams','v:0','-show_entries','stream=width,height','-of','json',path.join(dir,'input')],{timeout:10000,maxBuffer:65536});
+    await spoolCommittedEvidence(db,store,userId,proofId,evidenceId,path.join(dir,'input'));
+    const metadata=await boundedExec('ffprobe',['-v','error','-protocol_whitelist','file,pipe','-select_streams','v:0','-show_entries','stream=width,height','-of','json',path.join(dir,'input')],{timeout:10000,maxBuffer:65536});
     const dimensions=JSON.parse(metadata.stdout).streams?.[0];
     if(!dimensions||!Number.isFinite(dimensions.width)||!Number.isFinite(dimensions.height)||dimensions.width*dimensions.height>16777216) throw new Error('Pixel limit');
-    const video=source.contentType.startsWith('video/');
+    const video=source.content_type.startsWith('video/');
     const out=path.join(dir,video?'redacted.mp4':'redacted.png');
     // Fully opaque masks on EVERY frame. No original audio, metadata, attachments,
     // subtitles, hidden tracks or original thumbnails enter this representation.
     const filters=transform.masks.map(m=>`drawbox=x=floor(iw*${m.x}):y=floor(ih*${m.y}):w=ceil(iw*${m.x+m.width})-floor(iw*${m.x}):h=ceil(ih*${m.y+m.height})-floor(ih*${m.y}):color=black:t=fill`).join(',');
-    await exec('ffmpeg',['-nostdin','-v','error','-y','-protocol_whitelist','file,pipe','-i',path.join(dir,'input'),'-map','0:v:0','-vf',filters,'-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',...(video?['-c:v','libx264','-preset','fast','-pix_fmt','yuv420p','-movflags','+faststart']:['-frames:v','1']),out],{timeout:120000,maxBuffer:1024*1024});
-    const body=await readFile(out);
-    if(!body.length||body.length>100*1024*1024) throw new Error('Output limit');
-    const hash=sha256Hex(body),key=`derivatives/${proofId}/${id}/${hash}`,contentType=video?'video/mp4':'image/png';
-    await store.put(key,body,contentType);
-    await db.query('UPDATE proof_media_derivatives SET status=\'READY\',sha256=$2,object_key=$3,content_type=$4,byte_size=$5 WHERE id=$1 AND status=\'PENDING\'',[id,hash,key,contentType,body.length]);
+    await boundedExec('ffmpeg',['-nostdin','-v','error','-threads','1','-filter_threads','1','-y','-protocol_whitelist','file,pipe','-i',path.join(dir,'input'),'-map','0:v:0','-vf',filters,'-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',...(video?['-c:v','libx264','-threads','1','-preset','fast','-pix_fmt','yuv420p','-movflags','+faststart']:['-frames:v','1']),out],{timeout:120000,maxBuffer:1024*1024});
+    const byteSize=(await stat(out)).size;
+    if(!byteSize||byteSize>100*1024*1024) throw new Error('Output limit');
+    const hash=(await sha256HexFromStream(createReadStream(out))).sha256,key=`derivatives/${proofId}/${id}/${hash}`,contentType=video?'video/mp4':'image/png';
+    if(!store.putStream)throw new Error('Streaming storage required');
+    await store.putStream(key,createReadStream(out),contentType,byteSize);
+    await db.query('UPDATE proof_media_derivatives SET status=\'READY\',sha256=$2,object_key=$3,content_type=$4,byte_size=$5 WHERE id=$1 AND status=\'PENDING\'',[id,hash,key,contentType,byteSize]);
   } catch {
     await db.query('UPDATE proof_media_derivatives SET status=\'FAILED\',failure_code=\'RENDER_FAILED\' WHERE id=$1 AND status=\'PENDING\'',[id]);
   } finally { await rm(dir,{recursive:true,force:true}); }

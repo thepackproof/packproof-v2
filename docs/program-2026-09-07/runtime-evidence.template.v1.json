@@ -1,0 +1,14 @@
+{
+  "environment": null,
+  "apiImageDigest": null,
+  "deployedSourceSha": null,
+  "deployedMigrationChecksums": [],
+  "webAssetTreeSha256": null,
+  "distributedAndroidSha256": null,
+  "devices": [],
+  "capabilityVersions": null,
+  "featureFlags": null,
+  "signingKeyReference": null,
+  "verifierTrustConfigSha256": null,
+  "releaseEvidenceReferences": []
+}

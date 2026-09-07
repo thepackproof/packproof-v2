@@ -12,12 +12,15 @@ import { appendAudit } from './audit.js';
 import { loadCustodyBundle } from './custody.js';
 import { isQualifyingFulfillmentCapture } from './evidence-types.js';
 import { listSharedProofSources, readSharedStageSource } from './shared-proof-sources.js';
+import { SELLER_SHIPPING_STATEMENT } from './attestation-authorization.js';
+import type { AttestationRow } from './types.js';
+import { assertPolicyAccessSafe } from './policy-recovery.js';
 
 export const DISCLOSURE_POLICY_VERSION = 'packproof.disclosure/v1';
 export const DISCLOSURE_FIELDS = ['status', 'order', 'shipping', 'evidence', 'statements'] as const;
 export type DisclosureField = typeof DISCLOSURE_FIELDS[number];
 export type DisclosurePurpose = 'BUYER_RECEIPT' | 'CLAIMS_REVIEW' | 'PUBLIC_SAMPLE' | 'SHARED_PROOF';
-export const SHARED_PROOF_FIELDS: DisclosureField[] = ['status', 'order', 'shipping', 'evidence'];
+export const SHARED_PROOF_FIELDS: DisclosureField[] = ['status', 'order', 'shipping', 'evidence', 'statements'];
 export interface DisclosureMedia { evidenceId: string; representation: 'ORIGINAL' | 'DERIVATIVE'; derivativeId?: string }
 export interface DisclosureContext {
   proofId: string; actorUserId?: string; grantId: string; scopeIdentity?:string; policyVersion: string; scopeVersion: number;
@@ -32,6 +35,7 @@ function invalid(message: string): never { throw new DomainError('INVALID_DISCLO
 function forbidden(): never { throw new DomainError('INSUFFICIENT_SCOPE', 'This view does not include that source', 403); }
 
 export async function resolveDisclosureContext(db: Database, clock: Clock, input: { proofId?: string; actorUserId?: string; token?: string }): Promise<DisclosureContext> {
+  await assertPolicyAccessSafe(db);
   if (input.token) {
     const link = await resolveAccessToken(db, clock, input.token);
     if (input.proofId && input.proofId !== link.proof_id) forbidden();
@@ -43,6 +47,7 @@ export async function resolveDisclosureContext(db: Database, clock: Clock, input
   return {proofId: input.proofId!, actorUserId: input.actorUserId, grantId: `participant:${input.actorUserId}`, policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: 1, purpose:'PARTICIPANT', fields:[...DISCLOSURE_FIELDS], media: rows.rows.map(row=>({evidenceId:row.id,representation:'ORIGINAL'}))};
 }
 export async function disclosureContextForLink(db: Database, link: ProofAccessLinkRow, now:Date=new Date()): Promise<DisclosureContext> {
+  await assertPolicyAccessSafe(db);
   const creator = await db.query('SELECT 1 FROM proof_participants WHERE id=$1 AND proof_id=$2', [link.created_by_participant_id,link.proof_id]);
   if (!creator.rows[0]) forbidden();
   const subscription=(await db.query<{recipient_grant_id:string|null}>('SELECT recipient_grant_id FROM proof_notification_subscriptions WHERE access_link_id=$1',[link.id])).rows[0];
@@ -59,7 +64,7 @@ export async function disclosureContextForLink(db: Database, link: ProofAccessLi
     return {
       proofId: link.proof_id, grantId: link.id, scopeIdentity: effectiveLinkId,
       policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: Number(latest.scope_version),
-      purpose: 'SHARED_PROOF', fields: [...SHARED_PROOF_FIELDS],
+      purpose: 'SHARED_PROOF', fields: latest.fields.filter(field => SHARED_PROOF_FIELDS.includes(field)),
       media: (await listSharedProofSources(db, link.proof_id)).map(source => ({ evidenceId: source.id, representation: 'ORIGINAL' })),
     };
   }
@@ -138,10 +143,24 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
       ...(sharedSources ? {stageId:sharedSources.find(source => source.id === e.id)?.stage_id ?? null} : {}),
       label:media.representation==='DERIVATIVE'?'Reviewed redacted copy':!sharedSources||slot==='Evidence'?'Original recording':`${slot} recording`});
   }
+  const statementRows = ctx.fields.includes('statements') ? (await db.query<AttestationRow & {role:string}>(
+    'SELECT a.*,p.role FROM attestations a JOIN proof_participants p ON p.id=a.participant_id WHERE a.proof_id=$1 ORDER BY a.created_at,a.id', [ctx.proofId])).rows : [];
+  const statements = statementRows.filter(row => !row.related_evidence_id || ctx.media.some(media => media.evidenceId===row.related_evidence_id)).map(row => ({
+    attestationId:row.id, relatedEvidenceId:row.related_evidence_id,
+    statement:row.authorization_json ? SELLER_SHIPPING_STATEMENT : row.statement==='PACKED_DESCRIBED_ITEM' ? 'I packed this order as described.' : row.statement,
+    attributedTo:row.role==='SELLER'?'Seller account':'Buyer account', createdAt:new Date(row.created_at).toISOString(),
+    method:row.authorization_json?.method ?? 'PARTICIPANT_STATEMENT',
+    signatureVerification:row.authorization_json?.signatureVerification ?? 'NOT_CRYPTOGRAPHICALLY_VERIFIED',
+    biometricPolicy:row.authorization_json ? 'Strong biometric requested by Android; the server verifies the declaration signature.' : null,
+    hardwareOriginVerified:false, legalIdentityVerified:false,
+  }));
+  const recordHead=(await db.query<{sequence:string|number;sha256:string}>('SELECT sequence,sha256 FROM proof_supplements WHERE proof_id=$1 ORDER BY sequence DESC LIMIT 1',[ctx.proofId])).rows[0];
   const received=(await db.query('SELECT 1 FROM commerce_stages WHERE proof_id=$1 AND stage_type=\'RECEIPT\' AND finalized_at IS NOT NULL LIMIT 1',[ctx.proofId])).rows.length>0;
   const value={schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
     join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
     evidence:ctx.fields.includes('evidence')?evidence:[],
+    statements,
+    recordAsOf:{supplementSequence:Number(recordHead?.sequence??0),supplementSha256:recordHead?.sha256??null,scopeStatement:ctx.purpose==='SHARED_PROOF'?'This view includes the recordings and categories approved for this link.':'This view contains selected categories of the same Proof.'},
     observations:ctx.fields.includes('shipping')?custody.observations.map(o=>({label:o.label,occurredAt:o.occurredAt})):[],
     receipt:{mode:ctx.purpose==='PUBLIC_SAMPLE'?'SAMPLE':'LIVE',carrierReportedDelivered:shipping&&source.milestones.some(m=>m.code==='DELIVERED'&&m.state==='COMPLETE'),buyerReportedReceived:received,contributionRequiresVerification:true,contributionUrl:`/proof/${proof.id}/lifecycle`,message:'No buyer report is not acceptance. A receipt report is not a waiver.'},
     disclosure:{policyVersion:ctx.policyVersion,grantId:ctx.grantId,scopeVersion:ctx.scopeVersion,purpose:ctx.purpose,fields:ctx.fields,

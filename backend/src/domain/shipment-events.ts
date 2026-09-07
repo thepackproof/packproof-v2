@@ -1,4 +1,6 @@
 import type { Clock } from "../clock.js";
+import type { ManifestSigner } from "./manifest-signing.js";
+import { appendProofSupplementInTransaction } from "./proof-supplements.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
 import { appendAudit, asEventData } from "./audit.js";
@@ -287,6 +289,7 @@ export async function importShipmentObservations(
   actorUserId: string,
   transactionId: string,
   observations: ImportedShipmentEvent[],
+  signer?: ManifestSigner,
 ): Promise<ImportShipmentObservationsResult> {
   return db.transaction(async (tx) => {
     const events: ShipmentEventView[] = [];
@@ -309,6 +312,13 @@ export async function importShipmentObservations(
       events.push(recorded.event);
       if (recorded.created) {
         createdCount += 1;
+        const finalized = (await tx.query("SELECT 1 FROM proofs WHERE id=$1 AND status='FINALIZED'", [recorded.event.proofId])).rows[0];
+        if (signer && finalized) await appendProofSupplementInTransaction(tx, clock, signer, null, recorded.event.proofId, {
+          operationId: `carrier:${recorded.event.id}`,
+          kind: "CARRIER_UPDATE",
+          facts: { event: recorded.event },
+          sourceReference: recorded.event.id,
+        });
       }
       proofId = recorded.event.proofId;
     }
@@ -721,8 +731,8 @@ async function findExistingEvent(
 ): Promise<ShipmentEventRow | null> {
   if (input.sourceEventId) {
     const bySource = await db.query<ShipmentEventRow>(
-      `SELECT * FROM shipment_events WHERE provider = $1 AND source_event_id = $2`,
-      [input.provider, input.sourceEventId],
+      `SELECT * FROM shipment_events WHERE provider = $1 AND source_event_id = $2 AND transaction_id = $3`,
+      [input.provider, input.sourceEventId, input.transactionId],
     );
     if (bySource.rows[0]) {
       return bySource.rows[0];

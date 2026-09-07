@@ -112,7 +112,7 @@ describe("evidence capture API boundary", () => {
     expect(afterInit.evidence.some((item) => item.validationStatus === "COMMITTED")).toBe(false);
 
     const firstBytes = new Uint8Array(Buffer.from("discarded-local-capture"));
-    await ctx.seller.uploadObject(initialized.upload, firstBytes, "video/mp4");
+    await expect(ctx.seller.uploadObject(initialized.upload, firstBytes, "video/mp4")).rejects.toMatchObject({code:"UPLOAD_CONTRACT_INVALID"});
     await ctx.seller.uploadObject(retryInit.upload, submittedBytes, "video/mp4");
 
     await expect(

@@ -118,6 +118,8 @@ export function commerceLifecycleRouter(deps: AppDependencies) {
           req.params.id,
           req.params.stageId,
           req.body?.statement,
+          deps.manifestSigning?.signer,
+          {requireDurableReceipts:deps.requireDurableReceipts === true},
         ),
       );
     }),

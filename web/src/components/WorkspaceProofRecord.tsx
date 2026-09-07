@@ -10,6 +10,7 @@ import { EvidencePreview, mediaType, useEvidenceBlob } from "./EvidencePreview";
 import { ProofTimeline } from "./ProofTimeline";
 import { ShipmentTracking } from "./ShipmentTracking";
 import { StatusBadge } from "./StatusBadge";
+import { PreservationStatus } from "./PreservationStatus";
 
 const tabs = ["Recording", "Activity", "Tracking"] as const;
 type RecordTab = typeof tabs[number];
@@ -63,6 +64,7 @@ export function WorkspaceProofRecord(props: {
       <div><h2>{title}</h2>{reference && <p>{reference}</p>}<details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p></details></div>
       <StatusBadge label={recordProofStatus(proof.status)} />
     </header>
+    {props.api && <PreservationStatus api={props.api} proofId={proof.proofId} />}
     <div className="record-tabs" role="tablist" aria-label="Proof record views">
       {tabs.map((name, index) => <button
         key={name}

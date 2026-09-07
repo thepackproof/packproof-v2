@@ -1,0 +1,784 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:packproof:program:observations:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evidenceClass",
+    "period",
+    "costPeriod",
+    "billingReconciliation",
+    "currency",
+    "merchants",
+    "orders",
+    "uploadIntents",
+    "reviewerTasks",
+    "effortTasks",
+    "support",
+    "costs",
+    "payments"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.program.v1"
+    },
+    "evidenceClass": {
+      "enum": [
+        "synthetic",
+        "observed"
+      ]
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "asOf"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        }
+      }
+    },
+    "costPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        }
+      }
+    },
+    "billingReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "sourceRef",
+        "unexplainedDifferenceMinor"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "unreconciled",
+            "reconciled"
+          ]
+        },
+        "sourceRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^pr_[a-f0-9]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unexplainedDifferenceMinor": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "currency": {
+      "const": "USD"
+    },
+    "merchants": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "merchantRef",
+          "qualified",
+          "enrolledAt",
+          "firstUseTestAt",
+          "firstUsableAt",
+          "assistedFirstProof",
+          "droppedOutAt",
+          "paidDecisionAt",
+          "firstPaidAt",
+          "secondPeriodStart",
+          "secondPeriodEnd",
+          "secondPaidAt"
+        ],
+        "properties": {
+          "merchantRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "qualified": {
+            "type": "boolean"
+          },
+          "enrolledAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstUseTestAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstUsableAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assistedFirstProof": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "droppedOutAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "paidDecisionAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstPaidAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "secondPeriodStart": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "secondPeriodEnd": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "secondPaidAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "orders": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderRef",
+          "merchantRef",
+          "eligibleAt",
+          "eligible",
+          "exclusionReason",
+          "usableFinalizedAt"
+        ],
+        "properties": {
+          "orderRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "merchantRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "eligibleAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "exclusionReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unsupported_device",
+                  "unsupported_workflow",
+                  "not_consented",
+                  "synthetic"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "usableFinalizedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "uploadIntents": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "logicalAttemptRef",
+          "captureRef",
+          "merchantRef",
+          "startedAt",
+          "eligibility",
+          "committedAt",
+          "durableReceiptAt",
+          "cancelledAt",
+          "offlineMs",
+          "outcome"
+        ],
+        "properties": {
+          "logicalAttemptRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "captureRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "merchantRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          },
+          "eligibility": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "unsupported_workflow",
+              "not_consented",
+              "synthetic"
+            ]
+          },
+          "committedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "durableReceiptAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancelledAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "offlineMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed",
+              "cancelled",
+              "pending",
+              "unknown"
+            ]
+          }
+        }
+      }
+    },
+    "reviewerTasks": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taskRef",
+          "caseRef",
+          "reviewerRef",
+          "group",
+          "startedAt",
+          "completedAt",
+          "uploadAccepted",
+          "checklistPassed",
+          "factsUnderstood",
+          "unsupportedConclusion",
+          "preparationSeconds"
+        ],
+        "properties": {
+          "taskRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "caseRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "reviewerRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "ordinary",
+              "packproof"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uploadAccepted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checklistPassed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "factsUnderstood": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unsupportedConclusion": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preparationSeconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "effortTasks": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taskRef",
+          "merchantRef",
+          "startedAt",
+          "completed",
+          "ordinaryActiveSeconds",
+          "packproofActiveSeconds",
+          "unattendedSeconds"
+        ],
+        "properties": {
+          "taskRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "merchantRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "ordinaryActiveSeconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packproofActiveSeconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unattendedSeconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "support": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "supportRef",
+          "merchantRef",
+          "occurredAt",
+          "phase",
+          "seconds"
+        ],
+        "properties": {
+          "supportRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "merchantRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "onboarding",
+              "ongoing"
+            ]
+          },
+          "seconds": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "costs": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "costRef",
+          "category",
+          "scope",
+          "amountMinor",
+          "evidence",
+          "sourceRef"
+        ],
+        "properties": {
+          "costRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "original_storage",
+              "replicas_versions_holds",
+              "staging_abandoned",
+              "derivatives",
+              "storage_requests",
+              "playback_export_transfer",
+              "processing",
+              "database",
+              "provider_calls",
+              "signing",
+              "monitoring",
+              "release_services",
+              "support",
+              "payment_processing",
+              "other"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "variable",
+              "capacity_step",
+              "support"
+            ]
+          },
+          "amountMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "actual",
+              "estimate",
+              "missing"
+            ]
+          },
+          "sourceRef": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^pr_[a-f0-9]{32}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "payments": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "paymentRef",
+          "merchantRef",
+          "occurredAt",
+          "kind",
+          "amountMinor",
+          "source"
+        ],
+        "properties": {
+          "paymentRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "merchantRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "charge",
+              "refund"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "verified_provider"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

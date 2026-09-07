@@ -36,8 +36,12 @@ export type UnifiedCameraViewProps = ViewProps & {
   onCaptureError?: (event: NativeEvent<{ code: string; message: string }>) => void;
 };
 
-const nativeAvailable = Platform.OS === 'android'
-  && requireOptionalNativeModule('PackProofUnifiedCamera') != null;
+const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ getHapticsEnabled(): Promise<boolean> }>('PackProofUnifiedCamera') : null;
+const nativeAvailable = nativeModule != null;
+export async function systemHapticsEnabled(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  try { return nativeModule ? await nativeModule.getHapticsEnabled() : false; } catch { return false; }
+}
 
 export function isUnifiedCameraAvailable(): boolean {
   return nativeAvailable;

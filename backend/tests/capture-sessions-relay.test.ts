@@ -101,7 +101,7 @@ describe('authorized packing capture and relay',()=>{
   await expect(createCaptureSession(h.db,clock,seller,proofId,{client:'WEB_CAMERA',idempotencyKey:'wrong-role',stageId:stage.stageId})).rejects.toMatchObject({code:'CAPTURE_STAGE_NOT_AUTHORIZED'});
   await expect(initializeStageEvidence(h.db,clock,h.objectStore,other,proofId,stage.stageId,{contentType:'video/mp4',idempotencyKey:'gallery'})).rejects.toMatchObject({code:'CAPTURE_SESSION_REQUIRED'});
   const supporting=await initializeStageEvidence(h.db,clock,h.objectStore,other,proofId,stage.stageId,{contentType:'image/jpeg',idempotencyKey:'support'});
-  await h.objectStore.putUpload(new URL(supporting.upload.url).pathname.split('/').at(-1)!,Buffer.from('supporting image'),'image/jpeg');
+  await request(h.app).put(new URL(supporting.upload.url).pathname).set('Content-Type','image/jpeg').send(Buffer.concat([Buffer.from([255,216,255]),Buffer.from('supporting image')])).expect(200);
   await commitStageEvidence(h.db,clock,h.objectStore,other,proofId,stage.stageId,supporting.evidenceId,undefined);
   await expect(finalizeCommerceStage(h.db,clock,other,proofId,stage.stageId,'I_RECORDED_RECEIPT')).rejects.toMatchObject({code:'STAGE_CAPTURE_REQUIRED'});
   const session=await createCaptureSession(h.db,clock,other,proofId,{client:'NATIVE_CAMERA',idempotencyKey:'receipt-camera',stageId:stage.stageId});
@@ -110,7 +110,7 @@ describe('authorized packing capture and relay',()=>{
   const registered=await completeCaptureSession(h.db,clock,other,proofId,session.id,{sha256:sha256Hex(media),byteSize:media.length,contentType:'video/mp4',interrupted:true,recordedDurationMs:200});
   expect(registered.registrationTiming).toBe('DELAYED_NOT_INDEPENDENTLY_ATTESTED');
   const u=await initializeStageEvidence(h.db,clock,h.objectStore,other,proofId,stage.stageId,{contentType:'video/mp4',captureSessionId:session.id,idempotencyKey:'receipt-upload'});
-  await h.objectStore.putUpload(new URL(u.upload.url).pathname.split('/').at(-1)!,media,'video/mp4');
+  await request(h.app).put(new URL(u.upload.url).pathname).set('Content-Type','video/mp4').send(media).expect(200);
   await commitStageEvidence(h.db,clock,h.objectStore,other,proofId,stage.stageId,u.evidenceId,sha256Hex(media));
   const frozen=await finalizeCommerceStage(h.db,clock,other,proofId,stage.stageId,'I_RECORDED_RECEIPT');
   expect((await finalizeCommerceStage(h.db,clock,other,proofId,stage.stageId,'I_RECORDED_RECEIPT')).sha256).toBe(frozen.sha256);

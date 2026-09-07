@@ -79,6 +79,9 @@ export function MyProofsScreen() {
           />
         </View>
         <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Proofs</Text>
+        <Button label="Record a shipment" onPress={() => app.go("create")} />
+        {!app.localCapture && app.savedRecordings.some(capture => capture.recovery?.phase !== "FINALIZED") ? <Button
+          label="Review saved recordings" variant="secondary" onPress={() => app.go("account")} /> : null}
         {app.localCapture ? (
           <Button
             label="Resume saved recording"

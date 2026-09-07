@@ -3,6 +3,10 @@ import type { Database } from "../db/database.js";
 import type { Clock } from "../clock.js";
 import type { ObjectStore } from "../s3/object-store.js";
 import { sha256Hex } from "../hash.js";
+import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
+import type { IncomingMessage } from "node:http";
+import { MEDIA_MAX_BYTES, requestByteLength, reserveMediaIngress, finishMediaIngress, verifyMediaSignature } from "./media-admission.js";
 import { DomainError } from "./errors.js";
 import { requireParticipant, loadProof } from "./proof-access.js";
 import type { EvidenceRow } from "./types.js";
@@ -40,6 +44,7 @@ export async function discardPendingUpload(
       );
     if (row.validation_status !== "REJECTED") {
       await tx.query("UPDATE evidence SET validation_status='REJECTED' WHERE id=$1", [row.id]);
+      await tx.query("UPDATE evidence_upload_admissions SET state='DISCARDED' WHERE evidence_id=$1",[row.id]);
       await appendAudit(tx, {
         proofId,
         actorUserId: userId,
@@ -53,7 +58,7 @@ export async function discardPendingUpload(
 }
 
 export const UPLOAD_PART_BYTES = 5 * 1024 * 1024;
-export const MAX_UPLOAD_PARTS = 40;
+export const MAX_UPLOAD_PARTS = Math.ceil(MEDIA_MAX_BYTES / UPLOAD_PART_BYTES);
 async function pendingEvidence(
   db: Database,
   userId: string,
@@ -109,7 +114,7 @@ export async function storeUploadPart(
     !bytes.length ||
     bytes.length > UPLOAD_PART_BYTES
   )
-    throw new DomainError("INVALID_UPLOAD_PART", "Use up to 40 parts, each at most 5 MiB", 400);
+    throw new DomainError("INVALID_UPLOAD_PART", "Use up to 48 parts, each at most 5 MiB", 400);
   const digest = sha256Hex(bytes);
   return db.transaction(async (tx) => {
     const evidence = await pendingEvidence(tx, userId, proofId, evidenceId, true);
@@ -132,11 +137,15 @@ export async function storeUploadPart(
         replayed: true,
       };
     }
+    const admission=(await tx.query<{reserved_bytes:number|string;declared_bytes:number|string|null}>("SELECT reserved_bytes,declared_bytes FROM evidence_upload_admissions WHERE evidence_id=$1",[evidenceId])).rows[0];
+    const ceiling=Number(admission?.declared_bytes??admission?.reserved_bytes??MEDIA_MAX_BYTES);
+    if((partNumber-1)*UPLOAD_PART_BYTES+bytes.length>ceiling)throw new DomainError("UPLOAD_TOO_LARGE","Part exceeds its recording reservation",413);
     const key = `${evidence.object_key}.parts/${partNumber}-${digest}`;
     await store.put(key, bytes, "application/octet-stream");
+    const metadata=await store.head?.(key);
     await tx.query(
-      "INSERT INTO evidence_upload_parts(evidence_id,part_number,object_key,sha256,byte_size,created_at) VALUES($1,$2,$3,$4,$5,$6)",
-      [evidenceId, partNumber, key, digest, bytes.length, clock.now().toISOString()],
+      "INSERT INTO evidence_upload_parts(evidence_id,part_number,object_key,sha256,byte_size,created_at,object_version_id) VALUES($1,$2,$3,$4,$5,$6,$7)",
+      [evidenceId, partNumber, key, digest, bytes.length, clock.now().toISOString(),metadata?.versionId??null],
     );
     return {
       partNumber,
@@ -157,9 +166,9 @@ export async function completeUploadParts(
   if (
     !Number.isSafeInteger(totalBytes) ||
     totalBytes < 1 ||
-    totalBytes > MAX_UPLOAD_PARTS * UPLOAD_PART_BYTES
+    totalBytes > MEDIA_MAX_BYTES
   )
-    throw new DomainError("INVALID_UPLOAD_SIZE", "Recording exceeds the 200 MiB upload limit", 400);
+    throw new DomainError("INVALID_UPLOAD_SIZE", "Recording exceeds the 250 MB upload limit", 400);
   return db.transaction(async (tx) => {
     const evidence = await pendingEvidence(tx, userId, proofId, evidenceId, true);
     const count = Math.ceil(totalBytes / UPLOAD_PART_BYTES);
@@ -186,20 +195,46 @@ export async function completeUploadParts(
         "One or more recording parts are missing or have the wrong size",
         409,
       );
-    const parts: Buffer[] = [];
-    for (const part of rows) {
-      const data = await store.get(part.object_key);
-      if (!data || data.body.length !== part.byte_size || sha256Hex(data.body) !== part.sha256)
-        throw new DomainError("UPLOAD_PART_CORRUPT", "Stored upload part failed verification", 409);
-      parts.push(data.body);
+    const admission=(await tx.query<{declared_bytes:number|string|null;reserved_bytes:number|string;state:string;expires_at:Date|string}>("SELECT * FROM evidence_upload_admissions WHERE evidence_id=$1 FOR UPDATE",[evidenceId])).rows[0];
+    if(admission && (totalBytes>Number(admission.reserved_bytes) || admission.declared_bytes!==null && totalBytes!==Number(admission.declared_bytes))) throw new DomainError("UPLOAD_SIZE_MISMATCH","Recording size differs from its reservation",409);
+    if(admission && (['DISCARDED','EXPIRED','COMMITTED'].includes(admission.state)||new Date(admission.expires_at).getTime()<=Date.now()))throw new DomainError("UPLOAD_CONTRACT_EXPIRED","This upload reservation is closed",409);
+    const hash=createHash('sha256');
+    async function* verifiedParts() {
+      for(const part of rows) {
+        const data=store.getStream?await store.getStream(part.object_key,{versionId:(part as typeof part & {object_version_id?:string|null}).object_version_id}):null;
+        if(data) {
+          const partHash=createHash('sha256');let length=0;
+          for await(const chunk of data.body){const bytes=Buffer.from(chunk);length+=bytes.length;if(length>part.byte_size)throw new DomainError('UPLOAD_PART_CORRUPT','Stored upload part exceeded its declared size',409);partHash.update(bytes);hash.update(bytes);yield bytes;}
+          if(length!==Number(part.byte_size)||partHash.digest('hex')!==part.sha256)throw new DomainError('UPLOAD_PART_CORRUPT','Stored upload part failed verification',409);
+        } else {
+          const stored=await store.get(part.object_key);
+          if(!stored||stored.body.length!==Number(part.byte_size)||sha256Hex(stored.body)!==part.sha256)throw new DomainError('UPLOAD_PART_CORRUPT','Stored upload part failed verification',409);
+          hash.update(stored.body);yield stored.body;
+        }
+      }
     }
-    const body = Buffer.concat(parts);
-    await store.put(evidence.object_key, body, evidence.content_type);
-    return {
-      evidenceId,
-      byteSize: totalBytes,
-      sha256: sha256Hex(body),
-      readyToCommit: true,
-    };
+    let versionId:string|null|undefined;
+    if(store.putStream)versionId=(await store.putStream(evidence.object_key,verifyMediaSignature(Readable.from(verifiedParts()),evidence.content_type),evidence.content_type,totalBytes)).versionId;
+    else { // Small in-memory test-adapter compatibility, never production runtime.
+      if(totalBytes>UPLOAD_PART_BYTES)throw new DomainError('STREAMING_STORAGE_REQUIRED','Resumable completion requires streaming storage',503);
+      const chunks:Buffer[]=[];for await(const bytes of verifiedParts())chunks.push(bytes);await store.put(evidence.object_key,Buffer.concat(chunks),evidence.content_type);
+    }
+    if(admission)await tx.query("UPDATE evidence_upload_admissions SET state='RECEIVED',staging_version_id=$2,lease_token=NULL,lease_until=NULL WHERE evidence_id=$1",[evidenceId,versionId??null]);
+    return {evidenceId,byteSize:totalBytes,sha256:hash.digest('hex'),readyToCommit:true};
   });
+}
+
+/** HTTP ingress is reserved before a bounded part body is read or buffered. */
+export async function receiveAdmittedUploadPart(db:Database,clock:Clock,store:ObjectStore,userId:string,proofId:string,evidenceId:string,partNumber:number,req:IncomingMessage) {
+  await pendingEvidence(db,userId,proofId,evidenceId);
+  if(!Number.isInteger(partNumber)||partNumber<1||partNumber>MAX_UPLOAD_PARTS)throw new DomainError('INVALID_UPLOAD_PART','Invalid upload part number',400);
+  const byteSize=requestByteLength(req,UPLOAD_PART_BYTES);
+  const lease=await reserveMediaIngress(db,clock,{evidenceId,actorUserId:userId,byteSize,wholeObject:false});
+  try {
+    const chunks:Buffer[]=[];let total=0;
+    req.setTimeout(120000,()=>req.destroy(new Error('Part upload timed out')));
+    for await(const chunk of req){const bytes=Buffer.from(chunk);total+=bytes.length;if(total>byteSize)throw new DomainError('UPLOAD_TOO_LARGE','Part exceeds its reserved limit',413);chunks.push(bytes);}
+    if(total!==byteSize)throw new DomainError('UPLOAD_INCOMPLETE','Part ended before its declared length',409);
+    return await storeUploadPart(db,clock,store,userId,proofId,evidenceId,partNumber,Buffer.concat(chunks));
+  } finally {await finishMediaIngress(db,clock,{...lease,received:false});}
 }

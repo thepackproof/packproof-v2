@@ -1,4 +1,4 @@
-import { bindRecordedCapture, type LocalCapture } from "../capture";
+import { bindRecordedCapture, persistCaptureMetadata, type LocalCapture } from "../capture";
 import type { PackProofV2Client, SellerAttestationAuthorization } from "../v2-api";
 import { getAttestationAvailability, prepareAttestationKey, signAttestationPayload } from "./native";
 import { recordedSellerAuthorization, validateSellerChallenge } from "./authorization";
@@ -13,6 +13,10 @@ export async function authorizeSellerCapture({ client, capture, proofId, userId 
     const saved = recordedSellerAuthorization(await client.getProof(proofId), capture.uploadEvidenceId, userId);
     if (saved) return saved;
   }
+  // A retried delivery sends the same already-authorized signature. This does not create another signing operation.
+  const held = capture.recovery?.authorization;
+  if (held && held.sha256 === capture.captureSha256 && Date.parse(held.expiresAt) > Date.now())
+    return { challengeId: held.challengeId, signature: held.signature };
   const available = await getAttestationAvailability();
   if (!available.available) throw Object.assign(new Error(available.message ?? "Set up biometrics in Android settings to attest. Your recording is saved."), { code: available.code });
   await bindRecordedCapture(client, capture, proofId, userId);
@@ -25,6 +29,11 @@ export async function authorizeSellerCapture({ client, capture, proofId, userId 
   });
   validateSellerChallenge(challenge, { proofId, userId, captureSessionId: capture.captureSessionId, sha256: capture.captureSha256, publicKey });
   const { signature } = await signAttestationPayload(userId, challenge.payload);
+  if (capture.recovery) {
+    capture.recovery.authorization = { challengeId: challenge.challengeId, signature, expiresAt: challenge.expiresAt, sha256: capture.captureSha256 };
+    // Persist before the first attestation HTTP request so a lost response can replay exact bytes.
+    await persistCaptureMetadata(capture);
+  }
   return { challengeId: challenge.challengeId, signature };
 }
 

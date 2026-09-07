@@ -1,10 +1,21 @@
-# Proof Anywhere verifier 1.0.0
+# Proof Anywhere verifier 1.1.0
 
 Download `verify.py` separately from the PackProof repository/release. It is a standalone, read-only Python program; it does not import the PackProof server, log in, extract archive paths, execute package contents, fetch keys, or upload media. Python 3.10+ is required. Signature checks additionally require an installed OpenSSL executable; missing OpenSSL returns `SIGNATURE_UNCHECKED`.
 
 ```bash
 python3 verify.py proof.zip --trust-list independently-obtained-trust.json
 ```
+
+For the signed, dated registry format, obtain the authority's public PEM and key identity through an independent trusted channel:
+
+```bash
+python3 verify.py proof.zip \
+  --trust-registry signed-registry.json \
+  --trust-authority-key independently-pinned-authority.pem \
+  --trust-authority-key-id packproof-registry-authority
+```
+
+All three options are required together. The verifier verifies the registry signature before using any listed signing key. It never reads an authority key or registry from the ZIP, and it does not fetch keys or later revocations. `--trust-list` retains its existing explicitly trusted local-input semantics and cannot be combined with `--trust-registry`.
 
 For an existing unsigned Proof, obtain its manifest SHA-256 separately and compare it explicitly:
 
@@ -16,11 +27,14 @@ This compares the frozen record and every included original against that record.
 
 | Outcome | Meaning |
 | --- | --- |
-| `VERIFIED` | Original bytes match the frozen snapshot; signature verifies under the supplied active key and current trust-list window. |
+| `VERIFIED` | Original bytes match the frozen snapshot; signature verifies under a trusted active or historically valid retired key and a fresh trust snapshot. |
 | `VERIFIED_INDEPENDENT_DIGEST` | Original bytes match an independently supplied root digest. No signature is claimed. |
 | `UNSIGNED` | Internally consistent hash-only record; origin has not been independently established. |
 | `UNKNOWN_KEY` | A signature exists but its key is absent from the independently supplied trust list. |
 | `REVOKED_KEY` | The local trust list marks the signing key revoked; the verifier does not accept it. |
+| `COMPROMISED_KEY` | The authenticated registry reports compromise. Even a claimed signature date before the incident requires review. |
+| `KEY_OUTSIDE_VALIDITY` / `INVALID_SIGNING_TIME` | The signature's reported time is outside the key's effective dates, after retirement, in the future, or malformed. |
+| `UNTRUSTED_REGISTRY` / `INVALID_TRUST_REGISTRY` | The registry cannot be authenticated under the independent authority pin, or its schema/dates/statuses are invalid. No registry key establishes trust. |
 | `TRUST_STALE` / `TRUST_NOT_YET_VALID` | Signature math may pass, but the local list is outside its stated freshness window. |
 | `INVALID_SIGNATURE` | The signature did not verify with the independently supplied matching key. |
 | `MISSING_FILES` | A required included archive entry is absent. |
@@ -31,6 +45,12 @@ This compares the frozen record and every included original against that record.
 | `UNSAFE_ARCHIVE` | Duplicate/unsafe names, entry types, compression, counts, or size exceed the parser contract. |
 
 ## Trust-list contract and rotation
+
+The signed-registry envelope is `{registry,signature}`. `registry` has exactly `version:1`, `domain:"PACKPROOF_SIGNING_TRUST_REGISTRY"`, `publishedAt`, `nextReviewAt`, and `keys`. Every registry key has exactly `keyId`, `algorithm`, `publicKeyPem`, `validFrom`, `validUntil`, `status`, `statusEffectiveAt`, and `reason`. Timestamps include a timezone; `validUntil`, `statusEffectiveAt`, and `reason` can be null where applicable. `status` is `ACTIVE`, `RETIRED`, `REVOKED`, or `COMPROMISED`; unknown statuses and duplicate identities fail closed. Non-active keys require `statusEffectiveAt`, and effective status cannot postdate registry publication. `signature` has `algorithm`, the independently pinned authority `keyId`, `signatureBase64`, and `signedAt`, and covers the UTF-8 `packproof.sorted-json.v1` canonical registry object. Key algorithms are `ECDSA_SHA_256` or `RSASSA_PSS_SHA_256`.
+
+For an active or retired key, the reported signing date must be within its inclusive `validFrom`/`validUntil` range and not in the future. A retired key also requires signing on or before `statusEffectiveAt`. A revoked or compromised key always requires review: a self-asserted historical signing date cannot establish that a signature predates compromise. The verifier keeps signature mathematics separate: signed-registry checks may report `signatureVerified:true` alongside `REVOKED_KEY` or `COMPROMISED_KEY`, while `signature.keyTrustedAtSnapshot` is false. A stale registry can likewise preserve the math result but cannot produce overall `VERIFIED`. `trust.currentRevocationKnowledge` is always `UNAVAILABLE` offline. The root's signature timestamp is neither independently attested filming time nor a trusted timestamp authority receipt.
+
+The closed registry schema deliberately restricts canonicalization to fixed ASCII member names, strings, nulls, arrays, and integer version 1, avoiding cross-language floating-point or numeric-member-name differences. Unknown additional fields are rejected until a schema/version update explicitly supports them. Legacy manifest canonical bytes are still verified verbatim without Python reserialization.
 
 A trust list has schema `packproof.trust-list.v1`, timezone-qualified `generatedAt` and `expiresAt`, and a `keys` array. Every key contains `keyId`, `algorithm` (`ECDSA_SHA_256` or `RSASSA_PSS_SHA_256`), `publicKeyPem`, and `status` (`ACTIVE` or `REVOKED`). `keyId` must match the recorded signature and be unique. A trust list is an explicitly trusted local input, **not a self-authenticating file**. Authenticate its origin and checksum through an independent channel before use. Keys included in a ZIP are never loaded as trust.
 
@@ -70,6 +90,10 @@ From the repository root:
 
 ```bash
 npm --prefix backend test -- --run tests/proof-anywhere.test.ts tests/proof-package.test.ts
+python3 -B -m unittest discover -s verifier -p 'test_*.py' -v
+npm --prefix backend test -- tests/signed-registry-offline.test.ts
 ```
+
+Signed-registry tests exercise actual Python/OpenSSL verification for ECDSA and RSA-PSS authorities, corrupt registries, incorrect or missing external pins, unknown keys, stale/future snapshots, retirement windows, revoked/compromised keys with backdated claimed signatures, invalid manifest signatures and archive-included trust material. A TypeScript-generated signed fixture checks canonical interoperability, including Unicode text. The Python tests are also run by the backend test suite.
 
 Fixtures cover valid signature verification, modified media even after rewriting the ZIP hash inventory, missing files, unknown/forged/revoked keys, unsigned records, stale trust, unsupported versions, deliberate omissions, traversal, Windows paths, duplicate entries and compressed-size abuse. Tests run with deliberately unusable HTTP proxy endpoints; the verifier implementation has no network client. A physical air-gap and independent reviewer usability trial remain separate deployment/pilot validation tasks.

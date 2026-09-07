@@ -8,6 +8,7 @@ import { DomainError } from "./errors.js";
 import { strictAttestationObject, verifyAttestationAuthorization } from "./attestation-authorization.js";
 import { getProofView, loadProof, requireParticipant, type ProofView } from "./proofs.js";
 import { ATTESTATION_STATEMENTS, DIGEST_ALGORITHM, TRUST_KIND } from "./trust.js";
+import { enqueueRecoveryEvent, buildProofRecoverySnapshot } from "./recovery-journal.js";
 import {
   asRequiredIso,
   type AttestationRow,
@@ -194,6 +195,7 @@ export async function commitAttestation(
       await tx.query("UPDATE attestation_challenges SET consumed_at=$2, attestation_id=$3 WHERE id=$1 AND consumed_at IS NULL",
         [authorization.challengeId, createdAt, attestationId]);
     }
+    await enqueueRecoveryEvent(tx, clock, { operationId: `declaration:${attestationId}`, kind: "DECLARATION_COMMITTED", proofId, actorUserId, payload: await buildProofRecoverySnapshot(tx, proofId) });
 
     return {
       attestation: toAttestationView({

@@ -166,7 +166,7 @@ describe("signature experiences preserve source, snapshot, consent and approval 
     await completeCaptureSession(h.db, h.clock, buyer, proof.proofId, capture.id, { sha256: sha256Hex(bytes), byteSize: bytes.length, contentType: "video/mp4" });
     const upload = await initializeStageEvidence(h.db, h.clock, h.objectStore, buyer, proof.proofId, stage.stageId,
       { contentType: "video/mp4", captureSessionId: capture.id, idempotencyKey: "receipt" });
-    await h.objectStore.putUpload(new URL(upload.upload.url).pathname.split("/").at(-1)!, bytes, "video/mp4");
+    await request(h.app).put(new URL(upload.upload.url).pathname).set("Content-Type","video/mp4").send(bytes).expect(200);
     await commitStageEvidence(h.db, h.clock, h.objectStore, buyer, proof.proofId, stage.stageId, upload.evidenceId, sha256Hex(bytes));
     const inbound = await createSignatureAnchor(h.db, h.clock, buyer, proof.proofId, { evidenceId: upload.evidenceId,
       stageId: stage.stageId, startMs: 0, endMs: 100, label: "Receipt identifier", sourceType: "USER_MARKED", idempotencyKey: "inbound" });

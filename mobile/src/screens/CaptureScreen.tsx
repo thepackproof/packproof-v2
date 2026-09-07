@@ -1,4 +1,5 @@
-import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { captureRecoveryLabel } from "../capture/recovery-model";
+import { Alert, Linking, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePackProof } from "../app/PackProofProvider";
 import { OFFLINE_CAPTURE_MESSAGE } from "../copy/errors";
@@ -27,7 +28,7 @@ export function CaptureScreen() {
   const reviewing = Boolean(app.localCapture) && belongs && !inFlight;
   const sellerAttestation = Platform.OS === "android" && app.role === "SELLER" && !isGradingWorkflow(app.proof?.workflowType);
 
-  const progressLabel = preparing
+  const progressLabel = app.localCapture?.recovery ? captureRecoveryLabel(app.localCapture.recovery.phase) : preparing
     ? "Preparing…"
     : uploading
       ? `Uploading${app.uploadPercent != null ? ` • ${app.uploadPercent}%` : ""}`
@@ -39,22 +40,22 @@ export function CaptureScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.scanBackground }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={[
         styles.root,
         {
           paddingTop: Math.max(insets.top, 20),
           paddingBottom: Math.max(insets.bottom, 20),
-          backgroundColor: colors.scanBackground,
+          backgroundColor: colors.background,
         },
       ]}
     >
-      <Text style={[styles.title, { color: colors.scanText }]}>
-        {inFlight ? "Securing evidence…" : reviewing ? "Review your evidence" : "Capture evidence"}
+      <Text style={[styles.title, { color: colors.textPrimary }]}>
+        {inFlight ? "Saving your recording" : reviewing ? "Review your evidence" : "Capture evidence"}
       </Text>
-      <Text style={[styles.prompt, { color: colors.scanMuted }]}>
+      <Text style={[styles.prompt, { color: colors.textSecondary }]}>
         {inFlight
-          ? "PackProof is uploading and committing this recording. It is not secured until the server confirms."
+          ? "Your original stays on this device until PackProof confirms preservation and finalization."
           : reviewing
             ? sellerAttestation
               ? "Review your recording, then authenticate to confirm your statement and submit."
@@ -83,7 +84,7 @@ export function CaptureScreen() {
         />
       ) : null}
       {app.offline && app.localCapture ? (
-        <Text style={[styles.note, { color: colors.scanMuted }]}>{OFFLINE_CAPTURE_MESSAGE}</Text>
+        <Text style={[styles.note, { color: colors.textSecondary }]}>{OFFLINE_CAPTURE_MESSAGE}</Text>
       ) : null}
 
       {inFlight ? (
@@ -97,7 +98,7 @@ export function CaptureScreen() {
       {reviewing && app.localCapture ? (
         <View style={styles.preview}>
           <VideoReview key={app.localCapture.uri} uri={app.localCapture.uri} />
-          <Text style={[styles.item, { color: colors.scanText }]}>
+          <Text style={[styles.item, { color: colors.textPrimary }]}>
             {formatDuration(app.localCapture.durationMs)} recording{app.localCapture.interrupted ? " · interrupted segment" : ""}
           </Text>
           {sellerAttestation ? <SellerAttestation
@@ -109,15 +110,24 @@ export function CaptureScreen() {
             loading={app.busy}
             haptic="medium"
           />}
+          <Text style={[styles.note, { color: colors.textSecondary }]}>{app.localCapture.recovery ? captureRecoveryLabel(app.localCapture.recovery.phase) : "Saved on this device. Upload pending."} Local-only recordings can be lost if this app is uninstalled or the device is lost.</Text>
+          <Button
+            label="Android biometric settings"
+            onPress={() => void Linking.sendIntent("android.settings.BIOMETRIC_ENROLL").catch(() => Linking.openSettings())}
+            variant="tertiary"
+            disabled={app.busy}
+          />
           <Button
             label="Retake"
             onPress={() => void app.startCapture()}
             variant="secondary"
-            disabled={app.busy}
+            disabled={app.busy || Boolean(app.localCapture.uploadEvidenceId)}
           />
           <Button
             label="Discard"
-            onPress={() => void app.discardCapture()}
+            onPress={() => Alert.alert("Discard this local recording?", "This removes the recording from this device. If it has not been preserved by PackProof, it cannot be recovered. Existing committed server evidence is unaffected.", [
+              { text: "Keep recording", style: "cancel" }, { text: "Discard local copy", style: "destructive", onPress: () => void app.discardCapture() },
+            ])}
             variant="tertiary"
             disabled={app.busy}
           />

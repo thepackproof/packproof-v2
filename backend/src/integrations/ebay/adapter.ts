@@ -1,4 +1,4 @@
-import { ebayIdentityAccount } from "./normalize.js";
+import { ebayIdentityAccount, ebayPilotCaptureExclusion } from "./normalize.js";
 import type { Clock } from "../../clock.js";
 import type { Database } from "../../db/database.js";
 import { withEbayUserToken, type EbayRuntime } from "../../domain/ebay-marketplace.js";
@@ -34,6 +34,7 @@ export function normalizeEbayFulfillmentOrder(order: EbayOrder, account: string,
         paymentState: order.orderPaymentStatus === "PAID" ? "CONFIRMED" : order.orderPaymentStatus === "FULLY_REFUNDED" ? "REFUNDED" : order.orderPaymentStatus === "FAILED" ? "FAILED" : "PENDING",
         fulfillmentState: cancelled ? "CANCELLED" : order.orderFulfillmentStatus === "FULFILLED" ? "FULFILLED" : order.orderFulfillmentStatus === "IN_PROGRESS" ? "IN_PROGRESS" : order.orderFulfillmentStatus === "NOT_STARTED" ? "AWAITING_FULFILLMENT" : "UNKNOWN",
         requiresPhysicalFulfillment: order.requiresPhysicalFulfillment === true, cancelled,
+        pilotCaptureExclusion: ebayPilotCaptureExclusion(order),
         items: order.lineItems.map((item, index) => ({ externalItemId: item.lineItemId ?? item.legacyItemId, position: index + 1, title: item.title, description: null, sku: item.sku, quantity: item.quantity,
             remainingQuantity: item.fulfillmentStatus === "FULFILLED" ? 0 : item.fulfillmentStatus === "NOT_STARTED" ? item.quantity : null,
             unitValue: item.quantity && amount(item.lineItemCost?.value) !== null ? amount(item.lineItemCost?.value)! / item.quantity : amount(item.lineItemCost?.value), currency: item.lineItemCost?.currency ?? order.total?.currency ?? null })),

@@ -1,4 +1,5 @@
 import { MediaPrivacyTools } from "../components/MediaPrivacyTools";
+import { EvidenceResponsePanel } from "../components/EvidenceResponsePanel";
 import { SignatureWorkbench } from "../components/SignatureWorkbench";
 import { PrivacySharePanel } from "../components/PrivacySharePanel";
 import { WorkspaceProofRecord } from "../components/WorkspaceProofRecord";
@@ -403,7 +404,7 @@ export function ProofScreen(props: {
       {!grading && role === "SELLER" && proof.status !== "FINALIZED" && !actionEnabled ? <section className="section stack"><h2>Record your packing</h2><p>Use the PackProof camera to show the item, packing, and seal. Unfinished recordings stay on this device for recovery.</p><button className="btn" onClick={props.onOpenStation}>Open camera</button></section> : null}
       {detailed && props.api && <details id="proof-tools" className="proof-supporting-tools" onToggle={event => { if (!event.currentTarget.open) event.currentTarget.querySelectorAll<HTMLMediaElement>("video,audio").forEach(media => media.pause()); }} open={new URLSearchParams(location.search).has("historyShare") || new URLSearchParams(location.search).has("snapshot") || /(?:anchor|evidence)=/.test(location.hash) ? true : undefined}>
         <summary>Evidence tools</summary>
-        <SignatureWorkbench key={proof.proofId} api={props.api} proof={proof} />
+        <SignatureWorkbench userId={props.currentUserId} key={`${proof.proofId}.${props.currentUserId}.${props.api.recoveryScope}`} api={props.api} proof={proof} />
       </details>}
       {props.api && role === "SELLER" && <details className="proof-supporting-tools">
         <summary>Share Proof</summary>
@@ -462,6 +463,7 @@ export function ProofScreen(props: {
       </div>}
 
 
+      {props.api && proof.status === "FINALIZED" && <EvidenceResponsePanel userId={props.currentUserId} key={proof.proofId} api={props.api} proofId={proof.proofId} role={role ?? ""} />}
       {detailed && props.api && <MediaPrivacyTools api={props.api} proof={proof} />}
       {detailed ? <><TechnicalDetails proof={proof} /><button className="btn btn-secondary" onClick={() => setDetailed(false)}>Close details</button></> : null}
     </main>

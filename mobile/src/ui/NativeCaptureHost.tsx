@@ -1,4 +1,4 @@
-import * as Haptics from "expo-haptics";
+import { haptic } from "../theme/haptics";
 import { UnifiedCameraView, isUnifiedCameraAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
 import { newIdempotencyKey } from "../v2-api";
 import type { ShippingScanResult } from "../capture/shipping-scan-queue";
@@ -123,7 +123,7 @@ function CameraSession({
 }) {
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
-  const useUnified = process.env.EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING === "true" && isUnifiedCameraAvailable() && Boolean(request.captureSessionId && request.onShippingBarcode) && !request.stageType;
+  const useUnified = isUnifiedCameraAvailable() && Boolean(request.captureSessionId);
   const [shipping, setShipping] = useState<ShippingScanResult|null>(null);
   const [detectingShipping,setDetectingShipping] = useState(false);
   const [shippingError,setShippingError] = useState<string|null>(null);
@@ -137,7 +137,7 @@ function CameraSession({
     if(observed.current.has(key) || observed.current.size>=8) return;
     observed.current.add(key);
     setDetectingShipping(true);
-    void Haptics.selectionAsync().catch(()=>undefined);
+    void haptic("selection");
     try {
       const result = await request.onShippingBarcode({rawValue:event.rawValue,format:event.format,detectedAtMs:event.detectedAtMs,idempotencyKey:newIdempotencyKey()});
       if (result.status==='UNRECOGNIZED') return;
@@ -145,7 +145,7 @@ function CameraSession({
       setShipping(result);
       if (result.status==='BOUND' && !notified.current.has(result.observationId!)) {
         notified.current.add(result.observationId!);
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(()=>undefined);
+        void haptic("success");
       }
     } catch {
       setShippingError('The label could not be saved. Keep recording; you can add shipping information afterward.');
@@ -156,7 +156,7 @@ function CameraSession({
     try {
       const result = await request.onConfirmShipping(candidateRaw.current);
       setShipping(result);
-      if(result.status==='BOUND') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(()=>undefined);
+      if(result.status==='BOUND') void haptic("success");
     } catch {setShippingError('The label could not be saved. Keep recording and check shipping afterward.');}
   }
   const recipe =
@@ -211,8 +211,9 @@ function CameraSession({
     try {
       const video = useUnified
         ? await unifiedCamera.current!.startRecording(request.captureSessionId!, false)
-        : await camera.current!.recordAsync({ maxDuration: 180 });
+        : await camera.current!.recordAsync({ maxDuration: 300 });
       setSaving(true);
+      void haptic("light");
       if (!video?.uri)
         throw new Error(
           "The camera returned no recording. No save was confirmed.",
@@ -296,8 +297,8 @@ function CameraSession({
             style={{ color: colors.textSecondary }}
           >
             {recording
-              ? `${Math.floor(elapsed / 1000)} seconds · silent video`
-              : "Camera recording · up to 3 minutes · audio is not required"}
+              ? `${Math.floor(elapsed / 1000)} seconds · silent video${elapsed >= 270000 ? " · recording ends at 5 minutes; finish showing the seal and label" : ""}`
+              : "Camera recording · up to 5 minutes · audio is not required"}
           </Text>
         </View>
         <View style={styles.camera}>
@@ -307,7 +308,7 @@ function CameraSession({
             active
             torchEnabled={false}
             onReady={()=>setReady(true)}
-            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;}}
+            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs; void haptic("medium");}}
             onBarcodeDetected={({nativeEvent})=>{void detected(nativeEvent);}}
             onCaptureError={({nativeEvent})=>{
               if (recordingRef.current) setShippingError('Label scanning is unavailable. Your recording is continuing.');

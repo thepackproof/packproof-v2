@@ -14,6 +14,9 @@ export function createObjectStore(config: AppConfig): ObjectStore {
     return new AwsS3ObjectStore(config.awsS3Bucket, {
       region: config.awsRegion,
       expiresInSeconds: config.s3UploadExpiresSeconds,
+      gatewayBaseUrl: config.publicBaseUrl,
+      committedBucket: process.env.PACKPROOF_COMMITTED_S3_BUCKET,
+      immutableRecoveryJournal: process.env.PACKPROOF_IMMUTABLE_JOURNAL_VERIFIED === "true",
     });
   }
   return new LocalObjectStore(

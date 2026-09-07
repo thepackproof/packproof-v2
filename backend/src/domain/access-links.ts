@@ -8,6 +8,7 @@ import { DomainError } from "./errors.js";
 import { asIso, asRequiredIso } from "./types.js";
 import { requireParticipant } from "./proof-access.js";
 import { requireAccessLinkScope, type AccessLinkScope } from "./workflow.js";
+import { assertPolicyAccessSafe } from "./policy-recovery.js";
 
 export interface ProofAccessLinkRow {
   id: string;
@@ -168,6 +169,7 @@ export async function resolveAccessToken(
   clock: Clock,
   token: string,
 ): Promise<ProofAccessLinkRow> {
+  await assertPolicyAccessSafe(db);
   const presented = token.trim();
   if (!presented || presented.length < 16) {
     throw new DomainError("ACCESS_LINK_INVALID", "This viewing link is not valid", 404);

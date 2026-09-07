@@ -1,3 +1,5 @@
+import { capturePreflight } from "./capture/preflight";
+import type { CaptureRecoveryState } from "./capture/recovery-model";
 import { shippingQueue, readShippingJournal, releaseShippingQueue } from "./capture/shipping-scan-storage";
 import type { ShippingScan, ShippingScanResult, ShippingScanJournal } from "./capture/shipping-scan-queue";
 import { sha256 } from "@noble/hashes/sha256";
@@ -17,6 +19,7 @@ import {
 const LOCAL_CAPTURE_NAME = "packproof-seller-evidence.mp4";
 
 export interface LocalCapture {
+  recovery?: CaptureRecoveryState;
   uri: string;
   contentType: string;
   byteSize: number | null;
@@ -86,23 +89,35 @@ export async function captureGradingPhoto(): Promise<{
 export async function recordPackingEvidence(input: {
   client: PackProofV2Client; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
 }): Promise<LocalCapture | null> {
+  await capturePreflight(input.client, input.userId, !input.stageId);
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
   // Authorization exists before a frame is recorded. No gallery or camera-error file path.
   const session = await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId);
   const journal: ShippingScanJournal = {proofId:input.proofId,sessionId:session.id,userId:input.userId,entries:[]};
   const queue = shippingQueue(input.client,journal);
+  const recovery: CaptureRecoveryState = { version: 1, operationId: session.id, apiBaseUrl: input.client.apiBaseUrl,
+    userId: input.userId, proofId: input.proofId, stageId: input.stageId, phase: "RECORDING", evidenceIdempotencyKey: newIdempotencyKey(),
+    submitRequested: false, needsSellerAttestation: !input.stageId, attempt: 0, nextRetryAt: null, updatedAt: new Date().toISOString() };
+  // Write the account binding before native acquisition. A process restart can discover finalized native media.
+  await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
+    recovery, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
   const captured = await nativeRecorder({ proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
     ...(!input.stageId ? {onShippingBarcode:queue.detect,onConfirmShipping:queue.confirm} : {}),
   });
   await queue.flush();
   if (!captured) {
     releaseShippingQueue(session.id);
-    await input.client.cancelCaptureSession(input.proofId, session.id).catch(() => undefined);
+    const nativeFile = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`);
+    if (!nativeFile.exists || !("size" in nativeFile) || nativeFile.size === 0) {
+      await FileSystem.deleteAsync(captureJournalUri(session.id), { idempotent: true });
+      await input.client.cancelCaptureSession(input.proofId, session.id).catch(() => undefined);
+    }
+    // A failed finalization can still leave original bytes. Keep its account journal and capture identity for recovery/export.
     return null;
   }
   const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
-  return persistLocalCapture({ ...captured, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  return persistLocalCapture({ ...captured, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
 }
 
 /** Existing grading recipes retain their original actor/recipe checks and evidence origin.
@@ -149,6 +164,8 @@ export async function bindRecordedCapture(client: PackProofV2Client, capture: Lo
   // The server has accepted this digest for the capture session. Signing uses
   // the freshly computed original hash, never a cached or client-selected hash.
   capture.captureSha256 = digest;
+  capture.byteSize = info.size;
+  await persistCaptureMetadata(capture);
   releaseShippingQueue(capture.captureSessionId);
 }
 
@@ -175,7 +192,8 @@ export function durableCaptureUri(): string {
 
 export async function persistLocalCapture(capture: LocalCapture): Promise<LocalCapture> {
   if (!FileSystem.documentDirectory) throw new Error("Local document storage is unavailable.");
-  const dest = `${FileSystem.documentDirectory}packproof-evidence-${newIdempotencyKey()}.mp4`;
+  // The unified native camera already writes to protected document storage. Keep that unique original.
+  const dest = capture.uri.startsWith(FileSystem.documentDirectory) ? capture.uri : `${FileSystem.documentDirectory}packproof-evidence-${newIdempotencyKey()}.mp4`;
   if (capture.uri !== dest) {
     const existing = await FileSystem.getInfoAsync(dest);
     if (existing.exists) {
@@ -194,12 +212,52 @@ export async function persistLocalCapture(capture: LocalCapture): Promise<LocalC
     byteSize: "size" in info && typeof info.size === "number" ? info.size : capture.byteSize,
     durationMs: capture.durationMs,
   };
-  await FileSystem.writeAsStringAsync(`${dest}.json`, JSON.stringify(durable));
+  await persistCaptureMetadata(durable);
   return durable;
 }
 
 export async function persistCaptureMetadata(capture: LocalCapture): Promise<void> {
-  await FileSystem.writeAsStringAsync(`${capture.uri}.json`, JSON.stringify(capture));
+  if (capture.recovery) {
+    capture.recovery.updatedAt = new Date().toISOString();
+    const path = captureJournalUri(capture.recovery.operationId);
+    await FileSystem.writeAsStringAsync(`${path}.tmp`, JSON.stringify(capture));
+    await FileSystem.moveAsync({ from: `${path}.tmp`, to: path });
+  }
+  const info = await FileSystem.getInfoAsync(capture.uri);
+  if (info.exists) {
+    await FileSystem.writeAsStringAsync(`${capture.uri}.json.tmp`, JSON.stringify(capture));
+    await FileSystem.moveAsync({ from: `${capture.uri}.json.tmp`, to: `${capture.uri}.json` });
+  }
+}
+
+export function captureJournalUri(operationId: string): string {
+  if (!FileSystem.documentDirectory || !/^[a-zA-Z0-9_-]+$/.test(operationId)) throw new Error("Invalid local operation identity");
+  return `${FileSystem.documentDirectory}packproof-journal-${operationId}.json`;
+}
+
+export async function listAccountCaptures(apiBaseUrl: string, userId: string): Promise<LocalCapture[]> {
+  if (!FileSystem.documentDirectory) return [];
+  const names = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
+  const captures: LocalCapture[] = [];
+  for (const name of names.filter(name => /^packproof-journal-[a-zA-Z0-9_-]+\.json$/.test(name))) {
+    let capture: LocalCapture;
+    try { capture = JSON.parse(await FileSystem.readAsStringAsync(`${FileSystem.documentDirectory}${name}`)); } catch { continue; }
+    const state = capture.recovery;
+    if (!state || state.userId !== userId || state.apiBaseUrl.replace(/\/+$/, "") !== apiBaseUrl.replace(/\/+$/, "")) continue;
+    if (!capture.uri.startsWith(FileSystem.documentDirectory)) continue;
+    if (state.phase === "RECORDING") {
+      try {
+        const finalized = JSON.parse(await FileSystem.readAsStringAsync(`${capture.uri}.finalized.json`));
+        if (finalized.complete === true && finalized.byteSize > 0 && finalized.durationMs > 0) {
+          capture.byteSize = finalized.byteSize; capture.durationMs = finalized.durationMs;
+          capture.interrupted = true; state.phase = "LOCAL_ONLY";
+          await persistCaptureMetadata(capture);
+        }
+      } catch { /* Keep an incomplete native recording available for inspection; never fabricate a usable original. */ }
+    }
+    captures.push(capture);
+  }
+  return captures.sort((a, b) => (b.recovery?.updatedAt ?? "").localeCompare(a.recovery?.updatedAt ?? ""));
 }
 
 export async function localCaptureExists(uri: string | null | undefined): Promise<boolean> {
@@ -210,12 +268,16 @@ export async function localCaptureExists(uri: string | null | undefined): Promis
   return info.exists && !info.isDirectory;
 }
 
-export async function discardLocalCapture(uri: string | null | undefined): Promise<void> {
+export async function discardLocalCapture(uri: string | null | undefined, operationId?: string): Promise<void> {
   if (!uri) {
     return;
   }
   try {
+    let saved: LocalCapture | null = null;
+    try { saved = JSON.parse(await FileSystem.readAsStringAsync(`${uri}.json`)); } catch { /* Legacy file. */ }
     await FileSystem.deleteAsync(uri, { idempotent: true });
+    await FileSystem.deleteAsync(`${uri}.finalized.json`, { idempotent: true });
+    if (saved?.recovery || operationId) await FileSystem.deleteAsync(captureJournalUri(saved?.recovery?.operationId ?? operationId!), { idempotent: true });
     await FileSystem.deleteAsync(`${uri}.json`, { idempotent: true });
   } catch {
     // A missing temporary file is not Proof state.
@@ -239,10 +301,10 @@ export async function describeLocalCapture(
   return {
     ...metadata,
     uri,
-    contentType: fallback.contentType ?? "video/mp4",
+    contentType: metadata.contentType ?? fallback.contentType ?? "video/mp4",
     byteSize:
       "size" in info && typeof info.size === "number" ? info.size : (fallback.byteSize ?? null),
-    durationMs: fallback.durationMs ?? null,
+    durationMs: metadata.durationMs ?? fallback.durationMs ?? null,
   };
 }
 
@@ -253,6 +315,7 @@ export async function uploadCaptureFile(input: {
   contentType: string;
   onProgress?: (percent: number) => void;
 }): Promise<void> {
+  if (input.target.received) { input.onProgress?.(100); return; }
   const exists = await localCaptureExists(input.fileUri);
   if (!exists) {
     throw new Error("Captured video is no longer available. Record packing evidence again.");
@@ -345,7 +408,7 @@ export async function uploadCaptureResumable(input: {
   const state = await input.client.listUploadParts(input.proofId, input.evidenceId);
   const count = Math.ceil(info.size / state.partSize);
   if (count > state.maxParts)
-    throw new Error("This recording exceeds 200 MiB. Record a shorter video.");
+    throw new Error(`This recording exceeds the server limit of ${formatBytes(state.partSize * state.maxParts)}. The original remains on this device.`);
   const saved = new Set(state.parts.map((p) => p.partNumber));
   for (let part = 1; part <= count; part++) {
     if (!saved.has(part)) {

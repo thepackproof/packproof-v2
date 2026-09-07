@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PackProof independent offline ZIP verifier v1.0.0 (Python 3.10+, OpenSSL for signatures).
+"""PackProof independent offline ZIP verifier v1.1.0 (Python 3.10+, OpenSSL for signatures).
 Never extracts archive entries, executes package content, or opens network connections.
 Trust lists must be obtained and authenticated separately from the package.
 """
@@ -20,7 +20,7 @@ import sys
 import tempfile
 import zipfile
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 MAX_BYTES = 220 * 1024 * 1024
 MAX_JSON = 8 * 1024 * 1024
 MAX_ENTRIES = 4096
@@ -57,16 +57,81 @@ def safe_name(name):
             and re.fullmatch(r'[A-Za-z0-9_./-]+', name) is not None
             and not name.startswith('/') and all(p not in ('', '.', '..') for p in name.split('/')))
 
-def date(value):
+def date(value, error_status='INVALID_TRUST_LIST'):
     if not isinstance(value, str):
-        fail('INVALID_TRUST_LIST', 'Trust timestamps must be ISO 8601 strings')
+        fail(error_status, 'Trust timestamps must be ISO 8601 strings')
     try:
         parsed = dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
         if parsed.tzinfo is None:
             raise ValueError()
         return parsed
     except ValueError:
-        fail('INVALID_TRUST_LIST', 'Trust timestamp must include a timezone')
+        fail(error_status, 'Trust timestamp must include a timezone')
+
+def registry_canonical_bytes(registry):
+    # The closed registry schema has ASCII member names and only string/null values,
+    # arrays, and the integer version 1. Python and sorted-json.v1 agree for this subset.
+    try:
+        return json.dumps(registry, sort_keys=True, ensure_ascii=False,
+                          separators=(',', ':'), allow_nan=False).encode('utf-8')
+    except (UnicodeError, ValueError, TypeError):
+        fail('INVALID_TRUST_REGISTRY', 'Registry contains unsupported text or values')
+
+def load_registry(path, authority_path, authority_id, now):
+    if not authority_path or not isinstance(authority_id, str) or not authority_id.strip():
+        fail('UNTRUSTED_REGISTRY', 'An independently pinned authority PEM and authority key ID are required')
+    if os.path.getsize(path) > MAX_JSON or os.path.getsize(authority_path) > 65536:
+        fail('INVALID_TRUST_REGISTRY', 'Registry or authority key exceeds its size limit')
+    try:
+        signed = json_bytes(Path(path).read_bytes())
+        authority = Path(authority_path).read_text(encoding='utf-8')
+    except VerificationError:
+        fail('INVALID_TRUST_REGISTRY', 'Malformed signed registry JSON')
+    if (not isinstance(signed, dict) or set(signed) != {'registry', 'signature'}
+            or not isinstance(signed['registry'], dict) or not isinstance(signed['signature'], dict)):
+        fail('INVALID_TRUST_REGISTRY', 'Expected a signed registry envelope')
+    registry, signature = signed['registry'], signed['signature']
+    if (set(registry) != {'version', 'domain', 'publishedAt', 'nextReviewAt', 'keys'}
+            or type(registry['version']) is not int or registry['version'] != 1
+            or registry['domain'] != 'PACKPROOF_SIGNING_TRUST_REGISTRY'
+            or not isinstance(registry['keys'], list) or len(registry['keys']) > 4096):
+        fail('INVALID_TRUST_REGISTRY', 'Unsupported signing registry schema')
+    generated = date(registry['publishedAt'], 'INVALID_TRUST_REGISTRY')
+    expires = date(registry['nextReviewAt'], 'INVALID_TRUST_REGISTRY')
+    if expires <= generated:
+        fail('INVALID_TRUST_REGISTRY', 'Registry review deadline must follow publication')
+    keys = {}
+    for key in registry['keys']:
+        if (not isinstance(key, dict) or set(key) != {'keyId', 'algorithm', 'publicKeyPem', 'validFrom', 'validUntil', 'status', 'statusEffectiveAt', 'reason'}
+                or not isinstance(key['keyId'], str) or not 1 <= len(key['keyId']) <= 200
+                or key['keyId'] in keys or key['algorithm'] not in ALGORITHMS
+                or key['status'] not in ('ACTIVE', 'RETIRED', 'REVOKED', 'COMPROMISED')
+                or not isinstance(key['publicKeyPem'], str) or not 1 <= len(key['publicKeyPem']) <= 65536
+                or (key['reason'] is not None and not isinstance(key['reason'], str))):
+            fail('INVALID_TRUST_REGISTRY', 'Invalid, duplicate, or unknown-status registry key')
+        start = date(key['validFrom'], 'INVALID_TRUST_REGISTRY')
+        end = date(key['validUntil'], 'INVALID_TRUST_REGISTRY') if key['validUntil'] is not None else None
+        effective = date(key['statusEffectiveAt'], 'INVALID_TRUST_REGISTRY') if key['statusEffectiveAt'] is not None else None
+        if ((end is not None and end < start) or (effective is not None and effective > generated)
+                or (key['status'] != 'ACTIVE' and effective is None)):
+            fail('INVALID_TRUST_REGISTRY', 'Registry key dates are inconsistent')
+        keys[key['keyId']] = key
+    if (set(signature) != {'algorithm', 'keyId', 'signatureBase64', 'signedAt'}
+            or signature.get('keyId') != authority_id or signature.get('algorithm') not in ALGORITHMS):
+        fail('UNTRUSTED_REGISTRY', 'Registry signature does not match the independently pinned authority identity')
+    date(signature['signedAt'], 'INVALID_TRUST_REGISTRY')
+    authority_check = check_signature(registry_canonical_bytes(registry), signature, {
+        authority_id: {'status': 'ACTIVE', 'algorithm': signature['algorithm'], 'publicKeyPem': authority}
+    })
+    if not authority_check['verified']:
+        fail('SIGNATURE_UNCHECKED' if authority_check['status'] == 'SIGNATURE_UNCHECKED' else 'UNTRUSTED_REGISTRY',
+             'The registry signature could not be verified with the independently pinned authority')
+    freshness = 'NOT_YET_VALID' if generated > now else 'STALE' if expires <= now else 'FRESH'
+    return keys, {'source': 'SIGNED_REGISTRY', 'status': freshness,
+                  'registrySignatureVerified': True, 'authorityKeyId': authority_id,
+                  'generatedAt': registry['publishedAt'], 'expiresAt': registry['nextReviewAt'],
+                  'networkUsed': False, 'currentRevocationKnowledge': 'UNAVAILABLE',
+                  'limitation': 'Authenticated registry snapshot only. Later revocations cannot be discovered offline.'}
 
 def load_trust(path, now):
     if path is None:
@@ -136,9 +201,42 @@ def check_signature(raw, signature, keys):
             'algorithm': signature['algorithm'], 'signedAt': signature.get('signedAt'),
             'timeMeaning': 'Reported signing time is not independently timestamped filming time.'}
 
-def verify(path, expected=None, trust_path=None, now=None):
+def check_registry_signature(raw, signature, keys, now):
+    # Preserve the mathematical result even when policy no longer trusts the key.
+    crypto_keys = {identity: {**key, 'status': 'ACTIVE'} for identity, key in keys.items()}
+    result = check_signature(raw, signature, crypto_keys)
+    key = keys.get(result['keyId'])
+    result.update({'keyStatus': key['status'] if key else 'UNKNOWN', 'keyTrustedAtSnapshot': False,
+                   'historicalTrust': 'UNKNOWN_KEY' if not key else 'REQUIRES_REVIEW'})
+    if not key or not result['verified']:
+        return result
+    result.update({name: key[name] for name in ('validFrom', 'validUntil', 'statusEffectiveAt', 'reason')})
+    if key['status'] in ('REVOKED', 'COMPROMISED'):
+        result['status'] = key['status'] + '_KEY'
+        result['timeMeaning'] = 'A self-asserted historical signing time cannot defeat revocation or compromise.'
+        return result
+    try:
+        signed_at = date(signature.get('signedAt'), 'INVALID_SIGNING_TIME')
+    except VerificationError:
+        result['status'] = 'INVALID_SIGNING_TIME'
+        return result
+    if (signed_at > now or signed_at < date(key['validFrom'])
+            or (key['validUntil'] is not None and signed_at > date(key['validUntil']))
+            or (key['status'] == 'RETIRED' and signed_at > date(key['statusEffectiveAt']))):
+        result['status'] = 'KEY_OUTSIDE_VALIDITY'
+        return result
+    result.update({'keyTrustedAtSnapshot': True, 'historicalTrust': 'TRUSTED_AT_REGISTRY_SNAPSHOT'})
+    return result
+
+def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
+           authority_key_path=None, authority_key_id=None):
     now = now or dt.datetime.now(dt.timezone.utc)
-    keys, trust = load_trust(trust_path, now)
+    if trust_path and registry_path:
+        fail('INVALID_TRUST_REGISTRY', 'Choose a legacy trust list or a signed registry, not both')
+    if not registry_path and (authority_key_path or authority_key_id):
+        fail('INVALID_TRUST_REGISTRY', 'Authority options require a signed registry')
+    keys, trust = (load_registry(registry_path, authority_key_path, authority_key_id, now)
+                   if registry_path else load_trust(trust_path, now))
     if os.path.getsize(path) > MAX_BYTES:
         fail('UNSAFE_ARCHIVE', 'Archive exceeds compressed size limit')
     with zipfile.ZipFile(path) as archive:
@@ -302,7 +400,8 @@ def verify(path, expected=None, trust_path=None, now=None):
             stage_count += media_check(stage['evidence'], stage_manifest['evidence'], stage['stageId'])
         if metadata is not None and metadata.get('omissions') != omissions:
             fail('INVALID_PACKAGE', 'Omission inventories disagree')
-        signature = check_signature(raw, package.get('signature'), keys)
+        signature = (check_registry_signature(raw, package.get('signature'), keys, now)
+                     if registry_path else check_signature(raw, package.get('signature'), keys))
         if 'integrity/signatures.json' in name_set:
             signatures = read_json('integrity/signatures.json')
             if signatures.get('manifestSignature') != package.get('signature'):
@@ -310,7 +409,7 @@ def verify(path, expected=None, trust_path=None, now=None):
         status = signature['status']
         if status == 'UNSIGNED' and expected:
             status = 'VERIFIED_INDEPENDENT_DIGEST'
-        if signature['verified'] and trust['status'] != 'FRESH':
+        if status == 'VERIFIED' and trust['status'] != 'FRESH':
             status = 'TRUST_STALE' if trust['status'] == 'STALE' else 'TRUST_NOT_YET_VALID'
         if omissions and status in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST', 'UNSIGNED'):
             status = 'OMITTED_FILES'
@@ -340,7 +439,7 @@ def render_html_report(result):
         ('Later-stage files checked', result.get('lifecycleEvidenceVerified', 0)),
         ('Signature verified', 'Yes' if result.get('signatureVerified') else 'No'),
         ('Trust freshness', result.get('trust', {}).get('status', 'Not checked')),
-        ('Trust list expires', result.get('trust', {}).get('expiresAt', 'Not provided')),
+        ('Trust snapshot expires', result.get('trust', {}).get('expiresAt', 'Not provided')),
     ]
     rows = ''.join('<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>' for label, value in summary)
     inventory = ''.join('<tr><td>' + escape(item.get('path', '')) + '</td><td><code>' + escape(item.get('sha256', '')) + '</code></td><td>' + escape(item.get('status', '')) + '</td></tr>' for item in result.get('files', []))
@@ -382,6 +481,9 @@ def main(argv=None):
     parser.add_argument('package', nargs='?')
     parser.add_argument('--expected-manifest-sha256')
     parser.add_argument('--trust-list', help='Separately obtained authenticated trust-list JSON; never use a package-included key')
+    parser.add_argument('--trust-registry', help='Signed, dated registry JSON authenticated with an independently pinned authority')
+    parser.add_argument('--trust-authority-key', help='Independently pinned registry-authority public PEM file, outside the archive')
+    parser.add_argument('--trust-authority-key-id', help='Independently obtained identity of the pinned registry authority')
     parser.add_argument('--html-report', help='Create a new static offline HTML report; existing files are never overwritten')
     parser.add_argument('--version', action='version', version=VERSION)
     args = parser.parse_args(argv)
@@ -391,10 +493,14 @@ def main(argv=None):
         parser.error('expected manifest SHA-256 must contain exactly 64 hexadecimal characters')
     exit_code = 1
     try:
-        result = verify(args.package, args.expected_manifest_sha256, args.trust_list)
+        result = verify(args.package, args.expected_manifest_sha256, args.trust_list,
+                        registry_path=args.trust_registry, authority_key_path=args.trust_authority_key,
+                        authority_key_id=args.trust_authority_key_id)
         exit_code = 0 if result['status'] in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') else 2
     except VerificationError as error:
         result = {'verifierVersion': VERSION, 'status': error.status, 'message': str(error)}
+        if error.status == 'SIGNATURE_UNCHECKED':
+            exit_code = 2
     except zipfile.BadZipFile:
         result = {'verifierVersion': VERSION, 'status': 'INVALID_ARCHIVE', 'message': 'Malformed ZIP archive'}
     except (ValueError, TypeError, KeyError, AttributeError, OSError, OverflowError, RecursionError):

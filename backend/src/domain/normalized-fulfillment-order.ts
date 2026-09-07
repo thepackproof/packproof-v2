@@ -40,6 +40,7 @@ export interface NormalizedFulfillmentOrder {
   requiresPhysicalFulfillment: boolean;
   cancelled: boolean;
   onHold?: boolean;
+  pilotCaptureExclusion?: string | null;
   packages?: Array<{externalFulfillmentId:string|null;trackingNumber:string|null;lineItems:Array<{id:string|null;quantity:number|null}>}>;
   items: NormalizedOrderItem[];
   transactionValue: number | null;
@@ -129,6 +130,7 @@ export function parseNormalizedFulfillmentOrder(input: unknown): NormalizedFulfi
       trackingNumber:normalizeOptionalText(p.trackingNumber,"packages.trackingNumber",200),
       lineItems:Array.isArray(p.lineItems)?p.lineItems.map(value=>{const line=asRecord(value);return {id:normalizeOptionalText(line.id,"packages.lineItems.id",200),quantity:line.quantity==null?null:normalizeNonnegativeInt(line.quantity,"packages.lineItems.quantity")};}):[],
     };}) : [],
+    ...(record.pilotCaptureExclusion ? {pilotCaptureExclusion:normalizeOptionalText(record.pilotCaptureExclusion,"pilotCaptureExclusion",200)} : {}),
     items,
     transactionValue: normalizeMoney(record.transactionValue, "transactionValue"),
     currency: normalizeCurrency(record.currency),
@@ -164,6 +166,7 @@ export function fulfillmentOrderFingerprint(order: NormalizedFulfillmentOrder): 
       requiresPhysicalFulfillment: order.requiresPhysicalFulfillment,
       cancelled: order.cancelled,
       onHold: order.onHold ?? false,
+      ...(order.pilotCaptureExclusion ? {pilotCaptureExclusion:order.pilotCaptureExclusion} : {}),
       packages: order.packages ?? [],
       items: order.items,
       transactionValue: order.transactionValue,
@@ -177,7 +180,7 @@ export function fulfillmentOrderFingerprint(order: NormalizedFulfillmentOrder): 
 }
 
 export function eligibilityOf(order: NormalizedFulfillmentOrder): FulfillmentEligibility {
-  return decideFulfillmentEligibility(order);
+  return order.pilotCaptureExclusion ? "INELIGIBLE" : decideFulfillmentEligibility(order);
 }
 
 export function fulfillmentOrderToImportedTransaction(

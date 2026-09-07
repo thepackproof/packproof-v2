@@ -95,6 +95,7 @@ export function ebayOrderToImportedTransaction(input: {
       itemIds: order.lineItems.map((item) => item.legacyItemId).filter((id): id is string => Boolean(id)),
       environment,
       marketplaceId,
+      pilotCaptureExclusion: ebayPilotCaptureExclusion(order),
     },
   };
 }
@@ -126,4 +127,11 @@ function parseAmount(value: string | null | undefined): number | null {
 /** Seller usernames can change; OAuth's eBay user ID defines the merchant namespace. */
 export function ebayIdentityAccount(environment:EbayEnvironment,userId:string):string {
   return `${environment}.merchant-${sha256Hex(userId).slice(0,40)}`;
+}
+
+/** Preserve operational exclusion separately from provider fulfillment status. */
+export function ebayPilotCaptureExclusion(order:EbayOrder):string|null {
+  if((order.fulfillmentInstructionCount??0)>1||(order.fulfillmentReferenceCount??0)>1)return 'MULTIPLE_FULFILLMENT_GROUPS';
+  if(order.orderFulfillmentStatus==='IN_PROGRESS'||order.lineItems.some(i=>i.fulfillmentStatus==='IN_PROGRESS')||(order.lineItems.some(i=>i.fulfillmentStatus==='FULFILLED')&&order.lineItems.some(i=>i.fulfillmentStatus!=='FULFILLED')))return 'PARTIAL_FULFILLMENT';
+  return null;
 }

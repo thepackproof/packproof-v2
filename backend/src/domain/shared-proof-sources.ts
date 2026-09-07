@@ -33,14 +33,14 @@ export async function readSharedStageSource(
   db: Database, store: ObjectStore, actorUserId: string, proofId: string, evidenceId: string,
 ) {
   await requireCommerceAccess(db, proofId, actorUserId);
-  const row = (await db.query<{ object_key: string; content_type: string; sha256: string; byte_size: number | string }>(
-    `SELECT e.object_key, e.content_type, e.sha256, e.byte_size
+  const row = (await db.query<{ object_key: string; content_type: string; sha256: string; byte_size: number | string; object_version_id:string|null }>(
+    `SELECT e.object_key, e.content_type, e.sha256, e.byte_size, e.object_version_id
        FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id
       WHERE e.id=$1 AND s.proof_id=$2 AND e.committed_at IS NOT NULL AND e.discarded_at IS NULL`,
     [evidenceId, proofId],
   )).rows[0];
   if (!row) throw new DomainError('EVIDENCE_NOT_FOUND', 'Recording not found', 404);
-  const object = await store.get(row.object_key);
+  const object = await store.get(row.object_key,{versionId:row.object_version_id});
   if (!object) throw new DomainError('EVIDENCE_NOT_FOUND', 'Recording is unavailable', 404);
   if (sha256Hex(object.body) !== row.sha256 || object.body.length !== Number(row.byte_size))
     throw new DomainError('EVIDENCE_INTEGRITY_FAILURE', 'Stored recording does not match its committed digest', 409);

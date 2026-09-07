@@ -264,8 +264,8 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       recentCodes.clear()
       releaseAfterFinalize = false
       val options = FileOutputOptions.Builder(output)
-        .setDurationLimitMillis(if (proofCapture) 180 * 1000L else 10 * 60 * 1000L)
-        .setFileSizeLimit(if (proofCapture) 195 * 1024 * 1024L else 512 * 1024 * 1024L)
+        .setDurationLimitMillis(if (proofCapture) 300 * 1000L else 10 * 60 * 1000L)
+        .setFileSizeLimit(if (proofCapture) 250_000_000L else 512 * 1024 * 1024L)
         .build()
       var pending = videoCapture!!.output.prepareRecording(context, options)
       if (audioEnabled) pending = pending.withAudioEnabled()
@@ -308,6 +308,17 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
           event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED ||
           event.error == VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED
         if (recoverable && byteSize > 0 && durationMs > 0) {
+          // A JS bridge response can be lost on process death. Persist only native media facts first.
+          val marker = org.json.JSONObject().put("complete", true).put("durationMs", durationMs)
+            .put("byteSize", byteSize).put("interrupted", current.interrupted || event.error != VideoRecordEvent.Finalize.ERROR_NONE)
+          try {
+            val temporary = File(current.file.path + ".finalized.json.tmp")
+            temporary.writeText(marker.toString())
+            if (!temporary.renameTo(File(current.file.path + ".finalized.json"))) throw IllegalStateException("Recovery metadata unavailable")
+          } catch (_: Exception) {
+            current.promise.reject("RECORDING_RECOVERY_FAILED", "The recording was retained, but recovery metadata could not be saved. Free local space and try again.", null)
+            return
+          }
           current.promise.resolve(mapOf(
             "uri" to Uri.fromFile(current.file).toString(),
             "durationMs" to durationMs.toDouble(),
