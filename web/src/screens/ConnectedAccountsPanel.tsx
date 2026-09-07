@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { connectedAccountStatusLabel, providerDisplay } from "@packproof/copy/status";
+import { ETSY_ATTRIBUTION, providerSetupMessage } from "@packproof/copy/commerce";
 import type {
   ConnectedAccountProviderCatalogView,
   ConnectedAccountView,
@@ -20,7 +21,7 @@ export function ConnectedAccountsPanel(props: {
     <section className="section stack">
       <h2>Your platforms</h2>
       <p className="note">
-        Authorize a supported store to read order and fulfillment details. Automatic intake can prepare a Proof for paid physical orders before packing.
+        Authorize a supported store to read order and fulfillment details. This connects your selling account, separate from PackProof sign-in. You choose whether to turn on automatic intake below.
       </p>
       {props.notice ? <div className="banner banner-info">{props.notice}</div> : null}
       {props.accounts.length === 0 ? (
@@ -32,7 +33,7 @@ export function ConnectedAccountsPanel(props: {
             <p className="meta">{account.externalAccountName || account.externalAccountId}</p>
             <p className="meta">{connectedAccountStatusLabel(account.status)}</p>
             {account.capabilities.transactions ? (
-              <p className="note">Order import uses the provider APIs PackProof already supports.</p>
+              <p className="note">{account.provider === "etsy" ? "Read-only access to your Etsy shop orders. Choose automatic intake below to prepare eligible orders for recording." : "Order import uses the provider APIs PackProof already supports."}</p>
             ) : (
               <p className="note">Identity linking only. This provider does not supply PackProof transactions.</p>
             )}
@@ -65,12 +66,13 @@ export function ConnectedAccountsPanel(props: {
         if (!canConnect) {
           return provider.enabled ? null : (
             <p key={provider.provider} className="meta">
-              {provider.providerDisplay} is not enabled in this environment.
+              {providerSetupMessage(provider.provider)}
             </p>
           );
         }
         return (
           <div key={provider.provider} className="stack">
+            {provider.provider === "etsy" ? <p className="note">Authorize your Etsy shop to read paid orders awaiting shipment. After connecting, turn on automatic intake below to prepare Proofs for recording.</p> : null}
             {provider.requiresShop ? (
               <label className="field" htmlFor={`connected-shop-${provider.provider}`}>
                 <span>Shopify shop</span>
@@ -99,6 +101,7 @@ export function ConnectedAccountsPanel(props: {
           </div>
         );
       })}
+      {props.providers.some(provider => provider.provider === "etsy") || props.accounts.some(account => account.provider === "etsy") ? <p className="meta">{ETSY_ATTRIBUTION}</p> : null}
     </section>
   );
 }

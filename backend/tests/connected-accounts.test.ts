@@ -209,7 +209,7 @@ describe("connected accounts", () => {
     expect(listed.status).toBe(200);
     expect(listed.body.accounts).toEqual([]);
     const providers = listed.body.providers.map((row: { provider: string }) => row.provider).sort();
-    expect(providers).toEqual(["ebay", "facebook", "google", "shopify"]);
+    expect(providers).toEqual(["ebay", "etsy", "facebook", "google", "shopify"]);
     const google = listed.body.providers.find((row: { provider: string }) => row.provider === "google");
     expect(google.capabilities).toEqual({
       identity: true,

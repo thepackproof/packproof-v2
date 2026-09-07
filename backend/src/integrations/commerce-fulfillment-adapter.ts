@@ -11,12 +11,16 @@ export interface CommerceFulfillmentAdapter {
   readonly kind: IntegrationAdapterKind;
   readonly provider: string;
   readonly displayName: string;
+  /** Provider-specific quota budgets; shared workers still own leases and checkpoints. */
+  readonly preferredPollIntervalMs?: number;
+  readonly reconciliationIntervalMs?: number;
   listFulfillmentOrders(input: {
     connection: IntegrationConnectionRow;
     credentials?: IntegrationCredentials | null;
     cursor?: string | null;
     updatedSince?: string;
     updatedUntil?: string;
+    fullReconciliation?: boolean;
     onProgress?: () => Promise<void>;
   }): Promise<CommerceOrderPage>;
   fetchFulfillmentOrder?(input: {

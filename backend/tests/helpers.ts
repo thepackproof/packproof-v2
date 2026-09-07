@@ -40,6 +40,7 @@ export async function createHarness(
     integrations?: IntegrationAdapterRegistry;
     ebay?: import("../src/domain/ebay-marketplace.js").EbayRuntime;
     shopify?: import("../src/integrations/connected-accounts/providers/shopify.js").ShopifyOAuthRuntime;
+    etsy?: import("../src/integrations/etsy/runtime.js").EtsyRuntime;
     google?: import("../src/integrations/connected-accounts/providers/google.js").GoogleOAuthRuntime;
     facebook?: import("../src/integrations/connected-accounts/providers/facebook.js").FacebookOAuthRuntime;
     credentialStore?: MutableCredentialStore;
@@ -75,6 +76,7 @@ export async function createHarness(
     integrations: options.integrations,
     ebay: options.ebay,
     shopify: options.shopify,
+    etsy: options.etsy,
     google: options.google,
     facebook: options.facebook,
     // Unit/integration tests opt out of the external eBay key lookup by default.

@@ -181,6 +181,8 @@ export function providerDisplay(provider: string | null | undefined): string {
       return "eBay";
     case "shopify":
       return "Shopify";
+    case "etsy":
+      return "Etsy";
     case "google":
       return "Google";
     case "facebook":

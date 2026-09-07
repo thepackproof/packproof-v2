@@ -56,7 +56,7 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
         if (current.lease_expires_at && new Date(current.lease_expires_at).getTime() > started.getTime())
             throw new DomainError("COMMERCE_SYNC_IN_PROGRESS", "Orders are already syncing", 409);
         const fullReconciliation = current.window_started_at ? current.reconciliation_pass :
-            !current.last_reconciled_at || started.getTime() - new Date(current.last_reconciled_at).getTime() >= 15 * 60000;
+            !current.last_reconciled_at || started.getTime() - new Date(current.last_reconciled_at).getTime() >= (adapter.reconciliationIntervalMs ?? 15 * 60000);
         const windowStart = current.window_started_at ?? new Date(fullReconciliation ? started.getTime() - 60 * 86400000 :
             new Date(current.last_succeeded_at ?? started).getTime() - 15 * 60000).toISOString();
         const windowEnd = current.window_ended_at ?? started.toISOString();
@@ -65,7 +65,7 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
       ,reconciliation_pass=$7,discovered_count=CASE WHEN provider_cursor IS NULL THEN 0 ELSE discovered_count END,
       eligible_count=CASE WHEN provider_cursor IS NULL THEN 0 ELSE eligible_count END
       WHERE connection_id=$1`, [connectionId, leaseToken, new Date(started.getTime() + LEASE_MS).toISOString(), started.toISOString(), windowStart, windowEnd, fullReconciliation]);
-        return { ...current, window_started_at: windowStart, window_ended_at: windowEnd };
+        return { ...current, window_started_at: windowStart, window_ended_at: windowEnd, reconciliation_pass: fullReconciliation };
     });
     const result: CommerceFulfillmentSyncResult = { connectionId, adapterKey: adapter.adapterKey, provider: adapter.provider,
         discoveredCount: 0, eligibleCount: 0, createdTransactionCount: 0, createdProofCount: 0, existingProofCount: 0,
@@ -80,6 +80,7 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
                 throw new IntegrationError("INTEGRATION_CREDENTIALS_UNAVAILABLE", "Commerce credentials are unavailable", 503, true);
             const page = await adapter.listFulfillmentOrders({ connection, credentials, cursor: result.cursor,
                 updatedSince: new Date(state.window_started_at!).toISOString(), updatedUntil: new Date(state.window_ended_at!).toISOString(),
+                fullReconciliation: state.reconciliation_pass,
                 onProgress: () => db.transaction(tx => requireLease(tx, clock, connectionId, leaseToken, options.background === true)) });
             if (page.cursor && seenCursors.has(page.cursor))
                 throw new IntegrationError("PROVIDER_CURSOR_INVALID", "Provider repeated a page cursor", 502, false);
@@ -160,7 +161,7 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
       window_ended_at=CASE WHEN $3 THEN NULL ELSE window_ended_at END,
       last_reconciled_at=CASE WHEN $3 AND reconciliation_pass THEN $4::timestamptz ELSE last_reconciled_at END,
       next_run_at=$5,last_error_code=NULL,last_error_retryable=NULL,attempt_count=0,updated_at=$4
-      WHERE connection_id=$1 AND lease_token=$2`, [connectionId, leaseToken, result.complete, now, new Date(clock.now().getTime() + (result.complete ? 60000 : 0)).toISOString()]);
+      WHERE connection_id=$1 AND lease_token=$2`, [connectionId, leaseToken, result.complete, now, new Date(clock.now().getTime() + (result.complete ? adapter.preferredPollIntervalMs ?? 60000 : 0)).toISOString()]);
         // Incremental reads overlap 15 minutes; a bounded 60-day reconciliation runs every 15 minutes.
         if (result.complete)
             await db.query("UPDATE commerce_webhook_inbox SET processed_at=$2 WHERE connection_id=$1 AND processed_at IS NULL AND received_at<=$3", [connectionId, now, started.toISOString()]);
@@ -171,13 +172,20 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
         const code = error instanceof IntegrationError || error instanceof DomainError ? error.code : "PROVIDER_TEMPORARILY_UNAVAILABLE";
         const authFailure = code === "INTEGRATION_NEEDS_REAUTH" || code === "CONNECTED_ACCOUNT_REAUTH_REQUIRED" || code === "PROVIDER_AUTH_FAILED";
         const retryable = authFailure ? false : error instanceof IntegrationError ? error.retryable : !(error instanceof DomainError && error.httpStatus < 500);
-        const attempt = (state.attempt_count ?? 0) + 1;
+        // Shared provider quotas are scheduling deferrals, not failed import
+        // attempts. A busy application must resume automatically when capacity
+        // returns instead of permanently disabling an otherwise valid shop.
+        const rateDeferral = retryable && code === "PROVIDER_RATE_LIMITED";
+        const providerDelay = error && typeof error === "object" && "retryAfterSeconds" in error ? Number(error.retryAfterSeconds) : 0;
+        const retryDelay = Math.max(Math.min(30000 * 2 ** Math.min((state.attempt_count ?? 0), 6), 900000),
+            Number.isFinite(providerDelay) && providerDelay > 0 ? Math.min(providerDelay, 86400) * 1000 : 0);
+        const attempt = (state.attempt_count ?? 0) + (rateDeferral ? 0 : 1);
         if (authFailure)
             await updateConnectionStatus(db, clock, connectionId, "NEEDS_REAUTH");
         await db.query(`UPDATE commerce_connection_sync_states SET run_status=$3,lease_token=NULL,lease_expires_at=NULL,
       last_error_code=$4,last_error_retryable=$5,attempt_count=$6,next_run_at=$7,updated_at=$8
-      WHERE connection_id=$1 AND lease_token=$2`, [connectionId, leaseToken, retryable && attempt < 8 ? "RETRYING" : "FAILED", code, retryable, attempt,
-            new Date(clock.now().getTime() + Math.min(30000 * 2 ** Math.min(attempt - 1, 6), 900000)).toISOString(), clock.now().toISOString()]);
+      WHERE connection_id=$1 AND lease_token=$2`, [connectionId, leaseToken, retryable && (rateDeferral || attempt < 8) ? "RETRYING" : "FAILED", code, retryable, attempt,
+            new Date(clock.now().getTime() + retryDelay).toISOString(), clock.now().toISOString()]);
         throw error;
     }
 }

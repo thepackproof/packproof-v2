@@ -228,6 +228,8 @@ function providerDisplayName(provider: string): string {
       return "eBay";
     case "shopify":
       return "Shopify";
+    case "etsy":
+      return "Etsy";
     case "google":
       return "Google";
     case "facebook":
@@ -578,9 +580,14 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       setError(null);
       void api
         .listFulfillmentQueue(route.name === "fulfillment-detail" ? "all" : "ready")
-        .then((result) => { if (!cancelled) setQueue(result.items); })
+        .then(result => { if (!cancelled) setQueue(result.items); })
         .catch(fail)
         .finally(finished);
+      if (route.name === "fulfillment") {
+        void api.listCommerceConnections()
+          .then(result => { if (!cancelled) setConnections(result.connections); })
+          .catch(fail);
+      }
     }
     if (route.name === "stores") {
       setLoading(true);
@@ -948,6 +955,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "fulfillment" ? (
         <FulfillmentQueueScreen
+          connections={connections}
           items={queue.filter(
             (item) =>
               item.workflowState !== "COMPLETED" &&

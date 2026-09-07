@@ -278,6 +278,8 @@ export interface PackProofContextValue {
   syncShipment: () => Promise<void>;
   connectTrustedDemo: () => Promise<void>;
   loadConnections: () => Promise<void>;
+  setCommerceAutomation: (connectionId: string, enabled: boolean) => Promise<void>;
+  syncCommerceConnection: (connectionId: string) => Promise<void>;
   loadConnectedAccounts: () => Promise<void>;
   connectConnectedAccount: (provider: string, extra?: { shop?: string }) => Promise<void>;
   reauthorizeConnectedAccount: (accountId: string) => Promise<void>;
@@ -722,9 +724,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
       await refreshProofCollection();
       await refreshPendingInvites();
       try {
-        const connected = await client.listConnectedAccounts();
+        const [connected, commerce] = await Promise.all([
+          client.listConnectedAccounts(), client.listIntegrationConnections("commerce"),
+        ]);
         setConnectedAccounts(connected.accounts);
         setConnectedProviders(connected.providers);
+        setConnections(commerce.connections);
       } catch {
         // Connected-account routes require the matching API image.
       }
@@ -1769,8 +1774,21 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }),
     loadConnections: async () =>
       run(async () => {
-        const result = await client.listIntegrationConnections();
+        const result = await client.listIntegrationConnections("commerce");
         setConnections(result.connections);
+      }),
+    setCommerceAutomation: async (connectionId, enabled) =>
+      run(async () => {
+        await client.setCommerceAutomation(connectionId, enabled);
+        const result = await client.listIntegrationConnections("commerce");
+        setConnections(result.connections);
+      }),
+    syncCommerceConnection: async (connectionId) =>
+      run(async () => {
+        await client.syncCommerceConnection(connectionId);
+        const result = await client.listIntegrationConnections("commerce");
+        setConnections(result.connections);
+        await refreshProofCollection();
       }),
     loadConnectedAccounts: async () =>
       run(async () => {
@@ -1791,9 +1809,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
     disconnectConnectedAccount: async (accountId) =>
       run(async () => {
         await client.disconnectConnectedAccount(accountId);
-        const result = await client.listConnectedAccounts();
+        const [result, commerce] = await Promise.all([
+          client.listConnectedAccounts(), client.listIntegrationConnections("commerce"),
+        ]);
         setConnectedAccounts(result.accounts);
         setConnectedProviders(result.providers);
+        setConnections(commerce.connections);
       }),
     ensureAuth: ensureFreshCognitoToken,
     persistStation: async (next) => {

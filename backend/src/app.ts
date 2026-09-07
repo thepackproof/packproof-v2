@@ -179,8 +179,11 @@ import { captureSessionRouter, packingRelayRouter } from "./http/capture-router.
 import { signatureRouter } from "./http/signature-router.js";
 import { disclosureRouter, sendPrivateMedia } from "./http/disclosure-router.js";
 import { exportDisclosurePackageStream } from "./domain/disclosure-package.js";
-import { setCommerceAutomation, AUTOMATIC_ORDER_POLICY, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
+import { setCommerceAutomation, commerceOrderPolicy, getCommerceReviewSummary, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
 import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
+import { disabledEtsyRuntime, type EtsyRuntime } from "./integrations/etsy/runtime.js";
+import { createEtsyCommerceAdapter } from "./integrations/etsy/commerce-adapter.js";
+import { createEtsyAccessTokenRunner } from "./integrations/etsy/access.js";
 import { normalizeShopifyShop, shopifyShopHandle } from "./integrations/shopify/shop.js";
 import {
   getRetentionControls,
@@ -215,6 +218,7 @@ export interface AppDependencies {
   releaseIdentity?: ReleaseIdentity;
   ebay?: EbayRuntime;
   shopify?: ShopifyOAuthRuntime;
+  etsy?: EtsyRuntime;
   google?: GoogleOAuthRuntime;
   facebook?: FacebookOAuthRuntime;
   webhookConfig?: WebhookConfig;
@@ -262,12 +266,14 @@ export function createApp(deps: AppDependencies): Express {
   const ebay = deps.ebay ?? disabledEbayRuntime();
   if (ebay.enabled) integrations.registerCommerce(createEbayCommerceAdapter(deps.db, deps.clock, ebay, credentialStore));
   const shopify = deps.shopify ?? disabledShopifyRuntime();
+  const etsy = deps.etsy ?? disabledEtsyRuntime();
   const google = deps.google ?? disabledGoogleRuntime();
   const facebook = deps.facebook ?? disabledFacebookRuntime();
   const connectedAccounts: ConnectedAccountService = {
     registry: createConnectedAccountRegistry({
       ebay,
       shopify,
+      etsy,
       google,
       facebook,
       credentials: credentialStore,
@@ -276,6 +282,10 @@ export function createApp(deps: AppDependencies): Express {
     packproofEnvironment: releaseIdentity.environment,
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
+  if (etsy.enabled && etsy.client) {
+    integrations.registerCommerce(createEtsyCommerceAdapter(etsy.client,
+      createEtsyAccessTokenRunner(deps.db, deps.clock, connectedAccounts)));
+  }
   app.use(httpBoundary(corsOrigins));
   // Admission must happen before a body parser can buffer or accept upload bytes.
   app.put("/upload/:token", asyncRoute(async (req, res) => {
@@ -1531,8 +1541,9 @@ export function createApp(deps: AppDependencies): Express {
           lastErrorCode: sync.lastErrorCode,
           retryable: sync.retryable,
           readyOrderCount: await countReadyFulfillmentOrders(deps.db, row.id, actor),
+          ...await getCommerceReviewSummary(deps.db, row.id),
           autoSyncEnabled: row.auto_sync_enabled,
-          orderPolicy: AUTOMATIC_ORDER_POLICY,
+          orderPolicy: commerceOrderPolicy(row.adapter_key),
           sync,
         });
       }
