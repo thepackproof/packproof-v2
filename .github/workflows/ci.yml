@@ -109,6 +109,12 @@ jobs:
         run: npm ci
         working-directory: backend
       - run: npm ci
+      - name: Install media tools for the canonical API contract test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - run: npm run typecheck
       - run: npm run test:build-security
       - run: npm run test:proof-record
