@@ -44,6 +44,30 @@ describe("LocalObjectStore", () => {
     await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
+  it("publishes complete immutable metadata across independent concurrent committers", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-local-race-"));
+    dirs.push(dir);
+    const stores = Array.from({length: 12}, () => new LocalObjectStore(dir, "http://127.0.0.1:9", "secret"));
+    const key = "evidence/proof_race/evd_race/object";
+    const body = Buffer.alloc(256 * 1024, 7);
+    await stores[0].put(key, body, "video/mp4");
+    const preserved = await stores[0].commitUpload(key);
+    const results = await Promise.all(stores.map(async store => {
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const [committed, metadata] = await Promise.all([
+          store.commitUpload(key), store.head(preserved!.key),
+        ]);
+        expect(metadata).toMatchObject({contentType:"video/mp4",byteSize:body.length});
+        expect(committed).toEqual(preserved);
+      }
+      return store.digest(preserved!.key, {versionId:preserved!.versionId});
+    }));
+    expect(results.every(value => value?.sha256 === sha256Hex(body))).toBe(true);
+    await stores[0].put(key, body, "application/octet-stream");
+    await expect(stores[1].commitUpload(key)).rejects.toMatchObject({code:"OBJECT_ALREADY_PRESERVED"});
+    expect(await stores[0].head(preserved!.key)).toMatchObject({contentType:"video/mp4"});
+  });
+
   it("streams immutable originals and rejects unreserved local upload tokens", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-local-store-"));
     dirs.push(dir);

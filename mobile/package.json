@@ -14,7 +14,8 @@
     "test:proof-record": "node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts",
     "test:recovery": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-recovery.test.ts",
     "postinstall": "node scripts/secure-build-dependencies.cjs",
-    "test:build-security": "node --test tests/build-dependency-security.test.cjs"
+    "test:build-security": "node --test tests/build-dependency-security.test.cjs",
+    "test:study-timing": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/study-timing.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",

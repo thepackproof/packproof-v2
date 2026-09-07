@@ -1,4 +1,5 @@
 import { randomId } from "../random-id";
+import {startStationStudy,type StationStudyTimer} from '../analytics/study-capture';
 import { RelayStationPanel } from "../components/RelayStationPanel";
 import { capturePreflight } from "../capture-preflight";
 import { resumeStationRecording } from "../capture-queue";
@@ -60,6 +61,8 @@ export function PackingStationScreen(props: {
   const finishingRef = useRef(false);
   const pendingRef = useRef<PendingStationCapture | null>(null);
   const mountedRef = useRef(true);
+  const studyTimer=useRef<StationStudyTimer|null>(null);
+  useEffect(()=>()=>{studyTimer.current?.end('cancelled','cancelled');studyTimer.current=null;},[props.api,props.userId]);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   orderRef.current = state.order;
   stateRef.current = state;
@@ -200,7 +203,9 @@ export function PackingStationScreen(props: {
     if(pendingRef.current||heldBlobRef.current){setLocalError("Finish saving the recovered original before starting another recording.");return;}
     if(stateRef.current.phase!=="READY_TO_RECORD")return;
     setBusy(true); setLocalError(null);
+    studyTimer.current=await startStationStudy(props.api,props.userId);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      studyTimer.current?.end('failed','capability');studyTimer.current=null;
       setLocalError("This browser cannot record packing. Open PackProof on a supported phone and sign in to the same account. Your order is preserved."); setBusy(false); return;
     }
     try {
@@ -228,9 +233,11 @@ export function PackingStationScreen(props: {
       };
       recorder.onerror = () => { interruptedRef.current=true; setLocalError("Camera recording was interrupted. Saved segments remain available on this device."); if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); } };
       recorderRef.current = recorder; startedAt.current = performance.now();
+      studyTimer.current?.phase('recording');
       dispatch({type:"START_RECORDING",trigger:"MANUAL"}); recorder.start(2000); dispatch({type:"RECORDING_STARTED"});
       return session.id;
     } catch (error) {
+      studyTimer.current?.end('failed','capability');studyTimer.current=null;
       stopLiveTracks();
       setLocalError(error instanceof DOMException && error.name === "NotAllowedError" ? "Allow camera access in your browser’s site settings, then retry. No recording has been uploaded." : error instanceof Error ? error.message : "Camera unavailable. Check that another app is not using it, then retry camera.");
     } finally { setBusy(false); }
@@ -329,6 +336,7 @@ export function PackingStationScreen(props: {
     };
     dispatch({ type: "CAPTURE_READY", capture, trigger });
     if (!finishConfirmed) {
+      studyTimer.current?.end('failed','unknown');studyTimer.current=null;
       try { await preserveStation(blob, false, true); }
       catch (error) { setLocalError(error instanceof Error ? error.message : "Keep this page open to export the recording."); }
       dispatch({ type: "PROCESSING_FAILED", error: { code: "CAPTURE_INTERRUPTED", message: "Recording stopped automatically. Review the saved segment before confirming; missing footage remains missing." }, canRetry: true });
@@ -352,14 +360,17 @@ export function PackingStationScreen(props: {
       // Both foreground submission and the app-level worker join one serialized accepted intent.
       // PackProofApi is account-bound by App; its old token supplier returns null after an account change.
       const result = await resumeStationRecording(props.api, props.userId, () => true, progress => {
+        studyTimer.current?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');
         if (mountedRef.current) dispatch({ type: "PROCESSING_PROGRESS", submitStep: progress.step, uploadPercent: progress.uploadPercent });
       });
+      studyTimer.current?.end('succeeded');studyTimer.current=null;
       if (!mountedRef.current) return;
       pendingRef.current = null;
       setHeldBlob(null);
       setPreviewUrl(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
     } catch (error) {
+      studyTimer.current?.end('failed',error instanceof ApiError&&error.status===401?'authentication':'network');studyTimer.current=null;
       if (!mountedRef.current) return;
       if (error instanceof ApiError && error.status === 401) {
         dispatch({ type: "AUTH_FAILED" });

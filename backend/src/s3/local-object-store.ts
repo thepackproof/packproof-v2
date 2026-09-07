@@ -19,7 +19,7 @@ export class LocalObjectStore implements ObjectStore {
   async put(key:string,body:Buffer,contentType:string):Promise<void>{
     if(key.includes('/committed/')||key.startsWith('recovery/')){
       const result=await this.putIfAbsent(key,body,contentType);
-      if(!result.created){const existing=await this.get(key);if(!existing||sha256Hex(existing.body)!==sha256Hex(body))throw new DomainError('OBJECT_ALREADY_PRESERVED','Preserved objects cannot be replaced',409);}
+      if(!result.created){const existing=await this.get(key);if(!existing||sha256Hex(existing.body)!==sha256Hex(body)||existing.contentType!==contentType)throw new DomainError('OBJECT_ALREADY_PRESERVED','Preserved objects cannot be replaced',409);}
       return;
     }
     await this.putStream(key,Readable.from([body]),contentType,body.length);
@@ -28,14 +28,14 @@ export class LocalObjectStore implements ObjectStore {
     const file=this.filePath(key);await mkdir(path.dirname(file),{recursive:true});
     // Publish a completed temporary inode atomically: readers never see a partial journal.
     const temporary=`${file}.${randomUUID()}.tmp`;
-    try{await writeFile(temporary,body,{mode:0o600});await link(temporary,file);await writeFile(`${file}.meta.json`,JSON.stringify({contentType}),{mode:0o600});return {created:true};}
+    try{await writeFile(temporary,body,{mode:0o600});await link(temporary,file);await this.publishMetadata(file,contentType,true);return {created:true};}
     catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')return {created:false};throw error;}
     finally{await rm(temporary,{force:true});}
   }
   async putStream(key:string,body:AsyncIterable<Uint8Array>,contentType:string,byteSize:number):Promise<{versionId:null}>{
     if(key.includes('/committed/')||key.startsWith('recovery/'))throw new DomainError('STAGING_KEY_REQUIRED','Uploads can write only staging objects',403);
     const file=this.filePath(key);await mkdir(path.dirname(file),{recursive:true});const temporary=`${file}.${randomUUID()}.tmp`;
-    try{await pipeline(Readable.from(boundedExactStream(body,byteSize)),createWriteStream(temporary,{mode:0o600,flags:'wx'}));await rename(temporary,file);await writeFile(`${file}.meta.json`,JSON.stringify({contentType}),{mode:0o600});return {versionId:null};}
+    try{await pipeline(Readable.from(boundedExactStream(body,byteSize)),createWriteStream(temporary,{mode:0o600,flags:'wx'}));await rename(temporary,file);await this.publishMetadata(file,contentType,false);return {versionId:null};}
     finally{await rm(temporary,{force:true});}
   }
   async head(key:string,_reference:ObjectReference={}):Promise<ObjectMetadata|null>{
@@ -64,7 +64,7 @@ export class LocalObjectStore implements ObjectStore {
       assertCommitExpectations({sha256,byteSize,contentType:source.contentType},expected);
       const committedKey=committedEvidenceObjectKey(key,sha256),target=this.filePath(committedKey);await mkdir(path.dirname(target),{recursive:true});
       try{await link(temporary,target);}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}
-      await writeFile(`${target}.meta.json`,JSON.stringify({contentType:source.contentType}),{mode:0o600});
+      await this.publishMetadata(target,source.contentType,true);
       return {key:committedKey,sha256,byteSize,contentType:source.contentType,versionId:`local-sha256:${sha256}`,stagingVersionId:null};
     }finally{source.body.destroy();await rm(temporary,{force:true});}
   }
@@ -74,5 +74,20 @@ export class LocalObjectStore implements ObjectStore {
   }
   async createUploadTarget():Promise<UploadTarget>{throw new DomainError('UPLOAD_ADMISSION_REQUIRED','Create an evidence upload reservation before sending bytes',409);}
   async putUpload():Promise<{key:string}>{throw new DomainError('UPLOAD_ADMISSION_REQUIRED','Direct upload credentials are disabled',403);}
+  private async publishMetadata(file:string,contentType:string,immutable:boolean):Promise<void>{
+    // Never truncate a published sidecar: concurrent commit/read processes must
+    // see either the previous complete metadata or the new complete metadata.
+    const destination=`${file}.meta.json`,temporary=`${destination}.${randomUUID()}.tmp`;
+    try{
+      await writeFile(temporary,JSON.stringify({contentType}),{mode:0o600,flag:'wx'});
+      if(!immutable){await rename(temporary,destination);return;}
+      try{await link(temporary,destination);}
+      catch(error){
+        if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;
+        const existing=JSON.parse(await readFile(destination,'utf8')) as {contentType:string};
+        if(existing.contentType!==contentType)throw new DomainError('OBJECT_ALREADY_PRESERVED','Preserved object metadata cannot be replaced',409);
+      }
+    }finally{await rm(temporary,{force:true});}
+  }
   private filePath(key:string):string{return path.join(this.directory,...assertSafeObjectKey(key).split('/'));}
 }

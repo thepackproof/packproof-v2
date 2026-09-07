@@ -77,7 +77,7 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
   if (!proof) throw new DomainError("PROOF_NOT_FOUND", "Proof not found", 404);
   const transactionId = proof.transaction_id;
   const rows: Record<string, unknown> = { proofs: [proof] };
-  for (const table of ["proof_participants", "evidence", "attestations", "capture_sessions", "audit_events", "final_manifests", "proof_external_references", "proof_retention_holds", "proof_deletion_requests", "proof_supplements", "commerce_receivers", "commerce_stages", "proof_retention_assignments", "proof_disposition_state", "proof_assets", "proof_asset_external_refs", "custody_observations", "custody_transfers", "continuity_evaluations", "shipment_events", "capture_shipping_labels"]) {
+  for (const table of ["proof_participants", "evidence", "attestations", "attestation_challenges", "capture_sessions", "audit_events", "final_manifests", "proof_external_references", "proof_retention_holds", "proof_deletion_requests", "proof_supplements", "commerce_receivers", "commerce_stages", "proof_retention_assignments", "proof_disposition_state", "proof_assets", "proof_asset_external_refs", "custody_observations", "custody_transfers", "continuity_evaluations", "shipment_events", "capture_shipping_labels", "proof_parcel_scopes", "capture_label_observations"]) {
     rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
   }
   rows.commerce_stage_evidence = (await db.query("SELECT e.* FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1", [proofId])).rows;
@@ -172,7 +172,7 @@ export async function processRecoveryOutbox(db: Database, clock: Clock, publishe
       const receipt: PreservationReceipt = { version: 1, operationId: claim.operation_id, eventSha256: claim.sha256, envelopeSha256: sha256Hex(stored.body), objectKey, objectVersionId: head?.versionId ?? null, preservedAt: envelope.publishedAt, signature: envelope.signature };
       await tx.query("UPDATE recovery_delivery SET state='DURABLE',receipt_json=$2,delivered_at=$3,lease_token=NULL,lease_until=NULL,error_code=NULL WHERE operation_id=$1", [claim.operation_id, JSON.stringify(receipt), clock.now().toISOString()]);
       if (claim.kind === "PROOF_FINALIZED") {
-        const changed = await tx.query(`UPDATE proofs SET status='FINALIZED',manifest_id=m.id,finalized_at=m.created_at,updated_at=$2 FROM final_manifests m WHERE proofs.id=$1 AND m.proof_id=proofs.id AND proofs.status <> 'FINALIZED' RETURNING proofs.id`, [claim.proof_id, clock.now().toISOString()]);
+        const changed = await tx.query(`UPDATE proofs SET status='FINALIZED',manifest_id=m.id,finalized_at=m.created_at,updated_at=$2 FROM final_manifests m WHERE proofs.id=$1 AND m.proof_id=proofs.id AND proofs.status <> 'FINALIZED' RETURNING proofs.id`, [claim.proof_id, envelope.publishedAt]);
         if(changed.rows[0]) {
           const manifest=(await tx.query("SELECT * FROM final_manifests WHERE proof_id=$1",[claim.proof_id])).rows[0];
           const audit=finalizationAudit(envelope,claim.proof_id,claim.operation_id,manifest);
@@ -231,7 +231,10 @@ export async function buildRecoveryReplayPlan(input: {
       const manifest = snapshot.rows.final_manifests?.find(value => value.proof_id === row.event.proofId);
       const proof = snapshot.rows.proofs?.find(value => value.id === row.event.proofId);
       if (!manifest || !proof) throw new DomainError("RECOVERY_REPLAY_MISSING_DEPENDENCY", "Finalization recovery is missing its frozen manifest", 409);
-      if(proof.status !== "FINALIZED") snapshot.rows.audit_events.push(finalizationAudit(row.envelope,row.event.proofId,row.event.operationId,manifest));
+      if(proof.status !== "FINALIZED") {
+        snapshot.rows.audit_events.push(finalizationAudit(row.envelope,row.event.proofId,row.event.operationId,manifest));
+        proof.updated_at = row.envelope.publishedAt;
+      }
       Object.assign(proof, { status: "FINALIZED", manifest_id: manifest.id, finalized_at: manifest.created_at });
     }
     snapshots.set(row.event.proofId, { rows: snapshot.rows, coverage: snapshot.coverage });

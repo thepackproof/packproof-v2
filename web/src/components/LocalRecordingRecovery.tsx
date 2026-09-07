@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import {flushStudyTimings} from '../analytics/study-capture';
 import type { PackProofApi } from "../api/client";
 import { listRecoverableRecordings, removePreservedLocalRecording, resumeLocalRecordings } from "../capture-queue";
 
@@ -11,6 +12,7 @@ export function LocalRecordingRecovery({api, userId, onOpen}: {api:PackProofApi;
       if (running || !active) return;
       running = true;
       try {
+        if(navigator.onLine!==false)void flushStudyTimings(api,userId).catch(()=>{});
         const before = await listRecoverableRecordings(userId,api);
         if (active) setItems(before);
         if (navigator.onLine !== false) await resumeLocalRecordings(api, userId, () => active);

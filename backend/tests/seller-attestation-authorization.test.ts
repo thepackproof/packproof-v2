@@ -78,6 +78,11 @@ describe("seller shipping authorization", () => {
       proofId, attestedBy: seller, statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: evidence.evidenceId,
       createdAt: attestation.createdAt, authorization: attestation.authorization,
     })));
+    const recovery = (await h.db.query<{ canonical_json: string }>("SELECT canonical_json FROM recovery_events WHERE proof_id=$1 ORDER BY sequence DESC LIMIT 1", [proofId])).rows[0];
+    expect(JSON.parse(recovery.canonical_json).payload.rows.attestation_challenges).toEqual([
+      expect.objectContaining({ id: capture.challenge.challengeId, payload: capture.challenge.payload,
+        public_key_base64: publicKey, consumed_at: attestation.createdAt, attestation_id: attestation.attestationId }),
+    ]);
     const final = await finalizeProof(h.db, clock, seller, proofId);
     const frozen = (final.manifest.manifest as any).attestations[0];
     expect(frozen.authorization).toEqual(attestation.authorization);

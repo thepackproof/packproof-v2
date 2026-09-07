@@ -1440,6 +1440,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if(url.endsWith("/capabilities")) return json({schemaVersion:1,capture:{protocolVersions:[1],maxBytes:250000000,maxDurationSeconds:300,maxActiveUploads:2},preservation:{receiptVersions:[1],durableReceiptsRequired:true}});
+        if(url.endsWith("/recovery")) return json({proofId:fulfillmentItem.proofId,evidence:[{evidenceId:"evd_station",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}});
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1597,6 +1599,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if(url.endsWith("/capabilities")) return json({schemaVersion:1,capture:{protocolVersions:[1],maxBytes:250000000,maxDurationSeconds:300,maxActiveUploads:2},preservation:{receiptVersions:[1],durableReceiptsRequired:true}});
+        if(url.endsWith("/recovery")) return json({proofId:fulfillmentItem.proofId,evidence:[{evidenceId:"evd_manual",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}});
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});

@@ -138,9 +138,10 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
   date(start); date(end);
   if (start >= end || Date.parse(end) - Date.parse(start) > 366 * 86_400_000) fail("INVALID_BILLING_WINDOW", "Choose a usage window of at most 366 days");
   const finalized = (await db.query<{ total: string | number; confirmed: string | number }>(`SELECT COUNT(*) AS total,
-    COUNT(*) FILTER(WHERE d.state='DURABLE' AND d.receipt_json IS NOT NULL) AS confirmed
+    COUNT(*) FILTER(WHERE d.state='DURABLE' AND d.receipt_json->>'operationId'=r.operation_id AND d.receipt_json->>'eventSha256'=r.sha256) AS confirmed
     FROM proofs p JOIN proof_participants pp ON pp.proof_id=p.id AND pp.user_id=$1 AND pp.role='SELLER'
-    LEFT JOIN recovery_delivery d ON d.operation_id='finalize:'||p.id
+    LEFT JOIN recovery_events r ON r.operation_id='finalize:'||p.id AND r.kind='PROOF_FINALIZED'
+    LEFT JOIN recovery_delivery d ON d.operation_id=r.operation_id
     WHERE p.status='FINALIZED' AND p.finalized_at >= $2 AND p.finalized_at < $3`, [userId, start, end])).rows[0];
   const usage = (await db.query<{ total: string | number; charge_eligible: string | number }>(`SELECT COALESCE(SUM(units),0) AS total,
     COALESCE(SUM(units) FILTER(WHERE charge_eligible),0) AS charge_eligible FROM billing_proof_usage
@@ -150,7 +151,7 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
     FROM billing_account_offer_periods p JOIN billing_offer_versions o ON o.version=p.offer_version
     WHERE p.user_id=$1 AND p.period_start <= $2 AND p.period_end > $2`, [userId, now.toISOString()])).rows[0];
   const paymentTotals = (await db.query<{ environment: string; net_minor: string | number }>(`SELECT environment,
-    COALESCE(SUM(CASE WHEN kind='payment_settled' THEN amount_minor ELSE -amount_minor END),0) AS net_minor
+    COALESCE(SUM(CASE WHEN kind IN ('payment_settled','refund_reversed') THEN amount_minor ELSE -amount_minor END),0) AS net_minor
     FROM billing_payment_ledger WHERE user_id=$1 AND occurred_at >= $2 AND occurred_at < $3 GROUP BY environment ORDER BY environment`, [userId, start, end])).rows;
   return {
     schemaVersion: VERSION, window: { start, end }, finalizedProofs: Number(finalized.total),
@@ -160,6 +161,7 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
       interval: current.definition_json.interval, period: { start: new Date(current.period_start).toISOString(), end: new Date(current.period_end).toISOString() },
       includedFinalizedProofs: current.definition_json.includedFinalizedProofs, used: Number(current.used),
       remaining: Math.max(0, current.definition_json.includedFinalizedProofs - Number(current.used)), overage: current.definition_json.overage } : null,
+    paymentReconciliationStatus: "unreconciled",
     verifiedProviderAmounts: paymentTotals.map(row => ({ environment: row.environment, currency: "USD", netMinor: Number(row.net_minor) })),
     preservationAndPastAccessIndependentOfAllowance: true,
     message: current ? "One finalized transaction counts once within your consented offer. Metering does not itself create a charge."
@@ -172,7 +174,7 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
 
 export interface VerifiedProviderEvent {
   eventReference: string; customerReference: string; subjectReference: string; paymentReference: string;
-  kind: "payment_settled" | "refund_settled"; occurredAt: string; amountMinor: number; currency: "USD";
+  kind: "payment_settled" | "refund_settled" | "refund_reversed"; occurredAt: string; amountMinor: number; currency: "USD";
 }
 export interface BillingProviderVerifier {
   provider: string; environment: "sandbox" | "live"; providerAccount: string;
@@ -209,7 +211,7 @@ export async function ingestVerifiedBillingEvent(db: Database, clock: Clock, ver
   strict(event, ["eventReference", "customerReference", "subjectReference", "paymentReference", "kind", "occurredAt", "amountMinor", "currency"]);
   for (const field of [event.eventReference, event.customerReference, event.subjectReference, event.paymentReference]) identifier(field);
   date(event.occurredAt); integer(event.amountMinor);
-  if (!["payment_settled", "refund_settled"].includes(event.kind) || event.currency !== "USD") fail("INVALID_BILLING_EVENT", "Unsupported normalized billing event");
+  if (!["payment_settled", "refund_settled", "refund_reversed"].includes(event.kind) || event.currency !== "USD") fail("INVALID_BILLING_EVENT", "Unsupported normalized billing event");
   if (event.occurredAt > clock.now().toISOString()) fail("BILLING_EVENT_IN_FUTURE", "Provider occurrence time requires verification", 409);
   const providerKey = [verifier.provider, verifier.environment, verifier.providerAccount];
   const eventKey = [...providerKey, event.eventReference];
@@ -224,6 +226,13 @@ export async function ingestVerifiedBillingEvent(db: Database, clock: Clock, ver
     if (existing) {
       if (existing.sha256 !== eventSha) fail("BILLING_EVENT_CONFLICT", "A provider event cannot be reused with changed facts", 409);
       return { eventReference: event.eventReference, replayed: true, ledgerInserted: false };
+    }
+    if (event.kind === "refund_reversed") {
+      const debit = (await tx.query<{amount_minor: string | number; occurred_at: Date | string}>(`SELECT amount_minor,occurred_at FROM billing_payment_ledger
+        WHERE provider=$1 AND environment=$2 AND provider_account=$3 AND subject_reference=$4 AND kind='refund_settled'
+          AND user_id=$5 AND payment_reference=$6 AND currency=$7`, [...providerKey, event.subjectReference, binding.user_id, event.paymentReference, event.currency])).rows[0];
+      if (!debit || Number(debit.amount_minor) !== event.amountMinor || new Date(debit.occurred_at).toISOString() > event.occurredAt)
+        fail("BILLING_REFUND_RECONCILIATION_REQUIRED", "The verified original refund debit must be reconciled before its reversal", 503);
     }
     const paymentKey = [...providerKey, event.subjectReference, event.kind];
     const payment = (await tx.query<{ sha256: string }>("SELECT sha256 FROM billing_payment_ledger WHERE provider=$1 AND environment=$2 AND provider_account=$3 AND subject_reference=$4 AND kind=$5", paymentKey)).rows[0];

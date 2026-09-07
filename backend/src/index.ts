@@ -1,4 +1,6 @@
 import { assertPolicyAccessSafe } from "./domain/policy-recovery.js";
+import { StripeBillingAdapter, stripeBillingConfigFromEnv } from "./billing/stripe-adapter.js";
+import {observationConfigFromEnv} from "./analytics/observation-router.js";
 import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
@@ -39,6 +41,8 @@ if(config.migrateOnStart) await migrate(opened.db);
 else await assertSchemaCurrent(opened.db);
 
 const credentialStore = createCredentialStore(config);
+const billingConfig=stripeBillingConfigFromEnv(process.env);
+const billing=billingConfig?new StripeBillingAdapter(billingConfig,credentialStore,systemClock):null;
 const objectStore = createObjectStore(config);
 const webhookConfig = webhookConfigFromEnv();
 const recoveryPublisher=await initializeRecoveryPublisher(config,systemClock);
@@ -61,6 +65,7 @@ const readinessProbes=[
   }},
   {name:'signing-trust',required:manifestSigning.publicStatus.required,check:async()=>{
     if(!manifestSigning.publicStatus.required)return;
+    manifestSigning.readSignedTrustRegistry?.();
     const trust=manifestSigning.trustList;
     if(!manifestSigning.signer||!trust||Date.parse(trust.expiresAt)<=Date.now()||!trust.keys.some(key=>key.keyId===manifestSigning.publicStatus.keyId&&key.status==='ACTIVE'))throw new Error('Signing trust unavailable');
   }},
@@ -75,6 +80,8 @@ const app = config.processRole==='worker'?express():createServerApp({
   corsOrigins: config.webOrigins,
   integrations,
   credentialStore,
+  billing,
+  observationConfig:observationConfigFromEnv(process.env),
   webhookConfig,
   manifestSigning,
   releaseIdentity: config.release,

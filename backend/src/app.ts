@@ -1,5 +1,8 @@
+import { supportAccessRouter } from "./support/router.js";
 import { createReadiness, liveness, type DependencyProbe } from "./operations/readiness.js";
-import { getAccountUsageSummary } from "./billing/usage-ledger.js";
+import { getAccountUsageSummary, ingestVerifiedBillingEvent } from "./billing/usage-ledger.js";
+import type { StripeBillingAdapter } from "./billing/stripe-adapter.js";
+import {createObservationRouter,type ProgramObservationConfig} from "./analytics/observation-router.js";
 import { appendAudit } from "./domain/audit.js";
 import { pipeline } from "node:stream/promises";
 import express, {
@@ -218,6 +221,8 @@ export interface AppDependencies {
   manifestSigning?: ManifestSigningRuntime;
   requireDurableReceipts?: boolean;
   readinessProbes?: DependencyProbe[];
+  billing?: StripeBillingAdapter | null;
+  observationConfig?: ProgramObservationConfig | null;
 }
 
 function asyncRoute(
@@ -283,6 +288,10 @@ export function createApp(deps: AppDependencies): Express {
     res.json(await receiveAdmittedUploadPart(deps.db, deps.clock, deps.objectStore, actor.userId,
       req.params.id, req.params.evidenceId, Number(req.params.partNumber), req));
   }));
+  app.post("/billing/webhooks/stripe", distributedRateLimit(deps.db,{scope:"billing-webhook",limit:120,windowMs:60_000}), express.raw({type:()=>true,limit:"1mb"}), asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    res.json(await ingestVerifiedBillingEvent(deps.db,deps.clock,deps.billing,{rawBody:req.body,signature:req.get("Stripe-Signature")??null}));
+  }));
   app.use("/integrations/webhooks", express.raw({ type: () => true, limit: "256kb" }));
   app.use((req, res, next) => {
     if (Buffer.isBuffer(req.body) || (req.method === "PUT" && /^\/v1\/proofs\/[^/]+\/evidence\/[^/]+\/parts\/[^/]+$/.test(req.path))) {
@@ -345,9 +354,20 @@ export function createApp(deps: AppDependencies): Express {
     res.type("application/zip").send(bytes);
   }));
 
+  app.get("/.well-known/packproof-trust-registry.json", (_req,res)=>{
+    res.setHeader("Cache-Control","no-store");
+    res.setHeader("X-Content-Type-Options","nosniff");
+    const registry=deps.manifestSigning?.readSignedTrustRegistry?.() ?? deps.manifestSigning?.signedTrustRegistryJson;
+    if(!registry) {
+      res.status(503).json({error:{code:"SIGNED_TRUST_REGISTRY_UNAVAILABLE",message:"The signed trust registry is not configured"}}); return;
+    }
+    res.type("application/json").send(registry);
+  });
+
   app.get("/.well-known/packproof-trust.json", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    deps.manifestSigning?.readSignedTrustRegistry?.();
     if (!deps.manifestSigning?.trustList) {
       res.status(503).json({ error: { code: "MANIFEST_TRUST_NOT_CONFIGURED", message: "An authenticated public trust list has not been configured" } });
       return;
@@ -356,6 +376,7 @@ export function createApp(deps: AppDependencies): Express {
   });
   app.get("/integrity/signing", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
+    deps.manifestSigning?.readSignedTrustRegistry?.();
     res.json(deps.manifestSigning?.publicStatus ?? { mode: "UNSIGNED", algorithm: null, keyId: null, required: false, trustListSha256: null });
   });
 
@@ -408,6 +429,23 @@ export function createApp(deps: AppDependencies): Express {
       .catch(next);
   });
 
+  app.use("/internal/support", supportAccessRouter(deps));
+  app.use("/study",distributedRateLimit(deps.db,{scope:"study-observation",limit:120,windowMs:60_000,subject:bearerUser}),createObservationRouter(deps,deps.observationConfig??null));
+  app.use("/me/billing",distributedRateLimit(deps.db,{scope:"account-billing",limit:30,windowMs:60_000,subject:bearerUser}));
+  app.get("/me/billing/invoices", asyncRoute(async(req,res)=>{
+    res.setHeader("Cache-Control","private, no-store");
+    if(!deps.billing){res.json({enabled:false,invoices:[]});return;}
+    const customerReference=req.query.customerReference,startingAfter=req.query.startingAfter;
+    if((customerReference!==undefined&&typeof customerReference!=="string")||(startingAfter!==undefined&&typeof startingAfter!=="string"))throw new DomainError("INVALID_BILLING_REFERENCE","Billing references must be strings",400);
+    res.json({enabled:true,...await deps.billing.listOwnInvoices(deps.db,bearerUser(req),{customerReference,startingAfter})});
+  }));
+  app.post("/me/billing/cancellation-portal", asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    const {customerReference,subscriptionReference,operationId}=req.body??{};
+    if((customerReference!==undefined&&typeof customerReference!=="string")||typeof subscriptionReference!=="string"||typeof operationId!=="string")throw new DomainError("INVALID_BILLING_REFERENCE","A subscription reference and stable operation ID are required",400);
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await deps.billing.createOwnCancellationPortal(deps.db,bearerUser(req),{customerReference,subscriptionReference,operationId}));
+  }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
   app.use("/proofs/:id/capture-sessions", captureSessionRouter(deps));

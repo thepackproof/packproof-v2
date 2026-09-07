@@ -622,6 +622,7 @@ export class PackProofV2Client {
 
   get apiBaseUrl(): string { return this.options.baseUrl.replace(/\/+$/, ""); }
 
+  async studyRequest<T>(path:string,method="GET",body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
   async getCapabilities(): Promise<ApiCapabilities> {
     return this.request("/capabilities", { auth: false });
   }
