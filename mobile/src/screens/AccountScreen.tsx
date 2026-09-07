@@ -84,7 +84,9 @@ export function AccountScreen() {
         {mayCleanUpCapture(capture.recovery!) ? <Button label="Remove completed local copy" variant="secondary" loading={app.busy}
           onPress={() => Alert.alert("Remove completed local copy?", "PackProof will recheck the preservation and finalization receipts first. The server Proof remains available.", [
             { text: "Keep copy", style: "cancel" }, { text: "Remove local copy", onPress: () => void app.cleanUpSavedCapture(capture) },
-          ])} /> : <Button label="Open saved recording" variant="secondary" loading={app.busy} onPress={() => void app.resumeSavedCapture(capture)} />}
+          ])} /> : capture.recovery?.phase === "SUBMITTED"
+          ? <Button label="View submitted Proof" variant="secondary" loading={app.busy} onPress={() => void app.run(() => app.openProof(capture.captureProofId!))} />
+          : <Button label="Open saved recording" variant="secondary" loading={app.busy} onPress={() => void app.resumeSavedCapture(capture)} />}
       </InfoCard>)}
       <SectionHeader title="Appearance" />
       <View style={styles.appearance} accessibilityRole="radiogroup" accessibilityLabel="Appearance">

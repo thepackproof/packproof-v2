@@ -1,4 +1,5 @@
 import { randomId } from "./random-id";
+import { requiresDurableReceipts } from "./capture-preflight";
 import { submitStationSession, type StationSubmitResult } from "../../mobile/src/packing-station/submit";
 import type { SubmitStep } from "../../mobile/src/packing-station/types";
 import type { PackProofApi } from "./api/client";
@@ -9,6 +10,7 @@ export type PendingCapture = {
   apiScope?: string;
   stageId?: string;
   finalized?: boolean;
+  submitted?: boolean;
   key: string;
   file: File;
   digest: string;
@@ -202,7 +204,7 @@ export async function listLocalRecordings(userId: string): Promise<PendingCaptur
   return entries.filter(entry => entry.userId === userId && !!entry.proofId && !!entry.digest && !("order" in entry) && !(entry.key.includes(":stage:") && "captureSessionId" in entry));
 }
 
-export async function archiveReceivedRecording(userId:string, proofId:string, evidenceId:string, file:Blob, preserved=false, context: {stageId?:string;apiScope?:string;finalized?:boolean} = {}):Promise<void> {
+export async function archiveReceivedRecording(userId:string, proofId:string, evidenceId:string, file:Blob, preserved=false, context: {stageId?:string;apiScope?:string;finalized?:boolean;submitted?:boolean} = {}):Promise<void> {
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer())),byte=>byte.toString(16).padStart(2,"0")).join("");
   await queue("readwrite",store=>store.put({key:captureQueueKey(userId,proofId,evidenceId),userId,proofId,slot:evidenceId,file,digest,uploadKey:evidenceId,evidenceId,committed:true,preserved,kind:"archived",...context}));
 }
@@ -354,10 +356,12 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       const recovery=await api.getRecoveryStatus(pending.order.proofId);assertCurrent(active);
       pending.preserved = !!recovery.evidence?.some(item=>item.evidenceId===pending.evidenceId&&item.status==="PRESERVED"&&item.receipt);
       await saveStationCapture(pending); assertCurrent(active);
-      if(proof.status!=="FINALIZED"||recovery.finalization?.status!=="PRESERVED"||!recovery.finalization.receipt||!recovery.evidence?.some(item=>item.evidenceId===pending.evidenceId&&item.status==="PRESERVED"&&item.receipt))
+      const durablyFinalized = !!(pending.preserved && recovery.finalization?.status === "PRESERVED" && recovery.finalization.receipt);
+      const requiresDurability = durablyFinalized || await requiresDurableReceipts(api); assertCurrent(active);
+      if(proof.status!=="FINALIZED" || (!durablyFinalized && (requiresDurability || !proof.evidence.some(item=>item.evidenceId===pending.evidenceId&&item.validationStatus==="COMMITTED"))))
         throw Object.assign(new Error("Recording received. Preservation in progress. Your local original remains saved."),{code:"PRESERVATION_PENDING",status:503});
       for(const mark of pending.bookmarks??[])try{assertCurrent(active);await api.featureRequest(pending.order.proofId,"signature/anchors","POST",{evidenceId:pending.evidenceId,startMs:mark.startMs,endMs:Math.min(mark.startMs+1000,pending.durationMs||mark.startMs+1000),label:mark.label,sourceType:mark.sourceType,recipeVersion:mark.recipeVersion,idempotencyKey:mark.id});}catch{assertCurrent(active);}
-      assertCurrent(active);await archiveReceivedRecording(userId,pending.order.proofId,pending.evidenceId!,pending.file,true,{apiScope:api.recoveryScope,finalized:true});assertCurrent(active);
+      assertCurrent(active);await archiveReceivedRecording(userId,pending.order.proofId,pending.evidenceId!,pending.file,!!pending.preserved,{apiScope:api.recoveryScope,finalized:durablyFinalized,submitted:true});assertCurrent(active);
       await clearStationCapture(userId,pending.uploadKey);return result;
     } catch(error) {
       const latest=await recoverStationCapture(userId);
@@ -399,13 +403,13 @@ export function resumeStageRecording(api:PackProofApi,userId:string,key:string,a
   }).finally(()=>{stageJobs.delete(jobKey);});stageJobs.set(jobKey,job);return job;
 }
 
-export type LocalRecordingSummary={key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
+export type LocalRecordingSummary={key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;submitted?:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
 export async function listRecoverableRecordings(userId:string,api?:PackProofApi):Promise<LocalRecordingSummary[]>{
   const ordinary=(await listLocalRecordings(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
   const station=await recoverStationCapture(userId);
   const stages=(await listStageCaptures(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
   return [
-    ...ordinary.map(item=>({key:item.key,kind:"ordinary" as const,file:item.file,proofId:item.proofId!,preserved:!!item.preserved,finalized:!!item.finalized,committed:!!item.committed,accepted:true,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
+    ...ordinary.map(item=>({key:item.key,kind:"ordinary" as const,file:item.file,proofId:item.proofId!,preserved:!!item.preserved,finalized:!!item.finalized,submitted:!!item.submitted,committed:!!item.committed,accepted:true,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
     ...(station&&(!api||scopeMatches(station.apiScope,api))?[{key:station.key,kind:"station" as const,file:station.file,proofId:station.order.proofId,preserved:!!station.preserved,finalized:false,committed:!!station.committed,accepted:station.finishConfirmed,errorMessage:station.errorMessage,retryStopped:station.retryStopped}]:[]),
     ...stages.map(item=>({key:item.key,kind:"stage" as const,file:item.file,proofId:item.proofId??item.key.slice(userId.length+1,item.key.lastIndexOf(":stage:")),preserved:false,finalized:false,committed:false,accepted:!!item.submitRequested,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
   ];

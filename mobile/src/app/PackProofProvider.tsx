@@ -939,6 +939,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       const result = await completeSavedCapture({ client, capture: queued, userId: current.userId, interactive: false,
         needsSellerAttestation: queued.recovery!.needsSellerAttestation, assertAccount,
         onChange: capture => {
+          if (sessionRef.current?.userId === current.userId)
+            setSavedRecordings(previous => [...previous.filter(item => item.uri !== capture.uri), { ...capture }]);
           if (sessionRef.current?.userId === current.userId && sessionRef.current.captureUri === capture.uri) {
             setLocalCapture({ ...capture }); setCaptureStatus(captureStatusForJournal(capture));
           }
@@ -1564,7 +1566,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
               const result = await completeSavedCapture({ client, capture: localCapture, userId, interactive: true, idempotencyKey: sessionRef.current?.evidenceIdempotencyKey,
                 needsSellerAttestation: Platform.OS === "android" && proof.participants.some(item => item.role === "SELLER" && item.userId === userId),
                 assertAccount, onProgress: setUploadPercent,
-                onChange: capture => { if (sessionRef.current?.userId === userId) { setLocalCapture({ ...capture }); setCaptureStatus(captureStatusForJournal(capture)); } },
+                onChange: capture => { if (sessionRef.current?.userId === userId) {
+                  setLocalCapture({ ...capture }); setCaptureStatus(captureStatusForJournal(capture));
+                  setSavedRecordings(previous => [...previous.filter(item => item.uri !== capture.uri), { ...capture }]);
+                } },
               });
               assertAccount();
               await saveCaptureBookmarks(client, proof.proofId, localCapture.uploadEvidenceId!, localCapture).catch(() => undefined);
@@ -1841,7 +1846,7 @@ function captureStatusForJournal(capture: LocalCapture): LocalCaptureStatus {
   switch (capture.recovery?.phase) {
     case "UPLOADING": return "uploading";
     case "BYTES_RECEIVED": case "PRESERVATION_PENDING": case "FINALIZATION_PENDING": return "uploaded";
-    case "FINALIZED": return "committed";
+    case "SUBMITTED": case "FINALIZED": return "committed";
     case "UPLOAD_QUEUED": return "preparing";
     default: return "retry";
   }

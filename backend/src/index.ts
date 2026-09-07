@@ -119,6 +119,11 @@ if(billing&&billingReconciliationStartAt){
     if(result.state==='BLOCKED'||errorCode)throw new DomainError(errorCode??'BILLING_RECONCILIATION_BLOCKED','Billing event coverage requires review',503);
     return result;
   }});
+  if(billingConfig?.checkout)jobs.push({name:'billing-enrollment',intervalMs:60000,run:async()=>{
+    const result=await billing.reconcileEnrollments(opened.db);
+    if(result.errors?.length)throw new DomainError(result.errors[0].code,'Subscription enrollment reconciliation requires attention',503);
+    return result;
+  }});
 }
 if(webhookConfig.encryptionKey&&webhookConfig.allowedHosts.length&&process.env.PACKPROOF_WEBHOOK_WORKER!=="false")
   jobs.push({name:'webhooks',intervalMs:15000,run:()=>dispatchWebhooks(opened.db,systemClock,webhookConfig,undefined,5)});

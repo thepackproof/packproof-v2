@@ -1,4 +1,5 @@
 import { sha256Hex } from "../hash.js";
+import { reserveApprovedCaptureAllowance } from "../billing/capture-allowance.js";
 import { assertSupportedParcelCapture } from "./parcel-scope.js";
 import { requireCommerceAccess } from "./commerce-lifecycle.js";
 import type { Clock } from '../clock.js';
@@ -48,13 +49,17 @@ export interface CaptureSessionRow {
   created_at: string | Date; expires_at: string | Date; recover_until: string | Date;
   recorded_at: string | Date | null; expected_sha256: string | null;
   expected_byte_size: string | number | null; content_type: string | null; evidence_id: string | null;
+  max_duration_ms?: number | null;
+  max_recording_bytes?: string | number | null;
 }
 export function captureSessionView(s: CaptureSessionRow) {
   return { clientReportedCapture:s.client_reported_context??null,id: s.id, proofId: s.proof_id, stageId: s.stage_id, registrationTiming: s.recorded_at ? (new Date(s.recorded_at).getTime() > new Date(s.expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "NOT_REGISTERED", client: s.client, policyVersion: s.policy_version,
     workflowStep: s.workflow_step, state: s.state, expiresAt: asRequiredIso(s.expires_at),
     recoverUntil: asRequiredIso(s.recover_until), recordedAt: s.recorded_at ? asRequiredIso(s.recorded_at) : null,
     sha256: s.expected_sha256, byteSize: s.expected_byte_size == null ? null : Number(s.expected_byte_size),
-    contentType: s.content_type, evidenceId: s.evidence_id, assurance: CAPTURE_ASSURANCE };
+    contentType: s.content_type, evidenceId: s.evidence_id, assurance: CAPTURE_ASSURANCE,
+    maxRecordingBytes: s.max_recording_bytes == null ? CAPTURE_MAX_BYTES : Number(s.max_recording_bytes),
+    maxRecordingSeconds: (s.max_duration_ms ?? CAPTURE_MAX_DURATION_MS) / 1000 };
 }
 async function captureAccess(db: Database, actor: string, proofId: string, writable = true, stageId?: string | null) {
   if (stageId) {
@@ -97,8 +102,11 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
     }
     const active = await tx.query<{count: string}>("SELECT COUNT(*) AS count FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND state IN ('ISSUED','RECORDED','UPLOADING') AND recover_until > $3",[proofId,actor,clock.now().toISOString()]);
     if (Number(active.rows[0].count) >= 20) throw new DomainError('CAPTURE_QUEUE_FULL','Finish or cancel pending recordings before starting another',409);
+    const allowance = input.stageId ? {enforced:false as const} : await reserveApprovedCaptureAllowance(tx,clock,{userId:actor,proofId});
+    const maxRecordingBytes = Math.min(CAPTURE_MAX_BYTES,allowance.enforced ? allowance.maxRecordingBytes! : CAPTURE_MAX_BYTES);
+    const maxDurationMs = Math.min(CAPTURE_MAX_DURATION_MS,allowance.enforced ? allowance.maxRecordingSeconds!*1000 : CAPTURE_MAX_DURATION_MS);
     const now=clock.now(); const id=newId('cap');
-    const result=await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step,max_duration_ms) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11,300000) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,CAPTURE_POLICY_VERSION,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep]);
+    const result=await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step,max_duration_ms,max_recording_bytes) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11,$12,$13) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,CAPTURE_POLICY_VERSION,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep,maxDurationMs,maxRecordingBytes]);
     await appendAudit(tx,{proofId,actorUserId:actor,eventType:'CAPTURE_SESSION_ISSUED',eventData:{sessionId:id,client:input.client,policyVersion:CAPTURE_POLICY_VERSION,assurance:CAPTURE_ASSURANCE},at:now});
     return captureSessionView(result.rows[0]);
   });
@@ -115,6 +123,10 @@ export async function completeCaptureSession(db: Database, clock: Clock, actor: 
     await captureAccess(tx,actor,proofId,true,context.stage_id);
     const s=await loadCaptureSession(tx,actor,proofId,sessionId,true);
     if (s.state === 'CANCELLED') throw new DomainError('CAPTURE_SESSION_CANCELLED','This recording was cancelled',409);
+    // Duration is independently checked by ffprobe at commitment. Client wall-clock
+    // duration is supplementary context and may include delays around recording stop.
+    if (input.byteSize > Number(s.max_recording_bytes ?? CAPTURE_MAX_BYTES))
+      throw new DomainError('CAPTURE_RECORDING_LIMIT','This recording exceeds the limits authorized when capture started. Preserve the original.',422);
     if (s.expected_sha256) {
       if (s.expected_sha256 !== input.sha256.toLowerCase() || Number(s.expected_byte_size) !== input.byteSize || s.content_type !== contentType)
         throw new DomainError('CAPTURE_RECORDING_CONFLICT','A session cannot be reused for different recorded bytes',409);

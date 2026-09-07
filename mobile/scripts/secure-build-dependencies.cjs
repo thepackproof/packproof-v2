@@ -1,5 +1,5 @@
 // Narrow, fail-closed compatibility/security patches for the pinned Expo 52 toolchain.
-// These modify build tools only. Keep advisory findings visible until upstream fixes ship.
+// These modify build tools only. Never suppress dependency audit findings.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -23,9 +23,14 @@ const tarCompat = 'const data = { default: require("tar") }; // PackProof: named
 patch('@expo/cli/build/src/utils/tar.js', '2f673a6bbba4ee208e478024c6ef4d73f727e7d9243356336bb69d80d53df7bb', tarImport, tarCompat);
 patch('@expo/cli/build/src/utils/npm.js', '2883a0ca6fc57ad9234539cbbabe4418f571bc3a42d4b92b8f751dbe8c1edf29', tarImport, tarCompat);
 
-// GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq have no patched release.
-// Reject affected container signatures BEFORE detection: JXL/HEIF validation
-// itself calls the vulnerable box walker, so disableTypes() alone is insufficient.
+// The pinned community-maintained legacy fork fixes GHSA-w3rx-r6r6-pgpr and
+// GHSA-5p2g-fcmc-qvqq while preserving Metro's callable synchronous API. Refuse
+// accidental reinstallation of the original package or an unreviewed fork version.
+const imagePackage = require(path.join(root, 'node_modules/image-size/package.json'));
+if (imagePackage.name !== 'image-size-next' || imagePackage.version !== '1.2.2')
+  throw new Error('PackProof requires the reviewed image-size-next@1.2.2 dependency.');
+// Keep the earlier format restriction as defense in depth. Reject signatures
+// BEFORE detection, rather than relying on extensions or disableTypes().
 // PackProof build assets use PNG; ISO-BMFF/AVIF/HEIF/JXL and ICNS are unsupported.
 const imageLookup = 'function lookup(input, filepath) {\n';
 const guardedLookup = imageLookup + `    // PackProof build asset security guard; inspect bytes, never file extensions.

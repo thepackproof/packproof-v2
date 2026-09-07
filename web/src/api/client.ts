@@ -81,6 +81,9 @@ export class PackProofApi {
   async recoverCaptureSession(proofId:string, sessionId:string) { return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/recover`, {method:"POST",body:{}}); }
   async studyRequest<T>(path:string,method="GET",body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
   async getUsage<T>(): Promise<T> { return this.request("/me/usage"); }
+  async billingRequest<T>(path:string,body?:unknown):Promise<T> {
+    return this.request(`/me/billing/${path}`, {method:body === undefined ? "GET" : "POST",body});
+  }
   async getBillingInvoices<T>(startingAfter?:string):Promise<T>{
     return this.request(`/me/billing/invoices${startingAfter?`?startingAfter=${encodeURIComponent(startingAfter)}`:""}`);
   }

@@ -9,6 +9,8 @@ import type {
 } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { useTheme } from "../theme/ThemeProvider";
+import { PlanBillingPanel } from "../components/PlanBillingPanel";
+import type { PackProofApi } from "../api/client";
 
 
 const APPEARANCE_OPTIONS: Array<{
@@ -22,6 +24,7 @@ const APPEARANCE_OPTIONS: Array<{
 ];
 
 export function AccountScreen(props: {
+  api?: PackProofApi;
   displayName: string | null;
   username: string | null;
   subject: string;
@@ -120,6 +123,8 @@ export function AccountScreen(props: {
           })}
         </div>
       </section>
+
+      {props.api && <PlanBillingPanel api={props.api} />}
 
       {props.onOpenDeveloper ? (
         <section className="section stack">

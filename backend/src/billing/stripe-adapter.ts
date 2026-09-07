@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import {StripeEnrollment,validateCheckoutConfig,type StripeCheckoutConfig} from './stripe-enrollment.js';
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
 import { DomainError } from '../domain/errors.js';
@@ -10,6 +11,7 @@ export interface StripeBillingConfig {
   account: string; environment: 'sandbox' | 'live'; apiVersion: string;
   accountMode: 'direct' | 'connected'; credentialReference: string;
   portalCancellation?: { configuration: string; returnUrl: string };
+  checkout?: StripeCheckoutConfig;
 }
 const MAX_BYTES=1024*1024;
 function fail(code:string,message:string,status=400):never{throw new DomainError(code,message,status);}
@@ -24,6 +26,7 @@ function validateConfig(c:StripeBillingConfig){
   if(!['sandbox','live'].includes(c.environment)||!['direct','connected'].includes(c.accountMode)||!/^\d{4}-\d{2}-\d{2}(?:\.[a-z][a-z0-9_-]*)?$/.test(c.apiVersion))fail('STRIPE_CONFIGURATION_REQUIRED','Explicit billing account mode, environment and API version are required',503);
   if(!/^(?:arn:aws:secretsmanager:[^\s]+|sm:[^\s]+|packproof\/[^\s]+)$/.test(c.credentialReference))fail('STRIPE_MANAGED_SECRET_REQUIRED','Billing requires a managed credential reference',503);
   if(c.portalCancellation){ref(c.portalCancellation.configuration,'bpc');https(c.portalCancellation.returnUrl);}
+  if(c.checkout)validateCheckoutConfig(c.checkout);
 }
 /** Absent provider means disabled. Partial selected-provider configuration fails closed. */
 export function stripeBillingConfigFromEnv(env:NodeJS.ProcessEnv):StripeBillingConfig|null{
@@ -31,6 +34,7 @@ export function stripeBillingConfigFromEnv(env:NodeJS.ProcessEnv):StripeBillingC
   if(env.PACKPROOF_BILLING_PROVIDER!=='stripe')fail('BILLING_PROVIDER_UNSUPPORTED','Configured billing provider is unsupported',503);
   const c:StripeBillingConfig={account:env.PACKPROOF_STRIPE_ACCOUNT??'',environment:env.PACKPROOF_STRIPE_ENVIRONMENT as StripeBillingConfig['environment'],apiVersion:env.PACKPROOF_STRIPE_API_VERSION??'',accountMode:env.PACKPROOF_STRIPE_ACCOUNT_MODE as StripeBillingConfig['accountMode'],credentialReference:env.PACKPROOF_STRIPE_CREDENTIAL_REFERENCE??''};
   if(env.PACKPROOF_STRIPE_CANCELLATION_PORTAL_ENABLED==='true')c.portalCancellation={configuration:env.PACKPROOF_STRIPE_PORTAL_CONFIGURATION??'',returnUrl:env.PACKPROOF_STRIPE_PORTAL_RETURN_URL??''};
+  if(env.PACKPROOF_STRIPE_CHECKOUT_ENABLED==='true')c.checkout={offerVersion:env.PACKPROOF_STRIPE_CHECKOUT_OFFER_VERSION??'',priceReference:env.PACKPROOF_STRIPE_CHECKOUT_PRICE_REFERENCE??'',successUrl:env.PACKPROOF_STRIPE_CHECKOUT_SUCCESS_URL??'',cancelUrl:env.PACKPROOF_STRIPE_CHECKOUT_CANCEL_URL??''};
   validateConfig(c);return c;
 }
 /** Documented Stripe v1 HMAC over original bytes, constant-time comparison and
@@ -51,11 +55,11 @@ export function verifyStripeSignature(rawBody:Buffer,header:string|null,secret:s
  * offer, creates a charge or changes historical evidence access. */
 export class StripeBillingAdapter implements BillingProviderVerifier{
   readonly provider='stripe';readonly environment:'sandbox'|'live';readonly providerAccount:string;private readonly config:StripeBillingConfig;
-  constructor(config:StripeBillingConfig,private readonly credentials:IntegrationCredentialStore,private readonly clock:Clock,private readonly fetcher:typeof fetch=fetch){validateConfig(config);this.config={...config,portalCancellation:config.portalCancellation?{...config.portalCancellation}:undefined};this.environment=config.environment;this.providerAccount=config.account;}
+  constructor(config:StripeBillingConfig,private readonly credentials:IntegrationCredentialStore,private readonly clock:Clock,private readonly fetcher:typeof fetch=fetch){validateConfig(config);this.config={...config,portalCancellation:config.portalCancellation?{...config.portalCancellation}:undefined,checkout:config.checkout?{...config.checkout}:undefined};this.environment=config.environment;this.providerAccount=config.account;}
   private async secrets(){const value=await this.credentials.getCredentials({adapterKey:'stripe-billing',credentialReference:this.config.credentialReference});const apiKey=value?.material.apiKey,webhookSecret=value?.material.webhookSecret;
     if(!apiKey||!new RegExp(`^(?:sk|rk)_${this.environment==='live'?'live':'test'}_[A-Za-z0-9]{16,}$`).test(apiKey)||!webhookSecret)fail('STRIPE_MANAGED_SECRET_REQUIRED','Billing credentials are unavailable or use another environment',503);return{apiKey:apiKey!,webhookSecret:webhookSecret!};}
   private async api(route:string,apiKey:string,body?:URLSearchParams,idempotencyKey?:string):Promise<Record<string,unknown>>{
-    if(!/^\/v1\/[a-z_]+(?:\/[A-Za-z0-9_]+)?(?:\?[^\s]*)?$/.test(route))fail('STRIPE_INVALID_ROUTE','Unsupported billing route');
+    if(!/^\/v1\/[a-z_]+(?:\/[A-Za-z0-9_]+){0,2}(?:\?[^\s]*)?$/.test(route))fail('STRIPE_INVALID_ROUTE','Unsupported billing route');
     const headers:Record<string,string>={Authorization:`Bearer ${apiKey}`,'Stripe-Version':this.config.apiVersion};if(this.config.accountMode==='connected')headers['Stripe-Account']=this.config.account;if(body)headers['Content-Type']='application/x-www-form-urlencoded';if(idempotencyKey)headers['Idempotency-Key']=idempotencyKey;
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
     try{const response=await this.fetcher(`https://api.stripe.com${route}`,{method:body?'POST':'GET',body,headers,signal:controller.signal,redirect:'error'});
@@ -137,4 +141,11 @@ export class StripeBillingAdapter implements BillingProviderVerifier{
     const url=https(result.url);if(url.hostname!=='billing.stripe.com'||url.port)fail('STRIPE_INVALID_RESPONSE','Invalid billing portal host',502);
     return{url:url.toString(),subscriptionReference:subscriptionId,cancellationCompleted:false,chargesCreated:false};
   }
+  private enrollment(){return new StripeEnrollment(this.providerAccount,this.environment,this.clock,this.config.checkout,async(route,body,key)=>{const secrets=await this.secrets();await this.assertAccount(secrets.apiKey);return this.api(route,secrets.apiKey,body,key);});}
+  listApprovedCheckoutOffer(db:Database){return this.enrollment().availableOffer(db);}
+  getOwnBillingStatus(db:Database,userId:string){return this.enrollment().status(db,userId);}
+  createOwnCheckout(db:Database,userId:string,input:{operationId:string;offerVersion:string;acceptedOfferSha256:string}){return this.enrollment().start(db,userId,input);}
+  completeOwnCheckout(db:Database,userId:string,input:{operationId:string}){return this.enrollment().complete(db,userId,input);}
+  reconcileEnrollments(db:Database){return this.enrollment().reconcile(db,5);}
+
 }

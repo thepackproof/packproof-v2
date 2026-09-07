@@ -17,7 +17,7 @@ export function createRecoveryPublisher(config:AppConfig,store:ObjectStore,signi
   const enabled=env.PACKPROOF_RECOVERY_WORKER==='true'||config.requireDurableReceipts===true;
   if(!enabled)return undefined;
   const generation=env.PACKPROOF_RECOVERY_WRITER_GENERATION?.trim();
-  if(!generation||!store.putIfAbsent||store.immutableRecoveryJournal!==true||!signing.signer||!signing.trustList)
+  if(!generation||!store.putIfAbsent||!store.head||store.immutableRecoveryJournal!==true||!signing.signer||!signing.trustList)
     throw new Error('Durable preservation requires a verified immutable journal, signing trust, and explicit writer generation');
   return {store:{putIfAbsent:store.putIfAbsent.bind(store),get:store.get.bind(store),head:store.head?.bind(store)},signer:signing.signer,
     writerGeneration:generation,protectedStoreVerified:true,trustedPublicKey:async keyId=>{

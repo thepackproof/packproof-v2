@@ -6,6 +6,7 @@ import "./site/site.css";
 import "./site/refinements.css";
 import "./site/experience.css";
 import "./components/workspace-proof-record.css";
+import "./site/proof-diagram.css";
 
 const root = document.getElementById("root");
 if (!root) {

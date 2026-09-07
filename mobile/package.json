@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@types/react": "~18.3.12",
+    "image-size": "npm:image-size-next@1.2.2",
     "typescript": "~5.3.3"
   },
   "overrides": {
@@ -62,6 +63,6 @@
       "uuid": "11.1.1"
     },
     "tar": "7.5.22",
-    "image-size": "1.2.1"
+    "image-size": "npm:image-size-next@1.2.2"
   }
 }

@@ -21,6 +21,7 @@ class Store {
   objects=new Map<string,Buffer>(); loseOnce=false;
   async putIfAbsent(key:string,body:Buffer){if(this.objects.has(key))return {created:false};this.objects.set(key,body);if(this.loseOnce){this.loseOnce=false;throw new Error('response lost');}return {created:true};}
   async get(key:string){const body=this.objects.get(key);return body?{body,contentType:'application/json'}:null;}
+  async head(key:string){return this.objects.has(key)?{versionId:'protected-policy-test-version'}:null;}
 }
 const publisherFor=(store:Store):RecoveryPublisher=>({store,protectedStoreVerified:true,writerGeneration:'initial',trustedPublicKey:async id=>id==='policy-test-key'?pem:null,signer:{signManifest:async input=>({algorithm:'ECDSA_SHA_256',keyId:'policy-test-key',signedAt:clock.now().toISOString(),signatureBase64:sign('sha256',Buffer.from(input.canonicalJson),key.privateKey).toString('base64')})}});
 describe('ordered account and disclosure policy recovery',()=>{
@@ -74,6 +75,17 @@ describe('ordered account and disclosure policy recovery',()=>{
     await drain(h,publisher);now=new Date(now.getTime()+3000);
     await processRecoveryOutbox(h.db,clock,publisher);
     expect((await getRecoveryStatus(h.db,'policy-dependent-evidence')).status).toBe('PRESERVED');
+  });
+  it.each([undefined, '', 'null'])('does not accept a policy receipt without a retained version (%s)',async(versionId)=>{
+    const {h}=await setup(),store=new Store(),publisher=publisherFor(store);
+    await configurePolicyDurability(h.db,{required:true});
+    const incomplete:RecoveryPublisher={...publisher,store:{putIfAbsent:store.putIfAbsent.bind(store),get:store.get.bind(store),head:async()=>({versionId})}};
+    expect((await processPolicyRecoveryOutbox(h.db,clock,incomplete)).state).toBe('PENDING');
+    const first=(await h.db.query('SELECT state,receipt_json,error_code FROM policy_recovery_delivery ORDER BY sequence LIMIT 1')).rows[0];
+    expect(first).toEqual({state:'PENDING',receipt_json:null,error_code:'RECOVERY_OBJECT_VERSION_REQUIRED'});
+    await expect(assertPolicyAccessSafe(h.db)).rejects.toMatchObject({code:'POLICY_DURABILITY_PENDING'});
+    now=new Date(now.getTime()+3000);await drain(h,publisher);
+    await expect(assertPolicyAccessSafe(h.db)).resolves.toBeUndefined();
   });
   it('preserves policy envelope bytes on a lost response and fences access after a replay gap or untrusted watermark',async()=>{
     const {h}=await setup(),store=new Store(),publisher=publisherFor(store);store.loseOnce=true;

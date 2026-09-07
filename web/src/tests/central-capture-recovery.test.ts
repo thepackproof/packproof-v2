@@ -5,7 +5,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { PackProofApi } from "../api/client";
 import { stationContextFromProof } from "../../../mobile/src/packing-station/display";
 import { canonicalProof } from "./fixtures";
-import { saveStationCapture, stationCaptureKey, recoverStationCapture, resumeStationRecording, resumeLocalRecordings, listRecoverableRecordings, saveStageCapture, stageCaptureKey, recoverStageCapture, resumeStageRecording, listLocalRecordings } from "../capture-queue";
+import { saveStationCapture, stationCaptureKey, recoverStationCapture, resumeStationRecording, resumeLocalRecordings, listRecoverableRecordings, saveStageCapture, stageCaptureKey, recoverStageCapture, resumeStageRecording, listLocalRecordings, removePreservedLocalRecording } from "../capture-queue";
+import type { RecoveryView } from "../components/PreservationStatus";
 afterEach(() => vi.unstubAllGlobals());
 async function station(committed = true, confirmed = true) {
   vi.stubGlobal("crypto", webcrypto);
@@ -15,11 +16,12 @@ async function station(committed = true, confirmed = true) {
   let proof = {...canonicalProof, proofId, status: committed ? "EVIDENCE_COMMITTED" : "READY_FOR_EVIDENCE", participationPolicy:"COUNTERPARTY_OPTIONAL" as const,
     participants:[{...canonicalProof.participants[0],userId,role:"SELLER"}], evidence:committed ? [{...canonicalProof.evidence[0],evidenceId:"video",validationStatus:"COMMITTED" as const}] : [], attestations:[]};
   const api = {
+    getCapabilities:vi.fn(async()=>({schemaVersion:1,preservation:{receiptVersions:[1],durableReceiptsRequired:true}})),
     recoveryScope:"https://api.example.test", getProof:vi.fn(async()=>proof), completeCaptureSession:vi.fn(async()=>({})),
     initializeEvidenceUpload:vi.fn(async()=>({evidenceId:"video",upload:{method:"PUT",url:"/upload",headers:{}}})),
     uploadResumable:vi.fn(async()=>{}), commitEvidence:vi.fn(async()=>{proof={...proof,status:"EVIDENCE_COMMITTED",evidence:[{...canonicalProof.evidence[0],evidenceId:"video",validationStatus:"COMMITTED"}]};return{proof};}),
     createAttestation:vi.fn(async()=>({proof})), finalizeProof:vi.fn(async()=>{proof={...proof,status:"FINALIZED"};return{proof};}),
-    getRecoveryStatus:vi.fn(async()=>({proofId,evidence:[{evidenceId:"video",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}})),
+    getRecoveryStatus:vi.fn(async():Promise<RecoveryView>=>({proofId,evidence:[{evidenceId:"video",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}})),
     featureRequest:vi.fn(async()=>({})),
   };
   await saveStationCapture({key:stationCaptureKey(userId),userId,apiScope:api.recoveryScope,file,order:stationContextFromProof(proof),uploadKey:"original-key",evidenceId:committed?"video":undefined,finishConfirmed:confirmed,captureSessionId:"cap-original"});
@@ -45,6 +47,28 @@ it("foreground and background station work join one promise and preserve a singl
   const f=await station();const first=resumeStationRecording(f.client,f.userId,()=>true),second=resumeStationRecording(f.client,f.userId,()=>true);
   expect(first).toBe(second);await Promise.all([first,second]);
   expect(f.api.createAttestation).toHaveBeenCalledTimes(1);expect(f.api.finalizeProof).toHaveBeenCalledTimes(1);
+});
+it("explicit compatibility completion frees the station but keeps the exact local original and forbids cleanup",async()=>{
+  const f=await station();
+  f.api.getCapabilities.mockResolvedValue({schemaVersion:1,preservation:{receiptVersions:[1],durableReceiptsRequired:false}});
+  f.api.getRecoveryStatus.mockResolvedValue({proofId:f.proofId,evidence:[{evidenceId:"video",status:"COMMITTED_PENDING_DURABILITY",receipt:null}],declarations:[],finalization:{status:"COMMITTED_PENDING_DURABILITY",receipt:null}});
+  await resumeStationRecording(f.client,f.userId,()=>true);
+  expect(await recoverStationCapture(f.userId)).toBeNull();
+  const records=await listRecoverableRecordings(f.userId,f.client);
+  expect(records).toHaveLength(1);
+  expect(records[0]).toMatchObject({submitted:true,preserved:false,finalized:false,committed:true});
+  expect(await records[0].file.text()).toBe("recorded original bytes");
+  await expect(removePreservedLocalRecording(f.userId,records[0].key,f.client)).rejects.toThrow("Keep this local recording");
+  expect(f.api.finalizeProof).toHaveBeenCalledTimes(1);
+});
+it.each(["strict","unavailable","invalid"])("%s preservation policy cannot complete without receipts",async mode=>{
+  const f=await station();
+  f.api.getRecoveryStatus.mockResolvedValue({proofId:f.proofId,evidence:[{evidenceId:"video",status:"COMMITTED_PENDING_DURABILITY",receipt:null}],declarations:[],finalization:{status:"COMMITTED_PENDING_DURABILITY",receipt:null}});
+  if(mode==="unavailable")f.api.getCapabilities.mockRejectedValue(new Error("offline"));
+  if(mode==="invalid")f.api.getCapabilities.mockResolvedValue({schemaVersion:2,preservation:{receiptVersions:[1],durableReceiptsRequired:false}});
+  await expect(resumeStationRecording(f.client,f.userId,()=>true)).rejects.toMatchObject({code:"PRESERVATION_PENDING"});
+  expect(await recoverStationCapture(f.userId)).not.toBeNull();
+  expect(await listLocalRecordings(f.userId)).toHaveLength(0);
 });
 it("an account change during upload prevents commit and retains original account bytes",async()=>{
   const f=await station(false);let active=true;

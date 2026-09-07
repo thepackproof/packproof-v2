@@ -7,6 +7,7 @@ import { DomainError } from "./errors.js";
 import type { ManifestSignature, ManifestSigner } from "./manifest-signing.js";
 import { verifyManifestIntegrity } from "./manifest-signing.js";
 import { assertPolicyAccessSafe, currentPolicySequence, requireDurablePolicySequence } from "./policy-recovery.js";
+import { verifyPreservedJournalVersion } from "./recovery-journal-object.js";
 
 export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED";
 interface RecoveryRow {
@@ -29,7 +30,7 @@ export interface RecoveryStatus {
 /** Receipts require an independently protected conditional-create store. Plain put() is insufficient. */
 export interface RecoveryJournalStore {
   putIfAbsent(key: string, bytes: Buffer, contentType: string): Promise<{ created: boolean }>;
-  get(key: string): Promise<{ body: Buffer; contentType: string } | null>;
+  get(key: string, reference?: { versionId: string }): Promise<{ body: Buffer; contentType: string } | null>;
   head?(key: string): Promise<{ versionId?: string | null } | null>;
 }
 export interface RecoveryPublisher {
@@ -169,8 +170,8 @@ export async function processRecoveryOutbox(db: Database, clock: Clock, publishe
       }
       if (!stored) throw new DomainError("RECOVERY_OBJECT_UNAVAILABLE", "Recovery envelope is not readable after publication", 503);
       const envelope = await verifyRecoveryEnvelope(stored.body, publisher, claim.sha256);
-      const head = publisher.store.head ? await publisher.store.head(objectKey) : null;
-      const receipt: PreservationReceipt = { version: 1, operationId: claim.operation_id, eventSha256: claim.sha256, envelopeSha256: sha256Hex(stored.body), objectKey, objectVersionId: head?.versionId ?? null, preservedAt: envelope.publishedAt, signature: envelope.signature };
+      const objectVersionId = await verifyPreservedJournalVersion(publisher.store, objectKey, stored.body, "RECOVERY_ENVELOPE_CONFLICT");
+      const receipt: PreservationReceipt = { version: 1, operationId: claim.operation_id, eventSha256: claim.sha256, envelopeSha256: sha256Hex(stored.body), objectKey, objectVersionId, preservedAt: envelope.publishedAt, signature: envelope.signature };
       await tx.query("UPDATE recovery_delivery SET state='DURABLE',receipt_json=$2,delivered_at=$3,lease_token=NULL,lease_until=NULL,error_code=NULL WHERE operation_id=$1", [claim.operation_id, JSON.stringify(receipt), clock.now().toISOString()]);
       if (claim.kind === "PROOF_FINALIZED") {
         const changed = await tx.query(`UPDATE proofs SET status='FINALIZED',manifest_id=m.id,finalized_at=m.created_at,updated_at=$2 FROM final_manifests m WHERE proofs.id=$1 AND m.proof_id=proofs.id AND proofs.status <> 'FINALIZED' RETURNING proofs.id`, [claim.proof_id, envelope.publishedAt]);

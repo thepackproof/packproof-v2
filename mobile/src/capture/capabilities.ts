@@ -1,5 +1,17 @@
 import type { ApiCapabilities } from "../v2-api";
 
+/** Only an explicit, compatible server declaration permits legacy completion.
+ * Missing or malformed capabilities retain both durable-receipt gates. */
+export function requiresDurableCaptureReceipts(value: unknown): boolean {
+  const capabilities = value as Partial<ApiCapabilities> | null;
+  return !(capabilities?.schemaVersion === 1 &&
+    Array.isArray(capabilities.capture?.protocolVersions) && capabilities.capture.protocolVersions.includes(1) &&
+    Number.isFinite(capabilities.capture.maxBytes) && capabilities.capture.maxBytes > 0 &&
+    Array.isArray(capabilities.preservation?.receiptVersions) &&
+    capabilities.preservation.receiptVersions.includes(1) &&
+    capabilities.preservation.durableReceiptsRequired === false);
+}
+
 export function requireCaptureCapabilities(value: unknown, sellerAttestation: boolean): ApiCapabilities {
   const capabilities = value as Partial<ApiCapabilities> | null;
   if (!capabilities || capabilities.schemaVersion !== 1 || !capabilities.capture?.protocolVersions?.includes(1) ||

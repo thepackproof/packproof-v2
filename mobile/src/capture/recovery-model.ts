@@ -1,5 +1,5 @@
 /** Local workflow state is never canonical Proof state. No credentials or biometric samples. */
-export type CapturePhase = "RECORDING" | "LOCAL_ONLY" | "UPLOAD_QUEUED" | "UPLOADING" | "BYTES_RECEIVED" | "PRESERVATION_PENDING" | "CONFIRMATION_NEEDED" | "FINALIZATION_PENDING" | "FINALIZED" | "NEEDS_SIGN_IN" | "NEEDS_ATTENTION";
+export type CapturePhase = "RECORDING" | "LOCAL_ONLY" | "UPLOAD_QUEUED" | "UPLOADING" | "BYTES_RECEIVED" | "PRESERVATION_PENDING" | "CONFIRMATION_NEEDED" | "FINALIZATION_PENDING" | "SUBMITTED" | "FINALIZED" | "NEEDS_SIGN_IN" | "NEEDS_ATTENTION";
 export interface DurableReceipt {
   operationId: string; eventSha256: string; envelopeSha256: string;
   objectKey: string; objectVersionId: string | null; preservedAt: string; signature: unknown;
@@ -36,7 +36,8 @@ export function captureRecoveryLabel(phase: CapturePhase): string {
     case "UPLOADING": return "Uploading your saved recording";
     case "BYTES_RECEIVED": case "PRESERVATION_PENDING": return "Recording received. Preservation in progress.";
     case "CONFIRMATION_NEEDED": return "Recording preserved. Confirmation needed.";
-    case "FINALIZATION_PENDING": return "Recording preserved. Finalization pending.";
+    case "FINALIZATION_PENDING": return "Finalizing your Proof. Local recording kept.";
+    case "SUBMITTED": return "Submitted. Local recording kept until preservation is confirmed.";
     case "FINALIZED": return "Proof finalized and available";
     case "NEEDS_SIGN_IN": return "Your recording is saved. Sign in to continue.";
     case "NEEDS_ATTENTION": return "Your recording is saved. Review the next step.";

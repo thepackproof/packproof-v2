@@ -6,6 +6,16 @@ export type CaptureCapabilities = {
   preservation: { receiptVersions: number[]; durableReceiptsRequired: boolean };
 };
 
+/** Only an explicit current server policy permits completion before durable receipts.
+ * This never grants permission to discard the local original. */
+export async function requiresDurableReceipts(api: PackProofApi): Promise<boolean> {
+  try {
+    const value = await api.getCapabilities();
+    return !(value.schemaVersion === 1 && value.preservation?.receiptVersions?.includes(1)
+      && value.preservation.durableReceiptsRequired === false);
+  } catch { return true; }
+}
+
 export async function capturePreflight(api: PackProofApi): Promise<CaptureCapabilities> {
   const capabilities = await api.getCapabilities();
   if (capabilities.schemaVersion !== 1 || !capabilities.capture.protocolVersions.includes(1)) {

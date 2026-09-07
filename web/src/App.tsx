@@ -713,6 +713,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "account" ? (
         <AccountScreen
+          key={`account:${session.userId}`}
+          api={api}
           displayName={session.displayName}
           username={session.username}
           subject={session.subject}

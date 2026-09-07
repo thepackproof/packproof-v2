@@ -6,6 +6,7 @@ import { newId } from "../ids.js";
 import { DomainError } from "./errors.js";
 import { verifyManifestIntegrity, type ManifestSignature } from "./manifest-signing.js";
 import type { RecoveryPublisher } from "./recovery-journal.js";
+import { verifyPreservedJournalVersion } from "./recovery-journal-object.js";
 
 interface PolicyRow {
   sequence: string | number; table_name: string; entity_key: Record<string, unknown>;
@@ -117,8 +118,8 @@ export async function processPolicyRecoveryOutbox(db: Database, clock: Clock, pu
       if(!stored)throw new DomainError("POLICY_OBJECT_UNAVAILABLE","Published policy envelope is unavailable",503);
       const verified=await verifyPolicyEnvelope(stored.body,publisher.trustedPublicKey);
       if(verified.envelope.eventSha256!==eventSha256)throw policyConflict();
-      const head=publisher.store.head?await publisher.store.head(objectKey):null;
-      const receipt={version:1,sequence:String(candidate.sequence),eventSha256,envelopeSha256:sha256Hex(stored.body),objectKey,objectVersionId:head?.versionId??null,preservedAt:verified.envelope.publishedAt,signature:verified.envelope.signature};
+      const objectVersionId=await verifyPreservedJournalVersion(publisher.store,objectKey,stored.body,"POLICY_ENVELOPE_CONFLICT");
+      const receipt={version:1,sequence:String(candidate.sequence),eventSha256,envelopeSha256:sha256Hex(stored.body),objectKey,objectVersionId,preservedAt:verified.envelope.publishedAt,signature:verified.envelope.signature};
       await tx.query("UPDATE policy_recovery_delivery SET state='DURABLE',event_sha256=$2,receipt_json=$3,error_code=NULL,lease_token=NULL,lease_until=NULL WHERE sequence=$1",[candidate.sequence,eventSha256,JSON.stringify(receipt)]);
       await tx.query("UPDATE policy_recovery_fence SET reconciled_sequence=$1,reconciled_head_sha256=$2 WHERE singleton=1",[candidate.sequence,eventSha256]);
       return {processed:1,state:"DURABLE"};

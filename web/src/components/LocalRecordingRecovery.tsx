@@ -30,11 +30,11 @@ export function LocalRecordingRecovery({api, userId, onOpen}: {api:PackProofApi;
   if (!items.length) return null;
   return <aside className="local-recovery-panel" aria-label="Saved recordings">
     <details>
-      <summary>{items.some(item=>!item.finalized) ? "Recordings need attention" : "Completed recordings on this device"} · {items.length}</summary>
+      <summary>{items.some(item=>!item.finalized && !item.submitted) ? "Recordings need attention" : "Saved originals on this device"} · {items.length}</summary>
       <p>Saved originals use {(items.reduce((sum,item)=>sum+item.file.size,0)/1_000_000).toFixed(1)} MB. Clearing browser data or losing this device can remove local-only work.</p>
       {error && <p role="alert">{error}</p>}
       <ul>{items.map(item=><li key={item.key}>
-        <span>{item.finalized && item.preserved ? "Proof finalized and available" : item.preserved ? "Recording preserved. Confirmation or finalization needed." : item.committed ? "Recording received. Preservation in progress." : item.accepted ? "Saved on this device. Upload pending." : "Saved on this device. Review and confirmation needed."} · {(item.file.size/1_000_000).toFixed(1)} MB</span>
+        <span>{item.finalized && item.preserved ? "Proof finalized and available" : item.submitted ? "Proof submitted. Local original kept until preservation is confirmed." : item.preserved ? "Recording preserved. Confirmation or finalization needed." : item.committed ? "Recording received. Preservation in progress." : item.accepted ? "Saved on this device. Upload pending." : "Saved on this device. Review and confirmation needed."} · {(item.file.size/1_000_000).toFixed(1)} MB</span>
         {item.errorMessage && <span>{item.errorMessage}</span>}
         {item.kind === "station" ? <a className="btn btn-secondary" href="/station">Review station recording</a> : <button className="btn btn-secondary" onClick={()=>onOpen(item.proofId)}>Open Proof</button>}
         <button className="btn btn-secondary" onClick={()=>{

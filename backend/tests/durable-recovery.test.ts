@@ -76,6 +76,40 @@ describe("accepted-event recovery boundaries", () => {
     expect((await processRecoveryOutbox(h.db, clock, publisher)).processed).toBe(0);
     expect((await getRecoveryStatus(h.db, "test:after-conflict")).status).toBe("COMMITTED_PENDING_DURABILITY");
   });
+  it("keeps strict finalization pending until the exact journal version can be read", async () => {
+    const { seller, proofId, store, publisher } = await setup();
+    await commitFulfillmentAndAttest(h, seller, proofId);
+    await processRecoveryOutbox(h.db, clock, publisher);
+    await processRecoveryOutbox(h.db, clock, publisher);
+    await finalizeProof(h.db, clock, seller, proofId, signer, { requireDurableReceipts: true });
+    const get = store.get.bind(store);
+    const unavailable: RecoveryPublisher = { ...publisher, store: {
+      putIfAbsent: store.putIfAbsent.bind(store), head: store.head.bind(store),
+      get: async (key, reference) => reference ? null : get(key),
+    } };
+    expect((await processRecoveryOutbox(h.db, clock, unavailable)).state).toBe("PENDING");
+    expect(await getRecoveryStatus(h.db, `finalize:${proofId}`)).toMatchObject({
+      status: "COMMITTED_PENDING_DURABILITY", receipt: null, errorCode: "RECOVERY_OBJECT_VERSION_UNAVAILABLE",
+    });
+    expect((await h.db.query("SELECT status FROM proofs WHERE id=$1", [proofId])).rows[0].status).toBe("EVIDENCE_COMMITTED");
+    const acceptedBytes = store.objects.get(`recovery/v1/${sha256Hex(`finalize:${proofId}`)}.json`)!;
+    now = new Date(now.getTime() + 3000);
+    expect((await processRecoveryOutbox(h.db, clock, publisher)).state).toBe("DURABLE");
+    expect((await getRecoveryStatus(h.db, `finalize:${proofId}`)).receipt).toMatchObject({
+      objectVersionId: "immutable-test-version", envelopeSha256: sha256Hex(acceptedBytes),
+    });
+    expect((await h.db.query("SELECT status FROM proofs WHERE id=$1", [proofId])).rows[0].status).toBe("FINALIZED");
+  });
+  it("quarantines a version that differs from the authenticated latest journal bytes", async () => {
+    const { seller, proofId, store, publisher } = await setup();
+    await h.db.transaction(tx => enqueueRecoveryEvent(tx, clock, { operationId: "test:version-conflict", proofId, actorUserId: seller, kind: "EVIDENCE_COMMITTED", payload: {} }));
+    const conflicted: RecoveryPublisher = { ...publisher, store: {
+      putIfAbsent: store.putIfAbsent.bind(store), head: store.head.bind(store),
+      get: async (key, reference) => reference ? { body: Buffer.from("different retained bytes"), contentType: "application/json" } : store.get(key),
+    } };
+    expect((await processRecoveryOutbox(h.db, clock, conflicted)).state).toBe("DEAD_LETTER");
+    expect(await getRecoveryStatus(h.db, "test:version-conflict")).toMatchObject({ status: "FAILED", receipt: null, errorCode: "RECOVERY_ENVELOPE_CONFLICT" });
+  });
   it("fences stale writers and refuses unverified storage or unknown signing authority", async () => {
     const { seller, proofId, publisher, store } = await setup();
     await h.db.transaction(tx => enqueueRecoveryEvent(tx, clock, { operationId: "test:fence", proofId, actorUserId: seller, kind: "EVIDENCE_COMMITTED", payload: {} }));

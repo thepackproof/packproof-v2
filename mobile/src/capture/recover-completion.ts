@@ -1,4 +1,5 @@
 import { hasDurableReceipt, recoveryRetry, type CaptureRecoveryState, type ProofRecovery } from "./recovery-model";
+import { requiresDurableCaptureReceipts } from "./capabilities";
 
 export interface CompletionProof {
   proofId: string; status: string; participationPolicy?: string | null;
@@ -13,6 +14,7 @@ export interface CompletionDeps {
   save(): Promise<void>;
   getProof(): Promise<CompletionProof>;
   getRecovery(): Promise<ProofRecovery>;
+  getCapabilities?(): Promise<unknown>;
   initialize(key: string): Promise<string | { evidenceId: string; received: boolean }>;
   upload(evidenceId: string): Promise<void>;
   commit(evidenceId: string): Promise<void>;
@@ -36,6 +38,11 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
     let proof = await read();
     // Read the exact operation before repeating any write. Never substitute another recording on this Proof.
     let server = await status();
+    // Resolve from this server on every attempt; never persist a permissive mode.
+    // A failed read stops completion. Absent/invalid declarations remain strict.
+    const capabilities = await deps.getCapabilities?.();
+    deps.assertAccount();
+    const durableRequired = requiresDurableCaptureReceipts(capabilities);
     let evidenceId = capture.uploadEvidenceId;
     const committed = evidenceId && proof.evidence.some(item => item.evidenceId === evidenceId && item.validationStatus === "COMMITTED");
     if (!committed) {
@@ -67,17 +74,23 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
       deps.assertAccount(); await deps.save();
       state.declarationReceipt = await deps.attest(evidenceId, authorization); deps.assertAccount(); await deps.save();
     } else if (accepted) { state.declarationReceipt = accepted; await deps.save(); }
-    if (!hasDurableReceipt(preserved)) {
+    if (durableRequired && !hasDurableReceipt(preserved)) {
       await phase("PRESERVATION_PENDING");
       throw new CompletionPending("Recording received. Preservation is still in progress. PackProof will safely retry.");
     }
     await phase("FINALIZATION_PENDING");
     if (proof.status !== "FINALIZED") { await deps.finalize(); deps.assertAccount(); }
     proof = await read(); server = await status();
-    if (proof.status !== "FINALIZED" || !hasDurableReceipt(server.finalization)) throw new CompletionPending("Recording preserved. Finalization is still in progress.");
-    state.finalizationReceipt = server.finalization.receipt;
-    state.attempt = 0; state.nextRetryAt = null; state.lastError = undefined;
-    await phase("FINALIZED");
+    const finalEvidence = server.evidence.find(item => item.evidenceId === evidenceId);
+    const durablyFinalized = hasDurableReceipt(finalEvidence) && hasDurableReceipt(server.finalization);
+    if (proof.status !== "FINALIZED" || !proof.evidence.some(item => item.evidenceId === evidenceId && item.validationStatus === "COMMITTED") ||
+        (durableRequired && !durablyFinalized)) throw new CompletionPending("Finalization is still in progress. Your local recording is kept.");
+    if (hasDurableReceipt(finalEvidence)) state.preservationReceipt = finalEvidence.receipt;
+    if (hasDurableReceipt(server.finalization)) state.finalizationReceipt = server.finalization.receipt;
+    state.attempt = 0; state.nextRetryAt = durablyFinalized ? null : now() + 300_000; state.lastError = undefined;
+    // Canonical submission can finish on an explicitly compatible server. Local
+    // cleanup remains impossible until both real durable receipts are confirmed.
+    await phase(durablyFinalized ? "FINALIZED" : "SUBMITTED");
     return proof;
   } catch (error) {
     // Preserve the originating journal even if authentication or account selection changed.

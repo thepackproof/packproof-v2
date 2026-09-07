@@ -433,6 +433,30 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/internal/support", supportAccessRouter(deps));
   app.use("/study",distributedRateLimit(deps.db,{scope:"study-observation",limit:120,windowMs:60_000,subject:bearerUser}),createObservationRouter(deps,deps.observationConfig??null));
   app.use("/me/billing",distributedRateLimit(deps.db,{scope:"account-billing",limit:30,windowMs:60_000,subject:bearerUser}));
+  app.get("/me/billing/status",asyncRoute(async(req,res)=>{
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(deps.billing?await deps.billing.getOwnBillingStatus(deps.db,bearerUser(req)):{enabled:false,subscriptions:[],pendingCheckout:null});
+  }));
+  app.get("/me/billing/offer",asyncRoute(async(_req,res)=>{
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(deps.billing?await deps.billing.listApprovedCheckoutOffer(deps.db):{enabled:false,offer:null});
+  }));
+  app.post("/me/billing/checkout",asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    const body=req.body;
+    if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(key=>!["operationId","offerVersion","acceptedOfferSha256"].includes(key))||[body.operationId,body.offerVersion,body.acceptedOfferSha256].some(value=>typeof value!=="string"))
+      throw new DomainError("INVALID_BILLING_INPUT","An exact accepted offer and stable checkout operation ID are required",400);
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await deps.billing.createOwnCheckout(deps.db,bearerUser(req),body));
+  }));
+  app.post("/me/billing/checkout/complete",asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    const body=req.body;
+    if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(key=>key!=="operationId")||typeof body.operationId!=="string")
+      throw new DomainError("INVALID_BILLING_INPUT","A checkout operation ID is required",400);
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await deps.billing.completeOwnCheckout(deps.db,bearerUser(req),body));
+  }));
   app.get("/me/billing/invoices", asyncRoute(async(req,res)=>{
     res.setHeader("Cache-Control","private, no-store");
     if(!deps.billing){res.json({enabled:false,invoices:[]});return;}

@@ -1,4 +1,4 @@
-import { requireCaptureCapabilities } from "../src/capture/capabilities";
+import { requireCaptureCapabilities, requiresDurableCaptureReceipts } from "../src/capture/capabilities";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { recoverCaptureCompletion, type CompletionCapture, type CompletionDeps, type CompletionProof } from "../src/capture/recover-completion";
@@ -50,6 +50,68 @@ test("pending durability keeps a truthful phase and local bytes; later retry fin
   assert.equal(mayCleanUpCapture(f.capture.recovery), false); assert.equal(f.calls.includes("finalize"), false);
   f.server.evidence[0].status = "PRESERVED"; f.server.evidence[0].receipt = f.receipt("preserve");
   await recoverCaptureCompletion(f.capture, f.deps); assert.equal(f.calls.filter(c => c === "upload").length, 1);
+});
+
+const compatibleCapabilities = (required: boolean) => ({ schemaVersion: 1, capture: { protocolVersions: [1], maxBytes: 250000000 }, preservation: { receiptVersions: [1], durableReceiptsRequired: required } });
+
+test("explicit compatible server mode finishes canonical submission and retains the local original", async () => {
+  const f = fixture(); f.setDurability(false);
+  f.deps.getCapabilities = async () => compatibleCapabilities(false);
+  f.deps.now = () => 1000;
+  f.deps.finalize = async () => { f.calls.push("finalize"); f.proof.status = "FINALIZED"; };
+  const result = await recoverCaptureCompletion(f.capture, f.deps);
+  assert.equal(result.status, "FINALIZED");
+  assert.equal(f.capture.recovery.phase, "SUBMITTED");
+  assert.equal(captureRecoveryLabel(f.capture.recovery.phase), "Submitted. Local recording kept until preservation is confirmed.");
+  assert.equal(f.capture.recovery.preservationReceipt, undefined);
+  assert.equal(f.capture.recovery.finalizationReceipt, undefined);
+  assert.equal(mayCleanUpCapture(f.capture.recovery), false);
+  assert.equal(f.capture.recovery.nextRetryAt, 301000);
+  // Reopening the app reconciles the same finalized recording, without another
+  // upload, declaration, or finalization, and still does not authorize deletion.
+  await recoverCaptureCompletion(f.capture, f.deps);
+  for (const call of ["upload", "attest", "finalize"]) assert.equal(f.calls.filter(item => item === call).length, 1, call);
+  assert.equal(mayCleanUpCapture(f.capture.recovery), false);
+  // Cleanup becomes possible only when a later server read confirms both receipts.
+  f.server.evidence[0] = { ...f.server.evidence[0], status: "PRESERVED", receipt: f.receipt("preserve") };
+  f.server.finalization = { operationId: "final", status: "PRESERVED", receipt: f.receipt("final") };
+  await recoverCaptureCompletion(f.capture, f.deps);
+  assert.equal(f.capture.recovery.phase, "FINALIZED");
+  assert.equal(mayCleanUpCapture(f.capture.recovery), true);
+});
+
+test("strict, missing, malformed, or incompatible capability declarations cannot bypass preservation", async () => {
+  for (const capabilities of [undefined, null, {}, compatibleCapabilities(true),
+    { ...compatibleCapabilities(false), schemaVersion: 2 },
+    { ...compatibleCapabilities(false), capture: undefined },
+    { ...compatibleCapabilities(false), preservation: { receiptVersions: [1] } },
+    { ...compatibleCapabilities(false), preservation: { receiptVersions: [1], durableReceiptsRequired: "false" } },
+    { ...compatibleCapabilities(false), preservation: { receiptVersions: [2], durableReceiptsRequired: false } }]) {
+    const f = fixture(); f.setDurability(false); f.deps.getCapabilities = async () => capabilities;
+    assert.equal(requiresDurableCaptureReceipts(capabilities), true);
+    await assert.rejects(recoverCaptureCompletion(f.capture, f.deps), { code: "PRESERVATION_PENDING" });
+    assert.equal(f.calls.includes("finalize"), false);
+    assert.equal(mayCleanUpCapture(f.capture.recovery), false);
+  }
+});
+
+test("compatibility still requires canonical finalization of this exact recording", async () => {
+  for (const wrongEvidence of [false, true]) {
+    const f = fixture(); f.setDurability(false); f.deps.getCapabilities = async () => compatibleCapabilities(false);
+    f.deps.finalize = async () => {
+      if (wrongEvidence) { f.proof.status = "FINALIZED"; f.proof.evidence = [{ evidenceId: "other", validationStatus: "COMMITTED" }]; }
+    };
+    await assert.rejects(recoverCaptureCompletion(f.capture, f.deps), { code: "PRESERVATION_PENDING" });
+    assert.equal(mayCleanUpCapture(f.capture.recovery), false);
+  }
+});
+
+test("unavailable capability endpoint cannot opt into compatibility", async () => {
+  const f = fixture(); f.setDurability(false);
+  f.deps.getCapabilities = async () => { throw new Error("capability request failed"); };
+  await assert.rejects(recoverCaptureCompletion(f.capture, f.deps), /capability request failed/);
+  assert.equal(f.calls.includes("upload"), false);
+  assert.equal(f.calls.includes("finalize"), false);
 });
 test("account change after initialize stops upload and retains original account journal", async () => {
   const f = fixture(); const initialize = f.deps.initialize;

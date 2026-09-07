@@ -1,0 +1,56 @@
+/* The same fine-line visual language as the original order/evidence/Proof orbit. */
+.proof-diagram {
+  --diagram-blue:#087fab;
+  --diagram-green:#087747;
+  --diagram-line:#aac8d5;
+  --diagram-fill:#f5fbfe;
+  --diagram-label:#486373;
+  width:100%; min-width:0; color:var(--diagram-blue);
+}
+.proof-diagram-content { position:relative; width:min(100%, 290px); height:220px; margin-inline:auto; }
+.proof-diagram-chip { display:inline-flex; align-items:center; justify-content:center; gap:7px; border:1px solid var(--diagram-line); border-radius:6px; background:var(--diagram-fill); padding:8px 11px; color:var(--diagram-label); font-size:14px; font-weight:500; line-height:1.4; letter-spacing:.065em; white-space:nowrap; }
+.proof-diagram .is-accent { color:var(--diagram-green); }
+.proof-diagram-orbit { position:absolute; width:62%; height:85%; inset:7% 19%; border:1px solid var(--diagram-line); border-radius:50%; transform:rotate(-24deg); }
+.proof-diagram-core { position:absolute; inset:0; display:grid; place-items:center; }
+.diagram-north { position:absolute; top:12px; left:8%; }
+.diagram-east { position:absolute; top:112px; right:0; }
+.diagram-south { position:absolute; bottom:8px; left:12%; }
+.diagram-capture-frame { position:absolute; top:30px; inset-inline:0; display:flex; justify-content:space-around; gap:6px; padding:20px 8px; border:1px solid var(--diagram-line); border-radius:12px; background:var(--diagram-fill); }
+.diagram-capture-step { display:grid; justify-items:center; gap:12px; font-size:14px; letter-spacing:.07em; }
+.diagram-capture-step:last-child { color:var(--diagram-green); }
+.diagram-stem { position:absolute; left:50%; top:134px; height:30px; border-left:1px solid var(--diagram-line); }
+.diagram-caption { position:absolute; bottom:15px; inset-inline:0; display:flex; justify-content:center; }
+.diagram-pair { position:absolute; top:31px; inset-inline:0; display:flex; align-items:center; }
+.diagram-endpoint { width:91px; flex-shrink:0; display:grid; justify-items:center; gap:10px; padding:16px 5px; border:1px solid var(--diagram-line); border-radius:12px; background:var(--diagram-fill); font-size:14px; letter-spacing:.065em; }
+.diagram-connection { flex:1; display:grid; place-items:center; position:relative; }
+.diagram-connection::before { content:""; position:absolute; inset-inline:0; top:50%; border-top:1px solid var(--diagram-line); }
+.diagram-connection>svg { position:relative; background:var(--diagram-fill); padding:4px; box-sizing:content-box; border-radius:50%; }
+.proof-diagram-core>svg, .diagram-connection>svg { transition:transform .25s ease; }
+@media(hover:hover) and (prefers-reduced-motion:no-preference) {
+  article:hover .proof-diagram-core>svg, article:hover .diagram-connection>svg { transform:translateY(-3px); }
+}
+.step-card .proof-diagram { margin:0 0 23px; }
+.step-card .step-top { margin-bottom:4px; justify-content:flex-end; }
+.bento-small>.proof-diagram { margin-bottom:24px; }
+.trust-details .proof-diagram { margin-bottom:20px; }
+.workflow .proof-diagram { max-width:290px; justify-self:end; }
+ .trust-details .feature-icon { margin-bottom:20px; }
+.workflow article { grid-template-columns:70px minmax(0, 1fr) 260px; }
+@media (min-width:701px) and (max-width:1000px) {
+  .steps-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .workflow article { grid-template-columns:50px minmax(0, 1fr); }
+  .workflow .proof-diagram { grid-column:2; justify-self:start; }
+}
+@media (min-width:721px) and (max-width:1000px) {
+  .trust-details { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+@media(max-width:700px) {
+  .workflow .proof-diagram { grid-column:2; justify-self:start; width:100%; }
+  .proof-diagram-content { max-width:270px; }
+  .workflow article { grid-template-columns:35px minmax(0, 1fr); }
+}
+@media(max-width:380px) {
+  .workflow .proof-diagram { grid-column:1/-1; justify-self:center; }
+  .diagram-endpoint { width:80px; }
+  .proof-diagram-chip { padding-inline:8px; letter-spacing:.035em; }
+}

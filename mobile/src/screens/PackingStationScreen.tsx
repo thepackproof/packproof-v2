@@ -63,6 +63,7 @@ export function PackingStationScreen(props: {
   const [candidates, setCandidates] = useState<StationCandidate[]>([]);
   const [localBusy, setLocalBusy] = useState(false);
   const [heldCapture, setHeldCapture] = useState<LocalCapture | null>(props.restoredCapture);
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const stateRef = useRef(state);
   const heldCaptureRef = useRef(heldCapture);
   const evidenceIdRef = useRef(props.restoredEvidenceId);
@@ -380,6 +381,7 @@ export function PackingStationScreen(props: {
       assertCurrentSubmission();
       // Completed local originals stay in Account until deliberate, receipt-checked cleanup.
       assertCurrentSubmission();
+      setCompletionNotice(captured.recovery?.phase === "SUBMITTED" ? captureRecoveryLabel("SUBMITTED") : null);
       setHeldCapture(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
       await persistFromState(initialStationState(), null);
@@ -470,6 +472,7 @@ export function PackingStationScreen(props: {
         )}
 
         {state.error ? <Text style={styles.error}>{state.error.message}</Text> : null}
+        {state.phase === "PROOF_CREATED" && completionNotice ? <Text style={[styles.hint, { color: tone.muted }]}>{completionNotice}</Text> : null}
         {localBusy && state.phase !== "RECORDING" && state.phase !== "PROCESSING" ? (
           <Text style={[styles.hint, { color: tone.muted }]}>Working…</Text>
         ) : null}

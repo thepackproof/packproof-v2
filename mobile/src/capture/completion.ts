@@ -35,7 +35,7 @@ export function completeSavedCapture(input: {
       // Persist the intent before a prompt or HTTP request; background work never opens a biometric dialog.
       capture.recovery!.submitRequested = true; capture.recovery!.needsSellerAttestation = input.needsSellerAttestation;
       await save();
-      if (input.needsSellerAttestation) {
+      if (input.needsSellerAttestation && capture.recovery!.phase !== "SUBMITTED") {
         await authorizeSellerCapture({ client, capture, proofId, userId });
         input.assertAccount();
       } else if (!capture.captureSha256) { await bindRecordedCapture(client, capture, proofId, userId); input.assertAccount(); }
@@ -44,6 +44,7 @@ export function completeSavedCapture(input: {
     const proof = await recoverCaptureCompletion(capture as LocalCapture & { recovery: NonNullable<LocalCapture["recovery"]> }, {
       assertAccount: input.assertAccount, save,
       getProof: () => client.getProof(proofId), getRecovery: () => client.getProofRecovery(proofId),
+      getCapabilities: () => client.getCapabilities(),
       initialize: async key => {
         study?.phase('upload');
         const result = await client.initializeEvidenceUpload(proofId, { contentType: capture.contentType, byteSize: capture.byteSize ?? undefined,
