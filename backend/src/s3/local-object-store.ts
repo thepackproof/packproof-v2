@@ -28,8 +28,18 @@ export class LocalObjectStore implements ObjectStore {
     const file=this.filePath(key);await mkdir(path.dirname(file),{recursive:true});
     // Publish a completed temporary inode atomically: readers never see a partial journal.
     const temporary=`${file}.${randomUUID()}.tmp`;
-    try{await writeFile(temporary,body,{mode:0o600});await link(temporary,file);await this.publishMetadata(file,contentType,true);return {created:true};}
-    catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')return {created:false};throw error;}
+    try{
+      await writeFile(temporary,body,{mode:0o600,flag:'wx'});
+      try{await link(temporary,file);}
+      catch(error){
+        if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;
+        // A process may stop between publishing the body and its sidecar. A
+        // byte-identical retry can finish that publication without replacing it.
+        if((await readFile(file)).equals(body))await this.publishMetadata(file,contentType,true);
+        return {created:false};
+      }
+      await this.publishMetadata(file,contentType,true);return {created:true};
+    }
     finally{await rm(temporary,{force:true});}
   }
   async putStream(key:string,body:AsyncIterable<Uint8Array>,contentType:string,byteSize:number):Promise<{versionId:null}>{

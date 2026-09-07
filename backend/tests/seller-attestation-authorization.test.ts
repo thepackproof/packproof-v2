@@ -5,7 +5,7 @@ import { canonicalize } from "../src/canonical.js";
 import type { Database } from "../src/db/database.js";
 import { createAttestationChallenge, SELLER_SHIPPING_STATEMENT } from "../src/domain/attestation-authorization.js";
 import { commitAttestation } from "../src/domain/attestations.js";
-import { createCaptureSession } from "../src/domain/capture-sessions.js";
+import { createCaptureSession, completeCaptureSession } from "../src/domain/capture-sessions.js";
 import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
 import { finalizeProof } from "../src/domain/finalize.js";
 import { sha256Hex } from "../src/hash.js";
@@ -55,6 +55,10 @@ describe("seller shipping authorization", () => {
 
   it("signs the exact seller statement and video binding, freezes verification material, and preserves retry hashes", async () => {
     const capture = await recording();
+    await completeCaptureSession(h.db, clock, seller, proofId, capture.captureSessionId, {
+      sha256: sha256Hex(capture.bytes), byteSize: capture.bytes.length, contentType: "video/mp4",
+      recordedDurationMs: 1000, interrupted: false,
+    });
     const body = JSON.parse(capture.challenge.payload);
     expect(body).toEqual({
       version: 1, method: "ANDROID_BIOMETRIC_STRONG", challengeId: capture.challenge.challengeId,
@@ -82,6 +86,9 @@ describe("seller shipping authorization", () => {
     expect(JSON.parse(recovery.canonical_json).payload.rows.attestation_challenges).toEqual([
       expect.objectContaining({ id: capture.challenge.challengeId, payload: capture.challenge.payload,
         public_key_base64: publicKey, consumed_at: attestation.createdAt, attestation_id: attestation.attestationId }),
+    ]);
+    expect(JSON.parse(recovery.canonical_json).payload.rows.capture_session_reports).toEqual([
+      expect.objectContaining({ session_id: capture.captureSessionId, interrupted: false, recorded_duration_ms: 1000 }),
     ]);
     const final = await finalizeProof(h.db, clock, seller, proofId);
     const frozen = (final.manifest.manifest as any).attestations[0];

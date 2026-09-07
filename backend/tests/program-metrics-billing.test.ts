@@ -1,9 +1,18 @@
+import { syntheticPublication } from './program-metrics-publication-fixture.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPgliteDatabase } from "../src/db/pglite.js";
 import { migrate } from "../src/db/migrate.js";
 import type { Database } from "../src/db/database.js";
-import { bindBillingCustomer, getAccountUsageSummary, ingestVerifiedBillingEvent, reconcileDurableFinalizedUsage, registerOfferVersion,
-  scheduleApprovedOfferPeriod, type BillingProviderVerifier, type OfferDefinition, type VerifiedProviderEvent } from "../src/billing/usage-ledger.js";
+import { bindBillingCustomer, getAccountUsageSummary, ingestVerifiedBillingEvent, reconcileDurableFinalizedUsage, registerOfferVersion as registerOfferStorage,
+  scheduleApprovedOfferPeriod as scheduleOfferStorage, type BillingProviderVerifier, type OfferDefinition, type VerifiedProviderEvent } from "../src/billing/usage-ledger.js";
+
+// Approved fixtures explicitly supply synthetic pinned policy receipts.
+const registerOfferVersion: typeof registerOfferStorage = (db,clock,value) => registerOfferStorage(db,clock,value,
+  (value as OfferDefinition).status==='approved'?{publication:syntheticPublication(value as OfferDefinition,clock.now())}:undefined);
+const scheduleApprovedOfferPeriod: typeof scheduleOfferStorage = async(db,clock,input) => {
+  const offer=(await db.query<{definition_json:OfferDefinition}>('SELECT definition_json FROM billing_offer_versions WHERE version=$1',[input.offerVersion])).rows[0];
+  return scheduleOfferStorage(db,clock,input,offer?.definition_json.status==='approved'?{publication:syntheticPublication(offer.definition_json,clock.now())}:undefined);
+};
 
 let db: Database; let close: () => Promise<void>;
 let sequence = 0;
@@ -44,6 +53,17 @@ function offer(status: "draft" | "approved" = "draft"): OfferDefinition {
 }
 
 describe("durable finalized-Proof usage ledger", () => {
+  it("refuses imprecise monetary aggregates instead of rounding a customer's amount", async () => {
+    const account = await user(); const customer = id("large-customer");
+    await bindBillingCustomer(db, clock, {provider:"fixture",environment:"sandbox",providerAccount:"account",customerReference:customer,userId:account});
+    for(let index=0;index<2;index++) {
+      const reference=id("large-payment");
+      const verifier:BillingProviderVerifier={provider:"fixture",environment:"sandbox",providerAccount:"account",verifyAndNormalize:async()=>({eventReference:reference,customerReference:customer,subjectReference:reference,paymentReference:reference,kind:"payment_settled",occurredAt:at,amountMinor:Number.MAX_SAFE_INTEGER,currency:"USD"})};
+      await ingestVerifiedBillingEvent(db,clock,verifier,{rawBody:Buffer.from("synthetic"),signature:"fixture"});
+    }
+    await expect(getAccountUsageSummary(db,clock,account)).rejects.toMatchObject({code:"BILLING_AMOUNT_RECONCILIATION_REQUIRED"});
+  });
+
   it("does not seed pricing and meters each durable Proof once without charging legacy or pending records", async () => {
     const account = await user(); const other = await user();
     const proofId = await finalized(account); await finalized(account, "PENDING"); await finalized(account, "LEGACY"); await finalized(other);

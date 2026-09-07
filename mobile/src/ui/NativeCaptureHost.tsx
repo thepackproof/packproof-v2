@@ -308,7 +308,7 @@ function CameraSession({
             active
             torchEnabled={false}
             onReady={()=>setReady(true)}
-            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs; void haptic("medium");}}
+            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;request.onRecordingStarted?.(); void haptic("medium");}}
             onBarcodeDetected={({nativeEvent})=>{void detected(nativeEvent);}}
             onCaptureError={({nativeEvent})=>{
               if (recordingRef.current) setShippingError('Label scanning is unavailable. Your recording is continuing.');

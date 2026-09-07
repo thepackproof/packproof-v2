@@ -764,7 +764,8 @@
             "type": "string",
             "enum": [
               "charge",
-              "refund"
+              "refund",
+              "refund_reversal"
             ]
           },
           "amountMinor": {
@@ -776,8 +777,40 @@
             "enum": [
               "verified_provider"
             ]
+          },
+          "reversesPaymentRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "refund_reversal"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "reversesPaymentRef"
+              ],
+              "properties": {
+                "amountMinor": {
+                  "minimum": 1
+                }
+              }
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "reversesPaymentRef"
+                ]
+              }
+            }
+          }
+        ]
       }
     }
   }

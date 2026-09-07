@@ -8,6 +8,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class UnifiedCameraModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PackProofUnifiedCamera")
+    Function("newOperationNonce") { java.util.UUID.randomUUID().toString() }
 
     AsyncFunction("getHapticsEnabled") {
       val context = appContext.reactContext

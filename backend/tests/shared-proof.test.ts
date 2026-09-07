@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import {Readable} from 'node:stream';
 import { auth, commitFulfillmentAndAttest, commitProofEvidence, createHarness, login, type TestHarness } from './helpers.js';
 import { createDisclosureGrant, previewDisclosure, readDisclosedMedia } from '../src/domain/disclosure.js';
 import { createAccessLink, revokeAccessLink } from '../src/domain/access-links.js';
@@ -9,7 +10,7 @@ import { finalizeProof } from '../src/domain/finalize.js';
 import { acceptCommerceReceiver, commitStageEvidence, createCommerceStage, initializeStageEvidence, inviteCommerceReceiver } from '../src/domain/commerce-lifecycle.js';
 import { createProofEmailSubscription } from '../src/domain/proof-notifications.js';
 import { setReceiptPreference } from '../src/domain/buyer-receipt.js';
-import type { ObjectStore } from '../src/s3/object-store.js';
+import type { ObjectStore,ObjectReference } from '../src/s3/object-store.js';
 
 let h: TestHarness;
 afterEach(async () => { await h?.close(); });
@@ -80,12 +81,15 @@ describe('one live shared Proof', () => {
     const expiring = await share(seller, proofId, '2026-09-07T12:00:00Z');
     const revoked = await share(seller, proofId);
     const corruptStore: ObjectStore = Object.assign(Object.create(h.objectStore), {
-      get: async () => ({ body: Buffer.from('changed bytes'), contentType: 'image/jpeg' }),
+      getStream: async (key:string,reference:ObjectReference) => {
+        const original=await h.objectStore.getStream!(key,reference);if(!original)return null;original.body.destroy();
+        return {...original,body:Readable.from([Buffer.from('changed bytes')])};
+      },
     });
     await expect(readDisclosedMedia(h.db, h.clock, corruptStore, expiring.token, source.evidenceId)).rejects.toMatchObject({ code: 'EVIDENCE_INTEGRITY_FAILURE' });
     const revokingStore: ObjectStore = Object.assign(Object.create(h.objectStore), {
-      get: async (key: string) => {
-        const original = await h.objectStore.get(key);
+      getStream: async (key: string,reference:ObjectReference) => {
+        const original = await h.objectStore.getStream!(key,reference);
         await revokeAccessLink(h.db, h.clock, seller, proofId, revoked.accessLinkId);
         return original;
       },
@@ -115,7 +119,10 @@ describe('one live shared Proof', () => {
     expect(current.evidence.find(e => e.evidenceId === upload.evidenceId)).toMatchObject({ slot: 'Receipt', stageId: stage.stageId, representation: 'ORIGINAL' });
     expect((await readDisclosedMedia(h.db, h.clock, h.objectStore, link.token, upload.evidenceId)).body.equals(bytes)).toBe(true);
     const corruptStore: ObjectStore = Object.assign(Object.create(h.objectStore), {
-      get: async () => ({ body: Buffer.from('altered receipt photo'), contentType: 'image/jpeg' }),
+      getStream: async (key:string,reference:ObjectReference) => {
+        const original=await h.objectStore.getStream!(key,reference);if(!original)return null;original.body.destroy();
+        return {...original,body:Readable.from([Buffer.from('altered receipt photo')])};
+      },
     });
     await expect(readDisclosedMedia(h.db, h.clock, corruptStore, link.token, upload.evidenceId)).rejects.toMatchObject({ code: 'EVIDENCE_INTEGRITY_FAILURE' });
     const another = await share(seller, proofId);

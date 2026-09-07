@@ -31,3 +31,21 @@ test('extra metadata is never copied to disk and invalid timing field types reje
   assert.equal(JSON.stringify(f.journal).includes('private'),false);
   const invalid=fixture();invalid.grant();await invalid.bridge.start(start);await assert.rejects(invalid.bridge.checkpoint({...failed,activeMs:'private' as unknown as number}),/INVALID_STUDY_TIMING/);
 });
+
+test('long-running acknowledged progress reserves an end event within the lifetime intake limit',async()=>{
+  const f=fixture();f.grant();await f.bridge.start(start);
+  for(let elapsedMs=1;elapsedMs<=260;elapsedMs++){
+    await f.bridge.checkpoint({phase:'confirmation',outcome:'pending',elapsedMs,activeMs:elapsedMs,offlineMs:0,unattendedMs:0});
+    await f.bridge.flush();
+  }
+  assert.equal(f.appends.length,249);assert.equal(f.journal!.lastCheckpoint!.elapsedMs,260);
+  await f.bridge.checkpoint({...failed,elapsedMs:6000});await f.bridge.flush();
+  assert.equal(f.appends.length,250);assert.equal(f.journal,null);
+});
+
+test('cached explicit consent retains offline starts but cannot bypass a live withdrawal',async()=>{
+  const f=fixture();
+  assert.equal(await f.bridge.start(start,{datasetRef,granted:true,statementVersion:'capture-timing-study-v1'}),true);
+  await f.bridge.checkpoint(failed);assert.ok(f.journal);assert.equal(f.starts.length,0);
+  await f.bridge.flush();assert.equal(f.journal,null);assert.equal(f.starts.length,0);assert.equal(f.appends.length,0);
+});

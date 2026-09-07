@@ -164,5 +164,17 @@
       "accountable approval",
       "comparably recomputed old and new results"
     ]
+  },
+  "definitionRevision": "2026-09-07.refund-reversal",
+  "financialLegs": {
+    "charge": "Positive verified settled payment; never inferred from a refund reversal.",
+    "refund": "Negative verified settled refund.",
+    "refund_reversal": "Positive reversal of one exact prior refund. Required reversesPaymentRef resolves to a supplied refund with the same merchant, currency and positive amount, at an earlier or equal time. One reversal per refund after exact replay dedupe.",
+    "basisOutsidePeriod": "Include the original refund as supporting input even when outside costPeriod. Count each financial leg only in its own occurredAt period; never move the prior debit into the reversal period.",
+    "identity": "Opaque paymentRef and reversesPaymentRef follow the existing keyed pseudonymous convention. Use stable financial-leg identity rather than webhook delivery ID. Changed facts or a second reversal identity for one refund are rejected.",
+    "precision": "Net financial totals use exact integer accumulation and refuse a result outside the safe JSON integer range.",
+    "paidCohorts": "Refund reversals never create merchant first-payment, second-payment or usage observations.",
+    "providerMapping": "Ledger refund_reversed maps to analytical refund_reversal with its linked refund_settled basis. Mapping requires governed source reconciliation; the canonical observation exporter does not automatically populate financial data.",
+    "approval": "Additive pre-enrollment definition; actual data/operating freeze remains pending."
   }
 }

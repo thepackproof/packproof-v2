@@ -3,6 +3,7 @@ import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
 import { requireAuthIdentityProvider } from "./identity-providers.js";
+import { requireActiveAccount } from "./account-access.js";
 
 /**
  * Sign-in mapping: find or create a PackProof user for a verified provider subject.
@@ -21,6 +22,7 @@ export async function ensureIdentityUser(
     [normalizedProvider, subject],
   );
   if (existing.rows[0]) {
+    await requireActiveAccount(db, existing.rows[0].user_id);
     return existing.rows[0].user_id;
   }
 
@@ -31,6 +33,7 @@ export async function ensureIdentityUser(
       [normalizedProvider, subject],
     );
     if (found.rows[0]) {
+      await requireActiveAccount(tx, found.rows[0].user_id);
       return found.rows[0].user_id;
     }
 
@@ -60,6 +63,7 @@ export async function ensureIdentityUser(
       if (!raced.rows[0]) {
         throw new DomainError("USER_CREATE_FAILED", "Could not create user", 500);
       }
+      await requireActiveAccount(tx, raced.rows[0].user_id);
       return raced.rows[0].user_id;
     }
   });

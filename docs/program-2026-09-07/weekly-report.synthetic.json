@@ -186,6 +186,11 @@
     },
     "periodElapsed": true,
     "netRevenueMinor": 0,
+    "paymentLegs": {
+      "charges": 0,
+      "refunds": 0,
+      "refundReversals": 0
+    },
     "knownVariableAndSupportCostMinor": 0,
     "knownFixedCostMinor": 0,
     "knownCapacityStepCostMinor": 0,

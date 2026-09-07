@@ -1,4 +1,5 @@
 import * as Sharing from "expo-sharing";
+import {StudyConsentCard} from '../ui/StudyConsentCard';
 import { formatBytes } from "../capture";
 import { captureRecoveryLabel, mayCleanUpCapture } from "../capture/recovery-model";
 import { useEffect, useState } from "react";
@@ -43,6 +44,7 @@ export function AccountScreen() {
       <AppHeader title="Account" onBack={app.goBack} />
       <OfflineBanner visible={app.offline} />
       <ErrorBanner message={app.error} />
+      <StudyConsentCard key={`${app.apiBaseUrl}:${session.userId}`}/>
       <InfoCard>
         <Text style={[styles.name, { color: colors.textPrimary }]}>
           {displayName({ displayName: session.displayName, username: session.username, email: session.email })}

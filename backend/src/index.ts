@@ -1,5 +1,7 @@
 import { assertPolicyAccessSafe } from "./domain/policy-recovery.js";
 import { StripeBillingAdapter, stripeBillingConfigFromEnv } from "./billing/stripe-adapter.js";
+import {processStripeBillingReconciliation} from "./billing/daily-reconciliation.js";
+import {DomainError} from "./domain/errors.js";
 import {observationConfigFromEnv} from "./analytics/observation-router.js";
 import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import express from "express";
@@ -43,6 +45,12 @@ else await assertSchemaCurrent(opened.db);
 const credentialStore = createCredentialStore(config);
 const billingConfig=stripeBillingConfigFromEnv(process.env);
 const billing=billingConfig?new StripeBillingAdapter(billingConfig,credentialStore,systemClock):null;
+const billingReconciliationStartAt=process.env.PACKPROOF_STRIPE_RECONCILIATION_START_AT;
+if(billing){
+  const start=Date.parse(billingReconciliationStartAt??'');
+  if(!Number.isFinite(start)||new Date(start).toISOString()!==billingReconciliationStartAt||start%1000!==0||start>systemClock.now().getTime())
+    throw new Error('Configured billing requires an explicit UTC reconciliation baseline');
+}
 const objectStore = createObjectStore(config);
 const webhookConfig = webhookConfigFromEnv();
 const recoveryPublisher=await initializeRecoveryPublisher(config,systemClock);
@@ -103,6 +111,15 @@ const server = app.listen(config.port, "0.0.0.0", () => {
   );
 });
 const jobs:ScheduledJob[]=[];
+if(billing&&billingReconciliationStartAt){
+  const initialStartAt=billingReconciliationStartAt;
+  jobs.push({name:'billing-reconciliation',intervalMs:30000,run:async()=>{
+    const result=await processStripeBillingReconciliation(opened.db,systemClock,billing,{initialStartAt});
+    const errorCode='errorCode' in result?result.errorCode:null;
+    if(result.state==='BLOCKED'||errorCode)throw new DomainError(errorCode??'BILLING_RECONCILIATION_BLOCKED','Billing event coverage requires review',503);
+    return result;
+  }});
+}
 if(webhookConfig.encryptionKey&&webhookConfig.allowedHosts.length&&process.env.PACKPROOF_WEBHOOK_WORKER!=="false")
   jobs.push({name:'webhooks',intervalMs:15000,run:()=>dispatchWebhooks(opened.db,systemClock,webhookConfig,undefined,5)});
 if(process.env.PACKPROOF_COMMERCE_WORKER!=="false")jobs.push({name:'commerce',intervalMs:15000,run:()=>dispatchCommerceSyncs(opened.db,systemClock,{integrations,credentials:credentialStore})});

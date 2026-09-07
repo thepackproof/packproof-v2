@@ -6,7 +6,7 @@ import { sha256Hex, sha256HexFromStream } from "../hash.js";
 import type { ObjectStore } from "../s3/object-store.js";
 import { DomainError } from "./errors.js";
 import { buildRecoveryReplayPlan, verifyRecoveryEnvelope, type RecoveryPublisher, type PreservationReceipt } from "./recovery-journal.js";
-import { installPolicyRecoveryReplay, inspectPolicyRecoveryReconciliation, POLICY_RECOVERY_KEYS, verifyPolicyEnvelope } from "./policy-recovery.js";
+import { installPolicyRecoveryReplay, inspectPolicyRecoveryReconciliation, POLICY_RECOVERY_KEYS, verifyPolicyEnvelope, type PolicyParentContext } from "./policy-recovery.js";
 import { verifyManifestIntegrity, type ManifestSignature } from "./manifest-signing.js";
 import { MEDIA_MAX_BYTES } from "./media-admission.js";
 
@@ -98,6 +98,24 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
       for(const row of entries){if(row.proof_id!=null&&row.proof_id!==proof.proofId)throw failure("RECOVERY_RESTORE_SCOPE_CONFLICT","Snapshot contains another Proof's row");setRow(table,row);}
     }
   }
+  // Policy parent contexts retain unfinished workflow relationships, without
+  // manufacturing a core accepted event, manifest, evidence row or receipt.
+  const contexts = new Map<string, PolicyParentContext>();
+  for (const {event} of policy) if (event.change.recoveryContext) contexts.set(event.change.recoveryContext.proofId, event.change.recoveryContext);
+  const contextOnlyProofIds: string[] = [];
+  for (const context of contexts.values()) {
+    if (rows.get('proofs')?.has(identity('proofs', {id: context.proofId}))) continue;
+    const proof = context.rows.proofs[0];
+    if (!['OPEN', 'AWAITING_PARTICIPANT', 'READY_FOR_EVIDENCE'].includes(String(proof.status)) || proof.finalized_at != null || proof.manifest_id != null) {
+      throw failure('RECOVERY_RESTORE_DEPENDENCY_GAP', 'A completed or committed Proof context requires its accepted core journal; policy context cannot replace missing evidence');
+    }
+    for (const [table, entries] of Object.entries(context.rows)) for (const row of entries) {
+      const prior = rows.get(table)?.get(identity(table, row));
+      if (prior && canonicalize(prior) !== canonicalize(row)) throw failure('RECOVERY_RESTORE_SCOPE_CONFLICT', 'Policy parent context conflicts with an accepted core parent');
+      setRow(table, row);
+    }
+    contextOnlyProofIds.push(context.proofId);
+  }
   const unrecoverableInvitationIds:string[]=[];
   // Access policy wins over an older core snapshot. Deleted grants remain absent.
   for(const {event} of policy){
@@ -114,6 +132,15 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
     setRow(table,combined);
   }
   for(const row of rows.get('invitations')?.values()??[])unrecoverableInvitationIds.push(String(row.id));
+  // The global policy chain can refer to an unfinished Proof that never reached
+  // a core accepted-event snapshot. A proof_id alone cannot reconstruct that
+  // parent or its transaction; report the coverage gap before applying anything.
+  const recoveredProofs = new Set([...(rows.get('proofs')?.values() ?? [])].map(row => row.id));
+  for (const entries of rows.values()) for (const row of entries.values()) {
+    if (row.proof_id != null && !recoveredProofs.has(row.proof_id)) {
+      throw failure('RECOVERY_RESTORE_DEPENDENCY_GAP', 'Signed policy references a Proof whose parent context is absent from the accepted core journal');
+    }
+  }
   const media=await verifyMedia(rows,input.sourceStore);
   await verifyFrozenRecords(rows,input.trustedPublicKey);
   const journalVersions=new Map<string,string>();
@@ -173,7 +200,7 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
     const policyReport=await inspectPolicyRecoveryReconciliation(tx);
     if(!policyReport.matches)throw failure("POLICY_RECONCILIATION_REQUIRED","Freshly restored policy differs from authenticated source facts");
   });
-  return {version:1,mode:'FRESH_RECONSTRUCTION',startedAt,completedAt:new Date().toISOString(),coreHead:plan.finalHead,policyHead,counts,media,unrecoverableInvitationIds,
+  return {version:1,mode:'FRESH_RECONSTRUCTION',startedAt,completedAt:new Date().toISOString(),coreHead:plan.finalHead,policyHead,counts,media,unrecoverableInvitationIds,contextOnlyProofIds,
     isolatedTargetReference:input.isolatedTargetReference,oldWriterFenceReference:input.oldWriterFenceReference,trafficMayOpen:false,writersEnabled:false,
     remainingGates:['Independent verification of old-writer infrastructure fence','Policy restore audit publication and exact reconciliation','Domain audit after the last core envelope, non-core product/integration/billing metadata restore','Measured deployment restore drill and independently authorized cutover']};
 }

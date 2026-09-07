@@ -3,6 +3,7 @@ import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { DomainError } from "../domain/errors.js";
 import { ensureIdentityUser } from "../domain/users.js";
+import { requireActiveAccount } from "../domain/account-access.js";
 import {
   extractBearerToken,
   type AuthContext,
@@ -103,6 +104,7 @@ export class CognitoJwtAdapter implements AuthenticationAdapter {
         // verification timestamp when provider claims are unchanged. Rewriting it
         // on every authenticated request would continually invalidate policy receipts.
         await tx.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId]);
+        await requireActiveAccount(tx, userId);
         await tx.query("DELETE FROM user_verified_contacts WHERE user_id=$1 AND ($2::text IS NULL OR email_normalized <> $2)", [userId, verifiedEmail]);
         if (verifiedEmail) {
           await tx.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,$2,$3,'COGNITO') ON CONFLICT(user_id,email_normalized) DO NOTHING", [userId, verifiedEmail, this.clock.now().toISOString()]);

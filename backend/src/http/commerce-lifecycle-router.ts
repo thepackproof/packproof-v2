@@ -13,7 +13,9 @@ import {
 } from "../domain/commerce-lifecycle.js";
 import { DomainError } from "../domain/errors.js";
 import { getProofView } from "../domain/proofs.js";
-import { sha256Hex } from "../hash.js";
+import {streamPreservedObject} from "../domain/evidence.js";
+import {guardAuthorizedStream} from "../domain/authorized-stream.js";
+import {pipeline} from "node:stream/promises";
 const route =
   (fn: (req: Request, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction) => {
@@ -130,20 +132,23 @@ export function commerceLifecycleRouter(deps: AppDependencies) {
       await requireCommerceAccess(deps.db, req.params.id, user(req));
       const media = (
         await deps.db.query<{
+          id:string;
           object_key: string;
+          object_version_id:string|null;
+          byte_size:number|string;
           sha256: string;
           content_type: string;
         }>(
           `SELECT e.* FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id
-      WHERE s.proof_id=$1 AND s.id=$2 AND e.id=$3 AND e.committed_at IS NOT NULL`,
+      WHERE s.proof_id=$1 AND s.id=$2 AND e.id=$3 AND e.committed_at IS NOT NULL AND e.discarded_at IS NULL`,
           [req.params.id, req.params.stageId, req.params.evidenceId],
         )
       ).rows[0];
-      const object = media ? await deps.objectStore.get(media.object_key) : null;
-      if (!object || sha256Hex(object.body) !== media.sha256)
+      if (!media)
         throw new DomainError("EVIDENCE_NOT_FOUND", "Stage recording unavailable", 404);
-      res.setHeader("Cache-Control", "private, no-store");
-      res.type(media.content_type).send(object.body);
+      const source=await streamPreservedObject(deps.objectStore,media,req.header("range"));
+      res.status(source.status).set(source.headers);
+      if(source.body)await pipeline(guardAuthorizedStream(source.body,async()=>{await requireCommerceAccess(deps.db,req.params.id,user(req));}),res);else res.end();
     }),
   );
   router.post(

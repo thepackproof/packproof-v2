@@ -11,12 +11,18 @@ interface PolicyRow {
   sequence: string | number; table_name: string; entity_key: Record<string, unknown>;
   operation: "BASELINE" | "INSERT" | "UPDATE" | "DELETE"; before_json: Record<string, unknown> | null;
   after_json: Record<string, unknown> | null; database_principal: string; transaction_id: string; recorded_at: Date | string;
+  recovery_context: PolicyParentContext | null;
+}
+export interface PolicyParentContext {
+  version: 1; domain: "PACKPROOF_POLICY_PARENT_CONTEXT"; coreAcceptance: false; proofId: string;
+  rows: Record<string, Array<Record<string, unknown>>>;
 }
 interface PolicyEvent {
   version: 1; domain: "PACKPROOF_POLICY_RECOVERY_EVENT"; acceptance: "COMMITTED"; sequence: string;
   previousSha256: string | null; change: { table: string; key: Record<string, unknown>; operation: PolicyRow["operation"];
     before: Record<string, unknown> | null; after: Record<string, unknown> | null;
-    databasePrincipal: string; transactionId: string; recordedAt: string; attribution: "DATABASE_CHANGE_WITH_SEPARATE_DOMAIN_AUDIT" };
+    databasePrincipal: string; transactionId: string; recordedAt: string; attribution: "DATABASE_CHANGE_WITH_SEPARATE_DOMAIN_AUDIT";
+    recoveryContext?: PolicyParentContext };
 }
 interface PolicyEnvelope {
   version: 1; domain: "PACKPROOF_SIGNED_POLICY_RECOVERY_ENVELOPE";
@@ -64,6 +70,17 @@ export async function verifyPolicyEnvelope(bytes: Buffer, trustedPublicKey: Reco
   if(envelope.version!==1 || envelope.domain!=="PACKPROOF_SIGNED_POLICY_RECOVERY_ENVELOPE" || !envelope.signature || event.version!==1 || event.domain!=="PACKPROOF_POLICY_RECOVERY_EVENT" || event.acceptance!=="COMMITTED" || !/^[1-9][0-9]*$/.test(event.sequence) || !POLICY_RECOVERY_KEYS[event.change?.table]) throw policyConflict();
   const keys=POLICY_RECOVERY_KEYS[event.change.table];
   if(canonicalize(Object.keys(event.change.key).sort())!==canonicalize([...keys].sort()) || keys.some(key=>event.change.key[key]==null)) throw policyConflict();
+  if (event.change.recoveryContext) {
+    const context = event.change.recoveryContext;
+    const tables = ["proofs", "transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities"];
+    if (context.version !== 1 || context.domain !== "PACKPROOF_POLICY_PARENT_CONTEXT" || context.coreAcceptance !== false
+      || context.proofId !== (event.change.after?.proof_id ?? event.change.before?.proof_id)
+      || !context.rows || canonicalize(Object.keys(context.rows).sort()) !== canonicalize(tables.sort())
+      || Object.values(context.rows).some(rows => !Array.isArray(rows) || rows.some(row => !row || typeof row !== "object" || Array.isArray(row)))) throw policyConflict();
+    const proof = context.rows.proofs[0], transaction = context.rows.transactions[0];
+    if (context.rows.proofs.length !== 1 || context.rows.transactions.length !== 1 || proof.id !== context.proofId || proof.transaction_id !== transaction.id
+      || tables.filter(table => !["proofs", "transactions"].includes(table)).some(table => context.rows[table].some(row => row.transaction_id !== transaction.id))) throw policyConflict();
+  }
   const canonical=canonicalize({version:envelope.version,domain:envelope.domain,eventCanonicalJson:envelope.eventCanonicalJson,eventSha256:envelope.eventSha256,publishedAt:envelope.publishedAt});
   const validity=verifyManifestIntegrity({canonicalJson:canonical,expectedSha256:sha256Hex(canonical),signature:envelope.signature,publicKeyPem:await trustedPublicKey(envelope.signature.keyId)});
   if(!validity.signatureValid || sha256Hex(envelope.eventCanonicalJson)!==envelope.eventSha256 || canonicalize(event)!==envelope.eventCanonicalJson) throw policyConflict();
@@ -89,7 +106,7 @@ export async function processPolicyRecoveryOutbox(db: Database, clock: Clock, pu
       const lease=(await tx.query<{lease_token:string;state:string}>("SELECT lease_token,state FROM policy_recovery_delivery WHERE sequence=$1 FOR UPDATE",[candidate.sequence])).rows[0];
       if(lease?.lease_token!==token||lease.state!=="LEASED")return {processed:0};
       const previous=(await tx.query<{event_sha256:string}>("SELECT event_sha256 FROM policy_recovery_delivery WHERE sequence<$1 AND state='DURABLE' ORDER BY sequence DESC LIMIT 1",[candidate.sequence])).rows[0];
-      const event:PolicyEvent={version:1,domain:"PACKPROOF_POLICY_RECOVERY_EVENT",acceptance:"COMMITTED",sequence:String(candidate.sequence),previousSha256:previous?.event_sha256??null,change:{table:candidate.table_name,key:candidate.entity_key,operation:candidate.operation,before:candidate.before_json,after:candidate.after_json,databasePrincipal:candidate.database_principal,transactionId:candidate.transaction_id,recordedAt:new Date(candidate.recorded_at).toISOString(),attribution:"DATABASE_CHANGE_WITH_SEPARATE_DOMAIN_AUDIT"}};
+      const event:PolicyEvent={version:1,domain:"PACKPROOF_POLICY_RECOVERY_EVENT",acceptance:"COMMITTED",sequence:String(candidate.sequence),previousSha256:previous?.event_sha256??null,change:{table:candidate.table_name,key:candidate.entity_key,operation:candidate.operation,before:candidate.before_json,after:candidate.after_json,databasePrincipal:candidate.database_principal,transactionId:candidate.transaction_id,recordedAt:new Date(candidate.recorded_at).toISOString(),attribution:"DATABASE_CHANGE_WITH_SEPARATE_DOMAIN_AUDIT",...(candidate.recovery_context?{recoveryContext:candidate.recovery_context}:{})}};
       const eventCanonicalJson=canonicalize(event),eventSha256=sha256Hex(eventCanonicalJson),objectKey=`recovery/policy/v1/${String(candidate.sequence).padStart(20,"0")}.json`;
       let stored=await publisher.store.get(objectKey);
       if(!stored){
@@ -133,8 +150,8 @@ export async function installPolicyRecoveryReplay(db:Database, input:{envelopes:
     for(const row of verified){
       const change=row.event.change;
       const prior=(await tx.query<PolicyRow>("SELECT * FROM policy_recovery_events WHERE sequence=$1",[row.event.sequence])).rows[0];
-      if(prior && canonicalize({table:prior.table_name,key:prior.entity_key,operation:prior.operation,before:prior.before_json,after:prior.after_json,databasePrincipal:prior.database_principal,transactionId:prior.transaction_id,recordedAt:new Date(prior.recorded_at).toISOString(),attribution:"DATABASE_CHANGE_WITH_SEPARATE_DOMAIN_AUDIT"})!==canonicalize(change))throw policyConflict();
-      if(!prior)await tx.query("INSERT INTO policy_recovery_events(sequence,table_name,entity_key,operation,before_json,after_json,database_principal,transaction_id,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",[row.event.sequence,change.table,JSON.stringify(change.key),change.operation,change.before===null?null:JSON.stringify(change.before),change.after===null?null:JSON.stringify(change.after),change.databasePrincipal,change.transactionId,change.recordedAt]);
+      if(prior && canonicalize({table:prior.table_name,key:prior.entity_key,operation:prior.operation,before:prior.before_json,after:prior.after_json,databasePrincipal:prior.database_principal,transactionId:prior.transaction_id,recordedAt:new Date(prior.recorded_at).toISOString(),attribution:"DATABASE_CHANGE_WITH_SEPARATE_DOMAIN_AUDIT",...(prior.recovery_context?{recoveryContext:prior.recovery_context}:{})})!==canonicalize(change))throw policyConflict();
+      if(!prior)await tx.query("INSERT INTO policy_recovery_events(sequence,table_name,entity_key,operation,before_json,after_json,database_principal,transaction_id,recorded_at,recovery_context) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",[row.event.sequence,change.table,JSON.stringify(change.key),change.operation,change.before===null?null:JSON.stringify(change.before),change.after===null?null:JSON.stringify(change.after),change.databasePrincipal,change.transactionId,change.recordedAt,change.recoveryContext?JSON.stringify(change.recoveryContext):null]);
       const priorDelivery=(await tx.query<{state:string;event_sha256:string|null}>("SELECT state,event_sha256 FROM policy_recovery_delivery WHERE sequence=$1",[row.event.sequence])).rows[0];
       if(priorDelivery?.state==='DURABLE' && priorDelivery.event_sha256!==row.envelope.eventSha256)throw policyConflict();
       const receipt={version:1,sequence:row.event.sequence,eventSha256:row.envelope.eventSha256,envelopeSha256:sha256Hex(row.bytes),objectKey:`recovery/policy/v1/${row.event.sequence.padStart(20,'0')}.json`,objectVersionId:null,preservedAt:row.envelope.publishedAt,signature:row.envelope.signature};

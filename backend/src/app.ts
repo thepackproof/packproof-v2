@@ -167,7 +167,7 @@ import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
-import { exportEvidencePackage, getEvidenceReview } from "./domain/evidence-review.js";
+import { exportEvidencePackageStream, getEvidenceReview } from "./domain/evidence-review.js";
 import {
   listUploadParts,
   completeUploadParts,
@@ -178,7 +178,7 @@ import { httpBoundary, requestBodyErrors, requestCorrelation, configureTrustedPr
 import { captureSessionRouter, packingRelayRouter } from "./http/capture-router.js";
 import { signatureRouter } from "./http/signature-router.js";
 import { disclosureRouter, sendPrivateMedia } from "./http/disclosure-router.js";
-import { exportDisclosurePackage } from "./domain/disclosure-package.js";
+import { exportDisclosurePackageStream } from "./domain/disclosure-package.js";
 import { setCommerceAutomation, AUTOMATIC_ORDER_POLICY, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
 import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
 import { normalizeShopifyShop, shopifyShopHandle } from "./integrations/shopify/shop.js";
@@ -348,10 +348,11 @@ export function createApp(deps: AppDependencies): Express {
   app.get("/public/proofs/:token/package", asyncRoute(async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
-    const bytes = await exportDisclosurePackage(deps.db, deps.clock, deps.objectStore, req.params.token);
+    const archive = await exportDisclosurePackageStream(deps.db, deps.clock, deps.objectStore, req.params.token);
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Disposition", 'attachment; filename="proof-view.zip"');
-    res.type("application/zip").send(bytes);
+    res.type("application/zip");
+    await pipeline(archive,res);
   }));
 
   app.get("/.well-known/packproof-trust-registry.json", (_req,res)=>{
@@ -591,7 +592,7 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/proofs/:id/package",
     asyncRoute(async (req, res) => {
-      const bytes = await exportEvidencePackage(
+      const archive = await exportEvidencePackageStream(
         deps.db,
         deps.clock,
         deps.objectStore,
@@ -600,7 +601,8 @@ export function createApp(deps: AppDependencies): Express {
       );
       res.setHeader("Content-Disposition", `attachment; filename="${req.params.id.replace(/[^A-Za-z0-9_-]/g, "")}.zip"`);
       res.setHeader("Cache-Control", "no-store");
-      res.type("application/zip").send(bytes);
+      res.type("application/zip");
+      await pipeline(archive,res);
     }),
   );
 

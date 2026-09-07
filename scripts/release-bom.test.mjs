@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { createReleaseBom, inventoryTree } from "./release-bom.mjs";
+import { createReleaseBom, inventoryTree, safeBomFailureCode } from "./release-bom.mjs";
 
 async function fixture(run) {
   const temporary = await mkdtemp(join(tmpdir(), "packproof-bom-")); const root = join(temporary, "source");
@@ -44,3 +44,9 @@ test("artifact inventories are deterministic and reported mismatches remain bloc
   await writeFile(evidence, JSON.stringify({ apiSecret: "must not be stored in release evidence" }));
   await assert.rejects(createReleaseBom({ root, output: join(temporary, "bom.json"), runtimeEvidence: evidence }), /INVALID_RUNTIME_EVIDENCE_FIELDS/);
 }));
+
+test("BOM diagnostics reveal only fixed failure codes", () => {
+  assert.equal(safeBomFailureCode(new Error("RELEASE_SOURCE_DIRTY")), "RELEASE_SOURCE_DIRTY");
+  assert.equal(safeBomFailureCode(Object.assign(new Error("sensitive path detail"), {code: "ENOENT"})), "BOM_INPUT_NOT_FOUND");
+  assert.equal(safeBomFailureCode(new Error("command error with untrusted contents")), "RELEASE_BOM_FAILED");
+});

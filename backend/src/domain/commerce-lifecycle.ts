@@ -4,6 +4,7 @@ import { enqueueRecoveryEvent, buildProofRecoverySnapshot, getRecoveryStatus, re
 import { appendProofSupplementInTransaction } from "./proof-supplements.js";
 import type { ManifestSigner } from "./manifest-signing.js";
 import { assertPolicyAccessSafe } from "./policy-recovery.js";
+import { requireActiveAccount } from "./account-access.js";
 import { eligibleCaptureSession, readCaptureClientContext } from "./capture-sessions.js";
 import { validateCapturedMediaStream } from "./capture-media.js";
 import type { Database } from "../db/database.js";
@@ -48,6 +49,7 @@ export async function requireCommerceAccess(
   userId: string,
 ): Promise<"SELLER" | "BUYER"> {
   await assertPolicyAccessSafe(db);
+  await requireActiveAccount(db, userId);
   await commerceProof(db, proofId);
   const member = await db.query<{ role: "SELLER" | "BUYER" }>(
     "SELECT role FROM proof_participants WHERE proof_id=$1 AND user_id=$2",
@@ -123,6 +125,8 @@ export async function acceptCommerceReceiver(
   proofId: string,
 ) {
   return db.transaction(async (tx) => {
+    await assertPolicyAccessSafe(tx);
+    await requireActiveAccount(tx, userId);
     const invitation = await tx.query<{ accepted_at: unknown }>(
       "SELECT accepted_at FROM commerce_receivers WHERE proof_id=$1 AND user_id=$2 FOR UPDATE",
       [proofId, userId],

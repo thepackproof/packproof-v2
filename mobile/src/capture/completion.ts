@@ -4,6 +4,7 @@ import type { PackProofV2Client, ProofView } from "../v2-api";
 import { newIdempotencyKey } from "../v2-api";
 import { recoverCaptureCompletion } from "./recover-completion";
 import { sameCaptureAccount } from "./recovery-model";
+import {nativeStudyForCapture,type NativeStudyTimer} from '../analytics/native-study';
 
 const active = new Map<string, Promise<ProofView>>();
 export function captureCompletionActive(): boolean { return active.size > 0; }
@@ -24,10 +25,13 @@ export function completeSavedCapture(input: {
   const previous = active.get(operationId);
   if (previous) return previous;
   if (active.size >= 2) return Promise.reject(Object.assign(new Error("Two recordings are already resuming. This recording remains queued."), { code: "UPLOAD_LIMIT", status: 429 }));
+  let study:NativeStudyTimer|null=null;
   const run = (async () => {
+    study=await nativeStudyForCapture(client,userId,capture.studyTimingRef);
     const save = async () => { await persistCaptureMetadata(capture); input.onChange?.(capture); };
     input.assertAccount();
     if (input.interactive) {
+      study?.phase('confirmation');
       // Persist the intent before a prompt or HTTP request; background work never opens a biometric dialog.
       capture.recovery!.submitRequested = true; capture.recovery!.needsSellerAttestation = input.needsSellerAttestation;
       await save();
@@ -41,18 +45,26 @@ export function completeSavedCapture(input: {
       assertAccount: input.assertAccount, save,
       getProof: () => client.getProof(proofId), getRecovery: () => client.getProofRecovery(proofId),
       initialize: async key => {
+        study?.phase('upload');
         const result = await client.initializeEvidenceUpload(proofId, { contentType: capture.contentType, byteSize: capture.byteSize ?? undefined,
           captureSessionId: capture.captureSessionId, evidenceType: "FULFILLMENT_CAPTURE", idempotencyKey: key });
         return { evidenceId: result.evidenceId, received: result.upload.received === true };
       },
-      upload: evidenceId => uploadCaptureResumable({ client, baseUrl: client.apiBaseUrl, proofId, evidenceId, fileUri: capture.uri, onProgress: input.onProgress }),
+      upload: evidenceId => {study?.phase('upload');return uploadCaptureResumable({ client, baseUrl: client.apiBaseUrl, proofId, evidenceId, fileUri: capture.uri, onProgress: input.onProgress });},
       commit: async evidenceId => { await client.commitEvidence(proofId, evidenceId, capture.captureSha256); },
       attest: async (evidenceId, authorization) => (await client.createAttestation(proofId, { statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: evidenceId,
         authorization: { challengeId: authorization.challengeId, signature: authorization.signature } })).attestation,
-      finalize: async () => { await client.finalizeProof(proofId); },
+      finalize: async () => {study?.phase('finalization');await client.finalizeProof(proofId);},
     });
-    return proof as ProofView;
-  })().finally(() => { active.delete(operationId); });
+    study?.end('succeeded');return proof as ProofView;
+  })().catch(error=>{
+    const code=String(error?.code);
+    if(code==='PRESERVATION_PENDING')study?.phase('finalization');
+    else if(code==='ATTESTATION_CONFIRMATION_NEEDED')study?.phase('confirmation');
+    else if(capture.recovery?.lastError?.retryable)study?.problem('network');
+    else study?.end('failed',/AUTH|ACCOUNT/.test(code)?'authentication':'unknown');
+    throw error;
+  }).finally(() => { active.delete(operationId); });
   active.set(operationId, run);
   return run;
 }

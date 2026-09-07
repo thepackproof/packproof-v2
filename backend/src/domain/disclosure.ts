@@ -6,12 +6,11 @@ import { sha256Hex } from '../hash.js';
 import { createAccessLink, resolveAccessToken, type ProofAccessLinkRow } from './access-links.js';
 import { requireParticipant, loadProof } from './proof-access.js';
 import { buildProofTracker } from './proof-tracker.js';
-import { readCommittedEvidence } from './evidence.js';
 import { DomainError } from './errors.js';
 import { appendAudit } from './audit.js';
 import { loadCustodyBundle } from './custody.js';
 import { isQualifyingFulfillmentCapture } from './evidence-types.js';
-import { listSharedProofSources, readSharedStageSource } from './shared-proof-sources.js';
+import { listSharedProofSources } from './shared-proof-sources.js';
 import { SELLER_SHIPPING_STATEMENT } from './attestation-authorization.js';
 import type { AttestationRow } from './types.js';
 import { assertPolicyAccessSafe } from './policy-recovery.js';
@@ -194,27 +193,17 @@ export async function createDisclosureGrant(db:Database,clock:Clock,actorUserId:
     return {...link,preview:await getDisclosureProjection(tx,ctx)};
   });
 }
+/** Compatibility collector for small internal callers. HTTP archives and playback
+ * consume readDisclosedMediaStream directly and never buffer whole recordings. */
 export async function readDisclosedMedia(db:Database,clock:Clock,store:ObjectStore,token:string,evidenceId:string) {
-  const ctx=await resolveDisclosureContext(db,clock,{token});
-  const media=assertDisclosureMedia(ctx,evidenceId);
-  let result:{body:Buffer,contentType:string,evidenceId:string};
-  if(media.representation==='ORIGINAL') {
-    const creator=(await db.query<{user_id:string}>('SELECT pp.user_id FROM proof_access_links l JOIN proof_participants pp ON pp.id=l.created_by_participant_id WHERE l.id=$1',[ctx.grantId])).rows[0];
-    if(!creator) forbidden();
-    const rootSource = (await db.query('SELECT 1 FROM evidence WHERE id=$1 AND proof_id=$2 AND validation_status=\'COMMITTED\'', [evidenceId, ctx.proofId])).rows[0];
-    result = ctx.purpose === 'SHARED_PROOF' && !rootSource
-      ? await readSharedStageSource(db, store, creator.user_id, ctx.proofId, evidenceId)
-      : await readCommittedEvidence(db,store,creator.user_id,ctx.proofId,evidenceId);
-  } else {
-    const row=(await db.query<{object_key:string,sha256:string,byte_size:number,content_type:string}>('SELECT d.* FROM proof_media_derivatives d JOIN evidence e ON e.id=d.evidence_id AND e.proof_id=d.proof_id AND e.sha256=d.source_sha256 WHERE d.id=$1 AND d.proof_id=$2 AND d.evidence_id=$3 AND d.status=\'REVIEWED\'',[media.derivativeId,ctx.proofId,evidenceId])).rows[0];
-    if(!row) forbidden();
-    const stored=await store.get(row.object_key);
-    if(!stored||sha256Hex(stored.body)!==row.sha256||stored.body.length!==Number(row.byte_size)) throw new DomainError('DERIVATIVE_UNAVAILABLE','This redacted copy is unavailable',409);
-    result={body:stored.body,contentType:row.content_type,evidenceId};
-  }
-  // Reauthorize after fetching bytes; a scope change or revocation in flight fails closed.
-  const current=await resolveDisclosureContext(db,clock,{token});
-  if(current.scopeVersion!==ctx.scopeVersion||current.scopeIdentity!==ctx.scopeIdentity) forbidden();
-  assertDisclosureMedia(current,evidenceId,media.derivativeId);
-  return result;
+  const {readDisclosedMediaStream}=await import('./disclosure-stream.js');
+  const result=await readDisclosedMediaStream(db,clock,store,token,evidenceId);
+  if(!result.body)throw new DomainError('EVIDENCE_NOT_FOUND','Recording is unavailable',404);
+  if(result.byteSize>8*1024*1024){result.body.destroy();throw new DomainError('STREAMING_REQUIRED','Use the streamed recording or package download',413);}
+  const chunks:Buffer[]=[];let bytes=0;
+  try{for await(const chunk of result.body){bytes+=chunk.length;if(bytes>8*1024*1024)throw new DomainError('STREAMING_REQUIRED','Use the streamed recording or package download',413);chunks.push(Buffer.from(chunk));}}
+  finally{result.body.destroy();}
+  const body=Buffer.concat(chunks,bytes);
+  if(body.length!==result.byteSize||sha256Hex(body)!==result.sha256)throw new DomainError('EVIDENCE_INTEGRITY_FAILURE','Stored source failed verification',409);
+  return {body,contentType:result.contentType,evidenceId};
 }

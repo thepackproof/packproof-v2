@@ -1,0 +1,2017 @@
+{
+  "schema": "packproof.local-media-load.v1",
+  "startedAt": "2026-09-07T06:19:53.028Z",
+  "sourceCommit": "73ef9b31a680f3d3a67fbd1eed5608cd98ea7692",
+  "configuredMemory": {
+    "source": "infra/api-service.yaml:ExpressService.Properties.Memory",
+    "MiB": 1024,
+    "bytes": 1073741824,
+    "thresholdFraction": 0.7,
+    "thresholdBytes": 751619276.8,
+    "kernelEnforced": false
+  },
+  "environment": {
+    "platform": "linux",
+    "node": "v24.19.0",
+    "hostCgroupMemoryMax": "21474836480",
+    "hostCpuMax": "800000 100000",
+    "deploymentCpuUnits": 256,
+    "database": "Separate PGlite process via transaction-preserving IPC; excluded from API memory as external RDS is in deployment",
+    "objectStore": "LocalObjectStore exact-version filesystem implementation",
+    "auth": "Synthetic local BearerUserAdapter accounts",
+    "isolationLimitations": [
+      "Shared host cgroup is read-only: deployment 1 GiB kernel limit and 0.25-vCPU quota cannot be installed here.",
+      "Observer samples API + all observed media subprocess RSS every 20 ms; short-lived process exits are captured separately.",
+      "This is local memory and recovery evidence, not production S3/PostgreSQL/IAM, network or capacity evidence."
+    ]
+  },
+  "workload": {
+    "fixtureBytes": 100000000,
+    "resolution": "1280x720",
+    "fps": 30,
+    "durationSeconds": 39,
+    "playbacks": 10,
+    "playbackBytesPerSecondEach": 2500000,
+    "commits": 2,
+    "exports": 2,
+    "framesPerExport": 4,
+    "frameOffsetsMs": [
+      1000,
+      9000,
+      18000,
+      30000
+    ]
+  },
+  "samples": [
+    {
+      "atMs": 5428.318359,
+      "rssBytes": 269651968,
+      "apiRssBytes": 195911680,
+      "childRssBytes": 73740288,
+      "children": 2
+    },
+    {
+      "atMs": 5641.102338,
+      "rssBytes": 220676096,
+      "apiRssBytes": 203251712,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 5839.983088,
+      "rssBytes": 213377024,
+      "apiRssBytes": 195952640,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 6067.892412,
+      "rssBytes": 213848064,
+      "apiRssBytes": 196423680,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 6285.397522,
+      "rssBytes": 214302720,
+      "apiRssBytes": 196878336,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 6514.496829,
+      "rssBytes": 214310912,
+      "apiRssBytes": 196886528,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 6723.161871,
+      "rssBytes": 226439168,
+      "apiRssBytes": 209014784,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 6925.072969,
+      "rssBytes": 225468416,
+      "apiRssBytes": 208044032,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 7130.624879,
+      "rssBytes": 224837632,
+      "apiRssBytes": 207413248,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 7335.928744,
+      "rssBytes": 292241408,
+      "apiRssBytes": 197079040,
+      "childRssBytes": 95162368,
+      "children": 3
+    },
+    {
+      "atMs": 7535.847654,
+      "rssBytes": 214573056,
+      "apiRssBytes": 197148672,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 7740.852162,
+      "rssBytes": 214581248,
+      "apiRssBytes": 197156864,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 7938.990277,
+      "rssBytes": 214556672,
+      "apiRssBytes": 197132288,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 8139.513688,
+      "rssBytes": 222949376,
+      "apiRssBytes": 205524992,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 8340.952408,
+      "rssBytes": 292569088,
+      "apiRssBytes": 197152768,
+      "childRssBytes": 95416320,
+      "children": 3
+    },
+    {
+      "atMs": 8584.207648,
+      "rssBytes": 292593664,
+      "apiRssBytes": 197152768,
+      "childRssBytes": 95440896,
+      "children": 3
+    },
+    {
+      "atMs": 8800.40222,
+      "rssBytes": 244203520,
+      "apiRssBytes": 197160960,
+      "childRssBytes": 47042560,
+      "children": 3
+    },
+    {
+      "atMs": 9030.532538,
+      "rssBytes": 214626304,
+      "apiRssBytes": 197201920,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 9223.217355,
+      "rssBytes": 229502976,
+      "apiRssBytes": 212078592,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 9624.312007,
+      "rssBytes": 229568512,
+      "apiRssBytes": 212144128,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 9825.095171,
+      "rssBytes": 223424512,
+      "apiRssBytes": 206000128,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 10033.198325,
+      "rssBytes": 280252416,
+      "apiRssBytes": 197214208,
+      "childRssBytes": 83038208,
+      "children": 3
+    },
+    {
+      "atMs": 10230.517097,
+      "rssBytes": 292663296,
+      "apiRssBytes": 197218304,
+      "childRssBytes": 95444992,
+      "children": 3
+    },
+    {
+      "atMs": 10433.784864,
+      "rssBytes": 293101568,
+      "apiRssBytes": 197222400,
+      "childRssBytes": 95879168,
+      "children": 3
+    },
+    {
+      "atMs": 10629.743667,
+      "rssBytes": 293568512,
+      "apiRssBytes": 197222400,
+      "childRssBytes": 96346112,
+      "children": 3
+    },
+    {
+      "atMs": 10876.455943,
+      "rssBytes": 262782976,
+      "apiRssBytes": 197230592,
+      "childRssBytes": 65552384,
+      "children": 3
+    },
+    {
+      "atMs": 11080.02933,
+      "rssBytes": 214659072,
+      "apiRssBytes": 197234688,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 11275.766126,
+      "rssBytes": 214667264,
+      "apiRssBytes": 197242880,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 11476.232778,
+      "rssBytes": 213520384,
+      "apiRssBytes": 196096000,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 11685.436855,
+      "rssBytes": 228233216,
+      "apiRssBytes": 205451264,
+      "childRssBytes": 22781952,
+      "children": 2
+    },
+    {
+      "atMs": 11876.284859,
+      "rssBytes": 291594240,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 95444992,
+      "children": 3
+    },
+    {
+      "atMs": 12080.473002,
+      "rssBytes": 292061184,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 95911936,
+      "children": 3
+    },
+    {
+      "atMs": 12281.712579,
+      "rssBytes": 292528128,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 96378880,
+      "children": 3
+    },
+    {
+      "atMs": 12952.798592,
+      "rssBytes": 292601856,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 96452608,
+      "children": 3
+    },
+    {
+      "atMs": 13201.778706,
+      "rssBytes": 292601856,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 96452608,
+      "children": 3
+    },
+    {
+      "atMs": 13422.504606,
+      "rssBytes": 295424000,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 99274752,
+      "children": 3
+    },
+    {
+      "atMs": 13623.130294,
+      "rssBytes": 215396352,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 19247104,
+      "children": 2
+    },
+    {
+      "atMs": 13825.774612,
+      "rssBytes": 213573632,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 14026.190244,
+      "rssBytes": 213573632,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 14225.955062,
+      "rssBytes": 213573632,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 14427.720224,
+      "rssBytes": 213573632,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 14629.165689,
+      "rssBytes": 213573632,
+      "apiRssBytes": 196149248,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 14829.994857,
+      "rssBytes": 213577728,
+      "apiRssBytes": 196153344,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 15176.359024,
+      "rssBytes": 213577728,
+      "apiRssBytes": 196153344,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 15379.510574,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 15578.074588,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 15777.052032,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 15978.252768,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 16179.005729,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 16379.056275,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 16582.077573,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 16779.257301,
+      "rssBytes": 213536768,
+      "apiRssBytes": 196112384,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 16977.958698,
+      "rssBytes": 213549056,
+      "apiRssBytes": 196124672,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 17179.825738,
+      "rssBytes": 213549056,
+      "apiRssBytes": 196124672,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 17378.666405,
+      "rssBytes": 213549056,
+      "apiRssBytes": 196124672,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 17579.924195,
+      "rssBytes": 213549056,
+      "apiRssBytes": 196124672,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 17783.045889,
+      "rssBytes": 213549056,
+      "apiRssBytes": 196124672,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 17984.929542,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 18185.763308,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 18387.094036,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 18587.543491,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 18792.699569,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 18987.928136,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 19187.030645,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 19387.707512,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 19590.155714,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 19788.189346,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 19988.594755,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 20294.263104,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 20493.578782,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 20698.193532,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 20896.905365,
+      "rssBytes": 213553152,
+      "apiRssBytes": 196128768,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 21097.155254,
+      "rssBytes": 219455488,
+      "apiRssBytes": 202031104,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 21297.682193,
+      "rssBytes": 219463680,
+      "apiRssBytes": 202039296,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 21499.093517,
+      "rssBytes": 219480064,
+      "apiRssBytes": 202055680,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 21700.78321,
+      "rssBytes": 219480064,
+      "apiRssBytes": 202055680,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 21902.559551,
+      "rssBytes": 219480064,
+      "apiRssBytes": 202055680,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 22103.971193,
+      "rssBytes": 219480064,
+      "apiRssBytes": 202055680,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 22304.944384,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 22506.639906,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 22706.396359,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 22907.932064,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 23108.402781,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 23327.188669,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 23530.573396,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 23731.823604,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 23934.483292,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 24135.2187,
+      "rssBytes": 214102016,
+      "apiRssBytes": 196677632,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 24336.137945,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 24537.959497,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 24738.990129,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 24940.322736,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 25139.618491,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 25341.252062,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 25542.894556,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 25744.585952,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 25948.221763,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 26158.094278,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 26373.437595,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 26574.634382,
+      "rssBytes": 218824704,
+      "apiRssBytes": 201400320,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 26774.985236,
+      "rssBytes": 219742208,
+      "apiRssBytes": 202317824,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 26976.04738,
+      "rssBytes": 219746304,
+      "apiRssBytes": 202321920,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 27179.958748,
+      "rssBytes": 219746304,
+      "apiRssBytes": 202321920,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 27377.306642,
+      "rssBytes": 217387008,
+      "apiRssBytes": 199962624,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 27578.486229,
+      "rssBytes": 217387008,
+      "apiRssBytes": 199962624,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 27779.630303,
+      "rssBytes": 217387008,
+      "apiRssBytes": 199962624,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 28001.815554,
+      "rssBytes": 217387008,
+      "apiRssBytes": 199962624,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 28202.854999,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 28403.419054,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 28606.965563,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 28806.763589,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 29008.276642,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 29207.826151,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 29411.067291,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 29612.573694,
+      "rssBytes": 213581824,
+      "apiRssBytes": 196157440,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 29814.278611,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 30014.790269,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 30216.70219,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 30418.333527,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 30619.699233,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 30826.471536,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 31021.838036,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 31222.189072,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 31426.041144,
+      "rssBytes": 215289856,
+      "apiRssBytes": 197865472,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 31625.29374,
+      "rssBytes": 215293952,
+      "apiRssBytes": 197869568,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 31826.307152,
+      "rssBytes": 215293952,
+      "apiRssBytes": 197869568,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 32026.021477,
+      "rssBytes": 215293952,
+      "apiRssBytes": 197869568,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 32227.59806,
+      "rssBytes": 215293952,
+      "apiRssBytes": 197869568,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 32427.339713,
+      "rssBytes": 215293952,
+      "apiRssBytes": 197869568,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 32629.355464,
+      "rssBytes": 215293952,
+      "apiRssBytes": 197869568,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 32829.455018,
+      "rssBytes": 215293952,
+      "apiRssBytes": 197869568,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 33030.967988,
+      "rssBytes": 215298048,
+      "apiRssBytes": 197873664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 33232.345011,
+      "rssBytes": 215298048,
+      "apiRssBytes": 197873664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 33440.47321,
+      "rssBytes": 215302144,
+      "apiRssBytes": 197877760,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 33639.671685,
+      "rssBytes": 215302144,
+      "apiRssBytes": 197877760,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 33844.173784,
+      "rssBytes": 215302144,
+      "apiRssBytes": 197877760,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 34043.410626,
+      "rssBytes": 215302144,
+      "apiRssBytes": 197877760,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 34243.868563,
+      "rssBytes": 215302144,
+      "apiRssBytes": 197877760,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 34447.150758,
+      "rssBytes": 218120192,
+      "apiRssBytes": 200695808,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 34648.167245,
+      "rssBytes": 218120192,
+      "apiRssBytes": 200695808,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 34850.101977,
+      "rssBytes": 218120192,
+      "apiRssBytes": 200695808,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 35052.275762,
+      "rssBytes": 215891968,
+      "apiRssBytes": 198467584,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 35254.274603,
+      "rssBytes": 217223168,
+      "apiRssBytes": 199798784,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 35455.05998,
+      "rssBytes": 217235456,
+      "apiRssBytes": 199811072,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 35656.859722,
+      "rssBytes": 217235456,
+      "apiRssBytes": 199811072,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 35859.87638,
+      "rssBytes": 217235456,
+      "apiRssBytes": 199811072,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 36061.803745,
+      "rssBytes": 217235456,
+      "apiRssBytes": 199811072,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 36264.815557,
+      "rssBytes": 217890816,
+      "apiRssBytes": 200466432,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 36466.903961,
+      "rssBytes": 217894912,
+      "apiRssBytes": 200470528,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 36666.989995,
+      "rssBytes": 219201536,
+      "apiRssBytes": 201777152,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 36868.19632,
+      "rssBytes": 219201536,
+      "apiRssBytes": 201777152,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 37069.850875,
+      "rssBytes": 214945792,
+      "apiRssBytes": 197521408,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 37268.866408,
+      "rssBytes": 214945792,
+      "apiRssBytes": 197521408,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 37472.313169,
+      "rssBytes": 214945792,
+      "apiRssBytes": 197521408,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 37675.999345,
+      "rssBytes": 214945792,
+      "apiRssBytes": 197521408,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 37876.637834,
+      "rssBytes": 214945792,
+      "apiRssBytes": 197521408,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 38077.672101,
+      "rssBytes": 214978560,
+      "apiRssBytes": 197554176,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 38280.362216,
+      "rssBytes": 214978560,
+      "apiRssBytes": 197554176,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 38479.610768,
+      "rssBytes": 214978560,
+      "apiRssBytes": 197554176,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 38681.051804,
+      "rssBytes": 214978560,
+      "apiRssBytes": 197554176,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 38882.223464,
+      "rssBytes": 214978560,
+      "apiRssBytes": 197554176,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 39085.730367,
+      "rssBytes": 214982656,
+      "apiRssBytes": 197558272,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 39286.306729,
+      "rssBytes": 214982656,
+      "apiRssBytes": 197558272,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 39493.121982,
+      "rssBytes": 214982656,
+      "apiRssBytes": 197558272,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 39689.352427,
+      "rssBytes": 221085696,
+      "apiRssBytes": 203661312,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 39891.709619,
+      "rssBytes": 221085696,
+      "apiRssBytes": 203661312,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 40094.796697,
+      "rssBytes": 221085696,
+      "apiRssBytes": 203661312,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 40294.65692,
+      "rssBytes": 221085696,
+      "apiRssBytes": 203661312,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 40498.690702,
+      "rssBytes": 221085696,
+      "apiRssBytes": 203661312,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 40692.235956,
+      "rssBytes": 218591232,
+      "apiRssBytes": 201166848,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 40891.998271,
+      "rssBytes": 218591232,
+      "apiRssBytes": 201166848,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 41093.598623,
+      "rssBytes": 218595328,
+      "apiRssBytes": 201170944,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 41295.868922,
+      "rssBytes": 218595328,
+      "apiRssBytes": 201170944,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 41494.888582,
+      "rssBytes": 218595328,
+      "apiRssBytes": 201170944,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 41697.271041,
+      "rssBytes": 218595328,
+      "apiRssBytes": 201170944,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 41898.236718,
+      "rssBytes": 215773184,
+      "apiRssBytes": 198348800,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 42098.463672,
+      "rssBytes": 215773184,
+      "apiRssBytes": 198348800,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 42299.884514,
+      "rssBytes": 215760896,
+      "apiRssBytes": 198336512,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 42503.158748,
+      "rssBytes": 215760896,
+      "apiRssBytes": 198336512,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 42702.976419,
+      "rssBytes": 215760896,
+      "apiRssBytes": 198336512,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 42904.825002,
+      "rssBytes": 215764992,
+      "apiRssBytes": 198340608,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 43106.087372,
+      "rssBytes": 215764992,
+      "apiRssBytes": 198340608,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 43307.366125,
+      "rssBytes": 215785472,
+      "apiRssBytes": 198361088,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 43510.384597,
+      "rssBytes": 215785472,
+      "apiRssBytes": 198361088,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 43711.433888,
+      "rssBytes": 215810048,
+      "apiRssBytes": 198385664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 43913.095404,
+      "rssBytes": 215810048,
+      "apiRssBytes": 198385664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 44112.992727,
+      "rssBytes": 215810048,
+      "apiRssBytes": 198385664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 44314.295964,
+      "rssBytes": 215810048,
+      "apiRssBytes": 198385664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 44517.819301,
+      "rssBytes": 215810048,
+      "apiRssBytes": 198385664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 44716.257178,
+      "rssBytes": 215810048,
+      "apiRssBytes": 198385664,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 44916.946271,
+      "rssBytes": 215814144,
+      "apiRssBytes": 198389760,
+      "childRssBytes": 17424384,
+      "children": 1
+    },
+    {
+      "atMs": 45116.332264,
+      "rssBytes": 215814144,
+      "apiRssBytes": 198389760,
+      "childRssBytes": 17424384,
+      "children": 1
+    }
+  ],
+  "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "fixtureProbe": {
+    "programs": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "avg_frame_rate": "30/1"
+      }
+    ],
+    "format": {
+      "duration": "39.000000",
+      "size": "100000000"
+    }
+  },
+  "fixtureSha256": "332b03b53d60444ec9f1cc7f1f7c20a07ae55a3e90db5edb520a83ddc8509b58",
+  "memoryObserver": {
+    "apiNamespacePid": 37,
+    "apiProcfsPid": 806817,
+    "databaseProcfsPid": 806771,
+    "descendantDiscovery": "Recursive outer-Pid/PPid graph from /proc/*/status; includes the API process tree even when task/children files are unavailable"
+  },
+  "range": {
+    "requestedBytes": 1048576,
+    "returnedBytes": 1048576,
+    "storageReadBytes": 1048576,
+    "largestSourceChunk": 65536,
+    "status": 206,
+    "contentRange": "bytes 1048576-2097151/100000000",
+    "apiRssBeforeBytes": 193601536,
+    "apiRssAfterBytes": 193675264,
+    "passed": true
+  },
+  "loadDurationMs": 40011.24343,
+  "jobResults": [
+    {
+      "status": "fulfilled",
+      "index": 0,
+      "bytes": 100000000,
+      "durationMs": 40000.590651
+    },
+    {
+      "status": "fulfilled",
+      "index": 1,
+      "bytes": 100000000,
+      "durationMs": 39999.711638
+    },
+    {
+      "status": "fulfilled",
+      "index": 2,
+      "bytes": 100000000,
+      "durationMs": 39999.063773
+    },
+    {
+      "status": "fulfilled",
+      "index": 3,
+      "bytes": 100000000,
+      "durationMs": 39998.820114
+    },
+    {
+      "status": "fulfilled",
+      "index": 4,
+      "bytes": 100000000,
+      "durationMs": 39999.711066
+    },
+    {
+      "status": "fulfilled",
+      "index": 5,
+      "bytes": 100000000,
+      "durationMs": 40000.641075
+    },
+    {
+      "status": "fulfilled",
+      "index": 6,
+      "bytes": 100000000,
+      "durationMs": 40000.501789999995
+    },
+    {
+      "status": "fulfilled",
+      "index": 7,
+      "bytes": 100000000,
+      "durationMs": 40000.257248
+    },
+    {
+      "status": "fulfilled",
+      "index": 8,
+      "bytes": 100000000,
+      "durationMs": 40000.107958
+    },
+    {
+      "status": "fulfilled",
+      "index": 9,
+      "bytes": 100000000,
+      "durationMs": 39999.617084
+    },
+    {
+      "status": "fulfilled",
+      "kind": "commit",
+      "evidenceId": "evd_01M1X8C01SZN9N078YYVNMYCBR",
+      "durationMs": 2244.2741910000004
+    },
+    {
+      "status": "fulfilled",
+      "kind": "commit",
+      "evidenceId": "evd_01M1X8C08RRMW6YHT1138FV4X7",
+      "durationMs": 2338.2127409999994
+    },
+    {
+      "status": "fulfilled",
+      "kind": "export",
+      "durationMs": 8497.086558,
+      "processed": 1,
+      "failed": 0
+    },
+    {
+      "status": "fulfilled",
+      "kind": "export",
+      "durationMs": 8422.463131,
+      "processed": 1,
+      "failed": 0
+    }
+  ],
+  "storage": {
+    "readBytes": 2200000000,
+    "largestChunk": 65536
+  },
+  "exports": [
+    {
+      "state": "READY",
+      "files": [
+        {
+          "contentType": "application/pdf",
+          "byteSize": 1023296,
+          "pages": 5
+        }
+      ],
+      "selectedFrames": 4
+    },
+    {
+      "state": "READY",
+      "files": [
+        {
+          "contentType": "application/pdf",
+          "byteSize": 1023296,
+          "pages": 5
+        }
+      ],
+      "selectedFrames": 4
+    }
+  ],
+  "commits": [
+    {
+      "id": "evd_01M1X8C01SZN9N078YYVNMYCBR",
+      "validation_status": "COMMITTED",
+      "sha256": "332b03b53d60444ec9f1cc7f1f7c20a07ae55a3e90db5edb520a83ddc8509b58",
+      "byte_size": 100000000
+    },
+    {
+      "id": "evd_01M1X8C08RRMW6YHT1138FV4X7",
+      "validation_status": "COMMITTED",
+      "sha256": "332b03b53d60444ec9f1cc7f1f7c20a07ae55a3e90db5edb520a83ddc8509b58",
+      "byte_size": 100000000
+    }
+  ],
+  "memory": {
+    "baselineApiRssBytes": 193601536,
+    "peakApiRssBytes": 212156416,
+    "peakApiAndChildrenRssBytes": 319172608,
+    "conservativePeakConcurrentHighWaterSumBytes": 333725696,
+    "fractionOfConfiguredLimit": 0.2972526550292969,
+    "conservativeFractionOfConfiguredLimit": 0.3108062744140625,
+    "sampleIntervalMs": 20,
+    "samples": 1923,
+    "invalidMemorySamples": 0,
+    "maximumConcurrentMediaSubprocesses": 4,
+    "databaseExcludedPeakRssBytes": 483827712
+  },
+  "loadAbnormalExits": [],
+  "limitFuseTriggered": false,
+  "memoryMeasurementValid": true,
+  "localLoadGatePassed": true,
+  "queueRecovery": {
+    "injection": "Intentional API/process-group SIGKILL after a real RENDERING lease was committed; outside measured load",
+    "clockAdvance": "11 minutes of fixture clock to exceed existing 10-minute lease; no database lease rewrite",
+    "claimedBeforeCrash": {
+      "state": "RENDERING",
+      "attempts": 1
+    },
+    "recovered": {
+      "result": {
+        "processed": 1,
+        "failed": 0
+      },
+      "state": "READY",
+      "attempts": 2,
+      "lease_token": null,
+      "lease_until": null
+    },
+    "passed": true
+  },
+  "passed": true,
+  "completedAt": "2026-09-07T06:20:44.334Z",
+  "subprocessExits": [
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 61,
+      "code": 0,
+      "signal": null,
+      "phase": "setup"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 62,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 63,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 92,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 89,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 88,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 95,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 116,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 117,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 124,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 125,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 126,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 127,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 152,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 153,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 160,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 161,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 162,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 163,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 178,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 193,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 192,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 197,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 198,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 201,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 214,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 229,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 228,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 233,
+      "code": 0,
+      "signal": null,
+      "phase": "load"
+    },
+    {
+      "type": "api",
+      "pid": 37,
+      "phase": "fault-injection",
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    {
+      "type": "intentional-fault-child",
+      "pid": 234,
+      "phase": "fault-injection",
+      "signal": "SIGKILL"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 247,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 260,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 273,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 277,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 278,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 291,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 295,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 296,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 309,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 313,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 314,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 327,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    },
+    {
+      "type": "subprocess",
+      "event": "exited",
+      "pid": 331,
+      "code": 0,
+      "signal": null,
+      "phase": "recovery"
+    }
+  ],
+  "fixtureGeneration": {
+    "command": [
+      "ffmpeg",
+      "-nostdin",
+      "-y",
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=size=1280x720:rate=30",
+      "-t",
+      "39",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-pix_fmt",
+      "yuv420p",
+      "-b:v",
+      "20M",
+      "-minrate",
+      "20M",
+      "-maxrate",
+      "20M",
+      "-bufsize",
+      "20M",
+      "-x264-params",
+      "nal-hrd=cbr:force-cfr=1",
+      "-threads",
+      "1",
+      "-movflags",
+      "+faststart",
+      "<fixture>"
+    ],
+    "encodedBytes": 97258979,
+    "validMp4FreeBoxBytes": 2741021,
+    "reuse": "Generated once by the harness and reused byte-identically; final ffprobe size and SHA256 independently rechecked."
+  },
+  "harnessFiles": {
+    "backend/scripts/media-load-database.ts": "d137cfd2876f7da1db9cb890a1b79399cc8982b7dfcd3ca18fa4c8711b90369e",
+    "backend/scripts/media-load-worker.ts": "e566a24ef4d436e678186c4870f7eea2d301ff83fbeaae271df003dba4c5f687",
+    "backend/scripts/media-load.ts": "e874c6a79cbb8732e711b3405caeb4eeeaea7fdab7984df2e9055f121252139c"
+  },
+  "sourceProvenance": {
+    "sourceCommit": "73ef9b31a680f3d3a67fbd1eed5608cd98ea7692",
+    "sourceTree": "e712f3c47d86fe6aea2e036dba0dfe34516228bc",
+    "workingTreeCleanAtLaunch": true,
+    "harnessFiles": {
+      "backend/scripts/media-load-database.ts": "d137cfd2876f7da1db9cb890a1b79399cc8982b7dfcd3ca18fa4c8711b90369e",
+      "backend/scripts/media-load-worker.ts": "e566a24ef4d436e678186c4870f7eea2d301ff83fbeaae271df003dba4c5f687",
+      "backend/scripts/media-load.ts": "e874c6a79cbb8732e711b3405caeb4eeeaea7fdab7984df2e9055f121252139c"
+    },
+    "recordedAt": "2026-09-07T06:19:52.863399+00:00",
+    "invocation": "node --import tsx scripts/media-load.ts /workspace/scratch/d2f38d0c56b7/media-load-final-pin-2026-09-07",
+    "workingDirectory": "backend",
+    "completionVerifiedAt": "2026-09-07T06:23:47.166778+00:00",
+    "sourceCommitAtCompletion": "73ef9b31a680f3d3a67fbd1eed5608cd98ea7692",
+    "sourceTreeAtCompletion": "e712f3c47d86fe6aea2e036dba0dfe34516228bc",
+    "workingTreeCleanAtCompletion": true,
+    "harnessHashesUnchangedAtCompletion": true
+  },
+  "sourceQualification": "Executed from verified clean commit 73ef9b31a680f3d3a67fbd1eed5608cd98ea7692 (tree e712f3c47d86fe6aea2e036dba0dfe34516228bc); commit, tree, clean status and all three harness hashes were unchanged at launch and completion. This pins local source execution, not a production deployment or capacity assertion.",
+  "excludedCalibrationRuns": [
+    {
+      "reason": "Namespace-local PID used against outer procfs PID; API RSS absent. Result explicitly invalidated."
+    },
+    {
+      "reason": "Kernel omits task/children; API RSS valid but child RSS absent. Combined-memory result explicitly invalidated."
+    }
+  ]
+}

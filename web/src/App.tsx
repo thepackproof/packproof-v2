@@ -1,5 +1,6 @@
 import { UsagePanel } from "./components/UsagePanel";
 import { StudyConsentPanel } from "./components/StudyConsentPanel";
+import { BillingPanel } from "./components/BillingPanel";
 import { randomId } from "./random-id";
 import { OverviewScreen } from "./screens/OverviewScreen";
 import { PackingRequestsPanel } from "./components/PackingRequestsPanel";
@@ -794,6 +795,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       ) : null}
 
       {route.name === "account" ? <UsagePanel api={api} userId={session.userId} /> : null}
+      {route.name === "account" ? <BillingPanel api={api} userId={session.userId} /> : null}
       {route.name === "account" ? <StudyConsentPanel key={`${session.apiBaseUrl}:${session.userId}`} api={api} userId={session.userId} /> : null}
 
       {route.name === "create" ? (

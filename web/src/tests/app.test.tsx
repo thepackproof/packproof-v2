@@ -1566,7 +1566,10 @@ describe("PackProof web reference client", () => {
     const user = userEvent.setup();
     window.history.replaceState(null, "", "/station");
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: /Order #DS-1001/ }));
+    const queueOrder = await screen.findByRole("button", { name: /Order #DS-1001/ });
+    // The station opens only after its durable-journal boot has completed.
+    await waitFor(() => expect(queueOrder).toBeEnabled());
+    await user.click(queueOrder);
     expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start recording" }));
     expect(await screen.findByText("RECORDING")).toBeInTheDocument();
@@ -1669,7 +1672,10 @@ describe("PackProof web reference client", () => {
     const user = userEvent.setup();
     window.history.replaceState(null, "", "/station");
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: /Order #DS-1001/ }));
+    const queueOrder = await screen.findByRole("button", { name: /Order #DS-1001/ });
+    // The station opens only after its durable-journal boot has completed.
+    await waitFor(() => expect(queueOrder).toBeEnabled());
+    await user.click(queueOrder);
     await user.click(await screen.findByRole("button", { name: "Start recording" }));
     expect(await screen.findByRole("button", { name: "Scan Package to Finish" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Finished Packing" }));

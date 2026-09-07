@@ -1,3 +1,4 @@
+import { requireOfferPublication, type ApprovedOfferOptions } from "./publication-receipt.js";
 import type { Database } from "../db/database.js";
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
@@ -55,8 +56,9 @@ export function validateOfferDefinition(value: unknown): OfferDefinition {
 }
 
 /** Internal configuration command. No public route may publish/approve pricing. */
-export async function registerOfferVersion(db: Database, clock: Clock, value: unknown) {
+export async function registerOfferVersion(db: Database, clock: Clock, value: unknown, options?: ApprovedOfferOptions) {
   const offer = validateOfferDefinition(value); const digest = sha256Hex(canonicalize(offer));
+  if (offer.status === "approved") await requireOfferPublication(offer, clock, options);
   await db.query(`INSERT INTO billing_offer_versions(version,definition_json,sha256,approved_terms_reference,created_at)
     VALUES($1,$2,$3,$4,$5) ON CONFLICT(version) DO NOTHING`, [offer.version, JSON.stringify(offer), digest, offer.approvedTermsReference, clock.now().toISOString()]);
   const stored = (await db.query<{ sha256: string; definition_json: OfferDefinition }>("SELECT sha256,definition_json FROM billing_offer_versions WHERE version=$1", [offer.version])).rows[0];
@@ -69,7 +71,7 @@ export async function registerOfferVersion(db: Database, clock: Clock, value: un
  */
 export async function scheduleApprovedOfferPeriod(db: Database, clock: Clock, input: {
   id: string; userId: string; offerVersion: string; start: string; end: string; consentReceiptReference: string;
-}) {
+}, options?: ApprovedOfferOptions) {
   strict(input, ["id", "userId", "offerVersion", "start", "end", "consentReceiptReference"]);
   for (const field of [input.id, input.userId, input.offerVersion, input.consentReceiptReference]) identifier(field);
   date(input.start); date(input.end);
@@ -85,6 +87,7 @@ export async function scheduleApprovedOfferPeriod(db: Database, clock: Clock, in
     if (input.start < clock.now().toISOString()) fail("BILLING_RETROACTIVE_PERIOD_REJECTED", "New billing terms cannot be applied retroactively", 409);
     const offer = (await tx.query<{ definition_json: OfferDefinition }>("SELECT definition_json FROM billing_offer_versions WHERE version=$1 AND approved_terms_reference IS NOT NULL", [input.offerVersion])).rows[0];
     if (!offer || offer.definition_json.status !== "approved") fail("BILLING_OFFER_NOT_APPROVED", "This offer is not approved for enrollment", 409);
+    await requireOfferPublication(offer.definition_json, clock, options);
     const overlap = (await tx.query("SELECT 1 FROM billing_account_offer_periods WHERE user_id=$1 AND period_start < $3 AND period_end > $2", [input.userId, input.start, input.end])).rows[0];
     if (overlap) fail("BILLING_PERIOD_OVERLAP", "An offer already covers this billing period", 409);
     await tx.query(`INSERT INTO billing_account_offer_periods(id,user_id,offer_version,period_start,period_end,consent_receipt_reference,created_at)
@@ -162,7 +165,7 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
       includedFinalizedProofs: current.definition_json.includedFinalizedProofs, used: Number(current.used),
       remaining: Math.max(0, current.definition_json.includedFinalizedProofs - Number(current.used)), overage: current.definition_json.overage } : null,
     paymentReconciliationStatus: "unreconciled",
-    verifiedProviderAmounts: paymentTotals.map(row => ({ environment: row.environment, currency: "USD", netMinor: Number(row.net_minor) })),
+    verifiedProviderAmounts: paymentTotals.map(row => ({ environment: row.environment, currency: "USD", netMinor: safeMoneyTotal(row.net_minor) })),
     preservationAndPastAccessIndependentOfAllowance: true,
     message: current ? "One finalized transaction counts once within your consented offer. Metering does not itself create a charge."
       : "No priced offer is active. Completed Proofs are counted without creating charges.",
@@ -170,6 +173,12 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
       "New-capture quotas must be reserved atomically by media admission; this summary is not a quota reservation.",
       "Provider configuration, approved terms, actual payments and invoice reconciliation remain separate operating requirements."],
   };
+}
+
+function safeMoneyTotal(value: string | number): number {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount)) fail("BILLING_AMOUNT_RECONCILIATION_REQUIRED", "Provider total exceeds the supported exact accounting range", 409);
+  return amount;
 }
 
 export interface VerifiedProviderEvent {

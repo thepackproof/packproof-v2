@@ -81,6 +81,7 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
     rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
   }
   rows.commerce_stage_evidence = (await db.query("SELECT e.* FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1", [proofId])).rows;
+  rows.capture_session_reports = (await db.query("SELECT r.* FROM capture_session_reports r JOIN capture_sessions s ON s.id=r.session_id WHERE s.proof_id=$1", [proofId])).rows;
   for (const table of ["observation_assets", "observation_evidence", "observation_external_refs"]) rows[table] = (await db.query(`SELECT j.* FROM ${table} j JOIN custody_observations o ON o.id=j.observation_id WHERE o.proof_id=$1`, [proofId])).rows;
   for (const table of ["transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities"]) {
     rows[table] = (await db.query(`SELECT * FROM ${table} WHERE ${table === "transactions" ? "id" : "transaction_id"}=$1`, [transactionId])).rows;

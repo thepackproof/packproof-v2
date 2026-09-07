@@ -48,6 +48,16 @@ describe('time-limited internal support access',()=>{
     const expiring=await readSupportEvidence(h.db,h.clock,h.objectStore,policy,'support',next.grantId,media.evidenceId,'expiring-response');now=new Date(now.getTime()+1800001);
     await expect((async()=>{for await(const _chunk of expiring.body!){} })()).rejects.toMatchObject({code:'ACCESS_RESPONSE_EXPIRED'});
   });
+  it('stops an existing support media response when its internal reader account is disabled',async()=>{
+    const media=await commitProofEvidence(h,'seller',proofId,{bytes:Buffer.alloc(1024*1024,7)});
+    const scoped=await issueSupportGrant(h.db,h.clock,policy,'approver',grant({scope:'EVIDENCE_READ',evidenceIds:[media.evidenceId]}));
+    const result=await readSupportEvidence(h.db,h.clock,h.objectStore,policy,'support',scoped.grantId,media.evidenceId,'open-before-disable');
+    await h.db.query("UPDATE users SET status='DISABLED' WHERE id='support'");
+    await expect((async()=>{for await(const _chunk of result.body!){} })()).rejects.toMatchObject({code:'UNAUTHENTICATED'});
+    await expect(readSupportMetadata(h.db,h.clock,policy,'support',scoped.grantId,'after-disable')).rejects.toMatchObject({code:'UNAUTHENTICATED'});
+    expect((await h.db.query('SELECT id FROM support_access_grants WHERE id=$1',[scoped.grantId])).rows).toHaveLength(1);
+    expect((await h.db.query('SELECT id FROM evidence WHERE id=$1',[media.evidenceId])).rows).toHaveLength(1);
+  });
   it('keeps grants, revocations and access audit immutable and blocks restored uncertain policy',async()=>{
     const approved=await issueSupportGrant(h.db,h.clock,policy,'approver',grant());
     await revokeSupportGrant(h.db,h.clock,policy,'support',approved.grantId,{reason:'Support investigation ended; releasing access'});

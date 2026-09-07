@@ -113,6 +113,44 @@ describe("program metrics preserve denominators and measurement windows", () => 
     expect(() => buildWeeklyReport({ ...input, uploadIntents: [first, { ...first, logicalAttemptRef: ref(900) }] })).toThrow("CAPTURE_ATTEMPT_ID_CHANGED");
   });
 
+  it("nets explicit refund reversal once without creating a charge or a payer", () => {
+    const input = empty(); input.merchants = [merchant()];
+    const charge = { paymentRef: ref(500), merchantRef: ref(1), occurredAt: "2026-08-18T00:00:00.000Z", kind: "charge" as const, amountMinor: 5000, source: "verified_provider" as const };
+    const refund = { ...charge, paymentRef: ref(501), occurredAt: "2026-08-19T00:00:00.000Z", kind: "refund" as const, amountMinor: 2000 };
+    const reversal = { ...refund, paymentRef: ref(502), occurredAt: "2026-08-20T00:00:00.000Z", kind: "refund_reversal" as const, reversesPaymentRef: refund.paymentRef };
+    input.payments = [reversal, charge, refund, reversal];
+    const report = buildWeeklyReport(input);
+    expect(report.economics).toMatchObject({ netRevenueMinor: 5000, paymentLegs: { charges: 1, refunds: 1, refundReversals: 1 }, contributionMinor: null });
+    expect(report.cohort.firstPayers).toBe(0);
+    expect(buildWeeklyReport({ ...input, payments: [refund, reversal, charge] })).toEqual(report);
+    expect(() => buildWeeklyReport({ ...input, payments: [charge, refund, reversal, { ...reversal, paymentRef: ref(503) }] })).toThrow("REFUND_REVERSAL_ALREADY_REPRESENTED");
+  });
+
+  it("retains an out-of-period refund basis without moving its debit into the reversal period", () => {
+    const input = empty(); input.merchants = [merchant()];
+    const refund = { paymentRef: ref(501), merchantRef: ref(1), occurredAt: "2026-07-31T00:00:00.000Z", kind: "refund" as const, amountMinor: 2000, source: "verified_provider" as const };
+    const reversal = { ...refund, paymentRef: ref(502), occurredAt: "2026-08-01T00:00:00.000Z", kind: "refund_reversal" as const, reversesPaymentRef: refund.paymentRef };
+    input.payments = [refund, reversal];
+    expect(buildWeeklyReport(input).economics).toMatchObject({ netRevenueMinor: 2000, paymentLegs: { charges: 0, refunds: 0, refundReversals: 1 } });
+    expect(() => buildWeeklyReport({ ...input, payments: [reversal] })).toThrow("REFUND_REVERSAL_REQUIRES_MATCHING_BASIS");
+    for (const patch of [{ amountMinor: 2001 }, { occurredAt: "2026-07-30T00:00:00.000Z" }, { reversesPaymentRef: ref(999) }]) {
+      expect(() => buildWeeklyReport({ ...input, payments: [refund, { ...reversal, ...patch }] })).toThrow("REFUND_REVERSAL_REQUIRES_MATCHING_BASIS");
+    }
+    expect(() => buildWeeklyReport({ ...input, merchants: [merchant(), merchant(2)], payments: [refund, { ...reversal, merchantRef: ref(2) }] })).toThrow("REFUND_REVERSAL_REQUIRES_MATCHING_BASIS");
+    expect(() => buildWeeklyReport({ ...input, payments: [refund, { ...reversal, kind: "charge" }] })).toThrow("REFUND_REVERSAL_LINK_ON_OTHER_KIND");
+  });
+
+  it("keeps net financial legs exact across large intermediate totals and refuses overflow", () => {
+    const input = empty(); input.merchants = [merchant()];
+    const charge = { paymentRef: ref(502), merchantRef: ref(1), occurredAt: "2026-08-18T00:00:00.000Z", kind: "charge" as const, amountMinor: Number.MAX_SAFE_INTEGER, source: "verified_provider" as const };
+    const refund = { ...charge, paymentRef: ref(503), occurredAt: "2026-08-19T00:00:00.000Z", kind: "refund" as const, amountMinor: 2 };
+    const reversal = { ...refund, paymentRef: ref(501), occurredAt: "2026-08-20T00:00:00.000Z", kind: "refund_reversal" as const, reversesPaymentRef: refund.paymentRef };
+    input.payments = [reversal, charge, refund];
+    expect(buildWeeklyReport(input).economics.netRevenueMinor).toBe(Number.MAX_SAFE_INTEGER);
+    input.payments.push({ ...charge, paymentRef: ref(504), amountMinor: 1 });
+    expect(() => buildWeeklyReport(input)).toThrow("PAYMENT_TOTAL_OUT_OF_SAFE_RANGE");
+  });
+
   it("requires actual complete reconciled costs before showing contribution", () => {
     const input = empty(); input.merchants = [merchant()];
     input.payments = [{ paymentRef: ref(500), merchantRef: ref(1), occurredAt: "2026-08-20T00:00:00.000Z", kind: "charge", amountMinor: 5000, source: "verified_provider" }];

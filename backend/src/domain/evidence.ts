@@ -3,6 +3,7 @@ import { validateCapturedMediaStream } from "./capture-media.js";
 import { MEDIA_MAX_BYTES, reserveMediaAdmission, validateAdmissionMetadata } from "./media-admission.js";
 import { enqueueRecoveryEvent, buildProofRecoverySnapshot } from "./recovery-journal.js";
 import { Readable } from "node:stream";
+import { guardAuthorizedStream } from "./authorized-stream.js";
 import { sha256Hex } from "../hash.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
@@ -540,7 +541,9 @@ export async function readCommittedEvidenceStream(db:Database,store:ObjectStore,
   await authorizeProofAccess(db,proofId,userId);
   const row=(await db.query<EvidenceRow & {object_version_id?:string|null}>('SELECT * FROM evidence WHERE id=$1 AND proof_id=$2',[evidenceId,proofId])).rows[0];
   if(!row||row.validation_status!=='COMMITTED'||!row.sha256)throw new DomainError('EVIDENCE_NOT_FOUND','Evidence is unavailable',404);
-  return streamPreservedObject(store,row,rangeHeader);
+  const result=await streamPreservedObject(store,row,rangeHeader);
+  if(result.body)result.body=guardAuthorizedStream(result.body,async()=>{await authorizeProofAccess(db,proofId,userId);});
+  return result;
 }
 export async function streamPreservedObject(store:ObjectStore,row:{id:string;object_key:string;content_type:string;sha256:string|null;byte_size:number|string|null;object_version_id?:string|null},rangeHeader?:string):Promise<EvidenceStreamView>{
   if(!row.sha256)throw new DomainError('EVIDENCE_NOT_FOUND','Evidence is unavailable',404);

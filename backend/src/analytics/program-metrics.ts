@@ -39,10 +39,10 @@ export interface CostObservation {
   costRef: Ref; category: typeof COST_CATEGORIES[number]; scope: "fixed" | "variable" | "capacity_step" | "support";
   amountMinor: number | null; evidence: "actual" | "estimate" | "missing"; sourceRef: Ref | null;
 }
-export interface PaymentObservation {
-  paymentRef: Ref; merchantRef: Ref; occurredAt: string; kind: "charge" | "refund";
-  amountMinor: number; source: "verified_provider";
-}
+export type PaymentObservation = {
+  paymentRef: Ref; merchantRef: Ref; occurredAt: string; amountMinor: number; source: "verified_provider";
+} & ({ kind: "charge" | "refund"; reversesPaymentRef?: never }
+  | { kind: "refund_reversal"; reversesPaymentRef: Ref });
 export interface ProgramInput {
   schemaVersion: typeof PROGRAM_SCHEMA_VERSION;
   evidenceClass: "synthetic" | "observed";
@@ -56,8 +56,8 @@ export interface ProgramInput {
 }
 
 type Field = "reference" | "date" | "boolean" | "number" | "integer" | readonly string[];
-type Shape = Record<string, { type: Field; nullable?: boolean }>;
-const f = (type: Field, nullable = false) => ({ type, nullable });
+type Shape = Record<string, { type: Field; nullable?: boolean; optional?: boolean }>;
+const f = (type: Field, nullable = false, optional = false) => ({ type, nullable, optional });
 const shapes: Record<string, Shape> = {
   merchants: { merchantRef: f("reference"), qualified: f("boolean"), enrolledAt: f("date", true), firstUseTestAt: f("date", true), firstUsableAt: f("date", true), assistedFirstProof: f("boolean", true), droppedOutAt: f("date", true), paidDecisionAt: f("date", true), firstPaidAt: f("date", true), secondPeriodStart: f("date", true), secondPeriodEnd: f("date", true), secondPaidAt: f("date", true) },
   orders: { orderRef: f("reference"), merchantRef: f("reference"), eligibleAt: f("date"), eligible: f("boolean"), exclusionReason: f(["unsupported_device", "unsupported_workflow", "not_consented", "synthetic"], true), usableFinalizedAt: f("date", true) },
@@ -66,21 +66,26 @@ const shapes: Record<string, Shape> = {
   effortTasks: { taskRef: f("reference"), merchantRef: f("reference"), startedAt: f("date"), completed: f("boolean"), ordinaryActiveSeconds: f("number", true), packproofActiveSeconds: f("number", true), unattendedSeconds: f("number", true) },
   support: { supportRef: f("reference"), merchantRef: f("reference"), occurredAt: f("date"), phase: f(["onboarding", "ongoing"]), seconds: f("number") },
   costs: { costRef: f("reference"), category: f(COST_CATEGORIES), scope: f(["fixed", "variable", "capacity_step", "support"]), amountMinor: f("integer", true), evidence: f(["actual", "estimate", "missing"]), sourceRef: f("reference", true) },
-  payments: { paymentRef: f("reference"), merchantRef: f("reference"), occurredAt: f("date"), kind: f(["charge", "refund"]), amountMinor: f("integer"), source: f(["verified_provider"]) },
+  payments: { paymentRef: f("reference"), merchantRef: f("reference"), occurredAt: f("date"), kind: f(["charge", "refund", "refund_reversal"]), amountMinor: f("integer"), source: f(["verified_provider"]), reversesPaymentRef: f("reference", false, true) },
 };
 
 /** Exported from the same field definitions as the runtime validator. */
 export function programInputJsonSchema() {
   const dateSchema = { type: "string", format: "date-time", pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" };
-  const object = (properties: Record<string, unknown>) => ({ type: "object", additionalProperties: false, required: Object.keys(properties), properties });
+  const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", additionalProperties: false, required, properties });
   const arrays = Object.fromEntries(Object.entries(shapes).map(([name, shape]) => [name, {
     type: "array", maxItems: 100_000, items: object(Object.fromEntries(Object.entries(shape).map(([field, rule]) => {
       const base = Array.isArray(rule.type) ? { type: "string", enum: rule.type }
         : rule.type === "date" ? dateSchema : rule.type === "reference" ? { type: "string", pattern: "^pr_[a-f0-9]{32}$" }
           : rule.type === "boolean" ? { type: "boolean" } : { type: rule.type, minimum: 0 };
       return [field, rule.nullable ? { anyOf: [base, { type: "null" }] } : base];
-    }))),
+    })), Object.keys(shape).filter(key => !shape[key].optional)),
   }]));
+  Object.assign(arrays.payments.items, { allOf: [{
+    if: { properties: { kind: { const: "refund_reversal" } } },
+    then: { required: ["reversesPaymentRef"], properties: { amountMinor: { minimum: 1 } } },
+    else: { not: { required: ["reversesPaymentRef"] } },
+  }] });
   return { $schema: "https://json-schema.org/draft/2020-12/schema", $id: "urn:packproof:program:observations:v1",
     ...object({ schemaVersion: { const: PROGRAM_SCHEMA_VERSION }, evidenceClass: { enum: ["synthetic", "observed"] },
       period: object({ start: dateSchema, end: dateSchema, asOf: dateSchema }), costPeriod: object({ start: dateSchema, end: dateSchema }),
@@ -91,9 +96,10 @@ export function programInputJsonSchema() {
 function validateRows(value: unknown, shape: Shape, path: string): void {
   if (!Array.isArray(value) || value.length > 100_000) throw new Error(`INVALID_ARRAY:${path}`);
   value.forEach(item => {
-    const row = record(item, Object.keys(shape), Object.keys(shape), path);
+    const row = record(item, Object.keys(shape), Object.keys(shape).filter(key => !shape[key].optional), path);
     for (const [key, rule] of Object.entries(shape)) {
       const entry = row[key];
+      if (entry === undefined && rule.optional) continue;
       if (entry === null && rule.nullable) continue;
       const field = `${path}.${key}`;
       if (Array.isArray(rule.type)) enumValue(entry, rule.type, field);
@@ -149,6 +155,22 @@ export function validateProgramInput(value: unknown): ProgramInput {
     if (cost.evidence === "actual" && (cost.sourceRef === null || cost.amountMinor === null)) throw new Error("ACTUAL_COST_REQUIRES_SOURCE");
     if (cost.evidence === "missing" && cost.amountMinor !== null) throw new Error("MISSING_COST_CANNOT_HAVE_AMOUNT");
     if (cost.category === "support" && cost.scope !== "support") throw new Error("INVALID_SUPPORT_COST_SCOPE");
+  }
+  const paymentRows = deduplicate(input.payments, row => row.paymentRef);
+  const paymentsByRef = new Map(paymentRows.map(row => [row.paymentRef, row]));
+  const reversedRefunds = new Set<string>();
+  for (const payment of paymentRows) {
+    if (payment.kind !== "refund_reversal") {
+      if ("reversesPaymentRef" in payment) throw new Error("REFUND_REVERSAL_LINK_ON_OTHER_KIND");
+      continue;
+    }
+    const refund = paymentsByRef.get(payment.reversesPaymentRef);
+    if (!refund || refund.kind !== "refund" || refund.merchantRef !== payment.merchantRef
+      || refund.amountMinor !== payment.amountMinor || payment.amountMinor <= 0 || refund.occurredAt > payment.occurredAt) {
+      throw new Error("REFUND_REVERSAL_REQUIRES_MATCHING_BASIS");
+    }
+    if (reversedRefunds.has(refund.paymentRef)) throw new Error("REFUND_REVERSAL_ALREADY_REPRESENTED");
+    reversedRefunds.add(refund.paymentRef);
   }
   return input;
 }
@@ -241,7 +263,9 @@ export function buildWeeklyReport(value: unknown) {
   const costWindowElapsed = input.costPeriod.end <= asOf;
   const costPayments = payments.filter(row => observed(row.occurredAt) && row.occurredAt >= input.costPeriod.start && row.occurredAt < input.costPeriod.end);
   const sumCost = (scopes: CostObservation["scope"][]) => actualCosts.filter(row => scopes.includes(row.scope)).reduce((sum, row) => sum + row.amountMinor!, 0);
-  const netRevenueMinor = costPayments.reduce((sum, row) => sum + row.amountMinor * (row.kind === "charge" ? 1 : -1), 0);
+  const netRevenueExact = costPayments.reduce((sum, row) => sum + BigInt(row.amountMinor) * (row.kind === "refund" ? -1n : 1n), 0n);
+  if (netRevenueExact > BigInt(Number.MAX_SAFE_INTEGER) || netRevenueExact < -BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("PAYMENT_TOTAL_OUT_OF_SAFE_RANGE");
+  const netRevenueMinor = Number(netRevenueExact);
   const knownVariableCostMinor = sumCost(["variable", "support"]);
   const completeCostEvidence = costWindowElapsed && missingCostCategories.length === 0
     && input.billingReconciliation.status === "reconciled" && input.billingReconciliation.unexplainedDifferenceMinor === 0;
@@ -283,7 +307,10 @@ export function buildWeeklyReport(value: unknown) {
       onboardingMinutes: periodSupport.filter(row => row.phase === "onboarding").reduce((sum, row) => sum + row.seconds / 60, 0),
       ongoingMinutes: periodSupport.filter(row => row.phase === "ongoing").reduce((sum, row) => sum + row.seconds / 60, 0),
       minutesForInactiveMerchants: periodSupport.filter(row => !active.has(row.merchantRef)).reduce((sum, row) => sum + row.seconds / 60, 0), trend: "requires_prior_comparable_period" },
-    economics: { currency: input.currency, period: input.costPeriod, periodElapsed: costWindowElapsed, netRevenueMinor, knownVariableAndSupportCostMinor: knownVariableCostMinor,
+    economics: { currency: input.currency, period: input.costPeriod, periodElapsed: costWindowElapsed, netRevenueMinor,
+      paymentLegs: { charges: costPayments.filter(row => row.kind === "charge").length, refunds: costPayments.filter(row => row.kind === "refund").length,
+        refundReversals: costPayments.filter(row => row.kind === "refund_reversal").length },
+      knownVariableAndSupportCostMinor: knownVariableCostMinor,
       knownFixedCostMinor: sumCost(["fixed"]), knownCapacityStepCostMinor: sumCost(["capacity_step"]), missingCostCategories, contributionMinor,
       billingReconciliation: input.billingReconciliation, infrastructureCostMinor,
       infrastructureGrossMarginMinor: completeCostEvidence ? netRevenueMinor - infrastructureCostMinor : null,

@@ -1,0 +1,79 @@
+# Implementation handoff — September 7, 2026
+
+The plan now has substantial implemented software across W01–W18, an executable operating toolkit, and a source/evidence mapping for all 65 lettered acceptance criteria. **The comprehensive plan is not fully accepted or commercially released.** Physical-device work, deployed protection/restore, independent review, approved terms and elapsed customer/payment observations remain separate gates. W17 is intentionally designed and deferred under its six evidence triggers.
+
+`acceptance-evidence-register.v1.json` is the detailed handoff: it retains each requirement verbatim, links implementation and test files, distinguishes source coverage from actual test evidence, and records a specific remaining gap. A test path is not a claim that the test passed. All G1–G4 gates remain pending.
+
+## Source reconciliation and delivered changes
+
+The planning baseline main commit is `6bc3ea1200ad4a57c1f17fc468e54db067ca86e4`. Implementation was reconciled onto the latest plan-relevant PR35 source `c2174f7489045e5324fa4b79e1d9a5bbbb31024f`; overlapping PR34 work is ancestral to that source. The implementation branch is `codex/comprehensive-plan-2026-09-07`. This document is a candidate handoff, not the final deployed-source attestation.
+
+Key implementation commits include:
+
+| Area | Source commits |
+|---|---|
+| Native capture recovery | `3535ad0`, `4e1bd31`, `a4a995b`; browser/account continuation `ff91b02`, `19c2938`, `830649c`, `323f21f` |
+| Durable accepted records, policy and trust | `10688b7`, `5940c7b`, `ca906b0`, `a5890ce`, `b924bef`, `7111bd6` |
+| Media, provider safety, recipient exports, requests | `bed2a6d`, `aa4e5d6`, `982cb3b`, `1f14d3f`, `59d8467` |
+| Operational security, support and fresh restoration | `ed72bb0`, `59f206b`, `4c157d0`, `7ec0f68`, `975c2da`, `087b00a` |
+| API/web integration | `c7c86cb`, `14eddf3`, `4cd2c44`, `0505369`, `cdf4279`, `e217cff` |
+| Metrics/usage, CI/BOM, optional billing | `68c66c7`, `4d3b71b`, `3ae9fd3`, `2871c78`, `e2e4d34`, `a4ebc10`, `bdf76af` |
+| Mobile build dependency mitigation | `534e820` |
+
+Later source, generated artifacts and hosted checks must be attached to the final clean source SHA; earlier passing results do not automatically cover subsequent edits.
+
+## Package coverage and remaining acceptance
+
+| Package | Implemented software / usable artifact | Remaining acceptance |
+|---|---|---|
+| W01 | Source/build/migration/license BOM; checksummed schema startup; real PostgreSQL concurrency CI; deterministic web rebuild comparison; both native Kotlin compilers and debug APK evidence job | Final exact-source CI, actual deployed/API/schema/web/production AAB and both installed-device identity, deploy/rollback; main is currently unprotected and administration access is unavailable |
+| W02 | Canonical one-transaction Proof, immutable core, idempotent writes, signed append-only supplements, frozen portable chain snapshots and independent Python historical verification | Real role/concurrency proof; five adversarial fixtures now classify digital conflict, attributed contradiction and unresolved physical truth; full later parcel/return workflows exceed pilot slice |
+| W03 | Atomic quota/ingress reservations, one-use bounded gateway, full streaming hash, exact-version committed copies/ranges, isolated staging cleanup, bounded media work; observed local 10-playback/two-commit/two-export load and real interrupted worker recovery | Repeat measured load under actual container CPU/memory limits and external services; live bucket/IAM/Object Lock/cleanup evidence and consented readability |
+| W04 | Native protected-file/marker journal; account/API-scoped completion and retries; persisted browser/station recovery; truthful preservation states | Actual interruption/auth/storage matrix and unassisted Android/station task parity |
+| W05 | Strong-biometric challenge binding, exact declaration, accepted-result recovery, accessible confirmation, verification-scope labels | Both physical phones, TalkBack and no-biometric-data trace inspection for exact release |
+| W06 | Complete single outbound parcel snapshot; explicit split/multi/partial exclusions; separate observed label and accepted order; coalesced untrusted hints plus authenticated scheduled fetch | Consented live production order/carrier/export walkthrough; expanded parcel workflow before expanding support |
+| W07 | Stable record anchors, responsive completion feedback, light station, semantic status and attributed text context | Device/keyboard/accessibility/200% text/reduced-motion/haptic/readability and uncoached usability measurements |
+| W08 | Dated destination profiles; actual encoded size/type/count/page checks; embedded facts/stills; exact preview approval and repeatable verified downloads | Authorized portal acceptance, legibility, reviewer comprehension and handling-time observations measured separately |
+| W09 | Tenant/participant/scoped access, immutable revocation, checked active streams, attributed counter-evidence, deduped neutral buyer requests; denied-by-default time-bound reviewed support grants | Complete deployed cache/revocation matrix and actual support review; recipient workflow observations |
+| W10 | Verified DB TLS configuration, schema checksums, separate-role SQL, trusted proxy/distributed limits, redacted errors, scan/audit gates | Live CA rotation/privilege/ingress checks; independent security review; exact-source scans and six high mobile dependency advisories remain visible |
+| W11 | Independent scheduled workers/health; signed core+policy journals and stale-writer fences; independently signed historical trust; fresh isolated reconstruction CLI | Complete non-core metadata/post-snapshot audit recovery and controlled cutover; protected deployed-store/keys/role evidence and measured RTO/RPO/receipt drill |
+| W12 | Non-shortening retention and disposition gates; counsel checklist; publication script verifies exact approved/served policies and real support/former-subscriber evidence; backend approved offers require the receipt pinned to the exact running release | Disposition/tombstone/retry automation after approved policy and restore validation; actual approved terms/entity/contact/support, legal decisions and former-subscriber/wind-down exercises; current placeholders fail publication |
+| W13 | Immutable offer versions/consent, one durable-Proof usage unit, scheduled reconciliation and own-account summary; optional verified Stripe accounting, refund reversal, daily durable reconciliation, invoice read and cancellation-review portal | Implement paid enrollment, billing lifecycle display and approved-offer capture allowance enforcement; then configure approved provider/offer and reconcile real invoices/payment/refunds/cancellation/cost period |
+| W14 | Prepared versioned eligibility/consent/baseline/cohort/reviewer protocols and machine-readable registers | Named accountable researchers/support, actual consent/enrollment, complete uncoached merchant/reviewer tasks and elapsed six-week cohort |
+| W15 | Strict privacy-safe schemas/events; dedupe/missingness/elapsed-window metrics and JSON/Markdown CLI; consented canonical observation export and offline-safe ordinary Android/station timing hooks | Add stage/grading timing hooks before including those workflows in timing claims; actual lifecycle/timing calibration and source reconciliation; governed quality, qualification, orders, paired effort, support/cost/payment and cohort inputs |
+| W16 | Claim/provenance/permission register, dated competitor leads, qualified prospect/acquisition and reachable-market templates | Actual released public-claim audit, permissions, comparative tasks, dated competitor evidence and qualified tested offers |
+| W17 | Six explicit deferred decisions with triggers, first slices, rollout/rollback and acceptance requirements | Evidence trigger before implementing or advertising expanded capability |
+| W18 | 65-row acceptance map, assessment-cluster crosswalk, role/decision/evidence registers and G1–G4 closure rules | Named owners/backups/review dates, independent evidence and actual business outcomes before funding/partnership assertions |
+
+Canonical archives now carry a frozen signed supplement snapshot alongside the unchanged original root. The portable Python verifier authenticates every declared entry under independently supplied dated trust and reports the received sequence/head. It rejects broken/tampered/reordered/misbound chains and exposes stale, unknown or compromised trust. A valid older prefix does not prove that no newer supplement exists; unsigned legacy shipping/event files do not inherit the root signature.
+
+The fresh restore applier requires a new migrated isolated target, a dedicated non-superuser restore role, complete independently verified core/policy journals, exact retained object versions and historical trust. It preserves normal mutation guards and returns `trafficMayOpen:false` and `writersEnabled:false`. It does not restore all integration/billing/study metadata or every audit row after the last accepted core snapshot, and it does not perform production cutover. These limitations prohibit a blanket zero-loss or completed restore claim.
+
+The local mixed-load observation is retained in `media-load-observation-2026-09-07.json` with clean input commit `73ef9b31a680f3d3a67fbd1eed5608cd98ea7692`, unchanged launch/completion source and harness hashes, and explicit limits. All 14 jobs completed; peak sampled API-plus-child RSS was 304.4 MiB, and conservative concurrent high-water sum was 318.3 MiB (31.08% of the existing 1,024 MiB target), across 1,923 valid memory samples. A separate real SIGKILL of a claimed export recovered through the normal expired lease on attempt 2. The target was not kernel-enforced on the shared 20 GiB/eight-CPU host; this used filesystem storage and separate PGlite, so it is local evidence rather than deployed capacity acceptance.
+
+The Stripe adapter is optional software; it does not select a provider or enable an offer. Portal creation exposes a customer-confirmed cancellation review, not completed cancellation. Financial summaries remain unreconciled until actual provider/billing sources are reconciled. Weekly input now represents a refund reversal explicitly, requires its exact prior-refund basis, dedupes it and books each leg only in its own cost period. It never turns a reversal into a charge or payer. The canonical observation exporter leaves payment/cost inputs empty until governed reconciliation and makes no automatic full-financial-export claim. No charge, refund, invoice creation or customer/prospect outreach was performed during this implementation work.
+
+## Remaining implementation scope
+
+Passing release checks does not complete these software requirements:
+
+| Area | Unfinished implementation and its boundary |
+|---|---|
+| W13 paid continuation | Customer checkout/enrollment, expected-next-charge/trial/cancellation-state display, and enforcement of approved-offer Proof allowances during new capture are unfinished. The existing ingress quotas and usage display do not enforce those commercial allowances. Provider configuration alone cannot complete paid continuation. |
+| W12 disposition | Actual disposition, tombstone recording and partial-failure retry automation is unfinished. Current code evaluates retention, lists dry-run candidates and serializes a disposition lock with hold admission. The plan deliberately places destructive automation after approved policy and a successful restore drill; existing protective gates remain closed. |
+| W11 full restoration | Recovery of all non-core integration/billing/study metadata and every post-snapshot audit event, followed by a controlled service cutover, is unfinished. The implemented core/policy importer remains fenced and does not constitute a complete service restore. |
+| W15 additional timing | Stage/grading client timing hooks are unfinished. Ordinary Android and Packing Station timing is implemented; canonical stage starts are represented, but stage/grading active-time measurements must not be claimed. |
+
+The single-parcel pilot deliberately blocks split/multi-parcel, partial-fulfillment, replacement and relabel allocation workflows, as the plan permits before full support passes. This restriction does not complete W06's full allocation acceptance. W17's six expansion areas—iOS, team stations, return comparison, AI assistance, partner distribution and enterprise expansion—are intentionally designed and deferred pending their evidence triggers; they are not delivered capabilities.
+
+## Verification and next release evidence
+
+Locally observed owned checks: 17 current pure metrics tests passed; current billing ledger tests 8 passed; release BOM tests 4 and publication-policy tests 10 passed; optional Stripe tests 12, daily reconciliation tests 5 and backend publication-receipt tests 3 passed; strict policy HTTP create/invite/accept/capture regression 1 passed; backend typecheck passed. The implementing verifier agent additionally reported 22 standalone Python/OpenSSL tests and 23 focused backend archive/verification tests passed; source-security CI now runs the standalone suite on the exact checkout. These use synthetic provider/protected-store fixtures and PGlite where indicated. The real PostgreSQL release suite is mandatory in hosted CI; a local skip does not pass that gate.
+
+The coordinating release owner reported initial hosted run `34086025661` passed the backend suite (567 passed, 11 skipped) and both native Kotlin module compilations. Second hosted run `34087260300` on remote source `fe50c1caec535cc6c1361933e396bb2e0bba5efd` passed backend (601 passed, 11 skipped) and assembled a debug APK (job `101633568696`, artifact `10005813598`), but its BOM step failed. Installed Expo source confirmed that prebuild rewrote tracked Android/iOS package scripts. Commit `a4a995b` records those expected scripts as source inputs; `a4ebc10` adds immediate tracked-input refusal and safe BOM diagnostics. Direct execution of the installed Expo script updater now leaves those committed scripts unchanged. No reset or dirty-source waiver conceals used build inputs.
+
+These are historical partial results. The current native candidate is **0.3.7 / code 36**, with a new native UUID method and consented timing hooks. The coordinating release owner must refresh all required jobs on final source and retain exact SHA/tree, BOM and artifacts. Debug APK evidence is explicitly debug signed and may require Metro; it is not a production-signed or distributed AAB and does not prove either phone was tested.
+
+The dependency audit remains a gate: six high mobile `image-size`-related package advisories remain despite pinned pre-parser mitigation and its four security tests (plus a release-identity test). No blanket ignore or “zero vulnerabilities” claim is used. Hosted Gitleaks location evidence identified six historical findings comprising four reviewed non-secret fixture/public build values. Exact path+rule+value exceptions are recorded in `.gitleaks.toml` and its redacted audit note; the next exact-source scan must still pass. Secret values never belong in this report. Required failed checks remain failed until their stated risk is resolved or an explicit bounded reviewed exception is recorded.
+
+The coordinating release owner's actual GitHub read on September 7 reports `main.protected=false`, no protection contexts/checks and no repository rulesets. Detailed protection access returned 403 and the connector provides no administration mutation. Main protection has therefore not been configured or verified; the implementation PR remains draft. Broad task authorization does not supply unavailable repository administration access.

@@ -18,6 +18,7 @@ import { createAccessLink, revokeAccessLink } from "../src/domain/access-links.j
 import { inviteCommerceReceiver, acceptCommerceReceiver, createCommerceStage, initializeStageEvidence, commitStageEvidence, finalizeCommerceStage } from "../src/domain/commerce-lifecycle.js";
 import { appendProofSupplement } from "../src/domain/proof-supplements.js";
 import { sha256Hex } from "../src/hash.js";
+import { canonicalize } from "../src/canonical.js";
 import { createAttestationChallenge, verifyAttestationAuthorization } from "../src/domain/attestation-authorization.js";
 import { commitAttestation } from "../src/domain/attestations.js";
 import type { EvidenceRow } from "../src/domain/types.js";
@@ -120,6 +121,43 @@ describe('fresh isolated accepted-record reconstruction',()=>{
     expect((await fresh.db.query('SELECT * FROM proofs')).rows).toHaveLength(0);
     expect((await fresh.db.query('SELECT * FROM recovery_events')).rows).toHaveLength(0);
     expect((await fresh.db.query('SELECT writes_enabled FROM recovery_writer_fence')).rows[0].writes_enabled).toBe(false);
+  },30000);
+  it('restores an unrelated unfinished Proof from signed policy parent context without inventing accepted core receipts',async()=>{
+    const fixture=await source(),fresh=await target();
+    const transaction=await createTransaction(fixture.h.db,clock,fixture.seller,{itemTitle:'Unfinished draft context'});
+    const draft=await createOrGetProof(fixture.h.db,clock,fixture.seller,transaction.transactionId);
+    await fixture.drain();
+    const policy=[...fixture.journal.objects].filter(([key])=>key.startsWith('recovery/policy/v1/')).map(([,bytes])=>bytes);
+    const expectedDatabase=await assumeRestoreRole(fresh.db);
+    const report=await restoreFreshRecoveryDatabase(fresh.db,{...fixture.input,expectedDatabase,policy:{envelopes:policy,expectedWatermark:policy.at(-1)!}});
+    expect(report.contextOnlyProofIds).toEqual([draft.proofId]);
+    expect((await fresh.db.query('SELECT status,manifest_id FROM proofs WHERE id=$1',[draft.proofId])).rows[0]).toEqual({status:draft.status,manifest_id:null});
+    expect((await fresh.db.query('SELECT * FROM recovery_events WHERE proof_id=$1',[draft.proofId])).rows).toHaveLength(0);
+    expect((await fresh.db.query('SELECT item_title FROM transactions WHERE id=$1',[transaction.transactionId])).rows[0].item_title).toBe('Unfinished draft context');
+    expect((await inspectPolicyRecoveryReconciliation(fresh.db)).matches).toBe(true);
+    expect((await fresh.db.query('SELECT canonical_json FROM final_manifests WHERE proof_id=$1',[fixture.proofId])).rows[0].canonical_json).toBe(fixture.acknowledged.manifest.canonicalJson);
+    await expect(assertPolicyAccessSafe(fresh.db)).rejects.toMatchObject({code:'POLICY_RECOVERY_UNAVAILABLE'});
+  },30000);
+  it('keeps historical signed policies with missing parent context explicitly closed',async()=>{
+    const fixture=await source(),fresh=await target();
+    const transaction=await createTransaction(fixture.h.db,clock,fixture.seller,{itemTitle:'Pre-context draft'});
+    await createOrGetProof(fixture.h.db,clock,fixture.seller,transaction.transactionId);await fixture.drain();
+    // Produce authentic legacy schema envelopes with the fixture authority.
+    // Historical policy events did not contain recoveryContext at all.
+    const policy:Buffer[]=[];let previousSha256:string|null=null;
+    for(const [key,bytes] of fixture.journal.objects){
+      if(!key.startsWith('recovery/policy/v1/'))continue;
+      const outer=JSON.parse(bytes.toString()),event=JSON.parse(outer.eventCanonicalJson);delete event.change.recoveryContext;event.previousSha256=previousSha256;
+      const eventCanonicalJson=canonicalize(event),eventSha256=sha256Hex(eventCanonicalJson);
+      const facts={version:outer.version,domain:outer.domain,eventCanonicalJson,eventSha256,publishedAt:outer.publishedAt};
+      const canonicalJson=canonicalize(facts),signature=await fixture.publisher.signer.signManifest({proofId:'policy',manifestId:'legacy-fixture',canonicalJson,sha256:sha256Hex(canonicalJson)});
+      const legacy=Buffer.from(canonicalize({...facts,signature}));policy.push(legacy);fixture.journal.objects.set(key,legacy);previousSha256=eventSha256;
+    }
+    const expectedDatabase=await assumeRestoreRole(fresh.db);
+    await expect(restoreFreshRecoveryDatabase(fresh.db,{...fixture.input,expectedDatabase,policy:{envelopes:policy,expectedWatermark:policy.at(-1)!}})).rejects.toMatchObject({code:'RECOVERY_RESTORE_DEPENDENCY_GAP'});
+    expect((await fresh.db.query('SELECT * FROM proofs')).rows).toHaveLength(0);
+    expect((await fresh.db.query('SELECT * FROM recovery_events')).rows).toHaveLength(0);
+    await expect(assertPolicyAccessSafe(fresh.db)).rejects.toMatchObject({code:'POLICY_RECOVERY_UNAVAILABLE'});
   },30000);
   it('restores finalized recipient-stage dependencies and signed supplement history without rewriting the frozen seller core',async()=>{
     const fixture=await source(),{h,proofId,seller,publisher}=fixture,receiver=await createUser(h);

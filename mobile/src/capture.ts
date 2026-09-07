@@ -1,4 +1,5 @@
 import { capturePreflight } from "./capture/preflight";
+import {startNativeStudy,type NativeStudyTimer} from './analytics/native-study';
 import type { CaptureRecoveryState } from "./capture/recovery-model";
 import { shippingQueue, readShippingJournal, releaseShippingQueue } from "./capture/shipping-scan-storage";
 import type { ShippingScan, ShippingScanResult, ShippingScanJournal } from "./capture/shipping-scan-queue";
@@ -19,6 +20,7 @@ import {
 const LOCAL_CAPTURE_NAME = "packproof-seller-evidence.mp4";
 
 export interface LocalCapture {
+  studyTimingRef?: string;
   recovery?: CaptureRecoveryState;
   uri: string;
   contentType: string;
@@ -36,7 +38,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { onRecordingStarted?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -89,6 +91,11 @@ export async function captureGradingPhoto(): Promise<{
 export async function recordPackingEvidence(input: {
   client: PackProofV2Client; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
 }): Promise<LocalCapture | null> {
+  // Starts are journaled before preflight only after explicit native study opt-in.
+  const study=input.stageId?null:await startNativeStudy(input.client,input.userId);
+  try{return await recordPackingEvidenceInner(input,study);}catch(error){study?.end('failed','capability');throw error;}
+}
+async function recordPackingEvidenceInner(input:{client:PackProofV2Client;proofId:string;userId:string;orderLabel:string;stageId?:string;stageType?:string;guide?:{uri:string;headers:Record<string,string>}},study:NativeStudyTimer|null):Promise<LocalCapture|null>{
   await capturePreflight(input.client, input.userId, !input.stageId);
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
@@ -101,12 +108,14 @@ export async function recordPackingEvidence(input: {
     submitRequested: false, needsSellerAttestation: !input.stageId, attempt: 0, nextRetryAt: null, updatedAt: new Date().toISOString() };
   // Write the account binding before native acquisition. A process restart can discover finalized native media.
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
-    recovery, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+    recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
   const captured = await nativeRecorder({ proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+    onRecordingStarted:()=>study?.phase('recording'),
     ...(!input.stageId ? {onShippingBarcode:queue.detect,onConfirmShipping:queue.confirm} : {}),
   });
   await queue.flush();
   if (!captured) {
+    study?.end('cancelled','cancelled');
     releaseShippingQueue(session.id);
     const nativeFile = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`);
     if (!nativeFile.exists || !("size" in nativeFile) || nativeFile.size === 0) {
@@ -117,7 +126,8 @@ export async function recordPackingEvidence(input: {
     return null;
   }
   const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
-  return persistLocalCapture({ ...captured, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  study?.phase('confirmation');
+  return persistLocalCapture({ ...captured,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
 }
 
 /** Existing grading recipes retain their original actor/recipe checks and evidence origin.

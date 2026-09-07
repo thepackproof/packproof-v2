@@ -71,25 +71,51 @@ export class StripeBillingAdapter implements BillingProviderVerifier{
   async verifyAndNormalize(input:{rawBody:Buffer;signature:string|null}):Promise<VerifiedProviderEvent>{
     const secrets=await this.secrets();verifyStripeSignature(input.rawBody,input.signature,secrets.webhookSecret,this.clock);
     let e:Record<string,unknown>;try{e=obj(JSON.parse(input.rawBody.toString('utf8')));}catch{fail('STRIPE_INVALID_BODY','Billing event is not valid JSON');}
-    this.mode(e!);ref(e!.id,'evt');epoch(e!.created,this.clock);
+    return this.normalizeAuthenticatedEvent(e!,secrets.apiKey);
+  }
+  private async normalizeAuthenticatedEvent(e:Record<string,unknown>,apiKey:string):Promise<VerifiedProviderEvent>{
+    this.mode(e);ref(e.id,'evt');epoch(e.created,this.clock);
     if(e!.object!=='event'||e!.api_version!==this.config.apiVersion||e!.context!=null||(this.config.accountMode==='connected'?e!.account!==this.providerAccount:e!.account!=null))fail('STRIPE_EVENT_CONTEXT_MISMATCH','Billing endpoint account or API version mismatch',409);
     if(!['payment_intent.succeeded','refund.created','refund.updated','refund.failed'].includes(String(e!.type)))fail('STRIPE_EVENT_NOT_SUPPORTED','Billing event type is not configured for accounting',422);
     const source=obj(obj(e!.data).object),refund=String(e!.type).startsWith('refund.'),reversed=refund&&['failed','canceled'].includes(String(source.status));
     if(source.object!==(refund?'refund':'payment_intent')||(!reversed&&source.status!=='succeeded'))fail('STRIPE_EVENT_NOT_SETTLED','Only succeeded records or verified failed-refund reversals enter accounting',422);
     if(source.currency!=='usd')fail('STRIPE_CURRENCY_UNSUPPORTED','Offer ledger accepts USD only',422);
-    await this.assertAccount(secrets.apiKey);const subjectId=ref(source.id,refund?'re':'pi'),current=await this.api(`/v1/${refund?'refunds':'payment_intents'}/${subjectId}`,secrets.apiKey);
+    await this.assertAccount(apiKey);const subjectId=ref(source.id,refund?'re':'pi'),current=await this.api(`/v1/${refund?'refunds':'payment_intents'}/${subjectId}`,apiKey);
     if(current.id!==subjectId||current.object!==source.object||(reversed?current.status!==source.status:!['succeeded',...(refund?['failed','canceled']:[])].includes(String(current.status)))||current.currency!=='usd')fail('STRIPE_PAYMENT_MISMATCH','Billing record differs from succeeded event',409);
     const amount=money(refund?current.amount:current.amount_received);if(amount!==money(refund?source.amount:source.amount_received))fail('STRIPE_PAYMENT_MISMATCH','Billing event amount differs from financial record',409);
-    const paymentId=refund?related(current.payment_intent,'pi'):subjectId,payment=refund?await this.api(`/v1/payment_intents/${paymentId}`,secrets.apiKey):current;this.mode(payment);
+    const paymentId=refund?related(current.payment_intent,'pi'):subjectId,payment=refund?await this.api(`/v1/payment_intents/${paymentId}`,apiKey):current;this.mode(payment);
     if(payment.id!==paymentId||payment.object!=='payment_intent'||payment.status!=='succeeded'||payment.currency!=='usd')fail('STRIPE_PAYMENT_MISMATCH','Refund must resolve to a succeeded payment',409);
     const customer=related(payment.customer,'cus');if(!refund&&related(source.customer,'cus')!==customer)fail('STRIPE_CUSTOMER_MISMATCH','Billing event customer differs from financial record',409);
     if(refund&&related(source.payment_intent,'pi')!==paymentId)fail('STRIPE_PAYMENT_MISMATCH','Refund event differs from payment association',409);
-    const chargeId=related(refund?current.charge:current.latest_charge,'ch'),charge=await this.api(`/v1/charges/${chargeId}`,secrets.apiKey);this.mode(charge);
+    const chargeId=related(refund?current.charge:current.latest_charge,'ch'),charge=await this.api(`/v1/charges/${chargeId}`,apiKey);this.mode(charge);
     if(charge.id!==chargeId||charge.object!=='charge'||charge.status!=='succeeded'||charge.paid!==true||related(charge.payment_intent,'pi')!==paymentId||related(charge.customer,'cus')!==customer||charge.currency!=='usd')fail('STRIPE_PAYMENT_MISMATCH','Invalid billing charge association',409);
-    const balanceId=related(reversed?current.failure_balance_transaction:refund?current.balance_transaction:charge.balance_transaction,'txn'),balance=await this.api(`/v1/balance_transactions/${balanceId}`,secrets.apiKey);
+    const balanceId=related(reversed?current.failure_balance_transaction:refund?current.balance_transaction:charge.balance_transaction,'txn'),balance=await this.api(`/v1/balance_transactions/${balanceId}`,apiKey);
     if(balance.id!==balanceId||balance.object!=='balance_transaction'||balance.currency!=='usd'||related(balance.source,refund?'re':'ch')!==(refund?subjectId:chargeId)||balance.amount!==(refund&&!reversed?-amount:amount))fail('STRIPE_BALANCE_MISMATCH','Balance transaction differs from financial record',409);
     // Immutable financial booking time, not delivery, invoice period or bank payout.
     return{eventReference:String(e!.id),customerReference:customer,subjectReference:subjectId,paymentReference:paymentId,kind:reversed?'refund_reversed':refund?'refund_settled':'payment_settled',occurredAt:epoch(balance.created,this.clock),amountMinor:amount,currency:'USD'};
+  }
+  /** Server-authenticated reconciliation ingress; never accepts user event bodies. */
+  async readVerifiedAccountingEvent(eventReference:string):Promise<VerifiedProviderEvent>{
+    ref(eventReference,'evt');const secrets=await this.secrets();await this.assertAccount(secrets.apiKey);
+    const event=await this.api(`/v1/events/${eventReference}`,secrets.apiKey);
+    if(event.id!==eventReference)fail('STRIPE_EVENT_CONTEXT_MISMATCH','Retrieved event identity does not match',409);
+    return this.normalizeAuthenticatedEvent(event,secrets.apiKey);
+  }
+  async listAccountingEventReferences(input:{start:string;end:string;startingAfter?:string}){
+    const from=Date.parse(input.start),to=Date.parse(input.end),now=this.clock.now().getTime();
+    if(!Number.isFinite(from)||!Number.isFinite(to)||from>=to||to>now||from<now-30*86400000)fail('STRIPE_EVENT_HISTORY_GAP','Provider event window is outside the available 30-day history',409);
+    const secrets=await this.secrets();await this.assertAccount(secrets.apiKey);
+    const query=new URLSearchParams({limit:'100','created[gte]':String(Math.floor(from/1000)),'created[lt]':String(Math.floor(to/1000))});
+    for(const type of ['payment_intent.succeeded','refund.created','refund.updated','refund.failed'])query.append('types[]',type);
+    if(input.startingAfter)query.set('starting_after',ref(input.startingAfter,'evt'));
+    const page=await this.api(`/v1/events?${query}`,secrets.apiKey);
+    if(page.object!=='list'||!Array.isArray(page.data)||page.data.length>100||typeof page.has_more!=='boolean'||page.has_more&&!page.data.length)fail('STRIPE_INVALID_RESPONSE','Invalid accounting event page',502);
+    const events=(page.data as unknown[]).map(value=>{const event=obj(value);this.mode(event);const at=epoch(event.created,this.clock);
+      if(event.object!=='event'||event.api_version!==this.config.apiVersion||event.context!=null||(this.config.accountMode==='connected'?event.account!==this.providerAccount:event.account!=null)||at<input.start||at>=input.end)fail('STRIPE_EVENT_CONTEXT_MISMATCH','Accounting scan event has another context or period',409);
+      return{eventReference:ref(event.id,'evt'),createdAt:at};});
+    const cursor=page.has_more?events.at(-1)!.eventReference:null;
+    if(cursor&&cursor===input.startingAfter)fail('STRIPE_EVENT_CURSOR_STALLED','Accounting event cursor did not advance',409);
+    return{events,hasMore:page.has_more,nextStartingAfter:cursor};
   }
   private async ownCustomer(db:Database,userId:string,requested?:string){const rows=(await db.query<{customer_reference:string}>("SELECT customer_reference FROM billing_customer_bindings WHERE provider='stripe' AND environment=$1 AND provider_account=$2 AND user_id=$3 ORDER BY customer_reference",[this.environment,this.providerAccount,userId])).rows;if(requested)ref(requested,'cus');const found=requested?rows.find(r=>r.customer_reference===requested):rows.length===1?rows[0]:null;if(!found)fail('BILLING_CUSTOMER_NOT_BOUND','Choose a billing account linked to the signed-in user',404);return found!.customer_reference;}
   async listOwnInvoices(db:Database,userId:string,input:{customerReference?:string;startingAfter?:string}={}){

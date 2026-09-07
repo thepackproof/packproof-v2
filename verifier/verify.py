@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PackProof independent offline ZIP verifier v1.1.0 (Python 3.10+, OpenSSL for signatures).
+"""PackProof independent offline ZIP verifier v1.2.0 (Python 3.10+, OpenSSL for signatures).
 Never extracts archive entries, executes package content, or opens network connections.
 Trust lists must be obtained and authenticated separately from the package.
 """
@@ -20,7 +20,7 @@ import sys
 import tempfile
 import zipfile
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 MAX_BYTES = 220 * 1024 * 1024
 MAX_JSON = 8 * 1024 * 1024
 MAX_ENTRIES = 4096
@@ -228,6 +228,113 @@ def check_registry_signature(raw, signature, keys, now):
     result.update({'keyTrustedAtSnapshot': True, 'historicalTrust': 'TRUSTED_AT_REGISTRY_SNAPSHOT'})
     return result
 
+def verify_supplement_snapshot(package, metadata, name_set, hashes, read_json, core_sha, proof_id, keys, trust, now, registry_mode):
+    """Verify each received signed entry verbatim; never recanonicalize arbitrary facts.
+
+    The inventory/head is an export declaration, not a timestamp-authority promise
+    that no later signed entries exist. Truncation beyond a rewritten declared head
+    is indistinguishable from a legitimately older received snapshot offline.
+    """
+    sources = package.get('sources', {})
+    if not isinstance(sources, dict):
+        fail('INVALID_PACKAGE', 'Invalid package source descriptor')
+    descriptor = sources.get('signedSupplements')
+    if descriptor is None:
+        if 'proof-supplements.json' in name_set:
+            fail('INVALID_PACKAGE', 'Signed supplements need an explicit received-snapshot descriptor')
+        return {'status': 'NOT_INCLUDED_LEGACY_OR_UNDECLARED', 'coveredByRootSignature': False,
+                'chainContinuityVerified': False, 'signaturesVerified': False,
+                'completeness': 'NOT_ESTABLISHED', 'currentRevocationKnowledge': 'UNAVAILABLE_OFFLINE'}
+    if (not isinstance(descriptor, dict) or set(descriptor) != {'path', 'sequence', 'sha256', 'snapshotAt'}
+            or descriptor['path'] != 'proof-supplements.json'
+            or type(descriptor['sequence']) is not int or descriptor['sequence'] < 0
+            or not isinstance(descriptor['sha256'], str) or not re.fullmatch('[a-f0-9]{64}', descriptor['sha256'])):
+        fail('INVALID_PACKAGE', 'Unsupported signed supplement snapshot descriptor')
+    if descriptor['path'] not in hashes:
+        fail('MISSING_FILES', 'Declared supplement snapshot is absent from the file inventory')
+    if metadata and isinstance(metadata.get('sources'), dict):
+        mirror = metadata['sources'].get('signedSupplements')
+        if mirror is not None and mirror != descriptor:
+            fail('SUPPLEMENT_SNAPSHOT_MISMATCH', 'Supplement descriptors disagree')
+    snapshot_at = date(descriptor['snapshotAt'], 'INVALID_PACKAGE')
+    if snapshot_at > now:
+        fail('SUPPLEMENT_SNAPSHOT_MISMATCH', 'Supplement snapshot is dated in the future')
+    snapshot = read_json(descriptor['path'])
+    if (not isinstance(snapshot, dict) or snapshot.get('schema') != 'packproof.signed-supplement-snapshot.v1'
+            or snapshot.get('proofId') != proof_id or snapshot.get('coreManifestSha256') != core_sha
+            or snapshot.get('sequence') != descriptor['sequence'] or type(snapshot.get('sequence')) is not int
+            or snapshot.get('sha256') != descriptor['sha256'] or snapshot.get('snapshotAt') != descriptor['snapshotAt']
+            or not isinstance(snapshot.get('supplements'), list) or len(snapshot['supplements']) > MAX_ENTRIES
+            or len(snapshot['supplements']) != descriptor['sequence']):
+        fail('SUPPLEMENT_SNAPSHOT_MISMATCH', 'Signed supplement snapshot identity, declared head or count disagrees')
+    previous = core_sha
+    seen_ids, seen_operations, accepted = {}, set(), []
+    kinds = {'CORRECTION', 'RECIPIENT_RESPONSE', 'PARCEL', 'CARRIER_UPDATE', 'RETURN'}
+    for sequence, row in enumerate(snapshot['supplements'], 1):
+        if (not isinstance(row, dict) or not isinstance(row.get('canonicalJson'), str)
+                or not isinstance(row.get('supplementId'), str) or not row['supplementId']
+                or row['supplementId'] in seen_ids or row.get('kind') not in kinds
+                or not isinstance(row.get('sha256'), str) or not re.fullmatch('[a-f0-9]{64}', row['sha256'])):
+            fail('SUPPLEMENT_CHAIN_INVALID', 'Malformed or duplicate signed supplement')
+        raw = row['canonicalJson'].encode('utf-8')
+        if len(raw) > MAX_JSON or digest(raw) != row['sha256']:
+            fail('SUPPLEMENT_INTEGRITY_FAILURE', 'Signed supplement bytes differ from their recorded digest')
+        facts = json_bytes(raw)
+        if (not isinstance(facts, dict) or type(facts.get('version')) is not int or facts['version'] != 1
+                or facts.get('domain') != 'PACKPROOF_PROOF_SUPPLEMENT'
+                or row.get('proofId') != proof_id or facts.get('proofId') != proof_id
+                or type(row.get('sequence')) is not int or row['sequence'] != sequence
+                or type(facts.get('sequence')) is not int or facts['sequence'] != sequence
+                or row.get('previousSha256') != previous or facts.get('previousSha256') != previous
+                or row.get('coreManifestSha256') != core_sha or facts.get('coreManifestSha256') != core_sha
+                or facts.get('supplementId') != row['supplementId'] or facts.get('kind') != row['kind']
+                or facts.get('recordedAt') != row.get('createdAt') or not isinstance(facts.get('facts'), dict)):
+            fail('SUPPLEMENT_CHAIN_INVALID', 'Signed supplement scope, order, ancestry or representation disagrees')
+        if date(row['createdAt'], 'INVALID_PACKAGE') > snapshot_at:
+            fail('SUPPLEMENT_SNAPSHOT_MISMATCH', 'Supplement was recorded after the declared snapshot')
+        actor, operation = facts.get('actorUserId'), facts.get('operationId')
+        if ((actor is not None and not isinstance(actor, str)) or not isinstance(operation, str)
+                or not operation or (actor, operation) in seen_operations
+                or facts.get('attribution') != ('PARTICIPANT_SUPPLIED' if actor else 'AUTHORIZED_WORKFLOW')):
+            fail('SUPPLEMENT_CHAIN_INVALID', 'Supplement attribution or operation identity is inconsistent')
+        supersedes = facts.get('supersedesSupplementId')
+        if supersedes is not None and (row['kind'] != 'CORRECTION' or supersedes not in seen_ids
+                                       or seen_ids[supersedes] != actor):
+            fail('SUPPLEMENT_CHAIN_INVALID', 'A correction does not reference the same actor earlier in this chain')
+        signature = row.get('signature')
+        if not isinstance(signature, dict) or set(signature) != {'algorithm', 'keyId', 'signatureBase64', 'signedAt'}:
+            fail('SUPPLEMENT_INTEGRITY_FAILURE', 'A signed supplement requires complete signing context')
+        if date(signature['signedAt'], 'INVALID_PACKAGE') > snapshot_at:
+            fail('SUPPLEMENT_SNAPSHOT_MISMATCH', 'Supplement signing time exceeds the declared snapshot')
+        result = (check_registry_signature(raw, signature, keys, now) if registry_mode
+                  else check_signature(raw, signature, keys))
+        trusted = result['status'] == 'VERIFIED' and (not registry_mode or result.get('keyTrustedAtSnapshot') is True)
+        accepted.append({'supplementId': row['supplementId'], 'sequence': sequence, 'sha256': row['sha256'],
+                         'signature': result, 'keyTrustedAtSnapshot': trusted})
+        seen_ids[row['supplementId']] = actor
+        seen_operations.add((actor, operation))
+        previous = row['sha256']
+    if previous != descriptor['sha256']:
+        fail('SUPPLEMENT_SNAPSHOT_MISMATCH', 'Received signed chain does not reach the declared head')
+    all_math = bool(accepted) and all(row['signature']['verified'] for row in accepted)
+    all_trusted = bool(accepted) and all(row['keyTrustedAtSnapshot'] for row in accepted)
+    status = 'EMPTY_RECEIVED_SNAPSHOT' if not accepted else 'VERIFIED_RECEIVED_SNAPSHOT'
+    if accepted:
+        for row in accepted:
+            if not row['keyTrustedAtSnapshot']:
+                status = row['signature']['status']
+                break
+        if all_trusted and trust['status'] != 'FRESH':
+            status = 'TRUST_STALE' if trust['status'] == 'STALE' else 'TRUST_NOT_YET_VALID'
+    return {'status': status, 'coveredByRootSignature': False, 'chainContinuityVerified': True,
+            'signaturesVerified': all_math, 'keysTrustedAtSnapshot': all_trusted,
+            'fullyVerifiedReceivedChain': all_trusted and trust['status'] == 'FRESH',
+            'sequence': len(accepted), 'headSha256': previous, 'coreManifestSha256': core_sha,
+            'snapshotAt': descriptor['snapshotAt'], 'entries': accepted,
+            'completeness': 'RECEIVED_SNAPSHOT_ONLY', 'currentRevocationKnowledge': 'UNAVAILABLE_OFFLINE',
+            'snapshotTimeIndependentlyAttested': False,
+            'limitation': 'This is the received signed chain only. An older valid prefix cannot prove that no later supplements exist.'}
+
 def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
            authority_key_path=None, authority_key_id=None):
     now = now or dt.datetime.now(dt.timezone.utc)
@@ -406,11 +513,14 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
             signatures = read_json('integrity/signatures.json')
             if signatures.get('manifestSignature') != package.get('signature'):
                 fail('INVALID_PACKAGE', 'Signature inventories disagree')
+        supplements = verify_supplement_snapshot(package, metadata, name_set, hashes, read_json, actual, manifest['proofId'], keys, trust, now, bool(registry_path))
         status = signature['status']
         if status == 'UNSIGNED' and expected:
             status = 'VERIFIED_INDEPENDENT_DIGEST'
         if status == 'VERIFIED' and trust['status'] != 'FRESH':
             status = 'TRUST_STALE' if trust['status'] == 'STALE' else 'TRUST_NOT_YET_VALID'
+        if status in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') and supplements['status'] not in ('VERIFIED_RECEIVED_SNAPSHOT', 'EMPTY_RECEIVED_SNAPSHOT', 'NOT_INCLUDED_LEGACY_OR_UNDECLARED'):
+            status = 'SUPPLEMENT_' + supplements['status']
         if omissions and status in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST', 'UNSIGNED'):
             status = 'OMITTED_FILES'
         return {'verifierVersion': VERSION, 'status': status,
@@ -421,9 +531,11 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
                 'signatureVerified': signature['verified'], 'signature': signature, 'trust': trust,
                 'omissions': omissions, 'completeMedia': not omissions,
                 'scope': metadata.get('disclosure') if metadata else {'kind': 'LEGACY_PARTICIPANT_EXPORT'},
-                'supplements': {'status': 'SELF_CONSISTENCY_ONLY', 'coveredByRootSignature': False},
+                'supplements': supplements,
+                'otherSupplementalFiles': {'status': 'SELF_CONSISTENCY_ONLY', 'coveredByRootSignature': False},
                 'limitations': ['Integrity does not establish physical truth, authenticity, or liability.',
-                               'The root signature does not cover later supplements or an export inventory.',
+                               'The root signature does not cover later supplements. Each declared signed entry is checked separately; other export files remain inventory self-consistency only.',
+                               'A received signed chain cannot establish that no later events exist. Its export snapshot time is not independently attested.',
                                'Archive-included keys never establish trust. No media was uploaded.']}
 
 def render_html_report(result):
@@ -440,6 +552,10 @@ def render_html_report(result):
         ('Signature verified', 'Yes' if result.get('signatureVerified') else 'No'),
         ('Trust freshness', result.get('trust', {}).get('status', 'Not checked')),
         ('Trust snapshot expires', result.get('trust', {}).get('expiresAt', 'Not provided')),
+        ('Signed supplement chain', result.get('supplements', {}).get('status', 'Not checked')),
+        ('Received supplement sequence', result.get('supplements', {}).get('sequence', 'Not established')),
+        ('Received supplement head', result.get('supplements', {}).get('headSha256', 'Not established')),
+        ('Supplement completeness', result.get('supplements', {}).get('completeness', 'Not established')),
     ]
     rows = ''.join('<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>' for label, value in summary)
     inventory = ''.join('<tr><td>' + escape(item.get('path', '')) + '</td><td><code>' + escape(item.get('sha256', '')) + '</code></td><td>' + escape(item.get('status', '')) + '</td></tr>' for item in result.get('files', []))
@@ -447,7 +563,8 @@ def render_html_report(result):
         inventory = '<tr><td colspan="3">No complete file inventory was established.</td></tr>'
     limitations = result.get('limitations', []) + [
         'This report is a static view of a local check. Its own contents are not cryptographically signed.',
-        'File hashes in an export inventory establish self-consistency; they do not independently authenticate later supplements.',
+        'Export file hashes alone establish self-consistency. Declared signed supplement entries are authenticated separately and reported above.',
+        'The received supplement head does not establish whether unseen later entries exist.',
         'The archive was not extracted. No archive media, scripts, or links are embedded or executed.',
         'Integrity does not establish physical truth, authenticity, or liability.',
     ]

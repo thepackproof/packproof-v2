@@ -44,6 +44,19 @@ describe("LocalObjectStore", () => {
     await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
+  it("recovers a body published before process death without replacing its bytes",async()=>{
+    const dir=await mkdtemp(path.join(os.tmpdir(),"packproof-local-journal-crash-"));dirs.push(dir);
+    const store=new LocalObjectStore(dir,"http://127.0.0.1:9","secret"),key="recovery/v1/proof/event.json",body=Buffer.from('{"accepted":true}');
+    await store.putIfAbsent(key,body,"application/json");
+    // Simulate termination after the completed body inode, before metadata.
+    await rm(path.join(dir,key+".meta.json"));
+    expect(await store.head(key)).toBeNull();
+    expect(await store.putIfAbsent(key,body,"application/json")).toEqual({created:false});
+    expect((await store.get(key))?.body.equals(body)).toBe(true);
+    expect(await store.putIfAbsent(key,Buffer.from('{"accepted":false}'),"application/json")).toEqual({created:false});
+    expect((await store.get(key))?.body.equals(body)).toBe(true);
+  });
+
   it("publishes complete immutable metadata across independent concurrent committers", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-local-race-"));
     dirs.push(dir);

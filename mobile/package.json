@@ -5,8 +5,8 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "build:android:internal": "npx --yes eas-cli build --platform android --profile internal-staging --non-interactive",
     "test:api": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts",
@@ -14,8 +14,10 @@
     "test:proof-record": "node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts",
     "test:recovery": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-recovery.test.ts",
     "postinstall": "node scripts/secure-build-dependencies.cjs",
-    "test:build-security": "node --test tests/build-dependency-security.test.cjs",
-    "test:study-timing": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/study-timing.test.ts"
+    "test:build-security": "node --test tests/build-dependency-security.test.cjs tests/release-identity.test.cjs",
+    "test:study-timing": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/study-timing.test.ts tests/native-study-timing.test.ts",
+    "android:go": "expo start --android",
+    "ios:go": "expo start --ios"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",

@@ -36,8 +36,12 @@ export type UnifiedCameraViewProps = ViewProps & {
   onCaptureError?: (event: NativeEvent<{ code: string; message: string }>) => void;
 };
 
-const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ getHapticsEnabled(): Promise<boolean> }>('PackProofUnifiedCamera') : null;
+const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string }>('PackProofUnifiedCamera') : null;
 const nativeAvailable = nativeModule != null;
+export function newStudyOperationNonce():string {
+  if(!nativeModule?.newOperationNonce)throw new Error('This build cannot enable study collection. Install the current native build.');
+  return nativeModule.newOperationNonce();
+}
 export async function systemHapticsEnabled(): Promise<boolean> {
   if (Platform.OS !== 'android') return true;
   try { return nativeModule ? await nativeModule.getHapticsEnabled() : false; } catch { return false; }

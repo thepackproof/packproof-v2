@@ -9,7 +9,8 @@ it("loads the actual sign-in screen through the split application entry", async 
   window.localStorage.clear();
   window.history.replaceState({}, "", "/login");
   render(<Website />);
-  expect(await screen.findByRole("heading", { name: "Welcome back." })).toBeInTheDocument();
+  // Cold transformation of the lazy app entry can overlap the other CI suites.
+  expect(await screen.findByRole("heading", { name: "Welcome back." }, {timeout:4000})).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Sign in" })).toHaveAttribute("aria-selected", "true");
 });
 

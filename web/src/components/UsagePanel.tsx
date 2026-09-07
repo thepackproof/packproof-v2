@@ -17,7 +17,7 @@ function ScopedUsage({api}:Props) {
   useEffect(()=>{let active=true;void api.getUsage<unknown>().then(value=>{const parsed=usageView(value);if(active){setUsage(parsed);setError(false);}}).catch(()=>{if(active){setUsage(null);setError(true);}});return()=>{active=false;};},[api]);
   return <section className="page"><details><summary>Proof usage</summary>{error?<p role="status">Usage is temporarily unavailable.</p>:usage?<div className="stack">
     <p>{usage.message}</p><dl><dt>Preserved finalized Proofs this month</dt><dd>{usage.finalizedWithDurabilityReceipt}</dd><dt>Finalized records awaiting durability confirmation</dt><dd>{usage.finalizedWithoutConfirmedDurability}</dd><dt>Recorded usage units</dt><dd>{usage.recordedUsageUnits}</dd></dl>
-    {usage.currentOffer&&<p>{usage.currentOffer.remaining} of {usage.currentOffer.includedFinalizedProofs} included Proofs remain through {new Date(usage.currentOffer.period.end).toLocaleDateString()}.</p>}
+    {usage.currentOffer&&<p>Plan {usage.currentOffer.version}: {usage.currentOffer.remaining} of {usage.currentOffer.includedFinalizedProofs} included Proofs remain through {new Date(usage.currentOffer.period.end).toLocaleDateString()}.</p>}
     <p className="note">Your remaining new-capture allowance does not control retrieval of past Proofs or change their preservation.</p>
   </div>:<p>Loading usage…</p>}</details></section>;
 }

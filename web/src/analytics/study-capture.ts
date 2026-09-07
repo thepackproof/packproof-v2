@@ -28,10 +28,12 @@ export async function startStationStudy(api:PackProofApi,userId:string):Promise<
   try{
     // Default capture does not perform a study request. Only a previously explicit,
     // account-scoped opt-in enables the live consent recheck below.
-    if(!localStorage.getItem(`packproof-study-consent:${prefix(api,userId)}`))return null;
-    const status=await api.studyRequest<StudyStatus>('/consent');if(!status.enabled||!status.granted||!status.datasetRef)return null;
+    const cached=localStorage.getItem(`packproof-study-consent:${prefix(api,userId)}`);if(!cached)return null;
+    let status:StudyStatus={...JSON.parse(cached),enabled:true};
+    if(navigator.onLine!==false)try{status=await api.studyRequest<StudyStatus>('/consent');}catch{/* An explicit cached grant may retain an offline task start. Intake still rechecks live consent. */}
+    if(!status.enabled||!status.granted||!status.datasetRef||status.statementVersion!=='capture-timing-study-v1')return null;
     const key=prefix(api,userId)+randomId(),tracker=bridge(api,key);
-    if(!await tracker.start({datasetRef:status.datasetRef,taskKind:'packproof',deviceClass:'web',channel:'unknown'}))return null;
+    if(!await tracker.start({datasetRef:status.datasetRef,taskKind:'packproof',deviceClass:'web',channel:'unknown'},{datasetRef:status.datasetRef,granted:true,statementVersion:status.statementVersion}))return null;
     const started=performance.now();let previous=started,activeMs=0,unattendedMs=0,offlineMs=0,current:Exclude<TimingCheckpoint['phase'],'ended'>='preflight',ended=false,offline=navigator.onLine===false,hidden=document.visibilityState==='hidden';
     const sample=()=>{const now=performance.now(),delta=Math.max(0,now-previous);previous=now;if(offline)offlineMs+=delta;if(current==='upload'||current==='finalization'||hidden)unattendedMs+=delta;else activeMs+=delta;return Math.max(0,now-started);};
     const checkpoint=(phase:TimingCheckpoint['phase'],outcome:TimingCheckpoint['outcome']='pending',errorCode?:TimingCheckpoint['errorCode'])=>{

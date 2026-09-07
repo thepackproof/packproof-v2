@@ -1,5 +1,6 @@
 import { getProofRecoveryStatus } from "../domain/recovery-journal.js";
 import { pipeline } from "node:stream/promises";
+import {guardAuthorizedStream} from "../domain/authorized-stream.js";
 import { createCaptureSession, completeCaptureSession, recoverCaptureSession, cancelCaptureSession } from "../domain/capture-sessions.js";
 import express, { type Request, type Response, type NextFunction } from "express";
 import { fileURLToPath } from "node:url";
@@ -49,7 +50,7 @@ import {
   retryWebhookDelivery,
 } from "./webhooks.js";
 import { previewOrderIntake } from "../intake/order-intake.js";
-import { exportEvidencePackage, getEvidenceReview } from "../domain/evidence-review.js";
+import { exportEvidencePackageStream, getEvidenceReview } from "../domain/evidence-review.js";
 import {
   discardStageEvidence,
   acceptCommerceReceiver,
@@ -556,7 +557,7 @@ export function createPlatformRouter(deps: AppDependencies) {
         p = req.apiPrincipal!;
       requireScope(p, "proofs:read");
       await requireTenantProof(deps.db, p, req.params.id);
-      const bytes = await exportEvidencePackage(
+      const archive = await exportEvidencePackageStream(
         deps.db,
         deps.clock,
         deps.objectStore,
@@ -565,7 +566,10 @@ export function createPlatformRouter(deps: AppDependencies) {
       );
       await auditRequest(deps.db, deps, req, "GET /proofs/:id/package", 200);
       res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}.pkpr"`);
-      res.type("application/zip").send(bytes);
+      res.type("application/zip");
+      await pipeline(guardAuthorizedStream(archive,async()=>{
+        const current=await authenticateApiKey(deps.db,req.header("authorization"));requireScope(current,"proofs:read");await requireTenantProof(deps.db,current,req.params.id);
+      }),res);
     }),
   );
   router.get(
@@ -586,7 +590,9 @@ export function createPlatformRouter(deps: AppDependencies) {
       );
       for(const [name,value] of Object.entries(result.headers))res.setHeader(name,value);
       res.status(result.status);
-      if(result.body)await pipeline(result.body,res);else res.end();
+      if(result.body)await pipeline(guardAuthorizedStream(result.body,async()=>{
+        const current=await authenticateApiKey(deps.db,req.header("authorization"));requireScope(current,"proofs:read");await requireTenantProof(deps.db,current,req.params.id);
+      }),res);else res.end();
     }),
   );
   router.use((_req, _res, next) => next(new DomainError("NOT_FOUND", "Unknown v1 endpoint", 404)));

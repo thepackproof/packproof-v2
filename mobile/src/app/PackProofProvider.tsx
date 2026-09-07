@@ -1,4 +1,5 @@
 import { completeSavedCapture, captureCompletionActive } from "../capture/completion";
+import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture} from '../analytics/native-study';
 import { listAccountCaptures, persistCaptureMetadata } from "../capture";
 import { hasDurableReceipt, mayCleanUpCapture } from "../capture/recovery-model";
 import type { IntakePreview } from "../copy/order-intake";
@@ -367,6 +368,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const tokenRef = useRef<string | null>(null);
   const sessionRef = useRef<CachedClientState | null>(null);
+  useEffect(()=>registerStudyAccountReader(()=>{const value=sessionRef.current;return value&&tokenRef.current&&!value.needsReauthentication?{userId:value.userId,apiBaseUrl:value.apiBaseUrl}:null;}),[]);
+  useEffect(()=>{updateNativeStudyConnectivity(offline);},[offline,session?.userId,session?.apiBaseUrl,session?.needsReauthentication]);
   const searchGeneration = useRef(0);
   const captureSubmitLock = useRef(false);
   const tokenRefresh = useRef<Promise<void> | null>(null);
@@ -906,6 +909,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (!hydrated || !current || !tokenRef.current || current.needsReauthentication || recoveryTickBusy.current) return;
     recoveryTickBusy.current = true;
     try {
+      void flushNativeStudyTimings(client,current.userId).catch(()=>{});
       const captures = await listAccountCaptures(current.apiBaseUrl, current.userId);
       if (sessionRef.current?.userId !== current.userId) return;
       for (const capture of captures.filter(item => route.name !== "receipt" && item.captureStageId && item.uploadEvidenceId && item.recovery?.phase !== "FINALIZED")) {
@@ -1516,6 +1520,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         }
         if (sessionRef.current?.captureProofId !== proof.proofId)
           throw new Error("Open the original Proof to discard its saved recording.");
+        (await nativeStudyForCapture(client,sessionRef.current!.userId,localCapture.studyTimingRef))?.end('cancelled','cancelled');
         await discardLocalCapture(localCapture.uri);
         await queueRetiredUpload(proof.proofId);
         await persistCapture(null, null);

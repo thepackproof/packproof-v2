@@ -102,11 +102,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: |
+            mobile/package-lock.json
+            backend/package-lock.json
+      - name: Install shared timing and recovery test loader
+        run: npm ci
+        working-directory: backend
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test:build-security
       - run: npm run test:proof-record
+      - run: npm run test:study-timing
+      - run: npm run test:recovery
+      - run: npm run test:api
 
   native-attestation:
     name: Android attestation Kotlin
@@ -136,6 +144,11 @@ jobs:
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125'
       - name: Generate the Android project
         run: npx expo prebuild --platform android --no-install
+      - name: Refuse changed tracked build inputs after prebuild
+        run: |
+          git diff --stat
+          git diff --exit-code --quiet
+          git diff --cached --exit-code --quiet
       - name: Compile native attestation and unified camera against Android and Expo
         working-directory: mobile/android
         run: ./gradlew :packproof-attestation:compileReleaseKotlin :packproof-unified-camera:compileReleaseKotlin --no-daemon --console=plain
@@ -238,11 +251,16 @@ jobs:
         with:
           node-version: 22
       - name: Verify BOM refusal and artifact identity behavior
-        run: node --test scripts/release-bom.test.mjs
+        run: node --test scripts/release-bom.test.mjs scripts/publication-policy-gate.test.mjs
+      - name: Verify portable signatures and received supplement snapshots
+        run: |
+          python3 --version
+          openssl version
+          python3 -m unittest discover -s verifier -p 'test_*.py'
       - name: Fetch pinned open-source secret scanner
         run: docker pull ghcr.io/gitleaks/gitleaks:v8.30.1
       - name: Scan repository history with redacted findings
-        run: docker run --rm --network=none --user "$(id -u):$(id -g)" -v "$GITHUB_WORKSPACE:/repo:ro" -v "$RUNNER_TEMP:/reports" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --redact=100 --report-format=json --report-path=/reports/gitleaks.json
+        run: docker run --rm --network=none --user "$(id -u):$(id -g)" -v "$GITHUB_WORKSPACE:/repo:ro" -v "$RUNNER_TEMP:/reports" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --config=/repo/.gitleaks.toml --redact=100 --report-format=json --report-path=/reports/gitleaks.json
       - name: Print only redacted secret finding locations
         if: always()
         run: |

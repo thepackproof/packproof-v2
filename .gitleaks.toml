@@ -1,0 +1,39 @@
+# Reviewed against CI run 34087260300, Source secrets job 101633568556.
+# Preserve every built-in rule. Each exception requires BOTH the exact path and exact
+# reviewed non-secret value, and applies only to the named rule. No history is skipped.
+title = "PackProof audited non-secret fixture exceptions"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public CodeBuild execution UUID; an identifier, not an authentication credential."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/RELEASE_2026\-09\-05\.md$''']
+regexes = ['''^575a41c3\-8d08\-4a20\-9830\-35a4888d97a3$''']
+
+[[allowlists]]
+description = "Fixed tracker-link signing phrase used only with isolated test harness and fake delivery."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^backend/tests/notification\-merge\.test\.ts$''']
+regexes = ['''^notification\-merge\-verification\-secret\-at\-least\-32\-bytes$''']
+
+[[allowlists]]
+description = "Fixed tracker-link signing phrase used only with isolated test harness and fake delivery."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^backend/tests/product\-hardening\.test\.ts$''']
+regexes = ['''^test\-notification\-delivery\-secret\-at\-least\-32\-bytes$''']
+
+[[allowlists]]
+description = "Explicitly synthetic test-mode API key used with injected fake Stripe fetcher; retained history."
+targetRules = ["stripe-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^backend/tests/program\-metrics\-stripe\.test\.ts$''']
+regexes = ['''^rk_test_syntheticfixtureonly0000000$''']

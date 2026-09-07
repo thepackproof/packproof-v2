@@ -6,6 +6,7 @@ import { newId } from '../ids.js';
 import { canonicalize } from '../canonical.js';
 import { appendAudit } from '../domain/audit.js';
 import { assertPolicyAccessSafe } from '../domain/policy-recovery.js';
+import { requireActiveAccount } from '../domain/account-access.js';
 import { streamPreservedObject } from '../domain/evidence.js';
 import { guardDisclosureStream } from '../domain/disclosure-stream.js';
 export interface SupportAccessPolicy { approverUserIds:readonly string[]; readerUserIds:readonly string[]; }
@@ -36,6 +37,8 @@ export async function issueSupportGrant(db:Database,clock:Clock,policy:SupportAc
   return db.transaction(async tx=>{
     await assertPolicyAccessSafe(tx);
     await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[actor]);
+    await requireActiveAccount(tx,actor);
+    await requireActiveAccount(tx,input.supportUserId as string);
     const existing=(await tx.query<Grant>('SELECT * FROM support_access_grants WHERE approved_by=$1 AND operation_id=$2',[actor,input.operationId])).rows[0];
     if(existing){if(existing.proof_id!==input.proofId||existing.support_user_id!==input.supportUserId||existing.scope!==input.scope||existing.reason!==justification||existing.issue_reference!==input.issueReference||new Date(existing.expires_at).toISOString()!==expiresAt.toISOString()||canonicalize(existing.evidence_ids)!==canonicalize(selected))throw new DomainError('SUPPORT_OPERATION_CONFLICT','This operation already authorized a different scope',409);return view(existing);}
     if(!(await tx.query('SELECT id FROM users WHERE id=$1',[input.supportUserId])).rows[0]||!(await tx.query('SELECT id FROM proofs WHERE id=$1',[input.proofId])).rows[0])throw unavailable();
@@ -47,6 +50,7 @@ export async function issueSupportGrant(db:Database,clock:Clock,policy:SupportAc
 export async function authorizeSupportGrant(db:Database,clock:Clock,policy:SupportAccessPolicy,actor:string,grantId:string,evidenceId?:string):Promise<Grant>{
   if(!policy.readerUserIds.includes(actor))throw unavailable();
   await assertPolicyAccessSafe(db);
+  await requireActiveAccount(db,actor);
   const grant=(await db.query<Grant>('SELECT g.* FROM support_access_grants g WHERE g.id=$1 AND g.support_user_id=$2 AND g.expires_at>$3 AND NOT EXISTS(SELECT 1 FROM support_access_revocations r WHERE r.grant_id=g.id)',[grantId,actor,clock.now().toISOString()])).rows[0];
   if(!grant||evidenceId&&(grant.scope!=='EVIDENCE_READ'||!grant.evidence_ids.includes(evidenceId)))throw unavailable();
   return grant;
@@ -55,6 +59,7 @@ export async function revokeSupportGrant(db:Database,clock:Clock,policy:SupportA
   if(!object(input))throw inputError();const justification=reason(input.reason);
   return db.transaction(async tx=>{
     await assertPolicyAccessSafe(tx);
+    await requireActiveAccount(tx,actor);
     const grant=(await tx.query<Grant>('SELECT * FROM support_access_grants WHERE id=$1 FOR UPDATE',[grantId])).rows[0];
     if(!grant||!policy.approverUserIds.includes(actor)&&!(policy.readerUserIds.includes(actor)&&grant.support_user_id===actor))throw unavailable();
     const inserted=await tx.query('INSERT INTO support_access_revocations(grant_id,actor_user_id,reason,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(grant_id) DO NOTHING',[grantId,actor,justification,clock.now().toISOString()]);
@@ -63,7 +68,7 @@ export async function revokeSupportGrant(db:Database,clock:Clock,policy:SupportA
   });
 }
 export async function listSupportGrants(db:Database,clock:Clock,policy:SupportAccessPolicy,actor:string){
-  if(!policy.readerUserIds.includes(actor)&&!policy.approverUserIds.includes(actor))throw unavailable();await assertPolicyAccessSafe(db);
+  if(!policy.readerUserIds.includes(actor)&&!policy.approverUserIds.includes(actor))throw unavailable();await assertPolicyAccessSafe(db);await requireActiveAccount(db,actor);
   const rows=(await db.query<Grant & {revoked_at:Date|string|null}>('SELECT g.*,r.created_at AS revoked_at FROM support_access_grants g LEFT JOIN support_access_revocations r ON r.grant_id=g.id WHERE g.support_user_id=$1 OR g.approved_by=$1 ORDER BY g.created_at DESC,g.id DESC LIMIT 100',[actor])).rows;
   return {grants:rows.map(row=>({...view(row),revokedAt:row.revoked_at?new Date(row.revoked_at).toISOString():null})),readOnly:true};
 }

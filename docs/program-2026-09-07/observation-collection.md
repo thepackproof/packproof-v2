@@ -76,8 +76,27 @@ request without a prior local opt-in. Its IndexedDB journal resumes from the
 global recovery owner. Active/unattended fields here classify observed foreground
 task windows, not attention or manual effort. Leaving the station closes that
 client task as cancelled while canonical upload recovery remains independent.
-Native has the tested shared bridge and API method, but its camera/provider hooks
-and native consent UI are not yet connected; do not claim native timing coverage.
+Native Account includes the same explicit consent statement and unchecked agreement,
+plus a bounded device-class selection. Root commerce capture, including station
+capture, starts its durable timing task before preflight and records actual camera
+start, confirmation, upload and finalization. Transient retry and pending-preservation
+states retain the task; success, failure and explicit discard have separate outcomes.
+The provider resumes account-scoped AsyncStorage timing journals independently of
+media recovery. Normal capture makes no study request without a prior local consent
+marker. While offline, the prior explicit cached grant can retain a task start;
+flush still requires live consent, and the server enforces the grant interval.
+This keeps offline preflight failures in the timing denominator without assuming
+that a cached grant authorizes server intake. A new native cryptographic UUID method supplies operation nonces without a
+random-number fallback. Grading and supplementary-stage camera timing is not hooked;
+canonical stage starts remain in the source export.
+
+Native timers sample phase/AppState changes and 15-second checkpoints. Foreground
+preflight/recording/confirmation windows are active context; upload, finalization and
+background windows are unattended context. Connectivity is observed client context,
+not a guarantee of server reachability. No attention, touch effort or background OS
+execution is inferred. The last acknowledged counters survive process restart; the
+unobserved interval while the process is dead remains an elapsed-time gap. Progress
+checkpoints reserve a terminal event within the server's 250-event lifetime cap.
 
 ## Canonical query export and limits
 
@@ -112,7 +131,11 @@ Verification: five database/router tests cover absent/cross-account/cross-datase
 consent, unknown metadata rejection, replay/conflict, SQL immutability, withdrawal,
 failed/unfinished task denominators, canonical pending/committed uploads and
 private identifier exclusion, key-material changes, withdrawn-interval fencing,
-authenticated routes and disabled defaults. Four shared bridge tests cover default opt-out,
-lost start/update responses, offline failure, account switching, withdrawal and
-local field filtering. Physical-device timings and real study observations are
-not established by these tests.
+authenticated routes and disabled defaults. Six shared bridge tests cover default
+opt-out, lost start/update responses, offline failure, account switching, withdrawal,
+local field filtering, terminal-slot retention for long tasks and offline starts
+under cached consent without bypassing live withdrawal. Four native runtime
+tests cover zero-request default capture, consented offline retries, selected device
+class, account fencing, withdrawal separation from media and acknowledged counter
+recovery. Physical-device timings and real study observations are not established
+by these tests.

@@ -102,7 +102,17 @@ describe.skipIf(!databaseUrl)("release invariants on independent real PostgreSQL
     const upload = await initializeEvidenceUpload(first.db, clock, harness.objectStore, seller, proof.proofId,
       { idempotencyKey: "postgres-upload", captureSessionId: capture.captureSessionId, evidenceType: "FULFILLMENT_CAPTURE", contentType: "video/mp4", byteSize: capture.bytes.length });
     await harness.objectStore.put(upload.objectKey, capture.bytes, "video/mp4");
-    const commits = await Promise.all(Array.from({ length: 6 }, (_, index) => commitEvidence(index % 2 ? first.db : second.db, clock, harness.objectStore, seller, proof.proofId, upload.evidenceId, sha256Hex(capture.bytes))));
+    // A burst intentionally exceeds the two-validator budget. Only the documented
+    // backpressure response may retry; every other failure still fails this gate.
+    const commits = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
+      for(let attempt=0;;attempt++){
+        try{return await commitEvidence(index % 2 ? first.db : second.db, clock, harness.objectStore, seller, proof.proofId, upload.evidenceId, sha256Hex(capture.bytes));}
+        catch(error){
+          if((error as {code?:string}).code!=="CAPTURE_VALIDATION_BUSY"||attempt>=8)throw error;
+          await new Promise(resolve=>setTimeout(resolve,Math.min(1000,50*2**attempt)));
+        }
+      }
+    }));
     expect(new Set(commits.map(result => result.sha256)).size).toBe(1);
     await commitAttestation(first.db, clock, seller, proof.proofId, { statement: "PACKED_DESCRIBED_ITEM", relatedEvidenceId: upload.evidenceId });
     await expect(finalizeProof(second.db, clock, seller, proof.proofId, signer, { requireDurableReceipts: true })).rejects.toMatchObject({ code: "PRESERVATION_PENDING" });

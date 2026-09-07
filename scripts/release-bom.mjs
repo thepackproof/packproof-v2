@@ -125,6 +125,15 @@ export async function createReleaseBom({ root, output, allowDirty = false, webDi
   };
 }
 
+export function safeBomFailureCode(error) {
+  // Only fixed tool codes are printed; never command stderr, path contents or supplied fields.
+  const allowed = new Set(["RELEASE_SOURCE_SHA_MISMATCH", "RELEASE_SOURCE_DIRTY", "ARTIFACT_SYMLINK_REJECTED", "INVALID_RUNTIME_EVIDENCE_FIELDS", "INVALID_RUNTIME_DIGEST", "INVALID_RUNTIME_SOURCE", "INVALID_IMAGE_DIGEST", "INVALID_RUNTIME_ENVIRONMENT", "SIGNING_KEY_REFERENCE_ONLY", "INVALID_RUNTIME_LIST", "INVALID_MIGRATION_EVIDENCE", "DUPLICATE_MIGRATION_EVIDENCE", "INVALID_DEVICE_EVIDENCE", "BOOLEAN_FEATURE_FLAGS_ONLY", "INVALID_CAPABILITY_VERSIONS", "INVALID_RELEASE_EVIDENCE_REFERENCE", "DEPENDENCY_INVENTORY_TOO_LARGE", "RUNTIME_EVIDENCE_TOO_LARGE", "INVALID_BOM_ARGUMENTS", "BOM_OUTPUT_REQUIRED"]);
+  if (error instanceof Error && allowed.has(error.message)) return error.message;
+  if (error?.code === "ENOENT") return "BOM_INPUT_NOT_FOUND";
+  if (error?.code === "EACCES") return "BOM_INPUT_ACCESS_DENIED";
+  return "RELEASE_BOM_FAILED";
+}
+
 async function cli(args) {
   const options = new Map(); let allowDirty = false;
   for (let index = 0; index < args.length; index++) {
@@ -143,7 +152,7 @@ async function cli(args) {
   process.stdout.write(`Release BOM written; ${bom.compatibility.mismatches.length} identity mismatches and ${bom.compatibility.missingEvidence.length} evidence gaps.\n`);
   if (bom.compatibility.mismatches.length) process.exitCode = 1;
 }
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) cli(process.argv.slice(2)).catch(() => {
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) cli(process.argv.slice(2)).catch(error => {
   // Never dump process environment, supplied inventory fields or command errors.
-  process.stderr.write("RELEASE_BOM_FAILED: check source cleanliness, expected SHA, artifact paths and the allowlisted evidence schema.\n"); process.exitCode = 1;
+  process.stderr.write(`${safeBomFailureCode(error)}: check source cleanliness, expected SHA, artifact paths and the allowlisted evidence schema.\n`); process.exitCode = 1;
 });

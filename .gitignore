@@ -11,3 +11,5 @@ backend/data/
 mobile/.expo/
 infra/cdk.out
 infra/.cache
+__pycache__/
+*.py[cod]
