@@ -507,6 +507,11 @@ export interface TransactionImportView {
 }
 
 export interface IntegrationConnectionView {
+  reviewOrderCount?: number;
+  reviewReasons?: Array<{ code: string; count: number }>;
+  autoSyncEnabled?: boolean;
+  sync?: { runStatus?: string; initialSyncCompletedAt?: string | null; nextRunAt?: string | null };
+  orderPolicy?: string;
   connectionId: string;
   adapterKey: string;
   provider: string;
@@ -677,6 +682,18 @@ export class PackProofV2Client {
 
   async listConnectedAccounts(): Promise<ConnectedAccountsListView> {
     return this.request("/me/connected-accounts");
+  }
+
+  async setCommerceAutomation(connectionId: string, enabled: boolean): Promise<unknown> {
+    return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/automation`, {
+      method: "POST", body: { enabled },
+    });
+  }
+
+  async syncCommerceConnection(connectionId: string): Promise<unknown> {
+    return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/sync`, {
+      method: "POST", body: {},
+    });
   }
 
   async startConnectedAccountConnect(

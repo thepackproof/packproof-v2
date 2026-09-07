@@ -24,6 +24,9 @@ import { createCredentialStore } from "./integrations/create-credential-store.js
 import { createEbayRuntime } from "./integrations/ebay/runtime.js";
 import { webhookConfigFromEnv } from "./platform/webhooks.js";
 import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
+import { createEtsyCommerceAdapter } from "./integrations/etsy/commerce-adapter.js";
+import { createEtsyAccessTokenRunner } from "./integrations/etsy/access.js";
+import { createConnectedAccountRegistry } from "./integrations/connected-accounts/runtime.js";
 
 import { dispatchCommerceSyncs } from "./workers/commerce-worker.js";
 import { dispatchWebhooks } from "./platform/webhooks.js";
@@ -31,6 +34,7 @@ import {
   createFacebookRuntime,
   createGoogleRuntime,
   createShopifyRuntime,
+  createEtsyRuntime,
 } from "./integrations/connected-accounts/from-config.js";
 
 loadEnvFile(path.resolve(process.cwd()));
@@ -59,8 +63,19 @@ if(!durabilityPolicy||durabilityPolicy.durability_required!==(config.requireDura
   throw new Error('Runtime durability mode does not match the migration-controlled policy');
 
 const ebayRuntime=createEbayRuntime(config,{publicBaseUrl:config.publicBaseUrl,webOrigins:config.webOrigins});
+const etsyRuntime=createEtsyRuntime(config,credentialStore,opened.db,systemClock);
+const accountRuntimes={
+  ebay:ebayRuntime, etsy:etsyRuntime, shopify:createShopifyRuntime(config),
+  google:createGoogleRuntime(config), facebook:createFacebookRuntime(config), credentials:credentialStore,
+};
 const integrations=createDefaultIntegrationRegistry(systemClock);
 if(ebayRuntime.enabled) integrations.registerCommerce(createEbayCommerceAdapter(opened.db,systemClock,ebayRuntime,credentialStore));
+if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(createEtsyCommerceAdapter(etsyRuntime.client,
+  createEtsyAccessTokenRunner(opened.db,systemClock,{
+    registry:createConnectedAccountRegistry(accountRuntimes),credentials:credentialStore,
+    packproofEnvironment:config.release.environment,
+    webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
+  })));
 const readinessProbes=[
   {name:'policy-recovery',check:()=>assertPolicyAccessSafe(opened.db)},
   {name:'database',check:()=>opened.db.query('SELECT 1')},
@@ -96,9 +111,10 @@ const app = config.processRole==='worker'?express():createServerApp({
   requireDurableReceipts: config.requireDurableReceipts,
   readinessProbes,
   ebay: ebayRuntime,
-  shopify: createShopifyRuntime(config),
-  google: createGoogleRuntime(config),
-  facebook: createFacebookRuntime(config),
+  etsy: etsyRuntime,
+  shopify: accountRuntimes.shopify,
+  google: accountRuntimes.google,
+  facebook: accountRuntimes.facebook,
 });
 
 if(config.processRole==='worker'){

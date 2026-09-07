@@ -458,6 +458,8 @@ export interface FulfillmentQueueItem {
 }
 
 export interface CommerceConnectionView {
+  reviewOrderCount?: number;
+  reviewReasons?: Array<{ code: string; count: number }>;
   autoSyncEnabled?: boolean;
   sync?: {runStatus?:string;initialSyncCompletedAt?:string;nextRunAt?:string;lastSyncAt?:string};
   orderPolicy?: string;

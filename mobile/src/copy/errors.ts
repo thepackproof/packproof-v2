@@ -136,6 +136,35 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
     title: "eBay isn’t enabled yet.",
     message: "This PackProof environment has not turned on eBay connections.",
   },
+  ETSY_APPLICATION_NOT_CONFIGURED: {
+    title: "Etsy connection setup needs attention.",
+    message: "PackProof's Etsy app must be approved and configured before you can connect. Changing your Etsy password will not resolve this setup issue.",
+  },
+  ETSY_SELLER_SHOP_REQUIRED: {
+    title: "Connect your Etsy selling account.",
+    message: "This Etsy account has no available seller shop. Authorize the Etsy account that owns the shop you want to connect.",
+  },
+  CONNECTED_ACCOUNT_AUTH_DENIED: {
+    title: "Connection authorization was declined.",
+    message: "Your selling account was not connected. Start Connect again when you are ready to authorize access.",
+  },
+  CONNECTED_ACCOUNT_IDENTITY_MISMATCH: {
+    title: "Reconnect the same selling account.",
+    message: "The authorized shop differs from the connection you selected. Choose the original shop when reconnecting.",
+  },
+  PROVIDER_RATE_LIMITED: {
+    title: "The platform's request limit was reached.",
+    message: "The order check is paused. Enabled automatic intake will retry when the request allowance is available.",
+  },
+  PROVIDER_TEMPORARILY_UNAVAILABLE: {
+    title: "The selling platform is temporarily unavailable.",
+    message: "The order check could not finish. Enabled automatic intake will retry; you can also check again later.",
+  },
+  PROVIDER_RESPONSE_INVALID: {
+    title: "The platform returned incomplete order details.",
+    message: "PackProof could not safely import that response. Check the connection again or use manual order entry.",
+    action: "manual",
+  },
   CONNECTED_ACCOUNT_PROVIDER_DISABLED: {
     title: "That connection isn’t enabled yet.",
     message: "This PackProof environment has not turned on that provider.",

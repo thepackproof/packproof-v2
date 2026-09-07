@@ -36,6 +36,7 @@ export interface AppConfig {
   release: ReleaseIdentity;
   ebay: EbayConfig;
   shopify: ShopifyOAuthConfig;
+  etsy: EtsyOAuthConfig;
   google: GoogleOAuthConfig;
   facebook: FacebookOAuthConfig;
 }
@@ -54,6 +55,13 @@ export interface ShopifyOAuthConfig {
   enabled: boolean;
   clientId: string | null;
   appCredentialReference: string | null;
+}
+
+export interface EtsyOAuthConfig {
+  enabled: boolean;
+  clientId: string | null;
+  appCredentialReference: string | null;
+  redirectUri: string | null;
 }
 
 export interface GoogleOAuthConfig {
@@ -133,6 +141,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     release: parseReleaseIdentity(env),
     ebay: parseEbayConfig(env),
     shopify: parseShopifyConfig(env),
+    etsy: parseEtsyConfig(env),
     google: parseGoogleConfig(env),
     facebook: parseFacebookConfig(env),
   };
@@ -292,6 +301,30 @@ export function parseShopifyConfig(env: NodeJS.ProcessEnv = process.env): Shopif
     }
   }
   return { enabled, clientId, appCredentialReference };
+}
+
+export function parseEtsyConfig(env: NodeJS.ProcessEnv = process.env): EtsyOAuthConfig {
+  const enabled = parseBooleanFlag(env.PACKPROOF_ETSY_INTEGRATION_ENABLED);
+  const clientId = env.PACKPROOF_ETSY_CLIENT_ID?.trim() || null;
+  const appCredentialReference = env.PACKPROOF_ETSY_APP_CREDENTIAL_REFERENCE?.trim() ||
+    (env.PACKPROOF_ETSY_SHARED_SECRET ? "env:PACKPROOF_ETSY_SHARED_SECRET" : null);
+  const redirectUri = env.PACKPROOF_ETSY_REDIRECT_URI?.trim() || null;
+  if (enabled && (!clientId || !appCredentialReference)) {
+    throw new Error("PACKPROOF_ETSY_INTEGRATION_ENABLED requires PACKPROOF_ETSY_CLIENT_ID and PACKPROOF_ETSY_APP_CREDENTIAL_REFERENCE or PACKPROOF_ETSY_SHARED_SECRET. Secret values are not included.");
+  }
+  if (clientId && !/^[A-Za-z0-9_-]{8,128}$/.test(clientId)) {
+    throw new Error("PACKPROOF_ETSY_CLIENT_ID must contain a valid Etsy application keystring.");
+  }
+  if (redirectUri) {
+    let valid = false;
+    try {
+      const url = new URL(redirectUri);
+      valid = url.protocol === "https:" && !url.username && !url.password &&
+        !url.hash && !url.search && url.pathname.endsWith("/oauth/etsy/callback");
+    } catch { /* Report configuration names, never their values. */ }
+    if (!valid) throw new Error("PACKPROOF_ETSY_REDIRECT_URI must be an HTTPS callback ending in /oauth/etsy/callback, without credentials, query or fragment.");
+  }
+  return { enabled, clientId, appCredentialReference, redirectUri };
 }
 
 function parseBooleanFlag(value: string | undefined): boolean {

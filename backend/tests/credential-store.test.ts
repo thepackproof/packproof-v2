@@ -76,4 +76,39 @@ describe("durable integration credential store", () => {
       await store.getCredentials({ adapterKey: "ebay", credentialReference: "memory:ebay-app" }),
     ).toMatchObject({ material: { clientSecret: "test-cert-id" } });
   });
+
+  it("observes rotations and deletions from another running process", async () => {
+    const backend = new InMemorySecretsManagerClient();
+    const api = durableStore(backend);
+    const worker = durableStore(backend);
+    const identity = { adapterKey: "etsy", credentialReference: "packproof/test/integrations/etsy/shop" };
+    await api.put({ ...identity, material: { refreshToken: "token-one" } });
+    expect((await worker.getCredentials(identity))?.material.refreshToken).toBe("token-one");
+    await worker.put({ ...identity, material: { refreshToken: "token-two" } });
+    expect((await api.getCredentials(identity))?.material.refreshToken).toBe("token-two");
+    await api.deleteCredentials(identity);
+    expect(await worker.getCredentials(identity)).toBeNull();
+  });
+
+  it("never serves seeded stale cache material when a managed secret is unavailable", async () => {
+    const backend = new InMemorySecretsManagerClient();
+    const memory = new MemoryCredentialStore();
+    const identity = { adapterKey: "etsy", credentialReference: "packproof/test/integrations/etsy/missing" };
+    memory.put({ ...identity, material: { refreshToken: "obsolete-token" } });
+    expect(await durableStore(backend, memory).getCredentials(identity)).toBeNull();
+  });
+
+  it("does not publish a token rotation into memory before the durable write succeeds", async () => {
+    const memory = new MemoryCredentialStore();
+    const identity = { adapterKey: "etsy", credentialReference: "packproof/test/integrations/etsy/unavailable" };
+    const unavailable = {
+      async put() { throw new Error("storage unavailable"); },
+      async getCredentials() { return null; },
+      async deleteCredentials() {},
+    };
+    const store = new CompositeCredentialStore(memory, new EnvCredentialStore({}), unavailable);
+    await expect(store.put({ ...identity, material: { refreshToken: "unpersisted-token" } })).rejects.toThrow("storage unavailable");
+    expect(await memory.getCredentials(identity)).toBeNull();
+    expect(await store.getCredentials(identity)).toBeNull();
+  });
 });

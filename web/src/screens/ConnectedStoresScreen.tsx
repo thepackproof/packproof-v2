@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { formatDateTime } from "@packproof/copy/format";
+import { automaticIntakeStatus, orderIntakeExplanation, orderReviewReason } from "@packproof/copy/commerce";
+import { formatUserFacingError } from "@packproof/copy/errors";
 import type { CommerceConnectionView, CommerceSyncView, EbayMarketplaceView } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 
@@ -107,18 +109,19 @@ export function ConnectedStoresScreen(props: {
               <p className="meta">
                 {connection.providerDisplay} · {connection.status}
               </p>
-              <label className="row"><input type="checkbox" checked={connection.autoSyncEnabled===true} disabled={props.busy||connection.status!=="ACTIVE"} onChange={e=>props.onAutomation(connection.connectionId,e.target.checked)}/> Automatically prepare eligible paid orders for recording</label>
-              <p className="note">Paid physical orders with remaining fulfillment enter Orders automatically while this is enabled, even when this tab is closed. Digital, unpaid, cancelled and fully fulfilled orders are excluded. Recording always remains a deliberate action.</p>
-              <p className="meta">{connection.autoSyncEnabled ? connection.sync?.initialSyncCompletedAt ? "Automatic intake enabled" : "Initial order check pending or in progress" : "Automatic intake off"}{connection.sync?.runStatus ? ` · ${connection.sync.runStatus.toLowerCase().replaceAll("_"," ")}` : ""}</p>
+              <label className="row"><input type="checkbox" checked={connection.autoSyncEnabled===true} disabled={props.busy||(connection.status!=="ACTIVE"&&!connection.autoSyncEnabled)} onChange={e=>props.onAutomation(connection.connectionId,e.target.checked)}/> Automatically prepare eligible paid orders for recording</label>
+              <p className="note">{orderIntakeExplanation(connection.provider)}</p>
+              <p className="meta">{automaticIntakeStatus(connection)}</p>
               <p className="meta">{connection.readyOrderCount} orders ready</p>
+              {(connection.reviewOrderCount ?? 0) > 0 ? <p className="note">{connection.reviewOrderCount} orders need review and are excluded from the automatic packing queue. {(connection.reviewReasons ?? []).map(reason => `${orderReviewReason(reason.code)}: ${reason.count}`).join(" · ")}. Review the original orders in Etsy.</p> : null}
               {connection.lastSyncAt ? <p className="meta">Last sync {connection.lastSyncAt}</p> : null}
               {connection.lastErrorCode ? (
-                <p className="note">Last sync error: {connection.lastErrorCode}</p>
+                <p className="note">{formatUserFacingError({code:connection.lastErrorCode,message:"The last order check could not finish. Try checking again or reconnect your selling account."})}</p>
               ) : null}
               <button
                 className="btn"
                 type="button"
-                disabled={props.busy}
+                disabled={props.busy || connection.status !== "ACTIVE"}
                 onClick={() => props.onSync(connection.connectionId)}
               >
                 Check for orders now

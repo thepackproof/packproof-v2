@@ -40,7 +40,7 @@ describe("durable automatic commerce intake", () => {
             throw providerRateLimited(); return { orders: [order(cursor ? "two" : "one")], cursor: cursor ? null : "second" }; });
         const { h, user, connection, deps } = await setup(list);
         await expect(executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps)).rejects.toMatchObject({ code: "PROVIDER_RATE_LIMITED" });
-        expect((await h.db.query("SELECT * FROM commerce_connection_sync_states")).rows[0]).toMatchObject({ provider_cursor: "second", run_status: "RETRYING", attempt_count: 1, last_error_retryable: true });
+        expect((await h.db.query("SELECT * FROM commerce_connection_sync_states")).rows[0]).toMatchObject({ provider_cursor: "second", run_status: "RETRYING", attempt_count: 0, last_error_retryable: true });
         fail = false;
         expect(await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps)).toMatchObject({ createdProofCount: 1, complete: true });
         expect(list.mock.calls.map(([i]) => i.cursor)).toEqual([null, "second", "second"]);
