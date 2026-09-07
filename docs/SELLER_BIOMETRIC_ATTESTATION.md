@@ -47,4 +47,4 @@ Before wider release, validate on Galaxy S24 Ultra and Galaxy A16: successful fi
 
 References: [Android biometric prompt](https://developer.android.com/identity/sign-in/biometric-auth), [Android Keystore](https://developer.android.com/privacy-and-security/keystore), [Android biometric security](https://source.android.com/docs/security/features/biometric).
 
-GitHub publication status: the source is committed locally. Automatic approval review rejected the push because explicit permission is required to upload source and CI changes to `thepackproof/packproof-v2`. No new remote branch or draft PR was created.
+GitHub publication status: the initial push was blocked pending explicit authorization. On September 7 the user authorized publication; draft PR [#35](https://github.com/thepackproof/packproof-v2/pull/35) now includes this source alongside the scrolling correction. Its code commit is `e25c866f100b22187a9edc09c9a5450184f25279`. Build 35 preserves the attestation feature; see `ANDROID_SCROLL_FIX.md` for its verified release details. The backend deployment requirement above remains a release gate.
