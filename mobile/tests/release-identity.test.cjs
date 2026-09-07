@@ -15,3 +15,12 @@ test('next standard Android candidate advances the installed baseline and retain
   assert.equal(config.android.package,'com.packproof.mobile');
   assert.equal(config.android.allowBackup,false);
 });
+
+test('native Gradle outputs are ignored while local module source remains part of release identity', () => {
+  for(const moduleName of ['packproof-attestation','packproof-unified-camera']){
+    for(const [suffix,expected] of [['build/outputs/aar/module-debug.aar',0],['src/main/AndroidManifest.xml',1],['build.gradle',1]]){
+      const result=spawnSync('git',['check-ignore','--no-index',`modules/${moduleName}/android/${suffix}`],{cwd:path.resolve(__dirname,'..'),encoding:'utf8'});
+      assert.equal(result.status,expected,result.stderr);
+    }
+  }
+});
