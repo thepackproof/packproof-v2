@@ -22,7 +22,7 @@ export function initialProofRecordView(): ProofRecordViewState {
 export function recordProofStatus(status: string): string {
   const labels: Record<string, string> = {
     OPEN: "In progress", AWAITING_PARTICIPANT: "Waiting for buyer",
-    READY_FOR_EVIDENCE: "Recording needed", EVIDENCE_COMMITTED: "Ready to finalize", FINALIZED: "Proof finalized",
+    READY_FOR_EVIDENCE: "Recording needed", EVIDENCE_COMMITTED: "Finish saving", FINALIZED: "Proof saved",
   };
   return labels[status] ?? "In progress";
 }
@@ -31,11 +31,11 @@ export function recordProofStatus(status: string): string {
 export function recordNextStepCopy(local: NextAction, server: { title: string; hint?: string | null } | null, grading: boolean) {
   if (grading && server) return { title: server.title, hint: server.hint || "" };
   const hints: Partial<Record<NextAction["key"], string>> = {
-    start_capture: "Show the item, packing, and sealed package.",
-    review_recording: "Review your recording, then save it to this Proof.",
+    start_capture: "Keep the item and package in view. Show the shipping label while recording.",
+    review_recording: "Review your recording, then confirm what you are shipping.",
     uploading: "Keep PackProof open while your recording uploads.",
     securing: "Saving your recording to this Proof…",
-    finalize: "Your recording is saved. Review and finalize this Proof to lock the packing record.",
+    finalize: "Your recording is uploaded. Finish saving to lock the Proof.",
     add_participant: "Invite the buyer to continue.",
   };
   return { title: local.label, hint: hints[local.key] ?? local.hint };
@@ -125,4 +125,43 @@ export function receiptAcknowledgment(record: ReceiptRecordSummary | null): stri
   if (receipt?.finalizedAt) return "Receipt recording finalized";
   if (receipt?.evidence.some(item => Boolean(item.committedAt))) return "Receipt recording saved · not finalized";
   return "Not recorded";
+}
+
+
+export function recordCompletionState(status: string | null | undefined) {
+  const finalized = status === "FINALIZED";
+  return { finalized, title: finalized ? "Proof saved" : "Your Proof is not finished yet", label: finalized ? "View Proof" : "Finish saving" };
+}
+
+export type RecordActivityGroup = { key: string; entry: ChronologyEntry; entries: ChronologyEntry[]; access: boolean };
+const ACCESS_EVENTS = new Set(["PROOF_ACCESSED", "PROOF_VIEWED_VIA_ACCESS_LINK"]);
+
+/** Presentation only: same actor/link/source, in a fixed 30-minute UTC window.
+ * Unknown actor AND unknown link never merge. An access count never claims unique people.
+ * Original records, exact timestamps, and their IDs remain available inside every group.
+ */
+export function recordActivityGroups(entries: ChronologyEntry[], audit: ProofView["events"] = []): RecordActivityGroup[] {
+  const raw = new Map((audit ?? []).map(item => [item.eventId, item]));
+  const groups: RecordActivityGroup[] = [];
+  const byKey = new Map<string, RecordActivityGroup>();
+  for (const entry of orderedRecordEvents(entries)) {
+    const access = ACCESS_EVENTS.has(entry.eventType.toUpperCase());
+    if (!access && DETAIL_ONLY_EVENTS.has(entry.eventType.toUpperCase())) continue;
+    const source = raw.get(entry.id) ?? raw.get(entry.relatedEntityId ?? "");
+    const actor = source?.actorUserId || "";
+    const linkValue = source?.data.accessLinkId ?? source?.data.linkId;
+    const link = typeof linkValue === "string" ? linkValue : "";
+    const time = Date.parse(entry.occurredAt);
+    const key = access && (actor || link) && Number.isFinite(time)
+      ? JSON.stringify([actor, link, entry.source, entry.provider ?? "", Math.floor(time / 1_800_000)])
+      : `event:${entry.id}`;
+    const prior = access ? byKey.get(key) : undefined;
+    if (prior) prior.entries.push(entry);
+    else {
+      const group = { key, entry, entries: [entry], access };
+      groups.push(group);
+      if (access) byKey.set(key, group);
+    }
+  }
+  return groups;
 }

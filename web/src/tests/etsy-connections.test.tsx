@@ -41,9 +41,10 @@ describe("Etsy selling account and automatic intake", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  it("shows setup pending when server catalog disables Etsy instead of offering a broken connect action", () => {
+  it("omits a never-connected unavailable provider without offering a broken connect action", () => {
     render(<ConnectedAccountsPanel {...accountProps()} providers={[{ ...provider, enabled: false }]} />);
-    expect(screen.getByText(/Etsy connection setup is pending/)).toBeInTheDocument();
+    expect(screen.queryByText(/connection setup is pending|not enabled in this environment/)).not.toBeInTheDocument();
+    expect(screen.getByText(/No sales channels are available/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Etsy" })).not.toBeInTheDocument();
     expect(screen.queryByText(/^Connected$/)).not.toBeInTheDocument();
   });
@@ -86,7 +87,7 @@ describe("Etsy selling account and automatic intake", () => {
     const props = storeProps({ ...connection, status: "NEEDS_REAUTH", autoSyncEnabled: true });
     const { rerender } = render(<ConnectedStoresScreen {...props} />);
     expect(screen.getByRole("button", { name: "Check for orders now" })).toBeDisabled();
-    expect(screen.getByText(/Automatic intake paused/)).toBeInTheDocument();
+    expect(screen.getByText(/Automatic orders are paused/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox"));
     expect(props.onAutomation).toHaveBeenCalledExactlyOnceWith("etsy_shop", false);
     rerender(<ConnectedStoresScreen {...props} connections={[{ ...connection, status: "NEEDS_REAUTH" }]} />);

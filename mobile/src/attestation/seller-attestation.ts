@@ -1,3 +1,4 @@
+import { nativeStudyForCapture } from "../analytics/native-study";
 import { bindRecordedCapture, persistCaptureMetadata, type LocalCapture } from "../capture";
 import type { PackProofV2Client, SellerAttestationAuthorization } from "../v2-api";
 import { getAttestationAvailability, prepareAttestationKey, signAttestationPayload } from "./native";
@@ -28,7 +29,17 @@ export async function authorizeSellerCapture({ client, capture, proofId, userId 
     publicKey,
   });
   validateSellerChallenge(challenge, { proofId, userId, captureSessionId: capture.captureSessionId, sha256: capture.captureSha256, publicKey });
-  const { signature } = await signAttestationPayload(userId, challenge.payload);
+  const study=await nativeStudyForCapture(client,userId,capture.studyTimingRef);
+  let signature:string;
+  try {
+    ({signature}=await signAttestationPayload(userId,challenge.payload));
+    study?.event('consent_confirmed');
+  } catch (error) {
+    const cancelled=(error as {code?:string})?.code==='BIOMETRIC_CANCELLED';
+    study?.event(cancelled?'consent_cancelled':'consent_failed');
+    study?.problem(cancelled?'cancelled':'authentication');
+    throw error;
+  }
   if (capture.recovery) {
     capture.recovery.authorization = { challengeId: challenge.challengeId, signature, expiresAt: challenge.expiresAt, sha256: capture.captureSha256 };
     // Persist before the first attestation HTTP request so a lost response can replay exact bytes.

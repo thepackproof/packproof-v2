@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHarness, createUser, commitProofEvidence, commitFulfillmentAndAttest, prepareCameraCapture, type TestHarness } from './helpers.js';
 import { createProof } from '../src/domain/create-proof.js';
 import { createCaptureSession, completeCaptureSession, CAPTURE_ASSURANCE } from '../src/domain/capture-sessions.js';
+import { assertShippingReviewComplete, getCaptureLabelReview, resolveCaptureLabel } from '../src/domain/capture-label-review.js';
 import { bindCaptureShipping, getCaptureShipping } from '../src/domain/capture-shipping.js';
 import { initializeEvidenceUpload } from '../src/domain/evidence.js';
 import { finalizeProof, getManifest } from '../src/domain/finalize.js';
@@ -27,9 +28,24 @@ describe('W02-D adversarial evidence classifications',()=>{
   const f=await fixture(),session=await createCaptureSession(h.db,h.clock,f.seller,f.proofId,{client:'NATIVE_CAMERA',idempotencyKey:'label-camera'});
   const scan={rawValue:'1Z999AA10123456784',format:'CODE_128',detectedAtMs:10,idempotencyKey:'first-scan',confirmed:true};
   await bindCaptureShipping(h.db,h.clock,f.seller,f.proofId,session.id,scan);
-  await expect(bindCaptureShipping(h.db,h.clock,f.seller,f.proofId,session.id,{...scan,rawValue:'1Z999AA10123456785',idempotencyKey:'swapped-scan'})).rejects.toMatchObject({code:'SHIPPING_LABEL_CONFLICT'});
+  const conflict=await bindCaptureShipping(h.db,h.clock,f.seller,f.proofId,session.id,{...scan,rawValue:'1Z999AA10123456785',idempotencyKey:'swapped-scan'});
+  expect(conflict).toMatchObject({status:'CONFLICT',currentTrackingNumber:scan.rawValue,trackingNumber:'1Z999AA10123456785',observationId:expect.any(String)});
+  const review=await getCaptureLabelReview(h.db,f.seller,f.proofId,session.id);
+  expect(review.reviewRequired).toBe(true);
+  expect(review.observations).toEqual(expect.arrayContaining([
+    expect.objectContaining({trackingNumber:scan.rawValue,associated:true}),
+    expect.objectContaining({trackingNumber:'1Z999AA10123456785',associated:false,resolution:null}),
+  ]));
+  await expect(assertShippingReviewComplete(h.db,f.proofId,session.id)).rejects.toMatchObject({code:'LABEL_REVIEW_REQUIRED'});
   expect((await getCaptureShipping(h.db,f.proofId))?.observations.map(row=>row.trackingNumber)).toEqual([scan.rawValue]);
   expect((await h.db.query<{tracking_number:string}>('SELECT tracking_number FROM capture_label_observations WHERE proof_id=$1 ORDER BY tracking_number',[f.proofId])).rows.map(row=>row.tracking_number)).toEqual([scan.rawValue,'1Z999AA10123456785']);
+  await abstains(f.seller,f.proofId,'Was the physical shipping label swapped after recording?');
+  const observed=review.observations.find(row=>row.trackingNumber==='1Z999AA10123456785')!;
+  const resolved=await resolveCaptureLabel(h.db,h.clock,f.seller,f.proofId,session.id,observed.observationId,{decision:'NOT_THIS_PACKAGE',reason:'Another label was visible beside the package'});
+  expect(resolved.reviewRequired).toBe(false);
+  expect(resolved.currentTrackingNumber).toBe(scan.rawValue);
+  expect(resolved.observations.find(row=>row.observationId===observed.observationId)).toMatchObject({trackingNumber:'1Z999AA10123456785',associated:false,resolution:{decision:'NOT_THIS_PACKAGE'}});
+  // A participant's resolution changes neither tracking identity nor knowledge of unseen physical acts.
   await abstains(f.seller,f.proofId,'Was the physical shipping label swapped after recording?');
  });
  it('DOCUMENTED authorized byte equality: identical recordings in new sessions carry no fraud finding and reveal no other account recording',async()=>{

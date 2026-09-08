@@ -4,9 +4,10 @@ import type { AccessLinkView, CanonicalProof } from "../api/types";
 import { recordProofStatus } from "@packproof/copy/proof-record";
 import { SharedProofRecord, type SharedProofView } from "./SharedProofRecord";
 import { SharingCode } from "./SharingCode";
+import { recordStudyInteraction } from "../analytics/study-capture";
 
 type Preview = SharedProofView & { disclosure: NonNullable<SharedProofView["disclosure"]> };
-export function PrivacySharePanel({ api, proof }: { api: PackProofApi; proof: CanonicalProof }) {
+export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProofApi; proof: CanonicalProof; currentUserId?: string }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [grant, setGrant] = useState<AccessLinkView | null>(null);
   const [links, setLinks] = useState<AccessLinkView[]>([]);
@@ -58,6 +59,7 @@ export function PrivacySharePanel({ api, proof }: { api: PackProofApi; proof: Ca
       <p>{preview.disclosure.sharingNotice || "Anyone with this link can view this Proof, its original recordings, and future updates. Review the recordings before sharing."}</p>
       <button className="btn" disabled={busy} onClick={() => void run(async () => {
         const result = await api.featureRequest<AccessLinkView>(proof.proofId, "disclosure/grants", "POST", { purpose: "SHARED_PROOF", originalsReviewed: true, previewHash: preview.disclosure.viewHash, expiresAt: new Date(Date.now() + days * 86400000).toISOString() });
+        if (currentUserId && result.accessLinkId) void recordStudyInteraction(api, currentUserId, 'share_created');
         if (active.current) { setGrant(result); setNotice("Share link created."); }
       })}>{busy ? "Creating link…" : "Create share link"}</button>
     </div>}

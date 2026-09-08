@@ -46,6 +46,8 @@ import {
   DEFAULT_PARTICIPATION_POLICY,
   type ParticipationPolicy,
 } from "./participation.js";
+import { buildProofRecoverySnapshot, enqueueRecoveryEvent } from "./recovery-journal.js";
+import { hasBoundPackingCapture } from "./transaction-correction-policy.js";
 
 export interface TransactionImportView {
   transaction: TransactionView;
@@ -153,6 +155,7 @@ export async function importNormalizedTransaction(
       created = true;
     }
 
+    await recordSourceObservation(tx, clock, actorUserId, transactionId, parsed, { adapterKey, tenantKey, fingerprint });
     const existingProof = await tx.query<{ id: string }>(
       `SELECT id FROM proofs WHERE transaction_id = $1`,
       [transactionId],
@@ -302,16 +305,9 @@ async function applyImportedFacts(
   const itemsChanged =
     parsed.items.length > 0 ? await importedItemsChanged(db, transactionId, parsed.items) : false;
 
-  if (locked.proofStatus === "FINALIZED") {
-    if (Object.keys(txnChanged).length > 0 || Object.keys(shipChanged).length > 0 || itemsChanged) {
-      throw new DomainError(
-        "PROOF_ALREADY_FINALIZED",
-        "Imported data cannot mutate finalized Proof context",
-        409,
-      );
-    }
-    return;
-  }
+  // Provider refreshes remain useful observations. They cannot rewrite the
+  // snapshot the seller started recording, authorized, or already finalized.
+  if (locked.proofStatus === "FINALIZED" || await hasBoundPackingCapture(db, locked.proofId)) return;
 
   if (
     Object.keys(txnChanged).length === 0 &&
@@ -525,4 +521,23 @@ function shippingSnapshot(row: ShippingRow | null): ShippingWrite {
         trackingNumber: null,
         shipmentDate: null,
       };
+}
+
+async function recordSourceObservation(
+  db: Database, clock: Clock, actor: string, transactionId: string,
+  parsed: ParsedImportedTransaction,
+  context: {adapterKey: string; tenantKey: string; fingerprint: string},
+): Promise<void> {
+  const inserted = await db.query<{id: string}>(`INSERT INTO transaction_source_observations
+    (id,transaction_id,actor_user_id,adapter_key,tenant_key,payload_sha256,snapshot,received_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+    ON CONFLICT(transaction_id,adapter_key,payload_sha256) DO NOTHING RETURNING id`,
+    [newId('source'),transactionId,actor,context.adapterKey,context.tenantKey,context.fingerprint,
+      JSON.stringify(parsed),clock.now().toISOString()]);
+  if (!inserted.rows[0]) return;
+  const proof = (await db.query<{id:string}>('SELECT id FROM proofs WHERE transaction_id=$1', [transactionId])).rows[0];
+  if (proof) {
+    await appendAudit(db,{proofId:proof.id,actorUserId:actor,eventType:'TRANSACTION_SOURCE_OBSERVED',eventData:{observationId:inserted.rows[0].id,source:parsed.provenance.source,provider:parsed.provider,payloadSha256:context.fingerprint},at:clock.now()});
+    await enqueueRecoveryEvent(db,clock,{operationId:`source:${inserted.rows[0].id}`,kind:'SOURCE_OBSERVED',proofId:proof.id,actorUserId:actor,payload:await buildProofRecoverySnapshot(db,proof.id)});
+  }
 }

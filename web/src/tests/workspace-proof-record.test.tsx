@@ -20,6 +20,7 @@ function apiStub(anchors: unknown[] = [], stages: unknown[] = []) {
 }
 
 beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
   sessionStorage.clear();
   window.history.replaceState({}, "", `/proofs/${proof.proofId}`);
   let index = 0;
@@ -66,7 +67,11 @@ describe("simplified live Proof record", () => {
     const player = await screen.findByLabelText("Recorded packing evidence") as HTMLVideoElement;
     fireEvent.timeUpdate(player, { target: { currentTime: 12 } });
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(screen.queryByLabelText("Recorded packing evidence")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Recorded packing evidence")).not.toBeVisible();
+    await userEvent.click(screen.getByRole("tab", { name: "Recording" }));
+    expect(screen.getByLabelText("Recorded packing evidence")).toBe(player);
+    expect(load).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     first.unmount();
     const second = render(<WorkspaceProofRecord {...props} />);
     expect(screen.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
@@ -96,7 +101,7 @@ describe("simplified live Proof record", () => {
     const tracking = screen.getByRole("tabpanel", { name: "Tracking" });
     expect(within(tracking).getByText("UPS")).toBeInTheDocument();
     expect(within(tracking).getByText("1Z999")).toBeInTheDocument();
-    expect(within(tracking).getByText("Waiting for the first carrier update.")).toBeInTheDocument();
+    expect(within(tracking).getByText("Tracking number recorded. No carrier scan has been reported yet.")).toBeInTheDocument();
     expect(screen.queryByText(/Fictional|Illustrative stock|DEMO-1042/)).not.toBeInTheDocument();
   });
 

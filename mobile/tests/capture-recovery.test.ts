@@ -143,7 +143,7 @@ test("a stage recording requires its own finalized receipt rather than the froze
 test("new capture rejects malformed, incompatible or unsigned server capability paths before acquisition", () => {
   for (const value of [null, {}, { schemaVersion: 2 }, { schemaVersion: 1, capture: { protocolVersions: [1], maxBytes: 0 } }])
     assert.throws(() => requireCaptureCapabilities(value, true), { code: "CAPABILITY_UPDATE_REQUIRED" });
-  const valid = { schemaVersion: 1, capture: { protocolVersions: [1], maxBytes: 250000000 }, preservation: { receiptVersions: [1] }, sellerAttestation: { challengeVersions: [1], statementVersion: 1, methods: ["ANDROID_BIOMETRIC_STRONG"] } };
+  const valid = { schemaVersion: 1, capture: { protocolVersions: [1], maxBytes: 250000000, maxDurationSeconds: 300, maxActiveUploads: 2 }, preservation: { receiptVersions: [1], durableReceiptsRequired: true }, sellerAttestation: { challengeVersions: [1], statementVersion: 1, methods: ["ANDROID_BIOMETRIC_STRONG"] } };
   assert.equal(requireCaptureCapabilities(valid, true), valid);
   assert.throws(() => requireCaptureCapabilities({ ...valid, sellerAttestation: { ...valid.sellerAttestation, methods: ["PIN"] } }, true), { code: "CAPABILITY_ATTESTATION_REQUIRED" });
 });
@@ -154,5 +154,29 @@ test("a single-use gateway receipt skips retransmission after a lost upload-comp
   await recoverCaptureCompletion(f.capture, f.deps);
   assert.equal(f.calls.includes("upload"), false);
   assert.equal(f.calls.filter(call => call === "commit").length, 1);
+  assert.equal(f.capture.recovery.phase, "FINALIZED");
+});
+
+
+test("changed order context keeps the original and requires fresh consent without replaying stale authorization", async () => {
+  const f = fixture();
+  const acceptedAttestation = f.deps.attest;
+  f.deps.attest = async () => { throw Object.assign(new Error("Order details changed. Confirm again."), { code: "ATTESTATION_CONTEXT_CHANGED", status: 409 }); };
+  await assert.rejects(recoverCaptureCompletion(f.capture, f.deps), { code: "ATTESTATION_CONTEXT_CHANGED" });
+  assert.equal(f.capture.recovery.authorization, undefined);
+  assert.equal(f.capture.recovery.phase, "NEEDS_ATTENTION");
+  assert.equal(f.capture.recovery.nextRetryAt, null);
+  assert.equal(f.capture.uploadEvidenceId, "video");
+  assert.equal(f.capture.captureSha256, "c".repeat(64));
+  assert.equal(f.calls.includes("finalize"), false);
+  // An unattended retry cannot provide new consent or create an attestation.
+  f.deps.attest = acceptedAttestation;
+  await assert.rejects(recoverCaptureCompletion(f.capture, f.deps), { code: "ATTESTATION_CONFIRMATION_NEEDED" });
+  assert.equal(f.calls.filter(call => call === "attest").length, 0);
+  // The interactive coordinator supplies a newly signed challenge for the same original.
+  f.capture.recovery.authorization = { challengeId: "fresh-context", signature: "new-native-signature", expiresAt: "2099-01-01T00:00:00Z", sha256: "c".repeat(64) };
+  await recoverCaptureCompletion(f.capture, f.deps);
+  assert.equal(f.calls.filter(call => call === "upload").length, 1);
+  assert.equal(f.calls.filter(call => call === "attest").length, 1);
   assert.equal(f.capture.recovery.phase, "FINALIZED");
 });

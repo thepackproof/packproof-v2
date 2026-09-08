@@ -1,3 +1,5 @@
+import { attestationContext, assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
+import { assertShippingReviewComplete } from "./capture-label-review.js";
 import { createPublicKey, randomBytes, verify, type KeyObject } from "node:crypto";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
@@ -88,6 +90,8 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
       || session.expected_sha256 !== sha256 || !session.recorded_at) {
       throw new DomainError("ATTESTATION_CAPTURE_MISMATCH", "Attestation must match this seller's completed native packing recording", 409);
     }
+    await assertShippingReviewComplete(tx, proofId, captureSessionId);
+    const context = await attestationContext(tx, proof.transaction_id);
     const now = clock.now();
     if (session.state !== "COMMITTED" && now.getTime() >= new Date(session.recover_until).getTime()) {
       throw new DomainError("CAPTURE_RECOVERY_EXPIRED", "This recording is beyond its upload recovery window", 409);
@@ -98,7 +102,7 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
         AND expires_at>$5 ORDER BY created_at DESC LIMIT 1`,
       [proofId, actorUserId, captureSessionId, publicKey.sha256, now.toISOString()],
     );
-    if (active.rows[0]) return challengeView(active.rows[0]);
+    if (active.rows[0] && readAttestationContext(active.rows[0].payload).contextSha256 === context.contextSha256) return challengeView(active.rows[0]);
     const count = await tx.query<{ count: string }>(
       `SELECT COUNT(*) AS count FROM attestation_challenges WHERE proof_id=$1 AND actor_user_id=$2
         AND consumed_at IS NULL AND expires_at>$3`, [proofId, actorUserId, now.toISOString()],
@@ -109,7 +113,7 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
     const payload = canonicalize({
       version: 1, method: "ANDROID_BIOMETRIC_STRONG", challengeId,
       nonce: randomBytes(32).toString("hex"), actorUserId, proofId, captureSessionId,
-      sha256, statement: SELLER_SHIPPING_STATEMENT, publicKeySha256: publicKey.sha256, expiresAt,
+      ...context, sha256, statement: SELLER_SHIPPING_STATEMENT, publicKeySha256: publicKey.sha256, expiresAt,
     });
     await tx.query(
       `INSERT INTO attestation_challenges (id, proof_id, actor_user_id, capture_session_id,
@@ -143,6 +147,11 @@ export async function verifyAttestationAuthorization(
   const session = await loadCaptureSession(db, actorUserId, proofId, challenge.capture_session_id, true);
   if (session.state !== "COMMITTED" || session.evidence_id !== evidence.id || session.expected_sha256 !== evidence.sha256) {
     throw new DomainError("ATTESTATION_EVIDENCE_MISMATCH", "The signed recording has not been committed to this Proof", 409);
+  }
+  if (!challenge.consumed_at) {
+    const proof = await loadProof(db, proofId);
+    await assertShippingReviewComplete(db, proofId, challenge.capture_session_id);
+    await assertAttestationContextCurrent(db, proof.transaction_id, challenge.payload);
   }
   const publicKey = publicKeyFromInput(challenge.public_key_base64);
   let valid = false;

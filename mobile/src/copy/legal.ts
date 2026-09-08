@@ -1,4 +1,4 @@
-export const PACKPROOF_WEB_ORIGIN = "https://dvpmnwc27i8tw.cloudfront.net";
+export const PACKPROOF_WEB_ORIGIN = "https://thepackproof.com";
 
 export const TERMS_OF_SERVICE_URL = `${PACKPROOF_WEB_ORIGIN}/new/terms`;
 

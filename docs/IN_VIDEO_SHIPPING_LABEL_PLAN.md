@@ -1,5 +1,6 @@
 # PackProof — In-Video Shipping Label Scan & Automatic Carrier Binding
 
+> Historical implementation/research. The September 8 candidate supersedes ordinary scan/rescan choreography with Orders → one video → review → automatic authoritative completion. Legacy journal recovery remains supported. See [current redesign contracts and gates](ui-ux-redesign-2026-09-08/README.md).
 ## Development Plan for Astra
 
 ### Objective

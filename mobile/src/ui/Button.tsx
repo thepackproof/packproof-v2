@@ -103,8 +103,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
-  labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  label: { ...typography.button, textAlign: "center" },
+  labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, maxWidth: "100%" },
+  label: { ...typography.button, textAlign: "center", flexShrink: 1 },
   icon: {
     minWidth: sizes.touch,
     minHeight: sizes.touch,

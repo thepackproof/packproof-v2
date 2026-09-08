@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { moneyLabel, orderReferenceLabel, quantityLabel } from "@packproof/copy/format";
+import { providerDisplay } from "@packproof/copy/status";
 import { recordProofStatus } from "@packproof/copy/proof-record";
 import type { PackProofApi } from "../api/client";
 import type { CanonicalProof, ChronologyEntry } from "../api/types";
@@ -48,20 +49,22 @@ export function WorkspaceProofRecord(props: {
   const scope = `${props.api?.recoveryScope || location.origin}.${props.currentUserId}.${proof.proofId}`;
   const [savedTab, setTab] = useViewState<RecordTab>(`proof.${scope}.recordTab`, "Recording");
   const tab = tabs.includes(savedTab) ? savedTab : "Recording";
+  const record = useRef<HTMLElement>(null);
   const controls = useRef<Array<HTMLButtonElement | null>>([]);
   const title = proof.transaction.itemTitle?.trim() || "Untitled item";
   const reference = orderReferenceLabel(proof.transaction.externalReference);
 
   function select(next: RecordTab, focus = false) {
+    if (next !== "Recording") record.current?.querySelectorAll<HTMLMediaElement>("video,audio").forEach(media => media.pause());
     setTab(next);
     const button = controls.current[tabs.indexOf(next)];
     if (focus) button?.focus({ preventScroll: true });
     button?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }
 
-  return <article className="workspace-proof-record" aria-label="Proof record" data-context-anchor={`proof-record-${proof.proofId}`}>
+  return <article ref={record} className="workspace-proof-record" aria-label="Proof record" data-context-anchor={`proof-record-${proof.proofId}`}>
     <header className="record-top">
-      <div><h2>{title}</h2>{reference && <p>{reference}</p>}<details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p></details></div>
+      <div><h2>{title}</h2>{reference && <p>{reference}</p>}<details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p><p>{proof.transaction.provenance ? `From ${providerDisplay(proof.transaction.provenance.provider)}. Imported order details are read-only.` : "Order details supplied by a participant."}</p>{proof.transaction.provenance?.importedAt && <p>Imported {formatWhen(proof.transaction.provenance.importedAt)}</p>}</details></div>
       <StatusBadge label={recordProofStatus(proof.status)} />
     </header>
     {props.api && <PreservationStatus api={props.api} proofId={proof.proofId} />}
@@ -84,14 +87,18 @@ export function WorkspaceProofRecord(props: {
         }}
       >{name}</button>)}
     </div>
-    <div key={tab} className="record-body" role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-${tab}-panel`} aria-labelledby={`record-${proof.proofId}-${tab}-tab`}>
-      {tab === "Recording" && <RecordEvidence key={scope} scope={scope} proof={proof} api={props.api} load={props.loadEvidence} />}
+    <div className="record-body" hidden={tab !== "Recording"} role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-Recording-panel`} aria-labelledby={`record-${proof.proofId}-Recording-tab`}>
+      <RecordEvidence key={scope} scope={scope} proof={proof} api={props.api} load={props.loadEvidence} />
+    </div>
+    <div className="record-body" hidden={tab !== "Activity"} role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-Activity-panel`} aria-labelledby={`record-${proof.proofId}-Activity-tab`}>
       {tab === "Activity" && <>
-        <ProofTimeline entries={proof.chronology ?? []} finalizedAt={proof.finalizedAt} onSelect={props.onOpenEvent} />
-        {proof.status === "FINALIZED" && <p className="note record-source-note">The core record was frozen {formatWhen(proof.finalizedAt)}. Later carrier observations are appended separately.</p>}
+        <ProofTimeline entries={proof.chronology ?? []} audit={proof.events ?? []} finalizedAt={proof.finalizedAt} onSelect={props.onOpenEvent} />
+        {proof.status === "FINALIZED" && <p className="note record-source-note">The packing record was locked {formatWhen(proof.finalizedAt)}. Later carrier reports and receipt or return stages are added separately.</p>}
       </>}
+    </div>
+    <div className="record-body" hidden={tab !== "Tracking"} role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-Tracking-panel`} aria-labelledby={`record-${proof.proofId}-Tracking-tab`}>
       {tab === "Tracking" && <div className="stack">
-        <ShipmentTracking events={proof.shipmentObservations?.events ?? []} carrier={proof.transaction.shipping?.carrier} trackingNumber={proof.transaction.shipping?.trackingNumber} />
+        <ShipmentTracking events={proof.shipmentObservations?.events ?? []} carrier={proof.transaction.shipping?.carrier} trackingNumber={proof.transaction.shipping?.trackingNumber} registration={proof.captureShipping?.registration} sync={proof.shipmentSync} />
         {props.trackingTools}
       </div>}
     </div>
@@ -188,6 +195,11 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
     {preview.url && preview.contentType.startsWith("video/") && <>
       {visibleBookmarks.length > 0 ? <div className="record-chapters" aria-label="Recorded source moments">{visibleBookmarks.map(bookmark => <button type="button" key={bookmark.anchorId} onClick={() => void open(bookmark.evidenceId!, bookmark.startMs! / 1000)} title={`Source: ${bookmark.sourceCategory.replaceAll("_", " ").toLowerCase()}`}>{elapsed(bookmark.startMs!)} · {bookmark.label}</button>)}</div> : null}
     </>}
+    {(proof.attestations ?? []).filter(statement => !statement.relatedEvidenceId || statement.relatedEvidenceId === current?.evidenceId).map(statement => <section className="record-declaration" key={statement.attestationId} aria-label="Participant statement">
+      <h3>{proof.participants.find(participant => participant.userId === statement.attestedBy)?.role === "SELLER" ? "Seller declaration" : "Participant statement"}</h3>
+      <p>{statement.statement === "PACKED_DESCRIBED_ITEM" ? "I packed this order as described." : statement.statement}</p>
+      <p className="note">Recorded {formatWhen(statement.createdAt)}. This is the participant’s declaration about the shipment.</p>
+    </section>)}
     {bookmarkError && <p className="note" role="status">{bookmarkError} <button className="text-link" onClick={() => setRetry(value => value + 1)}>Retry bookmarks</button></p>}
   </div>;
 }

@@ -1,3 +1,4 @@
+import { disclosedRecord } from './disclosure-record.js';
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
 import type { ObjectStore } from '../s3/object-store.js';
@@ -155,7 +156,8 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
   }));
   const recordHead=(await db.query<{sequence:string|number;sha256:string}>('SELECT sequence,sha256 FROM proof_supplements WHERE proof_id=$1 ORDER BY sequence DESC LIMIT 1',[ctx.proofId])).rows[0];
   const received=(await db.query('SELECT 1 FROM commerce_stages WHERE proof_id=$1 AND stage_type=\'RECEIPT\' AND finalized_at IS NOT NULL LIMIT 1',[ctx.proofId])).rows.length>0;
-  const value={schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
+  const record = await disclosedRecord(db,ctx);
+  const value={...record,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
     join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
     evidence:ctx.fields.includes('evidence')?evidence:[],
     statements,

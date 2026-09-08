@@ -2,7 +2,9 @@
 
 Thin Expo client over the V2 API. It does not own Proof lifecycle state.
 
-Packing Station is the persistent pack surface: identify an order, record packing video with the existing capture path, submit through the canonical evidence commands, then return to READY. Proof details and invitations stay on the home/Proof screens.
+Orders is the default destination. Open an order or enter the minimum manual shipment detail, review the camera preview, and deliberately record one uninterrupted packing video. Barcode analysis shares that recording; there is no separate required scan/photo/rescan. Finish opens review and the exact shipment statement; Android strong-biometric confirmation submits through recoverable upload, commit, attestation and finalization. Only server FINALIZED means Proof saved. Batch packing reuses the same flow. Proofs and Account are the other primary destinations.
+
+See [redesign implementation and release gates](../docs/ui-ux-redesign-2026-09-08/README.md). Native camera/biometric testing requires a development or release build, not Expo Go.
 
 ## Run
 

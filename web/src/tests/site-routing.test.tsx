@@ -14,13 +14,16 @@ it("loads the actual sign-in screen through the split application entry", async 
   expect(screen.getByRole("tab", { name: "Sign in" })).toHaveAttribute("aria-selected", "true");
 });
 
-it("exposes the illustrative tracking and timeline controls in the public sample", async () => {
+it("exposes canonical record tabs with illustrative tracking and activity in the public sample", async () => {
   window.history.replaceState({}, "", "/sample");
   render(<Website />);
-  await userEvent.click(screen.getByRole("button", { name: "Tracking" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Tracking" }));
+  expect(screen.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Recording", "Activity", "Tracking"]);
+  expect(screen.getByRole("tab", { name: "Tracking" })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByText("Illustrative data · not a real shipment")).toBeInTheDocument();
   expect(screen.getByTitle(/Map of reported location: Columbus/)).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Timeline" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
+  expect(screen.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByText("Integrity event")).toBeInTheDocument();
   expect(screen.queryByTitle(/Map of reported location/)).not.toBeInTheDocument();
 });

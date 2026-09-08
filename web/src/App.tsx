@@ -1,8 +1,4 @@
-import { UsagePanel } from "./components/UsagePanel";
-import { StudyConsentPanel } from "./components/StudyConsentPanel";
-import { BillingPanel } from "./components/BillingPanel";
 import { randomId } from "./random-id";
-import { OverviewScreen } from "./screens/OverviewScreen";
 import { PackingRequestsPanel } from "./components/PackingRequestsPanel";
 import { LocalRecordingRecovery } from "./components/LocalRecordingRecovery";
 import { clearViewState, saveNavigationContext } from "./navigation-context";
@@ -40,6 +36,7 @@ import {
 } from "./auth/session";
 import { AppNav } from "./components/AppNav";
 import { ThemeProvider } from "./theme/ThemeProvider";
+import { AccountDeletionScreen } from "./screens/AccountDeletionScreen";
 import { AccountScreen } from "./screens/AccountScreen";
 import { ActivityScreen } from "./screens/ActivityScreen";
 import { CompletionScreen } from "./screens/CompletionScreen";
@@ -68,6 +65,7 @@ type Route =
   | { name: "scan" }
   | { name: "activity" }
   | { name: "account" }
+  | { name: "delete-account" }
   | { name: "developer" }
   | { name: "receipt"; proofId: string }
   | { name: "proof"; proofId: string }
@@ -87,6 +85,7 @@ type Route =
 function parseHref(href: string): Route {
   const url = new URL(href, "http://packproof.local");
   const pathname = url.pathname.replace(/\/$/, "") || "/";
+  if (pathname === "/new/delete-account") return { name: "delete-account" };
   if (pathname === "/new/privacy") {
     return { name: "privacy" };
   }
@@ -94,7 +93,7 @@ function parseHref(href: string): Route {
     return { name: "terms" };
   }
   if (pathname === "/new/scan") {
-    return { name: "scan" };
+    return { name: "create" };
   }
   if (pathname === "/new") {
     return { name: "create" };
@@ -372,6 +371,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     clearViewState();
     setSession(null);
     setProofs([]);
+    setQueue([]);
     setInvitations([]);
     setProof(null);
     setShipmentIntegrity(null);
@@ -611,6 +611,12 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     return () => { cancelled = true; };
   }, [api, route, session?.userId, session?.username, session?.displayName]);
 
+  if (route.name === "delete-account") {
+    return <AccountDeletionScreen api={session ? api : undefined} accountKey={session?.userId}
+      onSignIn={() => { sessionStorage.setItem("packproof.auth-return", "/new/delete-account"); go("/login"); }}
+      onBack={() => go(session ? "/account" : "/")} />;
+  }
+
   if (isLegalRoute(route)) {
     return <LegalScreen kind={route.name} onGo={go} />;
   }
@@ -638,7 +644,10 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             sessionRef.current = next;
             tokenRef.current = next.token;
             setSession(next);
-            if (["/login", "/signup", "/"].includes(window.location.pathname)) go("/app");
+            const authReturn = sessionStorage.getItem("packproof.auth-return");
+            sessionStorage.removeItem("packproof.auth-return");
+            if (authReturn === "/new/delete-account") go(authReturn);
+            else if (["/login", "/signup", "/"].includes(window.location.pathname)) go("/app");
             // Keep the requested Proof or receiver invitation through sign-in.
             // The current route is already guarded until the session/profile is ready.
             setError(null);
@@ -691,7 +700,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       <LocalRecordingRecovery key={session.userId} api={api} userId={session.userId} onOpen={id => go(`/proofs/${encodeURIComponent(id)}`)} />
 
-      {route.name === "home" ? <OverviewScreen proofs={proofs} orders={queue} connections={connections} loading={loading} error={error} onGo={go} /> : null}
+
       {route.name === "proofs" ? <><HomeScreen {...libraryProps} /><PackingRequestsPanel api={api} userId={session.userId} proofs={proofs} onOpen={id=>go(`/proofs/${encodeURIComponent(id)}`)} /></> : null}
 
       {route.name === "activity" ? (
@@ -721,6 +730,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {route.name === "account" ? (
         <AccountScreen
           key={`account:${session.userId}`}
+          userId={session.userId}
+          onOpenProof={id => go(`/proofs/${encodeURIComponent(id)}`)}
           api={api}
           displayName={session.displayName}
           username={session.username}
@@ -803,9 +814,6 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         />
       ) : null}
 
-      {route.name === "account" ? <UsagePanel api={api} userId={session.userId} /> : null}
-      {route.name === "account" ? <BillingPanel api={api} userId={session.userId} /> : null}
-      {route.name === "account" ? <StudyConsentPanel key={`${session.apiBaseUrl}:${session.userId}`} api={api} userId={session.userId} /> : null}
 
       {route.name === "create" ? (
         <CreateProofScreen
@@ -869,7 +877,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             void api
               .createTransaction(input)
               .then((txn) => api.createOrGetProof(txn.transactionId))
-              .then((created) => go(`/proofs/${encodeURIComponent(created.proofId)}`))
+              .then((created) => go(`/station?proof=${encodeURIComponent(created.proofId)}`))
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
@@ -938,6 +946,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "station" ? (
         <PackingStationScreen
+          key={`${session.apiBaseUrl}:${session.userId}:${route.proofId || "queue"}`}
           api={api}
           userId={session.userId}
           queue={queue.filter(
@@ -953,7 +962,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         />
       ) : null}
 
-      {route.name === "fulfillment" ? (
+      {route.name === "fulfillment" || route.name === "home" ? (
         <FulfillmentQueueScreen
           connections={connections}
           items={queue.filter(
@@ -964,7 +973,9 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           loading={loading}
           error={error}
           onBack={() => goBack("/account")}
-          onOpen={(proofId) => go(`/fulfillment/${encodeURIComponent(proofId)}`)}
+          onOpen={(proofId) => { const item = queue.find(row => row.proofId === proofId); go(item?.evidenceCount ? `/proofs/${encodeURIComponent(proofId)}` : `/station?proof=${encodeURIComponent(proofId)}`); }}
+          onCreate={() => go("/new")} onConnect={() => go("/stores")} onBatch={() => go("/station")}
+          onRefresh={() => { setLoading(true); void Promise.all([api.listFulfillmentQueue("ready"), api.listCommerceConnections()]).then(([q,c]) => { setQueue(q.items); setConnections(c.connections); setError(null); }).catch(e => setError(handleError(e))).finally(() => setLoading(false)); }}
         />
       ) : null}
 

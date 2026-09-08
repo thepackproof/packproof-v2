@@ -59,7 +59,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (status === "FINALIZED") {
     return {
       key: "completed",
-      label: "PackProof finalized",
+      label: "Proof saved",
       hint: "Evidence record secured. Later carrier observations do not change the sealed record.",
       kind: "success",
       enabled: false,
@@ -80,8 +80,8 @@ export function deriveNextAction(input: NextActionInput): NextAction {
     const percent = input.uploadPercent != null ? ` • ${input.uploadPercent}%` : "";
     return {
       key: "uploading",
-      label: `Uploading evidence${percent}`,
-      hint: "Bytes are transferring. Evidence is not secured until PackProof confirms the commit.",
+      label: `Uploading recording${percent}`,
+      hint: "Your recording is uploading. The Proof is not finished yet.",
       kind: "progress",
       enabled: false,
     };
@@ -90,7 +90,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (seller && local && input.captureStatus === "uploaded") {
     return {
       key: "securing",
-      label: "Securing evidence…",
+      label: "Finishing your Proof…",
       hint: "PackProof is confirming this recording. It is not secured until the server confirms.",
       kind: "progress",
       enabled: false,
@@ -100,8 +100,8 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (seller && local && input.captureStatus === "committed") {
     return {
       key: "securing",
-      label: "Committed",
-      hint: "This recording is now part of the Proof record.",
+      label: "Finishing your Proof…",
+      hint: "Your recording is uploaded. PackProof is finishing the record.",
       kind: "progress",
       enabled: false,
     };
@@ -130,7 +130,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (seller && status === "READY_FOR_EVIDENCE" && !committed) {
     return {
       key: "start_capture",
-      label: "Record packing video",
+      label: "Record packing",
       hint: "Record the item being packed and the package being sealed.",
       kind: "primary",
       enabled: true,
@@ -140,8 +140,8 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (seller && committed && status !== "FINALIZED") {
     return {
       key: "finalize",
-      label: "Finalize Proof",
-      hint: "Review the record, then seal it. This cannot be undone.",
+      label: "Finish saving",
+      hint: "Your recording is uploaded. Finish saving to lock the Proof.",
       kind: "primary",
       enabled: true,
     };

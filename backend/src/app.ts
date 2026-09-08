@@ -1,3 +1,4 @@
+import { getAccountDeletionRequest, requestAccountDeletion } from "./domain/account-deletion.js";
 import { supportAccessRouter } from "./support/router.js";
 import { createReadiness, liveness, type DependencyProbe } from "./operations/readiness.js";
 import { getAccountUsageSummary, ingestVerifiedBillingEvent } from "./billing/usage-ledger.js";
@@ -440,6 +441,12 @@ export function createApp(deps: AppDependencies): Express {
       .catch(next);
   });
 
+  app.get("/me/account-deletion-request", asyncRoute(async(req,res)=>{
+    res.json(await getAccountDeletionRequest(deps.db,bearerUser(req)));
+  }));
+  app.post("/me/account-deletion-request", asyncRoute(async(req,res)=>{
+    res.status(202).json(await requestAccountDeletion(deps.db,deps.clock,bearerUser(req),req.body));
+  }));
   app.use("/internal/support", supportAccessRouter(deps));
   app.use("/study",distributedRateLimit(deps.db,{scope:"study-observation",limit:120,windowMs:60_000,subject:bearerUser}),createObservationRouter(deps,deps.observationConfig??null));
   app.use("/me/billing",distributedRateLimit(deps.db,{scope:"account-billing",limit:30,windowMs:60_000,subject:bearerUser}));

@@ -15,7 +15,13 @@ export interface ShippingView {
   shipmentDate: string | null;
 }
 
+export interface TransactionCorrectionPolicy {
+  canCorrectOrderDetails: boolean;
+  canCorrectShipping: boolean;
+  reason: null | 'FINALIZED' | 'IMPORTED_FACTS_READ_ONLY' | 'CAPTURE_CONTEXT_LOCKED';
+}
 export interface TransactionView {
+  correctionPolicy?: TransactionCorrectionPolicy;
   transactionId: string;
   externalReference: string | null;
   transactionDate: string | null;
@@ -117,9 +123,11 @@ export function toTransactionView(
     buyerUserId: string | null;
     provenance?: TransactionProvenanceView | null;
     items?: TransactionItemView[];
+    correctionPolicy?: TransactionCorrectionPolicy;
   },
 ): TransactionView {
   return {
+    ...(extras.correctionPolicy ? {correctionPolicy: extras.correctionPolicy} : {}),
     transactionId: row.id,
     externalReference: row.external_reference,
     transactionDate: row.transaction_date,

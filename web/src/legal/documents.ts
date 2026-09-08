@@ -49,7 +49,7 @@ export const privacyPolicy: LegalDocument = {
   title: "Privacy Policy",
   description:
     "How PackProof collects, uses, stores, and retains information for accounts, marketplace connections, and evidentiary records.",
-  lastUpdated: LEGAL_LAST_UPDATED,
+  lastUpdated: "September 8, 2026",
   sections: [
     {
       id: "who-we-are",
@@ -268,7 +268,7 @@ export const privacyPolicy: LegalDocument = {
       id: "account-deletion",
       title: "22. Account deletion requests",
       paragraphs: [
-        `You may request deletion of your PackProof account by contacting ${PRIVACY_CONTACT_PLACEHOLDER}. PackProof does not currently offer an in-product self-serve account deletion control.`,
+        "You may request deletion of your PackProof account in Account → Privacy & account, or at /new/delete-account in the web application. Sign in and confirm the request. This starts a review and does not immediately erase your account or retained evidentiary records.",
         "We will review account deletion requests. Access credentials and connection tokens associated with your account can be removed or disabled. PackProof may still retain finalized evidentiary records as described below.",
       ],
     },

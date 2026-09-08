@@ -1,7 +1,8 @@
 import { completeSavedCapture, captureCompletionActive } from "../capture/completion";
-import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture} from '../analytics/native-study';
+import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture,recordNativeStudyInteraction} from '../analytics/native-study';
 import { listAccountCaptures, persistCaptureMetadata } from "../capture";
 import { hasDurableReceipt, mayCleanUpCapture } from "../capture/recovery-model";
+import { orderDestination } from "../copy/orders";
 import type { IntakePreview } from "../copy/order-intake";
 import { initialProofRecordView, type ProofRecordViewState } from "../copy/proof-record";
 import {
@@ -97,6 +98,9 @@ import {
   resolveBackRoute,
   type AppRoute,
   type AppRouteName,
+  type WorkspaceOrigin,
+  type OrdersViewState,
+  type AccountSection,
   type AuthPane,
   type ProofsLibraryState,
   type ProofsRoleFilter,
@@ -154,6 +158,8 @@ export interface PackProofContextValue {
   route: AppRoute;
   proofsLibrary: ProofsLibraryState;
   readProofsScrollOffset: () => number;
+  readOrdersView: (batch: boolean) => OrdersViewState;
+  saveOrdersView: (batch: boolean, value: Partial<OrdersViewState>) => void;
   readProofRecordView: (proofId: string) => ProofRecordViewState;
   saveProofRecordView: (proofId: string, state: ProofRecordViewState) => void;
   session: CachedClientState | null;
@@ -210,7 +216,7 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  go: (name: AppRouteName) => void;
+  go: (name: AppRouteName, options?: { accountSection?: AccountSection }) => void;
   goBack: () => void;
   setProofsView: (view: ProofsLibraryView) => void;
   setProofsQuery: (query: string) => void;
@@ -253,6 +259,9 @@ export interface PackProofContextValue {
   saveProfile: () => Promise<void>;
   syncWorkspace: () => Promise<void>;
   openProof: (proofId: string) => Promise<void>;
+  openOrder: (proofId: string, batch?: boolean) => Promise<void>;
+  batchPacking: boolean;
+  setBatchPacking: (value: boolean) => void;
   refreshProof: (proofId: string) => Promise<ProofView>;
   importPurchase: () => Promise<void>;
   confirmImportedPurchase: () => Promise<void>;
@@ -301,8 +310,22 @@ const PackProofContext = createContext<PackProofContextValue | null>(null);
 
 export function PackProofProvider(props: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
+  const [batchPacking, setBatchPacking] = useState(false);
   const [receiptProofId, setReceiptProofId] = useState<string | null>(null);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
+  const workspaceOrigin = useRef<WorkspaceOrigin>("orders");
+  const ordersViews = useRef<Record<"orders" | "station", OrdersViewState>>({
+    orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" },
+  });
+  const readOrdersView = useCallback((batch: boolean) => ordersViews.current[batch ? "station" : "orders"], []);
+  const saveOrdersView = useCallback((batch: boolean, value: Partial<OrdersViewState>) => {
+    const key = batch ? "station" : "orders";
+    const current = ordersViews.current[key];
+    ordersViews.current[key] = {
+      query: value.query ?? current.query,
+      offsetY: value.offsetY === undefined ? current.offsetY : Number.isFinite(value.offsetY) ? Math.max(0, value.offsetY) : 0,
+    };
+  }, []);
   const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(DEFAULT_PROOFS_LIBRARY);
   // Scroll is native interaction state, not application state. Publishing every
   // offset would rerender every context consumer during an Android fling.
@@ -385,8 +408,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
     [apiBaseUrl],
   );
 
-  const go = useCallback((name: AppRouteName) => {
-    if (name === "station" && sessionRef.current?.captureUri && !sessionRef.current.stationActive) {
+  const go = useCallback((name: AppRouteName, options?: { accountSection?: AccountSection }) => {
+    if (name === "scan") name = "create";
+    if (name === "station" && sessionRef.current?.captureUri && !sessionRef.current.stationActive && workspaceOrigin.current !== "station") {
       setError("Finish or discard your saved recording before opening the packing station.");
       return;
     }
@@ -395,20 +419,19 @@ export function PackProofProvider(props: { children: ReactNode }) {
       return;
     }
     setError(null);
-    if (name === "scan") {
-      setScanPhase("camera");
-      setScanResult(null);
-      setScanInput("");
-    }
     if (name === "proof") {
       setTechnicalOpen(false);
       setConfirmFinalize(false);
     }
-    setRoute({ name });
+    if (name === "home" || name === "orders" || name === "station") {
+      workspaceOrigin.current = name;
+      setBatchPacking(name === "station");
+    }
+    setRoute({ name, ...(name === "account" ? options : {}) });
   }, []);
 
   const goBack = useCallback(() => {
-    go(resolveBackRoute(route.name));
+    go(resolveBackRoute(route.name, workspaceOrigin.current));
   }, [go, route.name]);
 
   useEffect(() => {
@@ -593,6 +616,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
     const collection = await client.listMyProofs();
     setProofCollection(collection.proofs);
     if (!sameUser) {
+      ordersViews.current = { orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" } };
+      workspaceOrigin.current = "orders";
+      setBatchPacking(false);
       setProof(null);
       setTransactionDetail(null);
       setLocalCapture(null);
@@ -884,7 +910,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             go("auth");
             return;
           }
-          go(next.stationActive ? "station" : "home");
+          go(next.stationActive ? "station" : "orders");
         } catch (err) {
           if (isAuthenticationFailure(err)) {
             await requireSignIn();
@@ -1011,6 +1037,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     route,
     proofsLibrary,
     readProofsScrollOffset,
+    readOrdersView,
+    saveOrdersView,
     readProofRecordView: (proofId) => proofRecordViews.current.get(`${apiBaseUrl}:${session?.userId}:${proofId}`) ?? initialProofRecordView(),
     saveProofRecordView: (proofId, state) => {
       const key = `${apiBaseUrl}:${session?.userId}:${proofId}`;
@@ -1035,11 +1063,15 @@ export function PackProofProvider(props: { children: ReactNode }) {
       const current = sessionRef.current;
       if (!current || capture.captureUserId !== current.userId || capture.recovery?.apiBaseUrl !== client.apiBaseUrl)
         throw new Error("Sign in to the original account to open this recording.");
+      if (current.stationActive && current.captureUri && current.captureUri !== capture.uri)
+        throw new Error("Finish saving the recording already open in batch packing before opening another. Both recordings remain on this device.");
+      if (current.stationActive && !current.captureUri) await persist({ ...current, stationActive:false, stationPhase:null, stationProofId:null, stationTransactionId:null, stationOrderLabel:null, stationItemSummary:null });
       if (capture.captureStageId) { value.openReceipt(capture.captureProofId!); return; }
       if (capture.recovery?.phase === "RECORDING") throw new Error("This interrupted recording did not finish saving a playable video. Its bytes remain on this device for inspection.");
       await openProof(capture.captureProofId!);
       if (sessionRef.current?.userId !== current.userId) throw Object.assign(new Error("Sign in to the original account to resume."), { code: "ACCOUNT_CHANGED" });
       await persistCapture(capture, capture.recovery.evidenceIdempotencyKey);
+      (await nativeStudyForCapture(client,current.userId,capture.studyTimingRef))?.event("recovery_started");
       setCaptureStatus("retry"); go("capture");
     }),
     discardSavedCapture: async capture => run(async () => {
@@ -1047,6 +1079,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if (!userId || capture.captureUserId !== userId || capture.recovery?.apiBaseUrl !== client.apiBaseUrl)
         throw new Error("Open the original account to remove this local recording.");
       if (captureCompletionActive()) throw new Error("Wait for the current upload attempt to finish before discarding local work.");
+      (await nativeStudyForCapture(client,userId,capture.studyTimingRef))?.end('cancelled','cancelled');
       await discardLocalCapture(capture.uri, capture.recovery?.operationId);
       if (sessionRef.current?.captureUri === capture.uri) await persistCapture(null, null);
       setSavedRecordings(await listAccountCaptures(client.apiBaseUrl, userId));
@@ -1166,7 +1199,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             accessExpiresAt: tokens.expiresAt,
           });
         }
-        go(sessionRef.current?.stationActive ? "station" : "home");
+        go(sessionRef.current?.stationActive ? "station" : "orders");
       }),
     createAccount: async () =>
       run(async () => {
@@ -1232,6 +1265,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await clearCachedState();
         proofRecordViews.current.clear();
         proofsScrollOffset.current = 0;
+        ordersViews.current = { orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" } };
+        workspaceOrigin.current = "orders";
+        setBatchPacking(false);
         setSession(null);
         setProof(null);
         setConnections([]);
@@ -1269,6 +1305,25 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await applyProfile(updated);
       }),
     syncWorkspace,
+    batchPacking,
+    setBatchPacking,
+    openOrder: async (proofId, batch = false) => run(async () => {
+      const current = sessionRef.current;
+      if (!current) return;
+      void recordNativeStudyInteraction(client,current.userId,'order_selected').catch(()=>undefined);
+      if (current.captureUri && current.captureProofId !== proofId)
+        throw new Error("Finish saving your current recording before starting another order. It is still available in Orders.");
+      if (current.stationActive && current.captureUri) { go("station"); return; }
+      const fresh = await refreshProof(proofId);
+      setBatchPacking(batch);
+      workspaceOrigin.current = batch ? "station" : "orders";
+      const mine = fresh.participants.some(item => item.userId === current.userId && item.role === "SELLER");
+      const local = current.captureUri && current.captureProofId === proofId;
+      go(orderDestination({
+        proofStatus: fresh.status, workflowType: fresh.workflowType, seller: mine,
+        hasLocalCapture: Boolean(local), committedEvidenceCount: fresh.evidence.filter(item => item.validationStatus === "COMMITTED").length,
+      }));
+    }),
     openProof,
     refreshProof,
     importPurchase: async () =>
@@ -1337,7 +1392,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           setCreateForm(EMPTY_FORM);
           setIntakeReview(null);
           setImportReview(null);
-          go("proof");
+          go("capture");
         } catch (err) {
           const mapped = presentError(err);
           if (mapped.action === "open_existing") {
@@ -1514,8 +1569,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
         void haptic("medium");
         await queueRetiredUpload(proof.proofId);
         await persistCapture(captured, newIdempotencyKey());
-        if (localCapture && localCapture.uri !== captured.uri && !localCapture.uploadEvidenceId)
+        if (localCapture && localCapture.uri !== captured.uri && !localCapture.uploadEvidenceId) {
+          (await nativeStudyForCapture(client,sessionRef.current!.userId,localCapture.studyTimingRef))?.end('cancelled','cancelled');
           await discardLocalCapture(localCapture.uri);
+        }
         setCaptureStatus("captured");
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);

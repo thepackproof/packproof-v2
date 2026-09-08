@@ -93,6 +93,10 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
     await phase(durablyFinalized ? "FINALIZED" : "SUBMITTED");
     return proof;
   } catch (error) {
+    // A context-bound challenge can become stale after an allowed order correction.
+    // Discard its authorization, never the recording; the next explicit confirmation
+    // obtains and signs a fresh challenge instead of replaying the rejected one.
+    if ((error as { code?: string })?.code === "ATTESTATION_CONTEXT_CHANGED") state.authorization = undefined;
     // Preserve the originating journal even if authentication or account selection changed.
     const retry = recoveryRetry(error, state.attempt, now());
     state.attempt += 1; state.nextRetryAt = retry.nextRetryAt;

@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { PackProofApi } from "../api/client";
 import { stationContextFromProof } from "../../../mobile/src/packing-station/display";
 import { canonicalProof } from "./fixtures";
-import { saveStationCapture, stationCaptureKey, recoverStationCapture, resumeStationRecording, resumeLocalRecordings, listRecoverableRecordings, saveStageCapture, stageCaptureKey, recoverStageCapture, resumeStageRecording, listLocalRecordings, removePreservedLocalRecording } from "../capture-queue";
+import { updateStationCaptureScans, saveStationCapture, stationCaptureKey, recoverStationCapture, resumeStationRecording, resumeLocalRecordings, listRecoverableRecordings, saveStageCapture, stageCaptureKey, recoverStageCapture, resumeStageRecording, listLocalRecordings, removePreservedLocalRecording } from "../capture-queue";
 import type { RecoveryView } from "../components/PreservationStatus";
 afterEach(() => vi.unstubAllGlobals());
 async function station(committed = true, confirmed = true) {
@@ -17,6 +17,8 @@ async function station(committed = true, confirmed = true) {
     participants:[{...canonicalProof.participants[0],userId,role:"SELLER"}], evidence:committed ? [{...canonicalProof.evidence[0],evidenceId:"video",validationStatus:"COMMITTED" as const}] : [], attestations:[]};
   const api = {
     getCapabilities:vi.fn(async()=>({schemaVersion:1,preservation:{receiptVersions:[1],durableReceiptsRequired:true}})),
+    bindCaptureShipping:vi.fn(async()=>({status:"BOUND",trackingNumber:"9400111899223344556677"})),
+    getCaptureShippingReview:vi.fn(async()=>({currentTrackingNumber:null,reviewRequired:false,observations:[]})),
     recoveryScope:"https://api.example.test", getProof:vi.fn(async()=>proof), completeCaptureSession:vi.fn(async()=>({})),
     initializeEvidenceUpload:vi.fn(async()=>({evidenceId:"video",upload:{method:"PUT",url:"/upload",headers:{}}})),
     uploadResumable:vi.fn(async()=>{}), commitEvidence:vi.fn(async()=>{proof={...proof,status:"EVIDENCE_COMMITTED",evidence:[{...canonicalProof.evidence[0],evidenceId:"video",validationStatus:"COMMITTED"}]};return{proof};}),
@@ -94,4 +96,28 @@ it("stage commit-response loss resumes that stage and cannot enter the ordinary 
   await resumeStageRecording(api as unknown as PackProofApi,userId,key,()=>true);
   expect(api.uploadObject).toHaveBeenCalledTimes(1);expect(api.completeCaptureSession).toHaveBeenCalledTimes(1);expect(await recoverStageCapture(key)).toBeNull();
   expect((await listLocalRecordings(userId))[0]).toMatchObject({stageId:"return-stage",committed:true,preserved:false});
+});
+
+it("late label replies retain their original session and cannot regress an accepted label",async()=>{
+  const f=await station(false,false);const original=(await recoverStationCapture(f.userId))!;
+  const queued={rawValue:"9400111899223344556677",format:"code_128",detectedAtMs:1200,idempotencyKey:"scan-original",status:"QUEUED"};
+  await updateStationCaptureScans(f.userId,"different-session",[{...queued,status:"BOUND"}]);
+  expect((await recoverStationCapture(f.userId))?.shippingScans).toEqual([]);
+  await updateStationCaptureScans(f.userId,"cap-original",[{...queued,status:"BOUND"}]);
+  await saveStationCapture({...original,shippingScans:[queued]});
+  const kept=(await recoverStationCapture(f.userId))!;
+  expect(kept.shippingScans).toEqual([expect.objectContaining({idempotencyKey:"scan-original",status:"BOUND"})]);
+  expect(await kept.file.text()).toBe("recorded original bytes");
+});
+it("background recovery replays a queued label but waits for unresolved server review",async()=>{
+  const f=await station(false);
+  await updateStationCaptureScans(f.userId,"cap-original",[{rawValue:"9400111899223344556677",format:"code_128",detectedAtMs:1200,idempotencyKey:"scan-original",status:"QUEUED"}]);
+  f.api.getCaptureShippingReview.mockResolvedValueOnce({currentTrackingNumber:null,reviewRequired:true,observations:[]});
+  await expect(resumeStationRecording(f.client,f.userId,()=>true)).rejects.toMatchObject({code:"SHIPPING_REVIEW_REQUIRED"});
+  expect(f.api.bindCaptureShipping).toHaveBeenCalledWith(f.proofId,"cap-original",expect.objectContaining({idempotencyKey:"scan-original",rawValue:"9400111899223344556677"}));
+  expect(f.api.initializeEvidenceUpload).not.toHaveBeenCalled();expect(f.api.completeCaptureSession).not.toHaveBeenCalled();
+  expect(await (await recoverStationCapture(f.userId))!.file.text()).toBe("recorded original bytes");
+  await resumeStationRecording(f.client,f.userId,()=>true);
+  expect(f.api.bindCaptureShipping).toHaveBeenCalledTimes(1);expect(f.api.initializeEvidenceUpload).toHaveBeenCalledTimes(1);
+  expect(f.api.finalizeProof).toHaveBeenCalledTimes(1);
 });

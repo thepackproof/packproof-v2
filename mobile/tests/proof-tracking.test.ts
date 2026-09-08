@@ -59,3 +59,19 @@ test("map links retain reported coordinates, searches escape locations, and stal
   assert.equal(isHistoricalReport("invalid", time), false);
   assert.equal(isHistoricalReport("2026-09-07T12:00:00Z", time), false);
 });
+
+
+test("tracking empty and failure copy does not invent carrier movement", async () => {
+  const { trackingState } = await import("../src/copy/tracking-state.ts");
+  const base = { events: [] };
+  assert.equal(trackingState(base).kind, "missing_label");
+  assert.equal(trackingState({ ...base, trackingNumber: "known" }).kind, "unavailable");
+  const sync = { available: true, connectionId: "connection", status: "ACTIVE", provider: "shippo", adapterKey: "shippo" };
+  assert.equal(trackingState({ ...base, trackingNumber: "known", sync }).kind, "awaiting_scan");
+  assert.equal(trackingState({ ...base, trackingNumber: "known", sync: { ...sync, available: false, status: "ERROR" } }).kind, "unavailable");
+  assert.equal(trackingState({ ...base, trackingNumber: "known", sync, refreshError: "network" }).kind, "failed");
+  const registration = { state: "WAITING_FOR_CONNECTION", carrier: null, mode: "live", errorCode: null, registeredAt: null };
+  assert.equal(trackingState({ ...base, trackingNumber: "known", registration }).kind, "unavailable");
+  assert.equal(trackingState({ ...base, trackingNumber: "known", registration: { ...registration, state: "PENDING" } }).kind, "pending");
+  assert.equal(trackingState({ ...base, trackingNumber: "known", registration: { ...registration, state: "REGISTERED", mode: "test" } }).kind, "unavailable");
+});

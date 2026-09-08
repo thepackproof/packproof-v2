@@ -28,9 +28,9 @@ export function ActivityScreen(props: {
       kind: "Proof update",
       title:
         item.status === "FINALIZED"
-          ? "Proof finalized"
+          ? "Proof saved"
           : item.status === "EVIDENCE_COMMITTED"
-            ? "Evidence secured"
+            ? "Recording received · finish saving"
             : proofStatusLabel(item.status),
       subtitle: item.transaction.itemTitle ?? "PackProof",
       at: item.finalizedAt ?? item.updatedAt,
@@ -42,14 +42,14 @@ export function ActivityScreen(props: {
     <main className="page activity-page">
       <p className="workspace-overline">Workspace / Activity</p>
       <h1>Activity</h1>
-      <p className="lede">Invitations, secured evidence, and finalized Proofs.</p>
+      <p className="lede">Invitations, recordings to finish, and saved Proofs.</p>
       {props.error ? (
         <Notice kind="error" title="Activity is unavailable">{props.error}</Notice>
       ) : null}
       {props.loading ? (
         <p className="empty">Loading activity…</p>
       ) : items.length === 0 ? (
-        <p className="empty">No recent activity. Invitations, secured evidence, and finalized Proofs will appear here.</p>
+        <p className="empty">No recent activity. Invitations, recording updates, and saved Proofs will appear here.</p>
       ) : (
         <div className="card-list">
           {items.map((item) => (

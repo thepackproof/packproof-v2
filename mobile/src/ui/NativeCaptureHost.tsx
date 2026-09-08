@@ -1,10 +1,11 @@
 import { haptic } from "../theme/haptics";
 import { UnifiedCameraView, isUnifiedCameraAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
 import { newIdempotencyKey } from "../v2-api";
-import type { ShippingScanResult } from "../capture/shipping-scan-queue";
+import { shortenedTracking, type ShippingScanResult } from "../capture/shipping-scan-queue";
 import { useEffect, useRef, useState } from "react";
 import {
   AppState,
+  Alert,
   Image,
   Modal,
   Platform,
@@ -127,7 +128,6 @@ function CameraSession({
   const [shipping, setShipping] = useState<ShippingScanResult|null>(null);
   const [detectingShipping,setDetectingShipping] = useState(false);
   const [shippingError,setShippingError] = useState<string|null>(null);
-  const candidateRaw = useRef<string|null>(null);
   const notified = useRef(new Set<string>());
   const observed = useRef(new Set<string>());
   async function detected(event: UnifiedBarcodeDetection) {
@@ -137,27 +137,19 @@ function CameraSession({
     if(observed.current.has(key) || observed.current.size>=8) return;
     observed.current.add(key);
     setDetectingShipping(true);
-    void haptic("selection");
     try {
-      const result = await request.onShippingBarcode({rawValue:event.rawValue,format:event.format,detectedAtMs:event.detectedAtMs,idempotencyKey:newIdempotencyKey()});
+      const result = await request.onShippingBarcode({rawValue:event.rawValue,format:event.format,detectedAtMs:Math.floor(event.detectedAtMs),idempotencyKey:newIdempotencyKey(),
+        source:event.source,coordinateSpace:event.coordinateSpace,decoderVersion:event.decoderVersion,observedAtUnixMs:event.detectedAtUnixMs,
+        frameWidth:event.frameWidth,frameHeight:event.frameHeight,bounds:event.bounds});
       if (result.status==='UNRECOGNIZED') return;
-      candidateRaw.current = event.rawValue;
       setShipping(result);
-      if (result.status==='BOUND' && !notified.current.has(result.observationId!)) {
-        notified.current.add(result.observationId!);
-        void haptic("success");
+      if (!notified.current.has(key)) {
+        notified.current.add(key);
+        void haptic("selection");
       }
     } catch {
-      setShippingError('The label could not be saved. Keep recording; you can add shipping information afterward.');
+      setShippingError('Keep recording. We’ll check the label at review.');
     } finally {setDetectingShipping(false);}
-  }
-  async function confirmShipping() {
-    if (!candidateRaw.current || !request.onConfirmShipping) return;
-    try {
-      const result = await request.onConfirmShipping(candidateRaw.current);
-      setShipping(result);
-      if(result.status==='BOUND') void haptic("success");
-    } catch {setShippingError('The label could not be saved. Keep recording and check shipping afterward.');}
   }
   const recipe =
     request.stageType && request.stageType !== "RETURN_PACKING"
@@ -169,7 +161,6 @@ function CameraSession({
     [recording, setRecording] = useState(false),
     [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null),
-    [step, setStep] = useState(0),
     [coach, setCoach] = useState(true),
     [elapsed, setElapsed] = useState(0);
   const started = useRef(0),
@@ -219,6 +210,7 @@ function CameraSession({
           "The camera returned no recording. No save was confirmed.",
         );
       const durationMs = video && "durationMs" in video && typeof video.durationMs === "number" ? video.durationMs : Math.max(1, Date.now() - started.current);
+      request.onRecordingStopped?.();
       onFinish({
         uri: video.uri,
         contentType: Platform.OS === "ios" ? "video/quicktime" : "video/mp4",
@@ -244,17 +236,6 @@ function CameraSession({
       setSaving(false);
     }
   }
-  function mark() {
-    const startMs = Math.max(0, Date.now() - started.current);
-    bookmarks.current.push({
-      label: recipe[step].label,
-      startMs,
-      endMs: startMs + 1000,
-      sourceType: "USER_MARKED",
-      recipeVersion: recipe === receivingRecipe ? "packproof-native-receiving-v1" : "packproof-native-packing-v1",
-    });
-    setStep((value) => Math.min(recipe.length - 1, value + 1));
-  }
   const stop = () => {
     if (recordingRef.current) {
       setSaving(true);
@@ -266,7 +247,7 @@ function CameraSession({
     <Modal
       visible
       animationType={reducedMotion ? "none" : "slide"}
-      onRequestClose={() => (recordingRef.current ? stop() : onFinish(null))}
+      onRequestClose={() => recordingRef.current ? Alert.alert("Finish this recording?", "Keep recording or finish and review what you recorded.", [{text:"Keep recording",style:"cancel"},{text:"Finish recording",onPress:stop}]) : saving ? undefined : onFinish(null)}
     >
       <View
         style={[
@@ -284,7 +265,7 @@ function CameraSession({
               ? request.stageType
                 ? "Recording receipt / return"
                 : "Recording packing"
-              : "Ready to record"}
+              : "Record packing"}
           </Text>
           <Text style={{ color: colors.textSecondary }}>
             {request.orderLabel}
@@ -297,7 +278,7 @@ function CameraSession({
             style={{ color: colors.textSecondary }}
           >
             {recording
-              ? `${Math.floor(elapsed / 1000)} seconds · silent video${elapsed >= 270000 ? " · recording ends at 5 minutes; finish showing the seal and label" : ""}`
+              ? `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= 270000 ? " · under 30 seconds left" : ""}`
               : "Camera recording · up to 5 minutes · audio is not required"}
           </Text>
         </View>
@@ -343,15 +324,14 @@ function CameraSession({
         <ScrollView contentContainerStyle={styles.controls}>
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
             <Text style={{color:shipping?.status==='BOUND'?colors.success:colors.textSecondary}}>
-              {detectingShipping ? 'Barcode detected · attaching tracking…'
-                : shipping?.status==='BOUND' ? `Label attached · ${shipping.trackingNumber} · tracking update queued`
-                : shipping?.status==='QUEUED' ? 'Label saved on this device · waiting to attach'
-                : shipping?.status==='UNAVAILABLE' ? 'Tracking autofill is not available yet. Add shipping details to this Proof.'
-                : shipping?.status==='CONFLICT' ? 'Different label detected. Check that this is the correct package.'
-                : shipping?.status==='NEEDS_CONFIRMATION' ? `Is ${shipping.trackingNumber} the shipping tracking number?`
-                : 'Show the shipping barcode while recording to attach tracking.'}
+              {detectingShipping ? 'Reading tracking number…'
+                : shipping?.status==='BOUND' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')}`
+                : shipping?.status==='QUEUED' ? 'Tracking number read · saved on this device'
+                : shipping?.status==='UNAVAILABLE' ? 'Keep recording. We’ll check the label at review.'
+                : shipping?.status==='CONFLICT' ? 'This label differs from the order’s tracking. Check it at review.'
+                : shipping?.status==='NEEDS_CONFIRMATION' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')} · check at review`
+                : 'Show the shipping label during this recording.'}
             </Text>
-            {shipping?.status==='NEEDS_CONFIRMATION' ? <Button label="Use this tracking number" variant="secondary" onPress={()=>void confirmShipping()} /> : null}
             {shippingError ? <Text style={{color:colors.error}}>{shippingError}</Text> : null}
           </View> : null}
           {request.guide ? (
@@ -366,40 +346,23 @@ function CameraSession({
               retry.
             </Text>
           ) : null}
-          {coach ? (
-            <View style={{ gap: 6 }}>
-              <Text style={[styles.title, { color: colors.textPrimary }]}>
-                {recipe[step].label}
-              </Text>
-              <Text style={{ color: colors.textSecondary }}>
-                {recipe[step].hint}
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Guide only. A bookmark records your selected moment; it does not
-                confirm image quality or item identity.
-              </Text>
-              {recording ? (
-                <Button
-                  label={`Mark ${recipe[step].label.toLowerCase()} moment`}
-                  variant="secondary"
-                  disabled={saving}
-                  onPress={mark}
-                />
-              ) : null}
-            </View>
-          ) : null}
+          {coach ? <Text style={{ color: colors.textSecondary }}>
+            {recipe === receivingRecipe
+              ? "Keep the unopened package in view as you open it. Show the contents and their visible condition."
+              : "Keep the item and package in view as you pack and seal it. Show the shipping label during the recording."}
+          </Text> : null}
           {recording ? (
             <Button label="Finish recording" loading={saving} onPress={stop} />
           ) : (
             <Button
-              label="Start recording"
+              label={request.stageType ? "Record this stage" : "Record packing"}
               disabled={!ready || saving}
               onPress={() => void start()}
             />
           )}
           <Button
             label={coach ? "Hide guidance" : "Show guidance"}
-            variant="secondary"
+            variant="tertiary"
             onPress={() => setCoach(!coach)}
           />
           {!recording ? (
