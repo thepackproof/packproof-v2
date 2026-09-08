@@ -1,3 +1,4 @@
+import { assertIntakeFinalizeContext } from "../intake/context.js";
 import { assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
 import { assertShippingReviewComplete } from "./capture-label-review.js";
 import { readCaptureClientContext } from "./capture-sessions.js";
@@ -135,6 +136,8 @@ export async function finalizeProof(
     }
 
     assertNotFinalized(proof);
+    // Durable admission contract, independent of current rollout flags.
+    const intakeOrderContext = await assertIntakeFinalizeContext(tx, proofId);
     const participationPolicy = requireParticipationPolicy(
       proof.participation_policy,
       DEFAULT_PARTICIPATION_POLICY,
@@ -256,6 +259,7 @@ export async function finalizeProof(
     const storedItems = await listTransactionItems(tx, proof.transaction_id);
     const payload: Record<string, unknown> = {
       manifestVersion: 1,
+      ...(intakeOrderContext ? {orderContext: intakeOrderContext} : {}),
       proofId,
       transactionId: proof.transaction_id,
       transaction: {

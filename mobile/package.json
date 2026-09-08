@@ -18,7 +18,8 @@
     "test:study-timing": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/study-timing.test.ts tests/native-study-timing.test.ts",
     "android:go": "expo start --android",
     "ios:go": "expo start --ios",
-    "test:redesign": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/sales-channels.test.ts tests/capture-label-review.test.ts tests/orders.test.ts"
+    "test:redesign": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/sales-channels.test.ts tests/capture-label-review.test.ts tests/orders.test.ts",
+    "test:intake": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/intake-context.test.ts tests/intake-resolution.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",

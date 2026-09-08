@@ -4,6 +4,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ConnectedAccountsPanel, type ConnectedAccountsPanelProps } from "./ConnectedAccountsPanel";
 
 export function ConnectedStoresScreen(props: {
+  intakeSettings?: ReactNode;
   connectionPanel?: ReactNode;
   connections: CommerceConnectionView[];
   lastSync: CommerceSyncView | null;
@@ -28,5 +29,6 @@ export function ConnectedStoresScreen(props: {
     {props.error && <div className="banner banner-error" role="alert">{props.error}</div>}
     {props.lastSync && <p className="banner banner-info" role="status">Order check finished: {props.lastSync.eligibleCount} ready to pack, {props.lastSync.createdProofCount} new Proofs prepared.</p>}
     {props.loading ? <p role="status">Loading Connections…</p> : panel}
+    {props.intakeSettings}
   </main>;
 }

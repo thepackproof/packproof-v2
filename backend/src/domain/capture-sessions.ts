@@ -1,3 +1,4 @@
+import { pinCurrentIntakeCaptureContext, prepareIntakeCaptureEntry } from "../intake/context.js";
 import { sha256Hex } from "../hash.js";
 import { reserveApprovedCaptureAllowance } from "../billing/capture-allowance.js";
 import { assertSupportedParcelCapture } from "./parcel-scope.js";
@@ -42,6 +43,9 @@ async function appendCaptureClientReport(db:Database,clock:Clock,actor:string,pr
   if(result.rows[0]) await appendAudit(db,{proofId,actorUserId:actor,eventType:"CAPTURE_CLIENT_CONTEXT_REPORTED",eventData:{sessionId,...context,provenance:"CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED"},at:clock.now()});
 }
 export interface CaptureSessionRow {
+  order_snapshot_id?: string | null;
+  order_snapshot_version?: number | null;
+  order_snapshot_sha256?: string | null;
   client_reported_context?: ClientCaptureContext | null;
   stage_id: string | null;
   id: string; proof_id: string; actor_user_id: string; idempotency_key: string;
@@ -53,7 +57,7 @@ export interface CaptureSessionRow {
   max_recording_bytes?: string | number | null;
 }
 export function captureSessionView(s: CaptureSessionRow) {
-  return { clientReportedCapture:s.client_reported_context??null,id: s.id, proofId: s.proof_id, stageId: s.stage_id, registrationTiming: s.recorded_at ? (new Date(s.recorded_at).getTime() > new Date(s.expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "NOT_REGISTERED", client: s.client, policyVersion: s.policy_version,
+  return { orderSnapshotId:s.order_snapshot_id??null,orderSnapshotVersion:s.order_snapshot_version??null,orderSnapshotSha256:s.order_snapshot_sha256??null,clientReportedCapture:s.client_reported_context??null,id: s.id, proofId: s.proof_id, stageId: s.stage_id, registrationTiming: s.recorded_at ? (new Date(s.recorded_at).getTime() > new Date(s.expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "NOT_REGISTERED", client: s.client, policyVersion: s.policy_version,
     workflowStep: s.workflow_step, state: s.state, expiresAt: asRequiredIso(s.expires_at),
     recoverUntil: asRequiredIso(s.recover_until), recordedAt: s.recorded_at ? asRequiredIso(s.recorded_at) : null,
     sha256: s.expected_sha256, byteSize: s.expected_byte_size == null ? null : Number(s.expected_byte_size),
@@ -89,7 +93,9 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
     throw new DomainError('IDEMPOTENCY_KEY_REQUIRED','A capture idempotency key is required',400);
   if (!['WEB_CAMERA','NATIVE_CAMERA'].includes(input.client))
     throw new DomainError('CAPTURE_CLIENT_REQUIRED','Start recording using the web or native camera workflow',400);
+  if (!input.stageId) await prepareIntakeCaptureEntry(db,clock,actor,proofId);
   return db.transaction(async tx => {
+    await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[actor]);
     const context=await captureAccess(tx,actor,proofId,true,input.stageId);
     const existing = await tx.query<CaptureSessionRow>('SELECT * FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND idempotency_key=$3',[proofId,actor,input.idempotencyKey]);
     if (existing.rows[0]) {
@@ -97,6 +103,9 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
       return captureSessionView(existing.rows[0]);
     }
     if (!input.stageId) {
+      const intakeContract=(await tx.query<{contract_version:number}>('SELECT contract_version FROM proof_order_contexts WHERE proof_id=$1',[proofId])).rows[0];
+      if (intakeContract?.contract_version===1 && (await tx.query("SELECT 1 FROM capture_sessions WHERE proof_id=$1 AND stage_id IS NULL AND state<>'CANCELLED' LIMIT 1",[proofId])).rows.length)
+        throw new DomainError('INTAKE_CAPTURE_IN_PROGRESS','Resume the current recording or finish its attestation before starting another',409);
       const proof = await loadProof(tx, proofId);
       await assertSupportedParcelCapture(tx, proof.transaction_id);
     }
@@ -107,8 +116,9 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
     const maxDurationMs = Math.min(CAPTURE_MAX_DURATION_MS,allowance.enforced ? allowance.maxRecordingSeconds!*1000 : CAPTURE_MAX_DURATION_MS);
     const now=clock.now(); const id=newId('cap');
     const result=await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step,max_duration_ms,max_recording_bytes) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11,$12,$13) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,CAPTURE_POLICY_VERSION,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep,maxDurationMs,maxRecordingBytes]);
+    if (!input.stageId) await pinCurrentIntakeCaptureContext(tx,clock,actor,proofId,id);
     await appendAudit(tx,{proofId,actorUserId:actor,eventType:'CAPTURE_SESSION_ISSUED',eventData:{sessionId:id,client:input.client,policyVersion:CAPTURE_POLICY_VERSION,assurance:CAPTURE_ASSURANCE},at:now});
-    return captureSessionView(result.rows[0]);
+    return captureSessionView(await loadCaptureSession(tx,actor,proofId,id));
   });
 }
 export async function completeCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, sessionId: string, input: {sha256: string; byteSize: number; contentType: string; interrupted?: boolean; recordedDurationMs?: number}) {

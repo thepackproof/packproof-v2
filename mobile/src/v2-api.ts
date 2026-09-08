@@ -646,6 +646,9 @@ export class PackProofV2Client {
 
   get apiBaseUrl(): string { return this.options.baseUrl.replace(/\/+$/, ""); }
 
+  async intakeRequest<T>(path: string, method = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
+    return this.request(`/me/intake${path}`, { method, body, headers });
+  }
   async studyRequest<T>(path:string,method="GET",body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
   async getCapabilities(): Promise<ApiCapabilities> {
     return this.request("/capabilities", { auth: false });
@@ -1215,6 +1218,7 @@ export class PackProofV2Client {
     } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {
+      "X-PackProof-Intake-Version": "1",
       Accept: "application/json",
       ...(init.headers ?? {}),
     };

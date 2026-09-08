@@ -1,3 +1,4 @@
+import { IntakeSettings } from "../intake/IntakeSettings";
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -144,6 +145,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           </> : null}
           {!channel.catalog?.enabled && channel.accounts.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>New connections are temporarily unavailable. Existing connection and order status are shown above.</Text> : null}
         </InfoCard>)}
+        <IntakeSettings />
         <Text style={[styles.meta, { color: colors.textSecondary }]}>Marketplace authorization is separate from PackProof sign-in. Recording a Proof does not mark an order shipped.</Text>
         {channels.some(channel => channel.provider === "etsy") ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{ETSY_ATTRIBUTION}</Text> : null}
       </> : null}

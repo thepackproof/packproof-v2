@@ -1,3 +1,4 @@
+import { ReadyOrders } from "../intake/ReadyOrders";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ export function MyProofsScreen() {
   const app = usePackProof();
   const { colors, scheme } = useTheme();
   const [filterOpen, setFilterOpen] = useState(false);
+  const [preparedProofIds, setPreparedProofIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(!app.proofCollection.length);
   const [snapshot, setSnapshot] = useState<{ rows: ProofCollectionItem[]; invites: InvitationInboxView[] }>({ rows:app.proofCollection, invites:app.pendingInvites });
   const [requestedRefresh, setRequestedRefresh] = useState(false);
@@ -85,9 +87,10 @@ export function MyProofsScreen() {
     <OfflineBanner visible={app.offline} />
     <ErrorBanner message={app.error || (app.offline && !snapshot.rows.length ? "Proofs could not be loaded while offline. Reconnect and try again." : null)}/>
     {app.error || (app.offline && !snapshot.rows.length) ? <Button label="Try loading Proofs again" variant="tertiary" onPress={() => void refresh()} /> : null}
+    {library.view !== "completed" && !library.query.trim() ? <ReadyOrders onPreparedProofsChange={setPreparedProofIds} /> : null}
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
-    {rows.map(item => <View key={item.proofId} style={[styles.row,{backgroundColor:colors.surface,borderBottomColor:colors.divider}]}>
+    {rows.filter(item => !preparedProofIds.includes(item.proofId)).map(item => <View key={item.proofId} style={[styles.row,{backgroundColor:colors.surface,borderBottomColor:colors.divider}]}>
       <PressableScale onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
         <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>{item.transaction.itemTitle || 'Shipment Proof'}</Text>
         <Text style={[styles.meta,{color:colors.textSecondary}]}>{item.transaction.externalReference ? `Order ${item.transaction.externalReference}` : `Proof ${item.proofId.slice(0,8)}`}</Text>
@@ -96,7 +99,7 @@ export function MyProofsScreen() {
       </PressableScale>
       <Button label={item.presentation.nextAction.label} variant="tertiary" onPress={() => void open(item,true)} loading={app.busy} />
     </View>)}
-    {!loading && !app.error && !app.offline && !rows.length ? <EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /> : null}
+    {!loading && !app.error && !app.offline && !rows.length && !preparedProofIds.length ? <EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /> : null}
     <BottomSheet visible={filterOpen} title="Filters" onClose={() => setFilterOpen(false)}>
       <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>Your role</Text>
       {(['all','seller','buyer'] as const).map(role => <Button key={role} label={`${library.role === role ? '✓ ' : ''}${role === 'all' ? 'All roles' : role === 'seller' ? 'Seller' : 'Buyer'}`} variant="tertiary" onPress={() => app.setProofsRoleFilter(role)} />)}

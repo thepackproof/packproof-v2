@@ -1,3 +1,4 @@
+import { recordImportedIntakeConflict } from "../intake/context.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
@@ -69,15 +70,19 @@ export async function importNormalizedTransaction(
   imported: unknown,
   options: {
     createProof?: boolean;
+    /** Server-owned intake mapping; never accepted from an HTTP client. */
+    identityTenantKey?: string;
+    provenanceOverride?: "PARTICIPANT_SUPPLIED";
     adapterKey?: string;
     participationPolicy?: ParticipationPolicy;
   } = {},
 ): Promise<TransactionImportView> {
   const parsed = parseImportedTransaction(imported);
+  if (options.provenanceOverride) parsed.provenance.source = options.provenanceOverride;
   const adapterKey = options.adapterKey ?? parsed.provider;
   const createProof = options.createProof === true;
   const tenantKey = normalizeTenantKey(
-    tenantKeyForImport(
+    options.identityTenantKey ?? tenantKeyForImport(
       parsed.provider,
       parsed.provenance.source,
       parsed.externalAccountReference,
@@ -86,6 +91,7 @@ export async function importNormalizedTransaction(
   const fingerprint = importedPayloadFingerprint(parsed);
 
   return db.transaction(async (tx) => {
+    await tx.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [actorUserId]);
     const existingIdentity = await findTransactionIdentity(
       tx,
       tenantKey,
@@ -537,6 +543,7 @@ async function recordSourceObservation(
   if (!inserted.rows[0]) return;
   const proof = (await db.query<{id:string}>('SELECT id FROM proofs WHERE transaction_id=$1', [transactionId])).rows[0];
   if (proof) {
+    await recordImportedIntakeConflict(db,proof.id,parsed);
     await appendAudit(db,{proofId:proof.id,actorUserId:actor,eventType:'TRANSACTION_SOURCE_OBSERVED',eventData:{observationId:inserted.rows[0].id,source:parsed.provenance.source,provider:parsed.provider,payloadSha256:context.fingerprint},at:clock.now()});
     await enqueueRecoveryEvent(db,clock,{operationId:`source:${inserted.rows[0].id}`,kind:'SOURCE_OBSERVED',proofId:proof.id,actorUserId:actor,payload:await buildProofRecoverySnapshot(db,proof.id)});
   }

@@ -58,6 +58,9 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  async intakeRequest<T>(path: string, method = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
+    return this.request(`/me/intake${path}`, {method, body, headers});
+  }
   constructor(
     private readonly options: {
       baseUrl: string;
@@ -662,6 +665,7 @@ export class PackProofApi {
     } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {
+      "X-PackProof-Intake-Version": "1",
       Accept: "application/json",
       ...(init.headers ?? {}),
     };
