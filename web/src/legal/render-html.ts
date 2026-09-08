@@ -38,7 +38,7 @@ export function renderLegalHtml(document: LegalDocument, pageCss: string): strin
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="${escapeHtml(document.description)}" />
-    <link rel="icon" href="/packproof-logo.png" />
+    <link rel="icon" href="/brand/packproof-symbol.svg" />
     <title>${escapeHtml(document.title)} — PackProof</title>
     <style>
 :root {
@@ -113,7 +113,7 @@ ${pageCss}
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="/">
-          <img src="/packproof-logo.png" alt="" width="28" height="28" />
+          <img src="/brand/packproof-symbol.svg" alt="" width="28" height="28" />
           PackProof
         </a>
         <nav class="topbar-nav" aria-label="Legal">

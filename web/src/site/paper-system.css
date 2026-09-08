@@ -37,7 +37,8 @@ body { font-size: 1rem; }
 .pp-brand { gap: 8px; min-height: 48px; flex: 0 0 auto; }
 .pp-brand img, .workspace-nav .pp-brand img, .workspace-mobile-top .pp-brand img { width: 38px; height: 38px; border-radius: 0; object-fit: contain; background: transparent; }
 .pp-brand-lettering { display: block; width: 142px; height: 30px; background: currentColor; mask: url('/brand/packproof-wordmark.svg') center / contain no-repeat; -webkit-mask: url('/brand/packproof-wordmark.svg') center / contain no-repeat; }
-.auth-story .pp-brand img, [data-theme='dark'] .workspace-shell .pp-brand img { background: var(--brand-sheet); border-radius: 4px; }
+.auth-story .pp-brand img, [data-theme='dark'] .workspace-shell .pp-brand img, [data-theme='dark'] .app-shell > .topbar .pp-brand img { content: url('/brand/packproof-symbol-reversed.svg'); background: transparent; border-radius: 0; }
+.app-shell > .topbar .pp-brand { color: var(--text); }
 .workspace-nav.is-collapsed .pp-brand-lettering { display: none; }
 
 /* One readable-width working surface, anchored beside the navigation. */

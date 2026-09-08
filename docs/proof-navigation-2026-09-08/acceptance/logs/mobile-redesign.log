@@ -1,0 +1,32 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-mobile@0.1.0 test:redesign
+> node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/sales-channels.test.ts tests/capture-label-review.test.ts tests/orders.test.ts
+
+✔ encoded-frame source metadata and stable keys survive network loss without inventing a match (1.710848ms)
+✔ a conflict remains reviewable; an attributed exclusion does not erase its observation (0.179111ms)
+✔ product codes, URLs and hostile payloads never reach shipping storage or transport (0.28448ms)
+✔ cancelled or ineligible marketplace work cannot return as manual drafts (1.48026ms)
+✔ a failed initial queue request does not guess every Proof is a manual order (0.188134ms)
+✔ pending journals appear once rather than again as ready rows or manual drafts (0.150457ms)
+✔ committed and pending evidence have honest labels and viewer actions (0.227183ms)
+✔ authoritative finalization overrides stale queue state and a retained local original (0.162576ms)
+✔ grading remains a contextual workflow rather than ordinary packing (0.112931ms)
+✔ only ready seller work or its unfinished local capture enters capture (0.116867ms)
+✔ Orders search matches titles, references, and tracking without case sensitivity (0.187173ms)
+✔ successful queue reads do not hide failed or pending ingestion (0.380176ms)
+✔ packing returns to its canonical Proof before the unified Proofs list, including retired queue origins (0.256618ms)
+✔ retired batch and account destinations return to Proofs without a queue redirect loop (0.147944ms)
+✔ Proof disclosure and legacy routes keep their prior destinations (0.090266ms)
+✔ one card joins permission and ingestion without confusing health (0.956968ms)
+✔ reauthorized Shopify connections match normalized identity without leaking another shop (0.338602ms)
+✔ disabled unused providers are absent while unhealthy existing accounts stay visible (0.667911ms)
+✔ multiple accounts remain separate under one provider and connection IDs are claimed once (0.206092ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 238.484191

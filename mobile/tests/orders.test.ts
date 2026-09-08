@@ -53,19 +53,24 @@ test("successful queue reads do not hide failed or pending ingestion", () => {
 
 import { normalizeRouteName, resolveBackRoute } from "../src/app/navigation.ts";
 
-test("packing entered from Orders returns to its queue without an extra detail step", () => {
-  assert.equal(resolveBackRoute("capture", "orders"), "orders");
-  assert.equal(resolveBackRoute("proof", "orders"), "orders");
-  assert.equal(resolveBackRoute("create", "orders"), "orders");
-  assert.equal(resolveBackRoute("manual", "orders"), "orders");
+test("packing returns to its canonical Proof before the unified Proofs list, including retired queue origins", () => {
+  for (const origin of ["home", "orders", "station"] as const) {
+    assert.equal(resolveBackRoute("capture", origin), "proof");
+    assert.equal(resolveBackRoute("proof", origin), "home");
+    assert.equal(resolveBackRoute("create", origin), "home");
+    assert.equal(resolveBackRoute("manual", origin), "home");
+  }
 });
 
-test("batch and Account back preserve the originating destination", () => {
-  assert.equal(resolveBackRoute("capture", "station"), "station");
-  assert.equal(resolveBackRoute("proof", "station"), "station");
-  assert.equal(resolveBackRoute("station", "station"), "orders");
-  assert.equal(resolveBackRoute("account", "home"), "home");
-  assert.equal(resolveBackRoute("account", "orders"), "orders");
+test("retired batch and account destinations return to Proofs without a queue redirect loop", () => {
+  assert.equal(resolveBackRoute("station", "station"), "home");
+  for (const origin of ["home", "orders", "station"] as const) {
+    assert.equal(resolveBackRoute("account", origin), "home");
+  }
+  for (const retired of ["tabs", "overview", "orders", "activity", "station"]) {
+    assert.equal(normalizeRouteName(retired), "home");
+    assert.equal(normalizeRouteName(normalizeRouteName(retired)), "home");
+  }
 });
 
 test("Proof disclosure and legacy routes keep their prior destinations", () => {

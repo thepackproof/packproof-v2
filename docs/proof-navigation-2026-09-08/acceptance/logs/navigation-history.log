@@ -1,0 +1,15 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-web@0.1.0 test
+> vitest run --reporter=dot src/tests/navigation-history.test.tsx
+
+
+ RUN  v3.2.7 /workspace/scratch/43b45221121c/web-navigation/web
+
+··
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  14:40:26
+   Duration  6.57s (transform 889ms, setup 56ms, collect 516ms, tests 5.49s, environment 279ms, prepare 67ms)
+

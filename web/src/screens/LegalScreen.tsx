@@ -41,7 +41,7 @@ export function LegalScreen(props: { kind: LegalKind; onGo: (path: string) => vo
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="/" onClick={(event) => goTo(event, "/", props.onGo)}>
-          <img src="/packproof-logo.png" alt="" width={28} height={28} />
+          <img src="/brand/packproof-symbol.svg" alt="" width={28} height={28} />
           PackProof
         </a>
         <nav className="topbar-nav" aria-label="Legal">

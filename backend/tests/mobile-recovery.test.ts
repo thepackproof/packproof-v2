@@ -4,7 +4,7 @@ import type { StationProofSnapshot } from "../../mobile/src/packing-station/type
 import type { CachedClientState } from "../../mobile/src/session.ts";
 import { mergeRefreshedSession, sessionForReauthentication } from "../../mobile/src/session-recovery.ts";
 import { isAuthenticationFailure } from "../../mobile/src/copy/errors.ts";
-import { filterProofInvitations } from "../../mobile/src/copy/presentation.ts";
+import { mergeProofInvitations, presentationForProof, selectProofRows } from "../../mobile/src/copy/proof-list.ts";
 import { DEFAULT_PROOFS_LIBRARY } from "../../mobile/src/app/navigation.ts";
 import { initialStationState, reduceStation } from "../../mobile/src/packing-station/machine.ts";
 
@@ -133,16 +133,22 @@ describe("mobile authentication preserves recording recovery", () => {
 });
 
 describe("mobile invitation discovery", () => {
-  const invitations = [{ transaction: { itemTitle: "Rare Card" }, inviter: { displayName: "Collin", username: "seller" } }];
-  it("shows pending invitations with the default All role filter", () => {
-    expect(filterProofInvitations(invitations, DEFAULT_PROOFS_LIBRARY)).toEqual(invitations);
+  const invitations = [{ invitationId: "invite-card", proofId: "proof-card", status: "PENDING", createdAt: "2026-09-08T00:00:00Z", expiresAt: null,
+    transaction: { transactionId: "txn-card", itemTitle: "Rare Card", externalReference: "ORDER-CARD" },
+    inviter: { userId: "seller", displayName: "Collin", username: "seller" } }];
+  const rows = mergeProofInvitations([], invitations).map(row => ({ ...row, presentation: presentationForProof(row) }));
+  it("shows a pending invitation once in the default All Proofs list", () => {
+    expect(DEFAULT_PROOFS_LIBRARY.view).toBe("all");
+    expect(selectProofRows(rows, DEFAULT_PROOFS_LIBRARY)).toEqual(rows);
+    expect(rows[0].presentation).toMatchObject({ needsAttention: true, completed: false, nextAction: { type: "ACCEPT_INVITATION" }, share: { available: false } });
   });
-  it("matches the item and sender while respecting explicit filters", () => {
-    expect(filterProofInvitations(invitations, { ...DEFAULT_PROOFS_LIBRARY, query: " COLLIn " })).toEqual(invitations);
-    expect(filterProofInvitations(invitations, { ...DEFAULT_PROOFS_LIBRARY, query: "missing" })).toEqual([]);
-    expect(filterProofInvitations(invitations, { ...DEFAULT_PROOFS_LIBRARY, view: "completed" })).toEqual([]);
-    expect(filterProofInvitations(invitations, { ...DEFAULT_PROOFS_LIBRARY, role: "seller" })).toEqual([]);
-    expect(filterProofInvitations(invitations, { ...DEFAULT_PROOFS_LIBRARY, carrier: "UPS" })).toEqual([]);
+  it("matches the item and order reference while respecting explicit filters", () => {
+    expect(selectProofRows(rows, { ...DEFAULT_PROOFS_LIBRARY, query: " RARE card " })).toEqual(rows);
+    expect(selectProofRows(rows, { ...DEFAULT_PROOFS_LIBRARY, query: "order-card", view: "attention" })).toEqual(rows);
+    expect(selectProofRows(rows, { ...DEFAULT_PROOFS_LIBRARY, query: "missing" })).toEqual([]);
+    expect(selectProofRows(rows, { ...DEFAULT_PROOFS_LIBRARY, view: "completed" })).toEqual([]);
+    expect(selectProofRows(rows, { ...DEFAULT_PROOFS_LIBRARY, role: "seller" })).toEqual([]);
+    expect(selectProofRows(rows, { ...DEFAULT_PROOFS_LIBRARY, carrier: "UPS" })).toEqual([]);
   });
 });
 

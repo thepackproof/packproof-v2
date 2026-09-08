@@ -1,0 +1,13 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+ RUN  v3.2.7 /workspace/sites/packproof-pilot/backend
+
+ ✓ tests/mobile-recovery.test.ts (15 tests) 10ms
+ ✓ tests/mobile-theme.test.ts (14 tests) 7ms
+ ✓ tests/android-back-compat.test.ts (17 tests) 7ms
+
+ Test Files  3 passed (3)
+      Tests  46 passed (46)
+   Start at  14:40:07
+   Duration  810ms (transform 176ms, setup 0ms, collect 220ms, tests 23ms, environment 0ms, prepare 184ms)
+

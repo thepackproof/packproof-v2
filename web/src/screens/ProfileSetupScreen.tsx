@@ -64,7 +64,7 @@ export function ProfileSetupScreen(props: {
 
   return (
     <main className="page page-narrow">
-      <img className="auth-logo" src="/packproof-logo.png" alt="" width={72} height={72} />
+      <img className="auth-logo" src="/brand/packproof-symbol.svg" alt="" width={72} height={72} />
       <h1>Finish setting up your account</h1>
       <p className="lede">Choose how you appear to other PackProof users.</p>
       <form className="section stack" onSubmit={(event) => void submit(event)}>

@@ -41,7 +41,7 @@ export function restoreNavigationContext() {
     if (done) return;
     const anchor = saved.anchor ? [...document.querySelectorAll<HTMLElement>("[data-context-anchor]")].find(el => el.dataset.contextAnchor === saved.anchor) : null;
     if (document.querySelector("[aria-busy=true]")) return;
-    if (saved.anchor && !anchor && !document.querySelector(".proof-list,.empty-state")) return;
+    if (saved.anchor && !anchor && !document.querySelector(".library-page:not([aria-busy=true])")) return;
     window.scrollTo?.({ top: anchor ? window.scrollY + anchor.getBoundingClientRect().top - (saved.offset || 0) : saved.y, behavior: "instant" as ScrollBehavior });
     const focus = saved.focus ? document.getElementById(saved.focus) || [...document.querySelectorAll<HTMLElement>("[data-context-anchor]")].find(el => el.dataset.contextAnchor === saved.focus) : null;
     focus?.focus({ preventScroll: true });
@@ -49,7 +49,7 @@ export function restoreNavigationContext() {
   };
   const observer = new MutationObserver(apply);
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-busy"] });
-  const timeout = window.setTimeout(() => { if (!done) { window.scrollTo?.(0, saved.y); finish(); } }, 4000);
+  const timeout = window.setTimeout(() => { if (!done && !document.querySelector("[aria-busy=true]")) { window.scrollTo?.(0, saved.y); finish(); } }, 4000);
   const frame = requestAnimationFrame(apply);
   cleanup = () => { cancelAnimationFrame(frame); finish(); };
 }

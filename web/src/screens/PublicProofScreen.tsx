@@ -3,6 +3,7 @@ import { ApiError } from "../api/types";
 import { withRequestTimeout } from "../api/timeout";
 import type { PublicProofView } from "../api/types";
 import { SharedProofRecord } from "../components/SharedProofRecord";
+import { Brand } from "../site/Brand";
 
 type EmailPreference = "IMPORTANT" | "ALL" | "FINAL_ONLY";
 type RecipientSubscription = { email: string; preference: EmailPreference };
@@ -128,10 +129,7 @@ export function PublicProofScreen(props: {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <span className="brand">
-          <img src="/packproof-logo.png" alt="" width={28} height={28} />
-          PackProof
-        </span>
+        <Brand />
       </header>
       <main className="page stack" style={{ maxWidth: 720 }}>
         <h1>Proof</h1>

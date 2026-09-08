@@ -71,7 +71,7 @@ describe("public legal documents", () => {
     expect(html).toContain("<h1>Privacy Policy</h1>");
     expect(html).toContain("Last updated September 8, 2026");
     expect(html).toContain("/new/terms");
-    expect(html).toContain("/packproof-logo.png");
+    expect(html).toContain("/brand/packproof-symbol.svg");
     expect(html).not.toContain('<input type="password"');
     expect(html).toContain("/new/delete-account");
     expect(html).toContain("legal-placeholder");
