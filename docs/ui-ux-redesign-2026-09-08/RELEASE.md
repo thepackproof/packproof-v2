@@ -1,12 +1,12 @@
 # Candidate build, physical acceptance and controlled rollout
 
-This recipe does not authorize or claim a deployment. The user authorized implementation; execute only the intended candidate work, retain its evidence, and keep the plan's physical/usability release gates explicit. Do not reuse historical evidence as if it came from this redesign.
+The user authorized the complete plan, including candidate build and controlled release. Execution remains subject to available signing/deployment access and the plan's physical/usability release gates. This record does not claim a deployment or reuse historical evidence as if it came from this redesign.
 
 ## Build identities and evidence
 
 Before the intended signed build, commit and record the exact candidate SHA/tree, branch, dependency lockfiles, app config, native module versions, target API, capture/shipping feature flags, Cognito mode, package, signing lineage and monotonically increasing versionCode. Populate `release-evidence.template.json` with inspected facts; null means not established. No secret values belong in this file.
 
-Record API `/meta`, `/capabilities`, the actual additive migrations/checksums and served web identity. Migration `052_redesign_integrity.sql` adds preserved source observations, label context/resolutions and deletion-request state. Do not claim it is applied from source presence. Preserve predecessor client compatibility, existing origins, eBay/Etsy/shipping configuration, signing and immutable originals.
+Before internal distribution, verify compatible API `/meta` and public `/capabilities`, both additive migrations/checksums, and served web identity. Migration `052_redesign_integrity.sql` adds preserved source observations, label context/resolutions and deletion-request state; `053_study_ui_instrumentation.sql` supports the documented opt-in task instrumentation. Do not claim either is applied from source presence. The inspected old API does not satisfy new ordinary-recording preflight. Preserve predecessor client compatibility, existing origins, eBay/Etsy/shipping configuration, signing and immutable originals.
 
 The previously available AAB `packproof-0.3.8-37.aab` and baseline CI are historical only. A redesigned candidate requires a distinct final-source artifact and checksum. A debug APK cannot be renamed or presented as the signed `.aab` deliverable.
 

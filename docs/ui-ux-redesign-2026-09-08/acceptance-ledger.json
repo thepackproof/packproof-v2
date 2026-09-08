@@ -2,7 +2,15 @@
   "schema": "packproof.uiux-acceptance-ledger.v1",
   "baselineSourceSha": "bcedec57d9a56800a1ed80f6e5c4959b6de7dab4",
   "candidateSourceSha": null,
-  "releaseGate": "BLOCKED_DEVICE_USABILITY_AND_SIGNED_ARTIFACT",
+  "releaseGate": "BLOCKED_PENDING_REQUIRED_EVIDENCE",
+  "requiredReleaseGates": [
+    "FINAL_SOURCE_NATIVE_AND_FULL_SUITE_CI",
+    "COMPATIBLE_DEPLOYED_API_CAPABILITIES_MIGRATIONS_052_053_AND_WEB",
+    "SIGNED_ARTIFACT_AND_DISTRIBUTION_IDENTITY",
+    "BOTH_PHYSICAL_DEVICES_AND_UPGRADE_ACCESSIBILITY",
+    "EIGHT_PERSON_UNASSISTED_USABILITY"
+  ],
+  "finalCiReference": "https://github.com/thepackproof/packproof-v2/pull/38/checks",
   "entries": [
     {
       "id": "T01",
@@ -545,5 +553,5 @@
       "evidence": []
     }
   ],
-  "candidateCommitReference": "Exact commit recorded by candidate pull request and CI"
+  "candidateCommitReference": "https://github.com/thepackproof/packproof-v2/pull/38"
 }
