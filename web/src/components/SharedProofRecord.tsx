@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { recordProofStatus } from "@packproof/copy/proof-record";
+
 import type { ChronologyEntry, PublicProofView } from "../api/types";
 import { formatWhen } from "../format";
 import { useViewState } from "../navigation-context";
@@ -55,8 +55,9 @@ export function SharedProofRecord({ proof, loadMedia }: {
   return <article ref={record} className="workspace-proof-record" aria-label="Proof record">
     <header className="record-top">
       <div><h2>{tracker?.itemTitle || "Shared Proof"}</h2>{tracker?.reference && <p>{tracker.reference}</p>}</div>
-      <StatusBadge label={recordProofStatus(proof.status)} />
+      <StatusBadge label={proof.evidenceState?.code === "UPLOADING" ? "Evidence uploading" : proof.status === "FINALIZED" ? "Proof completed" : proof.status === "EVIDENCE_COMMITTED" ? "Confirmation pending" : proof.status === "READY_FOR_EVIDENCE" ? "Recording needed" : "Proof in progress"} />
     </header>
+    <p className="record-source-note">Shipment: {shipments.at(-1)?.label || "No carrier update yet"}</p>
     {proof.recordAsOf && <p className="record-source-note">{proof.recordAsOf.scopeStatement}</p>}
     <div className="record-tabs" role="tablist" aria-label="Proof record views">
       {tabs.map((name, index) => <button key={name} type="button" role="tab" ref={element => { buttons.current[index] = element; }}
@@ -69,7 +70,7 @@ export function SharedProofRecord({ proof, loadMedia }: {
     </div>
     <div className="record-body" hidden={tab !== "Recording"} role="tabpanel" tabIndex={0} id={`shared-${proof.proofId}-Recording-panel`} aria-labelledby={`shared-${proof.proofId}-Recording-tab`}>
       <div className="stack">
-        {current && loadMedia ? <PublicMedia key={`${current.evidenceId}:${current.derivativeId || "original"}`} playbackScope={scope} media={current} load={loadMedia} autoOpen /> : <p className="note">{current ? "Recording playback is unavailable." : "No recording is available through this link."}</p>}
+        {current && loadMedia ? <PublicMedia key={`${current.evidenceId}:${current.derivativeId || "original"}`} playbackScope={scope} media={current} load={loadMedia} autoOpen /> : <p className="note">{current ? "Recording playback is unavailable." : proof.evidenceState?.message || (proof.status === "OPEN" || proof.status === "AWAITING_PARTICIPANT" || proof.status === "READY_FOR_EVIDENCE" ? "Recording has not been added yet" : proof.status === "FINALIZED" ? "This link does not include recording access." : "No committed recording is available through this link yet.")}</p>}
         {(proof.evidence?.length ?? 0) > 1 && <div className="evidence-file-tabs" aria-label="Recordings">{proof.evidence!.map((item, index) => <button key={item.evidenceId} aria-pressed={current?.evidenceId === item.evidenceId} onClick={() => setSelected(item.evidenceId)}>{item.slot || "Recording"} {index + 1}</button>)}</div>}
         {proof.statements?.filter(statement=>!statement.relatedEvidenceId||statement.relatedEvidenceId===current?.evidenceId).map(statement=><section className="record-declaration" key={statement.attestationId} aria-label="Participant statement">
           <h3>{statement.attributedTo}</h3><p>{statement.statement}</p>

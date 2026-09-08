@@ -7,6 +7,9 @@ import "./site/refinements.css";
 import "./site/experience.css";
 import "./components/workspace-proof-record.css";
 import "./site/proof-diagram.css";
+import "./site/workflow-visual.css";
+import "./site/brand-palette.css";
+import "./site/paper-system.css";
 
 const root = document.getElementById("root");
 if (!root) {

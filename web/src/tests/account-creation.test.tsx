@@ -219,7 +219,7 @@ describe("web account creation", () => {
       if (url.endsWith("/me") && !url.includes("/proofs")) {
         return json(completeMe());
       }
-      if (url.endsWith("/me/proofs")) {
+      if (url.split("?")[0].endsWith("/me/proofs")) {
         return json({ proofs: [summary] });
       }
       if (url.endsWith("/invitations")) {
@@ -282,7 +282,7 @@ describe("web account creation", () => {
           displayName: "Alex Proof",
         });
       }
-      if (url.endsWith("/me/proofs")) {
+      if (url.split("?")[0].endsWith("/me/proofs")) {
         return json({ proofs: [summary] });
       }
       if (url.endsWith("/invitations")) {
@@ -362,7 +362,7 @@ describe("web account creation", () => {
           displayName: "Alex Proof",
         });
       }
-      if (url.endsWith("/me/proofs")) {
+      if (url.split("?")[0].endsWith("/me/proofs")) {
         return json({ proofs: [] });
       }
       if (url.endsWith("/invitations")) {
@@ -378,7 +378,7 @@ describe("web account creation", () => {
     await user.type(screen.getByLabelText("Display name"), "Alex Proof");
     await user.click(screen.getByRole("button", { name: "Finish setup" }));
     await waitFor(() => {
-      expect(screen.getByText(/No Proofs to show yet/)).toBeInTheDocument();
+      expect(screen.getByText(/^No Proofs yet$/)).toBeInTheDocument();
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/me/profile",

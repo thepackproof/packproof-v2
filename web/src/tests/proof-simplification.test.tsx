@@ -12,10 +12,10 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("keeps finalization guidance consistent even when the server packing hint is stale", async () => {
   const onFinalize = vi.fn();
-  const proof = { ...canonicalProof, status: "EVIDENCE_COMMITTED", nextAction: { type: "CAPTURE", title: "Record packing", hint: "Record the item being packed and the package being sealed." } };
+  const proof = { ...canonicalProof, evidence: canonicalProof.evidence.map(item => ({ ...item, evidenceType: "FULFILLMENT_CAPTURE" })), status: "EVIDENCE_COMMITTED", nextAction: { type: "CAPTURE", title: "Record packing", hint: "Record the item being packed and the package being sealed." } };
   render(<ProofScreen proof={proof} currentUserId="user_seller" shipmentIntegrity={null} loading={false} busy={false} error={null} onOpenFinalize={onFinalize} />);
   expect(screen.queryByText("Record the item being packed and the package being sealed.")).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Finish saving" }));
+  await userEvent.click(screen.getByRole("button", { name: "Review and confirm" }));
   expect(onFinalize).toHaveBeenCalledOnce();
 });
 

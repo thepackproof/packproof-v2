@@ -206,7 +206,10 @@ export interface ShipmentIntegrityView {
   verification: ShipmentIntegrityVerification;
 }
 
+import type { ProofPresentation } from "../../backend/src/domain/proof-presentation";
+
 export interface ProofView {
+  presentation?: ProofPresentation;
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
   transactionId: string;
@@ -249,6 +252,8 @@ export interface ProofView {
     evidenceType: string;
     validationStatus: string;
     submittedBy?: string;
+    captureSessionId?: string | null;
+    captureClient?: "NATIVE_CAMERA" | "WEB_CAMERA" | null;
     createdAt?: string;
     receivedAt?: string;
     sha256: string | null;
@@ -452,6 +457,9 @@ export interface InvitationInboxView {
 }
 
 export interface ProofCollectionItem {
+  accessKind?: "PARTICIPANT" | "INVITATION" | "RECEIVER";
+  presentation?: ProofPresentation;
+  invitationId?: string | null;
   workflowType?: string;
   schema?: "packproof.proof.summary/v1" | string;
   proofId: string;
@@ -468,6 +476,8 @@ export interface ProofCollectionItem {
     carrier: string | null;
     trackingNumber: string | null;
     service?: string | null;
+    provider?: string | null;
+    source?: string | null;
     transactionValue?: number | null;
     currency?: string | null;
   };
@@ -679,7 +689,16 @@ export class PackProofV2Client {
   }
 
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
-    return this.request("/me/proofs");
+    const rows = new Map<string, ProofCollectionItem>();
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const page: { proofs: ProofCollectionItem[]; nextOffset?: number | null } = await this.request(`/me/proofs?view=all&limit=100&offset=${offset}`);
+      for (const item of page.proofs) rows.set(item.proofId, item);
+      if (page.nextOffset == null) break;
+      if (!Number.isFinite(page.nextOffset) || page.nextOffset <= offset) throw new Error("Proofs could not be loaded completely. Please refresh.");
+      offset = page.nextOffset;
+    }
+    return { proofs: [...rows.values()] };
   }
 
   async listIntegrationConnections(

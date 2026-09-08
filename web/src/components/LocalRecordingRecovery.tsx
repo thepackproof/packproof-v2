@@ -3,7 +3,7 @@ import {flushStudyTimings} from '../analytics/study-capture';
 import type { PackProofApi } from "../api/client";
 import { listRecoverableRecordings, removePreservedLocalRecording, resumeLocalRecordings } from "../capture-queue";
 
-export function LocalRecordingRecovery({api, userId, onOpen}: {api:PackProofApi;userId:string;onOpen:(id:string)=>void}) {
+export function LocalRecordingRecovery({api, userId, onOpen, visible = true}: {api:PackProofApi;userId:string;onOpen:(id:string)=>void;visible?:boolean}) {
   const [items,setItems] = useState<Awaited<ReturnType<typeof listRecoverableRecordings>>>([]);
   const [error,setError] = useState<string|null>(null);
   useEffect(() => {
@@ -17,7 +17,7 @@ export function LocalRecordingRecovery({api, userId, onOpen}: {api:PackProofApi;
         if (active) setItems(before);
         if (navigator.onLine !== false) await resumeLocalRecordings(api, userId, () => active);
         const after = await listRecoverableRecordings(userId,api);
-        if (active) setItems(after);
+        if (active) { setItems(after); if (JSON.stringify(before.map(item => [item.proofId,item.committed,item.preserved,item.finalized,item.submitted])) !== JSON.stringify(after.map(item => [item.proofId,item.committed,item.preserved,item.finalized,item.submitted]))) window.dispatchEvent(new Event("packproof:records-updated")); }
       } catch { /* Capture reports unavailable IndexedDB before accepting local bytes. */ }
       finally { running = false; }
     };
@@ -27,7 +27,7 @@ export function LocalRecordingRecovery({api, userId, onOpen}: {api:PackProofApi;
     window.addEventListener("focus",update);
     return () => { active=false; clearInterval(timer); window.removeEventListener("online",update); window.removeEventListener("focus",update); };
   },[api,userId]);
-  if (!items.length) return null;
+  if (!visible || !items.length) return null;
   return <aside className="local-recovery-panel" aria-label="Saved recordings">
     <details>
       <summary>{items.some(item=>!item.finalized && !item.submitted) ? "Recordings need attention" : "Saved originals on this device"} · {items.length}</summary>
@@ -36,7 +36,7 @@ export function LocalRecordingRecovery({api, userId, onOpen}: {api:PackProofApi;
       <ul>{items.map(item=><li key={item.key}>
         <span>{item.finalized && item.preserved ? "Proof finalized and available" : item.submitted ? "Proof submitted. Local original kept until preservation is confirmed." : item.preserved ? "Recording preserved. Confirmation or finalization needed." : item.committed ? "Recording received. Preservation in progress." : item.accepted ? "Saved on this device. Upload pending." : "Saved on this device. Review and confirmation needed."} · {(item.file.size/1_000_000).toFixed(1)} MB</span>
         {item.errorMessage && <span>{item.errorMessage}</span>}
-        {item.kind === "station" ? <a className="btn btn-secondary" href="/station">Review station recording</a> : <button className="btn btn-secondary" onClick={()=>onOpen(item.proofId)}>Open Proof</button>}
+        {item.kind === "station" ? <button className="btn btn-secondary" onClick={() => onOpen(item.proofId)}>Review recording</button> : <button className="btn btn-secondary" onClick={()=>onOpen(item.proofId)}>Open Proof</button>}
         <button className="btn btn-secondary" onClick={()=>{
           const url=URL.createObjectURL(item.file);const link=document.createElement("a");
           link.href=url;link.download=`packproof-local-recording.${item.file.type.includes("mp4")?"mp4":"webm"}`;link.click();

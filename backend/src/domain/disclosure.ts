@@ -4,7 +4,7 @@ import type { Database } from '../db/database.js';
 import type { ObjectStore } from '../s3/object-store.js';
 import { canonicalize } from '../canonical.js';
 import { sha256Hex } from '../hash.js';
-import { createAccessLink, resolveAccessToken, type ProofAccessLinkRow } from './access-links.js';
+import { createAccessLink, resolveAccessToken, toAccessLinkView, type ProofAccessLinkRow } from './access-links.js';
 import { requireParticipant, loadProof } from './proof-access.js';
 import { buildProofTracker } from './proof-tracker.js';
 import { DomainError } from './errors.js';
@@ -147,7 +147,7 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
     'SELECT a.*,p.role FROM attestations a JOIN proof_participants p ON p.id=a.participant_id WHERE a.proof_id=$1 ORDER BY a.created_at,a.id', [ctx.proofId])).rows : [];
   const statements = statementRows.filter(row => !row.related_evidence_id || ctx.media.some(media => media.evidenceId===row.related_evidence_id)).map(row => ({
     attestationId:row.id, relatedEvidenceId:row.related_evidence_id,
-    statement:row.authorization_json ? SELLER_SHIPPING_STATEMENT : row.statement==='PACKED_DESCRIBED_ITEM' ? 'I packed this order as described.' : row.statement,
+    statement:row.authorization_json ? SELLER_SHIPPING_STATEMENT : row.statement==='PACKED_DESCRIBED_ITEM' ? 'Seller attested to packing the described item' : row.statement,
     attributedTo:row.role==='SELLER'?'Seller account':'Buyer account', createdAt:new Date(row.created_at).toISOString(),
     method:row.authorization_json?.method ?? 'PARTICIPANT_STATEMENT',
     signatureVerification:row.authorization_json?.signatureVerification ?? 'NOT_CRYPTOGRAPHICALLY_VERIFIED',
@@ -157,7 +157,13 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
   const recordHead=(await db.query<{sequence:string|number;sha256:string}>('SELECT sequence,sha256 FROM proof_supplements WHERE proof_id=$1 ORDER BY sequence DESC LIMIT 1',[ctx.proofId])).rows[0];
   const received=(await db.query('SELECT 1 FROM commerce_stages WHERE proof_id=$1 AND stage_type=\'RECEIPT\' AND finalized_at IS NOT NULL LIMIT 1',[ctx.proofId])).rows.length>0;
   const record = await disclosedRecord(db,ctx);
-  const value={...record,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
+  const pendingEvidence = ctx.purpose === 'SHARED_PROOF' && ctx.fields.includes('evidence') && (await db.query(`SELECT 1 FROM evidence WHERE proof_id=$1 AND validation_status='PENDING'
+    UNION ALL SELECT 1 FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1 AND e.committed_at IS NULL AND e.discarded_at IS NULL LIMIT 1`,[ctx.proofId])).rows.length > 0;
+  const evidenceState = !ctx.fields.includes('evidence') ? {code:'NOT_SHARED',message:'Recordings are not included in this link'}
+    : pendingEvidence ? {code:'UPLOADING',message:'Evidence is still uploading'}
+    : evidence.length === 0 ? ctx.purpose === 'SHARED_PROOF' ? {code:'NOT_RECORDED',message:'Recording has not been added yet'} : {code:'NOT_SHARED',message:'Recordings are not included in this link'}
+    : {code:'AVAILABLE',message:proof.status === 'FINALIZED' ? 'Proof completed' : 'Recording added; confirmation is pending'};
+  const value={...record,evidenceState,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
     join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
     evidence:ctx.fields.includes('evidence')?evidence:[],
     statements,
@@ -208,4 +214,19 @@ export async function readDisclosedMedia(db:Database,clock:Clock,store:ObjectSto
   const body=Buffer.concat(chunks,bytes);
   if(body.length!==result.byteSize||sha256Hex(body)!==result.sha256)throw new DomainError('EVIDENCE_INTEGRITY_FAILURE','Stored source failed verification',409);
   return {body,contentType:result.contentType,evidenceId};
+}
+
+/** Reuse an already approved live scope. Tokens remain hash-only in persistence. */
+export async function reuseSharedProofLink(db:Database,clock:Clock,actorUserId:string,proofId:string,token:unknown,publicWebBaseUrl:string) {
+  return db.transaction(async tx => {
+    await requireParticipant(tx,proofId,actorUserId,'SELLER');
+    if(typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new DomainError('ACCESS_LINK_INVALID','This viewing link is not valid',404);
+    const row=(await tx.query<ProofAccessLinkRow>('SELECT * FROM proof_access_links WHERE proof_id=$1 AND token_hash=$2 FOR UPDATE',[proofId,sha256Hex(token)])).rows[0];
+    if(!row) throw new DomainError('ACCESS_LINK_INVALID','This viewing link is not valid',404);
+    if(row.revoked_at) throw new DomainError('ACCESS_LINK_REVOKED','This viewing link has been revoked',404);
+    if(row.expires_at && new Date(row.expires_at) <= clock.now()) throw new DomainError('ACCESS_LINK_EXPIRED','This viewing link has expired',404);
+    const ctx=await disclosureContextForLink(tx,row,clock.now());
+    if(ctx.purpose!=='SHARED_PROOF' || ctx.fields.length!==SHARED_PROOF_FIELDS.length || SHARED_PROOF_FIELDS.some(field=>!ctx.fields.includes(field))) forbidden();
+    return {...toAccessLinkView(row),token,url:`${publicWebBaseUrl.replace(/\/$/,'')}/p/${token}`};
+  });
 }

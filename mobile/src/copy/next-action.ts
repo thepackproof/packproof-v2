@@ -54,7 +54,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   const status = input.proofStatus ?? "OPEN";
   const seller = input.role === "SELLER";
   const local = input.captureBelongsToProof && input.hasLocalCapture;
-  const committed = input.committedEvidenceCount > 0 || status === "EVIDENCE_COMMITTED";
+  const committed = input.committedEvidenceCount > 0;
 
   if (status === "FINALIZED") {
     return {
@@ -127,7 +127,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
     };
   }
 
-  if (seller && status === "READY_FOR_EVIDENCE" && !committed) {
+  if (seller && (status === "READY_FOR_EVIDENCE" || status === "EVIDENCE_COMMITTED") && !committed) {
     return {
       key: "start_capture",
       label: "Record packing",
@@ -194,7 +194,7 @@ export function canCaptureEvidence(input: {
 }): boolean {
   return (
     input.role === "SELLER" &&
-    input.proofStatus === "READY_FOR_EVIDENCE" &&
+    (input.proofStatus === "READY_FOR_EVIDENCE" || input.proofStatus === "EVIDENCE_COMMITTED") &&
     input.committedEvidenceCount === 0 &&
     input.finalized !== true
   );

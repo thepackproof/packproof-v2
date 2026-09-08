@@ -1,7 +1,7 @@
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, BackHandler, Linking, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, BackHandler, Keyboard, Linking, StyleSheet, Switch, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { formatBytes, type LocalCapture } from "../capture";
 import { captureRecoveryLabel, mayCleanUpCapture } from "../capture/recovery-model";
@@ -25,7 +25,7 @@ import { StudyConsentCard } from "../ui/StudyConsentCard";
 import type { AccountSection } from "../app/navigation";
 type DeletionRequest = { requestId: string; state: string; requestedAt: string; updatedAt: string };
 const SECTION_TITLES: Record<AccountSection, string> = {
-  profile: "Profile", channels: "Sales channels", recordings: "Recordings on this device",
+  profile: "Profile", channels: "Connections", recordings: "Recordings on this device",
   appearance: "Appearance", help: "Help & support", privacy: "Privacy & account",
 };
 const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
@@ -62,7 +62,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
     void app.loadConnectedAccounts().catch(() => undefined);
   }, []);
   useEffect(() => {
-    const listener = BackHandler.addEventListener("hardwareBackPress", () => { if(section) setSection(null); else app.goBack(); return true; });
+    const listener = BackHandler.addEventListener("hardwareBackPress", () => { if(Keyboard.isVisible()) { Keyboard.dismiss(); return true; } if(section) setSection(null); else app.goBack(); return true; });
     return () => listener.remove();
   }, [section, app.goBack]);
   useEffect(() => {
@@ -115,7 +115,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
         </View>
         <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
-          <AccountRow title="Sales channels" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
+          <AccountRow title="Connections" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
           <AccountRow title="Recordings on this device" detail={unfinished.length ? `${unfinished.length} ${unfinished.length === 1 ? "recording needs" : "recordings need"} attention` : retained.length ? `${retained.length} completed ${retained.length === 1 ? "copy" : "copies"} retained` : "No recordings stored here"} icon="videocam-outline" onPress={() => openSection("recordings")} />
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
           <AccountRow title="Help & support" detail="Recording, recovery, and invitations" icon="help-circle-outline" onPress={() => openSection("help")} />
@@ -132,8 +132,8 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       </> : null}
 
       {section === "channels" ? <>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Connect where you sell. Choose which channels automatically add orders ready to pack.</Text>
-        {!channels.length && !app.busy ? <Text style={[styles.meta, { color: colors.textSecondary }]}>No sales channels are available right now. You can still record a shipment from Orders.</Text> : null}
+        <Text style={[styles.body, { color: colors.textSecondary }]}>Connect where you sell. Choose which channels automatically prepare eligible orders in Proofs.</Text>
+        {!channels.length && !app.busy ? <Text style={[styles.meta, { color: colors.textSecondary }]}>No sales channels are available right now. You can still record a shipment from Proofs.</Text> : null}
         {channels.map(channel => <InfoCard key={channel.provider}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{channel.providerDisplay}</Text>
           {channel.accounts.map((entry, index) => <ChannelAccount key={entry.account?.id ?? entry.connection?.connectionId ?? index} entry={entry} providerDisplay={channel.providerDisplay} />)}

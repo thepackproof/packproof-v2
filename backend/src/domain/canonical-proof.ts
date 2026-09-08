@@ -1,3 +1,4 @@
+import { classifyProofPresentation, type ProofPresentation } from './proof-presentation.js';
 import { getCaptureShipping } from './capture-shipping.js';
 import { readCaptureClientContext, type ClientCaptureContext } from "./capture-sessions.js";
 import type { Database } from "../db/database.js";
@@ -62,6 +63,7 @@ export interface CanonicalEvidence {
   capturedDurationMs: number | null;
   captureOrigin: string;
   captureSessionId: string | null;
+  captureClient: string | null;
   captureAssurance: string;
   validationStatus: string;
   submittedBy: string;
@@ -120,6 +122,7 @@ export interface CanonicalExternalRecord {
 }
 
 export interface CanonicalProof {
+  presentation?: ProofPresentation;
   schema: typeof CANONICAL_PROOF_SCHEMA;
   proofId: string;
   transactionId: string;
@@ -200,8 +203,8 @@ export async function getCanonicalProof(
     `SELECT * FROM invitations WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
     [proofId],
   );
-  const evidence = await db.query<EvidenceRow>(
-    `SELECT e.*,c.recorded_at AS capture_registered_at,c.expires_at AS capture_expires_at FROM evidence e LEFT JOIN capture_sessions c ON c.id=e.capture_session_id WHERE e.proof_id = $1 ORDER BY e.created_at ASC, e.id ASC`,
+  const evidence = await db.query<EvidenceRow & {capture_client?:string}>(
+    `SELECT e.*,c.recorded_at AS capture_registered_at,c.expires_at AS capture_expires_at,c.client AS capture_client FROM evidence e LEFT JOIN capture_sessions c ON c.id=e.capture_session_id WHERE e.proof_id = $1 ORDER BY e.created_at ASC, e.id ASC`,
     [proofId],
   );
   const attestations = await db.query<AttestationRow>(
@@ -236,7 +239,7 @@ export async function getCanonicalProof(
     }),
   );
   const captureContexts=new Map(await Promise.all(evidence.rows.filter(row=>row.capture_session_id).map(async row=>[row.capture_session_id!,await readCaptureClientContext(db,row.capture_session_id!)] as const)));
-  const evidenceViews = evidence.rows.map(row=>toCanonicalEvidence(row,row.capture_session_id?captureContexts.get(row.capture_session_id)??null:null));
+  const evidenceViews = evidence.rows.map(row=>toCanonicalEvidence(row,row.capture_session_id?captureContexts.get(row.capture_session_id)??null:null,actorUserId));
   const attestationViews = attestations.rows.map(
     (row): CanonicalAttestation => ({
       kind: TRUST_KIND.ATTESTATION,
@@ -270,7 +273,18 @@ export async function getCanonicalProof(
     ).length,
   });
 
+  const commerceStages = proof.status === 'FINALIZED' && proof.workflow_type === 'COMMERCE_SALE' ? await listCommerceStages(db, proof.id) : undefined;
+  const pendingStage = commerceStages?.find(stage => stage.actorUserId === actorUserId && !stage.finalizedAt);
+  const receiverReceiptNeeded = Boolean(actorUserId && proof.status === 'FINALIZED' && (await db.query('SELECT 1 FROM commerce_receivers WHERE proof_id=$1 AND user_id=$2 AND accepted_at IS NOT NULL',[proof.id,actorUserId])).rows.length && !commerceStages?.some(stage=>stage.type==='RECEIPT' && stage.finalizedAt));
+  const orderCancelled = (await db.query('SELECT 1 FROM commerce_order_records WHERE transaction_id=$1 AND cancelled=true LIMIT 1',[proof.transaction_id])).rows.length > 0;
+  const shipmentStatus = (await db.query<{event_type:string}>("SELECT event_type FROM shipment_events WHERE proof_id=$1 AND event_type<>'WEIGHT_RECORDED' ORDER BY occurred_at DESC,id DESC LIMIT 1",[proof.id])).rows[0]?.event_type ?? null;
   return {
+    ...(actorUserId ? {presentation: classifyProofPresentation({proofId:proof.id,status:proof.status,role:actorRole,workflowType:proof.workflow_type,
+      participationPolicy:proof.participation_policy,finalizedAt,canShare:actorRole === 'SELLER',orderCancelled,shipmentStatus,
+      committedEvidenceCount:evidence.rows.filter(row=>row.validation_status==='COMMITTED').length,
+      fulfillmentCaptureCount:evidence.rows.filter(row=>isQualifyingFulfillmentCapture({evidenceType:row.evidence_type,validationStatus:row.validation_status})).length,
+      packingAttested:attestations.rows.some(row=>row.statement==='PACKED_DESCRIBED_ITEM'),workflowNextAction:custody.policy.nextAction,
+      pendingStage:pendingStage ? {type:pendingStage.type,hasEvidence:pendingStage.evidence.some(row=>Boolean((row as Record<string,unknown>).committedAt))} : receiverReceiptNeeded ? {type:'RECEIPT',hasEvidence:false} : null})} : {}),
     schema: CANONICAL_PROOF_SCHEMA,
     proofId: proof.id,
     transactionId: proof.transaction_id,
@@ -354,13 +368,11 @@ export async function getCanonicalProof(
     shippingContext: transaction.shipping,
     externalBindings: [...references, ...custody.bindings],
     auditEvents: events,
-    ...(proof.status === "FINALIZED" && proof.workflow_type === "COMMERCE_SALE"
-      ? { commerceStages: await listCommerceStages(db, proof.id) }
-      : {}),
+    ...(commerceStages ? {commerceStages} : {}),
   };
 }
 
-function toCanonicalEvidence(row: EvidenceRow, clientReportedCapture:ClientCaptureContext|null = null): CanonicalEvidence {
+function toCanonicalEvidence(row: EvidenceRow & {capture_client?:string}, clientReportedCapture:ClientCaptureContext|null = null, actorUserId?:string|null): CanonicalEvidence {
   const createdAt = asRequiredIso(row.created_at);
   return {
     evidenceId: row.id,
@@ -369,7 +381,9 @@ function toCanonicalEvidence(row: EvidenceRow, clientReportedCapture:ClientCaptu
     captureRegistrationTiming: row.capture_registered_at && row.capture_expires_at ? (new Date(row.capture_registered_at).getTime()>new Date(row.capture_expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "UNKNOWN",
     capturedDurationMs: row.captured_duration_ms == null ? null : Number(row.captured_duration_ms),
     captureOrigin: row.capture_origin ?? "LEGACY_UNKNOWN",
-    captureSessionId: row.capture_session_id ?? null,
+    // Session recovery is an uploader command context, not a guest or counterparty capability.
+    captureSessionId: actorUserId === row.submitted_by ? row.capture_session_id ?? null : null,
+    captureClient: actorUserId === row.submitted_by ? row.capture_client ?? null : null,
     captureAssurance: row.capture_origin === "AUTHORIZED_CAPTURE_SESSION"
       ? "Authorized capture workflow; camera origin is not independently attested."
       : row.capture_origin === "UPLOADED_ATTACHMENT" ? "Participant-uploaded supporting evidence." : "Historical evidence; capture origin is unknown.",

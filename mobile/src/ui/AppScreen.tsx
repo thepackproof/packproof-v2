@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   RefreshControl,
   StyleSheet,
@@ -9,7 +9,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
-import { RestoringScrollView } from "./RestoringScrollView";
+import { RestoringScrollView, type RestoringScrollViewHandle } from "./RestoringScrollView";
 
 export function AppScreen(props: {
   children: ReactNode;
@@ -22,10 +22,14 @@ export function AppScreen(props: {
   extraBottom?: number;
   initialOffsetY?: number;
   restorationReady?: boolean;
+  resetScrollKey?: string;
   onScrollOffset?: (offset: number) => void;
   style?: StyleProp<ViewStyle>;
 }) {
   const insets = useSafeAreaInsets();
+  const scroll = useRef<RestoringScrollViewHandle>(null);
+  const previousResetKey = useRef(props.resetScrollKey);
+  useEffect(() => { if (previousResetKey.current !== props.resetScrollKey) { previousResetKey.current = props.resetScrollKey; scroll.current?.scrollTo({y:0,animated:false}); } }, [props.resetScrollKey]);
   const { colors } = useTheme();
   const background = props.background ?? colors.background;
   // Insets belong to the viewport. Content padding scrolls away and lets controls
@@ -55,6 +59,7 @@ export function AppScreen(props: {
   return (
     <View style={[styles.root, props.style, viewportStyle]}>
       <RestoringScrollView
+        ref={scroll}
         style={styles.root}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}

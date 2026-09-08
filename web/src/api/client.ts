@@ -162,6 +162,20 @@ export class PackProofApi {
     return this.request("/me/proofs");
   }
 
+  async listProofs(input: { view: "all" | "attention" | "completed"; q?: string }): Promise<{ proofs: ProofCollectionItem[] }> {
+    const proofs = new Map<string, ProofCollectionItem>();
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const query = new URLSearchParams({ view: input.view, q: input.q || "", limit: "100", offset: String(offset) });
+      const page: { proofs: ProofCollectionItem[]; nextOffset?: number | null } = await this.request(`/me/proofs?${query}`);
+      for (const proof of page.proofs) proofs.set(proof.proofId, proof);
+      const next: number | null = page.nextOffset ?? null;
+      if (next !== null && next <= offset) throw new Error("The Proof list could not be loaded completely. Try again.");
+      offset = next;
+    }
+    return { proofs: [...proofs.values()] };
+  }
+
   async listFulfillmentQueue(
     filter: "ready" | "completed" | "all" = "ready",
   ): Promise<{ items: FulfillmentQueueItem[]; filter: string }> {

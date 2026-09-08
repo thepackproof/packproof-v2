@@ -74,7 +74,7 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
             {connection.lastErrorCode && <p className="note" role="status">The latest order check could not finish. {connection.status === "NEEDS_REAUTH" ? "Reconnect your selling account to continue." : "Try checking again. Your saved Proofs are still available."}</p>}
             <p className="meta">{connection.readyOrderCount} {connection.readyOrderCount === 1 ? "order" : "orders"} ready to pack</p>
             <p className="meta">{connection.lastSyncAt ? `Last successful order check ${formatDateTime(connection.lastSyncAt)}` : "No successful order check yet"}</p>
-            {(connection.reviewOrderCount ?? 0) > 0 && <p className="note">{connection.reviewOrderCount} orders need review and are excluded from the packing queue. {(connection.reviewReasons ?? []).map(reason => `${orderReviewReason(reason.code)}: ${reason.count}`).join(" · ")}. Review the original orders in {label}.</p>}
+            {(connection.reviewOrderCount ?? 0) > 0 && <p className="note">{connection.reviewOrderCount} orders need review and are excluded from automatic Proof creation. {(connection.reviewReasons ?? []).map(reason => `${orderReviewReason(reason.code)}: ${reason.count}`).join(" · ")}. Review the original orders in {label}.</p>}
             <button className="btn btn-secondary" type="button" disabled={props.busy || !canRead || !props.onSync} onClick={() => props.onSync?.(connection.connectionId)}>Check for orders now</button>
             <details className="settings-detail"><summary>Which orders are added?</summary><p className="note">{orderIntakeExplanation(provider)}</p></details>
           </div>;

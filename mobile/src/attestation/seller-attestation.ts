@@ -2,7 +2,7 @@ import { nativeStudyForCapture } from "../analytics/native-study";
 import { bindRecordedCapture, persistCaptureMetadata, type LocalCapture } from "../capture";
 import type { PackProofV2Client, SellerAttestationAuthorization } from "../v2-api";
 import { getAttestationAvailability, prepareAttestationKey, signAttestationPayload } from "./native";
-import { recordedSellerAuthorization, validateSellerChallenge } from "./authorization";
+import { recordedSellerAuthorization, recoverableSellerEvidence, validateSellerChallenge } from "./authorization";
 
 export async function authorizeSellerCapture({ client, capture, proofId, userId }: {
   client: PackProofV2Client; capture: LocalCapture; proofId: string; userId: string;
@@ -56,4 +56,23 @@ export async function attestSellerCapture({ client, proofId, evidenceId, authori
     relatedEvidenceId: evidenceId,
     authorization,
   });
+}
+
+/** Recover consent against the owner's existing committed native recording; no new capture or media copy. */
+export async function authorizeCommittedSellerEvidence({ client, proofId, evidenceId, userId }: {
+  client: PackProofV2Client; proofId: string; evidenceId: string; userId: string;
+}): Promise<SellerAttestationAuthorization> {
+  const proof = await client.getProof(proofId);
+  if (!proof.participants.some(person => person.userId === userId && person.role === "SELLER")) throw new Error("Open the seller account to confirm this recording.");
+  const recorded = recordedSellerAuthorization(proof,evidenceId,userId);
+  if (recorded) return recorded;
+  const evidence = recoverableSellerEvidence(proof,evidenceId,userId);
+  if (!evidence?.captureSessionId || !evidence.sha256 || evidence.captureClient !== "NATIVE_CAMERA") throw new Error("This recording cannot be confirmed with Android biometrics. Open its original recording workflow to confirm it.");
+  const available = await getAttestationAvailability();
+  if (!available.available) throw Object.assign(new Error(available.message ?? "Set up Android biometrics to confirm this recording."), {code:available.code});
+  const {publicKey} = await prepareAttestationKey(userId);
+  const challenge = await client.createAttestationChallenge(proofId,{captureSessionId:evidence.captureSessionId,sha256:evidence.sha256,publicKey});
+  validateSellerChallenge(challenge,{proofId,userId,captureSessionId:evidence.captureSessionId,sha256:evidence.sha256,publicKey});
+  const {signature} = await signAttestationPayload(userId,challenge.payload);
+  return {challengeId:challenge.challengeId,signature};
 }

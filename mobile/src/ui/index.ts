@@ -15,5 +15,4 @@ export { Timeline, TimelineEvent } from "./Timeline";
 export { EvidenceCard, ProgressState } from "./EvidenceCard";
 export { BottomSheet, ConfirmationSheet, TechnicalDetailsSheet } from "./Sheets";
 export { SuccessState } from "./SuccessState";
-export { CreateFab } from "./CreateFab";
 export { AvatarButton } from "./AvatarButton";

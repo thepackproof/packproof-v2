@@ -1,0 +1,169 @@
+/* The same paper, ink and document hierarchy serves every Proof doorway. */
+@font-face { font-family: 'Noto Sans'; src: url('/fonts/NotoSans-Regular.ttf') format('truetype'); font-style: normal; font-weight: 400 500; font-display: swap; }
+@font-face { font-family: 'Noto Sans'; src: url('/fonts/NotoSans-Bold.ttf') format('truetype'); font-style: normal; font-weight: 600 900; font-display: swap; }
+@font-face { font-family: 'Noto Serif'; src: url('/fonts/NotoSerif-Regular.ttf') format('truetype'); font-style: normal; font-weight: 400 500; font-display: swap; }
+@font-face { font-family: 'Noto Serif'; src: url('/fonts/NotoSerif-Bold.ttf') format('truetype'); font-style: normal; font-weight: 600 900; font-display: swap; }
+:root {
+  --sans: 'Noto Sans', system-ui, sans-serif;
+  --display: 'Noto Serif', Georgia, serif;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --motion-fast: 180ms;
+  --motion-page: 200ms;
+  --control-border: #7B8580;
+}
+:root[data-theme='dark'] { --control-border: #8B9790; }
+.public-site, .auth-experience { --control-border: #7B8580; }
+body { font-size: 1rem; }
+:where(h1,h2,h3,h4,p,button,a,summary,label,dt,dd) { overflow-wrap: break-word; }
+:where(.workspace-shell,.page,.record-body,.section,.search-row,.search-field) { min-width: 0; }
+:where(.page h1,.page h2,.record-top h2,.record-receipt h3,.section-head h2,.share-proof-panel h2) { font-family: var(--display); line-height: 1.3; letter-spacing: -.025em; }
+.workspace-shell .page-title { font-family: var(--display); font-size: clamp(1.75rem, 2.6vw, 2.25rem); line-height: 1.3; letter-spacing: -.035em; }
+.workspace-shell .page h2 { font-size: clamp(1.25rem, 2vw, 1.5rem); }
+:where(.workspace-shell,.share-proof-panel,.record-body) :is(p,li,dd) { font-size: 1rem; line-height: 1.65; }
+:where(.btn,.site-button,.filter-btn,.icon-btn,.icon-button,.segmented-tab,.segmented-tabs button,.record-tabs button,.record-chapters button) { min-height: 48px; border-radius: 6px; }
+:where(.icon-button,.icon-btn,.filter-btn) { min-width: 48px; }
+.workspace-shell .btn, .workspace-heading > .btn, .site-button, .site-button.small { min-height: 48px; font-size: 1rem; line-height: 1.45; white-space: normal; }
+:where(input,select,textarea) { font-size: 1rem; }
+:where(input:not([type=checkbox]):not([type=radio]),select) { min-height: 48px; }
+:where(input,select,textarea,.search-field,.filter-btn,.icon-button) { border-color: var(--control-border); }
+.search-field:focus-within { outline: 2px solid var(--accent-text,var(--brand-blue)); outline-offset: 2px; }
+.search-field input { min-width: 0; width: 100%; outline-offset: -3px; }
+:where(button,a,summary,input,select,textarea,[tabindex]):focus-visible { outline: 3px solid var(--accent-text,var(--brand-blue-text)); outline-offset: 3px; }
+:where(.note,.meta,.field>span,.field>label,.workspace-heading p,.status-badge,.filter-label,.filter-chip,.banner,.notice-content,.pp-notice strong,.record-top p,.record-order-details,.record-tabs button,.timeline-card>p,.timeline-title,.timeline-card h3,.tracking-status,.tracking-identity dt,.tracking-identity dd,.tracking-scans strong,.document-toolbar strong,.evidence-file-tabs button,.public-progress-title strong,.public-progress-list p) { font-size: .875rem; line-height: 1.55; }
+:where(.timeline-source,.timeline-preserved,.timeline-supplement,.timeline-end,.timeline-date time,.tracking-map-heading>div>span,.tracking-map-footer,.tracking-scans button>span>span,.tracking-scans time,.document-toolbar>div>span,.document-footer>span:last-child,.public-progress-list time,.panel-eyebrow) { font-size: .75rem; line-height: 1.5; }
+
+/* The wordmark is the approved traced lettering, never a substituted UI font. */
+.pp-brand { gap: 8px; min-height: 48px; flex: 0 0 auto; }
+.pp-brand img, .workspace-nav .pp-brand img, .workspace-mobile-top .pp-brand img { width: 38px; height: 38px; border-radius: 0; object-fit: contain; background: transparent; }
+.pp-brand-lettering { display: block; width: 142px; height: 30px; background: currentColor; mask: url('/brand/packproof-wordmark.svg') center / contain no-repeat; -webkit-mask: url('/brand/packproof-wordmark.svg') center / contain no-repeat; }
+.auth-story .pp-brand img, [data-theme='dark'] .workspace-shell .pp-brand img { background: var(--brand-sheet); border-radius: 4px; }
+.workspace-nav.is-collapsed .pp-brand-lettering { display: none; }
+
+/* One readable-width working surface, anchored beside the navigation. */
+.workspace-shell > .page { width: calc(100% - 64px); max-width: 1120px; margin-inline: 32px; padding-top: 32px; padding-bottom: 48px; }
+.workspace-shell > .page-narrow { max-width: 640px; }
+.workspace-shell > .library-page { max-width: 1120px; padding-bottom: 48px; }
+.workspace-heading { align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.workspace-heading > div { min-width: 0; }
+.workspace-heading p { max-width: 44rem; }
+.workspace-links a,.workspace-secondary a { min-height: 48px; font-size: 1rem; border-radius: 4px; }
+.workspace-links a[aria-current=page] { background: transparent; border-color: transparent; color: var(--accent-text); box-shadow: none; font-weight: 700; }
+.workspace-links a[aria-current=page]::before { width: 3px; height: 24px; background: var(--accent-text); }
+.workspace-links a:hover { background: var(--surface-elevated); }
+.workspace-switcher { border-radius: 4px; background: transparent; }
+.workspace-account strong,.workspace-account>div span,.sidebar-theme,.workspace-switcher strong,.workspace-switcher small { font-size: .875rem; }
+.workspace-shell .segmented, .workspace-shell .segmented-tabs { display: flex; flex-wrap: wrap; gap: 8px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 0; background: transparent; overflow: visible; }
+.workspace-shell .segmented-tab, .workspace-shell .segmented-tabs button { flex: 0 1 auto; min-height: 48px; padding: 12px 16px; margin: 0; border: 0; border-bottom: 3px solid transparent; border-radius: 0; box-shadow: none; background: transparent; color: var(--text-secondary); font-size: 1rem; line-height: 1.4; }
+.workspace-shell :is(.segmented-tab,.segmented-tabs button)[aria-selected=true], .workspace-shell :is(.segmented-tab,.segmented-tabs button)[aria-pressed=true] { background: transparent; border-bottom-color: var(--accent-text); color: var(--accent-text); font-weight: 700; }
+.workspace-shell .segmented-indicator { display: none; }
+.workspace-shell .search-field input { font-size: 1rem; }
+.search-row { margin-block: 24px; }
+.filter-sheet { border-radius: 6px; box-shadow: none; }
+.active-filter-chips button { min-height: 48px; font-size: .875rem; border-radius: 4px; }
+.card-list { gap: 0; border-top: 1px solid var(--border); }
+.workspace-shell .proof-card { min-height: 112px; padding: 24px 16px; gap: 16px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; }
+.workspace-shell .proof-card:hover { background: var(--surface); }
+.workspace-shell .proof-card:active { transform: none; background: var(--surface-pressed); }
+.proof-card-title { font-size: 1rem; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.proof-card-copy { gap: 8px; }
+.proof-card-thumb { border-radius: 4px; }
+.proof-card-meta,.proof-row-reference,.proof-row-source { color: var(--text-secondary); font-size: .875rem; line-height: 1.5; }
+.proof-row-action { display: inline-flex; align-items: center; gap: 8px; color: var(--accent-text); font-size: 1rem; line-height: 1.5; font-weight: 600; text-align: left; }
+.proof-card .status-badge { padding: 0; border: 0; border-radius: 0; background: transparent; font-size: .875rem; }
+.proof-card .status-badge::before { display: none; }
+.account-menu { margin-top: auto; border-top: 1px solid var(--border); padding-top: 16px; color: var(--text); }
+.account-menu > summary { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; font-size: 1rem; }
+.account-menu-items { display: grid; gap: 4px; padding-top: 8px; }
+.account-menu-items a,.account-menu-items button { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 12px; border: 0; border-radius: 4px; color: var(--text-secondary); background: transparent; font-size: .875rem; text-align: left; text-decoration: none; }
+.account-menu-items a:hover,.account-menu-items button:hover { background: var(--surface-elevated); color: var(--text); }
+.proof-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+
+/* A document with ruled sections, one in-flow next action, and visible evidence. */
+.workspace-proof-record { border-radius: 6px; box-shadow: 0 2px 8px #26302D08; overflow: visible; }
+.record-top { padding: 24px; flex-wrap: wrap; }
+.record-top h2 { font-family: var(--display); font-size: clamp(1.5rem,2.2vw,1.75rem); font-weight: 600; }
+.record-top > .status-badge { white-space: normal; }
+.record-tabs { flex-wrap: wrap; gap: 8px 16px; padding: 0 16px; overflow: visible; }
+.record-tabs button { font-size: .875rem; border-radius: 0; }
+.record-body { padding: 24px; animation: none; }
+.record-body .timeline-card { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; padding-block: 12px 20px; }
+.record-body .document-card, .proof-supporting-tools { border-radius: 6px; }
+.record-body :is(.section,.info-card,.summary-card) { border-radius: 4px; box-shadow: none; }
+.record-order-details > summary,.proof-supporting-tools > summary { min-height: 48px; padding-block: 12px; font-size: .875rem; }
+.proof-next-action { position: static; bottom: auto; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 20px 24px; background: var(--surface); z-index: auto; }
+.proof-next-action .btn { width: auto; min-width: min(240px,100%); }
+.proof-supporting-tools { box-shadow: none; }
+.share-proof-panel { border-radius: 6px; }
+.share-proof-panel .share-link-row { flex-wrap: wrap; }
+.share-proof-panel .share-link-row > * { min-width: 0; overflow-wrap: anywhere; }
+
+/* Marketing shares the restrained type and flat surfaces. All headings stay in flow. */
+.public-site { overflow: visible; }
+.public-site h1,.public-site h2,.public-site h3,.auth-experience h2 { font-family: var(--display); letter-spacing: -.035em; line-height: 1.2; }
+.public-site .hero h1 { font-size: clamp(2.75rem,4.6vw,4.25rem); line-height: 1.14; letter-spacing: -.04em; }
+.public-site h2 { font-size: clamp(1.75rem,3vw,2.75rem); }
+.public-site h3 { font-size: 1.375rem; line-height: 1.35; }
+.public-site .hero-visual { height: auto; min-height: 0; }
+.hero .sample-record { transform: none; box-shadow: 0 3px 12px #26302D12; }
+.public-site :is(.sample-record,.step-card,.bento-wide,.bento-small,.closing-cta,.contact-form,.feature-menu-panel,.feature-icon) { border-radius: 6px; }
+.public-site .site-button:hover { transform: none; box-shadow: none; }
+.public-site :is(.site-eyebrow,.text-link,.public-nav,.nav-login,.site-button.small,.feature-menu summary,.feature-menu-grid strong,.feature-menu-grid small,.feature-menu-footer,.sample-top strong,.sample-tabs button,.sample-facts strong,.sample-facts span,.footer-label,.footer-main a,.faq-section summary) { font-size: .875rem; line-height: 1.5; }
+.public-site :is(.feature-menu summary,.public-nav>a,.nav-login,.text-link,.sample-tabs button,.footer-main a) { min-height: 48px; display: inline-flex; align-items: center; }
+.public-site .site-nav { height: auto; min-height: 94px; padding-block: 16px; }
+.public-site .section-heading { height: auto; min-height: 0; }
+.public-site .section-heading > * { min-width: 0; }
+.public-site .hero-actions { flex-wrap: wrap; }
+.public-site .hero-bottom { flex-wrap: wrap; padding-block: 24px; }
+.auth-form-panel :is(input,.btn,.field>span,.auth-switch button,.auth-back) { font-size: 1rem; }
+.auth-form-panel :is(.auth-alt,.auth-legal-note,.auth-assistance,.auth-legal-links) { font-size: .875rem; }
+
+@media (max-width: 1150px) and (min-width: 701px) {
+  .workspace-shell > .page { width: calc(100% - 48px); margin-inline: 24px; }
+  .workspace-nav .pp-brand-lettering { width: 124px; }
+}
+@media (max-width: 900px) {
+  .trust-details { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .workspace-shell { padding-top: 76px; padding-bottom: 0; }
+  .workspace-shell > .page { width: calc(100% - 32px); margin-inline: 16px; padding: 24px 0 32px; }
+  .workspace-shell .page-title { font-size: 1.75rem; }
+  .workspace-mobile-top { height: auto; min-height: 76px; gap: 8px; padding: 12px 16px; }
+  .workspace-mobile-top > .icon-button { width: 48px; min-height: 48px; }
+  .workspace-mobile-top .pp-brand { margin-right: auto; }
+  .workspace-mobile-top .pp-brand-lettering { width: 120px; height: 28px; }
+  .workspace-mobile-top .pp-brand img { width: 32px; height: 38px; }
+  .workspace-nav:not(.mobile-expanded) { display: none; }
+  .workspace-nav.mobile-expanded { inset: 76px auto 0 0; width: min(320px,calc(100% - 32px)); padding: 24px 16px; }
+  .workspace-nav.mobile-expanded .workspace-links a { min-height: 48px; font-size: 1rem; }
+  .workspace-nav.mobile-expanded .workspace-link-label { font-size: 1rem; }
+  .workspace-nav.mobile-expanded .workspace-account { position: static; margin-top: 16px; padding-top: 16px; }
+  .workspace-nav.mobile-expanded .workspace-account > div { display: block; }
+  .workspace-shell .proof-card { padding: 20px 0; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .proof-card-copy { flex-basis: calc(100% - 76px); }
+  .proof-row-action { width: 100%; padding-top: 4px; }
+  .workspace-shell :is(.segmented-tab,.segmented-tabs button) { padding: 12px 8px; font-size: .875rem; }
+  .record-top,.record-body,.proof-next-action { padding: 20px 16px; }
+  .record-tabs { gap: 0 8px; padding-inline: 12px; }
+  .record-tabs button { padding-inline: 4px; }
+  .record-top h2 { font-size: 1.5rem; }
+  .record-body .tracking-map-heading strong { font-size: .875rem; }
+  .proof-next-action .btn { width: 100%; }
+  .public-site .site-nav { width: calc(100% - 32px); min-height: 76px; gap: 12px; padding-block: 12px; }
+  .public-site .site-nav .pp-brand-lettering { width: 120px; height: 28px; }
+  .public-site .site-nav .pp-brand img { width: 32px; height: 38px; }
+  .public-site .hero h1 { font-size: clamp(2.375rem,9vw,3.5rem); }
+  .public-site .hero-visual { height: auto; }
+  .public-site .hero-actions { gap: 16px; }
+  .public-site .hero-actions .site-button { font-size: 1rem; }
+  .public-site .section-heading { gap: 24px; }
+  .public-site .trust-details article { padding: 24px 0; }
+  .public-site .bento-wide { flex-wrap: wrap; }
+  .public-site .sample-tabs { gap: 16px; flex-wrap: wrap; }
+  .public-site .sample-top { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

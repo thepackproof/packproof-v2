@@ -45,7 +45,7 @@ export function PublicProofScreen(props: {
           terminal = true;
           setProof(null);
           setEmailSubscription(null);
-          setError("This viewing link has expired, was revoked, or is no longer available.");
+          setError(caught.code.includes("EXPIRED") ? "This viewing link has expired. Ask the sender for a current link." : caught.code.includes("REVOKED") ? "The sender has revoked this viewing link." : caught.status === 401 || caught.status === 403 ? "You don’t have permission to view this link." : "This viewing link is not available. Check the link with its sender.");
         } else {
           setError("Live updates are paused. Check your connection and try again. Any status shown is from the last successful update.");
         }

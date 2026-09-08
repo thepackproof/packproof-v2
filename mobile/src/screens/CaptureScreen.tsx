@@ -10,7 +10,9 @@ import { labelNeedsReview, shortenedTracking, type CaptureShippingReview } from 
 import type { EncodedVideoInspection } from "../../modules/packproof-unified-camera";
 import { spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
-import { Button } from "../ui/Button";
+import { AppHeader } from "../ui/AppHeader";
+import { Ionicons } from "@expo/vector-icons";
+import { Button, IconButton } from "../ui/Button";
 import { ProgressState } from "../ui/EvidenceCard";
 import { ErrorBanner } from "../ui/EmptyState";
 import { VideoReview } from "../ui/VideoReview";
@@ -86,6 +88,7 @@ export function CaptureScreen() {
   return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={[
     styles.root, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 20) },
   ]}>
+    <AppHeader title="Proof" onBack={app.goBack} right={app.role === "SELLER" && app.proof?.proofId ? <IconButton label="Share Proof" onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : undefined} />
     <Text style={[styles.title, { color: colors.textPrimary }]}>{inFlight ? "Finishing your Proof" : reviewing ? "Review your recording" : "Ready to pack"}</Text>
     {txn ? <View style={{ gap: spacing.xs }}>
       <Text style={[styles.item, { color: colors.textPrimary }]}>{txn.itemTitle || "Your shipment"}</Text>

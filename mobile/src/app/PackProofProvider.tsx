@@ -1,3 +1,6 @@
+import { loadProofsCache, saveProofsCache, clearProofsCache, emptyProofsCache } from "./proofs-cache";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { clearSharedLinkCache } from "../copy/share-cache";
 import { completeSavedCapture, captureCompletionActive } from "../capture/completion";
 import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture,recordNativeStudyInteraction} from '../analytics/native-study';
 import { listAccountCaptures, persistCaptureMetadata } from "../capture";
@@ -16,7 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import { AppState, Linking, Platform } from "react-native";
-import { authorizeSellerCapture, attestSellerCapture } from "../attestation/seller-attestation";
+import { authorizeSellerCapture, authorizeCommittedSellerEvidence, attestSellerCapture } from "../attestation/seller-attestation";
 import {
   PackProofV2Client,
   ApiError,
@@ -280,6 +283,7 @@ export interface PackProofContextValue {
   discardCapture: () => Promise<void>;
   submitCapture: () => Promise<void>;
   finalizeProof: () => Promise<void>;
+  confirmCommittedProof: () => Promise<void>;
   inviteUser: (userId: string) => Promise<void>;
   acceptInvite: (invitationId: string) => Promise<void>;
   openInvitation: (invite: InvitationInboxView) => void;
@@ -313,7 +317,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [batchPacking, setBatchPacking] = useState(false);
   const [receiptProofId, setReceiptProofId] = useState<string | null>(null);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
-  const workspaceOrigin = useRef<WorkspaceOrigin>("orders");
+  const workspaceOrigin = useRef<WorkspaceOrigin>("home");
   const ordersViews = useRef<Record<"orders" | "station", OrdersViewState>>({
     orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" },
   });
@@ -326,6 +330,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       offsetY: value.offsetY === undefined ? current.offsetY : Number.isFinite(value.offsetY) ? Math.max(0, value.offsetY) : 0,
     };
   }, []);
+  const cacheRef = useRef(emptyProofsCache());
+  const cacheScope = useRef<string | null>(null);
   const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(DEFAULT_PROOFS_LIBRARY);
   // Scroll is native interaction state, not application state. Publishing every
   // offset would rerender every context consumer during an Android fling.
@@ -410,6 +416,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
 
   const go = useCallback((name: AppRouteName, options?: { accountSection?: AccountSection }) => {
     if (name === "scan") name = "create";
+    if (name === "complete") name = "proof";
+    if (name === "orders" || (name === "station" && !sessionRef.current?.stationActive)) name = "home";
     if (name === "station" && sessionRef.current?.captureUri && !sessionRef.current.stationActive && workspaceOrigin.current !== "station") {
       setError("Finish or discard your saved recording before opening the packing station.");
       return;
@@ -423,12 +431,37 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setTechnicalOpen(false);
       setConfirmFinalize(false);
     }
-    if (name === "home" || name === "orders" || name === "station") {
+    if (name === "home" || name === "station") {
       workspaceOrigin.current = name;
       setBatchPacking(name === "station");
     }
+    const current = sessionRef.current;
+    if (current) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
     setRoute({ name, ...(name === "account" ? options : {}) });
   }, []);
+
+  useEffect(() => {
+    cacheRef.current = {...cacheRef.current,library:proofsLibrary};
+    const current = sessionRef.current;
+    if (current && cacheScope.current === `${current.apiBaseUrl}:${current.userId}`) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
+  }, [proofsLibrary]);
+
+  useEffect(() => {
+    const current = sessionRef.current;
+    if (!proof || !current || !proof.participants.some(person=>person.userId===current.userId)) return;
+    const records = {...cacheRef.current.records,[proof.proofId]:proof};
+    cacheRef.current = {...cacheRef.current,records};
+    if (!cacheRef.current.rows.some(row=>row.proofId===proof.proofId)) {
+      const item:ProofCollectionItem = {
+        proofId:proof.proofId, transactionId:proof.transactionId, status:proof.status, workflowType:proof.workflowType,
+        role:proof.participants.find(person=>person.userId===current.userId)!.role,
+        createdAt:proof.createdAt,updatedAt:proof.updatedAt,finalizedAt:proof.finalizedAt,presentation:proof.presentation,
+        transaction:{externalReference:proof.transaction.externalReference,itemTitle:proof.transaction.itemTitle,transactionDate:proof.transaction.transactionDate,carrier:proof.transaction.shipping?.carrier??null,trackingNumber:proof.transaction.shipping?.trackingNumber??null},
+      };
+      cacheRef.current.rows = [...cacheRef.current.rows,item]; setProofCollection(cacheRef.current.rows);
+    }
+    void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(()=>undefined);
+  }, [proof]);
 
   const goBack = useCallback(() => {
     go(resolveBackRoute(route.name, workspaceOrigin.current));
@@ -477,6 +510,22 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setCognitoRegion(runtime.cognito.region);
   }
 
+  async function restoreProofsContext(current: CachedClientState): Promise<void> {
+    const key = `${current.apiBaseUrl}:${current.userId}`;
+    if (cacheScope.current === key) return;
+    proofRecordViews.current.clear();
+    setProofsLibrary({...DEFAULT_PROOFS_LIBRARY}); proofsScrollOffset.current = 0;
+    setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]);
+    if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
+      await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+      await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+    }
+    cacheScope.current = key;
+    const cached = await loadProofsCache(current.apiBaseUrl,current.userId);
+    if (cacheScope.current !== key) return;
+    cacheRef.current = cached; setProofsLibrary(cached.library); proofsScrollOffset.current = cached.offsetY;
+    setProofCollection(cached.rows);
+  }
   async function persist(next: CachedClientState): Promise<void> {
     const runtime = currentRuntime(IS_RELEASE_CLIENT ? null : next);
     const stored: CachedClientState = IS_RELEASE_CLIENT
@@ -489,6 +538,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           cognitoRegion: runtime.cognito.region,
         }
       : next;
+    await restoreProofsContext(stored);
     tokenRef.current = stored.token || null;
     sessionRef.current = stored;
     setSession(stored.needsReauthentication ? null : stored);
@@ -558,6 +608,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setPendingInvites(inbox.invitations);
     const collection = await api.listMyProofs();
     setProofCollection(collection.proofs);
+    cacheRef.current = {...cacheRef.current,rows:collection.proofs};
+    if (sessionRef.current) void saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
     setOffline(false);
     return sessionRef.current;
   }
@@ -615,9 +667,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setPendingInvites(inbox.invitations);
     const collection = await client.listMyProofs();
     setProofCollection(collection.proofs);
+    cacheRef.current = {...cacheRef.current,rows:collection.proofs};
+    if (sessionRef.current) void saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
     if (!sameUser) {
       ordersViews.current = { orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" } };
-      workspaceOrigin.current = "orders";
+      workspaceOrigin.current = "home";
       setBatchPacking(false);
       setProof(null);
       setTransactionDetail(null);
@@ -740,8 +794,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
   }
 
   async function refreshProofCollection(): Promise<void> {
+    const account = sessionRef.current?.userId;
     const collection = await client.listMyProofs();
+    if (sessionRef.current?.userId !== account) return;
     setProofCollection(collection.proofs);
+    cacheRef.current = {...cacheRef.current,rows:collection.proofs};
+    if (sessionRef.current) void saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
   }
 
   async function syncWorkspace(): Promise<void> {
@@ -770,8 +828,17 @@ export function PackProofProvider(props: { children: ReactNode }) {
   }
 
   async function refreshProof(proofId: string): Promise<ProofView> {
+    const account = sessionRef.current?.userId;
     const fresh = await client.getProof(proofId);
+    if (sessionRef.current?.userId !== account) throw new Error("Open the original account to view this Proof.");
     setProof(fresh);
+    const currentAccount = sessionRef.current;
+    if (currentAccount) {
+      const records = {...cacheRef.current.records,[fresh.proofId]:fresh};
+      const keep = Object.entries(records).sort((a,b) => Date.parse(b[1].updatedAt)-Date.parse(a[1].updatedAt)).slice(0,30);
+      cacheRef.current = {...cacheRef.current,records:Object.fromEntries(keep)};
+      void saveProofsCache(currentAccount.apiBaseUrl,currentAccount.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
+    }
     const txn = await client.getTransaction(fresh.transactionId);
     setTransactionDetail(txn);
     setEditForm(formFromTransaction(txn));
@@ -798,7 +865,18 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (current) {
       await persist({ ...current, proofId });
     }
-    await refreshProof(proofId);
+    try { await refreshProof(proofId); }
+    catch (error) {
+      if (error instanceof ApiError && [403,404,410].includes(error.status)) {
+        const records = {...cacheRef.current.records}; delete records[proofId];
+        cacheRef.current = {...cacheRef.current,records,rows:cacheRef.current.rows.filter(row=>row.proofId!==proofId)};
+        setProofCollection(cacheRef.current.rows);
+        if (sessionRef.current) void saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,cacheRef.current).catch(()=>undefined);
+      }
+      const cached = cacheRef.current.records[proofId];
+      if (!isNetworkFailure(error) || !cached) throw error;
+      setProof(cached); setTransactionDetail(cached.transaction); setOffline(true);
+    }
     go("proof");
   }
 
@@ -809,7 +887,6 @@ export function PackProofProvider(props: { children: ReactNode }) {
     try {
       if (route.name !== "auth") await ensureFreshCognitoToken();
       await action();
-      setOffline(false);
     } catch (err) {
       if (isNetworkFailure(err)) {
         setOffline(true);
@@ -855,6 +932,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           cognitoClientId: runtime.cognito.clientId,
           cognitoRegion: runtime.cognito.region,
         };
+        await restoreProofsContext(next);
         tokenRef.current = next.token;
         sessionRef.current = next;
         setSession(next.needsReauthentication ? null : next);
@@ -910,7 +988,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             go("auth");
             return;
           }
-          go(next.stationActive ? "station" : "orders");
+          go(next.stationActive ? "station" : "home");
         } catch (err) {
           if (isAuthenticationFailure(err)) {
             await requireSignIn();
@@ -1148,10 +1226,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     role,
     go,
     goBack,
-    setProofsView: (view) => setProofsLibrary((current) => ({ ...current, view })),
-    setProofsQuery: (query) => setProofsLibrary((current) => ({ ...current, query })),
+    setProofsView: (view) => { proofsScrollOffset.current = 0; setProofsLibrary((current) => ({ ...current, view })); },
+    setProofsQuery: (query) => { proofsScrollOffset.current = 0; setProofsLibrary((current) => ({ ...current, query })); },
     setProofsSort: (sort) => setProofsLibrary((current) => ({ ...current, sort })),
-    setProofsRoleFilter: (role) => setProofsLibrary((current) => ({ ...current, role })),
+    setProofsRoleFilter: (role) => { proofsScrollOffset.current = 0; setProofsLibrary((current) => ({ ...current, role })); },
     setProofsCarrierFilter: (carrier) => setProofsLibrary((current) => ({ ...current, carrier })),
     setProofsScrollOffset,
     setError,
@@ -1199,7 +1277,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             accessExpiresAt: tokens.expiresAt,
           });
         }
-        go(sessionRef.current?.stationActive ? "station" : "orders");
+        go(sessionRef.current?.stationActive ? "station" : "home");
       }),
     createAccount: async () =>
       run(async () => {
@@ -1259,14 +1337,20 @@ export function PackProofProvider(props: { children: ReactNode }) {
         // Local sign-out still proceeds if remote revoke fails.
       }
       try {
-        if (sessionRef.current) await saveCaptureRecovery(sessionRef.current);
+        if (sessionRef.current) {
+          await saveCaptureRecovery(sessionRef.current);
+          await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+          await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+        }
+        cacheScope.current = null; cacheRef.current = emptyProofsCache();
+        setProofsLibrary({...DEFAULT_PROOFS_LIBRARY});
         tokenRef.current = null;
         sessionRef.current = null;
         await clearCachedState();
         proofRecordViews.current.clear();
         proofsScrollOffset.current = 0;
         ordersViews.current = { orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" } };
-        workspaceOrigin.current = "orders";
+        workspaceOrigin.current = "home";
         setBatchPacking(false);
         setSession(null);
         setProof(null);
@@ -1312,7 +1396,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if (!current) return;
       void recordNativeStudyInteraction(client,current.userId,'order_selected').catch(()=>undefined);
       if (current.captureUri && current.captureProofId !== proofId)
-        throw new Error("Finish saving your current recording before starting another order. It is still available in Orders.");
+        throw new Error("Finish saving your current recording before starting another order. It is still available in Proofs.");
       if (current.stationActive && current.captureUri) { go("station"); return; }
       const fresh = await refreshProof(proofId);
       setBatchPacking(batch);
@@ -1638,7 +1722,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
               // Retain the original in the account journal. Account offers deliberate cleanup after receipt checks.
               if (sessionRef.current?.captureUri === uri) await persistCapture(null, null);
               setProof(result); await refreshProof(result.proofId); await refreshProofCollection();
-              setCaptureStatus("idle"); setUploadPercent(null); void haptic("success"); go("complete");
+              setCaptureStatus("idle"); setUploadPercent(null); void haptic("success"); go("proof");
             } catch (error) { setCaptureStatus("retry"); throw error; }
             return;
           }
@@ -1752,6 +1836,20 @@ export function PackProofProvider(props: { children: ReactNode }) {
         captureSubmitLock.current = false;
       }
     },
+    confirmCommittedProof: async () => run(async () => {
+      const userId = sessionRef.current?.userId;
+      if (!proof || !userId) return;
+      const evidence = proof.evidence.find(row=>row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE" && row.submittedBy === userId);
+      if (!evidence) throw new Error("Open your packing recording to confirm it.");
+      const authorization = await authorizeCommittedSellerEvidence({client,proofId:proof.proofId,evidenceId:evidence.evidenceId,userId});
+      if (sessionRef.current?.userId !== userId) throw new Error("Return to the original seller account to confirm this Proof.");
+      await attestSellerCapture({client,proofId:proof.proofId,evidenceId:evidence.evidenceId,authorization});
+      await refreshProof(proof.proofId);
+      const result = await client.finalizeProof(proof.proofId);
+      setProof(result.proof); setManifest(result.manifest);
+      await refreshProof(result.proof.proofId); await refreshProofCollection();
+      setConfirmFinalize(false); go("proof");
+    }),
     finalizeProof: async () =>
       run(async () => {
         if (!proof) {
@@ -1764,7 +1862,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await refreshProof(result.proof.proofId);
         await refreshProofCollection();
         setConfirmFinalize(false);
-        go("complete");
+        go("proof");
       }),
     inviteUser: async (userId: string) =>
       run(async () => {

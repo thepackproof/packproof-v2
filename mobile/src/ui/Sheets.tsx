@@ -12,9 +12,9 @@ export function BottomSheet(props: {
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, reducedMotion } = useTheme();
   return (
-    <Modal visible={props.visible} transparent animationType="slide" onRequestClose={props.onClose}>
+    <Modal visible={props.visible} transparent animationType={reducedMotion ? "none" : "slide"} onRequestClose={props.onClose}>
       <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
         <Pressable style={styles.backdrop} onPress={props.onClose} accessibilityLabel="Close" />
         <View

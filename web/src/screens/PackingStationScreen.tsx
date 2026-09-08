@@ -27,6 +27,8 @@ export function PackingStationScreen(props: {
   initialProofId?: string;
   onAuthExpired: () => void;
   onLeave?: () => void;
+  onCompleted?: (proofId: string) => void;
+  onRecoverProof?: (proofId: string) => void;
 }) {
   const [state, dispatch] = useReducer(
     (current: StationState, event: StationEvent | { type: "RESTORE_LOCAL"; state: StationState }) =>
@@ -127,6 +129,7 @@ export function PackingStationScreen(props: {
       if (cancelled) return;
       if (pending) {
         if (pending.apiScope && pending.apiScope !== props.api.recoveryScope) throw new Error("A recording is saved for the original server. Return there to finish it before starting another shipment.");
+        if (props.initialProofId && pending.order.proofId !== props.initialProofId && props.onRecoverProof) { props.onRecoverProof(pending.order.proofId); return; }
         studyTimer.current = await resumeStationStudy(props.api, props.userId, pending.studyTaskRef);
         if (cancelled) { studyTimer.current?.suspend(); return; }
         studyTimer.current?.event('recovery_started');
@@ -488,6 +491,7 @@ export function PackingStationScreen(props: {
       setPreviewUrl(null);
       if (result.completion === "FINALIZED") setSavedIds(previous => new Set([...previous, order.proofId]));
       dispatch({ type: "COMPLETED", completion: result.completion });
+      if (orderRef.current?.proofId) props.onCompleted?.(orderRef.current.proofId);
     } catch (error) {
       studyTimer.current?.problem(error instanceof ApiError&&error.status===401?'authentication':'network');
       if (!mountedRef.current) return;
@@ -552,7 +556,7 @@ export function PackingStationScreen(props: {
     {state.phase === "PROCESSING" ? <p role="status">Finishing your Proof…{state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}</p> : null}
     {state.phase === "PROOF_CREATED" ? <section className="section stack"><h2>{state.completion === "FINALIZED" ? "Proof saved" : "Recording received"}</h2><p>{state.completion === "FINALIZED" ? "Packing record locked" : "Your Proof still needs attention before it can be locked."}</p><a className="btn" href={`/proofs/${encodeURIComponent(state.order?.proofId || "")}`}>View Proof</a>{state.completion === "FINALIZED" ? <button className="btn btn-secondary" onClick={() => dispatch({type:"RESET"})}>Pack next order</button> : null}</section> : null}
     <details><summary>Remote camera controls</summary><RelayStationPanel api={props.api} userId={props.userId} queue={props.queue} localProofId={state.order?.proofId} localPhase={state.phase} onRole={setRelayRole} start={startPacking} finish={async()=>{await finishPacking();}} selectProof={async(id)=>{if(stateRef.current.phase==="RECORDING"||pendingRef.current)throw new Error("Finish saving the current recording before selecting another order.");(await beginStudy())?.event('order_selected');const proof=await props.api.getProof(id);const context=stationContextFromProof(proof);orderRef.current=context;dispatch({type:"RESTORE_LOCAL",state:{...initialStationState(),phase:"READY_TO_RECORD",order:context}});}}/>{relayRole === "CONTROLLER" ? <p>Recording is controlled on the connected camera.</p> : null}</details>
-    {props.onLeave ? <button className="btn btn-tertiary" disabled={busy || state.phase === "RECORDING"} onClick={props.onLeave}>Back to Orders</button> : null}
+    {props.onLeave ? <button className="btn btn-tertiary" disabled={busy || state.phase === "RECORDING"} onClick={props.onLeave}>Back to Proof</button> : null}
   </main>;
 
 }

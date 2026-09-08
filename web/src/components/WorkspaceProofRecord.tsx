@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { moneyLabel, orderReferenceLabel, quantityLabel } from "@packproof/copy/format";
 import { providerDisplay } from "@packproof/copy/status";
-import { recordProofStatus } from "@packproof/copy/proof-record";
+import type { ProofPresentation } from "../../../backend/src/domain/proof-presentation";
+import { presentProof } from "../proof-presentation";
 import type { PackProofApi } from "../api/client";
 import type { CanonicalProof, ChronologyEntry } from "../api/types";
 import { formatWhen } from "../format";
@@ -35,6 +36,7 @@ function elapsed(ms: number) {
 /** The live counterpart of the public SampleProof, using only this participant's sources. */
 export function WorkspaceProofRecord(props: {
   proof: CanonicalProof;
+  presentation?: ProofPresentation;
   currentUserId: string;
   role?: string;
   api?: PackProofApi;
@@ -44,6 +46,7 @@ export function WorkspaceProofRecord(props: {
   onOpenReceipt?: () => void;
   onReviewSharing?: () => void;
   trackingTools?: ReactNode;
+  nextAction?: ReactNode;
 }) {
   const { proof } = props;
   const scope = `${props.api?.recoveryScope || location.origin}.${props.currentUserId}.${proof.proofId}`;
@@ -65,8 +68,10 @@ export function WorkspaceProofRecord(props: {
   return <article ref={record} className="workspace-proof-record" aria-label="Proof record" data-context-anchor={`proof-record-${proof.proofId}`}>
     <header className="record-top">
       <div><h2>{title}</h2>{reference && <p>{reference}</p>}<details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p><p>{proof.transaction.provenance ? `From ${providerDisplay(proof.transaction.provenance.provider)}. Imported order details are read-only.` : "Order details supplied by a participant."}</p>{proof.transaction.provenance?.importedAt && <p>Imported {formatWhen(proof.transaction.provenance.importedAt)}</p>}</details></div>
-      <StatusBadge label={recordProofStatus(proof.status)} />
+      <StatusBadge label={(props.presentation || presentProof(proof, props.currentUserId)).displayStatus} />
     </header>
+    <p className="record-source-note">Shipment: {proof.shipmentObservations?.latest?.eventType?.replaceAll("_", " ").toLowerCase() || "No carrier update yet"}</p>
+    {props.nextAction}
     {props.api && <PreservationStatus api={props.api} proofId={proof.proofId} />}
     <div className="record-tabs" role="tablist" aria-label="Proof record views">
       {tabs.map((name, index) => <button
@@ -168,7 +173,7 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
     && !bookmarks.some(replacement => replacement.supersedesId === bookmark.anchorId))
     .sort((a, b) => a.startMs! - b.startMs!);
 
-  if (!evidence.length) return <div className="evidence-placeholder"><span><Glyph name="film" size={28} /></span><strong>No recording yet</strong><p>Record the item being packed and sealed.</p></div>;
+  if (!evidence.length) return <div className="evidence-placeholder"><span><Glyph name="film" size={28} /></span><strong>Recording has not been added yet</strong><p>Record the item being packed and sealed.</p></div>;
   if (!load && !api) return <div className="evidence-placeholder"><span><Glyph name="film" size={28} /></span><strong>{evidence.length} saved file{evidence.length === 1 ? "" : "s"}</strong><p>Media playback isn’t available in this view.</p></div>;
 
   return <div className="record-evidence stack">
@@ -197,7 +202,7 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
     </>}
     {(proof.attestations ?? []).filter(statement => !statement.relatedEvidenceId || statement.relatedEvidenceId === current?.evidenceId).map(statement => <section className="record-declaration" key={statement.attestationId} aria-label="Participant statement">
       <h3>{proof.participants.find(participant => participant.userId === statement.attestedBy)?.role === "SELLER" ? "Seller declaration" : "Participant statement"}</h3>
-      <p>{statement.statement === "PACKED_DESCRIBED_ITEM" ? "I packed this order as described." : statement.statement}</p>
+      <p>{statement.statementText || (statement.statement === "PACKED_DESCRIBED_ITEM" ? "Seller attested to packing the described item" : statement.statement)}</p>
       <p className="note">Recorded {formatWhen(statement.createdAt)}. This is the participant’s declaration about the shipment.</p>
     </section>)}
     {bookmarkError && <p className="note" role="status">{bookmarkError} <button className="text-link" onClick={() => setRetry(value => value + 1)}>Retry bookmarks</button></p>}

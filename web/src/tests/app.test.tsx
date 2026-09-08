@@ -151,7 +151,7 @@ describe("PackProof web reference client", () => {
             updatedAt: "2026-08-30T12:00:00.000Z",
           });
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [summary] });
         }
         if (url.endsWith("/invitations")) {
@@ -306,8 +306,8 @@ describe("PackProof web reference client", () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Proofs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Vintage camera")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Invitation received")).toBeInTheDocument();
-    expect(screen.getByText(/UPS/)).toBeInTheDocument();
+    expect(screen.getByText("Recording needed")).toBeInTheDocument();
+    expect(screen.getByText("ORD-48392")).toBeInTheDocument();
     expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
   });
 
@@ -319,12 +319,11 @@ describe("PackProof web reference client", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
-    expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
+    expect(screen.queryByText("PackProof fact")).not.toBeVisible();
     await user.click(screen.getByRole("button", { name: "Proof actions" }));
     await user.click(screen.getByRole("button", { name: "Evidence and claim tools" }));
     expect(screen.getAllByText("PackProof fact").length).toBeGreaterThan(0);
     expect(screen.getAllByText("User attestation").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("External data").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Vintage camera").length).toBeGreaterThan(0);
     expect(screen.getByText("I packed the described item.")).toBeInTheDocument();
     expect(
@@ -408,7 +407,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts/complete"))return json({complete:true});
         if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [] });
         }
         if (url.endsWith("/invitations")) {
@@ -418,7 +417,7 @@ describe("PackProof web reference client", () => {
       }),
     );
     render(<App />);
-    expect(await screen.findByText(/No Proofs to show yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/^No Proofs yet$/)).toBeInTheDocument();
   });
 
   it("shows an API failure on discovery", async () => {
@@ -459,6 +458,8 @@ describe("PackProof web reference client", () => {
 
   it("reviews a pending invitation before joining the Proof", async () => {
     signInSession();
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => String(input).split("?")[0].endsWith("/me/proofs") ? json({ proofs: [{ ...summary, invitationId: invitation.invitationId, presentation: { proofId: summary.proofId, displayStatus: "Invitation received", nextAction: { type: "ACCEPT_INVITATION", label: "Accept invitation" }, needsAttention: true, completed: false, share: { available: false, reason: "Accept invitation" } } }] }) : originalFetch(input, init)));
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: /Vintage camera\. Invitation received/i }));
@@ -568,7 +569,7 @@ describe("PackProof web reference client", () => {
     const originalFetch = fetch;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.includes("/me/fulfillment-queue")) return json({ items: [item], filter: "all" });
+      if (url.split("?")[0].endsWith("/me/proofs")) return json({ proofs: [{ ...summary, proofId: item.proofId, transaction: { ...summary.transaction, itemTitle: "Nikon F3 Camera", externalReference: item.externalReference } }] });
       if (url.endsWith(`/proofs/${item.proofId}`)) return json(proof);
       return originalFetch(input, init);
     }));
@@ -576,8 +577,9 @@ describe("PackProof web reference client", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Nikon F3 Camera/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Nikon F3 Camera" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/station");
-    expect(new URLSearchParams(window.location.search).get("proof")).toBe(item.proofId);
+    expect(window.location.pathname).toBe(`/proofs/${item.proofId}`);
+    await userEvent.click(screen.getByRole("button", { name: "Record packing" }));
+    expect(window.location.pathname).toBe(`/proofs/${item.proofId}/capture`);
     expect(vi.mocked(fetch).mock.calls.some(([url, init]) => init?.method === "POST" && /import|transactions/.test(String(url)))).toBe(false);
   });
 
@@ -813,124 +815,6 @@ describe("PackProof web reference client", () => {
     expect(JSON.stringify(inviteCall?.[1]?.body ?? "")).not.toContain("email");
   });
 
-  it("renders the fulfillment queue and a multi-item packing workspace", async () => {
-    signInSession();
-    stubStationCamera();
-    let attested = false;
-    let finalized = false;
-    const multi = {
-      ...fulfillmentItem,
-      items: [
-        ...fulfillmentItem.items,
-        {
-          itemId: "itm_extra",
-          externalItemId: "line-1001-2",
-          position: 2,
-          title: "Sleeve pack",
-          description: null,
-          sku: null,
-          quantity: 2,
-          unitValue: 6,
-          currency: "USD",
-        },
-      ],
-      itemSummary: "Pokémon Booster Box + 1 more",
-      itemCount: 2,
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url.endsWith("/capabilities")) return json(captureCapabilities);
-        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
-        if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
-        if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
-        if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
-        if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
-        if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
-        if (url.includes("/me/fulfillment-queue")) {
-          const item = attested
-            ? { ...multi, sellerPackingAttested: true, canComplete: false, fulfillmentCaptureCount: 0 }
-            : multi;
-          if (finalized && url.includes("filter=ready")) {
-            return json({ items: [fulfillmentNext], filter: "ready" });
-          }
-          return json({ items: finalized ? [fulfillmentNext] : [item, fulfillmentNext], filter: "all" });
-        }
-        if (url.includes("/me/packing-station/resolve") && init?.method === "POST") {
-          return json({
-            schema: "packproof.packing-station.resolve/v1",
-            reference: "DS-1001",
-            matchedBy: "EXTERNAL_ORDER_ID",
-            transactionId: multi.transactionId,
-            proofId: multi.proofId,
-            proofStatus: "READY_FOR_EVIDENCE",
-            participationPolicy: "COUNTERPARTY_OPTIONAL",
-            orderLabel: "Order #DS-1001",
-            itemSummary: "Pokémon Booster Box + 1 more",
-            trackingHint: null,
-            committedEvidenceCount: 0,
-            captureReady: true,
-            alreadyFinalized: false,
-            alreadyHasCommittedEvidence: false,
-            blockReason: null,
-          });
-        }
-        if (url.endsWith(`/transactions/${multi.transactionId}/proof`) || url.endsWith(`/proofs/${multi.proofId}`)) {
-          return json({
-            ...canonicalProof,
-            proofId: multi.proofId,
-            transactionId: multi.transactionId,
-            status: "READY_FOR_EVIDENCE",
-            participationPolicy: "COUNTERPARTY_OPTIONAL",
-            evidence: [],
-            transaction: {
-              ...canonicalProof.transaction,
-              transactionId: multi.transactionId,
-              externalReference: "DS-1001",
-              itemTitle: "Pokémon Booster Box",
-            },
-          });
-        }
-        if (url.includes("/attestations") && init?.method === "POST") {
-          attested = true;
-          return json({
-            attestation: { attestationId: "att_1", statement: "PACKED_DESCRIBED_ITEM" },
-            proof: canonicalProof,
-          });
-        }
-        if (url.includes("/finalize") && init?.method === "POST") {
-          finalized = true;
-          return json({
-            proof: { ...canonicalProof, status: "FINALIZED" },
-            manifest: { manifestId: "man_1", proofId: multi.proofId, sha256: "aa", canonicalJson: "{}", manifest: {} },
-          });
-        }
-        if (url.endsWith("/me/proofs")) {
-          return json({ proofs: [summary] });
-        }
-        if (url.endsWith("/invitations")) {
-          return json({ invitations: [] });
-        }
-        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
-      }),
-    );
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Orders" }));
-    expect(await screen.findByRole("heading", { name: "Orders" })).toBeInTheDocument();
-    expect(screen.getByText("Pokémon Booster Box + 1 more")).toBeInTheDocument();
-    expect(screen.getAllByText(/Demo Storefront/).length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: /Pokémon Booster Box/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
-    expect(screen.getByLabelText("Packing camera preview")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Complete PackProof" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(attested).toBe(false);
-    expect(finalized).toBe(false);
-  });
-
   it("checks orders for an existing storefront from Sales channels", async () => {
     signInSession();
     let connected = true;
@@ -981,7 +865,7 @@ describe("PackProof web reference client", () => {
             cursor: null,
           });
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [] });
         }
         if (url.endsWith("/invitations")) {
@@ -992,9 +876,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Account" }));
-    await user.click(await screen.findByRole("button", { name: /Sales channels/ }));
-    expect(await screen.findByRole("heading", { name: "Sales channels" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("link", { name: "Connections" }));
+    expect(await screen.findByRole("heading", { name: "Connections" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Demo Storefront" })).toBeInTheDocument();
     expect(screen.getByText(/6 orders ready/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check for orders now" }));
@@ -1045,7 +928,7 @@ describe("PackProof web reference client", () => {
         if (url.includes("/integration-connections")) {
           return json({ connections: [] });
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [] });
         }
         if (url.endsWith("/invitations")) {
@@ -1056,9 +939,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Account" }));
-    await user.click(await screen.findByRole("button", { name: /Sales channels/ }));
-    expect(await screen.findByRole("heading", { name: "Sales channels" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("link", { name: "Connections" }));
+    expect(await screen.findByRole("heading", { name: "Connections" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Google" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Meta" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect Shopify" })).toBeDisabled();
@@ -1077,101 +959,7 @@ describe("PackProof web reference client", () => {
     });
   });
 
-  it("identifies an imported order in Packing Station and recovers from a bad reference", async () => {
-    signInSession();
-    stubStationCamera();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url.endsWith("/capabilities")) return json(captureCapabilities);
-        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
-        if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
-        if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
-        if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
-        if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
-        if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
-        if (url.includes("/me/fulfillment-queue")) {
-          return json({ items: [fulfillmentItem, fulfillmentNext], filter: "ready" });
-        }
-        if (url.includes("/me/packing-station/resolve") && init?.method === "POST") {
-          const body = JSON.parse(String(init.body ?? "{}")) as { reference?: string };
-          if (body.reference?.toUpperCase() === "DS-1001" || body.reference === "#DS-1001") {
-            return json({
-              schema: "packproof.packing-station.resolve/v1",
-              reference: "DS-1001",
-              matchedBy: "EXTERNAL_ORDER_ID",
-              transactionId: fulfillmentItem.transactionId,
-              proofId: fulfillmentItem.proofId,
-              proofStatus: "READY_FOR_EVIDENCE",
-              participationPolicy: "COUNTERPARTY_OPTIONAL",
-              orderLabel: "Order #DS-1001",
-              itemSummary: "Pokémon Booster Box",
-              committedEvidenceCount: 0,
-              captureReady: true,
-              alreadyFinalized: false,
-              alreadyHasCommittedEvidence: false,
-              blockReason: null,
-            });
-          }
-          return json({ error: { code: "STATION_REFERENCE_NOT_FOUND", message: "No packing order matched that reference" } }, 404);
-        }
-        if (url.endsWith(`/transactions/${fulfillmentItem.transactionId}/proof`)) {
-          return json({
-            ...canonicalProof,
-            proofId: fulfillmentItem.proofId,
-            transactionId: fulfillmentItem.transactionId,
-            status: "READY_FOR_EVIDENCE",
-            participationPolicy: "COUNTERPARTY_OPTIONAL",
-            evidence: [],
-            transaction: {
-              ...canonicalProof.transaction,
-              transactionId: fulfillmentItem.transactionId,
-              externalReference: "DS-1001",
-              itemTitle: "Pokémon Booster Box",
-            },
-          });
-        }
-        if (url.endsWith(`/transactions/${fulfillmentNext.transactionId}/proof`)) {
-          return json({
-            ...canonicalProof,
-            proofId: fulfillmentNext.proofId,
-            transactionId: fulfillmentNext.transactionId,
-            status: "READY_FOR_EVIDENCE",
-            participationPolicy: "COUNTERPARTY_OPTIONAL",
-            evidence: [],
-            transaction: {
-              ...canonicalProof.transaction,
-              transactionId: fulfillmentNext.transactionId,
-              externalReference: "DS-1002",
-              itemTitle: "Vintage Watch",
-            },
-          });
-        }
-        if (url.endsWith("/me/proofs")) {
-          return json({ proofs: [summary] });
-        }
-        if (url.endsWith("/invitations")) {
-          return json({ invitations: [] });
-        }
-        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
-      }),
-    );
-    const user = userEvent.setup();
-    window.history.replaceState(null, "", "/station?reference=NOPE");
-    render(<App />);
-    expect(await screen.findByText("No packing order matched that reference")).toBeInTheDocument();
-    const order = screen.getByRole("button", { name: /Order #DS-1001/ });
-    await waitFor(() => expect(order).toBeEnabled());
-    await user.click(order);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
-    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
-    expect(screen.getByLabelText("Packing camera preview")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Scan Order / Label" })).not.toBeInTheDocument();
-  });
-
-  it("records one continuous video, reviews before submission, and waits for an explicit next order", async () => {
+  it("records one continuous video, reviews before submission, and returns to its same canonical Proof", async () => {
     signInSession();
     stubStationCamera();
     let proofCreates = 0;
@@ -1297,7 +1085,7 @@ describe("PackProof web reference client", () => {
               : stationReadyProof(),
           );
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [summary] });
         }
         if (url.endsWith("/invitations")) {
@@ -1307,12 +1095,8 @@ describe("PackProof web reference client", () => {
       }),
     );
     const user = userEvent.setup();
-    window.history.replaceState(null, "", "/station");
+    window.history.replaceState(null, "", `/proofs/${fulfillmentItem.proofId}/capture`);
     render(<App />);
-    const queueOrder = await screen.findByRole("button", { name: /Order #DS-1001/ });
-    // The station opens only after its durable-journal boot has completed.
-    await waitFor(() => expect(queueOrder).toBeEnabled());
-    await user.click(queueOrder);
     await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Record packing" }));
     expect(await screen.findByRole("button", { name: "Finish recording" })).toBeInTheDocument();
@@ -1325,13 +1109,12 @@ describe("PackProof web reference client", () => {
     await user.click(screen.getByRole("checkbox", { name: /The item shown and attached/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm and submit" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Confirm and submit" }));
-    expect(await screen.findByRole("heading", { name: "Proof saved" })).toBeInTheDocument();
-    expect(proofCreates).toBe(1);
+    await waitFor(() => expect(window.location.pathname).toBe(`/proofs/${fulfillmentItem.proofId}`));
+    expect(await screen.findByRole("article", { name: "Proof record" })).toBeInTheDocument();
+    expect(proofCreates).toBe(0);
     expect(uploadInits).toBe(1);
     expect(screen.queryByRole("button", { name: /Order #DS-1002/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Pack next order" }));
-    expect(await screen.findByRole("button", { name: /Order #DS-1002/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Order #DS-1001/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pack next order" })).not.toBeInTheDocument();
   });
 
   it("allows a recording with no readable label to pass server review without a rescan", async () => {
@@ -1402,7 +1185,7 @@ describe("PackProof web reference client", () => {
         if (url.endsWith(`/proofs/${fulfillmentItem.proofId}`)) {
           return json(packed ? stationReadyProof({ status: "FINALIZED", evidence: [{ evidenceId: "evd_manual", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }] }) : stationReadyProof());
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [summary] });
         }
         if (url.endsWith("/invitations")) {
@@ -1412,12 +1195,8 @@ describe("PackProof web reference client", () => {
       }),
     );
     const user = userEvent.setup();
-    window.history.replaceState(null, "", "/station");
+    window.history.replaceState(null, "", `/proofs/${fulfillmentItem.proofId}/capture`);
     render(<App />);
-    const queueOrder = await screen.findByRole("button", { name: /Order #DS-1001/ });
-    // The station opens only after its durable-journal boot has completed.
-    await waitFor(() => expect(queueOrder).toBeEnabled());
-    await user.click(queueOrder);
     await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Record packing" }));
     await user.click(await screen.findByRole("button", { name: "Finish recording" }));
@@ -1427,7 +1206,8 @@ describe("PackProof web reference client", () => {
     await user.click(screen.getByRole("checkbox", { name: /The item shown and attached/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm and submit" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Confirm and submit" }));
-    expect(await screen.findByRole("heading", { name: "Proof saved" })).toBeInTheDocument();
+    await waitFor(() => expect(window.location.pathname).toBe(`/proofs/${fulfillmentItem.proofId}`));
+    expect(await screen.findByRole("article", { name: "Proof record" })).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/shipping-observations"))).toBe(true);
   });
 
@@ -1468,7 +1248,7 @@ describe("PackProof web reference client", () => {
     );
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Proof" })).toBeInTheDocument();
-    expect(await screen.findByText("Finish saving")).toBeInTheDocument();
+    expect(await screen.findByText("Confirmation pending")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     expect(screen.getAllByText("Handed off").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Join PackProof" })).toBeInTheDocument();
@@ -1529,7 +1309,7 @@ describe("PackProof web reference client", () => {
         if (url.split("?")[0].endsWith("/me/marketplaces")) {
           return json({ marketplaces: [] });
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [summary] });
         }
         if (url.endsWith("/invitations")) {
@@ -1620,7 +1400,7 @@ describe("PackProof web reference client", () => {
         if (url.split("?")[0].endsWith("/me/marketplaces")) {
           return json({ marketplaces: [] });
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [summary] });
         }
         if (url.endsWith("/invitations")) {
@@ -1718,7 +1498,7 @@ describe("PackProof web reference client", () => {
         if (url.split("?")[0].endsWith("/me/marketplaces")) {
           return json({ marketplaces: [] });
         }
-        if (url.endsWith("/me/proofs")) {
+        if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [summary] });
         }
         if (url.endsWith("/invitations")) {
@@ -1776,8 +1556,7 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Proof actions" }));
-    await user.click(await screen.findByRole("button", { name: "Share Proof" }));
+    await user.click(await screen.findByRole("button", { name: "Share" }));
     expect(await screen.findByRole("heading",{name:"Share Proof"})).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(call=>String(call[0]).endsWith("/access-links")&&call[1]?.method==="POST")).toBe(false);
     expect(writeText).not.toHaveBeenCalled();

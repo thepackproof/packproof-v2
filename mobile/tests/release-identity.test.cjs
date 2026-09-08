@@ -10,8 +10,8 @@ test('next standard Android candidate advances the installed baseline and retain
   });
   assert.equal(result.status,0,result.stderr);
   const config=JSON.parse(result.stdout);
-  assert.equal(config.version,'0.3.9');
-  assert.equal(config.android.versionCode,38);
+  assert.equal(config.version,'0.3.10');
+  assert.equal(config.android.versionCode,39);
   assert.equal(config.android.package,'com.packproof.mobile');
   assert.equal(config.android.allowBackup,false);
 });

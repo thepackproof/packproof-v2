@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Text } from "react-native";
+import { Alert, Text } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { usePackProof } from "../app/PackProofProvider";
 import { AppHeader, SectionHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
-import { Button } from "../ui/Button";
+import { Ionicons } from "@expo/vector-icons";
+import { Button, IconButton } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { ErrorBanner } from "../ui/EmptyState";
 
@@ -18,8 +19,9 @@ export function ManualCreateScreen() {
   const [showDetails, setShowDetails] = useState(Boolean(app.intakeReview));
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title="Record shipment" onBack={app.goBack} />
+      <AppHeader title="New Proof" onBack={app.goBack} right={<IconButton label="Share Proof" onPress={() => Alert.alert("Share Proof", app.offline ? "Connect to create a share link. Your draft is kept." : "Create this Proof to get a share link. Your draft is kept.")}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton>} />
       <ErrorBanner message={app.error} />
+      <Text style={{ color:colors.textSecondary,fontSize:16,lineHeight:24 }}>Connected-store orders appear automatically in Proofs. Add another shipment here.</Text>
       {app.intakeReview ? (
         <>
           <SectionHeader title="Review your order" />

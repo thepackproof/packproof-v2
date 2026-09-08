@@ -58,7 +58,7 @@ describe("Proof experience", () => {
     render(<PublicProofScreen token="token" load={load} onSignIn={() => {}} />);
     await screen.findByRole("article", { name: "Proof record" });
     fireEvent(window, new Event("online"));
-    await screen.findByText("This viewing link has expired, was revoked, or is no longer available.");
+    await screen.findByText("The sender has revoked this viewing link.");
     expect(screen.queryByRole("article", { name: "Proof record" })).not.toBeInTheDocument();
   });
 

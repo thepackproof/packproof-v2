@@ -1,4 +1,6 @@
-import { StyleSheet, Text, View } from "react-native";
+import { SellerAttestation } from "../ui/SellerAttestation";
+import { recordedSellerAuthorization } from "../attestation/authorization";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { FINALIZE_DISCLOSURE } from "../copy/errors";
 import { displayName, orderReferenceLabel, shippingSummary } from "../copy/format";
@@ -20,9 +22,11 @@ export function FinalizeScreen() {
   if (!proof || !txn) {
     return null;
   }
+  const evidence = proof.evidence.find(row=>row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE" && row.submittedBy === app.session?.userId);
+  const nativeConfirmation = Platform.OS === "android" && app.role === "SELLER" && Boolean(evidence?.captureSessionId && evidence.captureClient === "NATIVE_CAMERA") && !recordedSellerAuthorization(proof,evidence?.evidenceId,app.session?.userId ?? "");
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title="Finalize PackProof" onBack={app.goBack} />
+      <AppHeader title="Review and confirm" onBack={app.goBack} />
       <ErrorBanner message={app.error} />
       <InfoCard>
         <Row label="Order" value={orderReferenceLabel(txn.externalReference) || "No order reference"} />
@@ -38,10 +42,11 @@ export function FinalizeScreen() {
         />
       </InfoCard>
       <Text style={[styles.note, { color: colors.textSecondary }]}>{FINALIZE_DISCLOSURE}</Text>
-      <Button label="Finalize PackProof" onPress={() => app.setConfirmFinalize(true)} disabled={app.busy} haptic="medium" />
+      <Button label="Review recording" variant="tertiary" onPress={() => app.go("proof")} />
+      {nativeConfirmation ? <SellerAttestation onPress={() => void app.confirmCommittedProof()} loading={app.busy} /> : <Button label="Review and confirm" onPress={() => app.setConfirmFinalize(true)} disabled={app.busy} haptic="medium" />}
       <ConfirmationSheet
         visible={app.confirmFinalize}
-        title="Finalize PackProof"
+        title="Review and confirm"
         message={FINALIZE_DISCLOSURE}
         confirmLabel="Finalize PackProof"
         busy={app.busy}

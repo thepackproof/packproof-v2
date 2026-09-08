@@ -1,10 +1,10 @@
 /* The same fine-line visual language as the original order/evidence/Proof orbit. */
 .proof-diagram {
-  --diagram-blue:#087fab;
-  --diagram-green:#087747;
-  --diagram-line:#aac8d5;
-  --diagram-fill:#f5fbfe;
-  --diagram-label:#486373;
+  --diagram-blue:var(--brand-blue-text);
+  --diagram-green:var(--brand-forest);
+  --diagram-line:var(--brand-blue-line);
+  --diagram-fill:var(--brand-blue-soft);
+  --diagram-label:var(--brand-muted);
   width:100%; min-width:0; color:var(--diagram-blue);
 }
 .proof-diagram-content { position:relative; width:min(100%, 290px); height:220px; margin-inline:auto; }

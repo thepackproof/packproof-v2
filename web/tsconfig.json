@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -14,13 +18,27 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@packproof/copy/*": ["../mobile/src/copy/*"],
-      "@packproof/station/*": ["../mobile/src/packing-station/*"],
-      "@packproof/theme/*": ["../mobile/src/theme/*"]
+      "@packproof/copy/*": [
+        "../mobile/src/copy/*"
+      ],
+      "@packproof/station/*": [
+        "../mobile/src/packing-station/*"
+      ],
+      "@packproof/theme/*": [
+        "../mobile/src/theme/*"
+      ]
     }
   },
-  "include": ["src", "../mobile/src/packing-station/**/*.ts", "../mobile/src/copy/**/*.ts", "../mobile/src/theme/tokens.ts", "../mobile/src/theme/appearance.ts", "../mobile/src/theme/motion.ts"]
+  "include": [
+    "src",
+    "../mobile/src/packing-station/**/*.ts",
+    "../mobile/src/theme/tokens.ts",
+    "../mobile/src/theme/appearance.ts",
+    "../mobile/src/theme/motion.ts"
+  ]
 }

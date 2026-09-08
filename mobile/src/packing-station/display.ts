@@ -50,7 +50,8 @@ export function stationContextFromProof(
   proof: StationProofSnapshot,
   labels?: { orderLabel?: string; itemSummary?: string; trackingHint?: string | null },
 ): StationOrderContext {
-  const committed = committedEvidenceCount(proof);
+  // Supporting evidence must not prevent the required continuous packing capture.
+  const committed = proof.evidence.filter(item => item.validationStatus === "COMMITTED" && item.evidenceType === "FULFILLMENT_CAPTURE").length;
   const alreadyFinalized = proof.status === "FINALIZED";
   const alreadyHasCommittedEvidence = committed > 0;
   const blockReason = blockReasonForProof(proof.status, committed);
@@ -64,7 +65,7 @@ export function stationContextFromProof(
     trackingHint: labels?.trackingHint ?? null,
     alreadyFinalized,
     alreadyHasCommittedEvidence,
-    captureReady: blockReason == null && proof.status === "READY_FOR_EVIDENCE" && committed === 0,
+    captureReady: blockReason == null && (proof.status === "READY_FOR_EVIDENCE" || proof.status === "EVIDENCE_COMMITTED") && committed === 0,
     blockReason,
   };
 }
@@ -82,7 +83,7 @@ export function blockReasonForProof(
   if (committedEvidence > 0) {
     return "EVIDENCE_ALREADY_COMMITTED";
   }
-  if (status === "READY_FOR_EVIDENCE") {
+  if (status === "READY_FOR_EVIDENCE" || status === "EVIDENCE_COMMITTED") {
     return null;
   }
   if (status == null || status === "") {

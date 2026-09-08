@@ -1,3 +1,4 @@
+import { useFonts } from "expo-font";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Appearance, type ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -29,6 +30,12 @@ function schemeFromSystem(value: ColorSchemeName): ColorScheme {
 }
 
 export function ThemeProvider(props: { children: ReactNode }) {
+  const [fontsLoaded, fontError] = useFonts({
+    NotoSans: require("../../assets/fonts/NotoSans-Regular.ttf"),
+    "NotoSans-Bold": require("../../assets/fonts/NotoSans-Bold.ttf"),
+    NotoSerif: require("../../assets/fonts/NotoSerif-Regular.ttf"),
+    "NotoSerif-Bold": require("../../assets/fonts/NotoSerif-Bold.ttf"),
+  });
   const [preference, setPreferenceState] = useState<AppearancePreference>("light");
   const [systemScheme, setSystemScheme] = useState<ColorScheme>(() => schemeFromSystem(Appearance.getColorScheme()));
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -78,7 +85,7 @@ export function ThemeProvider(props: { children: ReactNode }) {
   const scheme = resolveColorScheme(preference, systemScheme);
   const value = useMemo<Theme>(
     () => ({
-      hydrated,
+      hydrated: hydrated && (fontsLoaded || Boolean(fontError)),
       preference,
       scheme,
       colors: colorsForScheme(scheme),
@@ -86,7 +93,7 @@ export function ThemeProvider(props: { children: ReactNode }) {
       reducedMotion,
       setPreference,
     }),
-    [hydrated, preference, reducedMotion, scheme, setPreference],
+    [hydrated, fontsLoaded, fontError, preference, reducedMotion, scheme, setPreference],
   );
 
   return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>;

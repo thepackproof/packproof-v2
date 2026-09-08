@@ -54,7 +54,7 @@ import {
 } from "./domain/invitations.js";
 import { commitAttestation } from "./domain/attestations.js";
 import { createAttestationChallenge } from "./domain/attestation-authorization.js";
-import { listMyProofs } from "./domain/proof-collection.js";
+import { listMyProofs, queryMyProofs, parseProofListQuery } from "./domain/proof-collection.js";
 import { listLinkedIdentities, unlinkIdentity } from "./domain/external-identities.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
 import { authorizeProofAccess, getProofForUser } from "./domain/proofs.js";
@@ -1503,6 +1503,10 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/me/proofs",
     asyncRoute(async (req, res) => {
+      if (["view", "q", "limit", "offset"].some(key => req.query[key] !== undefined)) {
+        res.json(await queryMyProofs(deps.db, bearerUser(req), parseProofListQuery(req.query), deps.clock.now()));
+        return;
+      }
       const proofs = await listMyProofs(deps.db, bearerUser(req));
       res.json({ proofs });
     }),

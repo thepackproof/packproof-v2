@@ -1,3 +1,4 @@
+import type { ProofPresentation } from "../../../backend/src/domain/proof-presentation";
 export type ProofStatus =
   | "OPEN"
   | "AWAITING_PARTICIPANT"
@@ -81,6 +82,7 @@ export interface TransactionWriteInput {
 }
 
 export interface CanonicalProof {
+  presentation?: ProofPresentation;
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
   transactionId: string;
@@ -143,6 +145,7 @@ export interface CanonicalProof {
     attestationId: string;
     attestedBy: string;
     participantId?: string;
+    statementText?: string | null;
     statement: string;
     relatedEvidenceId: string | null;
     relatedEventId?: string | null;
@@ -249,6 +252,10 @@ export interface CanonicalProof {
 }
 
 export interface ProofCollectionItem {
+  accessKind?: "PARTICIPANT" | "INVITATION" | "RECEIVER";
+  presentation?: ProofPresentation;
+  invitationId?: string;
+  source?: string | null;
   schema?: "packproof.proof.summary/v1" | string;
   proofId: string;
   transactionId: string;
@@ -562,6 +569,7 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
+  evidenceState?: { code: string; message: string };
   disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[];liveProof?:boolean;sharingNotice?:string};
   recordAsOf?: {supplementSequence:number;supplementSha256:string|null;scopeStatement:string};
   statements?: Array<{attestationId:string;relatedEvidenceId:string|null;statement:string;attributedTo:string;createdAt:string;method:string;signatureVerification:string;biometricPolicy:string|null;hardwareOriginVerified:boolean;legalIdentityVerified:boolean}>;

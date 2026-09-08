@@ -1,4 +1,4 @@
-export type ProofsLibraryView = "in_progress" | "completed";
+export type ProofsLibraryView = "all" | "attention" | "completed";
 
 export type ProofsSort = "newest" | "oldest" | "price_high" | "price_low";
 
@@ -49,7 +49,7 @@ export interface ProofsLibraryState {
 }
 
 export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
-  view: "in_progress",
+  view: "all",
   query: "",
   sort: "newest",
   role: "all",
@@ -58,14 +58,15 @@ export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
 
 /** @deprecated Use home. Kept so older session restore paths can be remapped. */
 export function normalizeRouteName(name: string): AppRouteName {
-  if (name === "tabs") {
+  if (["tabs", "overview", "orders", "activity", "proofs", "station"].includes(name)) {
     return "home";
   }
   return name as AppRouteName;
 }
 
-export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigin = "home"): AppRouteName {
+export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrigin = "home"): AppRouteName {
   switch (routeName) {
+    case "dev": return "account";
     case "sharing":
     case "signature":
     case "receipt":
@@ -77,14 +78,14 @@ export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigi
     case "complete":
       return "proof";
     case "capture":
-      return origin === "home" ? "proof" : origin;
+      return "proof";
     case "station":
-      return "orders";
+      return "home";
     case "proof":
     case "account":
     case "create":
     case "manual":
-      return origin;
+      return "home";
     case "scan":
     case "intake":
     case "review":
@@ -95,7 +96,7 @@ export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigi
 }
 
 export function showsTabBar(): boolean {
-  return true;
+  return false;
 }
 
 export function isImmersiveRoute(route: AppRoute): boolean {

@@ -28,3 +28,9 @@ export function recordedSellerAuthorization(proof: ProofView, evidenceId: string
     item.authorization.method === "ANDROID_BIOMETRIC_STRONG");
   return row?.authorization ? { challengeId: row.authorization.challengeId, signature: row.authorization.signature } : null;
 }
+
+/** Owner context for recovery is server-authorized; a different participant or web recording cannot use the native declaration path. */
+export function recoverableSellerEvidence(proof: ProofView, evidenceId: string, userId: string) {
+  if (!proof.participants.some(person=>person.userId===userId && person.role==="SELLER")) return null;
+  return proof.evidence.find(row=>row.evidenceId===evidenceId && row.validationStatus==="COMMITTED" && row.evidenceType==="FULFILLMENT_CAPTURE" && row.submittedBy===userId && row.captureClient==="NATIVE_CAMERA" && Boolean(row.captureSessionId && row.sha256)) ?? null;
+}

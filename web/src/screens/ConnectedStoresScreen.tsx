@@ -24,9 +24,9 @@ export function ConnectedStoresScreen(props: {
     ? cloneElement(props.connectionPanel, { connections: props.connections, onAutomation: props.onAutomation, onSync: props.onSync })
     : <ConnectedAccountsPanel accounts={[]} providers={[]} notice={null} busy={props.busy} connections={props.connections} onAutomation={props.onAutomation} onSync={props.onSync} onConnect={props.onConnectEbay} onReauthorize={props.onConnectEbay} onDisconnect={props.onDisconnectEbay} />;
   return <main className="page stack">
-    <PageHeader title="Sales channels" onBack={props.onBack} />
+    <PageHeader title="Connections" onBack={props.onBack} />
     {props.error && <div className="banner banner-error" role="alert">{props.error}</div>}
     {props.lastSync && <p className="banner banner-info" role="status">Order check finished: {props.lastSync.eligibleCount} ready to pack, {props.lastSync.createdProofCount} new Proofs prepared.</p>}
-    {props.loading ? <p role="status">Loading sales channels…</p> : panel}
+    {props.loading ? <p role="status">Loading Connections…</p> : panel}
   </main>;
 }

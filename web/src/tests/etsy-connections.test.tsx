@@ -3,7 +3,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConnectedAccountsPanel } from "../screens/ConnectedAccountsPanel";
 import { ConnectedStoresScreen } from "../screens/ConnectedStoresScreen";
-import { FulfillmentQueueScreen } from "../screens/FulfillmentQueueScreen";
 import type { CommerceConnectionView, ConnectedAccountProviderCatalogView, ConnectedAccountView } from "../api/types";
 import { automaticIntakeStatus } from "@packproof/copy/commerce";
 
@@ -99,11 +98,9 @@ describe("Etsy selling account and automatic intake", () => {
     expect(automaticIntakeStatus({ ...connection, autoSyncEnabled: true, sync: { runStatus: "RETRYING" } })).toContain("will retry");
   });
 
-  it("keeps complex-order review counts visible in Orders without offering a fabricated Proof action", () => {
-    render(<FulfillmentQueueScreen items={[]} loading={false} error={null} onOpen={vi.fn()}
-      connections={[{ ...connection, reviewOrderCount: 3, reviewReasons: [{ code: "etsy_partial_shipment", count: 2 }, { code: "etsy_mixed_physical_and_digital_order", count: 1 }] }]} />);
-    expect(screen.getByRole("heading", { name: "Orders requiring review" })).toBeInTheDocument();
-    expect(screen.getByText("Etsy: 3 orders need review")).toBeInTheDocument();
+  it("keeps complex-order review counts visible in Connections without offering a fabricated Proof action", () => {
+    render(<ConnectedStoresScreen {...storeProps({ ...connection, reviewOrderCount: 3, reviewReasons: [{ code: "etsy_partial_shipment", count: 2 }, { code: "etsy_mixed_physical_and_digital_order", count: 1 }] })} />);
+    expect(screen.getByText(/3 orders need review and are excluded from automatic Proof creation/)).toBeInTheDocument();
     expect(screen.getByText(/Partially shipped: 2/)).toHaveTextContent("Mixed physical and digital items: 1");
     expect(screen.queryByRole("button", { name: "Record packing" })).not.toBeInTheDocument();
     expect(screen.queryByText(/No orders are waiting/)).not.toBeInTheDocument();
