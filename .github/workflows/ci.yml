@@ -47,7 +47,7 @@ jobs:
       - run: npm run build
       - name: Hash exact API build and migration set
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/backend-bom.json" --api-dist dist --expected-sha "$GITHUB_SHA"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-release-evidence-${{ github.sha }}
@@ -85,7 +85,7 @@ jobs:
           cmp "$RUNNER_TEMP/web-first.json" "$RUNNER_TEMP/web-second.json"
       - name: Hash exact web build and source identity
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/web-bom.json" --web-dist dist --expected-sha "$GITHUB_SHA"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: web-release-evidence-${{ github.sha }}
@@ -173,7 +173,7 @@ jobs:
           node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/android-debug-bom.json" --android-artifact android/app/build/outputs/apk/debug/app-debug.apk --expected-sha "$GITHUB_SHA"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging android/app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/android-debug-package.txt"
           node --input-type=module -e 'process.stdout.write(JSON.stringify({schema:"packproof.android-build.v1",sourceSha:process.env.GITHUB_SHA,variant:"debug",signing:"generated debug keystore; not production release signing",distribution:"CI artifact only; debug build may require Metro",deviceVerification:"pending"},null,2))' > "$RUNNER_TEMP/android-debug-scope.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: android-debug-release-evidence-${{ github.sha }}
@@ -220,7 +220,7 @@ jobs:
           PACKPROOF_RELEASE_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
           PACKPROOF_REQUIRE_POSTGRES_RELEASE_GATES: '1'
         run: npm test -- tests/migrations.test.ts tests/release-postgres.integration.test.ts --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/postgres-release-tests.xml"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: postgres-release-evidence-${{ github.sha }}
@@ -246,7 +246,7 @@ jobs:
       - run: npm ci
       - name: Block high and critical known dependency findings
         run: npm audit --audit-level=high --json > "$RUNNER_TEMP/dependency-audit.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: dependency-audit-${{ matrix.project }}-${{ github.sha }}
@@ -289,7 +289,7 @@ jobs:
             }
           }
           NODE
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: redacted-secret-scan-${{ github.sha }}
