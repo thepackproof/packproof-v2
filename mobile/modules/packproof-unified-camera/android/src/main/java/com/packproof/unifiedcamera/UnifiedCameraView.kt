@@ -394,7 +394,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
             // run beyond the saved media when the encoder lags behind preview analysis.
             // This remains an approximate seek point and is checked against decoded media.
             val offsetMs = sampledEncodedMs.coerceAtLeast(0L)
-            onBarcodeDetected(mapOf(
+            val observation = mutableMapOf<String, Any>(
               "rawValue" to raw,
               "format" to format,
               "detectedAtMs" to offsetMs.toDouble(),
@@ -405,8 +405,11 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
               "decoderVersion" to "mlkit-barcode-17.2.0",
               "frameWidth" to if (image.imageInfo.rotationDegrees % 180 == 0) image.width else image.height,
               "frameHeight" to if (image.imageInfo.rotationDegrees % 180 == 0) image.height else image.width,
-              "bounds" to code.boundingBox?.let { mapOf("left" to it.left, "top" to it.top, "right" to it.right, "bottom" to it.bottom) },
-            ))
+            )
+            code.boundingBox?.let {
+              observation["bounds"] = mapOf("left" to it.left, "top" to it.top, "right" to it.right, "bottom" to it.bottom)
+            }
+            onBarcodeDetected(observation)
           }
         }
         .addOnFailureListener(mainExecutor) {

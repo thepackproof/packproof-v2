@@ -14,9 +14,10 @@ The candidate PR and its CI records identify the exact published source SHA. Com
 | Backend TypeScript / build | `cd backend && npm run typecheck` / `npm run build` | PASS |
 | Initial backend full suite | `cd backend && npm test -- --maxWorkers=2` | 712 passed, 10 failed, 11 skipped; failures investigated and corrected |
 | Backend regression verification | Eight affected/new files with `vitest run --maxWorkers=2` | 105 passed, 0 failed |
-| W5 schema/consent | `backend/tests/study-ui-instrumentation.test.ts` plus shared bridge/native/web timing suites | Targeted proposal tests pass; final complete backend rerun in progress at source publication |
-| Final complete backend | `cd backend && npm test -- --maxWorkers=3` | See final PR status; do not infer pass from targeted cases |
-| Android native compilation | Existing CI Android attestation Kotlin job | Await exact candidate CI result; baseline success is not candidate success |
+| W5 schema/consent | `backend/tests/study-ui-instrumentation.test.ts` plus shared bridge/native/web timing suites | PASS in the complete local suites |
+| Final local complete backend | `cd backend && npm test -- --maxWorkers=3` | 750 passed, 1 failed, 11 skipped; sole remaining legacy manual-creation Back expectation corrected and origin cases added. See exact-source CI for the final complete result. |
+| Android Back regression | `cd backend && npx vitest run tests/android-back-compat.test.ts --maxWorkers=2` | 17 passed; 0 failed, including both Orders and Station origins |
+| Android native compilation | Existing CI Android attestation Kotlin job | Candidate CI found a nullable optional bounds value incompatible with EventDispatcher; fixed by omitting unavailable bounds. See final PR for exact-source native compilation status. |
 | Signed release AAB | Existing `shipping-integration` EAS profile / signing lineage | NOT PRODUCED; authorized Expo automation token unavailable in inspected prior run |
 | Physical S24 Ultra / A16 5G | Exact installed-candidate protocol in RELEASE.md | NOT TESTED |
 | Eight-person usability | Counterbalanced tasks and thresholds in RELEASE.md | NOT RUN |

@@ -35,8 +35,12 @@ describe("Android 16 system Back compatibility", () => {
     ["proof", "home"], ["account", "home"], ["create", "home"],
     ["event", "proof"], ["capture", "proof"], ["editShipping", "proof"],
     ["editPurchase", "proof"], ["finalize", "proof"], ["sharing", "proof"],
-    ["manual", "create"], ["scan", "create"], ["review", "create"],
+    ["manual", "home"], ["scan", "create"], ["review", "create"],
   ] as const)("routes %s Back to %s, rather than exiting", (route, parent) => {
     expect(resolveBackRoute(route)).toBe(parent);
+  });
+
+  it.each(["orders", "station"] as const)("returns minimal manual creation to its %s origin", (origin) => {
+    expect(resolveBackRoute("manual", origin)).toBe(origin);
   });
 });
