@@ -61,3 +61,13 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''^docs/program\-2026\-09\-07/acceptance\-evidence\-register\.v1\.json$''']
 regexes = ['''^retired/revoked/compromised/unknown/stale$''']
+
+# Reviewed CI run 34179088662 / job 101914297483: the exact inspected API
+# commit identifier, also returned publicly by /meta, is not a credential.
+[[allowlists]]
+description = "Exact inspected live API source commit in the UI/UX release evidence template."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/ui\-ux\-redesign\-2026\-09\-08/release\-evidence\.template\.json$''']
+regexes = ['''^594ea0e0414228c4d149527b4f138a8095765b02$''']
