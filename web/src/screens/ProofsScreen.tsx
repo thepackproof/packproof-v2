@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ProofCollectionItem } from "../api/types";
 import type { ProofListView } from "../proof-list-state";
 import { IconSearch } from "../components/Icons";
@@ -9,6 +9,7 @@ import { classifyProofPresentation } from "../../../backend/src/domain/proof-pre
 
 export function ProofsScreen(props: {
   proofs: ProofCollectionItem[];
+  readyOrders?: ReactNode;
   view: ProofListView;
   query: string;
   loading: boolean;
@@ -29,6 +30,7 @@ export function ProofsScreen(props: {
   const empty = !props.loading && !props.error && !rows.length;
   return <main className="page library-page" aria-busy={props.loading}>
     <div className="workspace-heading"><div><h1 className="page-title">Proofs</h1><p>Your shipment records, from the first recording onward.</p></div><button className="btn" onClick={props.onCreate}><Glyph name="plus" size={16} />New Proof</button></div>
+    {props.readyOrders}
     <div className="segmented proof-filters" role="group" aria-label="Proof filters">{([ ["all", "All"], ["attention", "Needs attention"], ["completed", "Completed"] ] as const).map(([view, label]) => <button key={view} className="segmented-tab" type="button" aria-pressed={props.view === view} onClick={() => props.onChange(view, props.query)}>{label}</button>)}</div>
     <form className="search-row" role="search" onSubmit={event => { event.preventDefault(); props.onChange(props.view, query.trim()); }}>
       <label className="search-field"><IconSearch /><span className="visually-hidden">Search proofs</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search item, order or tracking number" autoComplete="off" /></label>

@@ -168,6 +168,8 @@ import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
+import { intakeRouter } from "./http/intake-router.js";
+import type { IntakeRuntimeConfig } from "./intake/runtime-config.js";
 import { exportEvidencePackageStream, getEvidenceReview } from "./domain/evidence-review.js";
 import {
   listUploadParts,
@@ -205,6 +207,7 @@ import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proo
 import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 
 export interface AppDependencies {
+  intake?: IntakeRuntimeConfig;
   db: Database;
   objectStore: ObjectStore;
   clock: Clock;
@@ -492,6 +495,22 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
   app.use("/proofs/:id/capture-sessions", captureSessionRouter(deps));
   app.use("/me/packing-relay", packingRelayRouter(deps));
+  app.use((req,res,next)=>{
+    const isProofAdmission=req.path==='/proofs'||/^\/transactions\/[^/]+\/proof$/.test(req.path);
+    // A transaction alone has no workflow policy; negotiate only when a new merchant Proof is requested.
+    const isAdmission=req.method==='POST'&&(isProofAdmission||(req.path==='/integrations/transactions/import'&&req.body?.createProof===true));
+    const preservedWorkflow=isProofAdmission&&(req.body?.workflowType==='GRADING_SUBMISSION'||req.body?.participationPolicy==='COUNTERPARTY_REQUIRED');
+    if(!isAdmission||preservedWorkflow||req.header('x-packproof-intake-version')==='1')return next();
+    void (async()=>{
+      const user=bearerUser(req);
+      const enrolled=(await deps.db.query('SELECT owner_user_id FROM intake_contract_cohorts WHERE owner_user_id=$1 AND enabled=true',[user])).rows[0];
+      if(!enrolled)return next();
+      const match=req.path.match(/^\/transactions\/([^/]+)\/proof$/);
+      if(match && (await deps.db.query('SELECT id FROM proofs WHERE transaction_id=$1',[match[1]])).rows[0])return next();
+      throw new DomainError('INTAKE_CLIENT_UPDATE_REQUIRED','Update PackProof before preparing a new order. Your existing recordings can still be recovered.',409);
+    })().catch(next);
+  });
+  app.use("/me/intake", distributedRateLimit(deps.db,{scope:"order-intake",limit:90,windowMs:60_000,subject:bearerUser}), intakeRouter(deps));
   app.use("/proofs/:id/signature", signatureRouter(deps));
   app.use("/proofs/:id/disclosure", disclosureRouter(deps));
   app.use("/packing-requests", packingRequestsRouter(deps));

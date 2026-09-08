@@ -1,4 +1,5 @@
 import { randomId } from "../random-id";
+import type { IntakeSnapshot } from '../intake-types';
 import {startStationStudy,resumeStationStudy,type StationStudyTimer} from '../analytics/study-capture';
 import { RelayStationPanel } from "../components/RelayStationPanel";
 import { capturePreflight } from "../capture-preflight";
@@ -25,6 +26,8 @@ export function PackingStationScreen(props: {
   error: string | null;
   initialReference?: string;
   initialProofId?: string;
+  acceptedIntakeSnapshot?: IntakeSnapshot | null;
+  onIntakeIntentConsumed?: () => void;
   onAuthExpired: () => void;
   onLeave?: () => void;
   onCompleted?: (proofId: string) => void;
@@ -85,6 +88,17 @@ export function PackingStationScreen(props: {
   stateRef.current = state;
   heldBlobRef.current = heldBlob;
   const [cameraReady, setCameraReady] = useState(false);
+  const intakeStarted=useRef(false);
+  const intakeSnapshot=useRef(props.acceptedIntakeSnapshot);
+  const intakeRetryKey=useRef(randomId());
+  // This intent exists only after the user presses Record on the ready-order card.
+  useEffect(()=>{
+    if(props.acceptedIntakeSnapshot && !intakeStarted.current && cameraReady && !busy && state.phase==='READY_TO_RECORD' && state.order?.proofId===props.acceptedIntakeSnapshot.proofId){
+      intakeStarted.current=true;
+      props.onIntakeIntentConsumed?.();
+      void startPacking();
+    }
+  },[cameraReady,busy,state.phase,state.order?.proofId,props.acceptedIntakeSnapshot]);
   const preparingCamera = useRef(false);
   const [elapsed, setElapsed] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
@@ -354,7 +368,20 @@ export function PackingStationScreen(props: {
       const stream = streamRef.current ?? await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       if (!stillReady()) { stream.getTracks().forEach(track => track.stop()); return; }
       streamRef.current = stream;
-      const session = await props.api.createCaptureSession(order.proofId, newIdempotencyKey());
+      const snapshot=intakeSnapshot.current;
+      const usesIntakeSnapshot=!!snapshot && snapshot.proofId===order.proofId;
+      const authorizeIntakeCapture=async()=> (await props.api.intakeRequest<{session:{id:string;state:string}}>('/orders/'+encodeURIComponent(snapshot!.id)+'/capture','POST',{idempotencyKey:intakeRetryKey.current,client:'WEB_CAMERA'})).session;
+      let session = usesIntakeSnapshot
+        ? await authorizeIntakeCapture()
+        : await props.api.createCaptureSession(order.proofId, newIdempotencyKey());
+      if(usesIntakeSnapshot && session.state==='CANCELLED') {
+        // A cancellation may have succeeded even when its response was lost.
+        // The authoritative replay confirms cancellation; this explicit Record
+        // action may now issue a fresh key, once, for the same accepted snapshot.
+        intakeRetryKey.current=randomId();
+        session=await authorizeIntakeCapture();
+      }
+      if(session.state!=='ISSUED')throw new Error('This order already has a recording. Recover it before recording again.');
       issuedSessionId = session.id;
       if (!stillReady()) { stopLiveTracks(); return; }
       captureSessionRef.current = session.id;
@@ -388,7 +415,10 @@ export function PackingStationScreen(props: {
     } finally {
       if (issuedSessionId && !recordingStarted) {
         // Only abandon an unused session. Recorded originals always remain recoverable.
-        void props.api.featureRequest(order.proofId, `capture-sessions/${encodeURIComponent(issuedSessionId)}/cancel`, "POST", {}).catch(() => {});
+        try {
+          const cancellation=await props.api.featureRequest<{cancelled:boolean}>(order.proofId, `capture-sessions/${encodeURIComponent(issuedSessionId)}/cancel`, "POST", {});
+          if(cancellation?.cancelled===true)intakeRetryKey.current=randomId();
+        } catch { /* Keep the same retry identity until cancellation is confirmed. */ }
       }
       startingRef.current=false;
       if (mountedRef.current) setBusy(false);

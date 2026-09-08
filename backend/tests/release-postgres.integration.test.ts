@@ -1,3 +1,6 @@
+import { submitIntakeObservation, type IntakeObservationInput } from '../src/intake/context.js';
+import { registerIntakeDevice,approveIntakeDevice,createIntakeHandoff,claimIntakeHandoff } from '../src/intake/handoffs.js';
+import { createCaptureSession } from '../src/domain/capture-sessions.js';
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -83,6 +86,38 @@ describe.skipIf(!databaseUrl)("release invariants on independent real PostgreSQL
     expect(new Set(results.map(result => result.proofId)).size).toBe(1);
     expect((await first.db.query("SELECT id FROM proofs WHERE transaction_id=$1", [transaction.transactionId])).rows).toHaveLength(1);
   });
+
+  it("serializes three intake sources and direct versus handoff capture across real independent pools", async () => {
+    const seller=await createUser(harness);
+    const observation:IntakeObservationInput={receiptId:'postgres-api',sourceKind:'API_OBSERVED',adapterKey:'postgres-intake-fixture',adapterVersion:'1',externalOrderId:'postgres-shared-order',orderReference:'Shared order',items:[{title:'Lens',quantity:2,variant:'Black'}],physicalFulfillment:true,paid:true,cancelled:false,fulfillmentScope:'FULL_ORDER'};
+    const scope={provider:'ebay',externalAccountReference:`store-${seller}`,namespaceSource:'MARKETPLACE_API' as const,connectionId:'api-fixture',store:'Concurrency fixture store',verified:true as const};
+    const results=await Promise.all([
+      submitIntakeObservation(first.db,clock,seller,observation,scope),
+      submitIntakeObservation(second.db,clock,seller,{...observation,receiptId:'postgres-browser',sourceKind:'BROWSER_CAPTURED'},{...scope,connectionId:'browser-fixture'}),
+      submitIntakeObservation(first.db,clock,seller,{...observation,receiptId:'postgres-mail',sourceKind:'FORWARDED_EMAIL'},{...scope,connectionId:'mail-fixture'}),
+    ]);
+    expect(results.every(result=>result.readiness==='READY')).toBe(true);
+    expect(new Set(results.map(result=>result.transactionId)).size).toBe(1);
+    expect(new Set(results.map(result=>result.proofId)).size).toBe(1);
+    expect((await second.db.query('SELECT id FROM intake_source_observations WHERE actor_user_id=$1',[seller])).rows).toHaveLength(3);
+    const snapshot=results[0].snapshot!;
+    const phone=await registerIntakeDevice(first.db,clock,seller,{name:'PostgreSQL recording fixture'});
+    await approveIntakeDevice(second.db,clock,seller,phone.device.id,phone.pairingCode);
+    const {handoff}=await createIntakeHandoff(first.db,clock,seller,{snapshotId:snapshot.id,targetDeviceId:phone.device.id,idempotencyKey:'postgres-handoff'});
+    const claimInput={deviceId:phone.device.id,deviceToken:phone.deviceToken,idempotencyKey:'postgres-claim',client:'NATIVE_CAMERA'};
+    const raced=await Promise.allSettled([
+      createCaptureSession(first.db,clock,seller,snapshot.proofId,{client:'WEB_CAMERA',idempotencyKey:'postgres-direct'}),
+      claimIntakeHandoff(second.db,clock,seller,handoff.id,claimInput),
+    ]);
+    expect(raced.filter(result=>result.status==='fulfilled')).toHaveLength(1);
+    const rejected=raced.find(result=>result.status==='rejected') as PromiseRejectedResult;
+    // A PostgreSQL deadlock/timeout is a failure, never accepted as a safe competing claim.
+    expect(rejected.reason.code).toBe('INTAKE_CAPTURE_IN_PROGRESS');
+    const sessions=(await first.db.query<{id:string;order_snapshot_id:string}>('SELECT id,order_snapshot_id FROM capture_sessions WHERE proof_id=$1',[snapshot.proofId])).rows;
+    expect(sessions).toHaveLength(1);expect(sessions[0].order_snapshot_id).toBe(snapshot.id);
+    if(raced[0].status==='fulfilled')expect((await createCaptureSession(second.db,clock,seller,snapshot.proofId,{client:'WEB_CAMERA',idempotencyKey:'postgres-direct'})).id).toBe(sessions[0].id);
+    else expect((await claimIntakeHandoff(first.db,clock,seller,handoff.id,claimInput)).session.id).toBe(sessions[0].id);
+  }, 15_000);
 
   it("enforces the shared account admission limit across independent Proof locks", async () => {
     const seller = await createUser(harness);

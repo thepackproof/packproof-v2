@@ -1,3 +1,6 @@
+import { IntakeApi } from "../intake/api";
+import { assertIntakeAcceptance } from "../intake/model";
+import { clearIntakeRequestKey, forgetIntakeDevice, intakeRequestKey, readIntakeDevice, revokeIntakeDevice } from "../intake/storage";
 import { loadProofsCache, saveProofsCache, clearProofsCache, emptyProofsCache } from "./proofs-cache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { clearSharedLinkCache } from "../copy/share-cache";
@@ -280,6 +283,7 @@ export interface PackProofContextValue {
   savePurchaseDetails: () => Promise<void>;
   saveShippingDetails: () => Promise<void>;
   startCapture: () => Promise<void>;
+  startIntakeCapture: (input: { snapshotId: string; handoffId?: string }) => Promise<void>;
   discardCapture: () => Promise<void>;
   submitCapture: () => Promise<void>;
   finalizeProof: () => Promise<void>;
@@ -403,6 +407,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   useEffect(()=>{updateNativeStudyConnectivity(offline);},[offline,session?.userId,session?.apiBaseUrl,session?.needsReauthentication]);
   const searchGeneration = useRef(0);
   const captureSubmitLock = useRef(false);
+  const intakeCaptureLock = useRef(false);
   const tokenRefresh = useRef<Promise<void> | null>(null);
   const client = useMemo(
     () =>
@@ -519,6 +524,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
       await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+      await revokeIntakeDevice(client, sessionRef.current.userId).catch(() => forgetIntakeDevice(client, sessionRef.current!.userId));
     }
     cacheScope.current = key;
     const cached = await loadProofsCache(current.apiBaseUrl,current.userId);
@@ -1323,6 +1329,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setErrorDetail(null);
       try {
         const current = sessionRef.current;
+        if (current) await revokeIntakeDevice(client, current.userId).catch(() => forgetIntakeDevice(client, current.userId));
         if (current?.authMode === "cognito" && current.token && current.cognitoClientId) {
           await cognitoGlobalSignOut(
             {
@@ -1632,6 +1639,49 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await refreshProof(proof.proofId);
         go("proof");
       }),
+    startIntakeCapture: async input => {
+      if (intakeCaptureLock.current) return;
+      intakeCaptureLock.current = true;
+      try {
+        await run(async () => {
+          const account = sessionRef.current;
+          if (!account) return;
+          if (localCapture && !["FINALIZED", "SUBMITTED"].includes(localCapture.recovery?.phase ?? ""))
+            throw new Error("Finish the recording already open before accepting another order. It is saved on this phone.");
+          const api = new IntakeApi(client);
+          const sourceKey = input.handoffId ? `handoff:${input.handoffId}` : `snapshot:${input.snapshotId}`;
+          const key = await intakeRequestKey(client, account.userId, sourceKey);
+          const device = input.handoffId ? await readIntakeDevice(client, account.userId) : null;
+          if (input.handoffId && !device) throw new Error("Pair this phone in Account → Connections before accepting this order.");
+          const accepted = input.handoffId
+            ? await api.claim(input.handoffId, device!, key)
+            : await api.capture(input.snapshotId, key);
+          assertIntakeAcceptance(accepted);
+          if (accepted.orderSnapshot.id !== input.snapshotId) throw new Error("The order changed. Refresh its card before recording.");
+          if (sessionRef.current?.userId !== account.userId) throw new Error("Sign in to the original account to record this order.");
+          const unfinished = await listAccountCaptures(client.apiBaseUrl, account.userId);
+          if (unfinished.some(row => row.captureSessionId === accepted.session.id && row.recovery?.phase !== "FINALIZED")) {
+            setSavedRecordings(unfinished); go("account", { accountSection: "recordings" });
+            throw new Error("This order already has a recording on this phone. Open its saved recording to continue.");
+          }
+          await refreshProof(accepted.proofId);
+          setCaptureStatus("capturing");
+          const captured = await recordPackingEvidence({ client, proofId: accepted.proofId, userId: account.userId,
+            orderLabel: `${accepted.orderSnapshot.store} · Order ${accepted.orderSnapshot.orderReference}`,
+            authorizedSession: accepted.session, autoStart: true }).catch(error => { setCaptureStatus("idle"); throw error; });
+          if (!captured) {
+            if (device) await api.release(device, accepted.session.id).catch(() => undefined);
+            if (!input.handoffId) await clearIntakeRequestKey(client, account.userId, sourceKey);
+            setCaptureStatus("idle"); go("home"); return;
+          }
+          await queueRetiredUpload(accepted.proofId);
+          await persistCapture(captured, captured.recovery?.evidenceIdempotencyKey ?? newIdempotencyKey());
+          setCaptureStatus("captured");
+          go("capture");
+          setProof(await client.getProof(accepted.proofId));
+        });
+      } finally { intakeCaptureLock.current = false; }
+    },
     startCapture: async () =>
       run(async () => {
         if (!proof) {

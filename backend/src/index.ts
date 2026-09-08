@@ -1,4 +1,7 @@
 import { assertPolicyAccessSafe } from "./domain/policy-recovery.js";
+import { intakeConfigFromEnv,enrollConfiguredIntakeCohort } from './intake/runtime-config.js';
+import { createIntakeMailJobs } from './intake/mail-runtime.js';
+import { dispatchShippoIntake } from './intake/shippo-runtime.js';
 import { StripeBillingAdapter, stripeBillingConfigFromEnv } from "./billing/stripe-adapter.js";
 import {processStripeBillingReconciliation} from "./billing/daily-reconciliation.js";
 import {DomainError} from "./domain/errors.js";
@@ -45,6 +48,8 @@ const manifestSigning = await initializeManifestSigningRuntime(systemClock);
 const opened = await openDatabase(config);
 if(config.migrateOnStart) await migrate(opened.db);
 else await assertSchemaCurrent(opened.db);
+const intakeConfig=intakeConfigFromEnv();
+await enrollConfiguredIntakeCohort(opened.db,intakeConfig);
 
 const credentialStore = createCredentialStore(config);
 const billingConfig=stripeBillingConfigFromEnv(process.env);
@@ -94,6 +99,7 @@ const readinessProbes=[
   }},
 ];
 const app = config.processRole==='worker'?express():createServerApp({
+  intake: intakeConfig,
   db: opened.db,
   objectStore,
   clock: systemClock,
@@ -126,7 +132,8 @@ const server = app.listen(config.port, "0.0.0.0", () => {
     `PackProof V2 API listening on ${config.port} engine=${opened.engine} objectStore=${config.objectStore} authMode=${config.authMode}`,
   );
 });
-const jobs:ScheduledJob[]=[];
+const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+jobs.push({name:'order-shippo',intervalMs:15000,run:()=>dispatchShippoIntake(opened.db,systemClock,{credentialStore,config:()=>intakeConfigFromEnv()})});
 if(billing&&billingReconciliationStartAt){
   const initialStartAt=billingReconciliationStartAt;
   jobs.push({name:'billing-reconciliation',intervalMs:30000,run:async()=>{

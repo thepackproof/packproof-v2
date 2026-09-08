@@ -123,6 +123,7 @@ jobs:
       - run: npm run test:build-security
       - run: npm run test:proof-record
       - run: npm run test:study-timing
+      - run: npm run test:intake
       - run: npm run test:redesign
       - name: Verify Proof navigation and share-link cache
         run: node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/proof-navigation.test.ts tests/share-cache.test.ts
@@ -264,6 +265,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Verify browser companion capture guards
+        run: node --test browser-companion/tests/*.test.cjs
       - name: Verify BOM refusal and artifact identity behavior
         run: node --test scripts/release-bom.test.mjs scripts/publication-policy-gate.test.mjs
       - name: Verify portable signatures and received supplement snapshots

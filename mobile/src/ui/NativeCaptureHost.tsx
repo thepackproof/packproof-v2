@@ -236,6 +236,14 @@ function CameraSession({
       setSaving(false);
     }
   }
+  const acceptedStart = useRef(false);
+  useEffect(() => {
+    // Only an explicit intake Record action sets autoStart. Handoff polling never does.
+    if (request.autoStart && ready && !acceptedStart.current && !recordingRef.current && AppState.currentState === "active") {
+      acceptedStart.current = true;
+      void start();
+    }
+  }, [ready, request.autoStart]);
   const stop = () => {
     if (recordingRef.current) {
       setSaving(true);

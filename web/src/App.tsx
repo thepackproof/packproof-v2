@@ -10,6 +10,11 @@ import { canonicalWorkspacePath, readProofListState, rememberProofListState } fr
 import { ReceiptScreen } from "./screens/ReceiptScreen";
 import { DeveloperScreen } from "./screens/DeveloperScreen";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReadyIntakeOrders } from './components/ReadyIntakeOrders';
+import { IntakeSettingsPanel } from './components/IntakeSettingsPanel';
+import { CompanionBridge } from './components/CompanionBridge';
+import { SelectedOrderHandoff } from './components/SelectedOrderHandoff';
+import type { IntakeSnapshot } from './intake-types';
 import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
 import { captureEvidenceType } from "@packproof/copy/custody";
 import { PackProofApi } from "./api/client";
@@ -268,6 +273,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   const [proofs, setProofs] = useState<ProofCollectionItem[]>([]);
   const [invitations, setInvitations] = useState<InvitationInboxView[]>([]);
   const [proof, setProof] = useState<CanonicalProof | null>(null);
+  const [acceptedIntakeSnapshot,setAcceptedIntakeSnapshot]=useState<IntakeSnapshot|null>(null);
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [loading, setLoading] = useState(() => Boolean(loadSession()));
   const [busy, setBusy] = useState(false);
@@ -339,6 +345,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   );
 
   function signOut() {
+    setAcceptedIntakeSnapshot(null);
     sessionRef.current = null;
     tokenRef.current = null;
     clearSession();
@@ -666,6 +673,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
   return (
     <div className="app-shell workspace-shell">
+        {(route.name==='proofs'||route.name==='create')&&<CompanionBridge api={api} userId={session.userId} connections={connections}/>}
+        {route.name==='proof'&&proof?.status==='READY_FOR_EVIDENCE'&&proof.workflowType==='COMMERCE_SALE'&&proof.participationPolicy==='COUNTERPARTY_OPTIONAL'&&<SelectedOrderHandoff key={proof.proofId} api={api} userId={session.userId} transactionId={proof.transaction.transactionId}/>}
         <AppNav
           session={session}
           invitationCount={invitations.length}
@@ -677,7 +686,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       <LocalRecordingRecovery visible={route.name === "account"} key={session.userId} api={api} userId={session.userId} onOpen={id => go(`/proofs/${encodeURIComponent(id)}`)} />
 
-      {route.name === "proofs" ? <ProofsScreen {...libraryProps} /> : null}
+      {route.name === "proofs" ? <ProofsScreen {...libraryProps} readyOrders={<ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />} /> : null}
 
       {route.name === "receipt" ? (
         <ReceiptScreen
@@ -782,6 +791,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "create" ? (
         <CreateProofScreen
+          readyOrders={<ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />}
           onPreviewIntake={(text) => api.previewOrderIntake(text)}
           busy={busy}
           error={error}
@@ -911,6 +921,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "station" ? (
         <PackingStationScreen
+          acceptedIntakeSnapshot={acceptedIntakeSnapshot?.proofId===route.proofId?acceptedIntakeSnapshot:null}
+          onIntakeIntentConsumed={()=>setAcceptedIntakeSnapshot(null)}
           key={`${session.apiBaseUrl}:${session.userId}:${route.proofId || "queue"}`}
           api={api}
           userId={session.userId}
@@ -931,6 +943,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "stores" ? (
         <ConnectedStoresScreen
+          intakeSettings={<IntakeSettingsPanel api={api} userId={session.userId} connections={connections} />}
           connectionPanel={<ConnectedAccountsPanel accounts={connectedAccounts} providers={connectedProviders} notice={connectedNotice} busy={busy}
             onConnect={(provider, extra) => { setBusy(true); void api.startConnectedAccountConnect(provider, extra).then(result => window.location.assign(result.authorizationUrl)).catch(caught => { setError(handleError(caught)); setBusy(false); }); }}
             onReauthorize={accountId => { setBusy(true); void api.reauthorizeConnectedAccount(accountId).then(result => window.location.assign(result.authorizationUrl)).catch(caught => { setError(handleError(caught)); setBusy(false); }); }}

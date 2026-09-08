@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { IntakePreview } from "@packproof/copy/order-intake";
 import { IntakePanel } from "../components/IntakePanel";
 import type { EbaySellerOrderView, TransactionImportView, TransactionWriteInput } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 export function CreateProofScreen(props: {
+  readyOrders?: ReactNode;
   busy: boolean;
   error: string | null;
   development: boolean;
@@ -36,6 +37,7 @@ export function CreateProofScreen(props: {
   const [grading, setGrading] = useState(false);
   const [count, setCount] = useState("1");
   return <main className="page narrow-page"><PageHeader title="Record shipment" onBack={props.onCancel} />
+    {props.readyOrders}
     {props.error ? <p role="alert" className="banner banner-error">{props.error}</p> : null}
     {paste && props.onPreviewIntake ? <IntakePanel onPreview={props.onPreviewIntake} onReview={result => { setIntake(result); setTitle(result.draft.itemTitle || ""); setReference(result.draft.externalReference || ""); setCurrency(result.draft.currency || ""); setQuantity(result.draft.quantity == null ? "" : String(result.draft.quantity)); setAmount(result.draft.transactionValue == null ? "" : String(result.draft.transactionValue)); setCarrier(result.draft.shipping.carrier || ""); setTracking(result.draft.shipping.trackingNumber || ""); setPaste(false); }} /> : null}
     <form className="stack" onSubmit={e => { e.preventDefault(); props.onCreate({itemTitle:title.trim(),externalReference:reference.trim() || null,itemDescription:description.trim() || null,currency:currency.trim() || null,quantity:quantity ? Number(quantity) : null,transactionValue:amount ? Number(amount) : null,shipping:{carrier:carrier.trim() || null,trackingNumber:tracking.trim() || null},...(intake ? {metadata:{intake:{...intake.draft.metadata.intake,confirmed:true}}} : {})}); }}>

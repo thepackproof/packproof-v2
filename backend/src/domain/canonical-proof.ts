@@ -1,3 +1,4 @@
+import { readIntakeProofContext } from "../intake/context.js";
 import { classifyProofPresentation, type ProofPresentation } from './proof-presentation.js';
 import { getCaptureShipping } from './capture-shipping.js';
 import { readCaptureClientContext, type ClientCaptureContext } from "./capture-sessions.js";
@@ -122,6 +123,7 @@ export interface CanonicalExternalRecord {
 }
 
 export interface CanonicalProof {
+  orderContext?: Awaited<ReturnType<typeof readIntakeProofContext>>;
   presentation?: ProofPresentation;
   schema: typeof CANONICAL_PROOF_SCHEMA;
   proofId: string;
@@ -285,6 +287,7 @@ export async function getCanonicalProof(
       fulfillmentCaptureCount:evidence.rows.filter(row=>isQualifyingFulfillmentCapture({evidenceType:row.evidence_type,validationStatus:row.validation_status})).length,
       packingAttested:attestations.rows.some(row=>row.statement==='PACKED_DESCRIBED_ITEM'),workflowNextAction:custody.policy.nextAction,
       pendingStage:pendingStage ? {type:pendingStage.type,hasEvidence:pendingStage.evidence.some(row=>Boolean((row as Record<string,unknown>).committedAt))} : receiverReceiptNeeded ? {type:'RECEIPT',hasEvidence:false} : null})} : {}),
+    ...(actorUserId ? {orderContext:await readIntakeProofContext(db,proofId)} : {}),
     schema: CANONICAL_PROOF_SCHEMA,
     proofId: proof.id,
     transactionId: proof.transaction_id,
