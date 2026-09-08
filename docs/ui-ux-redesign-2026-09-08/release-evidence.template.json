@@ -1,0 +1,41 @@
+{
+  "schema": "packproof.uiux-release-evidence.v1",
+  "candidate": {
+    "sourceSha": null,
+    "sourceTreeSha": null,
+    "branch": "codex/ui-ux-redesign-2026-09-08",
+    "versionName": null,
+    "versionCode": null,
+    "package": "com.packproof.mobile",
+    "profile": "shipping-integration",
+    "apiUrl": null,
+    "apiCommit": null,
+    "apiImageDigest": null,
+    "schemaMigrations": [],
+    "capabilitiesEvidence": null,
+    "servedWebSourceSha": null,
+    "servedWebEvidence": null
+  },
+  "historicalBaseline": {
+    "sourceSha": "bcedec57d9a56800a1ed80f6e5c4959b6de7dab4",
+    "liveApiCommitAtInspection": "594ea0e0414228c4d149527b4f138a8095765b02",
+    "oldAabVersionName": "0.3.8",
+    "oldAabVersionCode": 37,
+    "oldAabSha256": "898aa80e3b93f8ef97fb291e75091bff71d0474fad38a9fc341d64a58ce74368",
+    "oldAabBytes": 45507896,
+    "oldAabSourceSha": null,
+    "oldAabEasBuildId": null,
+    "oldAabIsRedesignArtifact": false,
+    "oldAabInstalledOnTestPhones": null
+  },
+  "redesignNativeCompilation": { "state": "NOT_ESTABLISHED", "ciRun": null, "sourceSha": null, "artifactEvidence": null },
+  "redesignSignedAab": { "state": "NOT_ESTABLISHED", "easBuildId": null, "sourceSha": null, "sha256": null, "bytes": null, "signingLineageEvidence": null },
+  "distribution": { "uploaded": null, "track": null, "availableToTesters": null, "evidence": null },
+  "devices": [
+    { "model": "Samsung Galaxy S24 Ultra", "installedVersionCode": null, "artifactAssociationEvidence": null, "physicalAcceptance": "NOT_TESTED", "evidence": [] },
+    { "model": "Samsung Galaxy A16 5G", "installedVersionCode": null, "artifactAssociationEvidence": null, "physicalAcceptance": "NOT_TESTED", "evidence": [] }
+  ],
+  "usability": { "state": "NOT_TESTED", "participants": 0, "perDevice": {}, "unassistedCompletions": null, "comprehensionPasses": null, "medianAppSeconds": null, "p90AppSeconds": null, "percentileMethod": null, "medianEaseOutOf7": null, "requiredExtraCaptureCount": null, "criticalFailures": null, "recoveryPassed": null, "evidence": [] },
+  "productionRollout": { "state": "NOT_ESTABLISHED", "evidence": null },
+  "rollback": { "verifiedRecipe": null, "candidateRecoveryVersionCode": null, "journalPreservationEvidence": null }
+}

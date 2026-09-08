@@ -10,7 +10,7 @@ import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { VideoReview } from "../ui/VideoReview";
 import { RecordedVideo } from "../ui/RecordedVideo";
-import { recordPackingEvidence, bindRecordedCapture, saveCaptureBookmarks, discardLocalCapture, uploadCaptureFile, type LocalCapture } from "../capture";
+import { recordPackingEvidence, bindRecordedCapture, saveCaptureBookmarks, listAccountCaptures, persistCaptureMetadata, discardLocalCapture, uploadCaptureFile, type LocalCapture } from "../capture";
 import type { UploadTarget } from "../v2-api";
 type Media = {
   evidenceId: string;
@@ -61,7 +61,7 @@ export function CommerceReceiptScreen() {
       }>
     >([]),
     [progress, setProgress] = useState<number | null>(null);
-  const storageKey = `packproof-receipt:${app.session!.userId}:${proofId}`;
+  const storageKey = `packproof-receipt:${encodeURIComponent(app.client.apiBaseUrl)}:${app.session!.userId}:${proofId}`;
   const actionLock = useRef(false);
   const request = <T,>(path: string, method = "GET", body?: unknown) =>
     app.client.lifecycleRequest<T>(proofId, path, method, body);
@@ -78,8 +78,15 @@ export function CommerceReceiptScreen() {
       setError(e.message);
     });
     void AsyncStorage.getItem(storageKey)
-      .then((raw) => {
-        if (raw) setRecording(JSON.parse(raw));
+      .then(async (raw) => {
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (saved.captureUserId === app.session?.userId && saved.captureProofId === proofId) setRecording(saved);
+        } else {
+          const recovered = (await listAccountCaptures(app.client.apiBaseUrl, app.session!.userId)).find(capture => capture.captureProofId === proofId && capture.captureStageId &&
+            !["RECORDING", "FINALIZED"].includes(capture.recovery?.phase ?? ""));
+          if (recovered) setRecording({ ...recovered, stageId: recovered.captureStageId!, key: recovered.recovery!.evidenceIdempotencyKey, evidenceId: recovered.uploadEvidenceId });
+        }
       })
       .catch(() => undefined);
   }, [proofId]);
@@ -127,11 +134,13 @@ export function CommerceReceiptScreen() {
         upload: UploadTarget;
       }>(`/stages/${saved.stageId}/evidence`, "POST", {
         contentType: saved.contentType,
+        byteSize: saved.byteSize,
         idempotencyKey: saved.key,
         captureSessionId: saved.captureSessionId,
       });
-      saved = { ...saved, evidenceId: initialized.evidenceId };
+      saved = { ...saved, evidenceId: initialized.evidenceId, uploadEvidenceId: initialized.evidenceId };
       await save(saved);
+      await persistCaptureMetadata(saved);
       await uploadCaptureFile({
         baseUrl: app.apiBaseUrl,
         target: initialized.upload,
@@ -144,7 +153,9 @@ export function CommerceReceiptScreen() {
     if (saved.evidenceId) await saveCaptureBookmarks(app.client, proofId, saved.evidenceId, saved).catch(() => undefined);
     await AsyncStorage.removeItem(storageKey);
     setRecording(null);
-    await discardLocalCapture(saved.uri);
+    if (saved.recovery) saved.recovery.phase = "PRESERVATION_PENDING";
+    await persistCaptureMetadata(saved);
+    setNotice("Recording received. Its local original remains in Account while preservation is confirmed.");
     await reload();
   }
   return (
@@ -288,7 +299,7 @@ export function CommerceReceiptScreen() {
                               );
                             await AsyncStorage.removeItem(storageKey);
                             if (recording)
-                              await FileSystem.deleteAsync(recording.uri, { idempotent: true });
+                              await discardLocalCapture(recording.uri);
                             setRecording(null);
                             await reload();
                           })

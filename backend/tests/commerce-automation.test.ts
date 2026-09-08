@@ -40,7 +40,7 @@ describe("durable automatic commerce intake", () => {
             throw providerRateLimited(); return { orders: [order(cursor ? "two" : "one")], cursor: cursor ? null : "second" }; });
         const { h, user, connection, deps } = await setup(list);
         await expect(executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps)).rejects.toMatchObject({ code: "PROVIDER_RATE_LIMITED" });
-        expect((await h.db.query("SELECT * FROM commerce_connection_sync_states")).rows[0]).toMatchObject({ provider_cursor: "second", run_status: "RETRYING", attempt_count: 1, last_error_retryable: true });
+        expect((await h.db.query("SELECT * FROM commerce_connection_sync_states")).rows[0]).toMatchObject({ provider_cursor: "second", run_status: "RETRYING", attempt_count: 0, last_error_retryable: true });
         fail = false;
         expect(await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps)).toMatchObject({ createdProofCount: 1, complete: true });
         expect(list.mock.calls.map(([i]) => i.cursor)).toEqual([null, "second", "second"]);
@@ -73,18 +73,28 @@ describe("durable automatic commerce intake", () => {
         expect((await h.db.query("SELECT canonical_json,sha256 FROM final_manifests WHERE proof_id=$1", [proof.id])).rows[0]).toEqual(before);
         expect((await h.db.query("SELECT disposition FROM commerce_order_revisions ORDER BY id DESC LIMIT 1")).rows[0].disposition).toBe("SUPPLEMENT");
     });
-    it("labels seller corrections and preserves them through provider refresh", async () => {
+    it("blocks new imported-field rewrites and preserves legacy attributed corrections through provider refresh", async () => {
         let current = order("corrected");
         const { h, user, connection, deps } = await setup(async () => ({ orders: [current], cursor: null }));
         await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps);
         const txn = (await h.db.query<{
             id: string;
         }>("SELECT id FROM transactions")).rows[0];
-        const updated = await updateTransaction(h.db, clock, user, txn.id, { itemTitle: "Seller corrected title" });
-        expect(updated.provenance).toMatchObject({ source: "PARTICIPANT_SUPPLIED", originalSource: "STOREFRONT_API", sellerCorrectedFields: ["itemTitle"] });
+        await expect(updateTransaction(h.db, clock, user, txn.id, { itemTitle: "Seller corrected title" })).rejects.toMatchObject({code:"IMPORTED_FACTS_READ_ONLY"});
+        const unchanged = (await h.db.query<{item_title:string;transaction_metadata:any}>("SELECT item_title,transaction_metadata FROM transactions WHERE id=$1", [txn.id])).rows[0];
+        expect(unchanged.item_title).toBe("Trading card");
+        expect(unchanged.transaction_metadata.sellerCorrections).toBeUndefined();
+        // Seed a historical pre-redesign record. Current commands cannot create this overwrite.
+        await h.db.query("UPDATE transactions SET item_title=$2,transaction_metadata=jsonb_set(transaction_metadata,'{sellerCorrections}',$3::jsonb) WHERE id=$1",
+          [txn.id,"Legacy seller-corrected title",JSON.stringify({itemTitle:{actorUserId:user,editedAt:clock.now().toISOString(),source:"PARTICIPANT_SUPPLIED"}})]);
         current = order("corrected", "store-one", { transactionValue: 45, providerUpdatedAt: "2026-09-05T12:00:00Z" });
         await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps);
-        expect((await h.db.query("SELECT item_title,transaction_value FROM transactions WHERE id=$1", [txn.id])).rows[0]).toMatchObject({ item_title: "Seller corrected title" });
+        const refreshed=(await h.db.query<{item_title:string;transaction_value:string|number}>("SELECT item_title,transaction_value FROM transactions WHERE id=$1", [txn.id])).rows[0];
+        expect(refreshed.item_title).toBe("Legacy seller-corrected title");
+        expect(Number(refreshed.transaction_value)).toBe(45);
+        const retained = await updateTransaction(h.db, clock, user, txn.id, {});
+        expect(retained.provenance).toMatchObject({source:"PARTICIPANT_SUPPLIED",originalSource:"STOREFRONT_API",sellerCorrectedFields:["itemTitle"]});
+        await expect(updateTransaction(h.db, clock, user, txn.id, {itemTitle:"Another overwrite"})).rejects.toMatchObject({code:"IMPORTED_FACTS_READ_ONLY"});
     });
     it("creates background Proofs only after opt-in and honors pause", async () => {
         const { h, user, connection, deps, integrations } = await setup(async () => ({ orders: [order("background-sale")], cursor: null }));

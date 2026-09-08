@@ -1,21 +1,26 @@
+import { disclosedRecord } from './disclosure-record.js';
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
 import type { ObjectStore } from '../s3/object-store.js';
 import { canonicalize } from '../canonical.js';
 import { sha256Hex } from '../hash.js';
-import { createAccessLink, resolveAccessToken, type ProofAccessLinkRow } from './access-links.js';
+import { createAccessLink, resolveAccessToken, toAccessLinkView, type ProofAccessLinkRow } from './access-links.js';
 import { requireParticipant, loadProof } from './proof-access.js';
 import { buildProofTracker } from './proof-tracker.js';
-import { readCommittedEvidence } from './evidence.js';
 import { DomainError } from './errors.js';
 import { appendAudit } from './audit.js';
 import { loadCustodyBundle } from './custody.js';
 import { isQualifyingFulfillmentCapture } from './evidence-types.js';
+import { listSharedProofSources } from './shared-proof-sources.js';
+import { SELLER_SHIPPING_STATEMENT } from './attestation-authorization.js';
+import type { AttestationRow } from './types.js';
+import { assertPolicyAccessSafe } from './policy-recovery.js';
 
 export const DISCLOSURE_POLICY_VERSION = 'packproof.disclosure/v1';
 export const DISCLOSURE_FIELDS = ['status', 'order', 'shipping', 'evidence', 'statements'] as const;
 export type DisclosureField = typeof DISCLOSURE_FIELDS[number];
-export type DisclosurePurpose = 'BUYER_RECEIPT' | 'CLAIMS_REVIEW' | 'PUBLIC_SAMPLE';
+export type DisclosurePurpose = 'BUYER_RECEIPT' | 'CLAIMS_REVIEW' | 'PUBLIC_SAMPLE' | 'SHARED_PROOF';
+export const SHARED_PROOF_FIELDS: DisclosureField[] = ['status', 'order', 'shipping', 'evidence', 'statements'];
 export interface DisclosureMedia { evidenceId: string; representation: 'ORIGINAL' | 'DERIVATIVE'; derivativeId?: string }
 export interface DisclosureContext {
   proofId: string; actorUserId?: string; grantId: string; scopeIdentity?:string; policyVersion: string; scopeVersion: number;
@@ -30,6 +35,7 @@ function invalid(message: string): never { throw new DomainError('INVALID_DISCLO
 function forbidden(): never { throw new DomainError('INSUFFICIENT_SCOPE', 'This view does not include that source', 403); }
 
 export async function resolveDisclosureContext(db: Database, clock: Clock, input: { proofId?: string; actorUserId?: string; token?: string }): Promise<DisclosureContext> {
+  await assertPolicyAccessSafe(db);
   if (input.token) {
     const link = await resolveAccessToken(db, clock, input.token);
     if (input.proofId && input.proofId !== link.proof_id) forbidden();
@@ -41,6 +47,7 @@ export async function resolveDisclosureContext(db: Database, clock: Clock, input
   return {proofId: input.proofId!, actorUserId: input.actorUserId, grantId: `participant:${input.actorUserId}`, policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: 1, purpose:'PARTICIPANT', fields:[...DISCLOSURE_FIELDS], media: rows.rows.map(row=>({evidenceId:row.id,representation:'ORIGINAL'}))};
 }
 export async function disclosureContextForLink(db: Database, link: ProofAccessLinkRow, now:Date=new Date()): Promise<DisclosureContext> {
+  await assertPolicyAccessSafe(db);
   const creator = await db.query('SELECT 1 FROM proof_participants WHERE id=$1 AND proof_id=$2', [link.created_by_participant_id,link.proof_id]);
   if (!creator.rows[0]) forbidden();
   const subscription=(await db.query<{recipient_grant_id:string|null}>('SELECT recipient_grant_id FROM proof_notification_subscriptions WHERE access_link_id=$1',[link.id])).rows[0];
@@ -52,7 +59,15 @@ export async function disclosureContextForLink(db: Database, link: ProofAccessLi
   }
   const latest = (await db.query<GrantRow>('SELECT * FROM proof_disclosure_grants WHERE access_link_id=$1 ORDER BY scope_version DESC LIMIT 1',[effectiveLinkId])).rows[0];
   if (latest && latest.policy_version !== DISCLOSURE_POLICY_VERSION) forbidden();
-  if(subscription?.recipient_grant_id && latest?.purpose!=='BUYER_RECEIPT') forbidden();
+  if(subscription?.recipient_grant_id && latest?.purpose!=='BUYER_RECEIPT' && latest?.purpose!=='SHARED_PROOF') forbidden();
+  if (latest?.purpose === 'SHARED_PROOF') {
+    return {
+      proofId: link.proof_id, grantId: link.id, scopeIdentity: effectiveLinkId,
+      policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: Number(latest.scope_version),
+      purpose: 'SHARED_PROOF', fields: latest.fields.filter(field => SHARED_PROOF_FIELDS.includes(field)),
+      media: (await listSharedProofSources(db, link.proof_id)).map(source => ({ evidenceId: source.id, representation: 'ORIGINAL' })),
+    };
+  }
   // Historical broad scopes never imply permission to reveal unreviewed media.
   return {proofId:link.proof_id,grantId:link.id,scopeIdentity:effectiveLinkId,policyVersion:DISCLOSURE_POLICY_VERSION,scopeVersion:Number(latest?.scope_version ?? 0),purpose:latest?.purpose ?? 'BUYER_RECEIPT',fields: latest?.fields ?? (link.scope==='STATUS_ONLY'?['status']:['status','order','shipping']), media:latest?.media ?? []};
 }
@@ -65,6 +80,15 @@ export function assertDisclosureMedia(ctx: DisclosureContext, evidenceId: string
 export async function validateDisclosureInput(db: Database, actorUserId:string,proofId:string,input:DisclosureInput): Promise<DisclosureContext> {
   await requireParticipant(db,proofId,actorUserId,'SELLER');
   const purpose = input.purpose ?? 'BUYER_RECEIPT';
+  if (purpose === 'SHARED_PROOF') {
+    if (input.fields !== undefined || input.media !== undefined)
+      invalid('Shared Proof links include the same record and recordings. Individual fields and files cannot be selected.');
+    return {
+      proofId, grantId: 'preview', policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: 1,
+      purpose, fields: [...SHARED_PROOF_FIELDS],
+      media: (await listSharedProofSources(db, proofId)).map(source => ({ evidenceId: source.id, representation: 'ORIGINAL' })),
+    };
+  }
   if(typeof purpose!=='string'||!['BUYER_RECEIPT','CLAIMS_REVIEW','PUBLIC_SAMPLE'].includes(purpose)) invalid('Choose a recipient purpose');
   const fields=input.fields ?? ['status','order','shipping'];
   if(!Array.isArray(fields)||fields.length>4||fields.some(x=>!['status','order','shipping','evidence'].includes(x))) invalid('Only status, item title, shipping status and selected media can be shared');
@@ -104,8 +128,9 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
     shipment:shipping&&source.shipment?{carrier:source.shipment.carrier,service:null,trackingNumber:null}:null,
     milestones:safeMilestones,lastUpdatedAt:safeMilestones.filter(m=>m.occurredAt).map(m=>m.occurredAt!).sort().at(-1)??source.lastUpdatedAt};
   const evidence=[];
+  const sharedSources = ctx.purpose === 'SHARED_PROOF' ? await listSharedProofSources(db, ctx.proofId) : null;
   for(const media of ctx.media) {
-    const e=(await db.query<{id:string,evidence_type:string,content_type:string,sha256:string}>('SELECT id,evidence_type,content_type,sha256 FROM evidence WHERE id=$1 AND proof_id=$2 AND validation_status=\'COMMITTED\'',[media.evidenceId,ctx.proofId])).rows[0];
+    const e=sharedSources ? sharedSources.find(source => source.id === media.evidenceId) : (await db.query<{id:string,evidence_type:string,content_type:string,sha256:string}>('SELECT id,evidence_type,content_type,sha256 FROM evidence WHERE id=$1 AND proof_id=$2 AND validation_status=\'COMMITTED\'',[media.evidenceId,ctx.proofId])).rows[0];
     if(!e) continue;
     let contentType=e.content_type;
     if(media.representation==='DERIVATIVE') {
@@ -113,15 +138,41 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
       if(!d) continue;
       contentType=d.content_type;
     }
-    evidence.push({evidenceId:e.id,slot:e.evidence_type==='FULFILLMENT_CAPTURE'?'Packing':'Evidence',committed:true as const,contentType,representation:media.representation,derivativeId:media.derivativeId??null,label:media.representation==='DERIVATIVE'?'Reviewed redacted copy':'Original recording'});
+    const slot = ({ FULFILLMENT_CAPTURE: 'Packing', RECEIPT: 'Receipt', RETURN_PACKING: 'Return packing', RETURN_RECEIPT: 'Return receipt' } as Record<string, string>)[e.evidence_type] ?? 'Evidence';
+    evidence.push({evidenceId:e.id,slot,committed:true as const,contentType,representation:media.representation,derivativeId:media.derivativeId??null,
+      ...(sharedSources ? {stageId:sharedSources.find(source => source.id === e.id)?.stage_id ?? null} : {}),
+      label:media.representation==='DERIVATIVE'?'Reviewed redacted copy':!sharedSources||slot==='Evidence'?'Original recording':`${slot} recording`});
   }
+  const statementRows = ctx.fields.includes('statements') ? (await db.query<AttestationRow & {role:string}>(
+    'SELECT a.*,p.role FROM attestations a JOIN proof_participants p ON p.id=a.participant_id WHERE a.proof_id=$1 ORDER BY a.created_at,a.id', [ctx.proofId])).rows : [];
+  const statements = statementRows.filter(row => !row.related_evidence_id || ctx.media.some(media => media.evidenceId===row.related_evidence_id)).map(row => ({
+    attestationId:row.id, relatedEvidenceId:row.related_evidence_id,
+    statement:row.authorization_json ? SELLER_SHIPPING_STATEMENT : row.statement==='PACKED_DESCRIBED_ITEM' ? 'Seller attested to packing the described item' : row.statement,
+    attributedTo:row.role==='SELLER'?'Seller account':'Buyer account', createdAt:new Date(row.created_at).toISOString(),
+    method:row.authorization_json?.method ?? 'PARTICIPANT_STATEMENT',
+    signatureVerification:row.authorization_json?.signatureVerification ?? 'NOT_CRYPTOGRAPHICALLY_VERIFIED',
+    biometricPolicy:row.authorization_json ? 'Strong biometric requested by Android; the server verifies the declaration signature.' : null,
+    hardwareOriginVerified:false, legalIdentityVerified:false,
+  }));
+  const recordHead=(await db.query<{sequence:string|number;sha256:string}>('SELECT sequence,sha256 FROM proof_supplements WHERE proof_id=$1 ORDER BY sequence DESC LIMIT 1',[ctx.proofId])).rows[0];
   const received=(await db.query('SELECT 1 FROM commerce_stages WHERE proof_id=$1 AND stage_type=\'RECEIPT\' AND finalized_at IS NOT NULL LIMIT 1',[ctx.proofId])).rows.length>0;
-  const value={schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
+  const record = await disclosedRecord(db,ctx);
+  const pendingEvidence = ctx.purpose === 'SHARED_PROOF' && ctx.fields.includes('evidence') && (await db.query(`SELECT 1 FROM evidence WHERE proof_id=$1 AND validation_status='PENDING'
+    UNION ALL SELECT 1 FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1 AND e.committed_at IS NULL AND e.discarded_at IS NULL LIMIT 1`,[ctx.proofId])).rows.length > 0;
+  const evidenceState = !ctx.fields.includes('evidence') ? {code:'NOT_SHARED',message:'Recordings are not included in this link'}
+    : pendingEvidence ? {code:'UPLOADING',message:'Evidence is still uploading'}
+    : evidence.length === 0 ? ctx.purpose === 'SHARED_PROOF' ? {code:'NOT_RECORDED',message:'Recording has not been added yet'} : {code:'NOT_SHARED',message:'Recordings are not included in this link'}
+    : {code:'AVAILABLE',message:proof.status === 'FINALIZED' ? 'Proof completed' : 'Recording added; confirmation is pending'};
+  const value={...record,evidenceState,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
     join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
     evidence:ctx.fields.includes('evidence')?evidence:[],
+    statements,
+    recordAsOf:{supplementSequence:Number(recordHead?.sequence??0),supplementSha256:recordHead?.sha256??null,scopeStatement:ctx.purpose==='SHARED_PROOF'?'This view includes the recordings and categories approved for this link.':'This view contains selected categories of the same Proof.'},
     observations:ctx.fields.includes('shipping')?custody.observations.map(o=>({label:o.label,occurredAt:o.occurredAt})):[],
     receipt:{mode:ctx.purpose==='PUBLIC_SAMPLE'?'SAMPLE':'LIVE',carrierReportedDelivered:shipping&&source.milestones.some(m=>m.code==='DELIVERED'&&m.state==='COMPLETE'),buyerReportedReceived:received,contributionRequiresVerification:true,contributionUrl:`/proof/${proof.id}/lifecycle`,message:'No buyer report is not acceptance. A receipt report is not a waiver.'},
-    disclosure:{policyVersion:ctx.policyVersion,grantId:ctx.grantId,scopeVersion:ctx.scopeVersion,purpose:ctx.purpose,fields:ctx.fields,revocationNotice:'Revoking a link prevents future access. It cannot recall files or screenshots already saved.'}};
+    disclosure:{policyVersion:ctx.policyVersion,grantId:ctx.grantId,scopeVersion:ctx.scopeVersion,purpose:ctx.purpose,fields:ctx.fields,
+      ...(ctx.purpose==='SHARED_PROOF'?{liveProof:true,sharingNotice:'Anyone with this link can view this Proof’s original recordings and future updates until access ends. Review recordings for private information before sharing.'}:{}),
+      revocationNotice:'Revoking a link prevents future access. It cannot recall files or screenshots already saved.'}};
   // Hash the exact disclosure content independent of the server-generated link id.
   const viewHash=sha256Hex(canonicalize({...value,disclosure:{...value.disclosure,grantId:null,scopeVersion:null}}));
   return {...value,disclosure:{...value.disclosure,viewHash}};
@@ -133,6 +184,8 @@ export async function createDisclosureGrant(db:Database,clock:Clock,actorUserId:
   return db.transaction(async tx=>{
     await loadProof(tx,proofId,true);
     const ctx=await validateDisclosureInput(tx,actorUserId,proofId,input);
+    if (ctx.purpose === 'SHARED_PROOF' && input.originalsReviewed !== true)
+      invalid('Review the Proof and approve sharing its original recordings and future updates before creating a link.');
     const preview=await getDisclosureProjection(tx,ctx);
     if(input.previewHash!==preview.disclosure.viewHash) throw new DomainError('DISCLOSURE_PREVIEW_CHANGED','Review the latest recipient preview before creating this link',409);
     let link;
@@ -148,24 +201,32 @@ export async function createDisclosureGrant(db:Database,clock:Clock,actorUserId:
     return {...link,preview:await getDisclosureProjection(tx,ctx)};
   });
 }
+/** Compatibility collector for small internal callers. HTTP archives and playback
+ * consume readDisclosedMediaStream directly and never buffer whole recordings. */
 export async function readDisclosedMedia(db:Database,clock:Clock,store:ObjectStore,token:string,evidenceId:string) {
-  const ctx=await resolveDisclosureContext(db,clock,{token});
-  const media=assertDisclosureMedia(ctx,evidenceId);
-  let result:{body:Buffer,contentType:string,evidenceId:string};
-  if(media.representation==='ORIGINAL') {
-    const creator=(await db.query<{user_id:string}>('SELECT pp.user_id FROM proof_access_links l JOIN proof_participants pp ON pp.id=l.created_by_participant_id WHERE l.id=$1',[ctx.grantId])).rows[0];
-    if(!creator) forbidden();
-    result=await readCommittedEvidence(db,store,creator.user_id,ctx.proofId,evidenceId);
-  } else {
-    const row=(await db.query<{object_key:string,sha256:string,byte_size:number,content_type:string}>('SELECT d.* FROM proof_media_derivatives d JOIN evidence e ON e.id=d.evidence_id AND e.proof_id=d.proof_id AND e.sha256=d.source_sha256 WHERE d.id=$1 AND d.proof_id=$2 AND d.evidence_id=$3 AND d.status=\'REVIEWED\'',[media.derivativeId,ctx.proofId,evidenceId])).rows[0];
-    if(!row) forbidden();
-    const stored=await store.get(row.object_key);
-    if(!stored||sha256Hex(stored.body)!==row.sha256||stored.body.length!==Number(row.byte_size)) throw new DomainError('DERIVATIVE_UNAVAILABLE','This redacted copy is unavailable',409);
-    result={body:stored.body,contentType:row.content_type,evidenceId};
-  }
-  // Reauthorize after fetching bytes; a scope change or revocation in flight fails closed.
-  const current=await resolveDisclosureContext(db,clock,{token});
-  if(current.scopeVersion!==ctx.scopeVersion||current.scopeIdentity!==ctx.scopeIdentity) forbidden();
-  assertDisclosureMedia(current,evidenceId,media.derivativeId);
-  return result;
+  const {readDisclosedMediaStream}=await import('./disclosure-stream.js');
+  const result=await readDisclosedMediaStream(db,clock,store,token,evidenceId);
+  if(!result.body)throw new DomainError('EVIDENCE_NOT_FOUND','Recording is unavailable',404);
+  if(result.byteSize>8*1024*1024){result.body.destroy();throw new DomainError('STREAMING_REQUIRED','Use the streamed recording or package download',413);}
+  const chunks:Buffer[]=[];let bytes=0;
+  try{for await(const chunk of result.body){bytes+=chunk.length;if(bytes>8*1024*1024)throw new DomainError('STREAMING_REQUIRED','Use the streamed recording or package download',413);chunks.push(Buffer.from(chunk));}}
+  finally{result.body.destroy();}
+  const body=Buffer.concat(chunks,bytes);
+  if(body.length!==result.byteSize||sha256Hex(body)!==result.sha256)throw new DomainError('EVIDENCE_INTEGRITY_FAILURE','Stored source failed verification',409);
+  return {body,contentType:result.contentType,evidenceId};
+}
+
+/** Reuse an already approved live scope. Tokens remain hash-only in persistence. */
+export async function reuseSharedProofLink(db:Database,clock:Clock,actorUserId:string,proofId:string,token:unknown,publicWebBaseUrl:string) {
+  return db.transaction(async tx => {
+    await requireParticipant(tx,proofId,actorUserId,'SELLER');
+    if(typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new DomainError('ACCESS_LINK_INVALID','This viewing link is not valid',404);
+    const row=(await tx.query<ProofAccessLinkRow>('SELECT * FROM proof_access_links WHERE proof_id=$1 AND token_hash=$2 FOR UPDATE',[proofId,sha256Hex(token)])).rows[0];
+    if(!row) throw new DomainError('ACCESS_LINK_INVALID','This viewing link is not valid',404);
+    if(row.revoked_at) throw new DomainError('ACCESS_LINK_REVOKED','This viewing link has been revoked',404);
+    if(row.expires_at && new Date(row.expires_at) <= clock.now()) throw new DomainError('ACCESS_LINK_EXPIRED','This viewing link has expired',404);
+    const ctx=await disclosureContextForLink(tx,row,clock.now());
+    if(ctx.purpose!=='SHARED_PROOF' || ctx.fields.length!==SHARED_PROOF_FIELDS.length || SHARED_PROOF_FIELDS.some(field=>!ctx.fields.includes(field))) forbidden();
+    return {...toAccessLinkView(row),token,url:`${publicWebBaseUrl.replace(/\/$/,'')}/p/${token}`};
+  });
 }

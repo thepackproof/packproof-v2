@@ -4,6 +4,7 @@ import type { Clock } from "../clock.js";
 import { DomainError } from "../domain/errors.js";
 import { newId } from "../ids.js";
 import { sha256Hex } from "../hash.js";
+import { assertPolicyAccessSafe } from "../domain/policy-recovery.js";
 
 export const API_SCOPES = [
   "proofs:read",
@@ -147,6 +148,7 @@ export async function authenticateApiKey(
   db: Database,
   authorization: string | undefined,
 ): Promise<ApiPrincipal> {
+  await assertPolicyAccessSafe(db);
   const token = authorization?.match(/^Bearer (pp_(?:sandbox|live)_[A-Za-z0-9_-]{43})$/)?.[1];
   if (!token) throw new DomainError("UNAUTHENTICATED", "A PackProof API key is required", 401);
   const found = await db.query<ApiPrincipal>(

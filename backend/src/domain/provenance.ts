@@ -106,6 +106,7 @@ export function readImportMetadata(metadata: unknown): ImportMetadata | null {
     payloadSha256:
       typeof importRecord.payloadSha256 === "string" ? importRecord.payloadSha256 : null,
     buyer: readBuyer(importRecord.buyer),
+    ...(importRecord.providerIdentifiers && typeof importRecord.providerIdentifiers === "object" && !Array.isArray(importRecord.providerIdentifiers) ? {providerIdentifiers: importRecord.providerIdentifiers as Record<string,unknown>} : {}),
   };
 }
 

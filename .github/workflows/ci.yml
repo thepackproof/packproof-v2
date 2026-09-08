@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+  VITE_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+
 permissions:
   contents: read
 
@@ -39,8 +43,17 @@ jobs:
         working-directory: mobile
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - run: npm test -- --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/backend-tests.xml"
       - run: npm run build
+      - name: Hash exact API build and migration set
+        run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/backend-bom.json" --api-dist dist --expected-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-release-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/backend-tests.xml
+            ${{ runner.temp }}/backend-bom.json
 
   web:
     name: Web
@@ -63,6 +76,23 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Record first deterministic web asset inventory
+        run: node --input-type=module -e 'import {inventoryTree} from "../scripts/release-bom.mjs"; process.stdout.write(JSON.stringify(await inventoryTree("dist")))' > "$RUNNER_TEMP/web-first.json"
+      - name: Rebuild and compare actual web bytes
+        run: |
+          npm run build
+          node --input-type=module -e 'import {inventoryTree} from "../scripts/release-bom.mjs"; process.stdout.write(JSON.stringify(await inventoryTree("dist")))' > "$RUNNER_TEMP/web-second.json"
+          cmp "$RUNNER_TEMP/web-first.json" "$RUNNER_TEMP/web-second.json"
+      - name: Hash exact web build and source identity
+        run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/web-bom.json" --web-dist dist --expected-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-release-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/web-first.json
+            ${{ runner.temp }}/web-second.json
+            ${{ runner.temp }}/web-bom.json
 
   mobile:
     name: Mobile
@@ -76,13 +106,85 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: |
+            mobile/package-lock.json
+            backend/package-lock.json
+      - name: Install shared timing and recovery test loader
+        run: npm ci
+        working-directory: backend
       - run: npm ci
+      - name: Install media tools for the canonical API contract test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - run: npm run typecheck
+      - run: npm run test:build-security
       - run: npm run test:proof-record
+      - run: npm run test:study-timing
+      - run: npm run test:redesign
+      - run: npm run test:recovery
+      - run: npm run test:api
+
+  native-attestation:
+    name: Android attestation Kotlin
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Install Android compile SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125'
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install
+      - name: Refuse changed tracked build inputs after prebuild
+        run: |
+          git diff --stat
+          git diff --exit-code --quiet
+          git diff --cached --exit-code --quiet
+      - name: Compile native attestation and unified camera against Android and Expo
+        working-directory: mobile/android
+        run: ./gradlew :packproof-attestation:compileReleaseKotlin :packproof-unified-camera:compileReleaseKotlin --no-daemon --console=plain
+
+      - name: Build explicitly debug-signed Android APK
+        working-directory: mobile/android
+        run: ./gradlew :app:assembleDebug --no-daemon --console=plain
+      - name: Record Android artifact and signing scope
+        run: |
+          git status --short --untracked-files=all
+          node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/android-debug-bom.json" --android-artifact android/app/build/outputs/apk/debug/app-debug.apk --expected-sha "$GITHUB_SHA"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging android/app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/android-debug-package.txt"
+          node --input-type=module -e 'process.stdout.write(JSON.stringify({schema:"packproof.android-build.v1",sourceSha:process.env.GITHUB_SHA,variant:"debug",signing:"generated debug keystore; not production release signing",distribution:"CI artifact only; debug build may require Metro",deviceVerification:"pending"},null,2))' > "$RUNNER_TEMP/android-debug-scope.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-debug-release-evidence-${{ github.sha }}
+          path: |
+            mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            ${{ runner.temp }}/android-debug-bom.json
+            ${{ runner.temp }}/android-debug-package.txt
+            ${{ runner.temp }}/android-debug-scope.json
 
   migrations-postgres:
-    name: PostgreSQL migration concurrency
+    name: PostgreSQL release invariants
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -105,11 +207,93 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
         working-directory: backend
-      - name: Verify concurrent PostgreSQL startup migrations
+      - run: npm ci
+        working-directory: mobile
+      - name: Install media validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Verify exact-source migrations, quotas, finalization and hold concurrency
         working-directory: backend
         env:
           PACKPROOF_MIGRATION_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
-        run: npm test -- tests/migrations.test.ts
+          PACKPROOF_RELEASE_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
+          PACKPROOF_REQUIRE_POSTGRES_RELEASE_GATES: '1'
+        run: npm test -- tests/migrations.test.ts tests/release-postgres.integration.test.ts --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/postgres-release-tests.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgres-release-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/postgres-release-tests.xml
+
+  dependency-audit:
+    name: Dependency audit (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [backend, web, mobile]
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.project }}/package-lock.json
+      - run: npm ci
+      - name: Block high and critical known dependency findings
+        run: npm audit --audit-level=high --json > "$RUNNER_TEMP/dependency-audit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-audit-${{ matrix.project }}-${{ github.sha }}
+          path: ${{ runner.temp }}/dependency-audit.json
+
+  source-security:
+    name: Source secrets and release tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify BOM refusal and artifact identity behavior
+        run: node --test scripts/release-bom.test.mjs scripts/publication-policy-gate.test.mjs
+      - name: Verify portable signatures and received supplement snapshots
+        run: |
+          python3 --version
+          openssl version
+          python3 -m unittest discover -s verifier -p 'test_*.py'
+      - name: Fetch pinned open-source secret scanner
+        run: docker pull ghcr.io/gitleaks/gitleaks:v8.30.1
+      - name: Scan repository history with redacted findings
+        run: docker run --rm --network=none --user "$(id -u):$(id -g)" -v "$GITHUB_WORKSPACE:/repo:ro" -v "$RUNNER_TEMP:/reports" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --config=/repo/.gitleaks.toml --redact=100 --report-format=json --report-path=/reports/gitleaks.json
+      - name: Print only redacted secret finding locations
+        if: always()
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = `${process.env.RUNNER_TEMP}/gitleaks.json`;
+          if (fs.existsSync(path)) {
+            const findings = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (!Array.isArray(findings)) throw new Error('Invalid scanner report');
+            for (const finding of findings) {
+              const location = {};
+              for (const key of ['RuleID', 'File', 'StartLine', 'EndLine', 'Commit', 'Fingerprint']) location[key] = finding[key] ?? null;
+              process.stdout.write(JSON.stringify(location) + '\n');
+            }
+          }
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: redacted-secret-scan-${{ github.sha }}
+          path: ${{ runner.temp }}/gitleaks.json
 
   deployment-scripts:
     name: Deployment scripts

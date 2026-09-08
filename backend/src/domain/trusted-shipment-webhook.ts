@@ -1,3 +1,5 @@
+import type { ManifestSigningRuntime } from '../integrity/signing-runtime.js';
+import { queueShippoNotification } from './shipment-notifications.js';
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { sha256Hex } from "../hash.js";
@@ -38,8 +40,15 @@ export async function ingestTrustedShipmentWebhook(
   deps: {
     integrations: IntegrationAdapterRegistry;
     credentials: IntegrationCredentialStore;
+    manifestSigning?: ManifestSigningRuntime;
   },
 ): Promise<TrustedShipmentSyncResult> {
+  // Shippo HMAC requires account provisioning. Default webhook handling makes
+  // no origin claim: durably schedule an authenticated API reconciliation.
+  if (adapterKey === 'shippo-tracker') {
+    await queueShippoNotification(db, clock, rawBody);
+    return {transactionId:'',proofId:'',connectionId:'',adapterKey,provider:'shippo',createdCount:0,eventCount:0,events:[],replayed:false};
+  }
   const started = Date.now();
   const adapter = deps.integrations.getTrustedShipment(adapterKey);
   const connections = await listActiveConnectionsForAdapter(db, adapter.adapterKey);
@@ -128,6 +137,7 @@ export async function ingestTrustedShipmentWebhook(
     verified.observations.map((observation) =>
       observationToImported(adapter, verified.carrier ?? null, observation),
     ),
+    deps.manifestSigning?.signer,
   );
   const replayed = await insertWebhookReceipt(db, clock, {
     adapterKey: adapter.adapterKey,

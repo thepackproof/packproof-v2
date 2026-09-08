@@ -24,7 +24,12 @@ export function RetentionPanel({
     [reason, setReason] = useState(""),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
-  const reload = async () => setState(await api.retentionRequest<Retention>(proofId));
+  const reload = async () => {
+    const result = await api.retentionRequest<Retention>(proofId);
+    if (!Array.isArray(result.holds) || !Array.isArray(result.deletionRequests) || !Array.isArray(result.blockers))
+      throw new Error("Preservation details are unavailable. Your Proof is unchanged.");
+    setState(result);
+  };
   useEffect(() => {
     void reload().catch((e) => setError(e.message));
   }, [api, proofId]);

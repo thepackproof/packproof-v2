@@ -13,7 +13,7 @@ export function parseShippoCredentials(credentials:IntegrationCredentials) {
   const apiKey = string(credentials.material.apiKey);
   const mode = apiKey.startsWith('shippo_test_') ? 'test' : apiKey.startsWith('shippo_live_') ? 'production' : null;
   if (!mode || (credentials.material.mode && credentials.material.mode!==mode)) throw providerAuthFailed();
-  return {apiKey,mode,webhookSecret:string(credentials.material.webhookSecret),registerWebhooks:credentials.material.registerWebhooks==='true'};
+  return {apiKey,mode,webhookSecret:string(credentials.material.webhookSecret),registerWebhooks:credentials.material.registerWebhooks==='true',hmacProvisioned:credentials.material.hmacProvisioned==='true'};
 }
 
 export function shippoCarrier(trackingNumber:string, hint?:string|null):string {
@@ -38,9 +38,9 @@ export function createShippoShipmentAdapter(client:ShippoTrackingClient = create
       }
       const carrier = shippoCarrier(trackingNumber,input.carrier);
       const cursor = `shippo:v1:${credentials.mode}:${carrier}:${trackingNumber}`;
-      // Polling works without account-manager approval. Register only after the
-      // operator has configured an authenticated webhook for this account/mode.
-      const register = credentials.registerWebhooks && Boolean(credentials.webhookSecret) && input.providerCursor!==cursor;
+      // Register externally purchased labels when enabled for this account/mode.
+      // Ordinary notifications trigger authenticated polling; HMAC is optional.
+      const register = credentials.registerWebhooks && input.providerCursor!==cursor;
       const tracker = await client.getTracking({carrier,trackingNumber,apiKey:credentials.apiKey,register,metadata:input.transactionId});
       assertMode(tracker,credentials.mode);
       if (trackingIdentity(string(tracker.tracking_number))!==trackingNumber || string(tracker.carrier).toLowerCase()!==carrier) throw providerResponseInvalid();
@@ -48,6 +48,7 @@ export function createShippoShipmentAdapter(client:ShippoTrackingClient = create
     },
     async verifyWebhook(input) {
       const credentials = parseShippoCredentials(input.credentials);
+      if (!credentials.hmacProvisioned) throw webhookSignatureInvalid();
       verifyShippoSignature(input.headers,input.rawBody,credentials.webhookSecret);
       let event:Record<string,unknown>|null;
       try {event=object(JSON.parse(input.rawBody.toString('utf8')));} catch {throw providerResponseInvalid();}

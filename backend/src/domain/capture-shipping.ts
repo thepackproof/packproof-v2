@@ -1,3 +1,4 @@
+import { assertSupportedParcelCapture } from './parcel-scope.js';
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
 import { sha256Hex } from '../hash.js';
@@ -26,6 +27,9 @@ export function shippingBarcode(raw: unknown) {
 export interface ShippingScanInput {
   rawValue: string; format: string; detectedAtMs: number;
   idempotencyKey: string; confirmed?: boolean;
+  source?: 'LIVE_CAMERA_ANALYSIS'|'ENCODED_VIDEO_FRAME'; decoderVersion?: string;
+  coordinateSpace?: string; observedAtUnixMs?: number;
+  frameWidth?: number; frameHeight?: number; bounds?: unknown;
 }
 export async function bindCaptureShipping(db: Database, clock: Clock, actor: string, proofId: string, sessionId: string, input: ShippingScanInput) {
   if (!input || typeof input.idempotencyKey !== 'string' || !input.idempotencyKey.trim() || input.idempotencyKey.length > 200 ||
@@ -35,12 +39,28 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
     throw new DomainError('INVALID_SHIPPING_SCAN', 'A barcode format, video offset and retry key are required', 400);
   await requireParticipant(db, proofId, actor, 'SELLER');
   const proof = await loadProof(db, proofId);
+  // Commit observations separately so a rejected association cannot erase them.
+  // Taking the ordinary context lock also serializes this append with finalization.
+  const observed = shippingBarcode(input.rawValue);
+  const observationId = observed ? await db.transaction(async tx => {
+    const context = await lockTransactionContext(tx, proof.transaction_id);
+    if (context.proofStatus === 'FINALIZED') return null;
+    const source = await loadCaptureSession(tx, actor, proofId, sessionId, true);
+    if (!['NATIVE_CAMERA','WEB_CAMERA'].includes(source.client) || source.stage_id || source.workflow_step !== 'PACKING' || source.state === 'CANCELLED'
+      || clock.now().getTime() > new Date(source.recover_until).getTime()
+      || (source.client_reported_context?.recordedDurationMs != null && input.detectedAtMs > source.client_reported_context.recordedDurationMs)) return null;
+    const contextInput = scanContext(input);
+    await tx.query(`INSERT INTO capture_label_observations(id,proof_id,session_id,actor_user_id,tracking_number,carrier_hint,detected_at_ms,barcode_format,received_at,raw_value,observation_context)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) ON CONFLICT(session_id,tracking_number) DO NOTHING`,
+      [newId('scan'),proofId,sessionId,actor,observed.trackingNumber,observed.carrierHint,input.detectedAtMs,input.format,clock.now().toISOString(),input.rawValue,JSON.stringify(contextInput)]);
+    return (await tx.query<{id:string}>('SELECT id FROM capture_label_observations WHERE session_id=$1 AND tracking_number=$2',[sessionId,observed.trackingNumber])).rows[0].id;
+  }) : null;
   return db.transaction(async tx => {
     // Same lock order as shipping edits/finalization; never hold locks over HTTP.
     const context = await lockTransactionContext(tx, proof.transaction_id);
     const session = await loadCaptureSession(tx, actor, proofId, sessionId, true);
-    if (session.client !== 'NATIVE_CAMERA' || session.stage_id || session.workflow_step !== 'PACKING' || session.state === 'CANCELLED')
-      throw new DomainError('SHIPPING_SCAN_SESSION_INVALID', 'Use an active native packing capture session', 409);
+    if (!['NATIVE_CAMERA','WEB_CAMERA'].includes(session.client) || session.stage_id || session.workflow_step !== 'PACKING' || session.state === 'CANCELLED')
+      throw new DomainError('SHIPPING_SCAN_SESSION_INVALID', 'Use an active packing capture session', 409);
     const candidate = shippingBarcode(input.rawValue);
     if (!candidate) return { status: 'UNRECOGNIZED' as const };
     const requestHash = sha256Hex(JSON.stringify({ ...candidate, format: input.format, detectedAtMs: input.detectedAtMs, confirmed: input.confirmed === true }));
@@ -55,16 +75,22 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
       throw new DomainError('SHIPPING_SCAN_SESSION_EXPIRED', 'This Proof is no longer accepting packing scans', 409);
     if (session.client_reported_context?.recordedDurationMs != null && input.detectedAtMs > session.client_reported_context.recordedDurationMs)
       throw new DomainError('INVALID_SHIPPING_SCAN', 'The scan falls outside the reported recording', 400);
+    await assertSupportedParcelCapture(tx,proof.transaction_id);
     const current = context.shipping?.tracking_number;
     const normalizedCurrent = current?.replace(/[ \t\r\n-]/g, '').toUpperCase();
-    if (!candidate.distinctive && normalizedCurrent !== candidate.trackingNumber && !input.confirmed)
-      return { status: 'NEEDS_CONFIRMATION' as const, ...candidate };
     if (normalizedCurrent && normalizedCurrent !== candidate.trackingNumber)
-      throw new DomainError('SHIPPING_LABEL_CONFLICT', 'This label differs from the tracking number already attached to this Proof. Keep recording and check the package.', 409);
+      return { status: 'CONFLICT' as const, ...candidate, observationId, currentTrackingNumber: current };
+    if (normalizedCurrent !== candidate.trackingNumber && !input.confirmed)
+      return { status: 'NEEDS_CONFIRMATION' as const, ...candidate, observationId };
     const duplicate = (await tx.query<{id:string}>('SELECT id FROM capture_shipping_labels WHERE session_id=$1 AND tracking_number=$2',[sessionId,candidate.trackingNumber])).rows[0];
     if (duplicate) return { status: 'BOUND' as const, ...candidate, observationId: duplicate.id, proofId, transactionId: proof.transaction_id };
+    if (observationId && (await tx.query('SELECT 1 FROM capture_label_resolutions WHERE observation_id=$1', [observationId])).rows.length) {
+      throw new DomainError('LABEL_RESOLUTION_CONFLICT', 'This label was recorded as belonging to another package and cannot be reassigned.', 409);
+    }
     const now = clock.now();
     if (!current) {
+      const confirmedDeclaration = await tx.query("SELECT 1 FROM attestations WHERE proof_id=$1 AND statement='PACKED_DESCRIBED_ITEM' LIMIT 1", [proofId]);
+      if (confirmedDeclaration.rows.length) throw new DomainError('ATTESTATION_CONTEXT_LOCKED', 'This recording has already been confirmed. Tracking must be recorded as a later attributed observation.', 409);
       if (context.shipping) await tx.query('UPDATE transaction_shipping SET tracking_number=$2,carrier=COALESCE(carrier,$3),updated_at=$4 WHERE transaction_id=$1', [proof.transaction_id,candidate.trackingNumber,candidate.carrierHint,now.toISOString()]);
       else await insertShipping(tx,proof.transaction_id,{trackingNumber:candidate.trackingNumber,carrier:candidate.carrierHint,service:null,shipmentDate:null},now.toISOString());
     }
@@ -86,4 +112,15 @@ export async function getCaptureShipping(db: Database, proofId: string) {
   return { source:'PACKPROOF_CAPTURE' as const, assurance:'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED' as const,
     observations:observations.map(o=>({observationId:o.id,sessionId:o.session_id,evidenceId:o.evidence_id,trackingNumber:o.tracking_number,carrierHint:o.carrier_hint,detectedAtMs:o.detected_at_ms,participantConfirmed:o.participant_confirmed})),
     registration:{state:job?.state??'QUEUED',carrier:job?.carrier??null,mode:job?.provider_mode??null,errorCode:job?.last_error_code??null,registeredAt:job?.registered_at ? new Date(job.registered_at).toISOString():null} };
+}
+
+function scanContext(input: ShippingScanInput): Record<string, unknown> {
+  if(input.source!==undefined&&!['LIVE_CAMERA_ANALYSIS','ENCODED_VIDEO_FRAME'].includes(input.source)) throw new DomainError('INVALID_SHIPPING_SCAN','Unsupported barcode observation source.',400);
+  if(input.decoderVersion!==undefined&&(typeof input.decoderVersion!=='string'||input.decoderVersion.length>100)) throw new DomainError('INVALID_SHIPPING_SCAN','Invalid decoder version.',400);
+  if(input.coordinateSpace!==undefined&&(typeof input.coordinateSpace!=='string'||input.coordinateSpace.length>100)) throw new DomainError('INVALID_SHIPPING_SCAN','Invalid coordinate space.',400);
+  for(const key of ['observedAtUnixMs','frameWidth','frameHeight'] as const) if(input[key]!==undefined&&(!Number.isSafeInteger(input[key])||input[key]!<0)) throw new DomainError('INVALID_SHIPPING_SCAN','Invalid observation coordinates or time.',400);
+  if(input.bounds!==undefined&&(typeof input.bounds!=='object'||input.bounds===null||JSON.stringify(input.bounds).length>500)) throw new DomainError('INVALID_SHIPPING_SCAN','Invalid barcode bounds.',400);
+  return {source:input.source??'LIVE_CAMERA_ANALYSIS',decoderVersion:input.decoderVersion??null,coordinateSpace:input.coordinateSpace??null,
+    observedAtUnixMs:input.observedAtUnixMs??null,frameWidth:input.frameWidth??null,frameHeight:input.frameHeight??null,bounds:input.bounds??null,
+    videoOffsetAssurance:'CLIENT_REPORTED_APPROXIMATE',assurance:'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED'};
 }

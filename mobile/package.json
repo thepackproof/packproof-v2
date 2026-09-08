@@ -5,13 +5,20 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "build:android:internal": "npx --yes eas-cli build --platform android --profile internal-staging --non-interactive",
-    "test:api": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts",
+    "test:api": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts tests/commerce-connections.test.ts",
     "test:camera-spike": "node --experimental-strip-types --test tests/camera-spike-model.test.ts",
-    "test:proof-record": "node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts"
+    "test:proof-record": "node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts",
+    "test:recovery": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-recovery.test.ts",
+    "postinstall": "node scripts/secure-build-dependencies.cjs",
+    "test:build-security": "node --test tests/build-dependency-security.test.cjs tests/release-identity.test.cjs",
+    "test:study-timing": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/study-timing.test.ts tests/native-study-timing.test.ts",
+    "android:go": "expo start --android",
+    "ios:go": "expo start --ios",
+    "test:redesign": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/sales-channels.test.ts tests/capture-label-review.test.ts tests/orders.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",
@@ -22,6 +29,7 @@
     "expo-asset": "~11.0.5",
     "expo-build-properties": "~0.13.3",
     "expo-camera": "~16.0.18",
+    "expo-clipboard": "~7.0.1",
     "expo-file-system": "~18.0.12",
     "expo-font": "~13.0.4",
     "expo-haptics": "~14.0.1",
@@ -37,6 +45,7 @@
   },
   "devDependencies": {
     "@types/react": "~18.3.12",
+    "image-size": "npm:image-size-next@1.2.2",
     "typescript": "~5.3.3"
   },
   "overrides": {
@@ -54,6 +63,8 @@
     },
     "xcode": {
       "uuid": "11.1.1"
-    }
+    },
+    "tar": "7.5.22",
+    "image-size": "npm:image-size-next@1.2.2"
   }
 }

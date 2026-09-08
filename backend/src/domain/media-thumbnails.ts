@@ -10,9 +10,10 @@ import {canonicalize} from '../canonical.js';
 import {sha256Hex} from '../hash.js';
 import {newId} from '../ids.js';
 import {requireParticipant} from './proof-access.js';
-import {readCommittedEvidence} from './evidence.js';
+import {spoolCommittedEvidence} from './media-files.js';
 import {DomainError} from './errors.js';
 const exec=promisify(execFile);
+const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=60','--fsize=2097152','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C'}});
 const VERSION='committed-source-thumbnail/v1';
 interface ThumbnailTransform {anchorId:string;sourceVersion:string;startMs:number;endMs:number;elapsedMs:number;removeAudio:true;stripMetadata:true;withheldIntervals:never[]}
 interface ThumbnailRow {id:string;proof_id:string;evidence_id:string;source_sha256:string;transform:ThumbnailTransform;status:string;sha256:string|null;object_key:string|null;content_type:string|null;byte_size:number|null;created_by_user_id:string;attempt_count:number;failure_code:string|null}
@@ -54,15 +55,14 @@ export async function processPendingThumbnails(db:Database,clock:Clock,store:Obj
   if(!claimed.rows[0])return {processed:0,failed:0};
   let dir:string|undefined;
   try {
-    const original=await readCommittedEvidence(db,store,pending.created_by_user_id,pending.proof_id,pending.evidence_id);
-    if(original.body.length>100*1024*1024||sha256Hex(original.body)!==pending.source_sha256)throw new Error('Source limit');
     dir=await mkdtemp(path.join(os.tmpdir(),'packproof-thumbnail-'));
     const input=path.join(dir,'source'),output=path.join(dir,'thumb.png');
-    await writeFile(input,original.body,{mode:0o600});
-    const probe=await exec('ffprobe',['-v','error','-protocol_whitelist','file,pipe','-show_entries','format=duration','-of','json',input],{timeout:10000,maxBuffer:64*1024});
+    const original=await spoolCommittedEvidence(db,store,pending.created_by_user_id,pending.proof_id,pending.evidence_id,input);
+    if(original.sha256!==pending.source_sha256)throw new Error('Source digest');
+    const probe=await boundedExec('ffprobe',['-v','error','-protocol_whitelist','file,pipe','-show_entries','format=duration','-of','json',input],{timeout:10000,maxBuffer:64*1024});
     const durationMs=Number(JSON.parse(probe.stdout).format?.duration)*1000;
     if(!Number.isFinite(durationMs)||pending.transform.elapsedMs>=durationMs||pending.transform.endMs>durationMs+100) throw new Error('Range unavailable');
-    await exec('ffmpeg',['-nostdin','-v','error','-y','-protocol_whitelist','file,pipe','-i',input,'-ss',String(pending.transform.elapsedMs/1000),'-map','0:v:0','-frames:v','1','-vf','scale=320:-2','-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',output],{timeout:60000,maxBuffer:1024*1024});
+    await boundedExec('ffmpeg',['-nostdin','-v','error','-threads','1','-filter_threads','1','-y','-protocol_whitelist','file,pipe','-i',input,'-ss',String(pending.transform.elapsedMs/1000),'-map','0:v:0','-threads','1','-frames:v','1','-vf','scale=320:-2','-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',output],{timeout:60000,maxBuffer:1024*1024});
     const body=await readFile(output),hash=sha256Hex(body),key=`derivatives/${pending.proof_id}/${pending.id}/${hash}`;
     if(!body.length||body.length>1024*1024)throw new Error('Output limit');
     await store.put(key,body,'image/png');

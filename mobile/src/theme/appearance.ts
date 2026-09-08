@@ -6,7 +6,8 @@ export function parseAppearancePreference(raw: string | null | undefined): Appea
   if (raw === "light" || raw === "dark" || raw === "system") {
     return raw;
   }
-  return "system";
+  // Missing values belong to the previous automatic default, not an explicit choice.
+  return "light";
 }
 
 export function resolveColorScheme(

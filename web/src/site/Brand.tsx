@@ -33,6 +33,6 @@ export function Glyph({ name = "arrow", size = 20 }: { name?: string; size?: num
 }
 
 export function Brand({ dark = false }: { dark?: boolean }) {
-  return <a className={`pp-brand ${dark ? "on-dark" : ""}`} href="/" aria-label="PackProof home"><img src="/packproof-logo.png" alt="" width="38" height="38" /><span>PackProof<span className="brand-dot">.</span></span></a>;
+  return <a className={`pp-brand ${dark ? "on-dark" : ""}`} href="/" aria-label="PackProof home"><img src="/brand/packproof-symbol.svg" alt="" width="38" height="38" /><span className="pp-brand-lettering" aria-hidden="true" /></a>;
 }
 

@@ -1,5 +1,33 @@
+import type { ProofRecovery } from "./capture/recovery-model";
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
 import { withRequestTimeout } from "./request-timeout";
+
+export interface ApiCapabilities {
+  schemaVersion: number;
+  capture: { protocolVersions: number[]; maxBytes: number; maxDurationSeconds: number; maxActiveUploads: number };
+  shippingReview?: { requiredForObservedConflicts: boolean; noLabelAllowed: boolean };
+  correctionPolicy?: { importedFactsReadOnly: boolean; captureBindingLocksManualDetails: boolean };
+  sellerAttestation: { contextBindingVersion?: number; challengeVersions: number[]; statementVersion: number; methods: string[] };
+  preservation: { receiptVersions: number[]; durableReceiptsRequired: boolean };
+  release: { commit: string | null; version: string | null };
+}
+
+export interface SellerAttestationAuthorization {
+  challengeId: string;
+  signature: string;
+}
+
+export interface SellerAttestationReceipt extends SellerAttestationAuthorization {
+  version: 1;
+  method: "ANDROID_BIOMETRIC_STRONG";
+  biometricMethodProvenance: "CLIENT_ASSERTED_NOT_INDEPENDENTLY_VERIFIED";
+  signatureVerification: "SERVER_VERIFIED";
+  algorithm: "ECDSA_SHA256";
+  payload: string;
+  publicKey: string;
+  publicKeySha256: string;
+  verifiedAt: string;
+}
 
 export type ProofStatus =
   | "OPEN"
@@ -28,6 +56,7 @@ export interface TransactionItemView {
 }
 
 export interface TransactionView {
+  correctionPolicy?: { canCorrectOrderDetails: boolean; canCorrectShipping: boolean; reason: string | null };
   transactionId: string;
   externalReference: string | null;
   transactionDate: string | null;
@@ -177,7 +206,10 @@ export interface ShipmentIntegrityView {
   verification: ShipmentIntegrityVerification;
 }
 
+import type { ProofPresentation } from "../../backend/src/domain/proof-presentation";
+
 export interface ProofView {
+  presentation?: ProofPresentation;
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
   transactionId: string;
@@ -220,6 +252,8 @@ export interface ProofView {
     evidenceType: string;
     validationStatus: string;
     submittedBy?: string;
+    captureSessionId?: string | null;
+    captureClient?: "NATIVE_CAMERA" | "WEB_CAMERA" | null;
     createdAt?: string;
     receivedAt?: string;
     sha256: string | null;
@@ -229,6 +263,21 @@ export interface ProofView {
     contentType?: string;
     digest?: { algorithm: string; sha256: string } | null;
   }>;
+  commerceStages?: Array<{
+    stageId: string;
+    type: string;
+    actorUserId: string;
+    createdAt: string;
+    finalizedAt: string | null;
+    sha256: string | null;
+    evidence: Array<{
+      evidenceId: string;
+      contentType: string;
+      committedAt: string | null;
+      sha256: string | null;
+      byteSize: number | string | null;
+    }>;
+  }>;
   attestations?: Array<{
     kind: "ATTESTATION" | string;
     attestationId: string;
@@ -237,6 +286,7 @@ export interface ProofView {
     relatedEvidenceId: string | null;
     createdAt: string;
     digest: { algorithm: string; sha256: string };
+    authorization?: SellerAttestationReceipt;
   }>;
   events?: Array<{
     eventId: string;
@@ -407,6 +457,10 @@ export interface InvitationInboxView {
 }
 
 export interface ProofCollectionItem {
+  accessKind?: "PARTICIPANT" | "INVITATION" | "RECEIVER";
+  presentation?: ProofPresentation;
+  invitationId?: string | null;
+  workflowType?: string;
   schema?: "packproof.proof.summary/v1" | string;
   proofId: string;
   transactionId: string;
@@ -422,6 +476,8 @@ export interface ProofCollectionItem {
     carrier: string | null;
     trackingNumber: string | null;
     service?: string | null;
+    provider?: string | null;
+    source?: string | null;
     transactionValue?: number | null;
     currency?: string | null;
   };
@@ -436,6 +492,7 @@ export interface ManifestView {
 }
 
 export interface UploadTarget {
+  received?: boolean;
   method: "PUT";
   url: string;
   headers: Record<string, string>;
@@ -464,6 +521,11 @@ export interface TransactionImportView {
 }
 
 export interface IntegrationConnectionView {
+  reviewOrderCount?: number;
+  reviewReasons?: Array<{ code: string; count: number }>;
+  autoSyncEnabled?: boolean;
+  sync?: { runStatus?: string; initialSyncCompletedAt?: string | null; nextRunAt?: string | null };
+  orderPolicy?: string;
   connectionId: string;
   adapterKey: string;
   provider: string;
@@ -516,6 +578,11 @@ export interface ConnectedAccountsListView {
 }
 
 export interface FulfillmentQueueItem {
+  provider?: string;
+  connectionId?: string;
+  transactionValue?: number | null;
+  currency?: string | null;
+  orderedAt?: string | null;
   transactionId: string;
   proofId: string;
   providerDisplay: string;
@@ -577,6 +644,17 @@ export class PackProofV2Client {
     },
   ) {}
 
+  get apiBaseUrl(): string { return this.options.baseUrl.replace(/\/+$/, ""); }
+
+  async studyRequest<T>(path:string,method="GET",body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
+  async getCapabilities(): Promise<ApiCapabilities> {
+    return this.request("/capabilities", { auth: false });
+  }
+
+  async getProofRecovery(proofId: string): Promise<ProofRecovery> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/recovery`);
+  }
+
   async login(subject: string): Promise<{ userId: string; token: string }> {
     return this.request("/auth/dev/login", {
       method: "POST",
@@ -611,7 +689,16 @@ export class PackProofV2Client {
   }
 
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
-    return this.request("/me/proofs");
+    const rows = new Map<string, ProofCollectionItem>();
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const page: { proofs: ProofCollectionItem[]; nextOffset?: number | null } = await this.request(`/me/proofs?view=all&limit=100&offset=${offset}`);
+      for (const item of page.proofs) rows.set(item.proofId, item);
+      if (page.nextOffset == null) break;
+      if (!Number.isFinite(page.nextOffset) || page.nextOffset <= offset) throw new Error("Proofs could not be loaded completely. Please refresh.");
+      offset = page.nextOffset;
+    }
+    return { proofs: [...rows.values()] };
   }
 
   async listIntegrationConnections(
@@ -621,8 +708,28 @@ export class PackProofV2Client {
     return this.request(`/me/integration-connections${query}`);
   }
 
+  async getAccountDeletionRequest(): Promise<{ request: null | { requestId: string; state: string; requestedAt: string; updatedAt: string }; retentionNotice: string }> {
+    return this.request("/me/account-deletion-request");
+  }
+
+  async requestAccountDeletion(): Promise<{ request: null | { requestId: string; state: string; requestedAt: string; updatedAt: string }; retentionNotice: string }> {
+    return this.request("/me/account-deletion-request", { method: "POST", body: { confirmation: "REQUEST_ACCOUNT_DELETION" } });
+  }
+
   async listConnectedAccounts(): Promise<ConnectedAccountsListView> {
     return this.request("/me/connected-accounts");
+  }
+
+  async setCommerceAutomation(connectionId: string, enabled: boolean): Promise<unknown> {
+    return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/automation`, {
+      method: "POST", body: { enabled },
+    });
+  }
+
+  async syncCommerceConnection(connectionId: string): Promise<unknown> {
+    return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/sync`, {
+      method: "POST", body: {},
+    });
   }
 
   async startConnectedAccountConnect(
@@ -924,9 +1031,19 @@ export class PackProofV2Client {
 
   async createAttestation(
     proofId: string,
-    input: { statement: string; relatedEvidenceId?: string },
+    input: { statement: string; relatedEvidenceId?: string; authorization?: SellerAttestationAuthorization },
   ): Promise<{ attestation: unknown; proof: ProofView }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/attestations`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  async createAttestationChallenge(
+    proofId: string,
+    input: { captureSessionId: string; sha256: string; publicKey: string },
+  ): Promise<{ challengeId: string; payload: string; expiresAt: string }> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/attestation-challenges`, {
       method: "POST",
       body: input,
     });
@@ -944,6 +1061,16 @@ export class PackProofV2Client {
 
   bindCaptureShipping(proofId: string, sessionId: string, scan: ShippingScan): Promise<ShippingScanResult> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-label`, {method: "POST", body: scan});
+  }
+
+  getCaptureShippingReview(proofId: string, sessionId: string): Promise<import("./capture/shipping-scan-queue").CaptureShippingReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations`);
+  }
+
+  resolveCaptureShippingObservation(proofId: string, sessionId: string, observationId: string, reason: string): Promise<import("./capture/shipping-scan-queue").CaptureShippingReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations/${encodeURIComponent(observationId)}/resolve`, {
+      method: "POST", body: { decision: "NOT_THIS_PACKAGE", reason },
+    });
   }
 
   async cancelCaptureSession(proofId: string, sessionId: string): Promise<unknown> {
@@ -992,6 +1119,7 @@ export class PackProofV2Client {
     proofId: string,
     input: {
       contentType: string;
+      byteSize?: number;
       evidenceType?: string;
       captureSessionId?: string;
       idempotencyKey: string;
@@ -1002,6 +1130,7 @@ export class PackProofV2Client {
       headers: { "Idempotency-Key": input.idempotencyKey },
       body: {
         contentType: input.contentType,
+        ...(input.byteSize !== undefined ? { byteSize: input.byteSize } : {}),
         evidenceType: input.evidenceType ?? "SELLER_EVIDENCE",
         captureSessionId: input.captureSessionId,
       },

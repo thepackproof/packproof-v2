@@ -9,9 +9,9 @@ export const AUTH_IDENTITY_PROVIDERS = [
   "x",
 ] as const;
 
-export const MARKETPLACE_PROVIDERS = ["ebay", "shopify"] as const;
+export const MARKETPLACE_PROVIDERS = ["ebay", "shopify", "etsy"] as const;
 
-export const CONNECTED_ACCOUNT_PROVIDERS = ["ebay", "shopify", "google", "facebook"] as const;
+export const CONNECTED_ACCOUNT_PROVIDERS = ["ebay", "shopify", "etsy", "google", "facebook"] as const;
 
 export type AuthIdentityProvider = (typeof AUTH_IDENTITY_PROVIDERS)[number];
 export type MarketplaceProvider = (typeof MARKETPLACE_PROVIDERS)[number];

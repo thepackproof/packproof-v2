@@ -15,7 +15,7 @@ export async function openDatabase(config: AppConfig, env: NodeJS.ProcessEnv = p
       region: config.awsRegion ?? "",
       expectedUsername: decodeURIComponent(new URL(config.databaseUrl).username),
     }) : undefined;
-    const opened = createPgDatabase(config.databaseUrl, passwordProvider);
+    const opened = createPgDatabase(config.databaseUrl, passwordProvider,env);
     return { ...opened, engine: "postgres" };
   }
   if (env.PACKPROOF_DB_SECRET_ARN?.trim()) {

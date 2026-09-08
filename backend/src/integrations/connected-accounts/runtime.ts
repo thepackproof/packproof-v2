@@ -2,6 +2,8 @@ import type { EbayRuntime } from "../../domain/ebay-marketplace.js";
 import type { IntegrationCredentialStore } from "../credentials.js";
 import { ConnectedAccountProviderRegistry } from "./registry.js";
 import { createEbayConnectedAccountProvider } from "./providers/ebay.js";
+import { createEtsyConnectedAccountProvider } from "./providers/etsy.js";
+import { disabledEtsyRuntime, type EtsyRuntime } from "../etsy/runtime.js";
 import {
   createShopifyConnectedAccountProvider,
   disabledShopifyRuntime,
@@ -21,6 +23,7 @@ import {
 export interface ConnectedAccountRuntimes {
   ebay: EbayRuntime;
   shopify: ShopifyOAuthRuntime;
+  etsy?: EtsyRuntime;
   google: GoogleOAuthRuntime;
   facebook: FacebookOAuthRuntime;
   credentials: IntegrationCredentialStore;
@@ -32,6 +35,7 @@ export function createConnectedAccountRegistry(
   return new ConnectedAccountProviderRegistry(
     new Map([
       ["ebay", createEbayConnectedAccountProvider({ runtime: input.ebay, credentials: input.credentials })],
+      ["etsy", createEtsyConnectedAccountProvider({ runtime: input.etsy ?? disabledEtsyRuntime(), credentials: input.credentials })],
       [
         "shopify",
         createShopifyConnectedAccountProvider({ runtime: input.shopify, credentials: input.credentials }),
@@ -49,6 +53,7 @@ export function disabledConnectedAccountRuntimes(
   return {
     ebay,
     shopify: disabledShopifyRuntime(),
+    etsy: disabledEtsyRuntime(),
     google: disabledGoogleRuntime(),
     facebook: disabledFacebookRuntime(),
     credentials,

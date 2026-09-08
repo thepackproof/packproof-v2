@@ -1,0 +1,339 @@
+{
+  "version": "packproof.operations.v1",
+  "status": "prepared_empty_registers",
+  "privacy": "Store identifiable consent/contact/legal source records in governed systems and use references here. Do not commit customer personal information or secrets.",
+  "tables": {
+    "merchantEnrollment": {
+      "requiredFields": [
+        "merchantRef",
+        "qualificationEvidenceRef",
+        "consentRef",
+        "enrolledAt",
+        "deviceClass",
+        "eligibilityRuleVersion",
+        "decisionWindowEnd",
+        "supportProcedureVersion",
+        "droppedOutAt"
+      ],
+      "rows": []
+    },
+    "reviewerCase": {
+      "requiredFields": [
+        "taskRef",
+        "caseRef",
+        "reviewerRef",
+        "consentRef",
+        "caseOrigin",
+        "issueType",
+        "assignmentGroup",
+        "answerKeyVersion",
+        "sourceSnapshotRef",
+        "startedAt",
+        "completedAt",
+        "technicalAcceptance",
+        "legibility",
+        "comprehension",
+        "preparationSeconds",
+        "unsupportedConclusion",
+        "failureCode"
+      ],
+      "rows": []
+    },
+    "prospect": {
+      "requiredFields": [
+        "prospectRef",
+        "qualificationEvidenceRef",
+        "channel",
+        "eligibleMonthlyShipments",
+        "expectedCoverage",
+        "observedCoverage",
+        "governedContactRef",
+        "testedContractValueMinor",
+        "acquisitionMinutes",
+        "conversionStage",
+        "retentionObserved"
+      ],
+      "rows": []
+    },
+    "supportLog": {
+      "requiredFields": [
+        "supportRef",
+        "merchantRef",
+        "occurredAt",
+        "phase",
+        "minutes",
+        "boundedReasonCode",
+        "operatorRef"
+      ],
+      "rows": []
+    },
+    "offer": {
+      "requiredFields": [
+        "offerId",
+        "version",
+        "status",
+        "currency",
+        "priceMinor",
+        "recordingAllowance",
+        "byteAllowance",
+        "durationSeconds",
+        "retentionPolicyVersion",
+        "supplementTerms",
+        "overageConsentPolicy",
+        "cancellationTermsRef",
+        "approvedBy",
+        "approvedAt",
+        "effectiveAt"
+      ],
+      "rows": []
+    },
+    "costReconciliation": {
+      "requiredFields": [
+        "periodStart",
+        "periodEnd",
+        "sourceInvoiceRefs",
+        "paymentSourceRef",
+        "usageReportRef",
+        "supportLaborRateMinorPerHour",
+        "missingCategories",
+        "unexplainedDifferenceMinor",
+        "reviewedBy",
+        "reviewedAt"
+      ],
+      "rows": []
+    },
+    "decision": {
+      "requiredFields": [
+        "decisionId",
+        "gate",
+        "evidenceRefs",
+        "rawCounts",
+        "missingness",
+        "cause",
+        "correctiveExperiment",
+        "owner",
+        "retestAt",
+        "decision",
+        "approvedBy"
+      ],
+      "rows": []
+    },
+    "claim": {
+      "requiredFields": [
+        "claimId",
+        "exactWording",
+        "surface",
+        "capabilityState",
+        "evidenceRef",
+        "scope",
+        "limitations",
+        "approvedBy",
+        "approvedAt",
+        "reviewDueAt"
+      ],
+      "rows": []
+    },
+    "legalDocket": {
+      "requiredFields": [
+        "matterId",
+        "actualFilingRef",
+        "qualifiedAdviceRef",
+        "verifiedDeadline",
+        "requiredAction",
+        "primaryOwner",
+        "backupOwner",
+        "completedEvidenceRef"
+      ],
+      "rows": []
+    }
+  },
+  "proposedClaims": [
+    {
+      "claimId": "positioning",
+      "exactWording": "Neutral Evidence Infrastructure for E-Commerce",
+      "status": "pending_release_and_owner_review",
+      "evidenceRefs": [],
+      "limitation": "Brand positioning, not certification",
+      "approvedBy": null,
+      "reviewDueAt": null
+    },
+    {
+      "claimId": "workflow",
+      "exactWording": "Record the item being packed, connect the recording and shipment information to the order, and retrieve relevant evidence when a question arises.",
+      "status": "pending_release_and_owner_review",
+      "evidenceRefs": [],
+      "limitation": "Verify each described released surface before publication",
+      "approvedBy": null,
+      "reviewDueAt": null
+    },
+    {
+      "claimId": "integrity",
+      "exactWording": "Integrity verification compares preserved bytes and signatures against trusted records.",
+      "status": "pending_release_and_owner_review",
+      "evidenceRefs": [],
+      "limitation": "Does not establish physical truth, authenticity, uninterrupted custody or guaranteed dispute success",
+      "approvedBy": null,
+      "reviewDueAt": null
+    },
+    {
+      "claimId": "delivery",
+      "exactWording": "Carrier-reported delivery is a shipment observation.",
+      "status": "pending_release_and_owner_review",
+      "evidenceRefs": [],
+      "limitation": "Does not verify contents or recipient identity",
+      "approvedBy": null,
+      "reviewDueAt": null
+    },
+    {
+      "claimId": "biometric",
+      "exactWording": "Seller confirmation uses supported strong biometric authentication on compatible Android devices.",
+      "status": "pending_release_and_owner_review",
+      "evidenceRefs": [],
+      "limitation": "Only publish for a verified released path; account attribution is not legal identity verification",
+      "approvedBy": null,
+      "reviewDueAt": null
+    },
+    {
+      "claimId": "sample",
+      "exactWording": "This demonstration uses synthetic order details.",
+      "status": "pending_release_and_owner_review",
+      "evidenceRefs": [],
+      "limitation": "Keep visible until replaced by a consented real demonstration",
+      "approvedBy": null,
+      "reviewDueAt": null
+    }
+  ],
+  "competitiveReview": {
+    "status": "not_freshly_evaluated",
+    "evaluatedAt": null,
+    "benchmark": [
+      "find correct recording",
+      "recover interrupted capture",
+      "locate source frame",
+      "prepare destination-compatible packet",
+      "retrieve later"
+    ],
+    "comparisons": [
+      {
+        "name": "Phone camera and folders",
+        "assessmentRole": "baseline substitute",
+        "freshPrimarySourceRefs": [],
+        "observedTaskResults": [],
+        "currentPrice": null,
+        "retentionDurationResolution": null,
+        "reviewDueAt": null
+      },
+      {
+        "name": "vAudit",
+        "assessmentRole": "packing records",
+        "freshPrimarySourceRefs": [],
+        "observedTaskResults": [],
+        "currentPrice": null,
+        "retentionDurationResolution": null,
+        "reviewDueAt": null
+      },
+      {
+        "name": "Parcel Proof Video",
+        "assessmentRole": "packing records",
+        "freshPrimarySourceRefs": [],
+        "observedTaskResults": [],
+        "currentPrice": null,
+        "retentionDurationResolution": null,
+        "reviewDueAt": null
+      },
+      {
+        "name": "Vimaan PackVIEW",
+        "assessmentRole": "packing and quantity error prevention",
+        "freshPrimarySourceRefs": [],
+        "observedTaskResults": [],
+        "currentPrice": null,
+        "retentionDurationResolution": null,
+        "reviewDueAt": null
+      },
+      {
+        "name": "Chargeflow",
+        "assessmentRole": "evidence/dispute handling",
+        "freshPrimarySourceRefs": [],
+        "observedTaskResults": [],
+        "currentPrice": null,
+        "retentionDurationResolution": null,
+        "reviewDueAt": null
+      },
+      {
+        "name": "Shipping protection",
+        "assessmentRole": "financial coverage under terms",
+        "freshPrimarySourceRefs": [],
+        "observedTaskResults": [],
+        "currentPrice": null,
+        "retentionDurationResolution": null,
+        "reviewDueAt": null
+      }
+    ]
+  },
+  "reachableMarketModel": {
+    "formula": "qualified reachable merchants × measured eligible shipments × observed coverage × tested unit/allowance price × measured retention",
+    "forecast": null,
+    "notRevenue": [
+      "returned-merchandise totals",
+      "headline fraud losses",
+      "unqualified community members"
+    ]
+  },
+  "accountability": [
+    {
+      "role": "release",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    },
+    {
+      "role": "preservation",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    },
+    {
+      "role": "mobile/web",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    },
+    {
+      "role": "product/design",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    },
+    {
+      "role": "integration/export",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    },
+    {
+      "role": "operations/security",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    },
+    {
+      "role": "research/commercial",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    },
+    {
+      "role": "qualified legal/IP",
+      "namedOwner": null,
+      "backupOwner": null,
+      "procedureRef": null
+    }
+  ],
+  "weeklyAgenda": [
+    "new verified evidence and raw counts",
+    "highest preservation/access risk",
+    "G1-G4 status",
+    "failed metric and corrective experiment",
+    "named owner and bounded retest"
+  ]
+}

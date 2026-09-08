@@ -6,6 +6,7 @@ import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence
 import { finalizeProof } from "../src/domain/finalize.js";
 import { acceptInvitation, createInvitation } from "../src/domain/invitations.js";
 import { createTransaction, updateShipping } from "../src/domain/transactions.js";
+import { bindCaptureShipping, getCaptureShipping } from "../src/domain/capture-shipping.js";
 import { sha256Hex } from "../src/hash.js";
 import { prepareCameraCapture, auth, createHarness, login, type TestHarness } from "./helpers.js";
 
@@ -30,8 +31,8 @@ async function resolve(harness: TestHarness, seller: string, reference: string) 
     .send({ reference });
 }
 
-async function commitVideo(harness: TestHarness, seller: string, proofId: string) {
-  const recording=await prepareCameraCapture(harness,seller,proofId,`station-session-${proofId}`);
+async function commitVideo(harness: TestHarness, seller: string, proofId: string, existingRecording?: Awaited<ReturnType<typeof prepareCameraCapture>>) {
+  const recording=existingRecording ?? await prepareCameraCapture(harness,seller,proofId,`station-session-${proofId}`);
   const bytes = recording.bytes;
   const upload = await initializeEvidenceUpload(
     harness.db,
@@ -120,10 +121,13 @@ describe("packing station resolve", () => {
     await connectAndSync(harness, seller);
     const resolved = await resolve(harness, seller, "DS-1002");
     expect(resolved.status).toBe(200);
-    await updateShipping(harness.db, harness.clock, seller, resolved.body.transactionId, {
-      carrier: "USPS",
-      trackingNumber: "9400111899223344556677",
-    });
+    await expect(updateShipping(harness.db, harness.clock, seller, resolved.body.transactionId, {
+      carrier: "USPS", trackingNumber: "9400111899223344556677",
+    })).rejects.toMatchObject({code:"IMPORTED_FACTS_READ_ONLY"});
+    const recording=await prepareCameraCapture(harness,seller,resolved.body.proofId,"station-label-in-video");
+    expect(await bindCaptureShipping(harness.db,harness.clock,seller,resolved.body.proofId,recording.captureSessionId,{
+      rawValue:"9400111899223344556677",format:"CODE_128",detectedAtMs:0,idempotencyKey:"station-label",confirmed:true,
+    })).toMatchObject({status:"BOUND",proofId:resolved.body.proofId,transactionId:resolved.body.transactionId});
 
     const byTrack = await resolve(harness, seller, "9400111899223344556677");
     expect(byTrack.status).toBe(200);
@@ -147,7 +151,8 @@ describe("packing station resolve", () => {
     expect(noisy.status).toBe(200);
     expect(noisy.body.transactionId).toBe(resolved.body.transactionId);
 
-    await commitVideo(harness, seller, resolved.body.proofId);
+    const committed=await commitVideo(harness, seller, resolved.body.proofId, recording);
+    expect((await getCaptureShipping(harness.db,resolved.body.proofId))?.observations[0]).toMatchObject({sessionId:recording.captureSessionId,evidenceId:committed.evidenceId,trackingNumber:"9400111899223344556677"});
     await commitAttestation(harness.db, harness.clock, seller, resolved.body.proofId, {
       statement: "PACKED_DESCRIBED_ITEM",
     });

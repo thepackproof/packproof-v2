@@ -78,7 +78,7 @@ describe("signature experiences preserve source, snapshot, consent and approval 
     expect(eventAnchor.startMs).toBeNull();
   });
 
-  it("cites original imported fields separately from later seller corrections", async () => {
+  it("blocks imported-field overwrites while retaining distinct citations for historical seller corrections", async () => {
     const seller = await createUser(h);
     const imported = await importNormalizedTransaction(h.db, h.clock, seller, {
       provider: "demo-marketplace", externalTransactionId: "SIGNATURE-SOURCE-1", itemTitle: "Imported card", quantity: 2,
@@ -87,7 +87,13 @@ describe("signature experiences preserve source, snapshot, consent and approval 
     const proofId = imported.proof!.proofId;
     const before = await createSignatureSnapshot(h.db, h.clock, seller, proofId);
     expect(before.data.order.fieldSources?.itemTitle).toBe("PROVIDER_REPORTED_FIELD");
-    await updateTransaction(h.db, h.clock, seller, imported.transaction.transactionId, { itemTitle: "Seller corrected card" });
+    await expect(updateTransaction(h.db, h.clock, seller, imported.transaction.transactionId, { itemTitle: "Seller corrected card" })).rejects.toMatchObject({code:"IMPORTED_FACTS_READ_ONLY"});
+    const protectedSnapshot = await createSignatureSnapshot(h.db, h.clock, seller, proofId);
+    expect(protectedSnapshot.data.order.itemTitle).toBe("Imported card");
+    expect(protectedSnapshot.data.order.fieldSources).toMatchObject({itemTitle:"PROVIDER_REPORTED_FIELD",quantity:"PROVIDER_REPORTED_FIELD"});
+    // Historical fixture from before source locking; no current edit command permits this overwrite.
+    await h.db.query("UPDATE transactions SET item_title=$2,transaction_metadata=jsonb_set(transaction_metadata,'{sellerCorrections}',$3::jsonb) WHERE id=$1",
+      [imported.transaction.transactionId,"Legacy seller-corrected card",JSON.stringify({itemTitle:{actorUserId:seller,editedAt:h.clock.now().toISOString(),source:"PARTICIPANT_SUPPLIED"}})]);
     const after = await createSignatureSnapshot(h.db, h.clock, seller, proofId);
     expect(after.data.order.fieldSources).toMatchObject({ itemTitle: "PARTICIPANT_SUPPLIED_STATEMENT", quantity: "PROVIDER_REPORTED_FIELD" });
     const answer = await askSignatureProof(h.db, seller, proofId, { snapshotId: after.snapshotId, question: "What item was ordered?" });
@@ -166,7 +172,7 @@ describe("signature experiences preserve source, snapshot, consent and approval 
     await completeCaptureSession(h.db, h.clock, buyer, proof.proofId, capture.id, { sha256: sha256Hex(bytes), byteSize: bytes.length, contentType: "video/mp4" });
     const upload = await initializeStageEvidence(h.db, h.clock, h.objectStore, buyer, proof.proofId, stage.stageId,
       { contentType: "video/mp4", captureSessionId: capture.id, idempotencyKey: "receipt" });
-    await h.objectStore.putUpload(new URL(upload.upload.url).pathname.split("/").at(-1)!, bytes, "video/mp4");
+    await request(h.app).put(new URL(upload.upload.url).pathname).set("Content-Type","video/mp4").send(bytes).expect(200);
     await commitStageEvidence(h.db, h.clock, h.objectStore, buyer, proof.proofId, stage.stageId, upload.evidenceId, sha256Hex(bytes));
     const inbound = await createSignatureAnchor(h.db, h.clock, buyer, proof.proofId, { evidenceId: upload.evidenceId,
       stageId: stage.stageId, startMs: 0, endMs: 100, label: "Receipt identifier", sourceType: "USER_MARKED", idempotencyKey: "inbound" });

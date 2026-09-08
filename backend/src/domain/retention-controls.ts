@@ -5,6 +5,8 @@ import { appendAudit } from "./audit.js";
 import { newId } from "../ids.js";
 import { requireCommerceAccess } from "./commerce-lifecycle.js";
 import { DomainError } from "./errors.js";
+import { assertHoldAdmissionOpen, evaluateProofDisposition } from "./retention-policy.js";
+import { enqueueRecoveryEvent, buildProofRecoverySnapshot } from "./recovery-journal.js";
 
 async function requireRetentionAccess(db: Database, proofId: string, userId: string) {
   const member = await db.query(
@@ -28,7 +30,7 @@ export async function getRetentionControls(
   const proof = await loadProof(db, proofId);
   const holds = (
     await db.query(
-      `SELECT id,created_by AS "createdBy",reason,created_at AS "createdAt",released_at AS "releasedAt" FROM proof_retention_holds WHERE proof_id=$1 ORDER BY created_at,id`,
+      `SELECT id,created_by AS "createdBy",reason,scope,review_at AS "reviewAt",release_protect_until AS "releaseProtectUntil",created_at AS "createdAt",released_at AS "releasedAt" FROM proof_retention_holds WHERE proof_id=$1 ORDER BY created_at,id`,
       [proofId],
     )
   ).rows;
@@ -59,15 +61,18 @@ export async function getRetentionControls(
       [proofId],
     )
   ).rows;
+  const disposition = await evaluateProofDisposition(db, clock, proofId);
   return {
-    policyVersion: 1,
+    policyVersion: 2,
     standardWindowDays: 90,
     automaticDeletion: false,
-    protectedUntil,
+    protectedUntil: disposition.protectedUntil ?? protectedUntil,
     holds,
     deletionRequests: requests,
-    blockers,
+    blockers: [...new Set([...blockers, ...disposition.blockers])],
     eligibleForDeletionReview: !blockers.length,
+    eligibleForDisposition: disposition.eligibleForDisposition,
+    dispositionState: disposition.dispositionState,
   };
 }
 export async function createRetentionHold(
@@ -81,6 +86,7 @@ export async function createRetentionHold(
   return db.transaction(async (tx) => {
     await requireRetentionAccess(tx, proofId, userId);
     await loadProof(tx, proofId, true);
+    await assertHoldAdmissionOpen(tx, proofId);
     const found = await tx.query<{ id: string }>(
       "SELECT id FROM proof_retention_holds WHERE proof_id=$1 AND created_by=$2 AND reason=$3 AND released_at IS NULL",
       [proofId, userId, text],
@@ -88,8 +94,8 @@ export async function createRetentionHold(
     if (found.rows[0]) return { id: found.rows[0].id };
     const id = newId("hold");
     await tx.query(
-      "INSERT INTO proof_retention_holds(id,proof_id,created_by,reason,created_at) VALUES($1,$2,$3,$4,$5)",
-      [id, proofId, userId, text, clock.now().toISOString()],
+      "INSERT INTO proof_retention_holds(id,proof_id,created_by,reason,created_at,review_at) VALUES($1,$2,$3,$4,$5,$6)",
+      [id, proofId, userId, text, clock.now().toISOString(), new Date(clock.now().getTime() + 30 * 86400000).toISOString()],
     );
     await appendAudit(tx, {
       proofId,
@@ -98,6 +104,7 @@ export async function createRetentionHold(
       eventData: { holdId: id },
       at: clock.now(),
     });
+    await enqueueRecoveryEvent(tx, clock, { operationId: `hold-created:${id}`, kind: "RETENTION_CHANGED", proofId, actorUserId: userId, payload: await buildProofRecoverySnapshot(tx, proofId) });
     return { id };
   });
 }
@@ -110,9 +117,13 @@ export async function releaseRetentionHold(
 ) {
   return db.transaction(async (tx) => {
     await requireRetentionAccess(tx, proofId, userId);
+    await loadProof(tx, proofId, true);
+    await assertHoldAdmissionOpen(tx, proofId);
+    const policies = (await tx.query<{policy_json: {afterHoldReleaseDays?: number}}>("SELECT policy_json FROM proof_retention_assignments WHERE proof_id=$1", [proofId])).rows;
+    const releaseDays = Math.max(30, ...policies.map(row => row.policy_json.afterHoldReleaseDays ?? 30));
     const result = await tx.query(
-      "UPDATE proof_retention_holds SET released_at=$4 WHERE id=$1 AND proof_id=$2 AND created_by=$3 AND released_at IS NULL RETURNING id",
-      [holdId, proofId, userId, clock.now().toISOString()],
+      "UPDATE proof_retention_holds SET released_at=$4,release_protect_until=$5 WHERE id=$1 AND proof_id=$2 AND created_by=$3 AND released_at IS NULL RETURNING id",
+      [holdId, proofId, userId, clock.now().toISOString(), new Date(clock.now().getTime() + releaseDays * 86400000).toISOString()],
     );
     if (!result.rows[0])
       throw new DomainError(
@@ -127,6 +138,7 @@ export async function releaseRetentionHold(
       eventData: { holdId },
       at: clock.now(),
     });
+    await enqueueRecoveryEvent(tx, clock, { operationId: `hold-released:${holdId}`, kind: "RETENTION_CHANGED", proofId, actorUserId: userId, payload: await buildProofRecoverySnapshot(tx, proofId) });
     return { released: true };
   });
 }
@@ -164,6 +176,7 @@ export async function requestProofDeletion(
       eventData: { requestId: result.rows[0].id },
       at: clock.now(),
     });
+    await enqueueRecoveryEvent(tx, clock, { operationId: `deletion-request:${result.rows[0].id}`, kind: "RETENTION_CHANGED", proofId, actorUserId: userId, payload: await buildProofRecoverySnapshot(tx, proofId) });
     return {
       id: result.rows[0].id,
       state: "REQUESTED",

@@ -1,0 +1,31 @@
+import { generateKeyPairSync, sign } from 'node:crypto';
+import request from 'supertest';
+import { afterEach, expect, it } from 'vitest';
+import { auth, createHarness, createUser, type TestHarness } from './helpers.js';
+import { createServerApp } from '../src/server-app.js';
+import { BearerUserAdapter } from '../src/auth/adapter.js';
+import { configurePolicyDurability, processPolicyRecoveryOutbox } from '../src/domain/policy-recovery.js';
+import type { RecoveryPublisher } from '../src/domain/recovery-journal.js';
+
+let harness: TestHarness | undefined;
+afterEach(async()=>{await harness?.close();harness=undefined;});
+it('strict HTTP creation, invitation acceptance and capture writes make progress after signed policy publication',async()=>{
+ const clock={now:()=>new Date('2026-09-07T12:00:00Z')};harness=await createHarness(clock);const h=harness;
+ const seller=await createUser(h),buyer=await createUser(h),key=generateKeyPairSync('ec',{namedCurve:'prime256v1'}),publicKey=key.publicKey.export({type:'spki',format:'pem'}).toString(),objects=new Map<string,Buffer>();
+ const publisher:RecoveryPublisher={protectedStoreVerified:true,writerGeneration:'initial',trustedPublicKey:async id=>id==='http-policy-fixture'?publicKey:null,signer:{signManifest:async input=>({algorithm:'ECDSA_SHA_256',keyId:'http-policy-fixture',signedAt:clock.now().toISOString(),signatureBase64:sign('sha256',Buffer.from(input.canonicalJson),key.privateKey).toString('base64')})},store:{putIfAbsent:async(k,b)=>{if(objects.has(k))return{created:false};objects.set(k,b);return{created:true};},get:async k=>objects.has(k)?{body:objects.get(k)!,contentType:'application/json'}:null,head:async k=>objects.has(k)?{versionId:'protected-http-test-version'}:null}};
+ const drain=async()=>{for(let i=0;i<100;i++){const r=await processPolicyRecoveryOutbox(h.db,clock,publisher);expect(r.state).not.toBe('DEAD_LETTER');if(!r.processed)return;}throw new Error('Policy fixture did not drain');};
+ await drain();await configurePolicyDurability(h.db,{required:true});
+ const app=createServerApp({db:h.db,clock,objectStore:h.objectStore,auth:new BearerUserAdapter(h.db),publicBaseUrl:'http://127.0.0.1',devAuth:true,credentialStore:h.credentialStore,requireDurableReceipts:true,ebayDeletionSignatureVerifier:async()=>undefined});
+ const transaction=await request(app).post('/transactions').set(auth(seller)).send({itemTitle:'Strict policy fixture',quantity:1});expect(transaction.status,JSON.stringify(transaction.body.error)).toBe(201);
+ const created=await request(app).post(`/transactions/${transaction.body.transactionId}/proof`).set(auth(seller)).send({});expect(created.status,JSON.stringify(created.body.error)).toBe(200);const proofId=created.body.proofId;
+ await drain();
+ const invited=await request(app).post(`/proofs/${proofId}/invitations`).set(auth(seller)).send({inviteeUserId:buyer});expect(invited.status,JSON.stringify(invited.body.error)).toBe(201);
+ await drain();
+ const accepted=await request(app).post(`/invitations/${invited.body.invitation.invitationId}/accept`).set(auth(buyer)).send({});expect(accepted.status,JSON.stringify(accepted.body.error)).toBe(200);
+ await drain();
+ const visible=await request(app).get(`/proofs/${proofId}`).set(auth(buyer));expect(visible.status,JSON.stringify(visible.body.error)).toBe(200);
+ const session=await request(app).post(`/proofs/${proofId}/capture-sessions`).set(auth(seller)).send({client:'WEB_CAMERA',idempotencyKey:'strict-http-capture'});expect(session.status,JSON.stringify(session.body.error)).toBe(201);
+ const completed=await request(app).post(`/proofs/${proofId}/capture-sessions/${session.body.id}/complete`).set(auth(seller)).send({sha256:'a'.repeat(64),byteSize:20,contentType:'video/mp4',recordedDurationMs:1000});expect(completed.status,JSON.stringify(completed.body.error)).toBe(200);
+ const recovered=await request(app).post(`/proofs/${proofId}/capture-sessions/${session.body.id}/recover`).set(auth(seller)).send({});expect(recovered.status,JSON.stringify(recovered.body.error)).toBe(200);
+ const duplicate=await request(app).post(`/proofs/${proofId}/capture-sessions`).set(auth(seller)).send({client:'WEB_CAMERA',idempotencyKey:'strict-http-capture'});expect(duplicate.status,JSON.stringify(duplicate.body.error)).toBe(201);expect(duplicate.body.id).toBe(session.body.id);
+},30000);

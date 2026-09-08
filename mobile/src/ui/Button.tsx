@@ -82,7 +82,7 @@ function buttonPalette(
 ): { background: string; foreground: string; border: string; borderWidth: number } {
   switch (variant) {
     case "secondary":
-      return { background: colors.surface, foreground: colors.textPrimary, border: colors.textPrimary, borderWidth: 1 };
+      return { background: colors.surface, foreground: colors.textPrimary, border: colors.border, borderWidth: 1 };
     case "tertiary":
       return { background: "transparent", foreground: colors.textPrimary, border: "transparent", borderWidth: 0 };
     case "success":
@@ -103,8 +103,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
-  labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  label: { ...typography.button, textAlign: "center" },
+  labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, maxWidth: "100%" },
+  label: { ...typography.button, textAlign: "center", flexShrink: 1 },
   icon: {
     minWidth: sizes.touch,
     minHeight: sizes.touch,

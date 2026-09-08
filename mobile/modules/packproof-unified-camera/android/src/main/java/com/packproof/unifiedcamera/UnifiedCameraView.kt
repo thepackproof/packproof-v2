@@ -64,7 +64,6 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_CODE_93,
       Barcode.FORMAT_CODABAR, Barcode.FORMAT_ITF, Barcode.FORMAT_QR_CODE,
       Barcode.FORMAT_PDF417, Barcode.FORMAT_AZTEC, Barcode.FORMAT_DATA_MATRIX,
-      Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8, Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E,
     ).build(),
   )
   private val previewView = PreviewView(context).apply {
@@ -89,9 +88,11 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   private var session: CaptureSession? = null
   @Volatile private var epoch: RecordingEpoch? = null
   private var releaseAfterFinalize = false
+  @Volatile private var encodedDurationMs = 0L
   private var lastAnalysisNanos = 0L
   private var lastScannerErrorNanos = 0L
   private val recentCodes = LinkedHashMap<String, Long>()
+  private val candidateReads = LinkedHashMap<String, Pair<Long, Int>>()
 
   private class CaptureSession(val file: File, val promise: Promise) {
     var interrupted = false
@@ -161,7 +162,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     }
     if (!canUseCamera() || binding || camera != null || session != null) return
     if (!hasPermission(Manifest.permission.CAMERA)) {
-      reportError("CAMERA_PERMISSION_REQUIRED", "Allow camera access before starting the camera test.")
+      reportError("CAMERA_PERMISSION_REQUIRED", "Allow camera access before recording.")
       return
     }
     binding = true
@@ -262,10 +263,12 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       session = current
       epoch = null
       recentCodes.clear()
+      candidateReads.clear()
+      encodedDurationMs = 0L
       releaseAfterFinalize = false
       val options = FileOutputOptions.Builder(output)
-        .setDurationLimitMillis(if (proofCapture) 180 * 1000L else 10 * 60 * 1000L)
-        .setFileSizeLimit(if (proofCapture) 195 * 1024 * 1024L else 512 * 1024 * 1024L)
+        .setDurationLimitMillis(if (proofCapture) 300 * 1000L else 10 * 60 * 1000L)
+        .setFileSizeLimit(if (proofCapture) 250_000_000L else 512 * 1024 * 1024L)
         .build()
       var pending = videoCapture!!.output.prepareRecording(context, options)
       if (audioEnabled) pending = pending.withAudioEnabled()
@@ -273,7 +276,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       mainHandler.postDelayed({
         if (session === current && !current.started && !current.stopping) {
           current.interrupted = true
-          reportError("RECORDING_START_TIMEOUT", "The video could not start. The camera test was stopped.")
+          reportError("RECORDING_START_TIMEOUT", "The video could not start. Recording was stopped.")
           stopRecording()
         }
       }, 15_000L)
@@ -297,6 +300,9 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
         // A Stop/background request can race Start; report the native start for the saved record.
         if (!destroyed) onRecordingStarted(mapOf("startedAtUnixMs" to started.startedUnixMs.toDouble()))
       }
+      is VideoRecordEvent.Status -> {
+        encodedDurationMs = event.recordingStats.recordedDurationNanos / 1_000_000L
+      }
       is VideoRecordEvent.Finalize -> {
         epoch = null
         session = null
@@ -308,6 +314,17 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
           event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED ||
           event.error == VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED
         if (recoverable && byteSize > 0 && durationMs > 0) {
+          // A JS bridge response can be lost on process death. Persist only native media facts first.
+          val marker = org.json.JSONObject().put("complete", true).put("durationMs", durationMs)
+            .put("byteSize", byteSize).put("interrupted", current.interrupted || event.error != VideoRecordEvent.Finalize.ERROR_NONE)
+          try {
+            val temporary = File(current.file.path + ".finalized.json.tmp")
+            temporary.writeText(marker.toString())
+            if (!temporary.renameTo(File(current.file.path + ".finalized.json"))) throw IllegalStateException("Recovery metadata unavailable")
+          } catch (_: Exception) {
+            current.promise.reject("RECORDING_RECOVERY_FAILED", "The recording was retained, but recovery metadata could not be saved. Free local space and try again.", null)
+            return
+          }
           current.promise.resolve(mapOf(
             "uri" to Uri.fromFile(current.file).toString(),
             "durationMs" to durationMs.toDouble(),
@@ -316,7 +333,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
           ))
         } else {
           // Keep any bytes at the unique path for inspection; never claim failed bytes are evidence.
-          current.promise.reject("RECORDING_FINALIZE_FAILED", "This camera test did not produce a completed video. Any local bytes were retained.", null)
+          current.promise.reject("RECORDING_FINALIZE_FAILED", "This recording did not produce a completed video. Any local bytes were retained.", null)
         }
         if (releaseAfterFinalize || !canUseCamera()) {
           releaseAfterFinalize = false
@@ -339,6 +356,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   private fun analyzeImage(image: ImageProxy, expectedGeneration: Int) {
     val observedEpoch = epoch
     val sampledNanos = SystemClock.elapsedRealtimeNanos()
+    val sampledEncodedMs = encodedDurationMs
     if (destroyed || observedEpoch == null || observedEpoch.generation != expectedGeneration ||
       expectedGeneration != generation || sampledNanos - lastAnalysisNanos < 200_000_000L) {
       image.close()
@@ -363,18 +381,35 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
             if (raw.isEmpty() || raw.length > 512) continue
             val format = barcodeFormat(code.format)
             val key = "$format:$raw"
-            val previous = recentCodes[key]
-            if (previous != null && now - previous < 3_000_000_000L) continue
+            if (recentCodes.containsKey(key)) continue
+            val previous = candidateReads[key]
+            val reads = if (previous != null && now - previous.first <= 1_500_000_000L) previous.second + 1 else 1
+            if (candidateReads.size >= 128 && previous == null) candidateReads.remove(candidateReads.keys.first())
+            candidateReads[key] = Pair(now, reads)
+            // Two distinct analyzed frames must agree; a single noisy frame is not accepted.
+            if (reads < 2) continue
             if (recentCodes.size >= 128) recentCodes.remove(recentCodes.keys.first())
             recentCodes[key] = now
-            val offsetMs = (sampledNanos - observedEpoch.startedNanos).coerceAtLeast(0L) / 1_000_000L
-            onBarcodeDetected(mapOf(
+            // Use the last encoder progress, not analysis wall time: the observation cannot
+            // run beyond the saved media when the encoder lags behind preview analysis.
+            // This remains an approximate seek point and is checked against decoded media.
+            val offsetMs = sampledEncodedMs.coerceAtLeast(0L)
+            val observation = mutableMapOf<String, Any>(
               "rawValue" to raw,
               "format" to format,
               "detectedAtMs" to offsetMs.toDouble(),
-              "detectedAtUnixMs" to (observedEpoch.startedUnixMs + offsetMs).toDouble(),
+              "detectedAtUnixMs" to (observedEpoch.startedUnixMs + (sampledNanos - observedEpoch.startedNanos).coerceAtLeast(0L) / 1_000_000L).toDouble(),
               "latencyMs" to ((now - sampledNanos) / 1_000_000L).toDouble(),
-            ))
+              "source" to "LIVE_CAMERA_ANALYSIS",
+              "coordinateSpace" to "ROTATED_ANALYSIS_PIXELS",
+              "decoderVersion" to "mlkit-barcode-17.2.0",
+              "frameWidth" to if (image.imageInfo.rotationDegrees % 180 == 0) image.width else image.height,
+              "frameHeight" to if (image.imageInfo.rotationDegrees % 180 == 0) image.height else image.width,
+            )
+            code.boundingBox?.let {
+              observation["bounds"] = mapOf("left" to it.left, "top" to it.top, "right" to it.right, "bottom" to it.bottom)
+            }
+            onBarcodeDetected(observation)
           }
         }
         .addOnFailureListener(mainExecutor) {

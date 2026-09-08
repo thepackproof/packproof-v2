@@ -1,3 +1,4 @@
+import type { ProofPresentation } from "../../../backend/src/domain/proof-presentation";
 export type ProofStatus =
   | "OPEN"
   | "AWAITING_PARTICIPANT"
@@ -81,6 +82,7 @@ export interface TransactionWriteInput {
 }
 
 export interface CanonicalProof {
+  presentation?: ProofPresentation;
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
   transactionId: string;
@@ -118,6 +120,12 @@ export interface CanonicalProof {
     acceptedAt: string | null;
     expiresAt: string | null;
   }>;
+  commerceStages?: Array<{
+    stageId: string;
+    type: string;
+    finalizedAt: string | null;
+    evidence: Array<{ evidenceId: string; contentType: string; byteSize: number; sha256: string | null; committedAt: string | null }>;
+  }>;
   evidence: Array<{
     evidenceId: string;
     evidenceType: string;
@@ -137,6 +145,7 @@ export interface CanonicalProof {
     attestationId: string;
     attestedBy: string;
     participantId?: string;
+    statementText?: string | null;
     statement: string;
     relatedEvidenceId: string | null;
     relatedEventId?: string | null;
@@ -243,6 +252,10 @@ export interface CanonicalProof {
 }
 
 export interface ProofCollectionItem {
+  accessKind?: "PARTICIPANT" | "INVITATION" | "RECEIVER";
+  presentation?: ProofPresentation;
+  invitationId?: string;
+  source?: string | null;
   schema?: "packproof.proof.summary/v1" | string;
   proofId: string;
   transactionId: string;
@@ -452,6 +465,8 @@ export interface FulfillmentQueueItem {
 }
 
 export interface CommerceConnectionView {
+  reviewOrderCount?: number;
+  reviewReasons?: Array<{ code: string; count: number }>;
   autoSyncEnabled?: boolean;
   sync?: {runStatus?:string;initialSyncCompletedAt?:string;nextRunAt?:string;lastSyncAt?:string};
   orderPolicy?: string;
@@ -554,10 +569,14 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
-  disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[]};
+  evidenceState?: { code: string; message: string };
+  disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[];liveProof?:boolean;sharingNotice?:string};
+  recordAsOf?: {supplementSequence:number;supplementSha256:string|null;scopeStatement:string};
+  statements?: Array<{attestationId:string;relatedEvidenceId:string|null;statement:string;attributedTo:string;createdAt:string;method:string;signatureVerification:string;biometricPolicy:string|null;hardwareOriginVerified:boolean;legalIdentityVerified:boolean}>;
   receipt?: {mode:string;carrierReportedDelivered:boolean;buyerReportedReceived:boolean;contributionUrl:string;message:string};
   evidence?: Array<{
     evidenceId: string;
+    stageId?: string | null;
     slot: string;
     committed: true;
     contentType?: string;

@@ -1,27 +1,36 @@
+import { UsagePanel } from "../components/UsagePanel";
+import { BillingPanel } from "../components/BillingPanel";
+import { StudyConsentPanel } from "../components/StudyConsentPanel";
+import { useState, type ReactNode } from "react";
 import { displayName } from "@packproof/copy/format";
-import { ACCOUNT_DELETION_COPY } from "@packproof/copy/legal";
-import { providerDisplay } from "@packproof/copy/status";
 import type { AppearancePreference } from "@packproof/theme/tokens";
-import type {
-  CommerceConnectionView,
-  ConnectedAccountProviderCatalogView,
-  ConnectedAccountView,
-} from "../api/types";
+import type { CommerceConnectionView, ConnectedAccountProviderCatalogView, ConnectedAccountView } from "../api/types";
+import type { PackProofApi } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
+import { IconChevron } from "../components/Icons";
 import { useTheme } from "../theme/ThemeProvider";
+import { PlanBillingPanel } from "../components/PlanBillingPanel";
+import { AccountDeletionRequestPanel } from "./AccountDeletionScreen";
+import { RecordingsSettingsPanel } from "./RecordingsSettingsPanel";
+import "./account-settings.css";
 
-
-const APPEARANCE_OPTIONS: Array<{
-  id: AppearancePreference;
-  label: string;
-  hint: string;
-}> = [
+const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
   { id: "system", label: "System", hint: "Match this device" },
   { id: "light", label: "Light", hint: "Always use light PackProof" },
   { id: "dark", label: "Dark", hint: "Always use dark PackProof" },
 ];
 
+function SettingsDisclosure({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <details className="settings-detail" onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>{title}</summary>{open && <div className="stack">{children}</div>}
+  </details>;
+}
+
 export function AccountScreen(props: {
+  api?: PackProofApi;
+  userId?: string;
+  onOpenProof?: (proofId: string) => void;
   displayName: string | null;
   username: string | null;
   subject: string;
@@ -49,148 +58,46 @@ export function AccountScreen(props: {
   onSignOut: () => void;
 }) {
   const theme = useTheme();
-  const name = displayName({
-    displayName: props.displayName,
-    username: props.username,
-    fallback: props.subject,
-  });
-
-  return (
-    <main className="page stack">
-      <PageHeader title="Account" onBack={props.onBack} />
-      {props.error ? (
-        <div className="banner banner-error" role="alert">
-          {props.error}
-        </div>
-      ) : null}
-
-      <section className="section">
-        <h2 className="card-title">{name}</h2>
-        <p className="meta">{props.username ? `@${props.username}` : "Username not set"}</p>
-      </section>
-
-      <section className="section stack">
-        <h2>Profile</h2>
-        {!props.username ? (
-          <label className="field">
-            <span>Username</span>
-            <input
-              value={props.usernameInput}
-              onChange={(event) => props.onUsernameChange(event.target.value)}
-              autoComplete="username"
-            />
-          </label>
-        ) : null}
-        <label className="field">
-          <span>Display name</span>
-          <input
-            value={props.displayNameInput}
-            onChange={(event) => props.onDisplayNameChange(event.target.value)}
-            autoComplete="name"
-          />
-        </label>
-        <button className="btn" type="button" disabled={props.busy} onClick={props.onSaveProfile}>
-          {props.username ? "Update display name" : "Save profile"}
-        </button>
-      </section>
-
-      <section className="section stack">
-        <h2>Appearance</h2>
-        <div className="appearance-list" role="radiogroup" aria-label="Appearance">
-          {APPEARANCE_OPTIONS.map((option) => {
-            const selected = theme.preference === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                className={`appearance-row${selected ? " appearance-row-selected" : ""}`}
-                role="radio"
-                aria-checked={selected}
-                onClick={() => theme.setPreference(option.id)}
-              >
-                <span>
-                  <strong className="card-title">{option.label}</strong>
-                  <span className="meta" style={{ display: "block" }}>
-                    {option.hint}
-                  </span>
-                </span>
-                <span className={`radio${selected ? " radio-on" : ""}`} aria-hidden="true" />
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {props.onOpenDeveloper ? (
-        <section className="section stack">
-          <h2>Integrations</h2>
-          <button className="btn btn-secondary" onClick={props.onOpenDeveloper}>
-            Developer access
-          </button>
-        </section>
-      ) : null}
-
-
-
-      <section className="section stack">
-        <h2>Connected marketplaces</h2>
-        {props.connections.length === 0 ? (
-          <p className="meta">
-            No marketplace connections on this account yet. Connect eBay or Shopify from Connected
-            Accounts above.
-          </p>
-        ) : (
-          props.connections.map((connection) => (
-            <article key={connection.connectionId}>
-              <div className="card-title">
-                {connection.externalAccountReference === "demo-store-001"
-                  ? "Demo Store"
-                  : connection.providerDisplay || providerDisplay(connection.provider)}
-              </div>
-              <p className="meta">{connection.status}</p>
-            </article>
-          ))
-        )}
-        <button className="btn btn-secondary" type="button" onClick={props.onOpenStores}>
-          Connections
-        </button>
-      </section>
-
-      <section className="section stack">
-        <h2>Packing tools</h2>
-        <button className="btn btn-secondary" type="button" onClick={props.onOpenStation}>
-          Packing Station
-        </button>
-        <button className="btn btn-secondary" type="button" onClick={props.onOpenFulfillment}>
-          Fulfillment
-        </button>
-      </section>
-
-      <section className="section stack">
-        <h2>About PackProof</h2>
-        <p className="note">
-          PackProof creates tamper-evident records for commerce. It records what was submitted,
-          when, and by whom. It does not decide who is right.
-        </p>
-        <button className="btn btn-tertiary" type="button" onClick={props.onOpenTerms}>
-          Terms of Service
-        </button>
-        <button className="btn btn-tertiary" type="button" onClick={props.onOpenPrivacy}>
-          Privacy Policy
-        </button>
-      </section>
-
-      <section className="section stack">
-        <h2>Account deletion</h2>
-        <p className="note">{ACCOUNT_DELETION_COPY}</p>
-        <button className="btn btn-secondary" type="button" onClick={props.onOpenPrivacy}>
-          Open Privacy Policy
-        </button>
-      </section>
-
-      <button className="btn btn-danger" type="button" onClick={props.onSignOut}>
-        Sign out
-      </button>
-    </main>
-  );
+  const name = displayName({ displayName: props.displayName, username: props.username, fallback: "Your account" });
+  const profileChanged = props.displayNameInput.trim() !== (props.displayName ?? "").trim()
+    || (!props.username && props.usernameInput.trim().length > 0);
+  const channelCount = new Set([...props.connectedAccounts.map(account => account.provider), ...props.connections.map(connection => connection.provider)]).size;
+  return <main className="page stack account-settings">
+    <PageHeader title="Account" onBack={props.onBack} />
+    {props.error && <div className="banner banner-error" role="alert">{props.error}</div>}
+    <section><h2 className="card-title">{name}</h2>{props.username && <p className="meta">@{props.username}</p>}</section>
+    <div className="settings-list">
+      <SettingsDisclosure title="Profile">
+        {!props.username && <label className="field"><span>Username</span><input value={props.usernameInput} onChange={event => props.onUsernameChange(event.target.value)} autoComplete="username" /></label>}
+        <label className="field"><span>Display name</span><input value={props.displayNameInput} onChange={event => props.onDisplayNameChange(event.target.value)} autoComplete="name" /></label>
+        {profileChanged && <button className="btn" type="button" disabled={props.busy} onClick={props.onSaveProfile}>Save profile</button>}
+        {props.api && <SettingsDisclosure title="Plan and billing"><PlanBillingPanel api={props.api} />{props.userId && <><UsagePanel api={props.api} userId={props.userId} /><BillingPanel api={props.api} userId={props.userId} /></>}</SettingsDisclosure>}
+      </SettingsDisclosure>
+      <button className="settings-row" type="button" onClick={props.onOpenStores}><span><strong>Sales channels</strong><span className="meta" style={{display:"block"}}>{channelCount ? `${channelCount} ${channelCount === 1 ? "channel" : "channels"} connected or needing attention` : "Connect a selling account"}</span></span><IconChevron /></button>
+      <SettingsDisclosure title="Recordings on this device">
+        {props.api && props.userId && props.onOpenProof ? <RecordingsSettingsPanel api={props.api} userId={props.userId} onOpenProof={props.onOpenProof} /> : <p className="note">Open Orders to find recordings that need attention. Keep this browser's data until your recordings have finished saving.</p>}
+      </SettingsDisclosure>
+      <SettingsDisclosure title="Appearance">
+        <fieldset className="appearance-list" style={{border:0,padding:0,margin:0}}><legend className="meta">Choose how PackProof looks</legend>{APPEARANCE_OPTIONS.map(option => <label key={option.id} className={`appearance-row${theme.preference === option.id ? " appearance-row-selected" : ""}`}>
+          <span><strong>{option.label}</strong><span className="meta" style={{display:"block"}}>{option.hint}</span></span>
+          <input type="radio" name="packproof-appearance" value={option.id} checked={theme.preference === option.id} onChange={() => theme.setPreference(option.id)} />
+        </label>)}</fieldset>
+      </SettingsDisclosure>
+      <SettingsDisclosure title="Help & support">
+        <p className="note">Choose an order, record the item being packed and sealed, then review the recording and confirm what you are shipping. PackProof shows when saving is complete.</p>
+        <p className="note">If saving is interrupted, return to that Proof to continue. Keep your local recording until PackProof confirms it is preserved.</p>
+        <p className="note">For account or privacy support, use the contact information in the Privacy Policy.</p>
+        <button className="btn btn-tertiary" type="button" onClick={props.onOpenPrivacy}>Support contact information</button>
+        {props.onOpenDeveloper && <SettingsDisclosure title="Developer tools"><button className="btn btn-secondary" type="button" onClick={props.onOpenDeveloper}>Developer access</button></SettingsDisclosure>}
+      </SettingsDisclosure>
+      <SettingsDisclosure title="Privacy & account">
+        {props.api && props.userId && <SettingsDisclosure title="Optional research participation"><StudyConsentPanel api={props.api} userId={props.userId} /></SettingsDisclosure>}
+        <p className="note">PackProof records what was submitted, when, and by whom. It does not decide who is right.</p>
+        <button className="btn btn-tertiary" type="button" onClick={props.onOpenPrivacy}>Privacy Policy</button>
+        <button className="btn btn-tertiary" type="button" onClick={props.onOpenTerms}>Terms of Service</button>
+        <SettingsDisclosure title="Delete account">{props.api ? <AccountDeletionRequestPanel api={props.api} accountKey={props.userId ?? props.subject} /> : <p className="note">Sign in to request deletion of your account.</p>}<a href="/new/delete-account">Open account deletion page</a></SettingsDisclosure>
+      </SettingsDisclosure>
+    </div>
+    <button className="btn btn-tertiary" type="button" disabled={props.busy} onClick={props.onSignOut}>Sign out</button>
+  </main>;
 }

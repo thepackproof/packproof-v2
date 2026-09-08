@@ -1,4 +1,6 @@
 import pg from "pg";
+import { readFileSync } from "node:fs";
+import type { ConnectionOptions } from "node:tls";
 import type { Database, QueryResult } from "./database.js";
 import { databaseUnavailable } from "./rotating-credentials.js";
 
@@ -6,20 +8,28 @@ function toResult<Row>(result: pg.QueryResult): QueryResult<Row> {
   return { rows: result.rows as Row[], rowCount: result.rowCount ?? 0 };
 }
 
-export function sslConfigFromConnectionString(connectionString: string): boolean | { rejectUnauthorized: boolean } | undefined {
-  try {
-    const sslmode = new URL(connectionString).searchParams.get("sslmode")?.toLowerCase();
-    if (!sslmode || sslmode === "disable") return undefined;
-    if (sslmode === "verify-ca" || sslmode === "verify-full") return { rejectUnauthorized: true };
-    return { rejectUnauthorized: false };
-  } catch { return undefined; }
+export function sslConfigFromConnectionString(connectionString:string,env:NodeJS.ProcessEnv=process.env):ConnectionOptions|undefined {
+  const url=new URL(connectionString);
+  const mode=url.searchParams.get('sslmode')?.toLowerCase();
+  const hosted=['production','staging'].includes(env.PACKPROOF_ENVIRONMENT??'');
+  if(mode==='disable'&&hosted)throw new Error('Hosted PostgreSQL requires verified TLS');
+  if((!mode&&!hosted)||mode==='disable')return undefined;
+  if(mode&&!['require','verify-ca','verify-full'].includes(mode))throw new Error('PostgreSQL TLS mode must require certificate verification');
+  const caFile=env.PACKPROOF_DB_CA_FILE?.trim()||url.searchParams.get('sslrootcert');
+  let ca:string|undefined;
+  if(caFile){try{ca=readFileSync(caFile,'utf8');}catch{throw new Error('Configured PostgreSQL CA bundle is unavailable');}}
+  else if(env.PACKPROOF_DB_CA_PEM)ca=env.PACKPROOF_DB_CA_PEM;
+  if(ca&&(!ca.includes('-----BEGIN CERTIFICATE-----')||ca.includes('PRIVATE KEY')))throw new Error('PostgreSQL CA bundle must contain public certificates');
+  // Keep Node's hostname check enabled for require, verify-ca and verify-full alike.
+  return {rejectUnauthorized:true,...(ca?{ca}:{}),minVersion:'TLSv1.2'};
 }
 
 export function postgresPoolConfig(
   connectionString: string,
   passwordProvider?: () => Promise<string>,
+  env:NodeJS.ProcessEnv=process.env,
 ): pg.PoolConfig {
-  const ssl = sslConfigFromConnectionString(connectionString);
+  const ssl = sslConfigFromConnectionString(connectionString,env);
   if (passwordProvider) {
     const url = new URL(connectionString);
     // A connection-string password overrides pg's callback. Pass the connection
@@ -34,16 +44,17 @@ export function postgresPoolConfig(
       application_name: url.searchParams.get("application_name") ?? undefined,
       options: url.searchParams.get("options") ?? undefined,
       connectionTimeoutMillis: 10_000,
+      statement_timeout:30000, query_timeout:35000,
     };
   }
   let poolConnectionString = connectionString;
   try {
     const url = new URL(connectionString);
-    url.searchParams.delete("sslmode");
+    for(const key of ["sslmode","sslrootcert","sslcert","sslkey","ssl"])url.searchParams.delete(key);
     url.searchParams.delete("uselibpqcompat");
     poolConnectionString = url.toString();
   } catch { /* pg retains responsibility for validating non-URL connection strings. */ }
-  return { connectionString: poolConnectionString, ssl };
+  return { connectionString: poolConnectionString, ssl, connectionTimeoutMillis:10000, statement_timeout:30000, query_timeout:35000 };
 }
 
 function mapDatabaseError(error: unknown): unknown {
@@ -54,11 +65,11 @@ function mapDatabaseError(error: unknown): unknown {
   return error;
 }
 
-export function createPgDatabase(connectionString: string, passwordProvider?: () => Promise<string>): {
+export function createPgDatabase(connectionString: string, passwordProvider?: () => Promise<string>,env:NodeJS.ProcessEnv=process.env): {
   db: Database;
   close: () => Promise<void>;
 } {
-  const pool = new pg.Pool(postgresPoolConfig(connectionString, passwordProvider));
+  const pool = new pg.Pool(postgresPoolConfig(connectionString, passwordProvider,env));
   pool.on("error", () => {
     // pg removes broken idle connections; logging an error object could expose
     // connection details. Subsequent connections resolve the current secret.

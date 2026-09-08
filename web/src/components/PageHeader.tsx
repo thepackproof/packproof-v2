@@ -15,11 +15,9 @@ export function PageHeader(props: {
           <button type="button" className="icon-btn" onClick={props.onBack} aria-label={props.backLabel ?? "Back"}>
             <IconBack />
           </button>
-        ) : (
-          <span className="page-header-spacer" />
-        )}
+        ) : null}
         <h1 className="page-header-title">{props.title}</h1>
-        <div className="page-header-right">{props.right ?? <span className="page-header-spacer" />}</div>
+        {props.right ? <div className="page-header-right">{props.right}</div> : null}
       </div>
       {props.subtitle ? <p className="page-header-subtitle">{props.subtitle}</p> : null}
     </header>

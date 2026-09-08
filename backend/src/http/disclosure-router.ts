@@ -1,6 +1,6 @@
 import express, {type Request,type Response,type NextFunction} from 'express';
 import type { AppDependencies } from '../app.js';
-import { createDisclosureGrant, previewDisclosure } from '../domain/disclosure.js';
+import { createDisclosureGrant, previewDisclosure, reuseSharedProofLink } from '../domain/disclosure.js';
 import { approveRedaction, listRedactions, readRedactionForReview, renderRedaction } from '../domain/media-redaction.js';
 import { setReceiptPreference } from '../domain/buyer-receipt.js';
 import { queueThumbnail,listThumbnails,readThumbnail } from '../domain/media-thumbnails.js';
@@ -29,6 +29,7 @@ export function disclosureRouter(deps:AppDependencies) {
   const router=express.Router({mergeParams:true});
   const user=(req:Request)=>{if(!req.packproofUserId)throw new DomainError('UNAUTHENTICATED','Sign in to manage sharing',401);return req.packproofUserId;};
   router.use((_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
+  router.post('/reuse',route(async(req,res)=>{res.json(await reuseSharedProofLink(deps.db,deps.clock,user(req),req.params.id,req.body?.token,(deps.corsOrigins ?? []).find(origin=>origin.startsWith('http'))??deps.publicBaseUrl));}));
   router.post('/preview',route(async(req,res)=>{res.json(await previewDisclosure(deps.db,user(req),req.params.id,req.body??{}));}));
   router.post('/grants',route(async(req,res)=>{res.status(201).json(await createDisclosureGrant(deps.db,deps.clock,user(req),req.params.id,{...req.body,publicWebBaseUrl:(deps.corsOrigins ?? []).find(origin=>origin.startsWith("http"))??deps.publicBaseUrl}));}));
   router.patch('/grants/:linkId',route(async(req,res)=>{res.json(await createDisclosureGrant(deps.db,deps.clock,user(req),req.params.id,{...req.body,accessLinkId:req.params.linkId,publicWebBaseUrl:(deps.corsOrigins ?? []).find(origin=>origin.startsWith("http"))??deps.publicBaseUrl}));}));

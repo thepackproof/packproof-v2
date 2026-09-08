@@ -1,5 +1,6 @@
 # Packing Station Mode
 
+> Historical implementation/research. The September 8 candidate supersedes ordinary scan/rescan choreography with Orders → one video → review → automatic authoritative completion. Legacy journal recovery remains supported. See [current redesign contracts and gates](ui-ux-redesign-2026-09-08/README.md).
 Packing Station is a persistent fulfillment surface. It is not a second Proof type, evidence pipeline, or integrity tier.
 
 ```text

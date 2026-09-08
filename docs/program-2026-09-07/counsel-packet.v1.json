@@ -1,0 +1,94 @@
+{
+  "version": "packproof.counsel-packet.v1",
+  "status": "prepared_checklist_no_legal_review",
+  "qualifiedAdviser": null,
+  "reviewedAt": null,
+  "rightsDecision": null,
+  "launchSpendDecision": null,
+  "limitation": "Same-name products are leads from the supplied assessment, not verified infringement findings. No clearance, patent deadline or compliance is asserted.",
+  "entity": {
+    "legalNameEvidenceRef": null,
+    "formationRef": null,
+    "registeredContactRef": null,
+    "supportChannelRef": null
+  },
+  "nameReview": {
+    "reportedLeads": [
+      {
+        "name": "PackProof: Pack Package Record",
+        "channel": "Shopify",
+        "freshSourceRef": null
+      },
+      {
+        "name": "PackProof",
+        "reportedPublisher": "GeeBuy",
+        "channel": "Google Play",
+        "freshSourceRef": null
+      }
+    ],
+    "requiredAttachments": [
+      "domain ownership",
+      "actual first-use records",
+      "app identifiers/listings",
+      "approved brand assets",
+      "trademark filing receipts if any",
+      "qualified search and rights advice"
+    ],
+    "decisionOptions": [
+      "use_under_documented_conditions",
+      "controlled_rename",
+      "further_review_required"
+    ]
+  },
+  "patentDocket": {
+    "actualProvisionalReceiptRef": null,
+    "actualDisclosureRef": null,
+    "counselConfirmedDeadline": null,
+    "ownershipInventorshipReviewRef": null,
+    "laterDevelopmentsReviewRef": null,
+    "primaryOwner": null,
+    "backupOwner": null,
+    "rule": "Inspect actual filings; never calculate a deadline from remembered conversation dates."
+  },
+  "policyApproval": {
+    "termsVersion": null,
+    "privacyVersion": null,
+    "supportVersion": null,
+    "retentionOfferVersion": null,
+    "approvalRef": null,
+    "servedPageVerificationRef": null,
+    "mustAddress": [
+      "participant/viewer access",
+      "personal information",
+      "correction/deletion/holds",
+      "minimum protection and claim windows",
+      "cancellation/nonpayment",
+      "former-subscriber export",
+      "wind-down notices/export",
+      "assurance limits"
+    ]
+  },
+  "ipRisk": {
+    "contributorAssignmentRefs": [],
+    "licenseInventoryRef": null,
+    "repositoryVisibilityDecisionRef": null,
+    "contractRefs": [],
+    "advisedInsuranceReviewRef": null
+  },
+  "renameContingency": {
+    "trigger": "Qualified advice recommends change and accountable owner decides to apply it",
+    "preserve": [
+      "account identities",
+      "historical Proof branding/provenance",
+      "historical signing trust"
+    ],
+    "migration": [
+      "approved name/assets",
+      "domains/listings",
+      "redirects",
+      "email/deep-link continuity",
+      "approved terms",
+      "customer notice"
+    ]
+  }
+}

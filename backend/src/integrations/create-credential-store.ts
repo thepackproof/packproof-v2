@@ -16,10 +16,14 @@ export class CompositeCredentialStore implements MutableCredentialStore {
   ) {}
 
   async put(credentials: IntegrationCredentials): Promise<void> {
-    this.memory.put(credentials);
     if (this.secrets && looksLikeSecretId(credentials.credentialReference)) {
+      // A managed reference has one authority across API and worker processes.
+      // Never make an unpersisted rotation visible through the local cache.
       await this.secrets.put(credentials);
+      this.memory.deleteCredentials(credentials);
+      return;
     }
+    this.memory.put(credentials);
   }
 
   async getCredentials(input: {
@@ -27,6 +31,11 @@ export class CompositeCredentialStore implements MutableCredentialStore {
     credentialReference: string;
     connectionId?: string;
   }): Promise<IntegrationCredentials | null> {
+    if (this.secrets && looksLikeSecretId(input.credentialReference)) {
+      // Refresh tokens rotate. A process-local or environment fallback may have
+      // been superseded or revoked by another process, so managed reads fail shut.
+      return this.secrets.getCredentials(input);
+    }
     const fromMemory = await this.memory.getCredentials(input);
     if (fromMemory) {
       return fromMemory;
@@ -45,10 +54,10 @@ export class CompositeCredentialStore implements MutableCredentialStore {
     adapterKey: string;
     credentialReference: string;
   }): Promise<void> {
-    this.memory.deleteCredentials(input);
     if (this.secrets && looksLikeSecretId(input.credentialReference)) {
       await this.secrets.deleteCredentials(input);
     }
+    this.memory.deleteCredentials(input);
   }
 }
 

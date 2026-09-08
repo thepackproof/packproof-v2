@@ -69,7 +69,7 @@ describe("storage configuration", () => {
         PACKPROOF_DB_NAME: "packproof_v2",
       }),
     ).toBe(
-      "postgres://packproof:p%40ss%2Fword@db.example.internal:5432/packproof_v2?sslmode=require",
+      "postgres://packproof:p%40ss%2Fword@db.example.internal:5432/packproof_v2?sslmode=verify-full",
     );
     expect(
       loadConfig({
@@ -135,18 +135,18 @@ describe("storage configuration", () => {
     );
   });
 
-  it("uses libpq-style sslmode=require without failing RDS certificate chains", () => {
+  it("verifies certificates and hostnames even for legacy sslmode=require", () => {
     expect(sslConfigFromConnectionString("postgres://u:p@127.0.0.1:5432/db")).toBeUndefined();
     expect(
       sslConfigFromConnectionString(
         "postgres://u:p@db.example.internal:5432/packproof_v2?sslmode=require",
       ),
-    ).toEqual({ rejectUnauthorized: false });
+    ).toEqual({ rejectUnauthorized: true, minVersion: "TLSv1.2" });
     expect(
       sslConfigFromConnectionString(
         "postgres://u:p@db.example.internal:5432/packproof_v2?sslmode=verify-full",
       ),
-    ).toEqual({ rejectUnauthorized: true });
+    ).toEqual({ rejectUnauthorized: true, minVersion: "TLSv1.2" });
   });
 
   it("loads PGlite only when PostgreSQL is not configured", async () => {

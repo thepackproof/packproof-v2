@@ -1,47 +1,94 @@
 import { useEffect, useRef, useState } from "react";
 import type { PackProofApi } from "../api/client";
-import type { CanonicalProof, PublicProofView } from "../api/types";
+import { ApiError, type AccessLinkView, type CanonicalProof } from "../api/types";
+import { recordProofStatus } from "@packproof/copy/proof-record";
+import { SharedProofRecord, type SharedProofView } from "./SharedProofRecord";
 import { SharingCode } from "./SharingCode";
-import { PublicMedia } from "./PublicMedia";
+import { recordStudyInteraction } from "../analytics/study-capture";
 
-type Mask = {x:number;y:number;width:number;height:number};
-type Derivative = {derivativeId:string;evidenceId:string;status:string;sha256:string|null;contentType:string;transform?:{type?:string}};
-type Selection = {evidenceId:string;representation:"ORIGINAL"|"DERIVATIVE";derivativeId?:string};
-type Preview = PublicProofView & {tracker?:{itemTitle:string|null;headline:string;milestones:Array<{code:string;label:string;occurredAt:string|null}>};disclosure:{viewHash:string;fields:string[];scopeVersion:number;revocationNotice:string}};
-export function PrivacySharePanel({api,proof}:{api:PackProofApi;proof:CanonicalProof}) {
-  const [purpose,setPurpose]=useState("BUYER_RECEIPT"),[fields,setFields]=useState(["status","order","shipping","evidence"]);
-  const [selected,setSelected]=useState<Selection[]>([]),[originalsReviewed,setOriginalsReviewed]=useState(false);
-  const [preview,setPreview]=useState<Preview|null>(null),[grant,setGrant]=useState<{accessLinkId:string;url?:string;token?:string}|null>(null);
-  const [busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[notice,setNotice]=useState<string|null>(null);
-  const [derivatives,setDerivatives]=useState<Derivative[]>([]),[maskSource,setMaskSource]=useState(""),[masks,setMasks]=useState<Mask[]>([]);
-  const [sourceUrl,setSourceUrl]=useState<string|null>(null),[reviewUrl,setReviewUrl]=useState<string|null>(null),[reviewing,setReviewing]=useState<Derivative|null>(null);
-  const [email,setEmail]=useState("");
-  const owned=useRef<string[]>([]);
-  const pendingStart=useRef<{x:number;y:number}|null>(null);
-  const evidence=proof.evidence.filter(e=>e.validationStatus==="COMMITTED");
-  const refresh=async()=>setDerivatives((await api.featureRequest<{derivatives:Derivative[]}>(proof.proofId,"disclosure/redactions")).derivatives);
-  useEffect(()=>{void refresh().catch(()=>undefined);return()=>owned.current.forEach(url=>URL.revokeObjectURL(url));},[api,proof.proofId]);
-  const input=()=>({purpose,fields:["status",...fields.filter(f=>f!=="status")],media:fields.includes("evidence")?selected:[],originalsReviewed});
-  const changed=()=>{setPreview(null);setGrant(null);setNotice(null);};
-  async function run(fn:()=>Promise<void>){if(busy)return;setBusy(true);setError(null);try{await fn();}catch(e){setError(e instanceof Error?e.message:"Sharing could not be completed.");}finally{setBusy(false);}}
-  async function openSource(id:string){setMaskSource(id);setMasks([]);setReviewing(null);setReviewUrl(null);setSourceUrl(null);await run(async()=>{const url=URL.createObjectURL(await api.getEvidenceBlob(proof.proofId,id));owned.current.push(url);setSourceUrl(url);});}
-  const source=evidence.find(e=>e.evidenceId===maskSource);
-  async function loadPreviewMedia(id:string){const selection=selected.find(s=>s.evidenceId===id);if(!selection)throw new Error("This source is outside the preview.");return selection.representation==="ORIGINAL"?api.getEvidenceBlob(proof.proofId,id):api.featureDownload(proof.proofId,`disclosure/redactions/${selection.derivativeId}/media`);}
-  return <section className="section signature-pane stack" aria-label="Privacy-safe sharing"><div><p className="panel-eyebrow">CHOOSE WHAT LEAVES YOUR WORKSPACE</p><h2>Preview as recipient</h2><p>Create a link to the information you select. Full addresses, financial details, and unrelated Proofs stay excluded.</p></div>
-    {error&&<p className="banner banner-error" role="alert">{error}</p>}{notice&&<p className="banner banner-info" role="status">{notice}</p>}
-    <label className="field"><span>Who is this view for?</span><select value={purpose} onChange={e=>{setPurpose(e.target.value);setSelected([]);setOriginalsReviewed(false);changed();}}><option value="BUYER_RECEIPT">Buyer · packing receipt</option><option value="CLAIMS_REVIEW">Claims reviewer</option><option value="PUBLIC_SAMPLE">Public sample</option></select></label>
-    <div className="scope-checks">{["status","order","shipping","evidence"].map(field=><label key={field}><input type="checkbox" disabled={field==="status"} checked={field==="status"||fields.includes(field)} onChange={e=>{setFields(old=>e.target.checked?[...old,field]:old.filter(f=>f!==field));changed();}}/>{field==="evidence"?"Selected media":field}</label>)}</div>
-    {fields.includes("evidence")&&<><p>Choose only reviewed copies for a buyer or public link. A claims reviewer can receive an original after you explicitly check its privacy.</p>{evidence.map((e,i)=>{const options=derivatives.filter(d=>d.evidenceId===e.evidenceId&&d.status==="REVIEWED");const choice=selected.find(m=>m.evidenceId===e.evidenceId);return <label className="field" key={e.evidenceId}><span>Source {i+1} · {e.contentType}</span><select value={choice?choice.representation==="ORIGINAL"?"original":choice.derivativeId:""} onChange={event=>{const value=event.target.value;setSelected(old=>[...old.filter(m=>m.evidenceId!==e.evidenceId),...(value?[{evidenceId:e.evidenceId,representation:value==="original"?"ORIGINAL" as const:"DERIVATIVE" as const,...(value!=="original"?{derivativeId:value}:{})}]:[])]);changed();}}><option value="">Withhold this file</option>{purpose==="CLAIMS_REVIEW"&&<option value="original">Original · requires privacy review below</option>}{options.map((d,n)=><option key={d.derivativeId} value={d.derivativeId}>Reviewed redacted copy {n+1}</option>)}</select></label>;})}
-    {selected.some(s=>s.representation==="ORIGINAL")&&<label className="row"><input type="checkbox" checked={originalsReviewed} onChange={e=>{setOriginalsReviewed(e.target.checked);changed();}}/>I reviewed these originals for private information and intend to share their full contents with this claims reviewer.</label>}
-    <details><summary>Create a redacted copy</summary><p>Mark private regions. Opaque masks cover these regions throughout the video; audio and hidden metadata are removed. Review the resulting copy before making it shareable.</p><div className="scope-checks">{evidence.filter(e=>e.contentType?.startsWith("video/")||e.contentType?.startsWith("image/")).map((e,i)=><button className="btn btn-secondary" disabled={busy} key={e.evidenceId} onClick={()=>void openSource(e.evidenceId)}>Review source {i+1}</button>)}</div>
-      {sourceUrl&&<><div className="redaction-editor" style={{position:"relative",touchAction:"none",maxWidth:720}} onPointerDown={e=>{if((e.target as HTMLElement).closest("video")&&source?.contentType?.startsWith("video/"))return;const r=e.currentTarget.getBoundingClientRect();pendingStart.current={x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerUp={e=>{const start=pendingStart.current;if(!start)return;const r=e.currentTarget.getBoundingClientRect();const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));const width=Math.abs(x-start.x),height=Math.abs(y-start.y);if(width>.01&&height>.01)setMasks(old=>[...old,{x:Math.min(start.x,x),y:Math.min(start.y,y),width,height}]);pendingStart.current=null;}}>
-        {source?.contentType?.startsWith("video/")?<video src={sourceUrl} controls playsInline style={{width:"100%",display:"block"}} aria-label="Private original for redaction review"/>:<img src={sourceUrl} style={{width:"100%",display:"block"}} alt="Private original for redaction review"/>}{masks.map((m,i)=><div key={i} aria-hidden style={{position:"absolute",pointerEvents:"none",left:`${m.x*100}%`,top:`${m.y*100}%`,width:`${m.width*100}%`,height:`${m.height*100}%`,background:"#071b2ac9",border:"2px solid #4fd0ff"}}/>)}</div><p className="note">The overlay above is an editing guide. Only the server-rendered copy is shared.</p><button className="btn btn-secondary" onClick={()=>setMasks(old=>[...old,{x:.05,y:.65,width:.9,height:.3}])}>Add private-region mask</button>{masks.map((m,i)=><fieldset key={i}><legend>Mask {i+1} · percentage of original frame</legend><div className="scope-checks">{(["x","y","width","height"] as const).map(key=><label key={key}>{key}<input type="number" min={0} max={100} step={1} value={Math.round(m[key]*100)} onChange={e=>{const v=Math.max(0,Math.min(1,Number(e.target.value)/100));setMasks(old=>old.map((item,j)=>j===i?{...item,[key]:v}:item));}}/></label>)}<button className="btn btn-secondary" onClick={()=>setMasks(old=>old.filter((_,j)=>j!==i))}>Remove mask</button></div></fieldset>)}<button className="btn" disabled={busy||!masks.length||masks.some(m=>m.width<=0||m.height<=0||m.x+m.width>1||m.y+m.height>1)} onClick={()=>void run(async()=>{const d=await api.featureRequest<Derivative>(proof.proofId,`disclosure/redactions/${maskSource}`,"POST",{masks});await refresh();if(d.status!=="READY"){setNotice("Redaction queued. Refresh rendering status below to review it when ready.");return;}setReviewing(d);const url=URL.createObjectURL(await api.featureDownload(proof.proofId,`disclosure/redactions/${d.derivativeId}/media`));owned.current.push(url);setReviewUrl(url);})}>{busy?"Rendering redacted copy…":"Render private regions out"}</button></>}
-      <button className="btn btn-secondary" disabled={busy} onClick={()=>void run(refresh)}>Refresh rendering status</button>{derivatives.filter(d=>d.status==="PENDING"||d.status==="FAILED").map(d=><p role="status" key={d.derivativeId}>{d.status==="PENDING"?"Redacted copy queued or rendering. Original is withheld.":"Rendering failed. Adjust masks and submit a new copy; no original is shared."}</p>)}
-      {derivatives.filter(d=>d.status==="READY").map((d,i)=><button className="btn btn-secondary" disabled={busy} key={d.derivativeId} onClick={()=>void run(async()=>{setReviewing(d);const url=URL.createObjectURL(await api.featureDownload(proof.proofId,`disclosure/redactions/${d.derivativeId}/media`));owned.current.push(url);setReviewUrl(url);})}>Review rendered copy {i+1}</button>)}
-      {reviewUrl&&reviewing&&<div className="case-preview"><h3>Review the actual redacted copy</h3>{reviewing.contentType?.startsWith("image/")?<img src={reviewUrl} alt="Server-rendered redacted copy"/>:<video src={reviewUrl} controls playsInline aria-label="Server-rendered redacted copy"/>}<p>Play the full copy and inspect all frames before approval. If any private region is still visible, make a new mask and render again.</p><button className="btn" disabled={busy||!reviewing.sha256} onClick={()=>void run(async()=>{await api.featureRequest(proof.proofId,`disclosure/redactions/${reviewing.derivativeId}/approve`,"POST",{sha256:reviewing.sha256});await refresh();setReviewing(null);setReviewUrl(null);changed();setNotice("Redacted copy approved. Select it above to include it in the recipient view.");})}>I reviewed this copy · make it selectable</button></div>}
-    </details></>}
-    <button className="btn" disabled={busy||!fields.length||(selected.some(s=>s.representation==="ORIGINAL")&&!originalsReviewed)} onClick={()=>void run(async()=>{setGrant(null);setPreview(await api.featureRequest<Preview>(proof.proofId,"disclosure/preview","POST",input()));})}>{busy?"Preparing preview…":"Preview exactly what they’ll see"}</button>
-    {preview&&<article className="case-preview"><p className="panel-eyebrow">RECIPIENT VIEW · {purpose.replaceAll("_"," ")}</p><p>{preview.receipt?.mode==="SAMPLE"?"Sample receipt":"Live record"}</p>{preview.receipt&&<><p>{preview.receipt.carrierReportedDelivered?"The carrier reported delivery.":"No carrier delivery report is included."}</p><p>{preview.receipt.buyerReportedReceived?"The buyer added a receiving record.":"The buyer has not added a receiving record."}</p><p>{preview.receipt.message}</p></>}<h3>{preview.tracker?.itemTitle||"Shared Proof"}</h3><p>{preview.tracker?.headline||preview.status}</p>{preview.tracker?.milestones.map(m=><p key={m.code}>{m.label}{m.occurredAt?` · ${new Date(m.occurredAt).toLocaleString()}`:" · No report yet"}</p>)}{preview.evidence?.map(m=><PublicMedia key={m.evidenceId} media={m} load={loadPreviewMedia}/>)}{!preview.evidence?.length&&<p>No media is included in this view.</p>}<details><summary>Complete recipient projection</summary><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(preview,null,2)}</pre></details><p>{preview.disclosure.revocationNotice}</p><button className="btn" disabled={busy} onClick={()=>void run(async()=>{setGrant(await api.featureRequest(proof.proofId,"disclosure/grants","POST",{...input(),previewHash:preview.disclosure.viewHash}));setNotice("Reviewed link created. Choose who receives it.");})}>Create this reviewed link</button></article>}
-    {grant&&<div className="stack"><SharingCode url={grant.url||`${window.location.origin}/p/${grant.token}`}/><button className="btn btn-secondary" disabled={busy} onClick={()=>void run(async()=>{await api.featureRequest(proof.proofId,`access-links/${grant.accessLinkId}`,"DELETE");setGrant(null);setNotice("Link revoked. Previously saved files cannot be recalled.");})}>Revoke this link</button>{purpose==="BUYER_RECEIPT"&&<form className="stack" onSubmit={e=>{e.preventDefault();void run(async()=>{const result=await api.featureRequest<{emailDeliveryConfigured?:boolean;emailSent?:boolean}>(proof.proofId,"email-subscriptions","POST",{email,preference:"IMPORTANT",recipientGrantId:grant.accessLinkId});setNotice(result.emailDeliveryConfigured===false?"Email delivery is not configured. The reviewed viewing link is ready to share.":result.emailSent?"Receipt email sent.":"Receipt update queued. Delivery is not yet confirmed.");});}}><label className="field"><span>Verified invited buyer email</span><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required maxLength={254}/></label><p className="note">The invited buyer must verify this email and opt in to updates. Sending requires your explicit action below.</p><button className="btn" disabled={busy||!email}>Send this receipt to the invited buyer</button></form>}</div>}
+type Preview = SharedProofView & { disclosure: NonNullable<SharedProofView["disclosure"]> };
+export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProofApi; proof: CanonicalProof; currentUserId?: string }) {
+  const cacheKey = `packproof.view.share.${api.recoveryScope}.${currentUserId || ""}.${proof.proofId}.SHARED_PROOF`;
+  function cachedGrant(): AccessLinkView | null {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(cacheKey) || "null") as AccessLinkView | null;
+      return saved?.token && saved.url && !saved.revokedAt && (!saved.expiresAt || Date.parse(saved.expiresAt) > Date.now()) ? saved : null;
+    } catch { return null; }
+  }
+  function rememberGrant(value: AccessLinkView | null) {
+    try { if (value) sessionStorage.setItem(cacheKey, JSON.stringify(value)); else sessionStorage.removeItem(cacheKey); } catch { /* In-memory link still works. */ }
+    setGrant(value);
+  }
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [grant, setGrant] = useState<AccessLinkView | null>(cachedGrant);
+  const [links, setLinks] = useState<AccessLinkView[]>([]);
+  const [days, setDays] = useState(7);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const lock = useRef(false);
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  // A refreshed record must be previewed again before a new grant is approved.
+  useEffect(() => { setPreview(null); }, [proof.updatedAt]);
+  async function run(fn: () => Promise<void>) {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError(null);
+    try { await fn(); }
+    catch (caught) { if (active.current) setError(caught instanceof Error ? caught.message : "Sharing could not be completed."); }
+    finally { lock.current = false; if (active.current) setBusy(false); }
+  }
+  async function refreshLinks() {
+    const result = await api.featureRequest<{ accessLinks: AccessLinkView[] }>(proof.proofId, "access-links");
+    if (active.current) setLinks(result.accessLinks);
+  }
+  async function validateGrant() {
+    if (!grant || navigator.onLine === false) return;
+    try {
+      const checked = await api.featureRequest<AccessLinkView>(proof.proofId, "disclosure/reuse", "POST", { token: grant.token });
+      rememberGrant(checked);
+    } catch (caught) {
+      if (caught instanceof ApiError && [401, 403, 404, 410].includes(caught.status)) rememberGrant(null);
+      throw caught;
+    }
+  }
+  async function prepare() {
+    if (navigator.onLine === false) throw new Error("Connect to create a share link. Your Proof and saved recordings stay unchanged.");
+    const result = await api.featureRequest<Preview>(proof.proofId, "disclosure/preview", "POST", { purpose: "SHARED_PROOF" });
+    if (active.current) { setPreview(result); }
+  }
+  async function loadMedia(id: string) {
+    const media = preview?.evidence?.find(item => item.evidenceId === id);
+    if (!media) throw new Error("This recording is not in the current Proof preview.");
+    return media.stageId
+      ? api.featureDownload(proof.proofId, `lifecycle/stages/${media.stageId}/evidence/${id}`)
+      : api.getEvidenceBlob(proof.proofId, id);
+  }
+  return <section className="section stack share-proof-panel" aria-label="Share Proof">
+    <h2>Share Proof</h2>
+    {error && <p className="banner banner-error" role="alert">{error}</p>}
+    {notice && <p role="status">{notice}</p>}
+    <div className="share-proof-identity"><strong>{proof.transaction.itemTitle || "This Proof"}</strong><span>{recordProofStatus(proof.status)}</span></div>
+    <button className="share-proof-preview-link" disabled={busy} onClick={() => void run(prepare)}>Preview Proof <span aria-hidden="true">›</span></button>
+    <label className="share-proof-expiry"><span>Link expires</span><select aria-label="Link expires" value={days} disabled={busy || Boolean(grant)} onChange={event => setDays(Number(event.target.value))}><option value={1}>1 day</option><option value={7}>7 days</option><option value={30}>30 days</option></select></label>
+    <details onToggle={event => { if (event.currentTarget.open) void run(refreshLinks); }}>
+      <summary>Manage shared links</summary>
+      <div className="stack">{links.filter(item => !item.revokedAt).map(item => <div key={item.accessLinkId} className="share-link-row"><span>{item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleDateString()}` : "No expiry"}</span><button className="text-link" disabled={busy} onClick={() => void run(async () => { await api.featureRequest(proof.proofId, `access-links/${item.accessLinkId}`, "DELETE"); if (grant?.accessLinkId === item.accessLinkId) rememberGrant(null); await refreshLinks(); })}>Revoke link</button></div>)}{!busy && !links.some(item => !item.revokedAt) && <p className="note">No active links.</p>}</div>
+    </details>
+    {preview && !grant && <div className="stack share-proof-review">
+      <SharedProofRecord proof={preview} loadMedia={loadMedia} />
+      <p>{preview.disclosure.sharingNotice || "Anyone with this link can view this Proof, its original recordings, and future updates. Review the recordings before sharing."}</p>
+      <button className="btn" disabled={busy} onClick={() => void run(async () => {
+        const result = await api.featureRequest<AccessLinkView>(proof.proofId, "disclosure/grants", "POST", { purpose: "SHARED_PROOF", originalsReviewed: true, previewHash: preview.disclosure.viewHash, expiresAt: new Date(Date.now() + days * 86400000).toISOString() });
+        if (currentUserId && result.accessLinkId) void recordStudyInteraction(api, currentUserId, 'share_created');
+        if (active.current) { rememberGrant(result); setNotice("Share link created."); }
+      })}>{busy ? "Creating link…" : "Create share link"}</button>
+    </div>}
+    {!preview && !grant && <button className="btn" disabled={busy} onClick={() => void run(prepare)}>{busy ? "Loading preview…" : "Create share link"}</button>}
+    {grant && (grant.url || grant.token) && <div className="stack"><SharingCode url={grant.url || `${window.location.origin}/p/${encodeURIComponent(grant.token!)}`} expiresAt={grant.expiresAt} onValidate={validateGrant} />
+      <button className="text-link" disabled={busy} onClick={() => { rememberGrant(null); setPreview(null); }}>Create another link with a different expiry</button>
+      <details><summary>Email this Proof</summary><form className="stack" onSubmit={event => { event.preventDefault(); void run(async () => { const result = await api.featureRequest<{ emailDeliveryConfigured?: boolean; emailSent?: boolean }>(proof.proofId, "email-subscriptions", "POST", { email, preference: "IMPORTANT", recipientGrantId: grant.accessLinkId }); setNotice(result.emailDeliveryConfigured === false ? "Email delivery is unavailable. You can copy the share link." : result.emailSent ? "Proof email sent." : "Proof email queued."); }); }}><label className="field"><span>Invited participant’s verified email</span><input type="email" required maxLength={254} value={email} onChange={event => setEmail(event.target.value)} /></label><button className="btn btn-secondary" disabled={busy || !email}>Send Proof email</button></form></details>
+    </div>}
   </section>;
 }

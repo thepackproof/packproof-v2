@@ -1,0 +1,77 @@
+/* Distinct workflow schematics, sharing PackProof's existing color and icon language. */
+.workflow-visual {
+  --visual-ink:var(--brand-ink);
+  --visual-muted:var(--brand-muted);
+  --visual-blue:var(--brand-blue-text);
+  --visual-green:var(--brand-forest);
+  --visual-line:var(--brand-blue-line);
+  width:100%; min-width:0; color:var(--visual-ink);
+  font-size:12px; line-height:1.45;
+}
+.workflow-visual-content { width:min(100%, 270px); min-height:240px; margin-inline:auto; display:flex; align-items:center; }
+.workflow-visual svg { flex-shrink:0; }
+.visual-order-sheet { width:100%; padding:22px; border:1px solid var(--visual-line); border-top:3px solid var(--visual-blue); border-radius:3px 3px 12px 12px; background:var(--brand-sheet); }
+.visual-order-heading { display:flex; align-items:center; gap:15px; margin-bottom:20px; color:var(--visual-blue); }
+.visual-order-heading>span { font-size:10px; letter-spacing:.1em; }
+.visual-order-heading strong { display:block; margin-top:4px; color:var(--visual-ink); font-size:16px; letter-spacing:-.025em; font-weight:600; }
+.visual-order-field { display:flex; align-items:center; gap:16px; color:var(--visual-muted); padding:9px 0; border-top:1px solid var(--brand-rule); }
+.visual-field-line { flex:1; height:4px; background:var(--brand-blue-line); border-radius:2px; }
+.visual-order-field:nth-child(3) .visual-field-line { max-width:52px; margin-left:auto; }
+.visual-import { display:flex; align-items:center; gap:9px; padding-top:15px; margin-top:5px; border-top:1px solid var(--visual-line); color:var(--visual-green); }
+.visual-recording { width:100%; }
+.visual-viewfinder { min-height:156px; display:grid; justify-items:center; gap:13px; padding:13px 16px 17px; background:var(--brand-ink); color:var(--brand-on-ink-blue); border-radius:12px; }
+.visual-recording-label { justify-self:start; display:flex; align-items:center; gap:7px; color:var(--brand-on-ink-muted); font-size:10px; letter-spacing:.12em; }
+.visual-recording-label i { width:6px; height:6px; border-radius:50%; background:var(--brand-on-ink-blue); }
+.visual-viewfinder-note { font-size:11px; color:var(--brand-on-ink-muted); }
+.visual-chapters { position:relative; display:flex; justify-content:space-between; padding-top:17px; color:var(--visual-muted); }
+.visual-chapters::before { content:""; position:absolute; top:21px; inset-inline:14px; height:1px; background:var(--visual-line); }
+.visual-chapters>span { position:relative; display:grid; justify-items:center; gap:7px; min-width:30px; }
+.visual-chapters i { width:9px; height:9px; border:2px solid var(--visual-blue); border-radius:50%; background:var(--brand-paper); }
+.visual-chapters>span:last-child i { border-color:var(--visual-green); }
+.visual-recording-caption { display:block; text-align:center; margin-top:15px; color:var(--visual-muted); font-size:9px; letter-spacing:.095em; }
+.visual-history { width:100%; padding:8px 17px; }
+.visual-history-heading { display:flex; align-items:center; gap:12px; color:var(--visual-blue); font-size:10px; letter-spacing:.08em; margin-bottom:20px; }
+.visual-history-entries { margin-left:14px; }
+.visual-history-entry { position:relative; display:flex; gap:18px; padding-bottom:20px; }
+.visual-history-entry:not(:last-child)::before { content:""; position:absolute; left:4px; top:8px; bottom:-4px; width:1px; background:var(--visual-line); }
+.visual-history-node { position:relative; flex:0 0 9px; height:9px; margin-top:4px; border-radius:50%; background:var(--visual-blue); box-shadow:0 0 0 4px var(--brand-blue-soft); }
+.visual-history-entry:last-child .visual-history-node { background:var(--visual-green); box-shadow:0 0 0 4px var(--brand-forest-soft); }
+.visual-history-entry strong { display:block; font-size:14px; font-weight:600; }
+.visual-history-entry small { display:block; margin-top:3px; color:var(--visual-muted); font-size:11px; }
+.visual-history-footer { display:flex; align-items:center; gap:10px; margin-left:14px; padding-top:13px; border-top:1px solid var(--visual-line); color:var(--visual-green); }
+.bento-wide>.workflow-visual { flex:0 0 220px; }
+.bento-wide>div:last-child { min-width:0; }
+.public-site .bento-wide h3 { color:var(--brand-sheet); }
+.visual-collection { width:100%; border:1px solid #526158; border-radius:12px; background:var(--brand-ink-raised); padding:18px; color:var(--brand-on-ink-muted); }
+.visual-collection-heading { display:flex; align-items:center; gap:12px; color:var(--brand-on-ink-blue); font-size:10px; letter-spacing:.09em; padding-bottom:18px; }
+.visual-collection-index { display:flex; align-items:center; justify-content:space-between; gap:8px; border-block:1px solid #526158; padding:12px 0; margin-bottom:3px; font-size:11px; color:var(--brand-on-ink-muted); }
+.visual-collection-row { display:flex; align-items:center; gap:10px; padding-top:16px; font-size:11px; }
+.visual-collection-row svg { color:var(--brand-on-ink-blue); }
+.visual-collection-mark { width:4px; height:4px; flex-shrink:0; background:var(--brand-on-ink-green); border-radius:50%; margin-left:auto; }
+.visual-recipient { width:100%; background:var(--brand-sheet); border:1px solid var(--visual-line); border-radius:12px; overflow:hidden; }
+.visual-recipient-toolbar { display:flex; align-items:center; gap:9px; padding:12px 17px; background:var(--brand-inset); border-bottom:1px solid var(--visual-line); color:var(--visual-muted); font-size:10px; letter-spacing:.09em; }
+.visual-recipient-access { display:flex; align-items:center; gap:13px; padding:19px 17px 14px; }
+.visual-recipient-person { width:47px; height:47px; display:grid; place-items:center; border-radius:50%; background:var(--brand-blue-soft); color:var(--visual-blue); }
+.visual-recipient-access strong { display:block; font-size:14px; font-weight:600; }
+.visual-recipient-access small { display:block; margin-top:5px; font-size:11px; color:var(--visual-green); }
+.visual-recipient-field { display:flex; align-items:center; gap:9px; padding:7px 20px; color:var(--visual-muted); }
+.visual-recipient-field svg { color:var(--visual-green); }
+.visual-recipient-footer { padding:11px 17px; margin-top:13px; border-top:1px solid var(--brand-rule); font-size:11px; color:var(--visual-muted); }
+.bento-small>.workflow-visual { margin-bottom:24px; }
+.workflow article>.workflow-visual { justify-self:end; }
+@media (max-width:1150px) {
+  .bento-wide>.workflow-visual { flex-basis:190px; }
+}
+@media (max-width:1000px) {
+  .workflow article>.workflow-visual { grid-column:2; max-width:290px; justify-self:start; }
+}
+@media (max-width:900px) {
+  .bento-wide>.workflow-visual { flex-basis:auto; width:100%; align-self:center; }
+}
+@media (max-width:700px) {
+  .bento-wide { flex-direction:column; align-items:flex-start; }
+  .workflow-visual-content { min-height:230px; }
+}
+@media (max-width:380px) {
+  .workflow article>.workflow-visual { grid-column:1/-1; justify-self:center; }
+}

@@ -131,7 +131,7 @@ describe("PackProof V2 API workflow", () => {
     expect(upload1.status).toBe(201);
     expect(upload2.body.evidenceId).toBe(upload1.body.evidenceId);
     const evidenceId = upload1.body.evidenceId as string;
-    const uploadUrl = new URL(upload1.body.upload.url as string);
+    const uploadUrl = new URL(upload2.body.upload.url as string);
 
     const bytes = recording.bytes;
     const put = await request(harness.app)

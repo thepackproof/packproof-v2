@@ -24,20 +24,16 @@ Session tokens are stored in `sessionStorage` for the tab only. A `401` clears t
 
 ## Discovery and retrieval
 
-- Home is **My Proofs**: In Progress / Completed, search, filter, and a create button. Invitations appear in In Progress and open a review screen before join. Avatar opens Account.
-- Create matches the Android flow: scan an order reference, import a purchase, enter details manually, or start a grading submission. Scan (`/new/scan`) identifies an order and create-or-returns the Proof. It does not open Packing Station. Invitation ID join is a collapsed fallback on Create.
-- Packing Station, Fulfillment, and Connected Stores are reached from Account, matching the Android packing tools and marketplace surfaces.
-- Opening a Proof calls `GET /proofs/:id` and renders `packproof.proof.canonical/v1`, including the server chronology and shipment observations. Invite, finalize, and event detail are dedicated screens. Finalize confirms, then shows the completion screen.
-- **Packing Station** (`/station`) is a persistent pack surface: scan or identify an order, record packing video as `FULFILLMENT_CAPTURE`, rescan the same canonical transaction to finish (USB/keyboard wedge), submit through the canonical evidence commands, then return to READY. Finished Packing remains a secondary fallback. Browser camera barcodes are not used; live camera barcodes are on mobile. See [PACKING_STATION.md](PACKING_STATION.md).
-- **Fulfillment** (`/fulfillment`) is the seller packing queue from `GET /me/fulfillment-queue`. Opening a row shows transaction context. Packing evidence is required before complete; attestation is attribution. Orders without capture link into Packing Station.
-- **Stores** (`/stores`) lists commerce connections that can sync fulfillment-eligible orders. Open it from Account → Connected stores. In development, Connect Demo Storefront and Sync now call server-owned reference routes. Connect Shopify from Account → Connected Accounts; synced shops then appear here. Production/Cognito mode does not show a fake Connect Shopify control on this screen.
-- **Account** (`/account`) lists canonical connected accounts (`GET /me/connected-accounts`): eBay, Shopify, Google, and Meta/Facebook. Connect opens the official provider OAuth page; the API callback returns to `/account`. See [CONNECTED_ACCOUNTS.md](CONNECTED_ACCOUNTS.md).
-- Create Proof can import a reference marketplace purchase (`POST /integrations/transactions/import`) or enter the transaction manually. The review screen renders the server transaction. See [TRANSACTION_INGESTION.md](TRANSACTION_INGESTION.md).
-- **Guest viewing** (`/p/:token`) calls unauthenticated `GET /public/proofs/:token` and renders live status only. It is not a workspace and cannot mutate the Proof. Participants create links with `POST /proofs/:id/access-links`.
-- **Grading submission** on Create calls `POST /proofs` with `workflowType: GRADING_SUBMISSION`. The Proof page prefers server `nextAction` and shows Item N / Documented / Packed / Handed off / Received. Commerce packing stays `FULFILLMENT_CAPTURE` via Packing Station.
-- Cached `proofId` values in the URL are shortcuts only.
-- Invitations addressed to the signed-in account appear in discovery (`GET /invitations`). Opening an invitation reviews it, then accept uses the invitation id. Tokens from create/accept responses are discarded by the API client.
-- Sellers add a participant from the Proof overflow menu, which opens the invite screen. Search uses PackProof usernames (`GET /proofs/:id/users/search`). Relationship state (You / Already participating / Invitation pending / Invite) comes from the server. Raw invite tokens are not shown. An invitation-ID join control remains as a collapsed fallback on Create.
+- Orders (`/app` or `/fulfillment`) is the starting queue. A row opens the ordinary camera preview at `/station?proof=…`; recording starts only after Record packing. `/station` without an order is the batch queue using that same recorder and completion pipeline.
+- Manual shipment (`/new`) asks for the item, with optional details collapsed. Legacy `/new/scan` redirects here. No ordinary pre-scan, extra photo or finish rescan is required.
+- Finish saves the original before review. Review resolves label ambiguities, shows the exact shipment statement and requires deliberate confirmation. Upload, commit, attestation and finalization then resume automatically and idempotently. Only authoritative FINALIZED is a saved Proof. Browser confirmation does not claim Android strong biometrics.
+- Proofs (`/proofs`) presents Needs attention and Saved Proofs with search. The canonical viewer uses Recording / Activity / Tracking, preserves playback/scroll state and puts integrity/actions behind contextual disclosures. Grading, receiver capture, invitations, receipt and return work remain contextual on the same Proof.
+- Account (`/account`) is a compact settings list. Sales channels (`/stores`) joins connection identity, permission/reauthorization, actual order health, sync time and server-owned automation in one provider card. Identity-only providers never imply order import.
+- Recordings on this device exposes retained browser originals and recoverable work. A local copy cannot be discarded before required durable receipts.
+- Account → Privacy & account and the public `/new/delete-account` page provide authenticated, explicit deletion requests and authoritative status. Request receipt does not claim immediate erasure.
+- Guest viewing (`/p/:token`) renders the same underlying record within the granted disclosure scope. Server authorization, revocation and evidence digest checks remain authoritative; private raw history is not leaked.
+
+See [redesign contracts and release gates](ui-ux-redesign-2026-09-08/README.md). Older descriptions of scan/rescan and separate manual finalization are superseded for this candidate.
 
 ## Trust vocabulary
 

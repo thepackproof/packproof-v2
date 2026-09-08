@@ -225,6 +225,9 @@ export function providerDisplay(adapterKey: string, provider: string): string {
   if (adapterKey === "shopify" || provider === "shopify") {
     return "Shopify";
   }
+  if (adapterKey === "etsy" || provider === "etsy") {
+    return "Etsy";
+  }
   if (adapterKey === "google" || provider === "google") {
     return "Google";
   }

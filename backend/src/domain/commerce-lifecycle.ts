@@ -1,5 +1,12 @@
+import { Readable } from "node:stream";
+import { MEDIA_MAX_BYTES, reserveMediaAdmission } from "./media-admission.js";
+import { enqueueRecoveryEvent, buildProofRecoverySnapshot, getRecoveryStatus, requireDurableOperation } from "./recovery-journal.js";
+import { appendProofSupplementInTransaction } from "./proof-supplements.js";
+import type { ManifestSigner } from "./manifest-signing.js";
+import { assertPolicyAccessSafe } from "./policy-recovery.js";
+import { requireActiveAccount } from "./account-access.js";
 import { eligibleCaptureSession, readCaptureClientContext } from "./capture-sessions.js";
-import { validateCapturedMedia } from "./capture-media.js";
+import { validateCapturedMediaStream } from "./capture-media.js";
 import type { Database } from "../db/database.js";
 import type { Clock } from "../clock.js";
 import type { ObjectStore } from "../s3/object-store.js";
@@ -41,6 +48,8 @@ export async function requireCommerceAccess(
   proofId: string,
   userId: string,
 ): Promise<"SELLER" | "BUYER"> {
+  await assertPolicyAccessSafe(db);
+  await requireActiveAccount(db, userId);
   await commerceProof(db, proofId);
   const member = await db.query<{ role: "SELLER" | "BUYER" }>(
     "SELECT role FROM proof_participants WHERE proof_id=$1 AND user_id=$2",
@@ -116,6 +125,8 @@ export async function acceptCommerceReceiver(
   proofId: string,
 ) {
   return db.transaction(async (tx) => {
+    await assertPolicyAccessSafe(tx);
+    await requireActiveAccount(tx, userId);
     const invitation = await tx.query<{ accepted_at: unknown }>(
       "SELECT accepted_at FROM commerce_receivers WHERE proof_id=$1 AND user_id=$2 FOR UPDATE",
       [proofId, userId],
@@ -244,7 +255,7 @@ export async function initializeStageEvidence(
   userId: string,
   proofId: string,
   stageId: string,
-  input: { contentType?: unknown; idempotencyKey?: unknown; captureSessionId?: unknown },
+  input: { contentType?: unknown; idempotencyKey?: unknown; captureSessionId?: unknown; byteSize?: number },
 ) {
   if (
     typeof input.contentType !== "string" ||
@@ -288,7 +299,7 @@ export async function initializeStageEvidence(
     if(capture?.evidence_id && capture.evidence_id!==existing?.id) throw new DomainError("CAPTURE_SESSION_ALREADY_USED","This recording belongs to another upload",409);
     if(input.captureSessionId && !capture) throw new DomainError("CAPTURE_SESSION_CONFLICT","Supporting images do not use a video capture session",409);
     const id = existing?.id ?? newId("media"),
-      objectKey = existing?.object_key ?? `proofs/${proofId}/lifecycle/${stageId}/${id}`;
+      objectKey = existing?.object_key ?? `evidence/${proofId}/${id}/object`;
     if (!existing)
       await tx.query(
         "INSERT INTO commerce_stage_evidence(id,stage_id,idempotency_key,object_key,content_type,created_at,capture_session_id,capture_origin) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
@@ -297,7 +308,7 @@ export async function initializeStageEvidence(
     if(capture) await tx.query("UPDATE capture_sessions SET state='UPLOADING',evidence_id=$2 WHERE id=$1",[capture.id,id]);
     return {
       evidenceId: id,
-      upload: await store.createUploadTarget({ key: objectKey, contentType }),
+      upload: await reserveMediaAdmission(tx,clock,store,{evidenceId:id,actorUserId:userId,stagingKey:objectKey,contentType,declaredBytes:capture?Number(capture.expected_byte_size):input.byteSize,sourceKind:"STAGE"}),
     };
   });
 }
@@ -329,10 +340,10 @@ export async function commitStageEvidence(
     const capture=row.capture_session_id ? await eligibleCaptureSession(tx,clock,userId,proofId,row.capture_session_id,row.content_type,stageId) : null;
     if (row.content_type.startsWith("video/") && !capture) throw new DomainError("CAPTURE_SESSION_REQUIRED","Start a new authorized recording for this unfinished stage upload",422);
     if(capture && capture.evidence_id!==evidenceId) throw new DomainError("CAPTURE_SESSION_CONFLICT","Stage capture is bound to another upload",409);
-    const object = await store.commitUpload(row.object_key);
+    const object = await store.commitUpload(row.object_key,{sha256:typeof expectedHash === 'string' ? expectedHash : capture?.expected_sha256??undefined,byteSize:capture?Number(capture.expected_byte_size):undefined,contentType:row.content_type,maxBytes:250000000});
     if (!object) throw new DomainError("EVIDENCE_OBJECT_MISSING", "Upload recording first", 409);
     if (
-      object.byteSize > 200 * 1024 * 1024 ||
+      object.byteSize > MEDIA_MAX_BYTES ||
       object.byteSize === 0 ||
       object.contentType.split(";")[0].trim().toLowerCase() !== row.content_type ||
       (expectedHash != null && expectedHash !== object.sha256)
@@ -345,13 +356,14 @@ export async function commitStageEvidence(
     let durationMs:number|null=null;
     if(capture) {
       if(capture.expected_sha256!==object.sha256 || Number(capture.expected_byte_size)!==object.byteSize) throw new DomainError("CAPTURE_RECORDING_MISMATCH","Uploaded bytes differ from this stage recording",422);
-      const original=await store.get(object.key);
-      if(!original || sha256Hex(original.body)!==object.sha256 || original.body.length!==object.byteSize) throw new DomainError("EVIDENCE_INTEGRITY_FAILURE","Stored stage original failed integrity verification",409);
-      durationMs=(await validateCapturedMedia(original.body,row.content_type)).durationMs;
+      const original=store.getStream?await store.getStream(object.key,{versionId:object.versionId}):null;
+      const fallback=!store.getStream?await store.get(object.key,{versionId:object.versionId}):null;
+      if(!original&&!fallback)throw new DomainError("EVIDENCE_INTEGRITY_FAILURE","Stored stage original is unavailable",409);
+      durationMs=(await validateCapturedMediaStream(original?.body??Readable.from([fallback!.body]),row.content_type,{byteSize:object.byteSize,sha256:object.sha256,maxDurationMs:(capture as typeof capture & {max_duration_ms?:number|null}).max_duration_ms??1_800_000})).durationMs;
     }
     await tx.query(
-      "UPDATE commerce_stage_evidence SET object_key=$2,sha256=$3,byte_size=$4,committed_at=$5,captured_duration_ms=$6 WHERE id=$1",
-      [evidenceId, object.key, object.sha256, object.byteSize, clock.now().toISOString(),durationMs],
+      "UPDATE commerce_stage_evidence SET object_key=$2,sha256=$3,byte_size=$4,committed_at=$5,captured_duration_ms=$6,object_version_id=$7,staging_version_id=$8 WHERE id=$1",
+      [evidenceId, object.key, object.sha256, object.byteSize, clock.now().toISOString(),durationMs,object.versionId??null,object.stagingVersionId??null],
     );
     if(capture) await tx.query("UPDATE capture_sessions SET state='COMMITTED',verified_duration_ms=$2 WHERE id=$1",[capture.id,durationMs]);
     await appendAudit(tx, {
@@ -361,6 +373,8 @@ export async function commitStageEvidence(
       eventData: { stageId, evidenceId, sha256: object.sha256 },
       at: clock.now(),
     });
+    await tx.query("UPDATE evidence_upload_admissions SET state='COMMITTED',staging_version_id=COALESCE($2,staging_version_id) WHERE evidence_id=$1",[evidenceId,object.stagingVersionId??null]);
+    await enqueueRecoveryEvent(tx,clock,{operationId:`stage-evidence:${evidenceId}`,kind:'EVIDENCE_COMMITTED',proofId,actorUserId:userId,payload:await buildProofRecoverySnapshot(tx,proofId)});
     return { evidenceId, sha256: object.sha256 };
   });
 }
@@ -371,6 +385,8 @@ export async function finalizeCommerceStage(
   proofId: string,
   stageId: string,
   statement: unknown,
+  signer?: ManifestSigner,
+  options: {requireDurableReceipts?: boolean} = {},
 ) {
   return db.transaction(async (tx) => {
     const stage = await ownedStage(tx, proofId, stageId, userId);
@@ -381,6 +397,7 @@ export async function finalizeCommerceStage(
         stageId,
         sha256: stage.sha256,
         manifest: JSON.parse(stage.canonical_json!),
+        recovery: await getRecoveryStatus(tx, `stage-finalize:${stageId}`),
       };
     const media = (
       await tx.query<{
@@ -392,6 +409,7 @@ export async function finalizeCommerceStage(
         committed_at: Date | string;
         capture_session_id:string|null;
         capture_origin:string;
+        object_version_id?:string|null;
       }>(
         "SELECT * FROM commerce_stage_evidence WHERE stage_id=$1 AND discarded_at IS NULL ORDER BY id",
         [stageId],
@@ -403,6 +421,10 @@ export async function finalizeCommerceStage(
         "Commit all stage recordings before finalizing",
         409,
       );
+    if(options.requireDurableReceipts) {
+      if(!signer) throw new DomainError("MANIFEST_SIGNING_UNAVAILABLE", "Stage signing is temporarily unavailable", 503);
+      for(const row of media) await requireDurableOperation(tx,`stage-evidence:${row.id}`);
+    }
     const eligibleCaptures=(await tx.query<{id:string;policy_version:string;client:string;recorded_at:string|Date;expires_at:string|Date}>(`SELECT c.id,c.policy_version,c.client,c.recorded_at,c.expires_at FROM capture_sessions c JOIN commerce_stage_evidence e ON e.id=c.evidence_id WHERE c.proof_id=$1 AND c.stage_id=$2 AND c.actor_user_id=$3 AND c.state='COMMITTED' AND c.expected_sha256=e.sha256 AND c.expected_byte_size=e.byte_size AND e.capture_session_id=c.id`,[proofId,stageId,userId])).rows;
     const captureContexts=new Map(await Promise.all(eligibleCaptures.map(async capture=>[capture.id,await readCaptureClientContext(tx,capture.id)] as const)));
     if(!media.some(m=>m.capture_origin==='LEGACY_UNKNOWN' || eligibleCaptures.some(c=>c.id===m.capture_session_id))) throw new DomainError("STAGE_CAPTURE_REQUIRED","An authorized stage recording is required; supporting images cannot replace it",422);
@@ -438,6 +460,7 @@ export async function finalizeCommerceStage(
         sha256: m.sha256,
         byteSize: Number(m.byte_size),
         objectKey: m.object_key,
+        ...(m.object_version_id ? {objectVersionId:m.object_version_id} : {}),
         contentType: m.content_type,
         committedAt: new Date(m.committed_at).toISOString(),
       })),
@@ -455,7 +478,9 @@ export async function finalizeCommerceStage(
       eventData: { stageId, type: stage.stage_type, sha256: hash },
       at: clock.now(),
     });
-    return { stageId, sha256: hash, manifest: payload };
+    if(signer) await appendProofSupplementInTransaction(tx,clock,signer,userId,proofId,{operationId:`stage:${stageId}`,kind:stage.stage_type === 'RECEIPT' ? 'RECIPIENT_RESPONSE' : 'RETURN',facts:{stage:payload},sourceReference:stageId});
+    const recovery=await enqueueRecoveryEvent(tx,clock,{operationId:`stage-finalize:${stageId}`,kind:'STAGE_FINALIZED',proofId,actorUserId:userId,payload:await buildProofRecoverySnapshot(tx,proofId)});
+    return { stageId, sha256: hash, manifest: payload, recovery };
   });
 }
 
@@ -489,6 +514,7 @@ export async function discardStageEvidence(
         evidenceId,
         clock.now().toISOString(),
       ]);
+      await tx.query("UPDATE evidence_upload_admissions SET state='DISCARDED' WHERE evidence_id=$1",[evidenceId]);
       await appendAudit(tx, {
         proofId,
         actorUserId: userId,

@@ -1,4 +1,4 @@
-# Proof Anywhere verifier 1.0.0
+# Proof Anywhere verifier 1.2.0
 
 Download `verify.py` separately from the PackProof repository/release. It is a standalone, read-only Python program; it does not import the PackProof server, log in, extract archive paths, execute package contents, fetch keys, or upload media. Python 3.10+ is required. Signature checks additionally require an installed OpenSSL executable; missing OpenSSL returns `SIGNATURE_UNCHECKED`.
 
@@ -6,23 +6,39 @@ Download `verify.py` separately from the PackProof repository/release. It is a s
 python3 verify.py proof.zip --trust-list independently-obtained-trust.json
 ```
 
+For the signed, dated registry format, obtain the authority's public PEM and key identity through an independent trusted channel:
+
+```bash
+python3 verify.py proof.zip \
+  --trust-registry signed-registry.json \
+  --trust-authority-key independently-pinned-authority.pem \
+  --trust-authority-key-id packproof-registry-authority
+```
+
+All three options are required together. The verifier verifies the registry signature before using any listed signing key. It never reads an authority key or registry from the ZIP, and it does not fetch keys or later revocations. `--trust-list` retains its existing explicitly trusted local-input semantics and cannot be combined with `--trust-registry`.
+
 For an existing unsigned Proof, obtain its manifest SHA-256 separately and compare it explicitly:
 
 ```bash
 python3 verify.py proof.zip --expected-manifest-sha256 <64-hexadecimal-characters>
 ```
 
-This compares the frozen record and every included original against that record. It does not make an unsigned record signed. The program returns JSON suitable for a local viewer or terminal. Add `--html-report report.html` to create a human-readable local report with the result, snapshot identity, signature/trust state, source file names, SHA-256 inventory and explicit omissions. Open that HTML file in an ordinary browser without logging in. It contains escaped text and static CSS only: no JavaScript, archive content links, active media, extraction, external assets, or network requests. Its content security policy denies active/network content, and existing destination files are never overwritten. The report itself is an unsigned presentation of the check, so retain the original ZIP and trusted verifier when reproducibility matters. Exit code `0` means a complete record verified against a separately provided digest or an active key in a fresh trust list. Exit `2` means a clear qualification requires review (unsigned, unknown/revoked key, invalid signature, stale trust, omissions, or unavailable signature tooling). Exit `1` means malformed, missing, modified, or unsupported package data. Always inspect `status`, `signature`, `trust`, and `omissions`; do not collapse all nonzero results into “fraud.”
+This compares the frozen record and every included original against that record. It does not make an unsigned record signed. The program returns JSON suitable for a local viewer or terminal. Add `--html-report report.html` to create a human-readable local report with the result, snapshot identity, signature/trust state, source file names, SHA-256 inventory and explicit omissions. Open that HTML file in an ordinary browser without logging in. It contains escaped text and static CSS only: no JavaScript, archive content links, active media, extraction, external assets, or network requests. Its content security policy denies active/network content, and existing destination files are never overwritten. The report itself is an unsigned presentation of the check, so retain the original ZIP and trusted verifier when reproducibility matters. Exit code `0` means a complete record verified against a separately provided digest or an active key in a fresh trust list. Exit `2` means a clear qualification requires review (unsigned, unknown/revoked key, invalid signature, stale trust, omissions, or unavailable signature tooling). Exit `1` means malformed, missing, modified, or unsupported package data. Always inspect `status`, `signature`, `trust`, `supplements`, and `omissions`; do not collapse all nonzero results into “fraud.”
 
 | Outcome | Meaning |
 | --- | --- |
-| `VERIFIED` | Original bytes match the frozen snapshot; signature verifies under the supplied active key and current trust-list window. |
+| `VERIFIED` | Original bytes match the frozen snapshot; signature verifies under a trusted active or historically valid retired key and a fresh trust snapshot. |
 | `VERIFIED_INDEPENDENT_DIGEST` | Original bytes match an independently supplied root digest. No signature is claimed. |
 | `UNSIGNED` | Internally consistent hash-only record; origin has not been independently established. |
 | `UNKNOWN_KEY` | A signature exists but its key is absent from the independently supplied trust list. |
 | `REVOKED_KEY` | The local trust list marks the signing key revoked; the verifier does not accept it. |
+| `COMPROMISED_KEY` | The authenticated registry reports compromise. Even a claimed signature date before the incident requires review. |
+| `KEY_OUTSIDE_VALIDITY` / `INVALID_SIGNING_TIME` | The signature's reported time is outside the key's effective dates, after retirement, in the future, or malformed. |
+| `UNTRUSTED_REGISTRY` / `INVALID_TRUST_REGISTRY` | The registry cannot be authenticated under the independent authority pin, or its schema/dates/statuses are invalid. No registry key establishes trust. |
 | `TRUST_STALE` / `TRUST_NOT_YET_VALID` | Signature math may pass, but the local list is outside its stated freshness window. |
 | `INVALID_SIGNATURE` | The signature did not verify with the independently supplied matching key. |
+| `SUPPLEMENT_<qualification>` | The root check passes but a separately signed received supplement has an unknown, revoked, compromised, invalid, or otherwise untrusted signature. Root math is reported separately. |
+| `SUPPLEMENT_CHAIN_INVALID` / `SUPPLEMENT_INTEGRITY_FAILURE` / `SUPPLEMENT_SNAPSHOT_MISMATCH` | A declared received chain has missing, duplicated, reordered, modified, out-of-scope, or inconsistent entries or head metadata. |
 | `MISSING_FILES` | A required included archive entry is absent. |
 | `OMITTED_FILES` | The exporter explicitly declared unavailable/excluded original media; excluded bytes were never verified. |
 | `DISCLOSURE_ONLY` | Only the recipient view and its included byte inventory are self-consistent. The root and withheld originals were not verified. |
@@ -31,6 +47,12 @@ This compares the frozen record and every included original against that record.
 | `UNSAFE_ARCHIVE` | Duplicate/unsafe names, entry types, compression, counts, or size exceed the parser contract. |
 
 ## Trust-list contract and rotation
+
+The signed-registry envelope is `{registry,signature}`. `registry` has exactly `version:1`, `domain:"PACKPROOF_SIGNING_TRUST_REGISTRY"`, `publishedAt`, `nextReviewAt`, and `keys`. Every registry key has exactly `keyId`, `algorithm`, `publicKeyPem`, `validFrom`, `validUntil`, `status`, `statusEffectiveAt`, and `reason`. Timestamps include a timezone; `validUntil`, `statusEffectiveAt`, and `reason` can be null where applicable. `status` is `ACTIVE`, `RETIRED`, `REVOKED`, or `COMPROMISED`; unknown statuses and duplicate identities fail closed. Non-active keys require `statusEffectiveAt`, and effective status cannot postdate registry publication. `signature` has `algorithm`, the independently pinned authority `keyId`, `signatureBase64`, and `signedAt`, and covers the UTF-8 `packproof.sorted-json.v1` canonical registry object. Key algorithms are `ECDSA_SHA_256` or `RSASSA_PSS_SHA_256`.
+
+For an active or retired key, the reported signing date must be within its inclusive `validFrom`/`validUntil` range and not in the future. A retired key also requires signing on or before `statusEffectiveAt`. A revoked or compromised key always requires review: a self-asserted historical signing date cannot establish that a signature predates compromise. The verifier keeps signature mathematics separate: signed-registry checks may report `signatureVerified:true` alongside `REVOKED_KEY` or `COMPROMISED_KEY`, while `signature.keyTrustedAtSnapshot` is false. A stale registry can likewise preserve the math result but cannot produce overall `VERIFIED`. `trust.currentRevocationKnowledge` is always `UNAVAILABLE` offline. The root's signature timestamp is neither independently attested filming time nor a trusted timestamp authority receipt.
+
+The closed registry schema deliberately restricts canonicalization to fixed ASCII member names, strings, nulls, arrays, and integer version 1, avoiding cross-language floating-point or numeric-member-name differences. Unknown additional fields are rejected until a schema/version update explicitly supports them. Legacy manifest canonical bytes are still verified verbatim without Python reserialization.
 
 A trust list has schema `packproof.trust-list.v1`, timezone-qualified `generatedAt` and `expiresAt`, and a `keys` array. Every key contains `keyId`, `algorithm` (`ECDSA_SHA_256` or `RSASSA_PSS_SHA_256`), `publicKeyPem`, and `status` (`ACTIVE` or `REVOKED`). `keyId` must match the recorded signature and be unique. A trust list is an explicitly trusted local input, **not a self-authenticating file**. Authenticate its origin and checksum through an independent channel before use. Keys included in a ZIP are never loaded as trust.
 
@@ -50,11 +72,24 @@ The transport is ordinary ZIP (`.zip`); old `.pkpr` filenames remain readable be
 - `lifecycle/stages.json`: finalized stage inventory with exact stage manifests and separately checked media. Every stage references the root and any preceding stage; a missing or cyclic predecessor fails verification.
 - `integrity/signatures.json`: repeats the root signature and describes signing availability. It must agree with the package signature.
 - `integrity/hashes.json`: SHA-256 of every file except itself. Legacy archives may leave `README.txt` outside this inventory. Unexpected unindexed entries fail verification.
+- `proof-supplements.json`: an optional, separately signed received chain with the format and trust boundaries below. Its path, sequence, head digest, and as-of date are declared in `package.json.sources.signedSupplements` and mirrored by current `archive.json` exports.
 - `shipping.json`, `events.json`: later, append-only supplemental information. Their archive hashes establish **self-consistency only**; they are not authenticated by the root signature. Editing these and recomputing an untrusted export inventory cannot be detected without a separately trusted export digest. The verifier always reports this boundary.
 
 Recipient exports use the distinct `packproof.disclosure-package.v1` schema: `view.json`, selected `media/` files, and the hash inventory. They contain no canonical manifest, original object keys, excluded original hashes, or hidden media. The verifier reports `DISCLOSURE_ONLY` with exit `2`; `evidenceVerified` is zero because canonical original identity has not been independently established. Lineage for redacted originals is visibly withheld by scope. Any unexpected extra file in a disclosure archive fails verification.
 
 Full exports require participant authorization. They can contain sensitive fields; a recipient-scoped projection must be a distinct disclosure export and must never masquerade as the complete root manifest. Revoking online access cannot recall already downloaded bytes. Derivatives are optional aids; their lineage must identify source hash/version, transformation/version, derivative hash, and omitted intervals. This exporter currently includes canonical originals and lifecycle originals, and declares an empty derivative inventory.
+
+## Portable signed supplement snapshots
+
+Current full participant exports freeze the received supplement head before streaming the ZIP. `proof-supplements.json` uses schema `packproof.signed-supplement-snapshot.v1` and includes `proofId`, `snapshotAt`, `coreManifestSha256`, `sequence`, `sha256`, and the ordered `supplements` array. The `package.json.sources.signedSupplements` descriptor is exactly `{path, sequence, sha256, snapshotAt}`. Its path is `proof-supplements.json`, and the snapshot file is indexed by the archive hash inventory. A declared missing file fails verification; it never silently becomes a legacy package. An empty snapshot has sequence zero and uses the core digest as its head.
+
+For each received entry, the verifier checks exact UTF-8 `canonicalJson` bytes against its digest and separate signature, then checks the signed domain/version, Proof identity, original core digest, sequence, preceding digest, supplement identity, kind, attributed actor, operation identity, recorded date, and correction ancestry against the supplied representation. Duplicate identities, missing middle entries, reordered entries, a correction that targets another actor, and a chain that does not reach the declared head fail. Arbitrary signed facts are parsed for structure but never reserialized using Python number formatting. Their signature authenticates the attributed statement; it does not establish that the statement is physically true.
+
+Each entry selects its key from the same independently supplied trust list or signed registry used for the root. ECDSA/SHA-256 and RSA-PSS/SHA-256 are supported. Registry validity, retirement, revocation, compromise, and freshness checks apply separately to each signing key. For example, the root can retain `signatureVerified:true` while a compromised supplement key produces overall `SUPPLEMENT_COMPROMISED_KEY`; valid signature mathematics cannot overcome the compromise policy. Unsigned shipping/event inventories retain `otherSupplementalFiles.status:SELF_CONSISTENCY_ONLY`.
+
+A successful nonempty chain reports `supplements.status:VERIFIED_RECEIVED_SNAPSHOT`, `fullyVerifiedReceivedChain:true`, the received sequence/head, and `completeness:RECEIVED_SNAPSHOT_ONLY`. An empty declared snapshot reports `EMPTY_RECEIVED_SNAPSHOT` without claiming any supplement signatures were checked. Older packages without a descriptor or snapshot remain readable and report `NOT_INCLUDED_LEGACY_OR_UNDECLARED` and `completeness:NOT_ESTABLISHED`.
+
+The declared head and export date are export metadata, not an independently signed timestamp or a promise of completeness. A valid older prefix can be exported or presented after newer entries exist. Even an attacker who removes the whole optional chain can resemble an older legacy export, so a successful root result never proves that no supplements were omitted. Independently obtained expected head/digest information or a current authorized source is required to resolve that question; this offline version does not discover unseen entries or later revocations. The JSON and static HTML reports state these limits explicitly.
 
 ## Canonical bytes and vectors
 
@@ -70,6 +105,10 @@ From the repository root:
 
 ```bash
 npm --prefix backend test -- --run tests/proof-anywhere.test.ts tests/proof-package.test.ts
+python3 -B -m unittest discover -s verifier -p 'test_*.py' -v
+npm --prefix backend test -- tests/signed-registry-offline.test.ts tests/signed-supplement-offline.test.ts tests/package-streaming.test.ts
 ```
+
+Signed-registry tests exercise actual Python/OpenSSL verification for ECDSA and RSA-PSS authorities, corrupt registries, incorrect or missing external pins, unknown keys, stale/future snapshots, retirement windows, revoked/compromised keys with backdated claimed signatures, invalid manifest signatures and archive-included trust material. A TypeScript-generated signed fixture checks canonical interoperability, including Unicode text. The Python tests are also run by the backend test suite. Signed-supplement tests cover missing, duplicate, reordered and tampered received entries, declared head/scope/date mismatches, both signature algorithms, independently supplied legacy trust, unknown/retired/revoked/compromised keys, empty and legacy exports, and a valid older prefix. An actual database-backed TypeScript export test verifies frozen older/current snapshots with Python, Unicode and JavaScript numeric vectors, and an unchanged signed root.
 
 Fixtures cover valid signature verification, modified media even after rewriting the ZIP hash inventory, missing files, unknown/forged/revoked keys, unsigned records, stale trust, unsupported versions, deliberate omissions, traversal, Windows paths, duplicate entries and compressed-size abuse. Tests run with deliberately unusable HTTP proxy endpoints; the verifier implementation has no network client. A physical air-gap and independent reviewer usability trial remain separate deployment/pilot validation tasks.

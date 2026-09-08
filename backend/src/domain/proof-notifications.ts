@@ -586,10 +586,10 @@ function toIso(value: Date | string): string {
 }
 
 async function copyReceiptGrant(db:Database,clock:Clock,actorUserId:string,proofId:string,targetLinkId:string,sourceLinkId:unknown):Promise<number|null> {
-  if(typeof sourceLinkId!=="string"||sourceLinkId===targetLinkId) throw new DomainError("INVALID_DISCLOSURE","Select a reviewed buyer receipt link",400);
+  if(typeof sourceLinkId!=="string"||sourceLinkId===targetLinkId) throw new DomainError("INVALID_DISCLOSURE","Select a shared Proof link",400);
   type Copied={scope_version:number,policy_version:string,purpose:string,fields:unknown,media:unknown,preview_hash:string};
   const source=(await db.query<Copied>(`SELECT g.* FROM proof_disclosure_grants g JOIN proof_access_links l ON l.id=g.access_link_id WHERE l.id=$1 AND l.proof_id=$2 AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at>$3) AND NOT EXISTS(SELECT 1 FROM proof_notification_subscriptions s WHERE s.access_link_id=l.id) ORDER BY g.scope_version DESC LIMIT 1`,[sourceLinkId,proofId,clock.now().toISOString()])).rows[0];
-  if(!source||source.purpose!=="BUYER_RECEIPT")throw new DomainError("INVALID_DISCLOSURE","Select a current reviewed buyer receipt link",409);
+  if(!source||!["BUYER_RECEIPT","SHARED_PROOF"].includes(source.purpose))throw new DomainError("INVALID_DISCLOSURE","Select a current shared Proof link",409);
   const previous=(await db.query<Copied>("SELECT * FROM proof_disclosure_grants WHERE access_link_id=$1 ORDER BY scope_version DESC LIMIT 1",[targetLinkId])).rows[0];
   if(previous&&previous.policy_version===source.policy_version&&previous.purpose===source.purpose&&JSON.stringify(previous.fields)===JSON.stringify(source.fields)&&JSON.stringify(previous.media)===JSON.stringify(source.media)&&previous.preview_hash===source.preview_hash)return null;
   const version=Number(previous?.scope_version??0)+1;

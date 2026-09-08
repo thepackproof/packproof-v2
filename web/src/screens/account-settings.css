@@ -1,0 +1,19 @@
+.account-settings { max-width: 760px; }
+.settings-list { border-block-start: 1px solid var(--border); }
+.settings-row, .settings-detail > summary { min-height: 52px; padding: 14px 0; text-align: start; font: inherit; color: var(--text); }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; border: 0; border-block-end: 1px solid var(--border); background: transparent; cursor: pointer; }
+.settings-row > span, .settings-detail > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.settings-detail { border-block-end: 1px solid var(--border); }
+.settings-detail > summary { cursor: pointer; font-weight: 600; }
+.settings-detail > .stack { padding-block: 4px 18px; }
+.settings-detail[open] > summary { color: var(--text); }
+.settings-detail p { overflow-wrap: anywhere; }
+.channel-toggle { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; }
+.channel-toggle input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--accent); }
+.channel-orders { padding-block: 12px; border-block-start: 1px solid var(--border); }
+.channel-account { padding-block: 4px; }
+.sales-channel h2 { margin: 0; }
+.recording-settings-list { list-style: none; margin: 0; padding: 0; }
+.recording-settings-list > li { padding-block: 16px; border-block-start: 1px solid var(--border); }
+.settings-row:focus-visible, .settings-detail > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+@media (prefers-reduced-motion: no-preference) { .settings-row { transition: background-color 140ms ease, color 140ms ease; } }

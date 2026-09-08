@@ -57,7 +57,7 @@ describe("S3 evidence transport boundary", () => {
     const uploaded = await request(harness.app)
       .put(`/upload/${token}`)
       .set("Content-Type", "video/mp4")
-      .send(Buffer.from("local-http-bytes"));
+      .send(Buffer.concat([Buffer.from([0,0,0,24,102,116,121,112]),Buffer.from("local-http-bytes")]));
     expect(uploaded.status).toBe(200);
     const committed = await commitEvidence(
       harness.db,
@@ -67,7 +67,7 @@ describe("S3 evidence transport boundary", () => {
       proof.proofId,
       initialized.evidenceId,
     );
-    expect(committed.sha256).toBe(sha256Hex(Buffer.from("local-http-bytes")));
+    expect(committed.sha256).toBe(sha256Hex(Buffer.concat([Buffer.from([0,0,0,24,102,116,121,112]),Buffer.from("local-http-bytes")])));
     expect(committed.proof.status).toBe("EVIDENCE_COMMITTED");
   });
 
@@ -273,8 +273,8 @@ describe("S3 evidence transport boundary", () => {
       .put("/upload/not-a-local-token")
       .set("Content-Type", "video/mp4")
       .send(Buffer.from("should-not-be-stored"));
-    expect(proxied.status).toBe(400);
-    expect(proxied.body.error.code).toBe("UPLOAD_NOT_LOCAL");
+    expect(proxied.status).toBe(403);
+    expect(proxied.body.error.code).toBe("UPLOAD_ADMISSION_REQUIRED");
 
     const missing = await request(harness.app)
       .post(`/proofs/${proof.proofId}/evidence/${initialized.body.evidenceId}/commit`)

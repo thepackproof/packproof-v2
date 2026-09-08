@@ -1,0 +1,109 @@
+/* Colors sampled from the paper-and-ink PackProof identity. */
+:root {
+  --brand-paper: #f5f2e9;
+  --brand-sheet: #fffefa;
+  --brand-inset: #f0eee6;
+  --brand-ink: #26302d;
+  --brand-ink-raised: #34423e;
+  --brand-muted: #59635f;
+  --brand-quiet: #59635f;
+  --brand-rule: #d9d8cf;
+  --brand-blue: #56727b;
+  --brand-blue-text: #48616a;
+  --brand-blue-soft: #eaf0f0;
+  --brand-blue-line: #c3d2d5;
+  --brand-forest: #365f4c;
+  --brand-forest-soft: #eaf0e8;
+  --brand-forest-line: #c5d3c6;
+  --brand-on-ink: #f5f2e9;
+  --brand-on-ink-muted: #c5cec4;
+  --brand-on-ink-blue: #a4c2cc;
+  --brand-on-ink-green: #a2c4a8;
+}
+
+/* Public pages retain a paper appearance after visiting a dark workspace. */
+.public-site, .auth-experience {
+  --ink: var(--brand-ink);
+  --muted: var(--brand-muted);
+  --line: var(--brand-rule);
+  --bg: var(--brand-paper);
+  --surface: var(--brand-sheet);
+  --surface-elevated: var(--brand-inset);
+  --surface-pressed: #e9e8df;
+  --input-bg: var(--brand-sheet);
+  --text: var(--brand-ink);
+  --text-secondary: var(--brand-muted);
+  --text-muted: var(--brand-quiet);
+  --text-on-primary: var(--brand-sheet);
+  --navy: var(--brand-ink);
+  --slate: var(--brand-muted);
+  --border: var(--brand-rule);
+  --divider: #e6e5dc;
+  --blue: var(--brand-blue);
+  --blue-soft: var(--brand-blue-soft);
+  --accent: var(--brand-blue);
+  --accent-pressed: var(--brand-blue-text);
+  --accent-text: var(--brand-blue-text);
+  --accent-soft: var(--brand-blue-soft);
+  --accent-soft-border: var(--brand-blue-line);
+  --primary: var(--brand-ink);
+  --primary-pressed: var(--brand-ink-raised);
+  --green: var(--brand-forest);
+  --green-soft: var(--brand-forest-soft);
+  --success: var(--brand-forest);
+  --success-text: var(--brand-forest);
+  --success-soft: var(--brand-forest-soft);
+  --success-soft-border: var(--brand-forest-line);
+  --warning-soft: #f7f0df;
+  --warning-text: #78551e;
+  --warning-soft-border: #ddcfac;
+  --error: #a13930;
+  --error-soft: #f7eae5;
+  color-scheme: light;
+}
+
+/* Paper is the dominant surface; charcoal anchors the smaller feature panels. */
+.dark-intro { background: var(--brand-paper); color: var(--brand-ink); }
+.header-dark, .hero-bottom { border-color: var(--brand-rule); }
+.dark-intro .on-dark,
+.header-dark .public-nav,
+.dark-intro .text-link.light { color: var(--brand-ink); }
+.header-dark .public-nav a:hover { color: var(--brand-blue-text); }
+.dark-intro h1, .public-site .hero h1 { color: var(--brand-ink) !important; }
+.dark-intro h1 span, .public-site .hero h1 span { color: var(--brand-blue-text) !important; }
+.hero-copy > p, .hero-copy > p:not(.site-eyebrow),
+.dark-intro .hero-note, .dark-intro .site-eyebrow.light,
+.hero-bottom, .hero-bottom > span, .hero-bottom > a { color: var(--brand-muted); }
+.hero .sample-record { box-shadow: 0 20px 55px #26302d14; }
+.site-button.blue { background: var(--brand-blue); color: var(--brand-sheet); }
+.site-button.blue:hover { background: var(--brand-blue-text); }
+.site-button.navy { background: var(--brand-ink); color: var(--brand-sheet); }
+.site-button.navy:hover { background: var(--brand-ink-raised); }
+.brand-dot { color: var(--brand-forest); }
+.product-section { background: var(--brand-inset); }
+.bento-wide .micro-label { color: var(--brand-on-ink-blue); }
+.closing-cta h2, .auth-story h2, .workspace-welcome h2 { color: var(--brand-on-ink); }
+.bento-wide p, .closing-cta p, .site-eyebrow.light { color: var(--brand-on-ink-muted); }
+.problem-scale { background: var(--brand-inset); color: var(--brand-ink); }
+.problem-scale h2 { color: var(--brand-ink); }
+.problem-scale .site-eyebrow.light,
+.problem-scale .problem-intro, .problem-caveat { color: var(--brand-muted); }
+.problem-statistics article { border-color: var(--brand-rule); }
+.problem-statistics strong, .problem-statistics a { color: var(--brand-blue-text); }
+.sample-source-note { background: #f7f0df; color: #78551e; }
+.created-bar { background: var(--accent); }
+.finalized-bar { background: var(--success); }
+.tracking-map-empty { background: var(--surface-elevated); }
+.core-milestone .timeline-node, [data-state=COMPLETE] > .public-progress-node {
+  color: var(--success-text);
+  background: var(--success-soft);
+  border-color: var(--success-soft-border);
+  box-shadow: none;
+}
+.capture-coach { background: var(--brand-ink); color: var(--brand-on-ink); border-color: var(--brand-ink-raised); }
+.capture-coach button { background: var(--brand-ink-raised); border-color: #66776b; }
+.capture-coach button[aria-pressed="true"] { background: var(--brand-forest); border-color: var(--brand-on-ink-green); }
+button:focus-visible, a:focus-visible, summary:focus-visible,
+:where(input, select, textarea, [tabindex]):focus-visible {
+  outline-color: var(--accent, var(--brand-blue-text));
+}

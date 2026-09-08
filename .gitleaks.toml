@@ -1,0 +1,73 @@
+# Reviewed against CI run 34087260300, Source secrets job 101633568556.
+# Preserve every built-in rule. Each exception requires BOTH the exact path and exact
+# reviewed non-secret value, and applies only to the named rule. No history is skipped.
+title = "PackProof audited non-secret fixture exceptions"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public CodeBuild execution UUID; an identifier, not an authentication credential."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/RELEASE_2026\-09\-05\.md$''']
+regexes = ['''^575a41c3\-8d08\-4a20\-9830\-35a4888d97a3$''']
+
+[[allowlists]]
+description = "Fixed tracker-link signing phrase used only with isolated test harness and fake delivery."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^backend/tests/notification\-merge\.test\.ts$''']
+regexes = ['''^notification\-merge\-verification\-secret\-at\-least\-32\-bytes$''']
+
+[[allowlists]]
+description = "Fixed tracker-link signing phrase used only with isolated test harness and fake delivery."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^backend/tests/product\-hardening\.test\.ts$''']
+regexes = ['''^test\-notification\-delivery\-secret\-at\-least\-32\-bytes$''']
+
+[[allowlists]]
+description = "Explicitly synthetic test-mode API key used with injected fake Stripe fetcher; retained history."
+targetRules = ["stripe-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^backend/tests/program\-metrics\-stripe\.test\.ts$''']
+regexes = ['''^rk_test_syntheticfixtureonly0000000$''']
+
+# Additional reviewed findings: run34091018206, job101644328180.
+[[allowlists]]
+description = "Exact source-file digest inventory entries, recomputed against their named tracked files."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/program\-2026\-09\-07/acceptance\-evidence\-register\.v1\.json$''']
+regexes = [
+  '''^0877a7bafb8d37146dd4165804a4daf4d2f9f20e855c719021263bdaba5f465a$''',
+  '''^b7e2bc4c629d033ae7996caaf3225a8568f341040c8c51fc99e10b8591845f77$''',
+  '''^72eeef31ba8457a1ba692be1c2ecc8403d1bfc63dbdcb432b361cdd51b7c5316$''',
+  '''^2a8ac30439cc1876514a02a731b3ee65ba2c3ceca95e3ccc113bddfb741f93d2$''',
+  '''^f9e5ef48519c82493e223cc9760052c9b948719e2c4d757e612f401d58b2e522$''',
+  '''^66dd551b25aa36d97445cb4ce6bbb46355c5903de350f9b636a12fd437281c43$''',
+]
+
+[[allowlists]]
+description = "Ordinary prose enumerating signing-key states; no authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/program\-2026\-09\-07/acceptance\-evidence\-register\.v1\.json$''']
+regexes = ['''^retired/revoked/compromised/unknown/stale$''']
+
+# Reviewed CI run 34179088662 / job 101914297483: the exact inspected API
+# commit identifier, also returned publicly by /meta, is not a credential.
+[[allowlists]]
+description = "Exact inspected live API source commit in the UI/UX release evidence template."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/ui\-ux\-redesign\-2026\-09\-08/release\-evidence\.template\.json$''']
+regexes = ['''^594ea0e0414228c4d149527b4f138a8095765b02$''']

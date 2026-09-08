@@ -1,4 +1,11 @@
+import { getAccountDeletionRequest, requestAccountDeletion } from "./domain/account-deletion.js";
+import { supportAccessRouter } from "./support/router.js";
+import { createReadiness, liveness, type DependencyProbe } from "./operations/readiness.js";
+import { getAccountUsageSummary, ingestVerifiedBillingEvent } from "./billing/usage-ledger.js";
+import type { StripeBillingAdapter } from "./billing/stripe-adapter.js";
+import {createObservationRouter,type ProgramObservationConfig} from "./analytics/observation-router.js";
 import { appendAudit } from "./domain/audit.js";
+import { pipeline } from "node:stream/promises";
 import express, {
   type ErrorRequestHandler,
   type Express,
@@ -12,11 +19,12 @@ import type { Database } from "./db/database.js";
 import { createOrGetProof, createProof } from "./domain/create-proof.js";
 import { requireParticipationPolicy } from "./domain/participation.js";
 import { requireWorkflowType } from "./domain/workflow.js";
-import { DomainError, errorCodeFromSql } from "./domain/errors.js";
+import { DomainError } from "./domain/errors.js";
 import {
   commitEvidence,
   initializeEvidenceUpload,
   readCommittedEvidence,
+  readCommittedEvidenceStream,
 } from "./domain/evidence.js";
 import { finalizeProof, getManifest } from "./domain/finalize.js";
 import { createProofAssets, listProofAssets, updateAssetCatalog } from "./domain/assets.js";
@@ -32,7 +40,6 @@ import {
   receiveAssets,
 } from "./domain/orchestration.js";
 import {
-  assertPublicProofRateLimit,
   createAccessLink,
   listAccessLinks,
   revokeAccessLink,
@@ -46,7 +53,8 @@ import {
   searchUsersForProof,
 } from "./domain/invitations.js";
 import { commitAttestation } from "./domain/attestations.js";
-import { listMyProofs } from "./domain/proof-collection.js";
+import { createAttestationChallenge } from "./domain/attestation-authorization.js";
+import { listMyProofs, queryMyProofs, parseProofListQuery } from "./domain/proof-collection.js";
 import { listLinkedIdentities, unlinkIdentity } from "./domain/external-identities.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
 import { authorizeProofAccess, getProofForUser } from "./domain/proofs.js";
@@ -160,21 +168,23 @@ import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
-import { exportEvidencePackage, getEvidenceReview } from "./domain/evidence-review.js";
+import { exportEvidencePackageStream, getEvidenceReview } from "./domain/evidence-review.js";
 import {
   listUploadParts,
-  storeUploadPart,
   completeUploadParts,
   discardPendingUpload,
 } from "./domain/resumable-upload.js";
 import { commerceLifecycleRouter } from "./http/commerce-lifecycle-router.js";
-import { httpBoundary, requestBodyErrors } from "./http/boundary.js";
+import { httpBoundary, requestBodyErrors, requestCorrelation, configureTrustedProxy, distributedRateLimit, safeHttpError } from "./http/boundary.js";
 import { captureSessionRouter, packingRelayRouter } from "./http/capture-router.js";
 import { signatureRouter } from "./http/signature-router.js";
 import { disclosureRouter, sendPrivateMedia } from "./http/disclosure-router.js";
-import { exportDisclosurePackage } from "./domain/disclosure-package.js";
-import { setCommerceAutomation, AUTOMATIC_ORDER_POLICY, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
+import { exportDisclosurePackageStream } from "./domain/disclosure-package.js";
+import { setCommerceAutomation, commerceOrderPolicy, getCommerceReviewSummary, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
 import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
+import { disabledEtsyRuntime, type EtsyRuntime } from "./integrations/etsy/runtime.js";
+import { createEtsyCommerceAdapter } from "./integrations/etsy/commerce-adapter.js";
+import { createEtsyAccessTokenRunner } from "./integrations/etsy/access.js";
 import { normalizeShopifyShop, shopifyShopHandle } from "./integrations/shopify/shop.js";
 import {
   getRetentionControls,
@@ -184,6 +194,15 @@ import {
 } from "./domain/retention-controls.js";
 
 import type { ManifestSigningRuntime } from "./integrity/signing-runtime.js";
+import { captureCapabilities } from "./http/capabilities.js";
+import { getProofRecoveryStatus } from "./domain/recovery-journal.js";
+import { receiveAdmittedUpload } from "./domain/media-admission.js";
+import { readDisclosedMediaStream } from "./domain/disclosure-stream.js";
+import { receiveAdmittedUploadPart } from "./domain/resumable-upload.js";
+import { packingRequestsRouter, parcelScopeRouter } from "./http/packing-requests-router.js";
+import { recipientExportsRouter } from "./http/recipient-exports-router.js";
+import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proof-supplements.js";
+import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 
 export interface AppDependencies {
   db: Database;
@@ -200,10 +219,15 @@ export interface AppDependencies {
   releaseIdentity?: ReleaseIdentity;
   ebay?: EbayRuntime;
   shopify?: ShopifyOAuthRuntime;
+  etsy?: EtsyRuntime;
   google?: GoogleOAuthRuntime;
   facebook?: FacebookOAuthRuntime;
   webhookConfig?: WebhookConfig;
   manifestSigning?: ManifestSigningRuntime;
+  requireDurableReceipts?: boolean;
+  readinessProbes?: DependencyProbe[];
+  billing?: StripeBillingAdapter | null;
+  observationConfig?: ProgramObservationConfig | null;
 }
 
 function asyncRoute(
@@ -233,6 +257,9 @@ declare global {
 export function createApp(deps: AppDependencies): Express {
   const app = express();
   app.disable("x-powered-by");
+  configureTrustedProxy(app);
+  app.use(requestCorrelation);
+  app.use("/public",distributedRateLimit(deps.db,{scope:"public-proof",limit:120,windowMs:60_000}));
   const corsOrigins = deps.corsOrigins ?? [];
   const integrations = deps.integrations ?? createDefaultIntegrationRegistry(deps.clock);
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
@@ -240,12 +267,14 @@ export function createApp(deps: AppDependencies): Express {
   const ebay = deps.ebay ?? disabledEbayRuntime();
   if (ebay.enabled) integrations.registerCommerce(createEbayCommerceAdapter(deps.db, deps.clock, ebay, credentialStore));
   const shopify = deps.shopify ?? disabledShopifyRuntime();
+  const etsy = deps.etsy ?? disabledEtsyRuntime();
   const google = deps.google ?? disabledGoogleRuntime();
   const facebook = deps.facebook ?? disabledFacebookRuntime();
   const connectedAccounts: ConnectedAccountService = {
     registry: createConnectedAccountRegistry({
       ebay,
       shopify,
+      etsy,
       google,
       facebook,
       credentials: credentialStore,
@@ -254,30 +283,54 @@ export function createApp(deps: AppDependencies): Express {
     packproofEnvironment: releaseIdentity.environment,
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
+  if (etsy.enabled && etsy.client) {
+    integrations.registerCommerce(createEtsyCommerceAdapter(etsy.client,
+      createEtsyAccessTokenRunner(deps.db, deps.clock, connectedAccounts)));
+  }
   app.use(httpBoundary(corsOrigins));
+  // Admission must happen before a body parser can buffer or accept upload bytes.
+  app.put("/upload/:token", asyncRoute(async (req, res) => {
+    const result = await receiveAdmittedUpload(deps.db, deps.clock, deps.objectStore, req.params.token, req);
+    res.json({objectKey:result.key,evidenceId:result.evidenceId});
+  }));
+  app.put("/proofs/:id/evidence/:evidenceId/parts/:partNumber", asyncRoute(async (req, res) => {
+    const actor = await deps.auth.authenticate(req.headers);
+    req.packproofUserId = actor.userId;
+    res.json(await receiveAdmittedUploadPart(deps.db, deps.clock, deps.objectStore, actor.userId,
+      req.params.id, req.params.evidenceId, Number(req.params.partNumber), req));
+  }));
+  app.post("/billing/webhooks/stripe", distributedRateLimit(deps.db,{scope:"billing-webhook",limit:120,windowMs:60_000}), express.raw({type:()=>true,limit:"1mb"}), asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    res.json(await ingestVerifiedBillingEvent(deps.db,deps.clock,deps.billing,{rawBody:req.body,signature:req.get("Stripe-Signature")??null}));
+  }));
   app.use("/integrations/webhooks", express.raw({ type: () => true, limit: "256kb" }));
   app.use((req, res, next) => {
-    if (Buffer.isBuffer(req.body)) {
+    if (Buffer.isBuffer(req.body) || (req.method === "PUT" && /^\/v1\/proofs\/[^/]+\/evidence\/[^/]+\/parts\/[^/]+$/.test(req.path))) {
       next();
       return;
     }
     express.json({ limit: "2mb" })(req, res, next);
   });
-  app.use(
-    express.raw({
-      type: ["application/octet-stream", "video/*", "image/*", "audio/*"],
-      limit: "100mb",
-    }),
-  );
+  app.use((req,res,next) => {
+    if (req.method === "PUT" && /^\/v1\/proofs\/[^/]+\/evidence\/[^/]+\/parts\/[^/]+$/.test(req.path)) { next(); return; }
+    express.raw({type:["application/octet-stream","video/*","image/*","audio/*"],limit:"100mb"})(req,res,next);
+  });
+
+  app.get("/live", liveness);
+  app.get("/ready", createReadiness(deps.readinessProbes ?? [{name:"database",check:()=>deps.db.query("SELECT 1")}]).handler);
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
+  app.get("/capabilities", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(captureCapabilities(releaseIdentity, deps.requireDurableReceipts === true));
+  });
+
   app.get(
     "/public/proofs/:token",
     asyncRoute(async (req, res) => {
-      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Referrer-Policy", "no-referrer");
       const result = await getPublicProof(deps.db, deps.clock, req.params.token);
@@ -288,34 +341,45 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/public/proofs/:token/evidence/:evidenceId",
     asyncRoute(async (req, res) => {
-      assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
-      const { readPublicEvidence } = await import("./domain/public-proof.js");
-      const media = await readPublicEvidence(
+      const media = await readDisclosedMediaStream(
         deps.db,
         deps.clock,
         deps.objectStore,
         req.params.token,
         req.params.evidenceId,
+        req.header("range"),
       );
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Referrer-Policy", "no-referrer");
-      sendPrivateMedia(req, res, media);
+      res.status(media.status).set(media.headers);
+      if (media.body) await pipeline(media.body,res); else res.end();
     }),
   );
 
   app.get("/public/proofs/:token/package", asyncRoute(async (req, res) => {
-    assertPublicProofRateLimit(String(req.ip || req.socket.remoteAddress || "unknown"));
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
-    const bytes = await exportDisclosurePackage(deps.db, deps.clock, deps.objectStore, req.params.token);
+    const archive = await exportDisclosurePackageStream(deps.db, deps.clock, deps.objectStore, req.params.token);
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Disposition", 'attachment; filename="proof-view.zip"');
-    res.type("application/zip").send(bytes);
+    res.type("application/zip");
+    await pipeline(archive,res);
   }));
+
+  app.get("/.well-known/packproof-trust-registry.json", (_req,res)=>{
+    res.setHeader("Cache-Control","no-store");
+    res.setHeader("X-Content-Type-Options","nosniff");
+    const registry=deps.manifestSigning?.readSignedTrustRegistry?.() ?? deps.manifestSigning?.signedTrustRegistryJson;
+    if(!registry) {
+      res.status(503).json({error:{code:"SIGNED_TRUST_REGISTRY_UNAVAILABLE",message:"The signed trust registry is not configured"}}); return;
+    }
+    res.type("application/json").send(registry);
+  });
 
   app.get("/.well-known/packproof-trust.json", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    deps.manifestSigning?.readSignedTrustRegistry?.();
     if (!deps.manifestSigning?.trustList) {
       res.status(503).json({ error: { code: "MANIFEST_TRUST_NOT_CONFIGURED", message: "An authenticated public trust list has not been configured" } });
       return;
@@ -324,6 +388,7 @@ export function createApp(deps: AppDependencies): Express {
   });
   app.get("/integrity/signing", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
+    deps.manifestSigning?.readSignedTrustRegistry?.();
     res.json(deps.manifestSigning?.publicStatus ?? { mode: "UNSIGNED", algorithm: null, keyId: null, required: false, trustListSha256: null });
   });
 
@@ -351,18 +416,6 @@ export function createApp(deps: AppDependencies): Express {
     );
   }
 
-  app.put(
-    "/upload/:token",
-    asyncRoute(async (req, res) => {
-      const body = Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(typeof req.body === "string" ? req.body : "");
-      const contentType = req.header("content-type") ?? undefined;
-      const result = await deps.objectStore.putUpload(req.params.token, body, contentType);
-      res.json({ objectKey: result.key });
-    }),
-  );
-
   app.use("/v1", createPlatformRouter(deps));
 
   app.use((req, _res, next) => {
@@ -388,12 +441,77 @@ export function createApp(deps: AppDependencies): Express {
       .catch(next);
   });
 
+  app.get("/me/account-deletion-request", asyncRoute(async(req,res)=>{
+    res.json(await getAccountDeletionRequest(deps.db,bearerUser(req)));
+  }));
+  app.post("/me/account-deletion-request", asyncRoute(async(req,res)=>{
+    res.status(202).json(await requestAccountDeletion(deps.db,deps.clock,bearerUser(req),req.body));
+  }));
+  app.use("/internal/support", supportAccessRouter(deps));
+  app.use("/study",distributedRateLimit(deps.db,{scope:"study-observation",limit:120,windowMs:60_000,subject:bearerUser}),createObservationRouter(deps,deps.observationConfig??null));
+  app.use("/me/billing",distributedRateLimit(deps.db,{scope:"account-billing",limit:30,windowMs:60_000,subject:bearerUser}));
+  app.get("/me/billing/status",asyncRoute(async(req,res)=>{
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(deps.billing?await deps.billing.getOwnBillingStatus(deps.db,bearerUser(req)):{enabled:false,subscriptions:[],pendingCheckout:null});
+  }));
+  app.get("/me/billing/offer",asyncRoute(async(_req,res)=>{
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(deps.billing?await deps.billing.listApprovedCheckoutOffer(deps.db):{enabled:false,offer:null});
+  }));
+  app.post("/me/billing/checkout",asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    const body=req.body;
+    if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(key=>!["operationId","offerVersion","acceptedOfferSha256"].includes(key))||[body.operationId,body.offerVersion,body.acceptedOfferSha256].some(value=>typeof value!=="string"))
+      throw new DomainError("INVALID_BILLING_INPUT","An exact accepted offer and stable checkout operation ID are required",400);
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await deps.billing.createOwnCheckout(deps.db,bearerUser(req),body));
+  }));
+  app.post("/me/billing/checkout/complete",asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    const body=req.body;
+    if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(key=>key!=="operationId")||typeof body.operationId!=="string")
+      throw new DomainError("INVALID_BILLING_INPUT","A checkout operation ID is required",400);
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await deps.billing.completeOwnCheckout(deps.db,bearerUser(req),body));
+  }));
+  app.get("/me/billing/invoices", asyncRoute(async(req,res)=>{
+    res.setHeader("Cache-Control","private, no-store");
+    if(!deps.billing){res.json({enabled:false,invoices:[]});return;}
+    const customerReference=req.query.customerReference,startingAfter=req.query.startingAfter;
+    if((customerReference!==undefined&&typeof customerReference!=="string")||(startingAfter!==undefined&&typeof startingAfter!=="string"))throw new DomainError("INVALID_BILLING_REFERENCE","Billing references must be strings",400);
+    res.json({enabled:true,...await deps.billing.listOwnInvoices(deps.db,bearerUser(req),{customerReference,startingAfter})});
+  }));
+  app.post("/me/billing/cancellation-portal", asyncRoute(async(req,res)=>{
+    if(!deps.billing)throw new DomainError("BILLING_DISABLED","Billing is not configured",404);
+    const {customerReference,subscriptionReference,operationId}=req.body??{};
+    if((customerReference!==undefined&&typeof customerReference!=="string")||typeof subscriptionReference!=="string"||typeof operationId!=="string")throw new DomainError("INVALID_BILLING_REFERENCE","A subscription reference and stable operation ID are required",400);
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await deps.billing.createOwnCancellationPortal(deps.db,bearerUser(req),{customerReference,subscriptionReference,operationId}));
+  }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
   app.use("/proofs/:id/capture-sessions", captureSessionRouter(deps));
   app.use("/me/packing-relay", packingRelayRouter(deps));
   app.use("/proofs/:id/signature", signatureRouter(deps));
   app.use("/proofs/:id/disclosure", disclosureRouter(deps));
+  app.use("/packing-requests", packingRequestsRouter(deps));
+  app.use("/proofs/:id/parcel-scope", parcelScopeRouter(deps));
+  app.use("/proofs/:id/recipient-exports", recipientExportsRouter(deps));
+  app.get("/proofs/:id/supplements", asyncRoute(async (req,res)=>{
+    await requireCommerceAccess(deps.db,req.params.id,bearerUser(req));
+    res.setHeader("Cache-Control","private, no-store");
+    res.json(await getProofSupplementSnapshot(deps.db,req.params.id));
+  }));
+  app.post("/proofs/:id/supplements", asyncRoute(async (req,res)=>{
+    if (!deps.manifestSigning?.signer) throw new DomainError("MANIFEST_SIGNING_UNAVAILABLE","Signing is temporarily unavailable. Retry shortly.",503);
+    res.status(201).json(await appendProofSupplement(deps.db,deps.clock,deps.manifestSigning.signer,bearerUser(req),req.params.id,req.body));
+  }));
+  app.get("/me/usage", asyncRoute(async (req,res) => { res.setHeader("Cache-Control","private, no-store"); res.json(await getAccountUsageSummary(deps.db,deps.clock,bearerUser(req))); }));
+
+  app.get("/proofs/:id/recovery", asyncRoute(async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await getProofRecoveryStatus(deps.db, bearerUser(req), req.params.id));
+  }));
   app.get(
     "/proofs/:id/retention",
     asyncRoute(async (req, res) => {
@@ -497,25 +615,6 @@ export function createApp(deps: AppDependencies): Express {
       );
     }),
   );
-  app.put(
-    "/proofs/:id/evidence/:evidenceId/parts/:partNumber",
-    asyncRoute(async (req, res) => {
-      if (!Buffer.isBuffer(req.body))
-        throw new DomainError("INVALID_UPLOAD_PART", "Send binary bytes", 400);
-      res.json(
-        await storeUploadPart(
-          deps.db,
-          deps.clock,
-          deps.objectStore,
-          bearerUser(req),
-          req.params.id,
-          req.params.evidenceId,
-          Number(req.params.partNumber),
-          req.body,
-        ),
-      );
-    }),
-  );
   app.post(
     "/proofs/:id/evidence/:evidenceId/parts/complete",
     asyncRoute(async (req, res) => {
@@ -534,7 +633,7 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/proofs/:id/package",
     asyncRoute(async (req, res) => {
-      const bytes = await exportEvidencePackage(
+      const archive = await exportEvidencePackageStream(
         deps.db,
         deps.clock,
         deps.objectStore,
@@ -543,7 +642,8 @@ export function createApp(deps: AppDependencies): Express {
       );
       res.setHeader("Content-Disposition", `attachment; filename="${req.params.id.replace(/[^A-Za-z0-9_-]/g, "")}.zip"`);
       res.setHeader("Cache-Control", "no-store");
-      res.type("application/zip").send(bytes);
+      res.type("application/zip");
+      await pipeline(archive,res);
     }),
   );
 
@@ -740,7 +840,7 @@ export function createApp(deps: AppDependencies): Express {
         req.params.adapterKey,
         req.headers,
         rawBody,
-        { integrations, credentials: credentialStore },
+        { integrations, credentials: credentialStore, manifestSigning: deps.manifestSigning },
       );
       await deps.db.query(`UPDATE capture_shipment_jobs SET state='REGISTERED',attempts=0,last_error_code=NULL,carrier=$2,provider_mode=$3,registered_at=COALESCE(registered_at,$4),updated_at=$4,next_run_at=$5 WHERE transaction_id=$1`,[req.params.id,result.carrier??null,result.mode??null,deps.clock.now().toISOString(),new Date(deps.clock.now().getTime()+6*3600000).toISOString()]);
       res.status(result.createdCount > 0 ? 201 : 200).json(publicSyncResult(result));
@@ -756,7 +856,7 @@ export function createApp(deps: AppDependencies): Express {
         deps.clock,
         bearerUser(req),
         req.params.id,
-        { integrations, credentials: credentialStore },
+        { integrations, credentials: credentialStore, manifestSigning: deps.manifestSigning },
       );
       res.status(result.createdCount > 0 ? 201 : 200).json(publicSyncResult(result));
     }),
@@ -1403,6 +1503,10 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/me/proofs",
     asyncRoute(async (req, res) => {
+      if (["view", "q", "limit", "offset"].some(key => req.query[key] !== undefined)) {
+        res.json(await queryMyProofs(deps.db, bearerUser(req), parseProofListQuery(req.query), deps.clock.now()));
+        return;
+      }
       const proofs = await listMyProofs(deps.db, bearerUser(req));
       res.json({ proofs });
     }),
@@ -1448,8 +1552,9 @@ export function createApp(deps: AppDependencies): Express {
           lastErrorCode: sync.lastErrorCode,
           retryable: sync.retryable,
           readyOrderCount: await countReadyFulfillmentOrders(deps.db, row.id, actor),
+          ...await getCommerceReviewSummary(deps.db, row.id),
           autoSyncEnabled: row.auto_sync_enabled,
-          orderPolicy: AUTOMATIC_ORDER_POLICY,
+          orderPolicy: commerceOrderPolicy(row.adapter_key),
           sync,
         });
       }
@@ -1560,6 +1665,7 @@ export function createApp(deps: AppDependencies): Express {
           contentType: String(req.body?.contentType ?? ""),
           evidenceType: req.body?.evidenceType,
           captureSessionId: req.body?.captureSessionId,
+          byteSize: req.body?.byteSize,
           idempotencyKey,
         },
       );
@@ -1570,22 +1676,25 @@ export function createApp(deps: AppDependencies): Express {
   app.get(
     "/proofs/:id/evidence/:evidenceId",
     asyncRoute(async (req, res) => {
-      const result = await readCommittedEvidence(
+      const result = await readCommittedEvidenceStream(
         deps.db,
         deps.objectStore,
         bearerUser(req),
         req.params.id,
         req.params.evidenceId,
+        req.header("range"),
       );
       res.setHeader("Content-Type", result.contentType);
-      await appendAudit(deps.db, {
+      try { await appendAudit(deps.db, {
         proofId: req.params.id,
         actorUserId: bearerUser(req),
         eventType: "PROOF_ACCESSED",
         eventData: { channel: "evidence_playback", evidenceId: req.params.evidenceId },
         at: deps.clock.now(),
       });
-      sendPrivateMedia(req, res, result);
+      } catch(error) { result.body?.destroy(); throw error; }
+      res.status(result.status).set(result.headers);
+      if (result.body) await pipeline(result.body, res); else res.end();
     }),
   );
 
@@ -1606,13 +1715,17 @@ export function createApp(deps: AppDependencies): Express {
   );
 
   app.post(
+    "/proofs/:id/attestation-challenges",
+    asyncRoute(async (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.status(201).json(await createAttestationChallenge(deps.db, deps.clock, bearerUser(req), req.params.id, req.body));
+    }),
+  );
+
+  app.post(
     "/proofs/:id/attestations",
     asyncRoute(async (req, res) => {
-      const result = await commitAttestation(deps.db, deps.clock, bearerUser(req), req.params.id, {
-        statement: req.body?.statement == null ? undefined : String(req.body.statement),
-        relatedEvidenceId:
-          req.body?.relatedEvidenceId == null ? undefined : String(req.body.relatedEvidenceId),
-      });
+      const result = await commitAttestation(deps.db, deps.clock, bearerUser(req), req.params.id, req.body);
       res.status(201).json(result);
     }),
   );
@@ -1620,8 +1733,8 @@ export function createApp(deps: AppDependencies): Express {
   app.post(
     "/proofs/:id/finalize",
     asyncRoute(async (req, res) => {
-      const result = await finalizeProof(deps.db, deps.clock, bearerUser(req), req.params.id, deps.manifestSigning?.signer);
-      res.json(result);
+      const result = await finalizeProof(deps.db, deps.clock, bearerUser(req), req.params.id, deps.manifestSigning?.signer, {requireDurableReceipts:deps.requireDurableReceipts === true});
+      res.status(result.proof.status === "FINALIZED" ? 200 : 202).json(result);
     }),
   );
 
@@ -1634,39 +1747,7 @@ export function createApp(deps: AppDependencies): Express {
   );
 
   app.use(requestBodyErrors);
-  const errors: ErrorRequestHandler = (error, _req, res, _next) => {
-    if (error instanceof IntegrationError) {
-      res.status(error.httpStatus).json({
-        error: {
-          code: error.code,
-          message: error.message,
-          retryable: error.retryable,
-        },
-      });
-      return;
-    }
-    if (error instanceof DomainError) {
-      res.status(error.httpStatus).json({
-        error: { code: error.code, message: error.message },
-      });
-      return;
-    }
-    const sqlCode = errorCodeFromSql(error);
-    if (sqlCode) {
-      const status = sqlCode === "PROOF_ALREADY_FINALIZED" ? 409 : 409;
-      res.status(status).json({
-        error: {
-          code: sqlCode,
-          message: error instanceof Error ? error.message : sqlCode,
-        },
-      });
-      return;
-    }
-    console.error(error);
-    res.status(500).json({
-      error: { code: "INTERNAL", message: "Internal server error" },
-    });
-  };
+  const errors: ErrorRequestHandler = (error, _req, res, _next) => safeHttpError(error,res);
   app.use(errors);
 
   return app;

@@ -1,0 +1,77 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-backend@0.1.0 test
+> vitest run tests/proof-navigation.test.ts tests/canonical-proof-contract.test.ts tests/shared-proof.test.ts tests/disclosure-compatibility.test.ts tests/seller-attestation-authorization.test.ts tests/capture-sessions-relay.test.ts tests/automatic-fulfillment.test.ts tests/etsy-commerce-intake.test.ts
+
+
+ RUN  v3.2.7 /workspace/sites/packproof-pilot/backend
+
+ ✓ tests/automatic-fulfillment.test.ts (9 tests) 17913ms
+   ✓ automatic fulfillment ingestion > connects the reference storefront, syncs deterministically, and is idempotent  2765ms
+   ✓ automatic fulfillment ingestion > scopes the same order id to a stable commerce tenant per store  2448ms
+   ✓ automatic fulfillment ingestion > preserves multi-item and quantity facts and keeps merchant Proofs ready without a buyer  1471ms
+   ✓ automatic fulfillment ingestion > lets a seller attest a merchant Proof but refuses finalize without fulfillment capture  1962ms
+   ✓ automatic fulfillment ingestion > rejects uncommitted media and requires qualifying fulfillment capture, not generic seller video  2251ms
+   ✓ automatic fulfillment ingestion > promotes a newly eligible order and removes a cancelled order from the ready queue without deleting the Proof  1890ms
+   ✓ automatic fulfillment ingestion > keeps the queue seller-scoped and never exposes credentials or trusted client payloads  1499ms
+   ✓ automatic fulfillment ingestion > freezes merchant transaction items after finalization and still allows an optional buyer invite  1857ms
+   ✓ automatic fulfillment ingestion > keeps manual P2P participation and enforces the shared packing standard  1769ms
+ ✓ tests/capture-sessions-relay.test.ts (10 tests) 16566ms
+   ✓ authorized packing capture and relay > rejects missing sessions, wrong participants, wrong Proofs, forged origin and changed recording intent  2053ms
+   ✓ authorized packing capture and relay > persists registration and renews transport after restart/auth renewal without changing identity, final hash or original  1615ms
+   ✓ authorized packing capture and relay > preserves preauthorized offline recording recovery and rejects expired transport or structurally truncated media  1358ms
+   ✓ authorized packing capture and relay > requires pairing credentials and acknowledgements; rejects 100 reorders/rebindings while preserving pending original  1843ms
+   ✓ authorized packing capture and relay > authorizes receipt/return stages by actor and stage, preserves delayed recovery and never changes the sealed root  1830ms
+   ✓ authorized packing capture and relay > recovers an unacknowledged START after camera restart with a RECORDED original  1641ms
+   ✓ authorized packing capture and relay > recovers an unacknowledged START after camera restart with a UPLOADING original  1604ms
+   ✓ authorized packing capture and relay > recovers an unacknowledged START after camera restart with a COMMITTED original  1460ms
+   ✓ authorized packing capture and relay > rejects an old session and preserves its first START binding after a station advances  1540ms
+   ✓ authorized packing capture and relay > retains interrupted client context on retries and freezes it separately from server media duration  1620ms
+ ✓ tests/etsy-commerce-intake.test.ts (12 tests) 17811ms
+   ✓ Etsy canonical automatic fulfillment intake > runs authenticated HTTP connect, opt-in, background intake and shared Orders with account isolation  2090ms
+   ✓ Etsy canonical automatic fulfillment intake > imports an old pending order only after opt-in and never invents evidence or finalization  1272ms
+   ✓ Etsy canonical automatic fulfillment intake > reuses the same shop+receipt across repeated reads, pause, disconnect and reconnect  1522ms
+   ✓ Etsy canonical automatic fulfillment intake > keeps identical receipt references separate between shops  2377ms
+   ✓ Etsy canonical automatic fulfillment intake > rejects a different shop during reauthorization before replacing the saved credentials  1510ms
+   ✓ Etsy canonical automatic fulfillment intake > removes cancelled or shipped orders from the ready queue while preserving their existing Proofs  1376ms
+   ✓ Etsy canonical automatic fulfillment intake > does not import unpaid, cancelled, shipped, refunded or digital orders  1349ms
+   ✓ Etsy canonical automatic fulfillment intake > reports unsupported pending physical orders for review without counting closed or digital-only orders  1117ms
+   ✓ Etsy canonical automatic fulfillment intake > checkpoints pages and provider retry-after, then resumes without duplicate Proofs  1285ms
+   ✓ Etsy canonical automatic fulfillment intake > keeps automatic intake retrying through exhausted shared quotas and more than eight provider cooldowns  1404ms
+   ✓ Etsy canonical automatic fulfillment intake > still stops after eight ordinary provider failures  1173ms
+   ✓ Etsy canonical automatic fulfillment intake > fences a paused in-flight response and rejects foreign seller payloads  1336ms
+ ✓ tests/seller-attestation-authorization.test.ts (8 tests) 13072ms
+   ✓ seller shipping authorization > signs the exact seller statement and video binding, freezes verification material, and preserves retry hashes  2058ms
+   ✓ seller shipping authorization > rejects forged signatures, edited statement/hash payloads, and a signature made by another key  1466ms
+   ✓ seller shipping authorization > rejects unrelated actors, Proofs, evidence, and capture sessions even when video bytes are identical  1783ms
+   ✓ seller shipping authorization > requires a recorded native session and committed matching evidence before authorization can be recorded  1630ms
+   ✓ seller shipping authorization > requires another confirmation after expiry and does not consume failed or expired challenges  1678ms
+   ✓ seller shipping authorization > rejects unknown biometric fields and malformed formats at the HTTP boundary before persisting them  1386ms
+   ✓ seller shipping authorization > keeps legacy attestation hashes and manifests unchanged and never relabels a legacy retry as biometric  1465ms
+   ✓ seller shipping authorization > rolls back the attestation and audit if challenge consumption fails  1603ms
+ ✓ tests/canonical-proof-contract.test.ts (7 tests) 10532ms
+   ✓ canonical Proof contract > lets an authorized participant retrieve the canonical Proof and fails closed otherwise  1892ms
+   ✓ canonical Proof contract > returns only authorized Proof summaries from GET /me/proofs  1296ms
+   ✓ canonical Proof contract > keeps committed evidence immutable through the canonical boundary and preserves the digest  1524ms
+   ✓ canonical Proof contract > keeps attestations distinguishable from PackProof facts and preserves external provenance  1656ms
+   ✓ canonical Proof contract > cannot bind the same tenant external transaction to two Proofs  1416ms
+   ✓ canonical Proof contract > treats an established external binding as immutable identity, not transaction metadata  1234ms
+   ✓ canonical Proof contract > preserves the existing finalize lifecycle on the canonical Proof  1512ms
+ ✓ tests/shared-proof.test.ts (4 tests) 6763ms
+   ✓ one live shared Proof > uses server-owned content, requires reviewed preview, and includes later recordings identically in every new link  2114ms
+   ✓ one live shared Proof > enforces expiry, revocation during a media read, and committed-byte integrity  1480ms
+   ✓ one live shared Proof > includes committed receipt sources in the same live Proof and preserves the finalized manifest  1723ms
+   ✓ one live shared Proof > binds consented email links to the same live shared Proof and parent revocation  1445ms
+ ✓ tests/proof-navigation.test.ts (6 tests) 7066ms
+   ✓ navigation collection and early scoped sharing > searches and filters the full accessible dataset, paginates without duplicates and leaves legacy clients unchanged  1792ms
+   ✓ navigation collection and early scoped sharing > includes targeted receipt access once, preserves its existing permission boundary, and keeps completed evidence independently actionable  1895ms
+   ✓ navigation collection and early scoped sharing > records required packing after supporting evidence and confirms the committed native original after losing all local capture state  1700ms
+   ✓ navigation collection and early scoped sharing > shares the same unfinished record, reuses exactly the approved live scope, and protects uncommitted sources and access boundaries  1673ms
+ ✓ tests/disclosure-compatibility.test.ts (1 test) 1902ms
+   ✓ requires a newly reviewed statements scope and does not expand a historical shared link  1901ms
+
+ Test Files  8 passed (8)
+      Tests  57 passed (57)
+   Start at  14:23:51
+   Duration  98.39s (transform 1.70s, setup 0ms, collect 4.98s, tests 91.62s, environment 1ms, prepare 450ms)
+

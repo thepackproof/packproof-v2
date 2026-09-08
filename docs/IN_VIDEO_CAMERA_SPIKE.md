@@ -1,5 +1,6 @@
 # In-video shipping labels: camera gate
 
+> Historical implementation/research. The September 8 candidate supersedes ordinary scan/rescan choreography with Orders → one video → review → automatic authoritative completion. Legacy journal recovery remains supported. See [current redesign contracts and gates](ui-ux-redesign-2026-09-08/README.md).
 This change implements the **Phase 1 camera spike** from [the supplied plan](IN_VIDEO_SHIPPING_LABEL_PLAN.md). The full shipping feature is not complete. Section 32 explicitly requires reliable simultaneous operation on the S24 Ultra before backend changes. The user reported successful S24 Ultra recording with seamless barcode detection, haptics, and visual feedback on September 5, 2026. This closes the initial simultaneous-recording feasibility gate and authorizes the carrier integration work. The detailed acceptance matrix below remains unexecuted unless explicitly recorded.
 
 ## What changed

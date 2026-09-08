@@ -2215,6 +2215,39 @@
           }
         }
       }
+    },
+    "/proofs/{id}/recovery": {
+      "get": {
+        "operationId": "get_proofs_id_recovery",
+        "summary": "GET /proofs/{id}/recovery",
+        "description": "Read authoritative evidence, declaration and finalization preservation receipts. Required scope: proofs:read. Poll this endpoint after a pending or lost response; a repeated finalize response can precede envelope publication.",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

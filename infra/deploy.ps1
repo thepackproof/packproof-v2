@@ -12,10 +12,15 @@ param(
   [string]$EbayClientId = "",
   [string]$EbayRuName = "",
   [string]$EbayAppCredentialReference = "",
-  [string]$PublicUrl = ""
+  [string]$PublicUrl = "",
+  [string]$ReviewedReleaseSha = ""
 )
 
 $ErrorActionPreference = "Stop"
+$currentReleaseSha = (& git rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $ReviewedReleaseSha -or $ReviewedReleaseSha -ne $currentReleaseSha) {
+  throw "Direct legacy deployment is gated. Use deploy-staging-current.ps1 after reviewing the exact release and runtime preservation."
+}
 $Aws = "$env:LOCALAPPDATA\Programs\Amazon\AWSCLIV2\aws.exe"
 if (-not (Test-Path $Aws)) {
   $Aws = "aws"

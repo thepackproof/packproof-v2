@@ -76,6 +76,7 @@ $deployParams = @{
   ApiStack = $ApiServiceName
   WebOrigins = $WebOrigins
   PublicUrl = $apiUrl
+  ReviewedReleaseSha = (& git rev-parse HEAD).Trim()
 }
 
 if (($previousEnvironment["PACKPROOF_EBAY_INTEGRATION_ENABLED"] ?? "").ToLowerInvariant() -eq "true") {

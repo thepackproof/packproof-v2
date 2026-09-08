@@ -1,17 +1,15 @@
+import { completeSavedCapture } from "../capture/completion";
+import { captureRecoveryLabel } from "../capture/recovery-model";
 import { PressableScale } from "../ui/motion";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { BackHandler, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { isAuthenticationFailure } from "../copy/errors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SellerAttestation } from "../ui/SellerAttestation";
 import {
-  discardLocalCapture,
   localCaptureExists,
   recordPackingEvidence,
-  bindRecordedCapture,
-  persistCaptureMetadata,
   saveCaptureBookmarks,
-  uploadCaptureFile,
-  uploadCaptureResumable,
   type LocalCapture,
 } from "../capture";
 import {
@@ -26,7 +24,6 @@ import {
   stationPhaseLabel,
 } from "../packing-station/machine";
 import { normalizeStationReference } from "../packing-station/scan";
-import { submitStationSession } from "../packing-station/submit";
 import type { StationCandidate, StationState } from "../packing-station/types";
 import { PackProofV2Client, newIdempotencyKey, type ProofView } from "../v2-api";
 import { BarcodeScanView } from "./BarcodeScanView";
@@ -66,13 +63,23 @@ export function PackingStationScreen(props: {
   const [candidates, setCandidates] = useState<StationCandidate[]>([]);
   const [localBusy, setLocalBusy] = useState(false);
   const [heldCapture, setHeldCapture] = useState<LocalCapture | null>(props.restoredCapture);
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
   const stateRef = useRef(state);
   const heldCaptureRef = useRef(heldCapture);
   const evidenceIdRef = useRef(props.restoredEvidenceId);
+  const mountedRef = useRef(true);
+  const contextRef = useRef({ userId: props.userId, client: props.client });
   const actionLock = useRef(false);
   const submitLock = useRef(false);
+  const biometricAttestation = Platform.OS === "android";
   stateRef.current = state;
   heldCaptureRef.current = heldCapture;
+  contextRef.current = { userId: props.userId, client: props.client };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     void loadCandidates();
@@ -259,7 +266,9 @@ export function PackingStationScreen(props: {
         itemSummary: stateRef.current.order?.itemSummary ?? null,
         stationActive: true,
       });
-      dispatch({ type: "FINISH_SCAN_STARTED" });
+      // The finished recording waits for the seller's explicit attestation.
+      // A package rescan remains available, but cannot submit on their behalf.
+      if (!biometricAttestation) dispatch({ type: "FINISH_SCAN_STARTED" });
     });
   }
 
@@ -284,15 +293,13 @@ export function PackingStationScreen(props: {
           resolved,
         });
         dispatch({ type: "FINISH_RESOLVED", resolved });
-        const captured = heldCaptureRef.current;
-        if (next.phase === "PROCESSING" && captured) {
-          const key = next.evidenceIdempotencyKey ?? newIdempotencyKey();
-          dispatch({
-            type: "PROCESSING_STARTED",
-            idempotencyKey: key,
-            submitStep: "upload",
-          });
-          await processCapture(captured, key);
+        if (next.phase === "PROCESSING") {
+          await persistFromState(next, heldCaptureRef.current);
+          if (!biometricAttestation && heldCaptureRef.current) {
+            const key = next.evidenceIdempotencyKey ?? newIdempotencyKey();
+            dispatch({ type: "PROCESSING_STARTED", idempotencyKey: key, submitStep: "upload" });
+            await processCapture(heldCaptureRef.current, key);
+          }
         }
       } catch (error) {
         const mapped = stationErrorFromUnknown(error);
@@ -307,6 +314,7 @@ export function PackingStationScreen(props: {
   }
 
   async function finishManually(): Promise<void> {
+    if (actionLock.current || submitLock.current) return;
     const captured = heldCaptureRef.current;
     const next = reduceStation(stateRef.current, { type: "FINISH_MANUAL" });
     dispatch({ type: "FINISH_MANUAL" });
@@ -315,7 +323,7 @@ export function PackingStationScreen(props: {
       dispatch({
         type: "PROCESSING_STARTED",
         idempotencyKey: key,
-        submitStep: "upload",
+        submitStep: biometricAttestation ? "attest" : "upload",
       });
       await processCapture(captured, key);
     }
@@ -329,9 +337,19 @@ export function PackingStationScreen(props: {
     if (submitLock.current) return;
     submitLock.current = true;
     setLocalBusy(true);
+    const isCurrentSubmission = () => mountedRef.current &&
+      contextRef.current.userId === props.userId && contextRef.current.client === props.client &&
+      stateRef.current.order?.proofId === order.proofId;
+    const assertCurrentSubmission = () => {
+      if (!isCurrentSubmission()) throw new Error(
+        "Your account or Proof changed. Open the original Proof and authenticate again.",
+      );
+    };
     try {
       await props.onEnsureAuth();
+      assertCurrentSubmission();
       const available = await localCaptureExists(captured.uri);
+      assertCurrentSubmission();
       if (!available) {
         dispatch({
           type: "PROCESSING_FAILED",
@@ -344,71 +362,34 @@ export function PackingStationScreen(props: {
         await persistFromState(stateRef.current, null);
         return;
       }
-      const proof = await props.client.getProof(order.proofId);
-      if (!proof.evidence.some((media) => media.evidenceId === captured.uploadEvidenceId && media.validationStatus === "COMMITTED"))
-        await bindRecordedCapture(props.client, captured, order.proofId, props.userId);
-      const result = await submitStationSession({
-        proof,
-        actorUserId: props.userId,
-        capture: {
-          handle: captured.uri,
-          captureSessionId: captured.captureSessionId,
-          contentType: captured.contentType,
-          byteSize: captured.byteSize,
-          durationMs: captured.durationMs,
-        },
-        idempotencyKey: key,
-        evidenceId: captured.uploadEvidenceId ?? evidenceIdRef.current,
-        onEvidenceInitialized: async (evidenceId) => {
-          evidenceIdRef.current = evidenceId;
-          captured.uploadEvidenceId = evidenceId;
-          await persistCaptureMetadata(captured);
-          setHeldCapture({ ...captured });
-          await persistFromState(stateRef.current, captured);
-        },
-        deps: {
-          api: {
-            initializeEvidenceUpload: (proofId, input) => props.client.initializeEvidenceUpload(proofId, { ...input, captureSessionId: captured.captureSessionId }),
-            commitEvidence: (proofId, evidenceId) => props.client.commitEvidence(proofId, evidenceId),
-            createAttestation: (proofId, input) => props.client.createAttestation(proofId, input),
-            finalizeProof: (proofId) => props.client.finalizeProof(proofId),
-            getProof: (proofId) => props.client.getProof(proofId),
-          },
-          uploadEvidence: (proofId, evidenceId, _capture, onProgress) =>
-            uploadCaptureResumable({
-              client: props.client,
-              baseUrl: props.apiBaseUrl,
-              proofId,
-              evidenceId,
-              fileUri: captured.uri,
-              onProgress,
-            }),
-          newIdempotencyKey,
-          upload: async (target, _capture, onProgress) => {
-            await uploadCaptureFile({
-              baseUrl: props.apiBaseUrl,
-              target,
-              fileUri: captured.uri,
-              contentType: captured.contentType,
-              onProgress,
-            });
-          },
-        },
-        onProgress: (progress) => {
-          dispatch({
-            type: "PROCESSING_PROGRESS",
-            submitStep: progress.step,
-            uploadPercent: progress.uploadPercent,
-          });
+      captured.uploadEvidenceId ??= evidenceIdRef.current ?? undefined;
+      const completedProof = await completeSavedCapture({
+        client: props.client, capture: captured, userId: props.userId, interactive: true, idempotencyKey: key,
+        needsSellerAttestation: biometricAttestation, assertAccount: assertCurrentSubmission,
+        onProgress: percent => { if (isCurrentSubmission()) dispatch({ type: "PROCESSING_PROGRESS", submitStep: "upload", uploadPercent: percent }); },
+        onChange: capture => {
+          if (!isCurrentSubmission()) return;
+          evidenceIdRef.current = capture.uploadEvidenceId ?? null;
+          setHeldCapture({ ...capture });
+          const phase = capture.recovery?.phase;
+          dispatch({ type: "PROCESSING_PROGRESS", submitStep: phase === "UPLOADING" ? "upload" : phase === "FINALIZATION_PENDING" ? "finalize" : "commit", uploadPercent: null });
         },
       });
+      const result = { proof: completedProof, evidenceId: captured.uploadEvidenceId!, completion: "FINALIZED" as const };
+      assertCurrentSubmission();
       await saveCaptureBookmarks(props.client, order.proofId, result.evidenceId, captured).catch(() => undefined);
-      await discardLocalCapture(captured.uri);
+      assertCurrentSubmission();
+      // Completed local originals stay in Account until deliberate, receipt-checked cleanup.
+      assertCurrentSubmission();
+      setCompletionNotice(captured.recovery?.phase === "SUBMITTED" ? captureRecoveryLabel("SUBMITTED") : null);
       setHeldCapture(null);
       dispatch({ type: "COMPLETED", completion: result.completion });
       await persistFromState(initialStationState(), null);
       await loadCandidates();
     } catch (error) {
+      // The original account's recovery was already saved before this prompt.
+      // A stale continuation must not write capture data into a different session.
+      if (!isCurrentSubmission()) return;
       if (isAuthenticationFailure(error)) {
         dispatch({ type: "AUTH_FAILED" });
         await persistFromState(stateRef.current, captured);
@@ -425,7 +406,7 @@ export function PackingStationScreen(props: {
       await persistFromState(stateRef.current, captured);
     } finally {
       submitLock.current = false;
-      setLocalBusy(false);
+      if (mountedRef.current) setLocalBusy(false);
     }
   }
 
@@ -438,6 +419,7 @@ export function PackingStationScreen(props: {
   }
 
   async function retry(): Promise<void> {
+    if (actionLock.current || submitLock.current) return;
     const captured = heldCapture ?? props.restoredCapture;
     const key = state.evidenceIdempotencyKey ?? props.restoredKey ?? newIdempotencyKey();
     if (!captured) {
@@ -447,13 +429,17 @@ export function PackingStationScreen(props: {
     dispatch({
       type: "PROCESSING_STARTED",
       idempotencyKey: key,
-      submitStep: "upload",
+      submitStep: biometricAttestation ? "attest" : "upload",
     });
     await processCapture(captured, key);
   }
 
   const tone = toneForPhase(state.phase);
   const leaveBlocked = Boolean(state.capture) && state.phase !== "PROOF_CREATED";
+  const awaitingAttestation = Boolean(state.capture) && (
+    state.phase === "RECORDING" || state.phase === "RECOVERY" ||
+    (state.phase === "PROCESSING" && state.submitStep === null)
+  );
   const insets = useSafeAreaInsets();
 
   return (
@@ -468,7 +454,9 @@ export function PackingStationScreen(props: {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.phase, { color: tone.ink }]}>{stationPhaseLabel(state)}</Text>
+        <Text style={[styles.phase, { color: tone.ink }]}>
+          {biometricAttestation && awaitingAttestation ? "CONFIRM SHIPMENT" : stationPhaseLabel(state)}
+        </Text>
         {state.order ? (
           <View style={styles.identity}>
             <Text style={[styles.order, { color: tone.ink }]}>{state.order.orderLabel}</Text>
@@ -479,17 +467,18 @@ export function PackingStationScreen(props: {
           </View>
         ) : (
           <Text style={[styles.hint, { color: tone.muted }]}>
-            Scan a label, pack in frame, then PackProof finishes the record.
+            Scan a label, record packing, then confirm what you are shipping.
           </Text>
         )}
 
         {state.error ? <Text style={styles.error}>{state.error.message}</Text> : null}
+        {state.phase === "PROOF_CREATED" && completionNotice ? <Text style={[styles.hint, { color: tone.muted }]}>{completionNotice}</Text> : null}
         {localBusy && state.phase !== "RECORDING" && state.phase !== "PROCESSING" ? (
           <Text style={[styles.hint, { color: tone.muted }]}>Working…</Text>
         ) : null}
-        {state.phase === "PROCESSING" ? (
+        {state.phase === "PROCESSING" && state.submitStep !== null ? (
           <Text style={[styles.hint, { color: tone.muted }]}>
-            Saving packing video
+            {heldCapture?.recovery ? captureRecoveryLabel(heldCapture.recovery.phase) : "Preparing your saved recording"}
             {state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}
           </Text>
         ) : null}
@@ -573,7 +562,7 @@ export function PackingStationScreen(props: {
 
         {state.phase === "FINISH_SCANNING" || state.phase === "VERIFYING_FINISH_SCAN" ? (
           <BarcodeScanView
-            prompt="Scan the same shipping label to finish this pack."
+            prompt="Scan the same shipping label to confirm this package."
             lockKey={`finish:${state.order?.transactionId ?? "none"}`}
             onDecoded={(value) => {
               void resolveFinishScan(value);
@@ -595,7 +584,7 @@ export function PackingStationScreen(props: {
                 error: {
                   code: "SCANNER_UNAVAILABLE",
                   message:
-                    "The camera scanner is unavailable. Use Finished Packing. The packing video is kept.",
+                    "The camera scanner is unavailable. Confirm your shipment below. The packing video is kept.",
                 },
               })
             }
@@ -619,30 +608,38 @@ export function PackingStationScreen(props: {
         {state.phase === "RECORDING" && state.capture ? (
           <View style={styles.block}>
             <StationButton
-              label="Scan Package to Finish"
+              label="Check package label"
               disabled={localBusy}
               onPress={() => dispatch({ type: "FINISH_SCAN_STARTED" })}
-            />
-            <StationButton
-              label="Finished Packing"
-              disabled={localBusy}
-              secondary
-              onPress={() => void finishManually()}
             />
           </View>
         ) : null}
 
         {state.phase === "FINISH_SCANNING" || state.phase === "VERIFYING_FINISH_SCAN" ? (
           <StationButton
-            label="Finished Packing"
+            label={biometricAttestation ? "Review shipment" : "Finished Packing"}
             disabled={localBusy}
             secondary
-            onPress={() => void finishManually()}
+            onPress={() => biometricAttestation
+              ? dispatch({ type: "FINISH_SCAN_CANCELLED" })
+              : void finishManually()}
           />
         ) : null}
 
-        {state.phase === "RECOVERY" && state.capture ? (
-          <StationButton label="Retry upload" disabled={localBusy} onPress={() => void retry()} />
+        {awaitingAttestation && biometricAttestation ? (
+          <SellerAttestation
+            disabled={localBusy}
+            loading={localBusy}
+            onPress={() => void (state.phase === "RECOVERY" ? retry() : finishManually())}
+          />
+        ) : null}
+
+        {awaitingAttestation && !biometricAttestation ? (
+          <StationButton
+            label={state.phase === "RECOVERY" ? "Retry upload" : "Finished Packing"}
+            disabled={localBusy}
+            onPress={() => void (state.phase === "RECOVERY" ? retry() : finishManually())}
+          />
         ) : null}
 
         {state.phase === "RECOVERY" && !state.capture ? (
@@ -712,18 +709,11 @@ function toneForPhase(phase: StationState["phase"]): {
   muted: string;
 } {
   switch (phase) {
-    case "RECORDING":
-    case "FINISH_SCANNING":
-    case "VERIFYING_FINISH_SCAN":
-      return { background: "#10222E", ink: "#F4F6F8", muted: "#9AA8B2" };
-    case "PROCESSING":
-      return { background: "#142735", ink: "#F4F6F8", muted: "#9AA8B2" };
-    case "PROOF_CREATED":
-      return { background: "#0C2A1C", ink: "#F3FFF6", muted: "#B7E0C5" };
-    case "RECOVERY":
-      return { background: "#2A2414", ink: "#FFF8E8", muted: "#E0C88A" };
-    default:
-      return { background: "#0B1220", ink: "#F3F7FC", muted: "#9FB0C6" };
+    case "RECORDING": case "FINISH_SCANNING": case "VERIFYING_FINISH_SCAN":
+      return { background: "#F5F7FA", ink: "#102A43", muted: "#243746" };
+    case "PROOF_CREATED": return { background: "#F0FDF4", ink: "#166534", muted: "#243746" };
+    case "RECOVERY": return { background: "#FFFBEB", ink: "#78350F", muted: "#243746" };
+    default: return { background: "#FFFFFF", ink: "#102A43", muted: "#243746" };
   }
 }
 
@@ -770,20 +760,20 @@ const styles = StyleSheet.create({
   order: { fontSize: 28, fontWeight: "700" },
   item: { fontSize: 22, fontWeight: "600" },
   hint: { fontSize: 18, lineHeight: 26 },
-  error: { color: "#ffd0d0", fontSize: 16 },
+  error: { color: "#9F1239", fontSize: 16 },
   block: { gap: 12 },
   fallback: { gap: 8, marginTop: 8 },
   fallbackLabel: { fontSize: 14, fontWeight: "700", letterSpacing: 0.6 },
   input: {
     borderWidth: 2,
-    borderColor: "#24354D",
-    backgroundColor: "#16243A",
-    color: "#F3F7FC",
+    borderColor: "#D8E0E8",
+    backgroundColor: "#F5F7FA",
+    color: "#102A43",
     padding: 16,
     fontSize: 20,
   },
   button: {
-    backgroundColor: "#13A8E8",
+    backgroundColor: "#1769E0",
     paddingVertical: 18,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -791,7 +781,7 @@ const styles = StyleSheet.create({
   buttonSecondary: {
     backgroundColor: "transparent",
     borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: "#D8E0E8",
   },
   buttonDisabled: { opacity: 0.4 },
   buttonText: {
@@ -800,5 +790,5 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
   },
-  buttonSecondaryText: { color: "#FFFFFF" },
+  buttonSecondaryText: { color: "#102A43" },
 });

@@ -9,11 +9,12 @@ RUN npm run build
 FROM public.ecr.aws/docker/library/node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg util-linux font-dejavu ca-certificates && command -v prlimit && command -v ffprobe
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+COPY certs ./certs
 COPY openapi.json ./openapi.json
 USER node
 EXPOSE 3000

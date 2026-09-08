@@ -1,5 +1,5 @@
 import { createCaptureSession, completeCaptureSession } from "../src/domain/capture-sessions.js";
-import { afterAll, beforeAll, describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { mkdtemp, writeFile, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -245,16 +245,23 @@ describe("receipt lifecycle and resumable capture", () => {
         .send({ contentType: "video/mp4", captureSessionId: recording.captureSessionId });
       expect(upload.status, JSON.stringify(upload.body)).toBe(201);
       const bytes = recording.bytes;
-      await h.objectStore.putUpload(
-        new URL(upload.body.upload.url).pathname.split("/").at(-1)!,
-        bytes,
-        "video/mp4",
-      );
+      await request(h.app).put(new URL(upload.body.upload.url).pathname).set("Content-Type","video/mp4").send(bytes).expect(200);
       const committed = await request(h.app)
         .post(`${base}/stages/${stageId}/evidence/${upload.body.evidenceId}/commit`)
         .set(auth(actor))
         .send({ sha256: sha256Hex(bytes) });
       expect(committed.status, JSON.stringify(committed.body)).toBe(200);
+      if(type==="RECEIPT"){
+        const buffered=vi.spyOn(h.objectStore,"get").mockRejectedValue(new Error("Playback must stream its exact version"));
+        try{
+          const playback=`${base}/stages/${stageId}/evidence/${upload.body.evidenceId}`;
+          const range=await request(h.app).get(playback).set(auth(actor)).set("Range","bytes=0-15");
+          expect(range.status).toBe(206);expect(range.headers["content-range"]).toBe(`bytes 0-15/${bytes.length}`);expect(range.headers["content-length"]).toBe("16");
+          expect((await request(h.app).get(playback).set(auth(actor)).set("Range",`bytes=${bytes.length}-`)).status).toBe(416);
+          expect((await request(h.app).get(playback).set(auth(other))).status).toBe(403);
+          expect(buffered).not.toHaveBeenCalled();
+        }finally{buffered.mockRestore();}
+      }
       expect(
         (
           await request(h.app)

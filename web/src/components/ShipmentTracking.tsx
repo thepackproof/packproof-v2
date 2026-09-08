@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useViewState } from "../navigation-context";
 import type { ShipmentEventView } from "../api/types";
+import { trackingAvailabilityMessage, type TrackingAvailability } from "../presentation/proof-record";
 import { Glyph } from "../site/Brand";
 import { formatWhen } from "../format";
 
@@ -39,18 +40,21 @@ function eventLabel(value: string) {
   return value.toLowerCase().replace(/_/g, " ").replace(/^\w/, letter => letter.toUpperCase());
 }
 
-export function ShipmentTracking({ events, carrier, trackingNumber, demo = false, refreshError }: {
+export function ShipmentTracking({ events, carrier, trackingNumber, demo = false, refreshError, registration, sync }: {
   events: TrackingObservation[];
   carrier?: string | null;
   trackingNumber?: string | null;
   demo?: boolean;
   refreshError?: string | null;
+  registration?: TrackingAvailability["registration"];
+  sync?: TrackingAvailability["sync"];
 }) {
   const [selectedId, setSelectedId] = useViewState<string | null>(`map.${window.location.pathname}.${trackingNumber||"unknown"}.selected`,null);
   const [expanded, setExpanded] = useViewState(`map.${window.location.pathname}.${trackingNumber||"unknown"}.expanded`,false);
   const [mapFailed,setMapFailed]=useState(false);
   const ordered = [...events].sort((a, b) => (Date.parse(b.occurredAt) || 0) - (Date.parse(a.occurredAt) || 0));
   useEffect(()=>{if(!selectedId&&ordered[0])setSelectedId(ordered[0].id);},[selectedId,ordered[0]?.id]);
+  const availability = trackingAvailabilityMessage(trackingNumber, { registration, sync, refreshError });
   const selected = ordered.find(event => event.id === selectedId) ?? ordered[0];
   const point = selected ? reportedCoordinates(selected.eventData) : null;
   // Web Mercator cannot display polar coordinates; retain the actual observation in text.
@@ -59,9 +63,13 @@ export function ShipmentTracking({ events, carrier, trackingNumber, demo = false
   const stale=selected&&!demo&&Date.now()-Date.parse(selected.occurredAt)>48*60*60*1000;
   const location = selected?.location || (point ? `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}` : "Location not reported");
   const locationSearch = selected?.location ? `https://www.openstreetmap.org/search?${new URLSearchParams({ query: selected.location })}` : null;
+  if (!ordered.length) return <section className="shipment-tracking tracking-compact-empty" aria-label="Shipment tracking">
+    <Glyph name="pin" size={23} /><div><h3>{carrier || "Shipment tracking"}</h3><p role="status">{availability || "Tracking number recorded. No carrier scan has been reported yet."}</p>{trackingNumber && <p className="tracking-number">{trackingNumber}</p>}</div>
+  </section>;
   return <section className={`section shipment-tracking ${expanded ? "tracking-expanded" : ""}`} aria-label="Shipment tracking">
-    <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="pin" size={15} /> {demo ? "ILLUSTRATIVE SHIPMENT" : "THE SHIPMENT STORY"}</span><h2>Shipment tracking</h2></div><span className="tracking-status"><span />{selected ? eventLabel(selected.eventType) : "Awaiting updates"}</span></div>
-    {refreshError&&<p role="status" className="map-unavailable">Tracking refresh failed. Previously recorded observations remain visible. {refreshError}</p>}
+    <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="pin" size={15} /> {demo ? "ILLUSTRATIVE SHIPMENT" : "CARRIER UPDATES"}</span><h2>Shipment tracking</h2></div><span className="tracking-status"><span />{ordered[0] ? eventLabel(ordered[0].eventType) : "Awaiting updates"}</span></div>
+    {availability && <p role="status" className="map-unavailable">{availability}</p>}
+    <p className="note">Latest carrier report: <time dateTime={ordered[0].occurredAt}>{formatWhen(ordered[0].occurredAt)}</time>.{sync?.lastSuccessfulSyncAt ? <> Last successful check: <time dateTime={sync.lastSuccessfulSyncAt}>{formatWhen(sync.lastSuccessfulSyncAt)}</time>.</> : null}</p>
     {events.some(event=>event.eventData.test===true)&&<p role="status" className="map-unavailable">Test tracking data · simulated shipment events, not real carrier evidence.</p>}
     {stale&&<p className="tracking-age">This selected report is more than 48 hours old. It is historical context, not a current location.</p>}
     <div className="tracking-layout"><div className="tracking-map-panel">

@@ -1,0 +1,180 @@
+{
+  "version": "packproof.program.v1",
+  "status": "implemented_definition_pending_operating_freeze",
+  "definitionOwnerRole": "research / commercial owner",
+  "approvedBy": null,
+  "approvedAt": null,
+  "timeRules": {
+    "format": "UTC ISO 8601 with milliseconds",
+    "reportInterval": "[start,end)",
+    "observed": "event timestamp <= asOf",
+    "rates": "Zero denominator yields null, never zero or one",
+    "gateMeaning": "A starting threshold on submitted observations; never automatic G1-G4 approval"
+  },
+  "privacy": {
+    "references": "HMAC-SHA-256 truncated to 128 bits, pr_ prefix; keyed and namespace-separated",
+    "forbidden": [
+      "names",
+      "email",
+      "addresses",
+      "raw account/order/capture identifiers",
+      "media",
+      "declaration text",
+      "free text error messages",
+      "tokens",
+      "URLs"
+    ],
+    "keyRotation": "Keep a metric cohort on its registered reference-key version; rotating references without an authorized crosswalk breaks longitudinal denominators",
+    "consentAndSource": "Retain consent and identifiable source material in its governed source system; analytics carries pseudonymous references only"
+  },
+  "metrics": [
+    {
+      "id": "unassistedActivation",
+      "numerator": "First-use tests in report window with a usable first task and explicitly no assistance",
+      "denominator": "All first-use tests in report window, including failures",
+      "startingTarget": 0.8,
+      "direction": "minimum",
+      "notes": "Assistance unknown is missing; do not substitute eventual success after coaching"
+    },
+    {
+      "id": "eligibleOrderCoverage",
+      "numerator": "Eligible report-window orders with observed usable finalized Proof",
+      "denominator": "Every eligible order first eligible in report window",
+      "startingTarget": 0.8,
+      "direction": "minimum",
+      "notes": "Excluded orders require one enumerated exclusion reason; cancelled/failed eligible orders stay included"
+    },
+    {
+      "id": "cohortWeekThreeCoverage",
+      "numerator": "Usable orders from days 14 through 21 after enrollment",
+      "denominator": "All eligible orders in the third week, only for merchants with 21 elapsed days",
+      "startingTarget": 0.8,
+      "direction": "minimum",
+      "notes": "Nonelapsed merchants shown separately; enrollment day is day zero"
+    },
+    {
+      "id": "eventualCommitment",
+      "numerator": "Elapsed eligible logical intents with durable receipt within 24 hours, inclusive",
+      "denominator": "Eligible upload intents started in report window whose 24-hour window has elapsed",
+      "startingTarget": 0.99,
+      "direction": "minimum",
+      "notes": "Pending DB durability is not success; cancelled and failed intents remain; receipt after asOf is unavailable"
+    },
+    {
+      "id": "allStartedCompletion",
+      "numerator": "All report-window starts with a durable receipt observed by asOf",
+      "denominator": "All upload intents started in report window",
+      "startingTarget": null,
+      "direction": "descriptive",
+      "notes": "Includes eligibility exclusions and unelapsed windows; never replace eventual-commit denominator with this"
+    },
+    {
+      "id": "reviewerCompleteness",
+      "numerator": "PackProof tasks completed with fixed issue checklist passed",
+      "denominator": "Every started PackProof task, including failed exports",
+      "startingTarget": 0.9,
+      "direction": "minimum",
+      "notes": "Null checklist is missing; failed tasks remain represented"
+    },
+    {
+      "id": "reviewerTechnicalAcceptance",
+      "numerator": "PackProof tasks with confirmed actual file acceptance",
+      "denominator": "All started PackProof tasks",
+      "startingTarget": null,
+      "direction": "descriptive",
+      "notes": "Acceptance, legibility, comprehension and improved handling are separate observations"
+    },
+    {
+      "id": "reviewerComprehension",
+      "numerator": "Completed PackProof tasks with source-answer-key comprehension passed",
+      "denominator": "All started PackProof tasks",
+      "startingTarget": null,
+      "direction": "descriptive",
+      "notes": "Unknown answers remain missing; reviewability does not imply endorsement"
+    },
+    {
+      "id": "paidContinuation",
+      "numerator": "Qualified enrolled merchants with actual first payment by asOf",
+      "denominator": "Qualified enrolled merchants whose predeclared payment decision window elapsed",
+      "startingTarget": 0.5,
+      "direction": "minimum",
+      "notes": "Dropouts stay in denominator; do not infer a payment from an active subscription UI"
+    },
+    {
+      "id": "secondPeriodPaymentRetention",
+      "numerator": "Elapsed second periods with actual payment within that period",
+      "denominator": "First-period payers whose second period ended by asOf",
+      "startingTarget": null,
+      "direction": "descriptive",
+      "notes": "Payment is reported separately from use; unelapsed second periods are excluded visibly"
+    },
+    {
+      "id": "secondPeriodUseRetention",
+      "numerator": "Elapsed second periods with a usable eligible Proof finalized in that period",
+      "denominator": "First-period payers whose second period ended by asOf",
+      "startingTarget": null,
+      "direction": "descriptive",
+      "notes": "A paid renewal without use is not retained use"
+    },
+    {
+      "id": "addedActiveEffort",
+      "numerator": "Paired PackProof hands-on seconds minus matched ordinary-packing seconds",
+      "denominator": "Every started paired task; incomplete/missing timings disclosed",
+      "startingTarget": {
+        "medianSeconds": 20,
+        "p90Seconds": 45
+      },
+      "direction": "maximum",
+      "notes": "Unattended time reported separately; quantile uses linear interpolation; incomplete timings block passing gate"
+    },
+    {
+      "id": "preparationImprovement",
+      "numerator": "Ordinary median preparation seconds minus PackProof median seconds",
+      "denominator": "Ordinary median preparation seconds",
+      "startingTarget": 0.3,
+      "direction": "minimum",
+      "notes": "Completed timed tasks only for medians; all failed/incomplete tasks disclosed and block a passing timing gate"
+    },
+    {
+      "id": "supportBurden",
+      "numerator": "All support minutes including founder assistance",
+      "denominator": "Weekly active merchants with a usable eligible finalized Proof",
+      "startingTarget": null,
+      "direction": "descriptive",
+      "notes": "Onboarding/ongoing and help for inactive merchants separate; compare a like-for-like earlier period to assess decline"
+    }
+  ],
+  "usableProofChecklist": [
+    "Correct transaction and parcel relationship",
+    "Issue-relevant item identifying details and condition readable",
+    "Required packing, seal and label views present or issue-specific gap disclosed",
+    "Durable preservation and required finalization verified",
+    "Declaration method and attribution accurate",
+    "Recipient-compatible retrievable export",
+    "Provider omissions are labeled and assessed for the relevant issue"
+  ],
+  "revisionPolicy": {
+    "freezeBefore": [
+      "W14 enrollment",
+      "W13 billing instrumentation"
+    ],
+    "changeRequires": [
+      "reason",
+      "version",
+      "accountable approval",
+      "comparably recomputed old and new results"
+    ]
+  },
+  "definitionRevision": "2026-09-07.refund-reversal",
+  "financialLegs": {
+    "charge": "Positive verified settled payment; never inferred from a refund reversal.",
+    "refund": "Negative verified settled refund.",
+    "refund_reversal": "Positive reversal of one exact prior refund. Required reversesPaymentRef resolves to a supplied refund with the same merchant, currency and positive amount, at an earlier or equal time. One reversal per refund after exact replay dedupe.",
+    "basisOutsidePeriod": "Include the original refund as supporting input even when outside costPeriod. Count each financial leg only in its own occurredAt period; never move the prior debit into the reversal period.",
+    "identity": "Opaque paymentRef and reversesPaymentRef follow the existing keyed pseudonymous convention. Use stable financial-leg identity rather than webhook delivery ID. Changed facts or a second reversal identity for one refund are rejected.",
+    "precision": "Net financial totals use exact integer accumulation and refuse a result outside the safe JSON integer range.",
+    "paidCohorts": "Refund reversals never create merchant first-payment, second-payment or usage observations.",
+    "providerMapping": "Ledger refund_reversed maps to analytical refund_reversal with its linked refund_settled basis. Mapping requires governed source reconciliation; the canonical observation exporter does not automatically populate financial data.",
+    "approval": "Additive pre-enrollment definition; actual data/operating freeze remains pending."
+  }
+}

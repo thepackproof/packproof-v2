@@ -1,31 +1,9 @@
-import { Glyph } from "../site/Brand";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "../api/types";
 import { withRequestTimeout } from "../api/timeout";
 import type { PublicProofView } from "../api/types";
-import { PublicMedia } from "../components/PublicMedia";
-
-type TrackerMilestone = {
-  code: string;
-  label: string;
-  state: "COMPLETE" | "CURRENT" | "UPCOMING";
-  occurredAt: string | null;
-  detail: string | null;
-};
-
-type TrackerView = {
-  state: "IN_PROGRESS" | "FINALIZED";
-  headline: string;
-  reference: string | null;
-  itemTitle: string | null;
-  lastUpdatedAt: string;
-  shipment: {
-    carrier: string | null;
-    service: string | null;
-    trackingNumber: string | null;
-  } | null;
-  milestones: TrackerMilestone[];
-};
+import { SharedProofRecord } from "../components/SharedProofRecord";
+import { Brand } from "../site/Brand";
 
 type EmailPreference = "IMPORTANT" | "ALL" | "FINAL_ONLY";
 type RecipientSubscription = { email: string; preference: EmailPreference };
@@ -44,10 +22,7 @@ export function PublicProofScreen(props: {
   const [emailSubscription, setEmailSubscription] = useState<RecipientSubscription | null>(null);
   const [emailStatus, setEmailStatus] = useState<string | null>(null);
   const [emailBusy, setEmailBusy] = useState(false);
-  const tracker = useMemo(
-    () => (proof as (PublicProofView & { tracker?: TrackerView }) | null)?.tracker ?? null,
-    [proof],
-  );
+
 
   useEffect(() => { setProof(null); setCheckedAt(null); }, [props.token]);
 
@@ -71,7 +46,7 @@ export function PublicProofScreen(props: {
           terminal = true;
           setProof(null);
           setEmailSubscription(null);
-          setError("This viewing link has expired, was revoked, or is no longer available.");
+          setError(caught.code.includes("EXPIRED") ? "This viewing link has expired. Ask the sender for a current link." : caught.code.includes("REVOKED") ? "The sender has revoked this viewing link." : caught.status === 401 || caught.status === 403 ? "You don’t have permission to view this link." : "This viewing link is not available. Check the link with its sender.");
         } else {
           setError("Live updates are paused. Check your connection and try again. Any status shown is from the last successful update.");
         }
@@ -154,44 +129,10 @@ export function PublicProofScreen(props: {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <span className="brand">
-          <img src="/packproof-logo.png" alt="" width={28} height={28} />
-          PackProof
-        </span>
+        <Brand />
       </header>
       <main className="page stack" style={{ maxWidth: 720 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-          }}
-        >
-          <div>
-            <p className="kicker">{proof?.receipt?.mode==="SAMPLE"?"Sample Proof tracker":"Live Proof tracker"}</p>
-            <h1 style={{ marginBottom: 4 }}>View Proof</h1>
-            <p className="meta" style={{ marginTop: 0 }}>
-              {tracker?.reference ? `Order ${tracker.reference}` : "Transaction Proof"}
-              {tracker?.itemTitle ? ` · ${tracker.itemTitle}` : ""}
-            </p>
-          </div>
-          {proof ? (
-            <span
-              style={{
-                whiteSpace: "nowrap",
-                borderRadius: 999,
-                padding: "7px 11px",
-                fontSize: 12,
-                fontWeight: 700,
-                border: "1px solid var(--border)",
-              }}
-            >
-              {proof.status === "FINALIZED" ? "Finalized" : "Live"}
-            </span>
-          ) : null}
-        </div>
-
+        <h1>Proof</h1>
         {error ? (
           <div className="banner banner-error" role="alert">
             <p>{error}</p>
@@ -204,70 +145,9 @@ export function PublicProofScreen(props: {
 
         {proof ? (
           <>
-            <section className="section" aria-live="polite">
-              <p className="kicker">Current status</p>
-              <p className="card-title" style={{ fontSize: 22 }}>
-                {tracker?.headline || proof.nextAction?.title || statusLabel(proof.status)}
-              </p>
-              {!tracker && <p className="meta">{stageLabel(proof.workflowStage)}</p>}
-              {tracker ? <p className="meta">Last event {formatTime(tracker.lastUpdatedAt)}</p> : null}
-              {checkedAt ? <p className="meta">{error ? "Updates paused" : `Checked ${formatTime(checkedAt)}`}</p> : null}
-              {tracker?.shipment ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
-                    gap: 12,
-                    marginTop: 16,
-                  }}
-                >
-                  {tracker.shipment.carrier ? (
-                    <Detail label="Carrier" value={tracker.shipment.carrier} />
-                  ) : null}
-                  {tracker.shipment.service ? (
-                    <Detail label="Service" value={tracker.shipment.service} />
-                  ) : null}
-                  {tracker.shipment.trackingNumber ? (
-                    <Detail label="Tracking" value={tracker.shipment.trackingNumber} />
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
-
-            {proof.receipt && <section className="section stack"><p className="kicker">{proof.receipt.mode === "SAMPLE" ? "Sample receipt" : "Buyer Proof receipt"}</p><p>{proof.receipt.carrierReportedDelivered ? "The carrier reported delivery." : "No carrier delivery report is included."}</p><p>{proof.receipt.buyerReportedReceived ? "The buyer added a receiving record." : "The buyer has not added a receiving record."}</p><p className="note">{proof.receipt.message}</p><a className="btn btn-secondary" href={`/receipt/${encodeURIComponent(proof.proofId)}`}>Sign in to document arrival</a><p className="note">Only the invited account can contribute. Opening this receipt does not confirm delivery or acceptance.</p></section>}
-            {props.loadMedia
-              ? proof.evidence?.map((media) => (
-                  <PublicMedia key={`${media.evidenceId}:${proof.disclosure?.viewHash}`} media={media} load={props.loadMedia!} />
-                ))
-              : null}
-            {tracker ? (
-              <section className="section public-progress">
-                <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="clock" size={15} /> FROM PACKED TO PRESERVED</span><h2>Proof progress</h2></div></div>
-                <ol className="public-progress-list">{tracker.milestones.map(milestone => <li key={milestone.code} data-state={milestone.state}>
-                  <span className="public-progress-node" aria-hidden="true"><Glyph name={milestone.state === "COMPLETE" ? "check" : milestone.state === "CURRENT" ? "clock" : "box"} size={15} /></span>
-                  <div><div className="public-progress-title"><strong>{milestone.label}</strong><span>{milestone.state === "COMPLETE" ? "Recorded" : milestone.state === "CURRENT" ? "Awaiting update" : "Upcoming"}</span></div>{milestone.occurredAt && <time dateTime={milestone.occurredAt}>{formatTime(milestone.occurredAt)}</time>}{milestone.detail && <p>{milestone.detail}</p>}</div>
-                </li>)}</ol>
-              </section>
-            ) : proof.observations && proof.observations.length > 0 ? (
-              <section className="section">
-                <h2>Progress</h2>
-                <ul className="card-list">
-                  {proof.observations.map((observation, index) => (
-                    <li key={`${observation.label}-${index}`}>
-                      <div className="card-title">{observation.label}</div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-
-            {proof.continuity?.map((row, index) => (
-              <section key={index} className="section">
-                <h2>Before sending versus when received</h2>
-                <p>{row.summary}</p>
-              </section>
-            ))}
-
+            <SharedProofRecord key={proof.proofId} proof={proof} loadMedia={props.loadMedia} />
+            {proof.status === "FINALIZED" && proof.receipt?.mode !== "SAMPLE" && <a className="btn btn-secondary" href={`/receipt/${encodeURIComponent(proof.proofId)}`}>Document receipt or return</a>}
+            {checkedAt && <p className="note" role="status">{error ? "Updates paused" : `Updated ${formatTime(checkedAt)}`}</p>}
             {emailSubscription ? (
               <section className="section stack" aria-label="Email updates">
                 <div>
@@ -331,13 +211,7 @@ export function PublicProofScreen(props: {
               </section>
             ) : null}
 
-            <section className="section">
-              <p className="card-title">View-only record</p>
-              <p className="note">
-                This secure link can display the Proof and its progress, but it cannot add, remove,
-                or change Proof evidence.
-              </p>
-            </section>
+            <p className="note">Shared for viewing. Original evidence stays unchanged.</p>
           </>
         ) : null}
       </main>
@@ -372,15 +246,6 @@ function recipientApiUrl(token: string, apiBaseUrl?: string): string {
   return new URL(path.replace(/^\//, ""), base.endsWith("/") ? base : `${base}/`).toString();
 }
 
-function Detail(props: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="meta">{props.label}</div>
-      <div style={{ fontWeight: 650, overflowWrap: "anywhere" }}>{props.value}</div>
-    </div>
-  );
-}
-
 function formatTime(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -391,33 +256,4 @@ function formatTime(value: string): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(parsed);
-}
-
-function stageLabel(stage: string): string {
-  switch (stage) {
-    case "DOCUMENTING":
-    case "AWAITING_DOCUMENTATION":
-      return "Documenting items";
-    case "AWAITING_PACK":
-      return "Ready to pack";
-    case "AWAITING_HANDOFF":
-      return "Ready to hand off";
-    case "IN_TRANSIT":
-      return "Handed off";
-    case "AWAITING_RECEIPT_CAPTURE":
-    case "AWAITING_COMPARE":
-      return "Received";
-    case "AWAITING_RETURN":
-    case "AWAITING_FINAL_RECEIPT":
-      return "Returning";
-    case "READY_TO_FINALIZE":
-    case "COMPLETE":
-      return "Complete";
-    default:
-      return "In progress";
-  }
-}
-
-function statusLabel(status: string): string {
-  return status === "FINALIZED" ? "Proof record sealed" : "Live Proof status";
 }

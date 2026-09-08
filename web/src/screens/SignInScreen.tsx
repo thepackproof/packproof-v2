@@ -250,7 +250,7 @@ export function SignInScreen(props: {
 
   return (
     <main className="page page-narrow">
-      <img className="auth-logo" src="/packproof-logo.png" alt="" width={72} height={72} />
+      <img className="auth-logo" src="/brand/packproof-symbol.svg" alt="" width={72} height={72} />
       {view === "forgot-password" || view === "reset-password" ? (
         <><h1>{view === "forgot-password" ? "Forgot your password?" : "A fresh start."}</h1><p className="lede">{view === "forgot-password" ? "Enter your email to request a password reset code." : "Enter the code from your email and choose a new password."}</p></>
       ) : view === "confirm-account" ? (

@@ -188,6 +188,14 @@ export async function completeConnectedAccountOAuth(
       redirectUri: attempt.redirectUri,
       extra,
     });
+    // A reconnect must never replace one shop's credentials with another shop's
+    // authorization. Existing commerce identities remain permanently shop-scoped.
+    if (providerId === "etsy" && typeof attempt.metadata.reauthorizeAccountId === "string") {
+      const reauthorizing = await requireOwnedAccount(db, attempt.userId, attempt.metadata.reauthorizeAccountId);
+      if (reauthorizing.provider !== providerId || reauthorizing.externalAccountId !== identity.externalAccountId) {
+        throw new DomainError("CONNECTED_ACCOUNT_IDENTITY_MISMATCH", "Reconnect the same Etsy shop, or connect the other shop separately", 409);
+      }
+    }
     const existingOther = await findConnectedAccountByExternal(db, providerId, identity.externalAccountId);
     if (existingOther && existingOther.userId !== attempt.userId && existingOther.status !== "DISCONNECTED") {
       throw new DomainError(
@@ -278,6 +286,23 @@ export async function disconnectConnectedAccount(
   accountId: string,
   service: ConnectedAccountService,
 ): Promise<void> {
+  const existing = await requireOwnedAccount(db, userId, accountId);
+  if (existing.provider !== "etsy") {
+    return disconnectConnectedAccountUnlocked(db, clock, userId, accountId, service);
+  }
+  await db.transaction(async (tx) => {
+    await tx.query("SELECT id FROM connected_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE", [accountId, userId]);
+    await disconnectConnectedAccountUnlocked(tx, clock, userId, accountId, service);
+  });
+}
+
+async function disconnectConnectedAccountUnlocked(
+  db: Database,
+  clock: Clock,
+  userId: string,
+  accountId: string,
+  service: ConnectedAccountService,
+): Promise<void> {
   const record = await requireOwnedAccount(db, userId, accountId);
   if (record.status === "DISCONNECTED") {
     return;
@@ -314,8 +339,39 @@ export async function refreshConnectedAccountCredentials(
   userId: string,
   accountId: string,
   service: ConnectedAccountService,
+  options: { preserveCommerceLease?: boolean; expectedAccessToken?: string } = {},
+): Promise<ConnectedAccountView> {
+  const existing = await requireOwnedAccount(db, userId, accountId);
+  if (existing.provider !== "etsy") {
+    return refreshConnectedAccountCredentialsUnlocked(db, clock, userId, accountId, service, options);
+  }
+  // The database lock coordinates API and worker processes as well as disconnect.
+  // Read credentials only after locking: a preceding refresh may rotate them.
+  const outcome = await db.transaction(async (tx) => {
+    await tx.query("SELECT id FROM connected_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE", [accountId, userId]);
+    try {
+      return { value: await refreshConnectedAccountCredentialsUnlocked(tx, clock, userId, accountId, service, options) };
+    } catch (error) {
+      // Auth failures intentionally persist NEEDS_REAUTH before being returned.
+      return { error };
+    }
+  });
+  if ("error" in outcome) throw outcome.error;
+  return outcome.value;
+}
+
+async function refreshConnectedAccountCredentialsUnlocked(
+  db: Database,
+  clock: Clock,
+  userId: string,
+  accountId: string,
+  service: ConnectedAccountService,
+  options: { preserveCommerceLease?: boolean; expectedAccessToken?: string },
 ): Promise<ConnectedAccountView> {
   const record = await requireOwnedAccount(db, userId, accountId);
+  if (record.status === "DISCONNECTED" || (record.provider === "etsy" && record.status !== "CONNECTED")) {
+    throw new DomainError("INTEGRATION_NEEDS_REAUTH", "Reconnect this account to restore authorization", 409);
+  }
   const provider = service.registry.get(record.provider);
   const stored = await service.credentials.getCredentials({
     adapterKey: record.provider,
@@ -325,6 +381,10 @@ export async function refreshConnectedAccountCredentials(
   if (!stored) {
     await updateConnectedAccount(db, clock, record.id, { status: "NEEDS_REAUTH" });
     throw new DomainError("INTEGRATION_NEEDS_REAUTH", "The saved authorization is no longer valid", 409);
+  }
+  if (record.provider === "etsy" && options.expectedAccessToken !== undefined &&
+      stored.material.accessToken !== options.expectedAccessToken) {
+    return toView(record, provider);
   }
   try {
     const tokens = await provider.refreshCredentials({ material: stored.material });
@@ -345,7 +405,7 @@ export async function refreshConnectedAccountCredentials(
       scopes: tokens.scopes.length > 0 ? tokens.scopes : record.scopes,
       expiresAt: tokens.expiresAt,
     });
-    await syncCommerceConnection(db,clock,updated);
+    await syncCommerceConnection(db,clock,updated,options);
     return toView(updated, provider);
   } catch (error) {
     const code=error&&typeof error==="object"&&"code" in error?String(error.code):"";
@@ -444,8 +504,9 @@ async function syncCommerceConnection(
   db: Database,
   clock: Clock,
   record: ConnectedAccountRecord,
+  options: { preserveCommerceLease?: boolean } = {},
 ): Promise<void> {
-  if (record.provider !== "ebay" && record.provider !== "shopify") {
+  if (record.provider !== "ebay" && record.provider !== "shopify" && record.provider !== "etsy") {
     return;
   }
   const adapterKey = record.provider;
@@ -458,7 +519,7 @@ async function syncCommerceConnection(
       externalAccountReference: externalRef,
       status: "ACTIVE",
     });
-    await resumeCommerceAutomation(db, clock, existing.id);
+    if (!options.preserveCommerceLease) await resumeCommerceAutomation(db, clock, existing.id);
     return;
   }
   await createIntegrationConnection(db, clock, record.userId, {
@@ -476,7 +537,7 @@ async function disableCommerceConnection(
   clock: Clock,
   record: ConnectedAccountRecord,
 ): Promise<void> {
-  if (record.provider !== "ebay" && record.provider !== "shopify") {
+  if (record.provider !== "ebay" && record.provider !== "shopify" && record.provider !== "etsy") {
     return;
   }
   const rows = await listOwnerConnections(db, record.userId, [record.provider]);

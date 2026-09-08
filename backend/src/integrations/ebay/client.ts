@@ -210,6 +210,8 @@ export function parseOrder(payload: unknown): EbayOrder | null {
     lastModifiedDate: asString(record.lastModifiedDate),
     orderFulfillmentStatus: asString(record.orderFulfillmentStatus),
     orderPaymentStatus: asString(record.orderPaymentStatus),
+    fulfillmentInstructionCount: instructions.length,
+    fulfillmentReferenceCount: Array.isArray(record.fulfillmentHrefs) ? record.fulfillmentHrefs.length : 0,
     sellerId: asString(record.sellerId),
     requiresPhysicalFulfillment: instructions.some(value=>{
       const instruction=asRecord(value);

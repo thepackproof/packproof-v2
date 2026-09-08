@@ -56,10 +56,10 @@ describe("Proof experience", () => {
       join: { eligible: false, requiresAuthentication: true, message: "" } };
     const load = vi.fn().mockResolvedValueOnce(proof).mockRejectedValue(new ApiError("ACCESS_LINK_REVOKED", "Revoked", 404));
     render(<PublicProofScreen token="token" load={load} onSignIn={() => {}} />);
-    await screen.findByText("Private proof status");
+    await screen.findByRole("article", { name: "Proof record" });
     fireEvent(window, new Event("online"));
-    await screen.findByText("This viewing link has expired, was revoked, or is no longer available.");
-    expect(screen.queryByText("Private proof status")).not.toBeInTheDocument();
+    await screen.findByText("The sender has revoked this viewing link.");
+    expect(screen.queryByRole("article", { name: "Proof record" })).not.toBeInTheDocument();
   });
 
   it("retains the last known Proof with a clear warning during a transient outage", async () => {
@@ -72,6 +72,6 @@ describe("Proof experience", () => {
     await waitFor(() => expect(screen.queryByText("Loading Proof status…")).not.toBeInTheDocument());
     await act(async () => { fireEvent(window, new Event("online")); });
     expect(await screen.findByText(/Live updates are paused/)).toBeInTheDocument();
-    expect(screen.getByText("View-only record")).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Proof record" })).toBeInTheDocument();
   });
 });

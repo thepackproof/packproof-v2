@@ -14,7 +14,7 @@ import { finalizeProof } from '../src/domain/finalize.js';
 import { sha256Hex } from '../src/hash.js';
 
 const tracking = '1Z999AA10123456784';
-const scan = {rawValue:tracking,format:'CODE_128',detectedAtMs:100,idempotencyKey:'scan-1'};
+const scan = {rawValue:tracking,format:'CODE_128',detectedAtMs:100,idempotencyKey:'scan-1',confirmed:true};
 describe('capture shipping identity and durable carrier registration',()=>{
   let h:TestHarness,seller:string,other:string,proofId:string,transactionId:string,sessionId:string;
   let now:Date,createCalls:number,getCalls:number,responseStatus:number,responseCode:string;
@@ -39,7 +39,7 @@ describe('capture shipping identity and durable carrier registration',()=>{
   it('binds once, preserves provenance, and prevents all shipping edit paths from replacing identity',async()=>{
     const first=await bind();expect(first.status).toBe('BOUND');expect(await bind()).toEqual(first);
     await expect(bind({detectedAtMs:101})).rejects.toMatchObject({code:'SHIPPING_SCAN_CONFLICT'});
-    await expect(bind({rawValue:'1Z999AA10123456785',idempotencyKey:'other'})).rejects.toMatchObject({code:'SHIPPING_LABEL_CONFLICT'});
+    expect(await bind({rawValue:'1Z999AA10123456785',idempotencyKey:'other'})).toMatchObject({status:'CONFLICT',currentTrackingNumber:tracking});
     const edit=await request(h.app).patch(`/transactions/${transactionId}/shipping`).set(auth(seller)).send({trackingNumber:'replacement'});
     expect(edit.status).toBe(409);
     await expect(h.db.query('UPDATE transaction_shipping SET tracking_number=$2 WHERE transaction_id=$1',[transactionId,'other'])).rejects.toThrow('CAPTURE_SHIPPING_IMMUTABLE');
@@ -52,7 +52,7 @@ describe('capture shipping identity and durable carrier registration',()=>{
     await expect(bindCaptureShipping(h.db,clock,other,proofId,sessionId,scan)).rejects.toMatchObject({code:'PARTICIPANT_NOT_AUTHORIZED'});
     await expect(bindCaptureShipping(h.db,clock,seller,proofId,'cap_unknown',scan)).rejects.toMatchObject({code:'CAPTURE_SESSION_NOT_FOUND'});
     const web=(await createCaptureSession(h.db,clock,seller,proofId,{client:'WEB_CAMERA',idempotencyKey:'web'})).id;
-    await expect(bindCaptureShipping(h.db,clock,seller,proofId,web,scan)).rejects.toMatchObject({code:'SHIPPING_SCAN_SESSION_INVALID'});
+    expect(await bindCaptureShipping(h.db,clock,seller,proofId,web,scan)).toMatchObject({status:'BOUND',trackingNumber:tracking});
     await cancelCaptureSession(h.db,clock,seller,proofId,sessionId);
     await expect(bind()).rejects.toMatchObject({code:'SHIPPING_SCAN_SESSION_INVALID'});
     const s=await createCaptureSession(h.db,clock,seller,proofId,{client:'NATIVE_CAMERA',idempotencyKey:'later'});
@@ -63,7 +63,7 @@ describe('capture shipping identity and durable carrier registration',()=>{
     expect(shippingBarcode('420902109400100000000000000000')).toMatchObject({trackingNumber:'9400100000000000000000',carrierHint:'USPS'});
     expect(shippingBarcode('https://example.com/address')).toBeNull();
     expect(shippingBarcode('9612345678901234567890123456789012')).toBeNull();
-    expect((await bind({rawValue:'123456789012'})).status).toBe('NEEDS_CONFIRMATION');
+    expect((await bind({rawValue:'123456789012',confirmed:false})).status).toBe('NEEDS_CONFIRMATION');
     expect(await getCaptureShipping(h.db,proofId)).toBeNull();
     expect((await bind({rawValue:'123456789012',confirmed:true})).status).toBe('BOUND');
     expect((await getCaptureShipping(h.db,proofId))?.observations[0].participantConfirmed).toBe(true);

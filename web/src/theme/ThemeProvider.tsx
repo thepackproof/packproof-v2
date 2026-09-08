@@ -39,6 +39,8 @@ function applyCssVars(scheme: ColorScheme) {
   const colors = colorsForScheme(scheme);
   const root = document.documentElement;
   const vars: Record<string, string> = {
+    "--navy": colors.textPrimary,
+    "--navy-muted": colors.surfacePressed,
     "--bg": colors.background,
     "--surface": colors.surface,
     "--surface-elevated": colors.surfaceElevated,

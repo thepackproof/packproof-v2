@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:packproof:program:event:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventRef",
+    "tenantRef",
+    "merchantRef",
+    "subjectRef",
+    "logicalAttemptRef",
+    "eventName",
+    "occurredAt",
+    "authority",
+    "deviceClass",
+    "channel",
+    "outcome"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.program.v1"
+    },
+    "eventRef": {
+      "type": "string",
+      "pattern": "^pr_[a-f0-9]{32}$"
+    },
+    "tenantRef": {
+      "type": "string",
+      "pattern": "^pr_[a-f0-9]{32}$"
+    },
+    "merchantRef": {
+      "type": "string",
+      "pattern": "^pr_[a-f0-9]{32}$"
+    },
+    "subjectRef": {
+      "type": "string",
+      "pattern": "^pr_[a-f0-9]{32}$"
+    },
+    "logicalAttemptRef": {
+      "type": "string",
+      "pattern": "^pr_[a-f0-9]{32}$"
+    },
+    "eventName": {
+      "enum": [
+        "upload.intent",
+        "evidence.committed_pending_durability",
+        "preservation.completed",
+        "proof.finalized",
+        "export.approved",
+        "payment.settled",
+        "capture.interaction"
+      ]
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "authority": {
+      "enum": [
+        "server",
+        "billing",
+        "client"
+      ]
+    },
+    "deviceClass": {
+      "enum": [
+        "s24_ultra",
+        "a16_5g",
+        "other_android",
+        "web",
+        "unknown"
+      ]
+    },
+    "channel": {
+      "enum": [
+        "ebay",
+        "stripe",
+        "paypal",
+        "manual",
+        "other",
+        "unknown"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "pending",
+        "cancelled"
+      ]
+    },
+    "errorCode": {
+      "enum": [
+        "network",
+        "authentication",
+        "quota",
+        "storage",
+        "capability",
+        "integrity",
+        "provider",
+        "cancelled",
+        "unknown"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "eventName": {
+            "const": "payment.settled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "authority": {
+            "const": "billing"
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "eventName": {
+              "const": "capture.interaction"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "authority": {
+              "const": "client"
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "authority": {
+              "const": "server"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventName": {
+            "enum": [
+              "preservation.completed",
+              "proof.finalized",
+              "export.approved",
+              "payment.settled"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "outcome": {
+            "const": "succeeded"
+          }
+        }
+      }
+    }
+  ],
+  "description": "Authority is an internal provenance contract, not authorization for a public HTTP payload. Canonical server/provider verification must precede projection."
+}

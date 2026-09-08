@@ -10,7 +10,9 @@ export function FinalizeScreen(props: {
   error: string | null;
   onBack: () => void;
   onFinalize: () => void;
+  requiresAttestation?: boolean;
 }) {
+  const [attested, setAttested] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const proof = props.proof;
   if (!proof) {
@@ -41,11 +43,12 @@ export function FinalizeScreen(props: {
         <Row label="Shipping" value={shippingSummary(txn.shipping ?? {}) || "No shipping details"} />
         <Row
           label="Evidence"
-          value={proof.evidence.some((item) => item.validationStatus === "COMMITTED") ? "Evidence secured" : "Not secured"}
+          value={proof.evidence.some((item) => item.validationStatus === "COMMITTED") ? "Recording received" : "No recording received"}
         />
       </article>
+      {props.requiresAttestation && <label className="field"><input type="checkbox" checked={attested} onChange={event => setAttested(event.target.checked)} />The item shown and attached in this Proof is the item I am shipping</label>}
       <p className="note">{FINALIZE_DISCLOSURE}</p>
-      <button className="btn" type="button" disabled={props.busy} onClick={() => setConfirmOpen(true)}>
+      <button className="btn" type="button" disabled={props.busy || Boolean(props.requiresAttestation && !attested)} onClick={() => setConfirmOpen(true)}>
         Finalize PackProof
       </button>
       {confirmOpen ? (
@@ -58,8 +61,9 @@ export function FinalizeScreen(props: {
             <button
               className="btn"
               type="button"
-              disabled={props.busy}
+              disabled={props.busy || Boolean(props.requiresAttestation && !attested)}
               onClick={() => {
+                if (props.requiresAttestation && !attested) return;
                 setConfirmOpen(false);
                 props.onFinalize();
               }}

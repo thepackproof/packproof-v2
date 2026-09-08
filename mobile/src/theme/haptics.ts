@@ -1,3 +1,4 @@
+import { systemHapticsEnabled } from "../../modules/packproof-unified-camera";
 import { Platform } from "react-native";
 
 export type HapticKind = "none" | "selection" | "light" | "medium" | "success" | "error";
@@ -17,6 +18,7 @@ export async function haptic(kind: HapticKind): Promise<void> {
   if (kind === "none") {
     return;
   }
+  if (!(await systemHapticsEnabled())) return;
   const Haptics = await nativeHaptics();
   if (!Haptics) {
     return;

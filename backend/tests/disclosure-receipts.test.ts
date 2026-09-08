@@ -32,6 +32,18 @@ async function verifiedBuyer(proofId:string,email:string) {
 }
 const secret='safe-receipt-test-secret-at-least-32-bytes';
 describe('server disclosure and buyer receipt boundaries',()=>{
+  it('keeps an independently authorized recipient grant when its historical creator cannot sign in',async()=>{
+    h=await createHarness();const {seller,proofId}=await proof();
+    const media=await commitProofEvidence(h,seller,proofId,{bytes:Buffer.from('retained recipient source'),contentType:'image/jpeg'});
+    const input={purpose:'CLAIMS_REVIEW',fields:['status','evidence'],media:[{evidenceId:media.evidenceId,representation:'ORIGINAL'}],originalsReviewed:true,publicWebBaseUrl:'https://example.test'};
+    const preview=await previewDisclosure(h.db,seller,proofId,input);
+    const link=await createDisclosureGrant(h.db,h.clock,seller,proofId,{...input,previewHash:preview.disclosure.viewHash});
+    const token=('token' in link?link.token:'') as string;
+    await h.db.query("UPDATE users SET status='DISABLED' WHERE id=$1",[seller]);
+    expect((await readDisclosedMedia(h.db,h.clock,h.objectStore,token,media.evidenceId)).body.toString()).toBe('retained recipient source');
+    const range=await request(h.app).get(`/public/proofs/${token}/evidence/${media.evidenceId}`).set('Range','bytes=0-3');
+    expect(range.status).toBe(206);expect(range.headers['content-range']).toBe('bytes 0-3/25');
+  });
   it('withholds original bytes and private fields from historical broad links',async()=>{
     h=await createHarness(); const {seller,proofId}=await proof();
     const media=await commitProofEvidence(h,seller,proofId,{bytes:Buffer.from('original secret'),contentType:'image/jpeg'});

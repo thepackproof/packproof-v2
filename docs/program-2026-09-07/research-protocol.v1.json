@@ -1,0 +1,123 @@
+{
+  "version": "packproof.research.v1",
+  "status": "prepared_not_enrolled",
+  "ownerRole": "research / commercial owner",
+  "namedOwner": null,
+  "prerequisites": [
+    "G1 passed with approved pilot terms",
+    "Metric dictionary frozen",
+    "Approved consent/support procedure",
+    "Eligibility and exclusions fixed before outcomes"
+  ],
+  "merchantStudy": {
+    "participants": {
+      "minimum": 8,
+      "maximum": 12
+    },
+    "durationWeeks": 6,
+    "segmentHypothesis": "Recurring specialist collectibles sellers on eBay using Android at a stable packing surface",
+    "alternative": "Used electronics only if qualified access and observed workflow economics are materially better",
+    "qualifyOn": [
+      "weekly natural shipment volume",
+      "documented relevant pain",
+      "visible item identification",
+      "stable packing area",
+      "willingness to report all eligible orders, failures and outcomes"
+    ],
+    "baseline": [
+      "Matched ordinary packing hands-on time",
+      "Phone/folder retrieval and frame preparation",
+      "Prior claims, carrier protection, tools and support labor"
+    ],
+    "sequence": [
+      "Uncoached first-use task; record interventions and misunderstanding",
+      "Standard brief onboarding",
+      "Natural unsupervised weekly use with all orders and skips recorded",
+      "Predeclared price/allowance and actual paid continuation",
+      "Observe second billing period only when it elapses"
+    ],
+    "prohibitedSubstitutions": [
+      "Founder demonstrations counted as unsupervised habit",
+      "Manufactured shipments",
+      "Removing dropouts or failed tasks",
+      "Subscription UI counted as settled payment"
+    ],
+    "requiredFields": [
+      "merchantRef",
+      "qualificationEvidenceRef",
+      "consentRef",
+      "enrolledAt",
+      "eligibleOrders",
+      "skippedReasons",
+      "deviceClass",
+      "firstUseTaskRef",
+      "interventions",
+      "supportMinutes",
+      "decisionWindowEnd",
+      "verifiedPaymentRef",
+      "dropoutReasonCode"
+    ]
+  },
+  "reviewerStudy": {
+    "participants": {
+      "minimum": 5,
+      "maximum": 10
+    },
+    "caseTarget": 30,
+    "caseTypes": [
+      "missing_contents",
+      "wrong_item",
+      "damage",
+      "return_condition",
+      "ordinary_delivery"
+    ],
+    "origins": [
+      "consented_historical",
+      "clearly_synthetic"
+    ],
+    "assignment": "Record a random seed and counterbalance ordinary/PackProof packets across comparable cases; avoid immediate same-case repetition",
+    "randomizationSeed": null,
+    "answerKey": "Fixed issue-specific fact checklist with source offsets; no winner verdict",
+    "separateMeasures": [
+      "technical file acceptance",
+      "legible reviewable content",
+      "facts understood",
+      "handling/preparation improvement",
+      "unsupported conclusions",
+      "information requests",
+      "failed/abandoned tasks"
+    ],
+    "analysis": "Raw counts, repeated case/reviewer structure and incomplete timings; no causal fraud-reduction claim"
+  },
+  "realClaimFollowup": {
+    "duration": "Until relevant disputes resolve, potentially after the cohort",
+    "fields": [
+      "eligibleShipmentDenominator",
+      "caseType",
+      "selectionMethod",
+      "baseline",
+      "sourceSnapshotRef",
+      "submittedDigest",
+      "submittedAt",
+      "destinationReceiptRef",
+      "otherProtection",
+      "resolvedAt",
+      "outcome",
+      "publicationPermission"
+    ],
+    "rule": "Selected favorable cases inform learning, not an advertised win rate"
+  },
+  "support": {
+    "publishedHours": null,
+    "workingChannel": null,
+    "primaryOperator": null,
+    "backupOperator": null,
+    "allAssistanceLogged": true
+  },
+  "consent": {
+    "approvedTextRef": null,
+    "version": null,
+    "withdrawalRetentionProcedureRef": null,
+    "caseStudyPermissionRequired": true
+  }
+}

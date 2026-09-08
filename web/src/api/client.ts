@@ -1,4 +1,6 @@
 import { withRequestTimeout } from "./timeout";
+import type { CaptureCapabilities } from "../capture-preflight";
+import type { RecoveryView } from "../components/PreservationStatus";
 import {
   ApiError,
   type CanonicalProof,
@@ -27,6 +29,21 @@ import {
   type ConnectedAccountsListView,
 } from "./types";
 
+export interface AccountDeletionRequestView {
+  request: null | { requestId: string; state: string; requestedAt: string; updatedAt: string };
+  retentionNotice: string;
+}
+
+function accountDeletionView(value: AccountDeletionRequestView): AccountDeletionRequestView {
+  if (!value || typeof value.retentionNotice !== "string" || !("request" in value)
+    || (value.request !== null && (!value.request || typeof value.request.requestId !== "string"
+      || !value.request.requestId || typeof value.request.state !== "string"
+      || typeof value.request.requestedAt !== "string" || typeof value.request.updatedAt !== "string"))) {
+    throw new Error("Your account request status could not be confirmed. Please try again.");
+  }
+  return value;
+}
+
 export type ProofEmailPreference = "IMPORTANT" | "ALL" | "FINAL_ONLY";
 
 export interface ProofEmailSubscriptionView {
@@ -51,11 +68,33 @@ export class PackProofApi {
 
   get recoveryScope(): string { return new URL(this.options.baseUrl || "/api", location.origin).href.replace(/\/$/, ""); }
 
+  async getCapabilities(): Promise<CaptureCapabilities> {
+    return this.request("/capabilities", {auth:false});
+  }
+
+  async getRecoveryStatus(proofId: string): Promise<RecoveryView> {
+    const view = await this.request<RecoveryView>(`/proofs/${encodeURIComponent(proofId)}/recovery`);
+    if (view.proofId !== proofId || !Array.isArray(view.evidence) || !Array.isArray(view.declarations)
+      || !view.finalization || typeof view.finalization.status !== "string") {
+      throw new Error("Preservation status is unavailable. Keep your local recording and retry shortly.");
+    }
+    return view;
+  }
+
   async setReceiptPreference(proofId:string,optedIn:boolean) {
     await this.options.getToken();
     const token=this.options.getIdentityToken?.();
     if(!token) throw new Error("Sign in again with your verified buyer email before choosing receipt updates.");
     return this.request(`/proofs/${encodeURIComponent(proofId)}/disclosure/receipt-preference`, {method:"POST",auth:false,headers:{Authorization:`Bearer ${token}`},body:{optedIn}});
+  }
+  async getCaptureShippingReview(proofId:string,sessionId:string):Promise<{currentTrackingNumber:string|null;reviewRequired:boolean;observations:Array<{observationId:string;trackingNumber:string;carrierHint:string|null;associated:boolean;resolution:null|{decision:string;reason:string;resolvedAt:string}}>}> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations`);
+  }
+  async resolveCaptureShippingObservation(proofId:string,sessionId:string,observationId:string) {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations/${encodeURIComponent(observationId)}/resolve`,{method:"POST",body:{decision:"NOT_THIS_PACKAGE",reason:"Another label visible in recording"}});
+  }
+  async bindCaptureShipping(proofId:string,sessionId:string,scan:{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;confirmed?:boolean}):Promise<{status:string;trackingNumber?:string}> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-label`,{method:"POST",body:scan});
   }
   async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string}> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, { method: "POST", body: {client:"WEB_CAMERA",idempotencyKey,stageId} });
@@ -64,6 +103,17 @@ export class PackProofApi {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/complete`, {method:"POST",body});
   }
   async recoverCaptureSession(proofId:string, sessionId:string) { return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/recover`, {method:"POST",body:{}}); }
+  async studyRequest<T>(path:string,method="GET",body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
+  async getUsage<T>(): Promise<T> { return this.request("/me/usage"); }
+  async billingRequest<T>(path:string,body?:unknown):Promise<T> {
+    return this.request(`/me/billing/${path}`, {method:body === undefined ? "GET" : "POST",body});
+  }
+  async getBillingInvoices<T>(startingAfter?:string):Promise<T>{
+    return this.request(`/me/billing/invoices${startingAfter?`?startingAfter=${encodeURIComponent(startingAfter)}`:""}`);
+  }
+
+  async packingRequest<T>(path = "", method = "GET", body?: unknown): Promise<T> { return this.request(`/packing-requests${path}`, {method,body}); }
+
   async featureRequest<T>(proofId:string, path:string, method = "GET", body?:unknown): Promise<T> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/${path}`, {method,body});
   }
@@ -76,6 +126,18 @@ export class PackProofApi {
       auth: false,
       body: { subject },
     });
+  }
+
+  async getAccountDeletionRequest(): Promise<AccountDeletionRequestView> {
+    return accountDeletionView(await this.request<AccountDeletionRequestView>("/me/account-deletion-request"));
+  }
+
+  async requestAccountDeletion(): Promise<AccountDeletionRequestView> {
+    const view = accountDeletionView(await this.request<AccountDeletionRequestView>("/me/account-deletion-request", {
+      method: "POST", body: { confirmation: "REQUEST_ACCOUNT_DELETION" },
+    }));
+    if (!view.request) throw new Error("Your account request has not been confirmed. Check its status before trying again.");
+    return view;
   }
 
   async getMe(): Promise<ProfileView> {
@@ -98,6 +160,20 @@ export class PackProofApi {
 
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
     return this.request("/me/proofs");
+  }
+
+  async listProofs(input: { view: "all" | "attention" | "completed"; q?: string }): Promise<{ proofs: ProofCollectionItem[] }> {
+    const proofs = new Map<string, ProofCollectionItem>();
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const query = new URLSearchParams({ view: input.view, q: input.q || "", limit: "100", offset: String(offset) });
+      const page: { proofs: ProofCollectionItem[]; nextOffset?: number | null } = await this.request(`/me/proofs?${query}`);
+      for (const proof of page.proofs) proofs.set(proof.proofId, proof);
+      const next: number | null = page.nextOffset ?? null;
+      if (next !== null && next <= offset) throw new Error("The Proof list could not be loaded completely. Try again.");
+      offset = next;
+    }
+    return { proofs: [...proofs.values()] };
   }
 
   async listFulfillmentQueue(
@@ -440,6 +516,7 @@ export class PackProofApi {
       evidenceType?: string;
       idempotencyKey: string;
       captureSessionId?: string;
+      byteSize?: number;
     },
   ): Promise<EvidenceUploadView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/uploads`, {

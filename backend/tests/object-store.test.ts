@@ -44,7 +44,44 @@ describe("LocalObjectStore", () => {
     await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  it("implements put, get, digest, and local upload tokens", async () => {
+  it("recovers a body published before process death without replacing its bytes",async()=>{
+    const dir=await mkdtemp(path.join(os.tmpdir(),"packproof-local-journal-crash-"));dirs.push(dir);
+    const store=new LocalObjectStore(dir,"http://127.0.0.1:9","secret"),key="recovery/v1/proof/event.json",body=Buffer.from('{"accepted":true}');
+    await store.putIfAbsent(key,body,"application/json");
+    // Simulate termination after the completed body inode, before metadata.
+    await rm(path.join(dir,key+".meta.json"));
+    expect(await store.head(key)).toBeNull();
+    expect(await store.putIfAbsent(key,body,"application/json")).toEqual({created:false});
+    expect((await store.get(key))?.body.equals(body)).toBe(true);
+    expect(await store.putIfAbsent(key,Buffer.from('{"accepted":false}'),"application/json")).toEqual({created:false});
+    expect((await store.get(key))?.body.equals(body)).toBe(true);
+  });
+
+  it("publishes complete immutable metadata across independent concurrent committers", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-local-race-"));
+    dirs.push(dir);
+    const stores = Array.from({length: 12}, () => new LocalObjectStore(dir, "http://127.0.0.1:9", "secret"));
+    const key = "evidence/proof_race/evd_race/object";
+    const body = Buffer.alloc(256 * 1024, 7);
+    await stores[0].put(key, body, "video/mp4");
+    const preserved = await stores[0].commitUpload(key);
+    const results = await Promise.all(stores.map(async store => {
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const [committed, metadata] = await Promise.all([
+          store.commitUpload(key), store.head(preserved!.key),
+        ]);
+        expect(metadata).toMatchObject({contentType:"video/mp4",byteSize:body.length});
+        expect(committed).toEqual(preserved);
+      }
+      return store.digest(preserved!.key, {versionId:preserved!.versionId});
+    }));
+    expect(results.every(value => value?.sha256 === sha256Hex(body))).toBe(true);
+    await stores[0].put(key, body, "application/octet-stream");
+    await expect(stores[1].commitUpload(key)).rejects.toMatchObject({code:"OBJECT_ALREADY_PRESERVED"});
+    expect(await stores[0].head(preserved!.key)).toMatchObject({contentType:"video/mp4"});
+  });
+
+  it("streams immutable originals and rejects unreserved local upload tokens", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "packproof-local-store-"));
     dirs.push(dir);
     const store = new LocalObjectStore(path.join(dir, "objects"), "http://127.0.0.1:9", "secret");
@@ -54,7 +91,7 @@ describe("LocalObjectStore", () => {
     const stored = await store.get(key);
     expect(stored?.contentType).toBe("video/mp4");
     expect(stored?.body.equals(body)).toBe(true);
-    await expect(store.digest(key)).resolves.toEqual({
+    await expect(store.digest(key)).resolves.toMatchObject({
       sha256: sha256Hex(body),
       byteSize: body.byteLength,
       contentType: "video/mp4",
@@ -65,21 +102,51 @@ describe("LocalObjectStore", () => {
     );
     expect((await store.get(committed!.key))?.body.equals(body)).toBe(true);
 
-    const target = await store.createUploadTarget({ key, contentType: "video/mp4" });
-    expect(target.method).toBe("PUT");
-    expect(target.url).toContain("/upload/");
-    const token = new URL(target.url).pathname.replace("/upload/", "");
-    const uploaded = await store.putUpload(token, Buffer.from("replaced"), "video/mp4");
-    expect(uploaded.key).toBe(key);
-    await expect(store.digest(key)).resolves.toMatchObject({
-      sha256: sha256Hex(Buffer.from("replaced")),
-      byteSize: 8,
-    });
+    await expect(store.createUploadTarget()).rejects.toMatchObject({code:"UPLOAD_ADMISSION_REQUIRED"});
+    await expect(store.putUpload()).rejects.toMatchObject({code:"UPLOAD_ADMISSION_REQUIRED"});
+    await store.put(key,Buffer.from("replaced"),"video/mp4");
+    expect((await store.get(committed!.key,{versionId:committed!.versionId}))?.body.equals(body)).toBe(true);
   });
 });
 
 describe("AwsS3ObjectStore", () => {
-  it("implements the ObjectStore interface with scoped presigned PUT authorization", async () => {
+  it.each(["recovery/v1/proof/event.json", "recovery/policy/v1/00000000000000000001.json"])(
+    "routes protected journal key %s through the preserved bucket",
+    async (key) => {
+      const commands: Array<PutObjectCommand | HeadObjectCommand | GetObjectCommand> = [];
+      const client = {
+        send: async (command: PutObjectCommand | HeadObjectCommand | GetObjectCommand) => {
+          commands.push(command);
+          if (command instanceof PutObjectCommand) return { VersionId: "journal-version" };
+          return {
+            ContentLength: 2,
+            ContentType: "application/json",
+            VersionId: "journal-version",
+            Body: Readable.from([Buffer.from("{}")]),
+          };
+        },
+      } as unknown as S3Client;
+      const store = new AwsS3ObjectStore("staging", {
+        region: "us-east-1", client, committedBucket: "preserved",
+      });
+      await expect(store.putIfAbsent(key, Buffer.from("{}"), "application/json"))
+        .resolves.toEqual({ created: true });
+      await store.head(key, { versionId: "journal-version" });
+      const streamed = await store.getStream(key, { versionId: "journal-version" });
+      streamed?.body.destroy();
+      expect(commands).toHaveLength(3);
+      expect(commands.every(command => command.input.Bucket === "preserved" && command.input.Key === key)).toBe(true);
+      expect((commands[0] as PutObjectCommand).input.IfNoneMatch).toBe("*");
+      expect((commands[1] as HeadObjectCommand).input.VersionId).toBe("journal-version");
+      expect((commands[2] as GetObjectCommand).input.VersionId).toBe("journal-version");
+      await expect(store.putStream(key, Readable.from([Buffer.from("{}")]), "application/json", 2))
+        .rejects.toMatchObject({ code: "STAGING_KEY_REQUIRED" });
+      await expect(store.deleteStaging(key)).rejects.toMatchObject({ code: "STAGING_KEY_REQUIRED" });
+      expect(commands).toHaveLength(3);
+    },
+  );
+
+  it("pins S3 versions and rejects direct presigned PUT authorization", async () => {
     const objects = new Map<string, { body: Buffer; contentType: string }>();
     const client = {
       send: async (command: unknown) => {
@@ -95,6 +162,7 @@ describe("AwsS3ObjectStore", () => {
             ContentLength: stored.body.byteLength,
             ContentType: stored.contentType,
             ETag: `"${sha256Hex(stored.body)}"`,
+            VersionId: command.input.Key?.includes("/committed/") ? "committed-version" : "stage-version",
           };
         }
         if (command instanceof GetObjectCommand) {
@@ -107,6 +175,8 @@ describe("AwsS3ObjectStore", () => {
           }
           return {
             ContentType: stored.contentType,
+            ContentLength: stored.body.length,
+            VersionId: command.input.VersionId ?? "stage-version",
             Body: Readable.from(stored.body),
           };
         }
@@ -121,7 +191,7 @@ describe("AwsS3ObjectStore", () => {
           return {};
         }
         if (command instanceof CopyObjectCommand) {
-          const source = decodeURIComponent(command.input.CopySource ?? "").replace(
+          const source = decodeURIComponent((command.input.CopySource ?? "").split("?versionId=")[0]).replace(
             /^packproof-test\//,
             "",
           );
@@ -132,11 +202,12 @@ describe("AwsS3ObjectStore", () => {
               $metadata: { httpStatusCode: 404 },
             });
           }
+          expect(command.input.CopySource).toContain("?versionId=stage-version");
           objects.set(command.input.Key ?? "", {
             body: Buffer.from(stored.body),
             contentType: stored.contentType,
           });
-          return {};
+          return {VersionId:"committed-version"};
         }
         throw new Error(`unexpected command ${command?.constructor?.name}`);
       },
@@ -153,7 +224,7 @@ describe("AwsS3ObjectStore", () => {
     const key = "evidence/proof_01A/evd_01B/object";
     await expect(store.digest(key)).resolves.toBeNull();
     await store.put(key, Buffer.from("s3-bytes"), "video/mp4");
-    await expect(store.digest(key)).resolves.toEqual({
+    await expect(store.digest(key)).resolves.toMatchObject({
       sha256: sha256Hex(Buffer.from("s3-bytes")),
       byteSize: 8,
       contentType: "video/mp4",
@@ -167,14 +238,11 @@ describe("AwsS3ObjectStore", () => {
     });
     expect(objects.get(committed!.key)?.body.toString()).toBe("s3-bytes");
 
-    const target = await store.createUploadTarget({ key, contentType: "video/mp4" });
-    expect(target.method).toBe("PUT");
-    expect(target.url).toContain(key);
-    expect(target.url).toContain("expires=900");
-    expect(target.headers["Content-Type"]).toBe("video/mp4");
-    await expect(store.putUpload("token", Buffer.from("x"), "video/mp4")).rejects.toMatchObject({
-      code: "UPLOAD_NOT_LOCAL",
-    });
+    expect(committed?.versionId).toBe("committed-version");
+    expect(committed?.stagingVersionId).toBe("stage-version");
+    expect((await store.commitUpload(key))?.versionId).toBe(committed?.versionId);
+    await expect(store.createUploadTarget()).rejects.toMatchObject({code:"UPLOAD_ADMISSION_REQUIRED"});
+    await expect(store.putUpload()).rejects.toMatchObject({code:"UPLOAD_ADMISSION_REQUIRED"});
   });
 
   it("rejects an incomplete object when streamed bytes do not match HeadObject size", async () => {

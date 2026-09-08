@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "packproof.billing.v1",
+  "version": "pilot-draft.v1",
+  "status": "draft",
+  "currency": "USD",
+  "priceMinor": null,
+  "interval": "monthly",
+  "includedFinalizedProofs": 100,
+  "maxRecordingBytes": 250000000,
+  "maxRecordingSeconds": 300,
+  "retentionPolicyVersion": "pending-policy-review",
+  "preservationStandard": "canonical-original-v1",
+  "supplements": "included_within_published_allowance",
+  "overage": "block_new_capture",
+  "approvedTermsReference": null
+}

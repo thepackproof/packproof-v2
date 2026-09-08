@@ -110,7 +110,7 @@ export function ReceiptScreen({
           <section className="section stack">
             <h2>{data.proof.transaction.itemTitle ?? "Shipment"}</h2>
             <p className="note">
-              The seller’s finalized Proof is preserved. Receipt and return records are added with
+              The seller’s finalized Proof remains unchanged. Receipt and return records are added with
               their own linked manifests.
             </p>
           </section>
@@ -169,7 +169,7 @@ export function ReceiptScreen({
                   <strong>{stage.label}</strong>
                   <p className="meta">
                     {saved?.finalizedAt
-                      ? `Preserved ${new Date(saved.finalizedAt).toLocaleString()}`
+                      ? `Finalized ${new Date(saved.finalizedAt).toLocaleString()}`
                       : saved
                         ? "Recording in progress"
                         : "Not yet recorded"}

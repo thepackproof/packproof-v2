@@ -1,0 +1,235 @@
+{
+  "schemaVersion": "packproof.program.v1",
+  "evidenceClass": "synthetic",
+  "period": {
+    "start": "2026-09-01T00:00:00.000Z",
+    "end": "2026-09-08T00:00:00.000Z",
+    "asOf": "2026-09-08T00:00:00.000Z"
+  },
+  "metrics": {
+    "unassistedActivation": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": 0.8,
+      "gate": "insufficient_data"
+    },
+    "eligibleOrderCoverage": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": 0.8,
+      "gate": "insufficient_data"
+    },
+    "cohortWeekThreeCoverage": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": 0.8,
+      "gate": "insufficient_data"
+    },
+    "eventualCommitment": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": 0.99,
+      "gate": "insufficient_data"
+    },
+    "allStartedCompletion": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": null,
+      "gate": "insufficient_data"
+    },
+    "reviewerCompleteness": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": 0.9,
+      "gate": "insufficient_data"
+    },
+    "reviewerTechnicalAcceptance": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": null,
+      "gate": "insufficient_data"
+    },
+    "reviewerComprehension": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": null,
+      "gate": "insufficient_data"
+    },
+    "paidContinuation": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": 0.5,
+      "gate": "insufficient_data"
+    },
+    "secondPeriodPaymentRetention": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": null,
+      "gate": "insufficient_data"
+    },
+    "secondPeriodUseRetention": {
+      "numerator": 0,
+      "denominator": 0,
+      "missing": 0,
+      "excluded": 0,
+      "pendingWindow": 0,
+      "value": null,
+      "target": null,
+      "gate": "insufficient_data"
+    }
+  },
+  "weeklyActiveMerchants": {
+    "count": 0,
+    "paying": 0
+  },
+  "cohort": {
+    "qualified": 0,
+    "enrolled": 0,
+    "dropouts": 0,
+    "firstPayers": 0,
+    "secondPeriodsElapsed": 0
+  },
+  "uploadDiagnostics": {
+    "allStarted": 0,
+    "eligible": 0,
+    "cancelled": 0,
+    "committedPendingDurability": 0,
+    "completedAfter24Hours": 0,
+    "offlineMs": 0,
+    "offlineMissing": 0,
+    "exclusions": {
+      "unsupported_workflow": 0,
+      "not_consented": 0,
+      "synthetic": 0
+    }
+  },
+  "addedActiveEffort": {
+    "medianSeconds": null,
+    "p90Seconds": null,
+    "completePairs": 0,
+    "allTasks": 0,
+    "missingOrIncomplete": 0,
+    "unattendedSeconds": 0,
+    "gate": "insufficient_data"
+  },
+  "preparationImprovement": {
+    "ordinaryMedianSeconds": null,
+    "packproofMedianSeconds": null,
+    "value": null,
+    "target": 0.3,
+    "ordinaryTimedTasks": 0,
+    "packproofTimedTasks": 0,
+    "allTasks": 0,
+    "missingOrIncomplete": 0,
+    "gate": "insufficient_data"
+  },
+  "reviewerDiagnostics": {
+    "uniqueReviewers": 0,
+    "uniqueCases": 0,
+    "unsupportedConclusions": 0,
+    "unsupportedConclusionMissing": 0
+  },
+  "support": {
+    "totalMinutes": 0,
+    "activeMerchants": 0,
+    "minutesPerActiveMerchant": null,
+    "onboardingMinutes": 0,
+    "ongoingMinutes": 0,
+    "minutesForInactiveMerchants": 0,
+    "trend": "requires_prior_comparable_period"
+  },
+  "economics": {
+    "currency": "USD",
+    "period": {
+      "start": "2026-08-01T00:00:00.000Z",
+      "end": "2026-09-01T00:00:00.000Z"
+    },
+    "periodElapsed": true,
+    "netRevenueMinor": 0,
+    "paymentLegs": {
+      "charges": 0,
+      "refunds": 0,
+      "refundReversals": 0
+    },
+    "knownVariableAndSupportCostMinor": 0,
+    "knownFixedCostMinor": 0,
+    "knownCapacityStepCostMinor": 0,
+    "missingCostCategories": [
+      "original_storage",
+      "replicas_versions_holds",
+      "staging_abandoned",
+      "derivatives",
+      "storage_requests",
+      "playback_export_transfer",
+      "processing",
+      "database",
+      "provider_calls",
+      "signing",
+      "monitoring",
+      "release_services",
+      "support",
+      "payment_processing",
+      "other"
+    ],
+    "contributionMinor": null,
+    "billingReconciliation": {
+      "status": "unreconciled",
+      "sourceRef": null,
+      "unexplainedDifferenceMinor": null
+    },
+    "infrastructureCostMinor": 0,
+    "infrastructureGrossMarginMinor": null,
+    "operatingResultMinor": null,
+    "reconciliation": "Provider source records and invoices must still be reconciled by the accountable operator; valid input is not proof of invoice completeness."
+  },
+  "nextActions": [
+    "Review remaining missing evidence and elapsed cohort windows; these thresholds alone do not authorize an expansion gate."
+  ],
+  "limitations": [
+    "Synthetic fixtures: no customer, release, commercial or legal gate is satisfied.",
+    "All rates retain failures; unelapsed windows, exclusions and missingness are explicit. A zero denominator is unknown, never 100%.",
+    "Usable Proof assessments require the versioned issue checklist. A finalized status alone is insufficient.",
+    "Small and repeated merchant/reviewer samples do not establish causal fraud reduction, statistical certainty or marketplace endorsement.",
+    "Cost projections are not provider invoices; missing categories prevent a complete contribution result."
+  ]
+}

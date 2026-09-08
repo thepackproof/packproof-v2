@@ -296,7 +296,7 @@ describe("append-only shipment observations", () => {
         sourceEventId: "shared-provider-id",
         authority: "INTEGRATION",
       }),
-    ).rejects.toMatchObject({ code: "SHIPMENT_EVENT_CONFLICT" } satisfies Partial<DomainError>);
+    ).resolves.toMatchObject({ created: true, event: { transactionId: second.transaction.transactionId } }); // Provider IDs are shipment-scoped; never reassign the original event.
 
     await expect(
       recordShipmentEvent(harness.db, harness.clock, seller, {

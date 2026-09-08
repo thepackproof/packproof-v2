@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { IconButton } from "./Button";
+import { PressableScale } from "./motion";
 import { Logo } from "./Logo";
 
 export function AppHeader(props: {
@@ -46,9 +47,7 @@ export function SectionHeader(props: { title: string; actionLabel?: string; onAc
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{props.title}</Text>
       {props.onAction && props.actionLabel ? (
-        <Text onPress={props.onAction} style={[styles.action, { color: colors.accent }]} accessibilityRole="button">
-          {props.actionLabel}
-        </Text>
+        <PressableScale onPress={props.onAction} accessibilityRole="button" style={{minHeight:48,minWidth:48,justifyContent:"center"}}><Text style={[styles.action, { color: colors.accent }]}>{props.actionLabel}</Text></PressableScale>
       ) : null}
     </View>
   );
@@ -57,7 +56,7 @@ export function SectionHeader(props: { title: string; actionLabel?: string; onAc
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
   row: { flexDirection: "row", alignItems: "center", minHeight: 48 },
-  center: { flex: 1, paddingHorizontal: spacing.sm },
+  center: { flex: 1, minWidth:0, paddingHorizontal: spacing.sm },
   right: { minWidth: 48, alignItems: "flex-end" },
   spacer: { width: 48, height: 48 },
   brand: { ...typography.secondaryStrong },

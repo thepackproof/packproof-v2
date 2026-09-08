@@ -28,8 +28,10 @@ it("restores station bytes and finishes the exact committed recording after a re
     evidence: [{ ...canonicalProof.evidence[0], evidenceId: "saved-recording", evidenceType: "FULFILLMENT_CAPTURE", validationStatus: "COMMITTED" as const }],
   };
   const api = {
+    getCaptureShippingReview:vi.fn(async()=>({currentTrackingNumber:null,reviewRequired:false,observations:[]})),
     getProof: vi.fn(async () => proof), completeCaptureSession: vi.fn(async()=>({state:"RECORDED"})),
     initializeEvidenceUpload: vi.fn(), uploadObject: vi.fn(), commitEvidence: vi.fn(),
+    getRecoveryStatus:vi.fn(async()=>({proofId:ready.proofId,evidence:[{evidenceId:"saved-recording",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}})),
     createAttestation: vi.fn(async () => ({ proof })),
     finalizeProof: vi.fn(async () => { proof = { ...proof, status: "FINALIZED" }; return { proof }; }),
   };
@@ -38,10 +40,11 @@ it("restores station bytes and finishes the exact committed recording after a re
     static revokeObjectURL = vi.fn();
   });
   render(<PackingStationScreen api={api as unknown as PackProofApi} userId="user_seller" queue={[]} error={null} onAuthExpired={() => {}} />);
-  const retry = await screen.findByRole("button", { name: "Retry upload" });
+  const retry = await screen.findByRole("button", { name: "Confirm and submit" });
+  fireEvent.click(await screen.findByRole("checkbox"));
   await waitFor(() => expect(retry).toBeEnabled());
   fireEvent.click(retry);
-  expect(await screen.findByText("PROOF CREATED")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", {name:"Proof saved"})).toBeInTheDocument();
   expect(api.initializeEvidenceUpload).not.toHaveBeenCalled();
   expect(api.uploadObject).not.toHaveBeenCalled();
   expect(api.commitEvidence).not.toHaveBeenCalled();

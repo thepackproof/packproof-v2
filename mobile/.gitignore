@@ -8,3 +8,7 @@ dist/
 *.apk
 *.jks
 *.keystore
+
+# Generated Gradle outputs from local Expo library modules.
+/modules/packproof-attestation/android/build/
+/modules/packproof-unified-camera/android/build/

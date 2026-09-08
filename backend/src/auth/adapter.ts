@@ -1,5 +1,6 @@
 import type { Database } from "../db/database.js";
 import { DomainError } from "../domain/errors.js";
+import { requireActiveAccount } from "../domain/account-access.js";
 
 export type PackProofUserId = string;
 
@@ -45,12 +46,7 @@ export class BearerUserAdapter implements AuthenticationAdapter {
     headers: Record<string, string | string[] | undefined>,
   ): Promise<AuthContext> {
     const userId = extractBearerToken(headers);
-    const found = await this.db.query(`SELECT id FROM users WHERE id = $1`, [
-      userId,
-    ]);
-    if (!found.rows[0]) {
-      throw new DomainError("UNAUTHENTICATED", "Unknown PackProof user", 401);
-    }
+    await requireActiveAccount(this.db, userId);
     return { userId };
   }
 }

@@ -6,6 +6,29 @@ import { loadConnection } from "./integration-connections.js";
 import { loadCommerceSyncState, syncStateView } from "./commerce-order-records.js";
 import type { IntegrationAdapterRegistry } from "../integrations/registry.js";
 export const AUTOMATIC_ORDER_POLICY = "Available paid physical orders requiring fulfillment, updated in the last 60 days. Cancelled, fully fulfilled, unpaid and digital-only orders do not create Proofs. No label or buyer account is required.";
+export const ETSY_AUTOMATIC_ORDER_POLICY = "Paid, unshipped physical Etsy orders create a Proof ready for recording. Pending orders have no age cutoff. Updates sync about every five minutes while PackProof is closed; mixed, partially shipped or incomplete orders are held for review. No buyer account or shipping label is required.";
+export function commerceOrderPolicy(adapterKey: string): string {
+    return adapterKey === "etsy" ? ETSY_AUTOMATIC_ORDER_POLICY : AUTOMATIC_ORDER_POLICY;
+}
+/** Seller-facing review counts are operational source data, never fabricated Proofs. */
+export async function getCommerceReviewSummary(db: Database, connectionId: string): Promise<{
+    reviewOrderCount: number;
+    reviewReasons: Array<{ code: string; count: number }>;
+}> {
+    const reasons = (await db.query<{ code: string; count: string | number }>(`
+      SELECT rev.normalized_order->>'pilotCaptureExclusion' AS code,COUNT(*) AS count
+      FROM commerce_order_records r
+      JOIN commerce_order_revisions rev ON rev.order_record_id=r.id AND rev.fingerprint=r.normalized_fingerprint
+      JOIN integration_connections c ON c.id=r.connection_id
+      WHERE r.connection_id=$1 AND c.provider='etsy' AND r.eligibility='INELIGIBLE'
+        AND r.payment_state='CONFIRMED' AND r.cancelled=false AND r.fulfillment_state NOT IN ('FULFILLED','CANCELLED')
+        AND rev.normalized_order->>'pilotCaptureExclusion' IN (
+          'etsy_incomplete_fulfillment_details','etsy_multiple_shipments','etsy_partial_shipment',
+          'etsy_mixed_physical_and_digital_order','etsy_unknown_fulfillment','etsy_inconsistent_currency','etsy_unconfirmed_order_status')
+      GROUP BY rev.normalized_order->>'pilotCaptureExclusion' ORDER BY code`, [connectionId])).rows;
+    const reviewReasons = reasons.map(row => ({ code: row.code, count: Number(row.count) }));
+    return { reviewOrderCount: reviewReasons.reduce((sum, row) => sum + row.count, 0), reviewReasons };
+}
 export async function setCommerceAutomation(db: Database, clock: Clock, userId: string, connectionId: string, enabled: unknown, integrations: IntegrationAdapterRegistry) {
     if (typeof enabled !== "boolean")
         throw new DomainError("INVALID_AUTOMATION_SETTING", "Choose whether to sync orders automatically", 400);
@@ -22,7 +45,7 @@ export async function setCommerceAutomation(db: Database, clock: Clock, userId: 
       ON CONFLICT(connection_id) DO UPDATE SET next_run_at=$2,run_status='IDLE',attempt_count=0,
       last_error_code=NULL,last_error_retryable=NULL,lease_token=NULL,lease_expires_at=NULL,updated_at=$2`, [connectionId, clock.now().toISOString()]);
     });
-    return { connectionId, autoSyncEnabled: enabled, orderPolicy: AUTOMATIC_ORDER_POLICY, sync: syncStateView(await loadCommerceSyncState(db, connectionId)) };
+    return { connectionId, autoSyncEnabled: enabled, orderPolicy: commerceOrderPolicy(connection.adapter_key), sync: syncStateView(await loadCommerceSyncState(db, connectionId)) };
 }
 /** OAuth reconnect retains the seller's previous opt-in and resumes outstanding checkpoints. */
 export async function resumeCommerceAutomation(db: Database, clock: Clock, connectionId: string) {

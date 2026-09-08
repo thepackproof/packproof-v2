@@ -6,6 +6,7 @@ import { sha256Hex } from "../hash.js";
 import { DomainError } from "../domain/errors.js";
 import { MANIFEST_SIGNATURE_ALGORITHMS, verifyManifestIntegrity, type ManifestSignatureAlgorithm } from "../domain/manifest-signing.js";
 import { loadManifestSigningRuntime, parseTrustList, validateAlgorithmKey, type ManifestSigningRuntime, type ManifestTrustList } from "./signing-runtime.js";
+import { assertRegistrySigningKey, installSignedTrustRegistryReader, loadSignedTrustRegistryRuntime } from "./trust-registry-runtime.js";
 
 export interface KmsSigningTransport {
   getPublicKey(input: GetPublicKeyCommandInput): Promise<GetPublicKeyCommandOutput>;
@@ -38,6 +39,7 @@ export async function initializeManifestSigningRuntime(clock: Clock, env: NodeJS
   const client = transport ?? awsTransport(arn![2]);
   let previousPublicPem: string | null = null;
   let refreshPromise: Promise<void> | null = null;
+  const registryConfigured = !!(env.PACKPROOF_MANIFEST_SIGNED_TRUST_REGISTRY_FILE || env.PACKPROOF_MANIFEST_REGISTRY_AUTHORITY_KEYS_FILE);
   const runtime: ManifestSigningRuntime = {
     trustList: null,
     publicStatus: { mode: "SIGNED", keyId, algorithm, required: requiredRaw === "true", trustListSha256: null, provider: "AWS_KMS" },
@@ -56,6 +58,16 @@ export async function initializeManifestSigningRuntime(clock: Clock, env: NodeJS
       publicKeyPem = key.export({ format: "pem", type: "spki" }).toString();
     } catch { return invalid("KMS returned an invalid or incompatible public key"); }
     if (previousPublicPem && previousPublicPem !== publicKeyPem) invalid("the exact signing key unexpectedly changed");
+    const registry = loadSignedTrustRegistryRuntime(clock, env);
+    if (registry) {
+      assertRegistrySigningKey(registry, clock, { keyId, algorithm, publicKeyPem });
+      previousPublicPem = publicKeyPem;
+      Object.assign(runtime, registry);
+      runtime.publicStatus.trustSource = "SIGNED_REGISTRY";
+      runtime.publicStatus.trustRegistrySha256 = sha256Hex(registry.signedTrustRegistryJson);
+      runtime.publicStatus.trustListSha256 = sha256Hex(canonicalize(registry.trustList));
+      return;
+    }
     const generatedAt = clock.now().toISOString();
     const expiresAt = new Date(clock.now().getTime() + ttlSeconds * 1000).toISOString();
     let historical: unknown = [];
@@ -69,14 +81,27 @@ export async function initializeManifestSigningRuntime(clock: Clock, env: NodeJS
       keys: [...historicalKeys, { keyId, algorithm, publicKeyPem, status: "ACTIVE" }] })));
     previousPublicPem = publicKeyPem;
     runtime.trustList = list;
+    runtime.publicStatus.trustSource = "LEGACY_TRUST_LIST";
     runtime.publicStatus.trustListSha256 = sha256Hex(canonicalize(list));
   }
   await refreshTrust(); // Fail startup before any finalization can be accepted.
+  installSignedTrustRegistryReader(runtime, clock, env);
   runtime.signer = {
     async signManifest(input) {
       if (sha256Hex(input.canonicalJson) !== input.sha256) throw new DomainError("MANIFEST_SIGNING_FAILED", "The frozen manifest could not be signed", 503);
+      if (registryConfigured) {
+        // A signer can consume a separately reviewed rotation/revocation file,
+        // but cannot extend the registry review date by generating its own list.
+        try {
+          const registry = loadSignedTrustRegistryRuntime(clock, env)!;
+          Object.assign(runtime, registry);
+          runtime.publicStatus.trustRegistrySha256 = sha256Hex(registry.signedTrustRegistryJson);
+          runtime.publicStatus.trustListSha256 = sha256Hex(canonicalize(registry.trustList));
+          assertRegistrySigningKey(registry, clock, { keyId, algorithm, publicKeyPem: previousPublicPem! });
+        } catch { throw new DomainError("MANIFEST_TRUST_REFRESH_FAILED", "The signed trust registry needs an operational review", 503); }
+      }
       const refreshBeforeMs = Math.min(ttlSeconds * 1000 / 4, 3600000);
-      if (Date.parse(runtime.trustList!.expiresAt) - clock.now().getTime() <= refreshBeforeMs) {
+      if (!registryConfigured && Date.parse(runtime.trustList!.expiresAt) - clock.now().getTime() <= refreshBeforeMs) {
         if (!refreshPromise) refreshPromise = refreshTrust().finally(() => { refreshPromise = null; });
         try { await refreshPromise; }
         catch { throw new DomainError("MANIFEST_TRUST_REFRESH_FAILED", "Signing trust information could not be refreshed", 503); }

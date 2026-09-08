@@ -5,6 +5,8 @@ import { canonicalize } from "../canonical.js";
 import { sha256Hex } from "../hash.js";
 import { DomainError } from "../domain/errors.js";
 import { MANIFEST_SIGNATURE_ALGORITHMS, type ManifestSignatureAlgorithm, type ManifestSigner } from "../domain/manifest-signing.js";
+import type { SignedTrustRegistry } from "../domain/signing-trust.js";
+import { assertRegistrySigningKey, installSignedTrustRegistryReader, loadSignedTrustRegistryRuntime } from "./trust-registry-runtime.js";
 
 export interface ManifestTrustKey {
   keyId: string;
@@ -20,8 +22,12 @@ export interface ManifestTrustList {
 }
 export interface ManifestSigningRuntime {
   signer?: ManifestSigner;
-  publicStatus: { mode: "SIGNED" | "UNSIGNED"; algorithm: ManifestSignatureAlgorithm | null; keyId: string | null; required: boolean; trustListSha256: string | null; provider?: "AWS_KMS" | "PEM" };
+  publicStatus: { mode: "SIGNED" | "UNSIGNED"; algorithm: ManifestSignatureAlgorithm | null; keyId: string | null; required: boolean; trustListSha256: string | null; provider?: "AWS_KMS" | "PEM"; trustSource?: "SIGNED_REGISTRY" | "LEGACY_TRUST_LIST"; trustRegistrySha256?: string };
   trustList: ManifestTrustList | null;
+  signedTrustRegistryJson?: string;
+  signedTrustRegistry?: SignedTrustRegistry;
+  registryAuthorityKeys?: Record<string, string>;
+  readSignedTrustRegistry?: () => string;
 }
 const invalid = (detail: string): never => { throw new Error(`Invalid manifest signing configuration: ${detail}`); };
 function readBoundedFile(file: string, maximum: number, privateFile = false): Buffer {
@@ -76,12 +82,15 @@ export function loadManifestSigningRuntime(clock: Clock, env: NodeJS.ProcessEnv 
   const required = rawRequired === "true";
   if (!["unsigned", "pem"].includes(mode)) invalid("choose unsigned or pem mode");
   const trustPath = env.PACKPROOF_MANIFEST_TRUST_LIST_FILE?.trim();
-  const trustList = trustPath ? parseTrustList(readBoundedFile(trustPath, 1024 * 1024)) : null;
+  const registry = loadSignedTrustRegistryRuntime(clock, env);
+  const trustList = registry?.trustList ?? (trustPath ? parseTrustList(readBoundedFile(trustPath, 1024 * 1024)) : null);
   if (mode === "unsigned") {
     if (required) invalid("signed manifests are required but no signer is configured");
     if (env.PACKPROOF_MANIFEST_SIGNING_KEY_FILE || env.PACKPROOF_MANIFEST_SIGNING_KEY_ID || env.PACKPROOF_MANIFEST_SIGNING_ALGORITHM || env.PACKPROOF_MANIFEST_KMS_KEY_ARN)
       invalid("key configuration cannot be silently ignored in unsigned mode");
-    return { trustList, publicStatus: { mode: "UNSIGNED", algorithm: null, keyId: null, required, trustListSha256: trustList ? sha256Hex(canonicalize(trustList)) : null } };
+    const runtime: ManifestSigningRuntime = { ...registry, trustList, publicStatus: { mode: "UNSIGNED", algorithm: null, keyId: null, required, trustListSha256: trustList ? sha256Hex(canonicalize(trustList)) : null, ...(registry ? { trustSource: "SIGNED_REGISTRY", trustRegistrySha256: sha256Hex(registry.signedTrustRegistryJson) } : {}) } };
+    installSignedTrustRegistryReader(runtime, clock, env);
+    return runtime;
   }
   const keyFile = env.PACKPROOF_MANIFEST_SIGNING_KEY_FILE?.trim();
   const keyId = env.PACKPROOF_MANIFEST_SIGNING_KEY_ID?.trim();
@@ -98,11 +107,21 @@ export function loadManifestSigningRuntime(clock: Clock, env: NodeJS.ProcessEnv 
   const active = trustList!.keys.find(key => key.keyId === keyId && key.algorithm === algorithm && key.status === "ACTIVE");
   if (!active) invalid("active signing key is absent or revoked in the trust list");
   const actualPublic = createPublicKey(privateKey!).export({ type: "spki", format: "der" });
+  const publicKeyPem = createPublicKey(privateKey!).export({ type: "spki", format: "pem" }).toString();
+  if (registry) assertRegistrySigningKey(registry, clock, { keyId: keyId!, algorithm, publicKeyPem });
   const expectedPublic = createPublicKey(active!.publicKeyPem).export({ type: "spki", format: "der" });
   if (actualPublic.length !== expectedPublic.length || !timingSafeEqual(actualPublic, expectedPublic)) invalid("signing and published verification keys differ");
   const signer: ManifestSigner = {
     async signManifest(input) {
-      if (!trustIsCurrent(trustList!, clock)) throw new DomainError("MANIFEST_TRUST_EXPIRED", "Signing trust information needs an operational refresh", 503);
+      if (registry) {
+        try {
+          const refreshed = loadSignedTrustRegistryRuntime(clock, env)!;
+          Object.assign(runtime, refreshed);
+          runtime.publicStatus.trustRegistrySha256 = sha256Hex(refreshed.signedTrustRegistryJson);
+          runtime.publicStatus.trustListSha256 = sha256Hex(canonicalize(refreshed.trustList));
+          assertRegistrySigningKey(refreshed, clock, { keyId: keyId!, algorithm, publicKeyPem });
+        } catch { throw new DomainError("MANIFEST_TRUST_EXPIRED", "The signed trust registry needs an operational review", 503); }
+      } else if (!trustIsCurrent(trustList!, clock)) throw new DomainError("MANIFEST_TRUST_EXPIRED", "Signing trust information needs an operational refresh", 503);
       if (sha256Hex(input.canonicalJson) !== input.sha256) throw new DomainError("MANIFEST_SIGNING_FAILED", "The frozen manifest could not be signed", 503);
       let signed: Buffer;
       try {
@@ -113,5 +132,7 @@ export function loadManifestSigningRuntime(clock: Clock, env: NodeJS.ProcessEnv 
       return { algorithm, keyId: keyId!, signatureBase64: signed.toString("base64"), signedAt: clock.now().toISOString() };
     },
   };
-  return { signer, trustList, publicStatus: { mode: "SIGNED", keyId: keyId!, algorithm, required, trustListSha256: sha256Hex(canonicalize(trustList)) } };
+  const runtime: ManifestSigningRuntime = { ...registry, signer, trustList, publicStatus: { mode: "SIGNED", keyId: keyId!, algorithm, required, trustListSha256: sha256Hex(canonicalize(trustList)), trustSource: registry ? "SIGNED_REGISTRY" : "LEGACY_TRUST_LIST", ...(registry ? { trustRegistrySha256: sha256Hex(registry.signedTrustRegistryJson) } : {}) } };
+  installSignedTrustRegistryReader(runtime, clock, env);
+  return runtime;
 }

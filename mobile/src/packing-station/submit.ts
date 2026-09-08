@@ -28,6 +28,10 @@ export interface StationSubmitApi {
 
 export interface StationSubmitDeps {
   api: StationSubmitApi;
+  /** Obtain deliberate seller authorization before uploading any capture bytes. */
+  prepareAttestation?: () => Promise<
+    (proofId: string, evidenceId: string) => Promise<{ proof: StationProofSnapshot }>
+  >;
   uploadEvidence?: (
     proofId: string,
     evidenceId: string,
@@ -86,6 +90,12 @@ export async function submitStationSession(input: {
     input.onProgress?.({ step, uploadPercent });
   };
 
+  // A native caller must finish its OS authorization here. Cancellation leaves
+  // the capture local and never initializes, uploads, or commits evidence.
+  const attestEvidence = input.proof.status !== "FINALIZED"
+    ? await input.deps.prepareAttestation?.()
+    : undefined;
+
   notify("upload", 0);
   let initialized: Awaited<ReturnType<StationSubmitApi["initializeEvidenceUpload"]>> | null = null;
   let evidenceId: string | null = recoveredEvidence?.evidenceId ?? null;
@@ -113,14 +123,16 @@ export async function submitStationSession(input: {
     if (mapped.code === "EVIDENCE_ALREADY_COMMITTED") {
       notify("refresh", 100);
       proof = await input.deps.api.getProof(proofId);
+      const expectedEvidenceId = initialized?.evidenceId ?? input.evidenceId;
       evidenceId =
-        proof.evidence.find((item) => item.validationStatus === "COMMITTED" && item.evidenceId)
+        proof.evidence.find((item) => item.validationStatus === "COMMITTED" &&
+          item.evidenceId === expectedEvidenceId)
           ?.evidenceId ?? null;
       if (!evidenceId) {
         throw mapSubmitError(
           error,
-          "NETWORK",
-          "Packing evidence was committed, but recovery could not identify it.",
+          "EVIDENCE_ALREADY_COMMITTED",
+          "Packing evidence was committed, but recovery could not identify this exact video.",
         );
       }
     } else {
@@ -158,13 +170,18 @@ export async function submitStationSession(input: {
   }
 
   const optional = proof.participationPolicy === "COUNTERPARTY_OPTIONAL";
-  if (proof.status !== "FINALIZED" && optional && !sellerHasPackingAttestation(proof, input.actorUserId)) {
+  if (proof.status !== "FINALIZED" &&
+    (attestEvidence || (optional && !sellerHasPackingAttestation(proof, input.actorUserId)))) {
     notify("attest", 100);
     try {
-      const attested = await input.deps.api.createAttestation(proofId, {
-        statement: "PACKED_DESCRIBED_ITEM",
-        relatedEvidenceId: evidenceId,
-      });
+      // Signed mobile attestations are evidence-specific and apply regardless of
+      // buyer participation. A previous account attestation cannot replace one.
+      const attested = attestEvidence
+        ? await attestEvidence(proofId, evidenceId)
+        : await input.deps.api.createAttestation(proofId, {
+            statement: "PACKED_DESCRIBED_ITEM",
+            relatedEvidenceId: evidenceId,
+          });
       proof = attested.proof;
     } catch (error) {
       throw mapSubmitError(

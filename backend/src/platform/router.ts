@@ -1,3 +1,6 @@
+import { getProofRecoveryStatus } from "../domain/recovery-journal.js";
+import { pipeline } from "node:stream/promises";
+import {guardAuthorizedStream} from "../domain/authorized-stream.js";
 import { createCaptureSession, completeCaptureSession, recoverCaptureSession, cancelCaptureSession } from "../domain/capture-sessions.js";
 import express, { type Request, type Response, type NextFunction } from "express";
 import { fileURLToPath } from "node:url";
@@ -10,7 +13,7 @@ import { getProofForUser, getProofView, type ProofView } from "../domain/proofs.
 import {
   initializeEvidenceUpload,
   commitEvidence,
-  readCommittedEvidence,
+  readCommittedEvidenceStream,
 } from "../domain/evidence.js";
 import { commitAttestation } from "../domain/attestations.js";
 import { createInvitation } from "../domain/invitations.js";
@@ -47,7 +50,7 @@ import {
   retryWebhookDelivery,
 } from "./webhooks.js";
 import { previewOrderIntake } from "../intake/order-intake.js";
-import { exportEvidencePackage, getEvidenceReview } from "../domain/evidence-review.js";
+import { exportEvidencePackageStream, getEvidenceReview } from "../domain/evidence-review.js";
 import {
   discardStageEvidence,
   acceptCommerceReceiver,
@@ -61,7 +64,7 @@ import {
 } from "../domain/commerce-lifecycle.js";
 import {
   listUploadParts,
-  storeUploadPart,
+  receiveAdmittedUploadPart,
   completeUploadParts,
   discardPendingUpload,
 } from "../domain/resumable-upload.js";
@@ -289,6 +292,7 @@ export function createPlatformRouter(deps: AppDependencies) {
         contentType: textField(req.body?.contentType, "contentType", 100),
         evidenceType: req.body?.evidenceType,
         captureSessionId: req.body?.captureSessionId,
+        byteSize: req.body?.byteSize,
         idempotencyKey: sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`),
       }),
     201,
@@ -339,9 +343,7 @@ export function createPlatformRouter(deps: AppDependencies) {
         p = req.apiPrincipal!;
       requireScope(p, "evidence:write");
       await requireTenantProof(deps.db, p, req.params.id);
-      if (!Buffer.isBuffer(req.body))
-        throw new DomainError("INVALID_UPLOAD_PART", "Send binary bytes", 400);
-      const part = await storeUploadPart(
+      const part = await receiveAdmittedUploadPart(
         deps.db,
         deps.clock,
         deps.objectStore,
@@ -349,7 +351,7 @@ export function createPlatformRouter(deps: AppDependencies) {
         req.params.id,
         req.params.evidenceId,
         Number(req.params.partNumber),
-        req.body,
+        req,
       );
       await auditRequest(
         deps.db,
@@ -376,8 +378,9 @@ export function createPlatformRouter(deps: AppDependencies) {
     201,
   );
   endpoint("post", "/proofs/:id/finalize", "proofs:finalize", (db, p, req) =>
-    finalizeProof(db, deps.clock, p.userId, req.params.id, deps.manifestSigning?.signer),
+    finalizeProof(db, deps.clock, p.userId, req.params.id, deps.manifestSigning?.signer, {requireDurableReceipts:deps.requireDurableReceipts===true}),
   );
+  endpoint("get", "/proofs/:id/recovery", "proofs:read", (db,p,req) => getProofRecoveryStatus(db,p.userId,req.params.id));
   endpoint("get", "/proofs/:id/manifest", "proofs:read", (db, p, req) =>
     getManifest(db, p.userId, req.params.id),
   );
@@ -509,6 +512,8 @@ export function createPlatformRouter(deps: AppDependencies) {
         req.params.id,
         req.params.stageId,
         req.body?.statement,
+        deps.manifestSigning?.signer,
+        {requireDurableReceipts:deps.requireDurableReceipts===true},
       ),
   );
   endpoint(
@@ -552,7 +557,7 @@ export function createPlatformRouter(deps: AppDependencies) {
         p = req.apiPrincipal!;
       requireScope(p, "proofs:read");
       await requireTenantProof(deps.db, p, req.params.id);
-      const bytes = await exportEvidencePackage(
+      const archive = await exportEvidencePackageStream(
         deps.db,
         deps.clock,
         deps.objectStore,
@@ -561,7 +566,10 @@ export function createPlatformRouter(deps: AppDependencies) {
       );
       await auditRequest(deps.db, deps, req, "GET /proofs/:id/package", 200);
       res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}.pkpr"`);
-      res.type("application/zip").send(bytes);
+      res.type("application/zip");
+      await pipeline(guardAuthorizedStream(archive,async()=>{
+        const current=await authenticateApiKey(deps.db,req.header("authorization"));requireScope(current,"proofs:read");await requireTenantProof(deps.db,current,req.params.id);
+      }),res);
     }),
   );
   router.get(
@@ -571,19 +579,25 @@ export function createPlatformRouter(deps: AppDependencies) {
         p = req.apiPrincipal!;
       requireScope(p, "proofs:read");
       await requireTenantProof(deps.db, p, req.params.id);
-      const result = await readCommittedEvidence(
+      await auditRequest(deps.db, deps, req, "GET /proofs/:id/evidence/:evidenceId", 200);
+      const result = await readCommittedEvidenceStream(
         deps.db,
         deps.objectStore,
         p.userId,
         req.params.id,
         req.params.evidenceId,
+        req.header("range"),
       );
-      await auditRequest(deps.db, deps, req, "GET /proofs/:id/evidence/:evidenceId", 200);
-      res.type(result.contentType).send(result.body);
+      for(const [name,value] of Object.entries(result.headers))res.setHeader(name,value);
+      res.status(result.status);
+      if(result.body)await pipeline(guardAuthorizedStream(result.body,async()=>{
+        const current=await authenticateApiKey(deps.db,req.header("authorization"));requireScope(current,"proofs:read");await requireTenantProof(deps.db,current,req.params.id);
+      }),res);else res.end();
     }),
   );
   router.use((_req, _res, next) => next(new DomainError("NOT_FOUND", "Unknown v1 endpoint", 404)));
   router.use((error: unknown, raw: Request, res: Response, _next: NextFunction) => {
+    if(res.headersSent){res.destroy(error instanceof Error?error:undefined);return;}
     const req = raw as ApiRequest;
     const domain = error instanceof DomainError ? error : null;
     const status = domain?.httpStatus ?? (errorCodeFromSql(error) ? 409 : 500);

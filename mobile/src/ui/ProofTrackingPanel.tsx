@@ -3,7 +3,8 @@ import { Image, Linking, Modal, ScrollView, StyleSheet, Text, View, useWindowDim
 import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { ShipmentEventView } from "../v2-api";
+import type { ProofView, ShipmentEventView } from "../v2-api";
+import { trackingState } from "../copy/tracking-state";
 import { formatDateTime } from "../copy/format";
 import {
   MAP_DEFAULT_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, MAP_TILE_SIZE,
@@ -107,11 +108,13 @@ function ScanMap({ point, zoom, onZoom, height, onOpenLink }: {
   </View>;
 }
 
-export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshError, selectedId: controlledSelectedId, onSelect }: {
+export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshError, sync, registration, selectedId: controlledSelectedId, onSelect }: {
   events: ShipmentEventView[];
   carrier?: string | null;
   trackingNumber?: string | null;
   refreshError?: string | null;
+  sync?: ProofView["shipmentSync"];
+  registration?: NonNullable<ProofView["captureShipping"]>["registration"];
   selectedId?: string | null;
   onSelect?: (id: string) => void;
 }) {
@@ -129,6 +132,8 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
   const canMap = canMapCoordinates(point);
   const location = selected?.location || (point ? `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}` : "Location not reported");
   const searchUrl = trackingLocationSearchUrl(selected?.location);
+  const state = trackingState({ trackingNumber, events, sync, registration, refreshError });
+  const latestReceived = [...events].filter(event => Number.isFinite(Date.parse(event.observedAt))).sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0]?.observedAt;
   const testData = events.some((event) => event.eventData.test === true);
   const stale = selected && isHistoricalReport(selected.occurredAt);
   const source = selected ? [...new Set([selected.provider, selected.source].filter(Boolean))].join(" · ") || "Not provided" : "Awaiting update";
@@ -146,13 +151,21 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
     catch { setLinkError("The map link could not be opened. Your recorded shipment details remain available here."); }
   }
 
+  if (!selected) return <View style={styles.panel}>
+    <Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{state.title}</Text>
+    <Text style={[styles.note, { color: colors.textSecondary }]}>{state.detail}</Text>
+    {carrier || trackingNumber ? <View style={styles.emptyIdentity}>
+      {carrier ? <Text style={[styles.note, { color: colors.textSecondary }]}>{carrier}</Text> : null}
+      {trackingNumber ? <Text selectable style={[styles.note, { color: colors.textPrimary }]}>{trackingNumber}</Text> : null}
+    </View> : null}
+  </View>;
+
   return <View style={styles.panel}>
     <View style={styles.heading}>
-      <View style={styles.eyebrow}><Ionicons name="location-outline" size={16} color={colors.accent} /><Text style={[styles.eyebrowText, { color: colors.textSecondary }]}>THE SHIPMENT STORY</Text></View>
-      <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Shipment tracking</Text>
       <View style={[styles.status, { backgroundColor: colors.accentSoft, borderColor: colors.accentSoftBorder }]}><View style={[styles.statusDot, { backgroundColor: colors.accent }]} /><Text style={[styles.note, { color: colors.accentText }]}>{selected ? shipmentEventLabel(selected.eventType) : "Awaiting updates"}</Text></View>
     </View>
-    {refreshError && <Text accessibilityRole="alert" style={[styles.notice, { backgroundColor: colors.warningSoft, color: colors.warningText }]}>Tracking refresh failed. Previously recorded observations remain visible. {refreshError}</Text>}
+    {state.kind !== "reported" ? <Text accessibilityRole={state.kind === "failed" ? "alert" : undefined} style={[styles.notice, { backgroundColor: colors.warningSoft, color: colors.warningText }]}>{state.title}. {state.detail}</Text> : null}
+    {latestReceived ? <Text style={[styles.note, { color: colors.textSecondary }]}>Latest report received {formatDateTime(latestReceived)}</Text> : null}
     {testData && <Text style={[styles.notice, { backgroundColor: colors.warningSoft, color: colors.warningText }]}>Test tracking data · simulated shipment events, not real carrier evidence.</Text>}
     {stale && <Text style={[styles.note, { color: colors.textSecondary }]}>This selected report is more than 48 hours old. It is historical context, not a current location.</Text>}
     <View style={[styles.mapCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
@@ -161,22 +174,18 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
         <View style={styles.locationText}><Text style={[styles.note, { color: colors.textSecondary }]}>{selected?.id === ordered[0]?.id ? "Last reported location" : "Selected observation"}</Text><Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{selected ? location : "Your journey will appear here"}</Text></View>
         {canMap && <PressableScale accessibilityRole="button" accessibilityLabel="Expand shipment map" onPress={() => setExpanded(true)} style={[styles.expandButton, { borderColor: colors.border }]}><Ionicons name="expand-outline" size={22} color={colors.textPrimary} /></PressableScale>}
       </View>
-      {canMap && !expanded ? <ScanMap key={selected?.id} point={point!} zoom={zoom} onZoom={setZoom} height={300} onOpenLink={(url) => void openLink(url)} /> : canMap ? <View style={{ height: 300 }} /> : <View style={[styles.mapEmpty, { backgroundColor: colors.surfaceElevated }]}>
-        <Ionicons name="location-outline" size={38} color={colors.accentText} />
-        <Text style={[styles.bodyStrong, styles.centered, { color: colors.textPrimary }]}>{selected ? "A location update, without a map pin." : "Ready for the next handoff."}</Text>
-        <Text style={[styles.note, styles.centered, { color: colors.textSecondary }]}>{selected ? "This observation doesn’t include coordinates that can be displayed on the map." : "Recorded shipment updates will appear here when they become available."}</Text>
-        {point && <Text selectable style={[styles.note, { color: colors.textSecondary }]}>Reported coordinates: {point.latitude}, {point.longitude}</Text>}
-        {searchUrl && <PressableScale accessibilityRole="link" onPress={() => void openLink(searchUrl)} style={styles.textButton}><Text style={[styles.link, { color: colors.accentText }]}>Find reported location on map ↗</Text></PressableScale>}
+      {canMap && !expanded ? <ScanMap key={selected?.id} point={point!} zoom={zoom} onZoom={setZoom} height={240} onOpenLink={(url) => void openLink(url)} /> : canMap ? <View style={{ height: 240 }} /> : <View style={styles.unmapped}>
+        {point ? <Text selectable style={[styles.note, { color: colors.textSecondary }]}>Reported coordinates: {point.latitude}, {point.longitude}</Text> : null}
+        {searchUrl ? <PressableScale accessibilityRole="link" onPress={() => void openLink(searchUrl)} style={styles.textButton}><Text style={[styles.link, { color: colors.accentText }]}>Find location on map ↗</Text></PressableScale> : null}
       </View>}
       <View style={[styles.mapFooter, { borderTopColor: colors.border }]}><Text style={[styles.caption, { color: colors.textSecondary }]}>Reported observations · not live GPS</Text>{canMap && <PressableScale accessibilityRole="link" onPress={() => void openLink(trackingMapUrl(point!, zoom))} style={styles.textButton}><Text style={[styles.link, { color: colors.accentText }]}>Open map ↗</Text></PressableScale>}</View>
     </View>
     {linkError && <Text accessibilityRole="alert" style={[styles.note, { color: colors.error }]}>{linkError}</Text>}
     <View style={styles.details}>
-      <Text style={[styles.eyebrowText, { color: colors.textSecondary }]}>SHIPMENT DETAILS</Text>
-      {[{ label: "Carrier", value: carrier || selected?.carrier || "Not provided" }, { label: "Tracking number", value: trackingNumber || "Not provided" }, { label: "Observation source", value: source }].map((row) => <View key={row.label} style={styles.detailRow}><Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{row.label}</Text><Text selectable style={[styles.detailValue, { color: colors.textPrimary }]}>{row.value}</Text></View>)}
+      {[{ label: "Carrier", value: carrier || selected?.carrier || "Not provided" }, { label: "Tracking number", value: trackingNumber || "Not provided" }, { label: "Source", value: source }].map((row) => <View key={row.label} style={styles.detailRow}><Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{row.label}</Text><Text selectable style={[styles.detailValue, { color: colors.textPrimary }]}>{row.value}</Text></View>)}
     </View>
     <View style={styles.scans}>
-      <View style={styles.scanHeading}><Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>Reported scans</Text><Text style={[styles.caption, { color: colors.textSecondary }]}>{ordered.length}</Text></View>
+      <View style={styles.scanHeading}><Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>Carrier updates</Text><Text style={[styles.caption, { color: colors.textSecondary }]}>{ordered.length}</Text></View>
       {selected?.id !== ordered[0]?.id && ordered[0] && <PressableScale accessibilityRole="button" onPress={() => selectEvent(ordered[0].id)} style={styles.textButton}><Text style={[styles.link, { color: colors.accentText }]}>Show newest report</Text></PressableScale>}
       {ordered.length ? ordered.map((event) => {
         const active = selected?.id === event.id;
@@ -201,7 +210,7 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: spacing.xl }, heading: { gap: spacing.sm },
+  panel: { gap: spacing.lg }, emptyIdentity: { gap: spacing.xs }, unmapped: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm }, heading: { gap: spacing.sm },
   eyebrow: { flexDirection: "row", gap: spacing.sm, alignItems: "center" },
   eyebrowText: { ...typography.caption, letterSpacing: 1.3, fontWeight: "700" },
   title: { ...typography.sectionTitle, fontSize: 23, lineHeight: 30 },
@@ -211,22 +220,22 @@ const styles = StyleSheet.create({
   notice: { ...typography.secondary, padding: spacing.md, borderRadius: radii.md },
   mapCard: { borderWidth: 1, borderRadius: radii.lg, overflow: "hidden" },
   mapHeading: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
-  locationIcon: { width: 44, height: 44, borderRadius: radii.md, alignItems: "center", justifyContent: "center" },
+  locationIcon: { width: 48, height: 48, borderRadius: radii.md, alignItems: "center", justifyContent: "center" },
   locationText: { flex: 1, gap: spacing.xs },
-  expandButton: { borderWidth: 1, borderRadius: radii.md, width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  expandButton: { borderWidth: 1, borderRadius: radii.md, width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   map: { overflow: "hidden", position: "relative" },
   marker: { position: "absolute", left: "50%", top: "50%", width: 48, height: 48, marginLeft: -24, marginTop: -45 },
   markerShadow: { textShadowColor: "rgba(0,0,0,0.3)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3 },
   coordinateChip: { position: "absolute", top: spacing.sm, left: spacing.sm, right: 64, padding: spacing.sm, borderWidth: 1, borderRadius: radii.sm },
   zoomControls: { position: "absolute", top: spacing.sm, right: spacing.sm, borderWidth: 1, borderRadius: radii.sm, overflow: "hidden" },
-  mapControl: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  mapControl: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   attribution: { position: "absolute", bottom: 0, right: 0, borderTopLeftRadius: radii.sm },
-  attributionLink: { minHeight: 36, justifyContent: "center", paddingHorizontal: spacing.sm },
+  attributionLink: { minHeight: 48, justifyContent: "center", paddingHorizontal: spacing.sm },
   mapFailure: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: spacing.xxl, gap: spacing.sm },
   mapEmpty: { alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.xxxl },
   centered: { textAlign: "center" },
   mapFooter: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1 },
-  textButton: { minHeight: 44, justifyContent: "center" }, link: { ...typography.secondaryStrong },
+  textButton: { minHeight: 48, justifyContent: "center" }, link: { ...typography.secondaryStrong },
   details: { gap: spacing.lg, marginTop: spacing.sm },
   detailRow: { flexDirection: "row", gap: spacing.md }, detailLabel: { ...typography.secondary, flex: 0.8 }, detailValue: { ...typography.secondaryStrong, flex: 1.2 },
   scans: { gap: spacing.sm }, scanHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },

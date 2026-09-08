@@ -1,3 +1,4 @@
+import { proofIdFromLink } from "./deep-links";
 import { SharingScreen } from "../screens/SharingScreen";
 import { SignatureProofScreen } from "../screens/SignatureProofScreen";
 import { NativeCaptureHost } from "../ui/NativeCaptureHost";
@@ -5,7 +6,7 @@ import { OrderIntakeScreen } from "../screens/OrderIntakeScreen";
 import { CommerceReceiptScreen } from "../screens/CommerceReceiptScreen";
 import { sharedOrderText } from "../copy/share-intake";
 import { useEffect, useState } from "react";
-import { BackHandler, StyleSheet, Text, View, Linking } from "react-native";
+import { BackHandler, StyleSheet, Text, View, Linking, Keyboard } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
 import { isImmersiveRoute } from "./navigation";
@@ -23,7 +24,6 @@ import { ScanScreen } from "../screens/ScanScreen";
 import { PurchaseReviewScreen } from "../screens/PurchaseReviewScreen";
 import { ManualCreateScreen } from "../screens/ManualCreateScreen";
 import { FinalizeScreen } from "../screens/FinalizeScreen";
-import { CompletionScreen } from "../screens/CompletionScreen";
 import { InviteScreen } from "../screens/InviteScreen";
 import { InvitationReviewScreen } from "../screens/InvitationReviewScreen";
 import { EventDetailScreen } from "../screens/EventDetailScreen";
@@ -34,14 +34,18 @@ import { PackingStationScreen } from "../screens/PackingStationScreen";
 export function Root() {
   const app = usePackProof();
   const theme = useTheme();
-  const immersive = isImmersiveRoute(app.route);
+  const immersive = isImmersiveRoute(app.route) && app.route.name !== "capture" && app.route.name !== "station";
+  const [linkedProofId, setLinkedProofId] = useState<string | null>(null);
   const [sharedText, setSharedText] = useState<string | null>(null);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
 
   useEffect(() => {
-    if (!ready || !app.session || ["auth", "home", "station"].includes(app.route.name)) return;
+    if (!ready || !app.session || ["auth", "account"].includes(app.route.name)) return;
+    if (app.route.name === "station" && app.session?.stationActive && app.localCapture && app.session.stationProofId === app.localCapture.captureProofId) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!app.busy) app.goBack();
+      if (Keyboard.isVisible()) { Keyboard.dismiss(); return true; }
+      if (app.route.name === "home") return false;
+      if (!app.busy) { if(app.route.name === "station") app.go("home"); else app.goBack(); }
       return true;
     });
     return () => subscription.remove();
@@ -58,6 +62,8 @@ export function Root() {
 
   useEffect(() => {
     const receive = (url: string) => {
+      const proofId = proofIdFromLink(url);
+      if (proofId) { setLinkedProofId(proofId); return; }
       const text = sharedOrderText(url);
       if (text) setSharedText(text);
     };
@@ -72,6 +78,10 @@ export function Root() {
   useEffect(() => {
     if (ready && app.session && sharedText) app.go("intake");
   }, [ready, app.session?.userId, sharedText]);
+
+  useEffect(() => {
+    if (ready && app.session && linkedProofId) { const id = linkedProofId; setLinkedProofId(null); app.go("home"); void app.run(() => app.openProof(id)); }
+  }, [ready, app.session?.userId, linkedProofId]);
 
   const statusStyle = immersive || theme.scheme === "dark" || !ready ? "light" : "dark";
 
@@ -97,7 +107,7 @@ export function Root() {
     );
   }
 
-  if (app.route.name === "station") {
+  if (app.route.name === "station" && app.session?.stationActive && app.localCapture && app.session.stationProofId === app.localCapture.captureProofId) {
     return (
       <>
         <StatusBar style="light" />
@@ -131,12 +141,12 @@ export function Root() {
   }
 
   let body = null;
-  if (app.route.name === "home") {
+  if (["home", "orders", "station"].includes(app.route.name)) {
     body = <MyProofsScreen />;
   } else if (app.route.name === "create") {
     body = <CreateScreen />;
   } else if (app.route.name === "account") {
-    body = <AccountScreen />;
+    body = <AccountScreen key={app.route.accountSection ?? "account"} initialSection={app.route.accountSection} />;
   } else if (app.route.name === "sharing") {
     body = <SharingScreen key={app.proof?.proofId} />;
   } else if (app.route.name === "signature") {
@@ -168,8 +178,7 @@ export function Root() {
     body = <ManualCreateScreen />;
   } else if (app.route.name === "finalize") {
     body = <FinalizeScreen />;
-  } else if (app.route.name === "complete") {
-    body = <CompletionScreen />;
+
   } else if (app.route.name === "invite") {
     body = <InviteScreen />;
   } else if (app.route.name === "invitation") {

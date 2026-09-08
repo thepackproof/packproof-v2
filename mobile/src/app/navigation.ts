@@ -1,4 +1,4 @@
-export type ProofsLibraryView = "in_progress" | "completed";
+export type ProofsLibraryView = "all" | "attention" | "completed";
 
 export type ProofsSort = "newest" | "oldest" | "price_high" | "price_low";
 
@@ -10,6 +10,7 @@ export type AppRouteName =
   | "boot"
   | "auth"
   | "home"
+  | "orders"
   | "create"
   | "account"
   | "sharing"
@@ -31,8 +32,12 @@ export type AppRouteName =
   | "editShipping"
   | "event";
 
+export type WorkspaceOrigin = "home" | "orders" | "station";
+export type AccountSection = "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
+export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
   name: AppRouteName;
+  accountSection?: AccountSection;
 }
 
 export interface ProofsLibraryState {
@@ -41,32 +46,30 @@ export interface ProofsLibraryState {
   sort: ProofsSort;
   role: ProofsRoleFilter;
   carrier: string | null;
-  scrollOffset: number;
 }
 
 export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
-  view: "in_progress",
+  view: "all",
   query: "",
   sort: "newest",
   role: "all",
   carrier: null,
-  scrollOffset: 0,
 };
 
 /** @deprecated Use home. Kept so older session restore paths can be remapped. */
 export function normalizeRouteName(name: string): AppRouteName {
-  if (name === "tabs") {
+  if (["tabs", "overview", "orders", "activity", "proofs", "station"].includes(name)) {
     return "home";
   }
   return name as AppRouteName;
 }
 
-export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
+export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrigin = "home"): AppRouteName {
   switch (routeName) {
+    case "dev": return "account";
     case "sharing":
     case "signature":
     case "receipt":
-    case "capture":
     case "finalize":
     case "invite":
     case "editPurchase":
@@ -74,9 +77,17 @@ export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
     case "event":
     case "complete":
       return "proof";
+    case "capture":
+      return "proof";
+    case "station":
+      return "home";
+    case "proof":
+    case "account":
+    case "create":
+    case "manual":
+      return "home";
     case "scan":
     case "intake":
-    case "manual":
     case "review":
       return "create";
     default:

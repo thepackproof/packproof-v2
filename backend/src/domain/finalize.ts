@@ -1,3 +1,5 @@
+import { assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
+import { assertShippingReviewComplete } from "./capture-label-review.js";
 import { readCaptureClientContext } from "./capture-sessions.js";
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
@@ -37,6 +39,7 @@ import { listContinuityEvaluations } from "./continuity.js";
 import { listAssetBindings } from "./asset-bindings.js";
 import { custodyOutcomeFor, requireWorkflowType } from "./workflow.js";
 import { requireManifestSignatureAlgorithm, type ManifestSigner, type ManifestSignature } from "./manifest-signing.js";
+import { buildProofRecoverySnapshot, enqueueRecoveryEvent, getRecoveryStatus, requireDurableOperation, type RecoveryStatus } from "./recovery-journal.js";
 
 export interface ManifestView {
   manifestId: string;
@@ -54,6 +57,7 @@ function signatureFromRow(row: ManifestRow): { signature?: ManifestSignature } {
 export interface FinalizeView {
   proof: ProofView;
   manifest: ManifestView;
+  recovery?: RecoveryStatus;
 }
 
 export async function getManifest(
@@ -70,6 +74,8 @@ export async function getManifest(
   if (!row) {
     throw new DomainError("MANIFEST_NOT_FOUND", "Proof has not been finalized", 404);
   }
+  const proof = await loadProof(db, proofId);
+  if (proof.status !== "FINALIZED") throw new DomainError("PRESERVATION_PENDING", "The signed manifest is prepared; final preservation is still in progress", 409);
   return {
     manifestId: row.id,
     proofId: row.proof_id,
@@ -86,6 +92,7 @@ export async function finalizeProof(
   actorUserId: string,
   proofId: string,
   signer?: ManifestSigner,
+  options: { requireDurableReceipts?: boolean } = {},
 ): Promise<FinalizeView> {
   return db.transaction(async (tx) => {
     const existingProof = await tx.query<ProofRow>(`SELECT * FROM proofs WHERE id = $1`, [proofId]);
@@ -115,6 +122,7 @@ export async function finalizeProof(
       }
       return {
         proof: await getProofView(tx, proofId),
+        recovery: await getRecoveryStatus(tx, `finalize:${proofId}`),
         manifest: {
           manifestId: existing.rows[0].id,
           proofId,
@@ -148,6 +156,10 @@ export async function finalizeProof(
         ORDER BY committed_at ASC, id ASC`,
       [proofId],
     );
+    if (options.requireDurableReceipts) {
+      if (!signer) throw new DomainError("MANIFEST_SIGNING_UNAVAILABLE", "Signing is required before finalization; retry once service is restored", 503);
+      for (const row of evidence.rows) await requireDurableOperation(tx, `evidence:${row.id}`);
+    }
     const eligibleSessions = (await tx.query<{id: string; policy_version:string; client:string; recorded_at:string|Date;expires_at:string|Date}>(
       `SELECT c.id,c.policy_version,c.client,c.recorded_at,c.expires_at FROM capture_sessions c JOIN evidence e ON e.id=c.evidence_id
        WHERE c.proof_id=$1 AND c.state='COMMITTED' AND c.actor_user_id=e.submitted_by
@@ -162,9 +174,20 @@ export async function finalizeProof(
       `SELECT * FROM attestations WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
       [proofId],
     );
+    for (const session of eligibleSessions) await assertShippingReviewComplete(tx, proofId, session.id);
+    for (const row of attestations.rows) {
+      // Preserve historically committed version-1 authorizations and manifests.
+      if (row.authorization_json && readAttestationContext(row.authorization_json.payload).contextVersion === 1) {
+        await assertAttestationContextCurrent(tx, proof.transaction_id, row.authorization_json.payload);
+      }
+    }
     const packingAttested = attestations.rows.some(
-      (row) => row.statement === "PACKED_DESCRIBED_ITEM" && row.attested_by === actorUserId,
+      (row) => row.statement === "PACKED_DESCRIBED_ITEM" && row.attested_by === actorUserId
+        && (!options.requireDurableReceipts || evidence.rows.some(item => item.id === row.related_evidence_id
+          && item.submitted_by === actorUserId && item.evidence_type === "FULFILLMENT_CAPTURE"
+          && (!item.capture_session_id || eligibleSessionIds.has(item.capture_session_id)))),
     );
+    if (options.requireDurableReceipts) for (const row of attestations.rows) await requireDurableOperation(tx, `declaration:${row.id}`);
     const observations = await listObservations(tx, proofId);
     const workflowType = requireWorkflowType(proof.workflow_type);
     const assets = workflowType === "GRADING_SUBMISSION" ? await listProofAssets(tx, proofId) : [];
@@ -290,6 +313,7 @@ export async function finalizeProof(
           assurance: "Workflow authorization; camera origin and offline timing are not independently attested.",
         }} : {}),
         objectKey: row.object_key,
+        ...((row as EvidenceRow & {object_version_id?: string}).object_version_id ? { objectVersionId: (row as EvidenceRow & {object_version_id: string}).object_version_id } : {}),
         contentType: row.content_type,
         byteSize: Number(row.byte_size ?? 0),
         sha256: row.sha256,
@@ -306,6 +330,7 @@ export async function finalizeProof(
         attestationId: row.id,
         attestedBy: row.attested_by,
         statement: row.statement,
+        ...(row.authorization_json ? { authorization: row.authorization_json } : {}),
         relatedEvidenceId: row.related_evidence_id,
         createdAt: asRequiredIso(row.created_at),
         sha256: row.sha256,
@@ -382,7 +407,7 @@ export async function finalizeProof(
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [manifestId, proofId, canonicalJson, digest, now.toISOString(), signature?.algorithm ?? null, signature?.signatureBase64 ?? null, signature?.keyId ?? null, signature?.signedAt ?? null],
     );
-    await tx.query(
+    if (!options.requireDurableReceipts) await tx.query(
       `UPDATE proofs
           SET status = 'FINALIZED',
               finalized_at = $2,
@@ -394,13 +419,15 @@ export async function finalizeProof(
     await appendAudit(tx, {
       proofId,
       actorUserId,
-      eventType: "PROOF_FINALIZED",
+      eventType: options.requireDurableReceipts ? "PROOF_FINALIZATION_PREPARED" : "PROOF_FINALIZED",
       eventData: { manifestId, sha256: digest },
       at: now,
     });
+    const recovery = await enqueueRecoveryEvent(tx, clock, { operationId: `finalize:${proofId}`, kind: "PROOF_FINALIZED", proofId, actorUserId, payload: await buildProofRecoverySnapshot(tx, proofId) });
 
     return {
       proof: await getProofView(tx, proofId),
+      recovery,
       manifest: {
         manifestId,
         proofId,

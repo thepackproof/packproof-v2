@@ -12,7 +12,7 @@ import { createIntegrationConnection, bindTransactionShipmentConnection } from '
 import { dispatchCaptureShipments } from '../src/workers/capture-shipment-worker.js';
 
 const tracking='1Z999AA10123456784', reference='memory:shippo-fixture';
-const credentials={adapterKey:'shippo-tracker',credentialReference:reference,material:{apiKey:'shippo_live_fixture',mode:'production',webhookSecret:'fixture-secret'}};
+const credentials={adapterKey:'shippo-tracker',credentialReference:reference,material:{apiKey:'shippo_live_fixture',mode:'production',webhookSecret:'fixture-secret',hmacProvisioned:'true'}};
 const detail={status:'TRANSIT',status_date:'2026-09-05T11:00:00Z',status_details:'Departed facility',substatus:{code:'package_departed'},location:{city:'Chicago',state:'IL',country:'US'}};
 const fixture=(overrides:Record<string,unknown>={})=>({carrier:'ups',tracking_number:tracking,test:false,tracking_status:{...detail,object_id:'current'},tracking_history:[{...detail,object_id:'history'}],...overrides});
 const snapshotInput={trackingNumber:tracking,transactionId:'txn_fixture',externalTransactionId:null,carrier:'UPS',credentials};
@@ -69,7 +69,7 @@ describe('Shippo tracking contract',()=>{
     expect(result.observations[0].sourceEventId).toBe(normalizeShippoTracking(fixture()).observations[0].sourceEventId);
     expect(()=>verifyShippoSignature(headers,Buffer.concat([body,Buffer.from(' ')]),'fixture-secret')).toThrow();
     expect(()=>verifyShippoSignature({'shippo-auth-signature':signature(body,1_700_000_000)},body,'fixture-secret')).toThrow();
-    await expect(adapter.verifyWebhook({headers,rawBody:body,credentials:{...credentials,material:{apiKey:'shippo_test_fixture',webhookSecret:'fixture-secret'}}})).rejects.toMatchObject({code:'PROVIDER_RESPONSE_INVALID'});
+    await expect(adapter.verifyWebhook({headers,rawBody:body,credentials:{...credentials,material:{apiKey:'shippo_test_fixture',webhookSecret:'fixture-secret',hmacProvisioned:'true'}}})).rejects.toMatchObject({code:'PROVIDER_RESPONSE_INVALID'});
   });
 });
 
@@ -85,7 +85,7 @@ describe('Shippo capture to Proof',()=>{
     const transactionId=t.body.transactionId;
     const p=await request(h.app).post(`/transactions/${transactionId}/proof`).set(auth(seller)).send({});const proofId=p.body.proofId;
     const session=await createCaptureSession(h.db,clock,seller,proofId,{client:'NATIVE_CAMERA',idempotencyKey:'shippo-camera'});
-    await bindCaptureShipping(h.db,clock,seller,proofId,session.id,{rawValue:tracking,format:'CODE_128',detectedAtMs:250,idempotencyKey:'shippo-scan'});
+    await bindCaptureShipping(h.db,clock,seller,proofId,session.id,{rawValue:tracking,format:'CODE_128',detectedAtMs:250,idempotencyKey:'shippo-scan',confirmed:true});
     await h.credentialStore.put(credentials);
     const deps={integrations,credentials:h.credentialStore,defaultShippoCredentialReference:reference,defaultEasyPostCredentialReference:'memory:legacy'};
     expect(await dispatchCaptureShipments(h.db,clock,deps)).toEqual({completed:0,failed:1});
@@ -106,7 +106,7 @@ describe('Shippo capture to Proof',()=>{
     expect((await request(h.app).get(`/proofs/${proofId}`).set(auth(seller))).body.shipmentObservations.events).toHaveLength(1);
     const foreign=Buffer.from(JSON.stringify({event:'track_updated',test:false,data:fixture({carrier:'usps'})}));
     const rejected=await request(h.app).post('/integrations/webhooks/shippo-tracker').set('Content-Type','application/json').set('shippo-auth-signature',signature(foreign)).send(foreign.toString());
-    expect(rejected.status).toBe(404);
+    expect(rejected.status).toBe(200); // Unknown hints do not reveal tracking bindings.
     expect((await request(h.app).get(`/proofs/${proofId}`).set(auth(seller))).body.shipmentObservations.events).toHaveLength(1);
   });
   it.skipIf(!process.env.SHIPPO_SANDBOX_TEST_TOKEN)('imports an actual Shippo sandbox response into a Proof',async()=>{

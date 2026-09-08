@@ -253,7 +253,11 @@ describe("grading custody vertical slice", () => {
     expect(publicView.body.schema).toBe("packproof.proof.public/v1");
     expect(publicView.body.workflowStage).toBe("IN_TRANSIT");
     expect(publicView.body.join.requiresAuthentication).toBe(true);
-    expect(JSON.stringify(publicView.body)).not.toMatch(/cognito|objectKey|sha256|token_hash/i);
+    // The dated supplement head is public record identity; original media hashes,
+    // storage locators, account identities and bearer hashes remain private.
+    const {recordAsOf, ...publicContent} = publicView.body;
+    expect(recordAsOf).toMatchObject({supplementSequence:0,supplementSha256:null});
+    expect(JSON.stringify(publicContent)).not.toMatch(/cognito|objectKey|sha256|token_hash/i);
     expect(publicView.body.observations.some((row: { label: string }) => row.label === "Handed off")).toBe(
       true,
     );

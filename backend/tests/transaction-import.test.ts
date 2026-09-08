@@ -245,7 +245,7 @@ describe("transaction ingestion from external integrations", () => {
     } satisfies Partial<DomainError>);
   });
 
-  it("rejects imported mutation after finalization and returns the same Proof on identical retry", async () => {
+  it("preserves provider revisions after finalization without mutating the core or duplicate Proofs", async () => {
     harness = await createHarness();
     const seller = await login(harness.app, "import-final-seller");
     const buyer = await login(harness.app, "import-final-buyer");
@@ -265,17 +265,14 @@ describe("transaction ingestion from external integrations", () => {
     expect(same.proof?.proofId).toBe(proofId);
     expect(same.proof?.status).toBe("FINALIZED");
 
-    await expect(
-      importNormalizedTransaction(
-        harness.db,
-        harness.clock,
-        seller,
-        { ...SAMPLE, itemTitle: "Mutated after final" },
-        { adapterKey: "demo-marketplace", createProof: true },
-      ),
-    ).rejects.toMatchObject({
-      code: "PROOF_ALREADY_FINALIZED",
-    } satisfies Partial<DomainError>);
+    const revision = await importNormalizedTransaction(harness.db, harness.clock, seller,
+      { ...SAMPLE, itemTitle: "Mutated after final" }, { adapterKey: "demo-marketplace", createProof: true });
+    expect(revision.transaction.itemTitle).toBe(SAMPLE.itemTitle);
+    expect(revision.proof?.proofId).toBe(proofId);
+    const observed = await harness.db.query<{ snapshot: {itemTitle: string} }>(
+      'SELECT snapshot FROM transaction_source_observations WHERE transaction_id=$1', [revision.transaction.transactionId]);
+    expect(observed.rows).toHaveLength(2);
+    expect(observed.rows.some(row => row.snapshot.itemTitle === 'Mutated after final')).toBe(true);
 
     const again = await request(harness.app)
       .post(`/proofs/${proofId}/finalize`)

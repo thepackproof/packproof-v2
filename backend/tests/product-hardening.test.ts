@@ -45,7 +45,9 @@ describe("product reliability and public boundaries", () => {
     for (const target of [path, "/transactions"]) {
       const invalid = await request(h.app).post(target).set(auth(seller)).set("Content-Type", "application/json").send('{"secret":');
       expect(invalid.status).toBe(400);
-      expect(invalid.body).toEqual({ error: { code: "INVALID_JSON", message: "Request body must be valid JSON" } });
+      expect(invalid.body).toMatchObject({ error: { code: "INVALID_JSON", message: "Request body must be valid JSON", operationId: invalid.headers["x-packproof-operation-id"] } });
+      expect(invalid.body.error.operationId).toMatch(/^[a-f0-9-]{36}$/);
+      expect(JSON.stringify(invalid.body)).not.toContain('secret');
     }
   });
 

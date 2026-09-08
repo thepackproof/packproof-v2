@@ -1,17 +1,15 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   RefreshControl,
-  ScrollView,
   StyleSheet,
   View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
+import { RestoringScrollView, type RestoringScrollViewHandle } from "./RestoringScrollView";
 
 export function AppScreen(props: {
   children: ReactNode;
@@ -22,38 +20,55 @@ export function AppScreen(props: {
   background?: string;
   bottomInset?: boolean;
   extraBottom?: number;
-  contentOffsetY?: number;
+  initialOffsetY?: number;
+  restorationReady?: boolean;
+  resetScrollKey?: string;
   onScrollOffset?: (offset: number) => void;
   style?: StyleProp<ViewStyle>;
 }) {
   const insets = useSafeAreaInsets();
+  const scroll = useRef<RestoringScrollViewHandle>(null);
+  const previousResetKey = useRef(props.resetScrollKey);
+  useEffect(() => { if (previousResetKey.current !== props.resetScrollKey) { previousResetKey.current = props.resetScrollKey; scroll.current?.scrollTo({y:0,animated:false}); } }, [props.resetScrollKey]);
   const { colors } = useTheme();
   const background = props.background ?? colors.background;
-  const paddingBottom =
-    (props.bottomInset === false ? spacing.lg : Math.max(insets.bottom, spacing.lg)) + (props.extraBottom ?? 0);
+  // Insets belong to the viewport. Content padding scrolls away and lets controls
+  // move beneath Android's status and navigation bars on edge-to-edge devices.
+  const viewportStyle = {
+    backgroundColor: background,
+    paddingTop: insets.top,
+    paddingBottom: props.bottomInset === false ? 0 : insets.bottom,
+    paddingLeft: insets.left,
+    paddingRight: insets.right,
+  };
+  const paddingBottom = spacing.lg + (props.extraBottom ?? 0);
   const contentStyle = [
     styles.content,
     props.padded === false ? null : styles.padded,
-    { paddingBottom, paddingTop: props.padded === false ? 0 : Math.max(insets.top, spacing.sm) },
+    { paddingBottom, paddingTop: props.padded === false ? 0 : spacing.sm },
   ];
 
   if (props.scroll === false) {
-    return <View style={[styles.root, { backgroundColor: background }, props.style, contentStyle]}>{props.children}</View>;
-  }
-
-  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    props.onScrollOffset?.(event.nativeEvent.contentOffset.y);
+    return (
+      <View style={[styles.root, props.style, viewportStyle]}>
+        <View style={[styles.root, contentStyle]}>{props.children}</View>
+      </View>
+    );
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: background }, props.style]}>
-      <ScrollView
+    <View style={[styles.root, props.style, viewportStyle]}>
+      <RestoringScrollView
+        ref={scroll}
+        style={styles.root}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
         contentContainerStyle={contentStyle}
-        contentOffset={props.contentOffsetY ? { x: 0, y: props.contentOffsetY } : undefined}
+        initialOffsetY={props.initialOffsetY}
+        restorationReady={props.restorationReady}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        scrollEventThrottle={16}
-        onScroll={props.onScrollOffset ? handleScroll : undefined}
+        onScrollOffset={props.onScrollOffset}
         refreshControl={
           props.onRefresh ? (
             <RefreshControl
@@ -67,7 +82,7 @@ export function AppScreen(props: {
         }
       >
         {props.children}
-      </ScrollView>
+      </RestoringScrollView>
     </View>
   );
 }
