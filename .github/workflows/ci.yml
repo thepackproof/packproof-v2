@@ -124,6 +124,8 @@ jobs:
       - run: npm run test:proof-record
       - run: npm run test:study-timing
       - run: npm run test:redesign
+      - name: Verify Proof navigation and share-link cache
+        run: node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/proof-navigation.test.ts tests/share-cache.test.ts
       - run: npm run test:recovery
       - run: npm run test:api
 

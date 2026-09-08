@@ -1,0 +1,64 @@
+2026-09-08T17:46:58.8265059Z HEAD is now at 7eb3290 Merge 215d00b9ea49c9baa7424975b32ed9042460ccb5 into 6bc3ea1200ad4a57c1f17fc468e54db067ca86e4
+2026-09-08T17:46:58.8337375Z 7eb3290ddc778668f4259e0bf0ada6f9302c5c3b
+2026-09-08T17:47:43.8297297Z ##[group]Run npm run typecheck
+2026-09-08T17:47:43.9372700Z > tsc --noEmit
+2026-09-08T17:47:48.8955914Z ##[group]Run npm run test:build-security
+2026-09-08T17:47:48.9969422Z > node --test tests/build-dependency-security.test.cjs tests/release-identity.test.cjs
+2026-09-08T17:47:49.4245810Z # tests 8
+2026-09-08T17:47:49.4245996Z # suites 0
+2026-09-08T17:47:49.4246499Z # pass 8
+2026-09-08T17:47:49.4246705Z # fail 0
+2026-09-08T17:47:49.4246886Z # cancelled 0
+2026-09-08T17:47:49.4247090Z # skipped 0
+2026-09-08T17:47:49.4247269Z # todo 0
+2026-09-08T17:47:49.4247482Z # duration_ms 393.900631
+2026-09-08T17:47:49.4431457Z ##[group]Run npm run test:proof-record
+2026-09-08T17:47:49.5464560Z > node --experimental-strip-types --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts
+2026-09-08T17:47:49.7938366Z # tests 25
+2026-09-08T17:47:49.7938545Z # suites 0
+2026-09-08T17:47:49.7938724Z # pass 25
+2026-09-08T17:47:49.7938899Z # fail 0
+2026-09-08T17:47:49.7939079Z # cancelled 0
+2026-09-08T17:47:49.7939266Z # skipped 0
+2026-09-08T17:47:49.7939445Z # todo 0
+2026-09-08T17:47:49.7939652Z # duration_ms 205.651344
+2026-09-08T17:47:49.8041301Z ##[group]Run npm run test:study-timing
+2026-09-08T17:47:49.9059824Z > node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/study-timing.test.ts tests/native-study-timing.test.ts
+2026-09-08T17:47:50.4083754Z # tests 17
+2026-09-08T17:47:50.4083936Z # suites 0
+2026-09-08T17:47:50.4084133Z # pass 17
+2026-09-08T17:47:50.4084310Z # fail 0
+2026-09-08T17:47:50.4084493Z # cancelled 0
+2026-09-08T17:47:50.4084880Z # skipped 0
+2026-09-08T17:47:50.4085079Z # todo 0
+2026-09-08T17:47:50.4085285Z # duration_ms 465.705202
+2026-09-08T17:47:50.4209621Z ##[group]Run npm run test:redesign
+2026-09-08T17:47:50.5213926Z > node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/sales-channels.test.ts tests/capture-label-review.test.ts tests/orders.test.ts
+2026-09-08T17:47:50.9357419Z # tests 19
+2026-09-08T17:47:50.9358001Z # suites 0
+2026-09-08T17:47:50.9358529Z # pass 19
+2026-09-08T17:47:50.9358996Z # fail 0
+2026-09-08T17:47:50.9359472Z # cancelled 0
+2026-09-08T17:47:50.9359980Z # skipped 0
+2026-09-08T17:47:50.9360456Z # todo 0
+2026-09-08T17:47:50.9361066Z # duration_ms 379.984855
+2026-09-08T17:47:50.9520882Z ##[group]Run npm run test:recovery
+2026-09-08T17:47:51.0528646Z > node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-recovery.test.ts
+2026-09-08T17:47:51.3639340Z # tests 15
+2026-09-08T17:47:51.3640285Z # suites 0
+2026-09-08T17:47:51.3640657Z # pass 15
+2026-09-08T17:47:51.3641037Z # fail 0
+2026-09-08T17:47:51.3641905Z # cancelled 0
+2026-09-08T17:47:51.3643244Z # skipped 0
+2026-09-08T17:47:51.3643551Z # todo 0
+2026-09-08T17:47:51.3643906Z # duration_ms 278.553625
+2026-09-08T17:47:51.3828579Z ##[group]Run npm run test:api
+2026-09-08T17:47:51.4855692Z > node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts tests/commerce-connections.test.ts
+2026-09-08T17:47:56.0086277Z # tests 3
+2026-09-08T17:47:56.0086535Z # suites 0
+2026-09-08T17:47:56.0086882Z # pass 3
+2026-09-08T17:47:56.0087668Z # fail 0
+2026-09-08T17:47:56.0088471Z # cancelled 0
+2026-09-08T17:47:56.0088916Z # skipped 0
+2026-09-08T17:47:56.0089211Z # todo 0
+2026-09-08T17:47:56.0089719Z # duration_ms 4491.417124

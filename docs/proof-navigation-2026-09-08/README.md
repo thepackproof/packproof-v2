@@ -2,6 +2,10 @@
 
 Governing specification: `PackProof_Astra_Proof_Navigation_Development_Plan_2026-09-08(1).docx` supplied by Collin. This release consolidates navigation, record presentation, state and sharing. It does not reseed or delete customer records.
 
+## Release status
+
+API revision 19 reached steady state on 8 September 2026 at 18:12 UTC. Website version 16 was published at 18:16 UTC: https://packproof-experience.packproof.chatgpt.site . Signed Android 0.3.10 (39) passed artifact and signature verification and is available at https://expo.dev/accounts/packproof-llc/projects/packproof/builds/5989a187-655e-433c-9579-74d48758070e . The implementation was merged in PR 39. Final CI passed: backend 759, web 198 and mobile 87 tests, plus 12 focused mobile navigation/sharing tests. Physical device acceptance and browser 200% zoom remain unverified. See `release-evidence.json` for exact provenance and limitations.
+
 ## Source reconciliation
 
 The live Sites checkout was `3ac0857a99ed3f01156687dc429b866dd09d148a`. Its backend/mobile code predates the signed Android 0.3.9 (38) candidate. The product implementation is therefore based on `5476459adf057480491639badb15947dae06a43c`, retaining that candidate's camera, barcode, attestation, recovery, imported-field protection and account changes. The later approved website iconography is retained and prepared as clean paper-and-ink assets.

@@ -1,0 +1,75 @@
+{
+  "checkedAt": "2026-09-08T17:54:31.534Z",
+  "baseUrl": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+  "/health": {
+    "status": "ok"
+  },
+  "/live": {
+    "status": "alive"
+  },
+  "/ready": {
+    "status": "ready",
+    "checkedAt": "2026-09-08T17:54:31.529Z"
+  },
+  "/meta": {
+    "service": "packproof-api",
+    "environment": "staging",
+    "commit": "cc8209d50774d124646fa9c373eac537bc168e9b",
+    "version": "2026-09-08-proof-navigation",
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:876df68c11975cbcdbdd98bdd2dc4f54aa816772600151f65fe602ff11c16969"
+  },
+  "/capabilities": {
+    "schemaVersion": 1,
+    "capture": {
+      "protocolVersions": [
+        1
+      ],
+      "maxBytes": 250000000,
+      "maxDurationSeconds": 300,
+      "maxActiveUploads": 2
+    },
+    "accountDeletion": {
+      "requestSupported": true
+    },
+    "correctionPolicy": {
+      "importedFactsReadOnly": true,
+      "captureBindingLocksManualDetails": true
+    },
+    "shippingReview": {
+      "requiredForObservedConflicts": true,
+      "noLabelAllowed": true
+    },
+    "sellerAttestation": {
+      "contextBindingVersion": 1,
+      "challengeVersions": [
+        1
+      ],
+      "statementVersion": 1,
+      "statement": "The item shown and attached in this Proof is the item I am shipping",
+      "methods": [
+        "ANDROID_BIOMETRIC_STRONG"
+      ],
+      "hardwareOriginVerified": false
+    },
+    "preservation": {
+      "receiptVersions": [
+        1
+      ],
+      "durableReceiptsRequired": false
+    },
+    "release": {
+      "commit": "cc8209d50774d124646fa9c373eac537bc168e9b",
+      "version": "2026-09-08-proof-navigation"
+    }
+  },
+  "/integrity/signing": {
+    "mode": "SIGNED",
+    "keyId": "packproof-manifest-2026-09",
+    "algorithm": "ECDSA_SHA_256",
+    "required": true,
+    "trustListSha256": "19bb39c6d85fb6f28a3f768840ccd425a5b5ef1db75541ef123d37a2bc5e1c8a",
+    "provider": "AWS_KMS",
+    "trustSource": "LEGACY_TRUST_LIST"
+  },
+  "unauthenticatedProofsStatus": 401
+}

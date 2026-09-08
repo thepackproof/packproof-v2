@@ -1,0 +1,20 @@
+✔ one contract classifies recordable seller work, waiting buyers, and pending upload without false attention (1.366448ms)
+✔ All remains complete; attention sort is stable; finalization and shipment movement remain separate (7.359286ms)
+✔ invitation merges by canonical ID and cannot become participant work before acceptance (0.332603ms)
+✔ participant deep links return to Proofs and never absorb public share or arbitrary external URLs (0.38328ms)
+✔ mobile collection traverses all pages and deduplicates overlapping pages before search (0.664345ms)
+✔ supporting evidence never blocks the required continuous packing recording (5.477358ms)
+✔ server-only native confirmation uses only the exact committed original owned by its seller (77.839085ms)
+✔ reopening a Proof restores the exact approved URL within its account and API (2.110173ms)
+✔ expired, revoked, mismatched, and corrupt grants cannot be copied offline (0.35703ms)
+✔ sign-out clears all links for the departed account without crossing account boundaries (0.46887ms)
+✔ revocation removes the cached token and cache never retains evidence projection extras (0.223509ms)
+✔ only transport failures permit cached-link fallback, never access denial (0.296028ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 256.160038

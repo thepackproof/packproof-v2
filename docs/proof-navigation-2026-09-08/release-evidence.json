@@ -1,0 +1,117 @@
+{
+  "release": "PackProof proof navigation",
+  "date": "2026-09-08",
+  "source": {
+    "api_and_android_commit": "cc8209d50774d124646fa9c373eac537bc168e9b",
+    "web_commit": "215d00b9ea49c9baa7424975b32ed9042460ccb5",
+    "sites_commit": "341ac46e9b45a61af39bec66584c1a5af391808b",
+    "web_tree": "7cbd566bf1ca605f771f86d115cc68b7c0c6ff74",
+    "pull_request": "https://github.com/thepackproof/packproof-v2/pull/39",
+    "runtime_unchanged_by_followup": [
+      "backend/src",
+      "backend/migrations",
+      "backend/Dockerfile",
+      "backend/certs",
+      "mobile/src",
+      "mobile/modules",
+      "mobile/assets",
+      "mobile/app.config.js",
+      "mobile/package.json",
+      "mobile/package-lock.json"
+    ],
+    "merged_commit": "114aaa7e41fd5ab3e23b9856a595fd8f381d11ab"
+  },
+  "web": {
+    "saved_version": 16,
+    "version_id": "appgprj_6a9c2365007c8191a0958c54e4a67b95~appgver_664c4d655ee88191ba14cb3f187f5f72",
+    "archive_sha256": "67550ee02c473c45c8de62286e2b9767b4a33a5eceecacf70db10129b60927aa",
+    "deployment_status": "succeeded",
+    "deployment_id": "appgdep_6aa050e127988191aa6218934e92e992",
+    "url": "https://packproof-experience.packproof.chatgpt.site",
+    "published_at": "2026-09-08T18:16:13.217818+00:00"
+  },
+  "api": {
+    "image_digest": "sha256:876df68c11975cbcdbdd98bdd2dc4f54aa816772600151f65fe602ff11c16969",
+    "migration_dry_run": "passed; deliberately rolled back to original32 entries",
+    "migration_apply": "passed;54 checksum-verified migrations through053",
+    "rollout_status": "COMPLETED",
+    "ecs_revision": 19,
+    "public_smoke": "passed three consecutive checks: health,live,ready,meta,capabilities,required KMS signing,unauthenticated401",
+    "initial_rollout_issue": "Managed rollback alarm counts4xx and5xx. Smoke probes used new public routes against older canary traffic, causing expected401 responses. Alarms retained; verify only shared meta route during rollout, then new readiness/auth checks after completion.",
+    "deployment_id": "ecs-svc/9506166080989206154",
+    "completed_at": "2026-09-08T18:12:04.121000+00:00",
+    "running_count": 1,
+    "pending_count": 0
+  },
+  "android": {
+    "version": "0.3.10",
+    "version_code": 39,
+    "eas_build_id": "5989a187-655e-433c-9579-74d48758070e",
+    "eas_url": "https://expo.dev/accounts/packproof-llc/projects/packproof/builds/5989a187-655e-433c-9579-74d48758070e",
+    "build_status": "finished",
+    "artifact_verification": "passed",
+    "installed_on_devices": false,
+    "size_bytes": 46469707,
+    "sha256": "f6fe96c68b180dea46723601fa6b82a8ffb2a2a7e7208c0532f62b6dbe3021a8",
+    "signature": "valid; same existing upload certificate",
+    "embedded_source_and_api": "verified",
+    "credential_file_check": "passed",
+    "delivery": "Verified signed AAB available from EAS build page; local mirror transfer stopped at user request."
+  },
+  "checks": {
+    "web_final": {
+      "files": 31,
+      "passed": 198
+    },
+    "backend_focused": {
+      "files": 8,
+      "passed": 57
+    },
+    "backend_full_initial": {
+      "passed": 752,
+      "failed": 7,
+      "skipped": 11,
+      "failures": "obsolete mobile navigation, palette and invitation assertions; no domain failures"
+    },
+    "backend_corrected_suites": {
+      "files": 3,
+      "passed": 46
+    },
+    "mobile_cloud_navigation": {
+      "scope": "Proof record gate",
+      "passed": 25
+    },
+    "mobile_redesign": {
+      "passed": 19
+    },
+    "native_attestation_kotlin": "passed in final CI159",
+    "final_ci_run": "https://github.com/thepackproof/packproof-v2/actions/runs/34259143800",
+    "final_ci_status": "passed",
+    "mobile_final_ci": {
+      "passed": 87,
+      "failed": 0,
+      "skipped": 0,
+      "run_id": 34259143800,
+      "job_id": 102172417148,
+      "checkout_sha": "7eb3290ddc778668f4259e0bf0ada6f9302c5c3b"
+    },
+    "mobile_new_navigation_and_sharing": {
+      "passed": 12,
+      "runtime_source": "cc8209d50774d124646fa9c373eac537bc168e9b",
+      "dependencies": "actual locked @noble/hashes1.8.0 and base64-js1.5.1"
+    },
+    "backend_final_ci": {
+      "files_passed": 109,
+      "files_skipped": 4,
+      "passed": 759,
+      "skipped": 11,
+      "failed": 0,
+      "job_id": 102172417307
+    }
+  },
+  "limits": [
+    "Galaxy S24 Ultra and A16 5G hardware unavailable; no installation/upgrade/camera/fingerprint/TalkBack claim",
+    "Browser200%zoom controls had no effect in available browser; not marked passed",
+    "Browser screenshots use controlled fixtures; source details and coverage are in acceptance/README.md"
+  ]
+}

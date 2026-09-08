@@ -6,15 +6,18 @@ This checkpoint records the browser observations and automated results gathered 
 
 | Scope | Observed result | Evidence |
 |---|---|---|
+| Backend final CI | 759 tests passed; 11 skipped; 0 failed | [Final backend CI log](logs/backend-final-ci.log). |
 | Backend focused acceptance | 57 tests passed in 8 files | [Backend log](logs/backend-focused.log) |
 | Integrated web suite | 198 tests passed in 31 files | [Web log](logs/web-suite.log) |
-| Mobile cloud validation | Clean npm ci, typecheck and 25 Proof navigation tests passed | Remote result observed by the release owner; native runtime coverage remains separate. |
+| Mobile cloud validation | Clean npm ci, typecheck and 25 Proof record tests passed | Remote result observed by the release owner; native runtime coverage remains separate. |
 | Local mobile redesign suite | 19 tests passed; 0 failed | [Mobile redesign log](logs/mobile-redesign.log); stale expectations were corrected in tests only. |
-| Signed Android bundle | EAS build finished; artifact verification is separate | Final release handoff records the signature, source identity and hash. |
+| Mobile final CI | 87 tests passed; 0 failures/skips; install and typecheck passed | [CI log](logs/mobile-ci159-sanitized.log). |
+| New navigation and sharing tests | 12 tests passed on the unchanged runtime using the actual locked dependencies | [Focused log](logs/mobile-runtime-navigation-sharing-tests.log); these files are now wired into the Mobile CI workflow. |
+| Signed Android bundle | Build and signature/source verification passed: 0.3.10 (39) | Final release handoff records the downloadable artifact and SHA-256. |
 
 The backend run covers the navigation collection, canonical Proof contract, live sharing, disclosure compatibility, seller authorization, capture relay/recovery, automatic fulfillment and Etsy intake. It includes full-dataset search and pagination without duplicate rows; stable external identity; early authorized sharing with committed sources only; expiry and revocation; finalization rules; exact seller statement/signature binding; and capture restart recovery.
 
-The final web suite passed after a two-line correction that keeps navigation restoration pending while delayed list data loads. The original full backend CI run had 752 passing tests, 11 skips and seven obsolete mobile presentation assertions; all 46 tests in the three corrected suites now pass ([log](logs/backend-ci-corrections.log)). No backend or native runtime change was required by those assertion updates.
+The final web suite passed after a two-line correction that keeps navigation restoration pending while delayed list data loads. The original full backend CI run had 752 passing tests, 11 skips and seven obsolete mobile presentation assertions; all 46 tests in the three corrected suites now pass ([log](logs/backend-ci-corrections.log)). No backend or native runtime change was required by those assertion updates. The final full CI rerun then passed all 759 executed tests (11 skips).
 
 The web suite passed. Its log retains two React list-key warnings in the capture test fixture. A passing component suite is separate from native camera, biometric, keyboard and physical-device verification.
 
