@@ -61,6 +61,7 @@ describe("seller shipping authorization", () => {
     });
     const body = JSON.parse(capture.challenge.payload);
     expect(body).toEqual({
+      contextVersion: 1, contextSha256: expect.stringMatching(/^[a-f0-9]{64}$/), transactionId: expect.any(String), statementVersion: 1,
       version: 1, method: "ANDROID_BIOMETRIC_STRONG", challengeId: capture.challenge.challengeId,
       nonce: expect.stringMatching(/^[a-f0-9]{64}$/), actorUserId: seller, proofId,
       captureSessionId: capture.captureSessionId, sha256: sha256Hex(capture.bytes),

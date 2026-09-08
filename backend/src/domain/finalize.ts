@@ -1,3 +1,5 @@
+import { assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
+import { assertShippingReviewComplete } from "./capture-label-review.js";
 import { readCaptureClientContext } from "./capture-sessions.js";
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
@@ -172,6 +174,13 @@ export async function finalizeProof(
       `SELECT * FROM attestations WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
       [proofId],
     );
+    for (const session of eligibleSessions) await assertShippingReviewComplete(tx, proofId, session.id);
+    for (const row of attestations.rows) {
+      // Preserve historically committed version-1 authorizations and manifests.
+      if (row.authorization_json && readAttestationContext(row.authorization_json.payload).contextVersion === 1) {
+        await assertAttestationContextCurrent(tx, proof.transaction_id, row.authorization_json.payload);
+      }
+    }
     const packingAttested = attestations.rows.some(
       (row) => row.statement === "PACKED_DESCRIBED_ITEM" && row.attested_by === actorUserId
         && (!options.requireDurableReceipts || evidence.rows.some(item => item.id === row.related_evidence_id

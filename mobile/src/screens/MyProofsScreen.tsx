@@ -15,7 +15,6 @@ import { useTheme } from "../theme/ThemeProvider";
 import { AppScreen } from "../ui/AppScreen";
 import { AvatarButton } from "../ui/AvatarButton";
 import { BottomSheet } from "../ui/Sheets";
-import { CreateFab } from "../ui/CreateFab";
 import { EmptyState, ErrorBanner, OfflineBanner } from "../ui/EmptyState";
 import { Logo } from "../ui/Logo";
 import { ProofCard } from "../ui/ProofCard";
@@ -61,7 +60,7 @@ export function MyProofsScreen() {
       <AppScreen
         onRefresh={() => void app.run(app.syncWorkspace)}
         refreshing={app.busy}
-        extraBottom={108}
+        extraBottom={24}
         bottomInset={false}
         initialOffsetY={app.readProofsScrollOffset()}
         onScrollOffset={app.setProofsScrollOffset}
@@ -78,10 +77,9 @@ export function MyProofsScreen() {
             onPress={() => app.go("account")}
           />
         </View>
-        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Proofs</Text>
-        <Button label="Record a shipment" onPress={() => app.go("create")} />
+        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Proofs</Text>
         {!app.localCapture && app.savedRecordings.some(capture => capture.recovery?.phase !== "FINALIZED") ? <Button
-          label="Review saved recordings" variant="secondary" onPress={() => app.go("account")} /> : null}
+          label="Review saved recordings" variant="secondary" onPress={() => app.go("account", { accountSection: "recordings" })} /> : null}
         {app.localCapture ? (
           <Button
             label="Resume saved recording"
@@ -101,36 +99,10 @@ export function MyProofsScreen() {
             onPress={() => app.openReceipt(receipt.proofId)}
           />
         ))}
-        {!app.busy && !app.proofCollection.length && !app.pendingInvites.length ? (
-          <View style={{ gap: 12, paddingVertical: 16 }}>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: 20,
-                fontWeight: "600",
-              }}
-            >
-              Protect your shipment with a PackProof.
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 16,
-                lineHeight: 24,
-              }}
-            >
-              Add your order, record the packing and seal, then preserve the record.
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-              Order → Record → Seal → Proof
-            </Text>
-            <Button label="Create your first Proof" onPress={() => app.go("create")} />
-          </View>
-        ) : null}
         <SegmentedTabs
           options={[
-            { id: "in_progress", label: "In Progress", icon: "time-outline" },
-            { id: "completed", label: "Completed", icon: "checkmark-outline" },
+            { id: "in_progress", label: "Needs attention", icon: "time-outline" },
+            { id: "completed", label: "Saved Proofs", icon: "checkmark-outline" },
           ]}
           selected={library.view}
           onSelect={app.setProofsView}
@@ -205,19 +177,18 @@ export function MyProofsScreen() {
 
         {!showSkeleton && proofs.length === 0 && invitations.length === 0 ? (
           <EmptyState
-            title={library.view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
+            title={library.view === "completed" ? "No saved Proofs" : "No Proofs need attention"}
             body={
               library.view === "completed"
-                ? "Finalized Proofs will appear here."
-                : "Create a Proof to start a record, or review an invitation."
+                ? "Your saved packing records will appear here."
+                : "Choose an order in Orders when you are ready to pack."
             }
-            actionLabel={library.view === "in_progress" ? "Create a Proof" : undefined}
-            onAction={library.view === "in_progress" ? () => app.go("create") : undefined}
+            actionLabel={library.view === "in_progress" ? "Go to Orders" : undefined}
+            onAction={library.view === "in_progress" ? () => app.go("orders") : undefined}
             icon={library.view === "completed" ? "checkmark-circle-outline" : "cube-outline"}
           />
         ) : null}
       </AppScreen>
-      <CreateFab onPress={() => app.go("create")} />
       <BottomSheet
         visible={filterOpen}
         title="Sort and filter"

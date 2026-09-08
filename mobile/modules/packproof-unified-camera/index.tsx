@@ -12,10 +12,16 @@ export type UnifiedCameraResult = {
 export type UnifiedBarcodeDetection = {
   rawValue: string;
   format: string;
-  /** Approximate video offset, anchored to CameraX's native recording-start callback. */
+  /** Approximate video seek point from CameraX encoder progress; not an exact frame PTS. */
   detectedAtMs: number;
   detectedAtUnixMs: number;
   latencyMs: number;
+  source?: "LIVE_CAMERA_ANALYSIS" | "ENCODED_VIDEO_FRAME";
+  coordinateSpace?: "ROTATED_ANALYSIS_PIXELS" | "DECODED_VIDEO_PIXELS";
+  decoderVersion?: string;
+  frameWidth?: number;
+  frameHeight?: number;
+  bounds?: { left: number; top: number; right: number; bottom: number } | null;
 };
 
 export type UnifiedCameraViewRef = {
@@ -36,7 +42,16 @@ export type UnifiedCameraViewProps = ViewProps & {
   onCaptureError?: (event: NativeEvent<{ code: string; message: string }>) => void;
 };
 
-const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string }>('PackProofUnifiedCamera') : null;
+export interface EncodedVideoInspection {
+  playable: boolean;
+  inspectedFrames: number;
+  durationMs: number;
+  observations: Array<UnifiedBarcodeDetection & { source: "ENCODED_VIDEO_FRAME" }>;
+  frames: Array<{ uri: string; sha256: string; requestedOffsetMs: number; timestampPrecision: "NEAR_REQUESTED_TIME"; transform: string }>;
+  timestampPrecision: "NEAR_REQUESTED_TIME";
+}
+
+const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
 const nativeAvailable = nativeModule != null;
 export function newStudyOperationNonce():string {
   if(!nativeModule?.newOperationNonce)throw new Error('This build cannot enable study collection. Install the current native build.');
@@ -45,6 +60,11 @@ export function newStudyOperationNonce():string {
 export async function systemHapticsEnabled(): Promise<boolean> {
   if (Platform.OS !== 'android') return true;
   try { return nativeModule ? await nativeModule.getHapticsEnabled() : false; } catch { return false; }
+}
+
+/** Reads only this session's finalized original; older installed bundles truthfully return unavailable. */
+export async function inspectRecordedVideo(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection | null> {
+  return nativeModule?.inspectRecordedVideo ? nativeModule.inspectRecordedVideo(sessionId, offsetsMs.slice(0, 8)) : null;
 }
 
 export function isUnifiedCameraAvailable(): boolean {

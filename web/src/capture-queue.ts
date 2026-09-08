@@ -1,4 +1,5 @@
 import { randomId } from "./random-id";
+import { resumeStationStudy } from "./analytics/study-capture";
 import { requiresDurableReceipts } from "./capture-preflight";
 import { submitStationSession, type StationSubmitResult } from "../../mobile/src/packing-station/submit";
 import type { SubmitStep } from "../../mobile/src/packing-station/types";
@@ -72,6 +73,9 @@ export async function recoverCapture(key: string): Promise<File | null> {
 }
 
 export type PendingStationCapture = {
+  /** Opaque local timing journal reference; never sent with capture/evidence data. */
+  studyTaskRef?: string;
+  shippingScans?: Array<{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;status:string;trackingNumber?:string}>;
   kind?: "station";
   committed?: boolean;
   preserved?: boolean;
@@ -113,9 +117,27 @@ export async function saveStationCapture(capture: PendingStationCapture): Promis
     if (existingDigest !== incomingDigest) throw new Error("Finish the accepted original before replacing this recording.");
     capture = { ...previous, ...capture, digest: existingDigest, evidenceId: previous.evidenceId ?? capture.evidenceId, finishConfirmed: true };
   }
+  capture = { ...capture, shippingScans: mergeStationScans(previous?.shippingScans, capture.shippingScans) };
   await queue("readwrite", (store) => store.put({ ...capture, kind: "station" }));
 
   });
+}
+/** Late barcode responses can update only their original, still-pending capture. */
+export async function updateStationCaptureScans(userId: string, sessionId: string, scans: NonNullable<PendingStationCapture["shippingScans"]>): Promise<void> {
+  return serializeJournalWrite(stationCaptureKey(userId), async () => {
+    const pending = await recoverStationCapture(userId);
+    if (!pending || pending.captureSessionId !== sessionId) return;
+    await queue("readwrite", store => store.put({ ...pending, shippingScans: mergeStationScans(pending.shippingScans, scans) }));
+  });
+}
+function mergeStationScans(previous: PendingStationCapture["shippingScans"] = [], incoming: PendingStationCapture["shippingScans"] = []) {
+  const priority = (status: string) => status === "BOUND" ? 2 : status === "QUEUED" ? 0 : 1;
+  const scans = new Map(previous.map(scan => [scan.idempotencyKey, scan]));
+  for (const scan of incoming) {
+    const current = scans.get(scan.idempotencyKey);
+    if (!current || priority(scan.status) >= priority(current.status)) scans.set(scan.idempotencyKey, scan);
+  }
+  return [...scans.values()];
 }
 export async function clearStationCapture(userId: string, uploadKey?: string): Promise<void> {
   return serializeJournalWrite(stationCaptureKey(userId), async () => {
@@ -319,6 +341,11 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
     const pending = await recoverStationCapture(userId);
     if (!pending || !pending.finishConfirmed) throw Object.assign(new Error("Review the saved recording and confirm finishing first."),{code:"CONFIRMATION_REQUIRED",status:409});
     if (pending.key !== stationCaptureKey(userId) || !scopeMatches(pending.apiScope,api)) throw Object.assign(new Error("Open the original account and server to resume."),{status:403});
+    const study = await resumeStationStudy(api, userId, pending.studyTaskRef);
+    const studyState = { step: 'upload' as SubmitStep };
+    study?.phase('upload');
+    if (pending.attempts || pending.evidenceId) study?.event('recovery_started');
+    study?.event('upload_pending');
     try {
       assertCurrent(active);
       let proof = await api.getProof(pending.order.proofId); assertCurrent(active);
@@ -326,6 +353,17 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
         pending.committed = true; await saveStationCapture(pending); assertCurrent(active);
       }
       if (!pending.captureSessionId) throw Object.assign(new Error("This older recording has no direct-capture session. Keep or export its original; record a new eligible session to finish."),{code:"CAPTURE_SESSION_REQUIRED",status:422});
+      if (proof.status !== "FINALIZED") {
+        for (const scan of pending.shippingScans ?? []) {
+          if (scan.status !== "QUEUED") continue;
+          const result = await api.bindCaptureShipping(pending.order.proofId, pending.captureSessionId, scan); assertCurrent(active);
+          Object.assign(scan, result);
+          await updateStationCaptureScans(userId, pending.captureSessionId, [scan]); assertCurrent(active);
+        }
+        const review = await api.getCaptureShippingReview(pending.order.proofId, pending.captureSessionId); assertCurrent(active);
+        if (review.reviewRequired || pending.shippingScans?.some(scan => scan.status === "QUEUED"))
+          throw Object.assign(new Error("Review the detected label before submitting. Your recording remains saved in this browser."), { code: "SHIPPING_REVIEW_REQUIRED", status: 409 });
+      }
       if (proof.status !== "FINALIZED" && !proof.evidence.some(item=>item.evidenceId===pending.evidenceId&&item.validationStatus==="COMMITTED")) {
         pending.digest ??= await fileDigest(pending.file); assertCurrent(active); await saveStationCapture(pending); assertCurrent(active);
         await api.completeCaptureSession(pending.order.proofId,pending.captureSessionId,{sha256:pending.digest,byteSize:pending.file.size,contentType:pending.file.type,interrupted:pending.interrupted,recordedDurationMs:pending.durationMs}); assertCurrent(active);
@@ -349,7 +387,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
             if(!pending.evidenceId)throw new Error("Upload identity is unavailable. Original retained.");
             await api.uploadResumable(pending.order.proofId,pending.evidenceId,pending.file,value=>{assertCurrent(active);progress(value);});assertCurrent(active);
           },
-        },onProgress:progress=>{assertCurrent(active);onProgress?.(progress);},
+        },onProgress:progress=>{assertCurrent(active);studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);},
       });
       pending.committed = true; await saveStationCapture(pending); assertCurrent(active);
       proof=await api.getProof(pending.order.proofId);assertCurrent(active);
@@ -362,8 +400,16 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
         throw Object.assign(new Error("Recording received. Preservation in progress. Your local original remains saved."),{code:"PRESERVATION_PENDING",status:503});
       for(const mark of pending.bookmarks??[])try{assertCurrent(active);await api.featureRequest(pending.order.proofId,"signature/anchors","POST",{evidenceId:pending.evidenceId,startMs:mark.startMs,endMs:Math.min(mark.startMs+1000,pending.durationMs||mark.startMs+1000),label:mark.label,sourceType:mark.sourceType,recipeVersion:mark.recipeVersion,idempotencyKey:mark.id});}catch{assertCurrent(active);}
       assertCurrent(active);await archiveReceivedRecording(userId,pending.order.proofId,pending.evidenceId!,pending.file,!!pending.preserved,{apiScope:api.recoveryScope,finalized:durablyFinalized,submitted:true});assertCurrent(active);
-      await clearStationCapture(userId,pending.uploadKey);return result;
+      await clearStationCapture(userId,pending.uploadKey);
+      if (proof.status === "FINALIZED" && result.completion === "FINALIZED") {
+        study?.phase('finalization'); study?.event('server_completed'); study?.end('succeeded');
+      } else { study?.suspend(); }
+      return result;
     } catch(error) {
+      const failure = error as {status?:number;code?:string};
+      if (failure.code === "CONFIRMATION_REQUIRED" || studyState.step === "attest") study?.event('consent_failed');
+      study?.problem(failure.status === 401 ? 'authentication' : failure.code === "PRESERVATION_PENDING" ? 'provider' : 'network');
+      study?.suspend();
       const latest=await recoverStationCapture(userId);
       if(latest?.uploadKey===pending.uploadKey)await saveStationCapture({...latest,...retryState(error,latest.attempts)});
       throw error;

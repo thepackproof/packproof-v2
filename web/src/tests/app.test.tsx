@@ -23,6 +23,8 @@ function json(data: unknown, status = 200) {
   });
 }
 
+const captureCapabilities = { schemaVersion: 1, capture: { protocolVersions: [1], maxBytes: 250000000, maxDurationSeconds: 300, maxActiveUploads: 2 }, preservation: { receiptVersions: [1], durableReceiptsRequired: true }, shippingReview: { requiredForObservedConflicts: true, noLabelAllowed: true }, correctionPolicy: { importedFactsReadOnly: true, captureBindingLocksManualDetails: true }, sellerAttestation: { contextBindingVersion: 1 } };
+
 function stationReadyProof(overrides: Record<string, unknown> = {}) {
   return {
     ...canonicalProof,
@@ -106,6 +108,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, _init?:RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -257,7 +261,7 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByRole("heading", { name: "Privacy Policy" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
     expect(screen.getAllByText(/does not sell personal data/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Last updated September 1, 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/Last updated September 8, 2026/)).toBeInTheDocument();
   });
 
   it("renders terms of service from a direct URL without signing in", async () => {
@@ -300,7 +304,7 @@ describe("PackProof web reference client", () => {
   it("lets an authenticated user load Proof discovery summaries", async () => {
     signInSession();
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "My Proofs" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Proofs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Vintage camera")).length).toBeGreaterThan(0);
     expect(screen.getByText("Invitation received")).toBeInTheDocument();
     expect(screen.getByText(/UPS/)).toBeInTheDocument();
@@ -311,13 +315,13 @@ describe("PackProof web reference client", () => {
     signInSession();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: /Vintage camera\. Packing evidence needed/i }));
+    await user.click(await screen.findByRole("button", { name: /Vintage camera\. Recording needed/i }));
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
     expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Proof actions" }));
-    await user.click(screen.getByRole("button", { name: "Proof tools and details" }));
+    await user.click(screen.getByRole("button", { name: "Evidence and claim tools" }));
     expect(screen.getAllByText("PackProof fact").length).toBeGreaterThan(0);
     expect(screen.getAllByText("User attestation").length).toBeGreaterThan(0);
     expect(screen.getAllByText("External data").length).toBeGreaterThan(0);
@@ -334,7 +338,7 @@ describe("PackProof web reference client", () => {
     const events = within(history as HTMLElement).getAllByRole("listitem");
     expect(events[0]).toHaveTextContent("Proof created");
     expect(events[1]).toHaveTextContent("Participant joined");
-    expect(events[2]).toHaveTextContent("Packing evidence committed");
+    expect(events[2]).toHaveTextContent("Recording saved");
     expect(fetch).toHaveBeenCalledWith(
       "/proofs/proof_01ABCVERYLONGIDENTIFIERVALUE",
       expect.objectContaining({ method: "GET" }),
@@ -396,6 +400,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, _init?:RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -431,7 +437,7 @@ describe("PackProof web reference client", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Proof actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Proof tools and details" }));
+    await userEvent.click(screen.getByRole("button", { name: "Evidence and claim tools" }));
     const digest = await screen.findByText(
       "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888",
     );
@@ -442,11 +448,9 @@ describe("PackProof web reference client", () => {
   it("accepts an invitation ID and then loads the canonical Proof", async () => {
     signInSession();
     const user = userEvent.setup();
+    window.history.replaceState(null, "", "/invitations/inv_01");
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
-    await user.click(screen.getByRole("button", { name: "I have an invitation ID" }));
-    await user.type(await screen.findByLabelText("Invitation ID"), "inv_01");
-    await user.click(screen.getByRole("button", { name: "Join Proof" }));
+    await user.click(await screen.findByRole("button", { name: "Review Proof" }));
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
     });
@@ -471,70 +475,13 @@ describe("PackProof web reference client", () => {
     expect(screen.queryByText("secret-token")).not.toBeInTheDocument();
   });
 
-  it("identifies an order from Create Scan and opens the Proof", async () => {
-    signInSession();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
-        if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
-        if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
-        if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
-        if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
-        if (url.includes("/me/packing-station/resolve") && init?.method === "POST") {
-          return json({
-            schema: "packproof.packing-station.resolve/v1",
-            reference: "ORD-48392",
-            matchedBy: "EXTERNAL_ORDER_ID",
-            transactionId: summary.transactionId,
-            proofId: summary.proofId,
-            proofStatus: "READY_FOR_EVIDENCE",
-            participationPolicy: "COUNTERPARTY_REQUIRED",
-            orderLabel: "Order #ORD-48392",
-            itemSummary: "Vintage camera",
-            committedEvidenceCount: 0,
-            captureReady: true,
-            alreadyFinalized: false,
-            alreadyHasCommittedEvidence: false,
-            blockReason: null,
-          });
-        }
-        if (url.endsWith(`/transactions/${summary.transactionId}/proof`) && init?.method === "POST") {
-          return json(canonicalProof);
-        }
-        if (url.includes("/shipment-integrity")) {
-          return json({ status: "CORE_NOT_FINALIZED", verification: { valid: false } });
-        }
-        if (url.endsWith(`/proofs/${summary.proofId}`)) {
-          return json(canonicalProof);
-        }
-        if (url.endsWith("/me/proofs")) {
-          return json({ proofs: [summary] });
-        }
-        if (url.endsWith("/invitations")) {
-          return json({ invitations: [] });
-        }
-        if (url.split("?")[0].endsWith("/me/marketplaces")) {
-          return json({ marketplaces: [] });
-        }
-        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
-      }),
-    );
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
-    await user.click(await screen.findByRole("button", { name: "Scan order or label" }));
-    expect(await screen.findByRole("heading", { name: "Scan order" })).toBeInTheDocument();
-    expect(screen.queryByText("READY")).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText("Reference"), "ORD-48392");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByRole("heading", { name: "Order found" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Open existing Proof" }));
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
-    });
+  it("routes legacy Create Scan links into the minimal shipment form", async () => {
+    signInSession(); window.history.replaceState(null, "", "/new/scan"); render(<App />);
+    expect(await screen.findByRole("heading", { name: "Record shipment" })).toBeInTheDocument();
+    expect(screen.getByLabelText("What are you shipping?")).toBeRequired();
+    expect(screen.getByRole("button", { name: "Paste order details" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Reference")).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/me/packing-station/resolve"))).toBe(false);
   });
 
   it("can sign in through the PackProof account form", async () => {
@@ -577,257 +524,61 @@ describe("PackProof web reference client", () => {
     },
   );
 
-  it("reviews a server-imported purchase before creating the Proof", async () => {
-    signInSession();
-    const user = userEvent.setup();
+  it("creates a manual shipment from its title and opens its bound camera", async () => {
+    signInSession(); stubStationCamera();
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/transactions") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        expect(body).toMatchObject({ itemTitle: "Parcel with camera", externalReference: null, shipping: { carrier: null, trackingNumber: null } });
+        return json({ ...canonicalProof.transaction, transactionId: "txn_manual" }, 201);
+      }
+      if (url.endsWith("/transactions/txn_manual/proof")) return json(stationReadyProof());
+      if (url.endsWith(`/proofs/${fulfillmentItem.proofId}`)) return json(stationReadyProof());
+      return originalFetch(input, init);
+    }));
+    window.history.replaceState(null, "", "/new");
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
-    expect(await screen.findByRole("button", { name: "Import purchase" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enter manually" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Import purchase" }));
-    expect(await screen.findByRole("heading", { name: "Review imported purchase" })).toBeInTheDocument();
-    expect(screen.getByText("Vintage film camera")).toBeInTheDocument();
-    expect(screen.getByText("DM-WEB-1")).toBeInTheDocument();
-    expect(screen.getByText("Alex Buyer")).toBeInTheDocument();
-    expect(screen.getByText("MARKETPLACE_API")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Create PackProof" }));
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();
-    });
-    expect(fetch).toHaveBeenCalledWith(
-      "/integrations/transactions/import",
-      expect.objectContaining({ method: "POST" }),
-    );
-    const importCall = vi.mocked(fetch).mock.calls.find((call) =>
-      String(call[0]).endsWith("/integrations/transactions/import"),
-    );
-    expect(importCall?.[1]).toEqual(
-      expect.objectContaining({
-        body: JSON.stringify({
-          adapterKey: "demo-marketplace",
-          mode: "reference",
-          externalTransactionId: null,
-          createProof: false,
-        }),
-      }),
-    );
-    expect(String(importCall?.[1] && "body" in importCall[1] ? importCall[1].body : "")).not.toContain(
-      "ebay_order_id",
-    );
+    await userEvent.type(screen.getByLabelText("What are you shipping?"), "Parcel with camera");
+    await userEvent.click(screen.getByRole("button", { name: "Open camera" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
+    expect(screen.getByLabelText("Packing camera preview")).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/integrations/transactions/import"))).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/capture-sessions"))).toBe(false);
   });
 
-  it("sends marketplace import from Create and does not offer Connect eBay there", async () => {
-    signInSession();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, _init?:RequestInit) => {
-        const url = String(input);
-        if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
-        if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
-        if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
-        if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
-        if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
-        if (url.split("?")[0].endsWith("/me/marketplaces")) {
-          return json({
-            marketplaces: [
-              {
-                provider: "ebay",
-                adapterKey: "ebay",
-                enabled: true,
-                environment: "sandbox",
-                connection: null,
-              },
-            ],
-          });
-        }
-        if (url.endsWith("/me/proofs")) {
-          return json({ proofs: [summary] });
-        }
-        if (url.endsWith("/invitations")) {
-          return json({ invitations: [] });
-        }
-        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
-      }),
-    );
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
-    expect(await screen.findByRole("button", { name: "Import purchase" })).toBeInTheDocument();
+  it("keeps manual intake minimal and marketplace connections out of its path", async () => {
+    signInSession(); window.history.replaceState(null, "", "/new"); render(<App />);
+    expect(screen.getByRole("heading", { name: "Record shipment" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open camera" })).toBeDisabled();
+    expect(screen.getByLabelText("What are you shipping?")).toBeRequired();
+    expect(screen.queryByRole("button", { name: "Import purchase" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scan order or label" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect eBay" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Vintage film camera")).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("What are you shipping?"), "One item");
+    expect(screen.getByRole("button", { name: "Open camera" })).toBeEnabled();
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/integrations/transactions/import"), expect.anything());
   });
 
-  it("lists connected eBay sales instead of the demo marketplace import", async () => {
-    signInSession();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
-        if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
-        if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
-        if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
-        if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
-        const path = url.split("?")[0];
-        if (path.endsWith("/me/marketplaces")) {
-          return json({
-            marketplaces: [
-              {
-                provider: "ebay",
-                adapterKey: "ebay",
-                enabled: true,
-                environment: "sandbox",
-                connection: {
-                  connectionId: "icn_ebay",
-                  status: "ACTIVE",
-                  displayName: "collin_seller",
-                  connectedAt: "2026-09-01T12:00:00.000Z",
-                  updatedAt: "2026-09-01T12:05:00.000Z",
-                },
-              },
-            ],
-          });
-        }
-        if (path.endsWith("/me/marketplaces/ebay/orders")) {
-          return json({
-            role: "SELLING",
-            connection: { connectionId: "icn_ebay", status: "ACTIVE", displayName: "collin_seller" },
-            orders: [
-              {
-                externalOrderId: "12-00007-84931",
-                title: "Nikon F3 Camera",
-                soldAt: "2026-08-31T18:12:00.000Z",
-                total: 349.99,
-                currency: "USD",
-                fulfillmentStatus: "NOT_STARTED",
-                fulfillmentLabel: "Ready to ship",
-                buyerUsername: "buyer_one",
-                quantity: 1,
-                proofId: null,
-                transactionId: null,
-              },
-            ],
-            disclosure:
-              "Transaction information was supplied by eBay. PackProof records the supplied information but does not independently verify the listing contents or transaction claims.",
-          });
-        }
-        if (path.endsWith("/me/marketplaces/ebay/orders/12-00007-84931/import") && init?.method === "POST") {
-          return json({
-            created: true,
-            identity: {
-              adapterKey: "ebay",
-              tenantKey: "marketplace:ebay:sandbox",
-              externalTransactionId: "12-00007-84931",
-              source: "MARKETPLACE_API",
-            },
-            proof: null,
-            transaction: {
-              ...canonicalProof.transaction,
-              transactionId: "txn_ebay",
-              proofId: null,
-              proofStatus: null,
-              itemTitle: "Nikon F3 Camera",
-              externalReference: "12-00007-84931",
-              provenance: {
-                source: "MARKETPLACE_API",
-                adapterKey: "ebay",
-                provider: "ebay",
-                tenantKey: "marketplace:ebay:sandbox",
-                externalTransactionId: "12-00007-84931",
-                sourceRecordId: "12-00007-84931",
-                importedAt: "2026-09-01T12:06:00.000Z",
-                payloadSha256: "aa".repeat(32),
-                buyer: { externalId: "buyer_one", displayName: "buyer_one", email: null },
-              },
-            },
-          });
-        }
-        if (path.endsWith("/transactions/txn_ebay/proof")) {
-          return json({
-            ...canonicalProof,
-            transactionId: "txn_ebay",
-            transaction: {
-              ...canonicalProof.transaction,
-              transactionId: "txn_ebay",
-              itemTitle: "Nikon F3 Camera",
-              externalReference: "12-00007-84931",
-            },
-          });
-        }
-        if (url.includes("/shipment-integrity")) {
-          return json({
-            schema: "packproof.shipment.integrity/v1",
-            status: "CORE_NOT_FINALIZED",
-            proofId: canonicalProof.proofId,
-            transactionId: "txn_ebay",
-            shippingId: null,
-            coreManifestSha256: null,
-            shipmentSupplementSha256: null,
-            eventCount: 0,
-            firstEventSha256: null,
-            latestEventSha256: null,
-            supplement: null,
-            verification: {
-              coreManifestValid: false,
-              eventContentHashesValid: true,
-              eventChainValid: true,
-              supplementValid: false,
-              linkedToFinalizedProof: false,
-              valid: false,
-            },
-          });
-        }
-        if (url.includes(`/proofs/${canonicalProof.proofId}`) && !url.includes("/attestations")) {
-          return json({
-            ...canonicalProof,
-            transactionId: "txn_ebay",
-            transaction: {
-              ...canonicalProof.transaction,
-              transactionId: "txn_ebay",
-              itemTitle: "Nikon F3 Camera",
-              externalReference: "12-00007-84931",
-            },
-          });
-        }
-        if (url.endsWith("/me/proofs")) {
-          return json({ proofs: [summary] });
-        }
-        if (url.endsWith("/invitations")) {
-          return json({ invitations: [] });
-        }
-        if (url.includes("/integration-connections")) {
-          return json({ connections: [] });
-        }
-        return json({ error: { code: "NOT_FOUND", message: "missing" } }, 404);
-      }),
-    );
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
-    await user.click(await screen.findByRole("button", { name: "Import purchase" }));
-    expect(await screen.findByRole("heading", { name: "Your eBay sales" })).toBeInTheDocument();
-    expect(screen.getByText("Nikon F3 Camera")).toBeInTheDocument();
-    expect(screen.getByText(/Ready to ship/)).toBeInTheDocument();
-    expect(screen.queryByText("Vintage film camera")).not.toBeInTheDocument();
-    expect(screen.queryByText("Alex Buyer")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Nikon F3 Camera/ }));
-    expect(await screen.findByRole("heading", { name: "Review imported purchase" })).toBeInTheDocument();
-    expect(screen.getByText("Nikon F3 Camera")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Create PackProof" }));
-    await waitFor(() => {
-      expect(screen.getByRole("article", { name: "Proof record" })).toBeInTheDocument();
-    });
+  it("opens an automatically imported eBay order using its existing Proof", async () => {
+    signInSession(); stubStationCamera();
+    const item = { ...fulfillmentItem, providerDisplay: "eBay", itemSummary: "Nikon F3 Camera", externalReference: "12-00007-84931", externalOrderId: "12-00007-84931" };
+    const proof = stationReadyProof({ transaction: { ...canonicalProof.transaction, itemTitle: "Nikon F3 Camera", externalReference: item.externalReference } });
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/me/fulfillment-queue")) return json({ items: [item], filter: "all" });
+      if (url.endsWith(`/proofs/${item.proofId}`)) return json(proof);
+      return originalFetch(input, init);
+    }));
+    window.history.replaceState(null, "", "/app"); render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: /Nikon F3 Camera/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Nikon F3 Camera" })).toBeInTheDocument();
-    expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/integrations/transactions/import"))).toBe(
-      false,
-    );
-    expect(
-      vi.mocked(fetch).mock.calls.some((call) =>
-        String(call[0]).includes("/me/marketplaces/ebay/orders/12-00007-84931/import"),
-      ),
-    ).toBe(true);
+    expect(window.location.pathname).toBe("/station");
+    expect(new URLSearchParams(window.location.search).get("proof")).toBe(item.proofId);
+    expect(vi.mocked(fetch).mock.calls.some(([url, init]) => init?.method === "POST" && /import|transactions/.test(String(url)))).toBe(false);
   });
 
   it("shows an eBay connection error after OAuth return", async () => {
@@ -844,6 +595,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, _init?:RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -958,6 +711,8 @@ describe("PackProof web reference client", () => {
     ];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1060,6 +815,7 @@ describe("PackProof web reference client", () => {
 
   it("renders the fulfillment queue and a multi-item packing workspace", async () => {
     signInSession();
+    stubStationCamera();
     let attested = false;
     let finalized = false;
     const multi = {
@@ -1085,6 +841,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1160,37 +918,29 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Account" }));
     await user.click(await screen.findByRole("link", { name: "Orders" }));
     expect(await screen.findByRole("heading", { name: "Orders" })).toBeInTheDocument();
-    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
     expect(screen.getByText("Pokémon Booster Box + 1 more")).toBeInTheDocument();
     expect(screen.getAllByText(/Demo Storefront/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/video is required/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/buyer acceptance/i)).not.toBeInTheDocument();
-    await user.click(screen.getAllByRole("button", { name: "Record packing" })[0]);
-    expect(await screen.findByRole("heading", { name: "Order #DS-1001" })).toBeInTheDocument();
-    expect(screen.getByText("Sleeve pack")).toBeInTheDocument();
-    expect(screen.getByText(/Buyer acceptance is not required/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open Packing Station" })).toBeInTheDocument();
-    expect(screen.getByText(/Packing evidence is required/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Complete PackProof" })).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /I attest that I packed this order as described/i }));
-    expect(await screen.findByText("Packing attestation recorded")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Complete & Next" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Open Packing Station" }));
-    expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
-    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start recording" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Pokémon Booster Box/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
+    expect(screen.getByLabelText("Packing camera preview")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Complete PackProof" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(attested).toBe(false);
+    expect(finalized).toBe(false);
   });
 
-  it("connects and syncs the demo storefront from Connected Stores", async () => {
+  it("checks orders for an existing storefront from Sales channels", async () => {
     signInSession();
-    let connected = false;
+    let connected = true;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/me/connected-accounts")) return json(emptyConnectedAccounts);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1243,18 +993,16 @@ describe("PackProof web reference client", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: "Account" }));
-    await user.click(await screen.findByRole("button", { name: "Connections" }));
-    expect(await screen.findByRole("heading", { name: "Connections" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Your platforms" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "Connect Demo Storefront" }));
-    expect(await screen.findByText("Demo Store")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Sales channels/ }));
+    expect(await screen.findByRole("heading", { name: "Sales channels" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Demo Storefront" })).toBeInTheDocument();
     expect(screen.getByText(/6 orders ready/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check for orders now" }));
-    expect(await screen.findByText(/10 orders discovered/)).toBeInTheDocument();
+    expect(await screen.findByText(/Order check finished: 6 ready to pack, 6 new Proofs prepared/)).toBeInTheDocument();
     expect(screen.queryByText(/icn_/)).not.toBeInTheDocument();
   });
 
-  it("connects Google from Account without sending client secrets", async () => {
+  it("connects an eBay sales channel without exposing secrets or offering identity-only accounts", async () => {
     signInSession();
     const assign = vi.fn();
     vi.stubGlobal("location", {
@@ -1270,6 +1018,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1277,14 +1027,14 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.endsWith("/me/connected-accounts") && init?.method !== "POST") {
-          return json(emptyConnectedAccounts);
+          return json({ ...emptyConnectedAccounts, providers: emptyConnectedAccounts.providers.map(provider => provider.provider === "ebay" ? { ...provider, enabled: true } : provider) });
         }
-        if (url.endsWith("/me/connected-accounts/google/connect") && init?.method === "POST") {
+        if (url.endsWith("/me/connected-accounts/ebay/connect") && init?.method === "POST") {
           return json(
             {
-              authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?client_id=public&state=abc",
+              authorizationUrl: "https://auth.ebay.com/oauth2/authorize?client_id=public&state=abc",
               expiresAt: "2026-09-02T15:00:00.000Z",
-              provider: "google",
+              provider: "ebay",
             },
             201,
           );
@@ -1307,32 +1057,35 @@ describe("PackProof web reference client", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: "Account" }));
-    await user.click(await screen.findByRole("button", { name: "Connections" }));
-    expect(await screen.findByRole("heading", { name: "Your platforms" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect Google" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect Meta" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Sales channels/ }));
+    expect(await screen.findByRole("heading", { name: "Sales channels" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect Google" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect Meta" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect Shopify" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Connect Google" }));
+    await user.click(screen.getByRole("button", { name: "Connect eBay" }));
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        "/me/connected-accounts/google/connect",
+        "/me/connected-accounts/ebay/connect",
         expect.objectContaining({ method: "POST" }),
       );
     });
     expect(JSON.stringify(vi.mocked(fetch).mock.calls)).not.toContain("secret");
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith(
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id=public&state=abc",
+        "https://auth.ebay.com/oauth2/authorize?client_id=public&state=abc",
       );
     });
   });
 
   it("identifies an imported order in Packing Station and recovers from a bad reference", async () => {
     signInSession();
+    stubStationCamera();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1406,31 +1159,19 @@ describe("PackProof web reference client", () => {
       }),
     );
     const user = userEvent.setup();
-    window.history.replaceState(null, "", "/station");
+    window.history.replaceState(null, "", "/station?reference=NOPE");
     render(<App />);
-    expect(await screen.findByText("READY")).toBeInTheDocument();
-    expect(screen.getByText(/Choose an order or scan/)).toBeInTheDocument();
-    expect(screen.queryByText(/SHA-256|manifest|object store/i)).not.toBeInTheDocument();
-
-    // READY is rendered while the local capture journal is still being checked.
-    await waitFor(() => expect(screen.getByRole("button", { name: "Scan Order / Label" })).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: "Scan Order / Label" }));
-    expect(await screen.findByText("SCAN")).toBeInTheDocument();
-    await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "NOPE");
-    await user.click(screen.getByRole("button", { name: "Use this code" }));
     expect(await screen.findByText("No packing order matched that reference")).toBeInTheDocument();
-    expect(screen.getByText("NEEDS ATTENTION")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Ready for next order" }));
-    expect(await screen.findByText("READY")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /Order #DS-1001/ }));
-    expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
+    const order = screen.getByRole("button", { name: /Order #DS-1001/ });
+    await waitFor(() => expect(order).toBeEnabled());
+    await user.click(order);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
-    expect(screen.getByText("Pokémon Booster Box")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start recording" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Packing camera preview")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scan Order / Label" })).not.toBeInTheDocument();
   });
 
-  it("finishes a webcam pack by USB rescan of the same order and keeps recording on a wrong barcode", async () => {
+  it("records one continuous video, reviews before submission, and waits for an explicit next order", async () => {
     signInSession();
     stubStationCamera();
     let proofCreates = 0;
@@ -1440,6 +1181,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.endsWith("/capabilities")) return json({schemaVersion:1,capture:{protocolVersions:[1],maxBytes:250000000,maxDurationSeconds:300,maxActiveUploads:2},preservation:{receiptVersions:[1],durableReceiptsRequired:true}});
         if(url.endsWith("/recovery")) return json({proofId:fulfillmentItem.proofId,evidence:[{evidenceId:"evd_station",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}});
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
@@ -1516,7 +1259,7 @@ describe("PackProof web reference client", () => {
           return json({
             proof: stationReadyProof({
               status: "EVIDENCE_COMMITTED",
-              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              evidence: [{ evidenceId: "evd_station", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
             }),
             sha256: "aa",
             evidenceId: "evd_station",
@@ -1527,7 +1270,7 @@ describe("PackProof web reference client", () => {
             attestation: { attestationId: "att_station", statement: "PACKED_DESCRIBED_ITEM" },
             proof: stationReadyProof({
               status: "EVIDENCE_COMMITTED",
-              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              evidence: [{ evidenceId: "evd_station", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
               attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
             }),
           });
@@ -1537,7 +1280,7 @@ describe("PackProof web reference client", () => {
           return json({
             proof: stationReadyProof({
               status: "FINALIZED",
-              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              evidence: [{ evidenceId: "evd_station", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
               attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
             }),
             manifest: { manifestId: "man_station", proofId: fulfillmentItem.proofId, sha256: "aa", canonicalJson: "{}", manifest: {} },
@@ -1548,7 +1291,7 @@ describe("PackProof web reference client", () => {
             packed
               ? stationReadyProof({
                   status: "FINALIZED",
-                  evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+                  evidence: [{ evidenceId: "evd_station", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
                   attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
                 })
               : stationReadyProof(),
@@ -1570,31 +1313,28 @@ describe("PackProof web reference client", () => {
     // The station opens only after its durable-journal boot has completed.
     await waitFor(() => expect(queueOrder).toBeEnabled());
     await user.click(queueOrder);
-    expect(await screen.findByText("READY TO PACK")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Start recording" }));
-    expect(await screen.findByText("RECORDING")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Scan Package to Finish" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Finished Packing" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Scan Package to Finish" }));
-    expect(await screen.findByText("SCAN TO FINISH")).toBeInTheDocument();
-    await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "DS-1002");
-    await user.click(screen.getByRole("button", { name: "Use this code" }));
-    expect(await screen.findByText("Different order scanned. Finish packing the current order first.")).toBeInTheDocument();
-    expect(screen.getByText("RECORDING")).toBeInTheDocument();
-    expect(screen.getByText("Order #DS-1001")).toBeInTheDocument();
-    expect(proofCreates).toBe(1);
-
-    await user.click(screen.getByRole("button", { name: "Scan Package to Finish" }));
-    await user.type(screen.getByPlaceholderText("Scan or enter barcode"), "9400111899223344556677");
-    await user.click(screen.getByRole("button", { name: "Use this code" }));
-    expect(await screen.findByText("PROOF CREATED")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Record packing" }));
+    expect(await screen.findByRole("button", { name: "Finish recording" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scan Package to Finish" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finish recording" }));
+    expect(await screen.findByLabelText("Recorded packing video")).toBeInTheDocument();
+    expect(uploadInits).toBe(0);
+    expect(await screen.findByRole("button", { name: "Confirm and submit" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /The item shown and attached/ })).toBeEnabled());
+    await user.click(screen.getByRole("checkbox", { name: /The item shown and attached/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm and submit" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Confirm and submit" }));
+    expect(await screen.findByRole("heading", { name: "Proof saved" })).toBeInTheDocument();
     expect(proofCreates).toBe(1);
     expect(uploadInits).toBe(1);
-    expect(await screen.findByText("READY", {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Order #DS-1002/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Pack next order" }));
+    expect(await screen.findByRole("button", { name: /Order #DS-1002/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Order #DS-1001/ })).not.toBeInTheDocument();
   });
 
-  it("keeps Finished Packing as a secondary webcam fallback", async () => {
+  it("allows a recording with no readable label to pass server review without a rescan", async () => {
     signInSession();
     stubStationCamera();
     let packed = false;
@@ -1602,6 +1342,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.endsWith("/capabilities")) return json({schemaVersion:1,capture:{protocolVersions:[1],maxBytes:250000000,maxDurationSeconds:300,maxActiveUploads:2},preservation:{receiptVersions:[1],durableReceiptsRequired:true}});
         if(url.endsWith("/recovery")) return json({proofId:fulfillmentItem.proofId,evidence:[{evidenceId:"evd_manual",status:"PRESERVED",receipt:{version:1}}],declarations:[],finalization:{status:"PRESERVED",receipt:{version:1}}});
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
@@ -1634,7 +1376,7 @@ describe("PackProof web reference client", () => {
           return json({
             proof: stationReadyProof({
               status: "EVIDENCE_COMMITTED",
-              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              evidence: [{ evidenceId: "evd_manual", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
             }),
             sha256: "aa",
             evidenceId: "evd_manual",
@@ -1645,7 +1387,7 @@ describe("PackProof web reference client", () => {
             attestation: { attestationId: "att_manual", statement: "PACKED_DESCRIBED_ITEM" },
             proof: stationReadyProof({
               status: "EVIDENCE_COMMITTED",
-              evidence: [{ validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
+              evidence: [{ evidenceId: "evd_manual", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }],
               attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "user_seller" }],
             }),
           });
@@ -1653,12 +1395,12 @@ describe("PackProof web reference client", () => {
         if (url.includes("/finalize") && init?.method === "POST") {
           packed = true;
           return json({
-            proof: stationReadyProof({ status: "FINALIZED" }),
+            proof: stationReadyProof({ status: "FINALIZED", evidence: [{ evidenceId: "evd_manual", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }] }),
             manifest: { manifestId: "man_manual", proofId: fulfillmentItem.proofId, sha256: "aa", canonicalJson: "{}", manifest: {} },
           });
         }
         if (url.endsWith(`/proofs/${fulfillmentItem.proofId}`)) {
-          return json(packed ? stationReadyProof({ status: "FINALIZED" }) : stationReadyProof());
+          return json(packed ? stationReadyProof({ status: "FINALIZED", evidence: [{ evidenceId: "evd_manual", validationStatus: "COMMITTED", evidenceType: "FULFILLMENT_CAPTURE" }] }) : stationReadyProof());
         }
         if (url.endsWith("/me/proofs")) {
           return json({ proofs: [summary] });
@@ -1676,10 +1418,17 @@ describe("PackProof web reference client", () => {
     // The station opens only after its durable-journal boot has completed.
     await waitFor(() => expect(queueOrder).toBeEnabled());
     await user.click(queueOrder);
-    await user.click(await screen.findByRole("button", { name: "Start recording" }));
-    expect(await screen.findByRole("button", { name: "Scan Package to Finish" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Finished Packing" }));
-    expect(await screen.findByText("PROOF CREATED")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Record packing" }));
+    await user.click(await screen.findByRole("button", { name: "Finish recording" }));
+    expect(await screen.findByText(/couldn’t read a shipping label automatically/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Recorded packing video")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /The item shown and attached/ })).toBeEnabled());
+    await user.click(screen.getByRole("checkbox", { name: /The item shown and attached/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm and submit" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Confirm and submit" }));
+    expect(await screen.findByRole("heading", { name: "Proof saved" })).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/shipping-observations"))).toBe(true);
   });
 
   it.each(["", "https://api.packproof.example"])("renders a guest viewing page using configured API origin %s without a session", async (baseUrl) => {
@@ -1689,6 +1438,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, _init?:RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1717,7 +1468,7 @@ describe("PackProof web reference client", () => {
     );
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Proof" })).toBeInTheDocument();
-    expect(await screen.findByText("Ready to finalize")).toBeInTheDocument();
+    expect(await screen.findByText("Finish saving")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     expect(screen.getAllByText("Handed off").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Join PackProof" })).toBeInTheDocument();
@@ -1754,6 +1505,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1800,15 +1553,15 @@ describe("PackProof web reference client", () => {
       }),
     );
     const user = userEvent.setup();
+    window.history.replaceState(null, "", "/new");
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Create a new Proof" }));
-    await user.click(await screen.findByRole("button", { name: "Grading submission" }));
-    await user.clear(screen.getByLabelText("Item count"));
-    await user.type(screen.getByLabelText("Item count"), "2");
-    await user.click(screen.getByRole("button", { name: "Create grading Proof" }));
+    await user.click(screen.getByText("Document a grading submission"));
+    await user.clear(screen.getByLabelText("Number of items"));
+    await user.type(screen.getByLabelText("Number of items"), "2");
+    await user.click(screen.getByRole("button", { name: "Start grading submission" }));
     expect(await screen.findByText("Document item 1 of 2")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Proof actions" }));
-    await user.click(screen.getByRole("button", { name: "Proof tools and details" }));
+    await user.click(screen.getByRole("button", { name: "Evidence and claim tools" }));
     expect(screen.getByText("Item 1")).toBeInTheDocument();
     expect(screen.getByText("Originator")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Proof actions" }));
@@ -1846,6 +1599,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, _init?:RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
@@ -1915,7 +1670,7 @@ describe("PackProof web reference client", () => {
     window.history.replaceState(null, "", "/proofs/proof_compare");
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Proof actions" }));
-    await userEvent.click(screen.getByRole("button", { name: "Proof tools and details" }));
+    await userEvent.click(screen.getByRole("button", { name: "Evidence and claim tools" }));
     expect(await screen.findByRole("heading", { name: "Before sending versus when received" })).toBeInTheDocument();
     expect(screen.getByText("Consistent")).toBeInTheDocument();
     expect(screen.getByText("The available observations are materially consistent.")).toBeInTheDocument();
@@ -1942,6 +1697,8 @@ describe("PackProof web reference client", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.endsWith("/capabilities")) return json(captureCapabilities);
+        if (url.endsWith("/shipping-observations")) return json({ currentTrackingNumber: null, reviewRequired: false, observations: [] });
         if(url.includes("/signature/")||url.includes("/disclosure/"))return json({error:{code:"NOT_FOUND",message:"Optional tools unavailable"}},404);
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});

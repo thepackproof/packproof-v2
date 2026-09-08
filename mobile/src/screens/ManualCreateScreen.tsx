@@ -13,10 +13,12 @@ export function ManualCreateScreen() {
   const { colors } = useTheme();
   const form = app.createForm;
   const setForm = app.setCreateForm;
+  const [showGrading, setShowGrading] = useState(false);
+  const [gradingCount, setGradingCount] = useState("1");
   const [showDetails, setShowDetails] = useState(Boolean(app.intakeReview));
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title="Enter manually" onBack={app.goBack} />
+      <AppHeader title="Record shipment" onBack={app.goBack} />
       <ErrorBanner message={app.error} />
       {app.intakeReview ? (
         <>
@@ -35,13 +37,21 @@ export function ManualCreateScreen() {
           ))}
         </>
       ) : null}
-      <SectionHeader title="Purchase details" />
       <FormField
-        label="Item"
+        label="What are you shipping?"
         value={form.itemTitle}
         onChangeText={(value) => setForm({ ...form, itemTitle: value })}
         autoCapitalize="sentences"
       />
+      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Show the shipping label during your packing video. PackProof will try to read it for you.</Text>
+      <Button label="Paste order details" variant="tertiary" onPress={() => app.go("intake")} />
+      <Button
+        label={showDetails ? "Hide optional details" : "Add optional details"}
+        variant="tertiary"
+        onPress={() => setShowDetails(!showDetails)}
+      />
+      {showDetails ? (
+        <>
       <FormField
         label="Description"
         value={form.itemDescription}
@@ -66,16 +76,7 @@ export function ManualCreateScreen() {
         value={form.trackingNumber}
         onChangeText={(value) => setForm({ ...form, trackingNumber: value })}
       />
-      <Text style={{ color: colors.textSecondary }}>
-        Invite the buyer by username after creating the Proof. Only the item is required to start.
-      </Text>
-      <Button
-        label={showDetails ? "Hide optional details" : "Add optional details"}
-        variant="tertiary"
-        onPress={() => setShowDetails(!showDetails)}
-      />
-      {showDetails ? (
-        <>
+
           <FormField
             label="Quantity"
             value={form.quantity}
@@ -112,9 +113,11 @@ export function ManualCreateScreen() {
           />
         </>
       ) : null}
+      <Button label="Document a grading submission" variant="tertiary" onPress={() => setShowGrading(value => !value)} />
+      {showGrading ? <><FormField label="Number of items" value={gradingCount} onChangeText={setGradingCount} keyboardType="number-pad" /><Button label="Start grading submission" variant="secondary" disabled={!/^[1-9]\d*$/.test(gradingCount)} onPress={() => void app.createGradingProof(Number(gradingCount))} /></> : null}
       <Button
         disabled={!form.itemTitle.trim()}
-        label="Create PackProof"
+        label="Open camera"
         onPress={() => void app.createManualProof()}
         loading={app.busy}
       />

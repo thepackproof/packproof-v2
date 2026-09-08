@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { CreateProofScreen } from "../screens/CreateProofScreen";
@@ -47,7 +47,7 @@ it("requires review and preserves corrected intake provenance only for that orde
       onConfirmImport={() => {}}
     />,
   );
-  await user.click(screen.getByRole("button", { name: /Paste an order/ }));
+  await user.click(screen.getByRole("button", { name: /Paste order details/ }));
   await user.type(
     screen.getByLabelText("Order confirmation"),
     "Order: ORDER-101\nItem: Card\nPrice: $3000",
@@ -56,7 +56,7 @@ it("requires review and preserves corrected intake provenance only for that orde
   expect(await screen.findByText("Confirm the currency.")).toBeInTheDocument();
   expect(create).not.toHaveBeenCalled();
   await user.type(screen.getByLabelText("Currency"), "USD");
-  await user.click(screen.getByRole("button", { name: "Create PackProof" }));
+  await user.click(screen.getByRole("button", { name: "Open camera" }));
   await waitFor(() =>
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -67,14 +67,8 @@ it("requires review and preserves corrected intake provenance only for that orde
       }),
     ),
   );
-  await user.click(
-    within(screen.getByRole("button", { name: "Create PackProof" }).closest("form")!).getByRole(
-      "button",
-      { name: "Back" },
-    ),
-  );
-  await user.click(screen.getByRole("button", { name: "Enter manually" }));
-  await user.type(screen.getByLabelText("Item title"), "Different order");
-  await user.click(screen.getByRole("button", { name: "Create PackProof" }));
+  await user.click(screen.getByRole("button", {name:"Clear pasted details"}));
+  await user.type(screen.getByLabelText("What are you shipping?"), "Different order");
+  await user.click(screen.getByRole("button", { name: "Open camera" }));
   expect(create.mock.calls.at(-1)![0].metadata).toBeUndefined();
 });

@@ -1,0 +1,67 @@
+{
+  "schema": "packproof.uiux-source-inventory.v1",
+  "baselineSourceSha": "bcedec57d9a56800a1ed80f6e5c4959b6de7dab4",
+  "branch": "codex/ui-ux-redesign-2026-09-08",
+  "candidateVersionName": "0.3.9",
+  "candidateVersionCode": 38,
+  "versionCodeHistoryCheck": "PENDING_EXPO_PLAY_ACCESS",
+  "package": "com.packproof.mobile",
+  "buildProfile": "shipping-integration",
+  "files": [
+    {
+      "path": "backend/package-lock.json",
+      "sha256": "d1412079075e427f874aa6450fe294061a6cd002a540bcd098d2dd36c7418a18",
+      "bytes": 123825
+    },
+    {
+      "path": "mobile/package-lock.json",
+      "sha256": "79c5871de04c9d230d3845aeb9572055dcb49864bc03b8b1e551ac0139ec4b61",
+      "bytes": 422655
+    },
+    {
+      "path": "web/package-lock.json",
+      "sha256": "4f71175861da2ffb328c4942bef49a0c247c1da728e653c4bfbb946c24b80725",
+      "bytes": 116385
+    },
+    {
+      "path": "mobile/app.config.js",
+      "sha256": "f645e7064c5d80f986516384eb70c5163bf6e92e2846847d62ccb3b1dbd269d9",
+      "bytes": 3682
+    },
+    {
+      "path": "mobile/eas.json",
+      "sha256": "d31a0a851ef59e0719541877c394f5c3712403f8f2df13adf188fadaeb33ac02",
+      "bytes": 995
+    },
+    {
+      "path": "mobile/modules/packproof-unified-camera/package.json",
+      "sha256": "9f95f13116a6fc3c746d6618967b6cb6cdfcfcc028606108faa2c8269a30566a",
+      "bytes": 105
+    },
+    {
+      "path": "mobile/modules/packproof-unified-camera/android/build.gradle",
+      "sha256": "aa57c2e32edcab109a5001e6f7dbee5229464584806a0ecc417d2cacde3f9bba",
+      "bytes": 1060
+    },
+    {
+      "path": "mobile/modules/packproof-attestation/package.json",
+      "sha256": "844c007ba2174a7b546a5d0f5a01937f90293890e647db93d81bddccbd984122",
+      "bytes": 101
+    },
+    {
+      "path": "mobile/modules/packproof-attestation/android/build.gradle",
+      "sha256": "cf9d0c36f18cc46019ce6a67c0c24f6bb199dec27c06923223a35535e9b81ad8",
+      "bytes": 527
+    },
+    {
+      "path": "backend/migrations/052_redesign_integrity.sql",
+      "sha256": "2ebb5bb0c5769a878733d42c06c8eb5df4306184a17f0750dad4791b8a10b27e",
+      "bytes": 1728
+    },
+    {
+      "path": "backend/migrations/053_study_ui_instrumentation.sql",
+      "sha256": "deaae42b7bec506b9c196235924df0b9fbfdb33f43b461df2ba7d2cb7d107b30",
+      "bytes": 824
+    }
+  ]
+}

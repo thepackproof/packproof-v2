@@ -5,7 +5,9 @@ import { withRequestTimeout } from "./request-timeout";
 export interface ApiCapabilities {
   schemaVersion: number;
   capture: { protocolVersions: number[]; maxBytes: number; maxDurationSeconds: number; maxActiveUploads: number };
-  sellerAttestation: { challengeVersions: number[]; statementVersion: number; methods: string[] };
+  shippingReview?: { requiredForObservedConflicts: boolean; noLabelAllowed: boolean };
+  correctionPolicy?: { importedFactsReadOnly: boolean; captureBindingLocksManualDetails: boolean };
+  sellerAttestation: { contextBindingVersion?: number; challengeVersions: number[]; statementVersion: number; methods: string[] };
   preservation: { receiptVersions: number[]; durableReceiptsRequired: boolean };
   release: { commit: string | null; version: string | null };
 }
@@ -54,6 +56,7 @@ export interface TransactionItemView {
 }
 
 export interface TransactionView {
+  correctionPolicy?: { canCorrectOrderDetails: boolean; canCorrectShipping: boolean; reason: string | null };
   transactionId: string;
   externalReference: string | null;
   transactionDate: string | null;
@@ -449,6 +452,7 @@ export interface InvitationInboxView {
 }
 
 export interface ProofCollectionItem {
+  workflowType?: string;
   schema?: "packproof.proof.summary/v1" | string;
   proofId: string;
   transactionId: string;
@@ -564,6 +568,11 @@ export interface ConnectedAccountsListView {
 }
 
 export interface FulfillmentQueueItem {
+  provider?: string;
+  connectionId?: string;
+  transactionValue?: number | null;
+  currency?: string | null;
+  orderedAt?: string | null;
   transactionId: string;
   proofId: string;
   providerDisplay: string;
@@ -678,6 +687,14 @@ export class PackProofV2Client {
   ): Promise<{ connections: IntegrationConnectionView[] }> {
     const query = capability ? `?capability=${encodeURIComponent(capability)}` : "";
     return this.request(`/me/integration-connections${query}`);
+  }
+
+  async getAccountDeletionRequest(): Promise<{ request: null | { requestId: string; state: string; requestedAt: string; updatedAt: string }; retentionNotice: string }> {
+    return this.request("/me/account-deletion-request");
+  }
+
+  async requestAccountDeletion(): Promise<{ request: null | { requestId: string; state: string; requestedAt: string; updatedAt: string }; retentionNotice: string }> {
+    return this.request("/me/account-deletion-request", { method: "POST", body: { confirmation: "REQUEST_ACCOUNT_DELETION" } });
   }
 
   async listConnectedAccounts(): Promise<ConnectedAccountsListView> {
@@ -1025,6 +1042,16 @@ export class PackProofV2Client {
 
   bindCaptureShipping(proofId: string, sessionId: string, scan: ShippingScan): Promise<ShippingScanResult> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-label`, {method: "POST", body: scan});
+  }
+
+  getCaptureShippingReview(proofId: string, sessionId: string): Promise<import("./capture/shipping-scan-queue").CaptureShippingReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations`);
+  }
+
+  resolveCaptureShippingObservation(proofId: string, sessionId: string, observationId: string, reason: string): Promise<import("./capture/shipping-scan-queue").CaptureShippingReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations/${encodeURIComponent(observationId)}/resolve`, {
+      method: "POST", body: { decision: "NOT_THIS_PACKAGE", reason },
+    });
   }
 
   async cancelCaptureSession(proofId: string, sessionId: string): Promise<unknown> {

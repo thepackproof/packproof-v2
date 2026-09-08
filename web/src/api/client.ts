@@ -29,6 +29,21 @@ import {
   type ConnectedAccountsListView,
 } from "./types";
 
+export interface AccountDeletionRequestView {
+  request: null | { requestId: string; state: string; requestedAt: string; updatedAt: string };
+  retentionNotice: string;
+}
+
+function accountDeletionView(value: AccountDeletionRequestView): AccountDeletionRequestView {
+  if (!value || typeof value.retentionNotice !== "string" || !("request" in value)
+    || (value.request !== null && (!value.request || typeof value.request.requestId !== "string"
+      || !value.request.requestId || typeof value.request.state !== "string"
+      || typeof value.request.requestedAt !== "string" || typeof value.request.updatedAt !== "string"))) {
+    throw new Error("Your account request status could not be confirmed. Please try again.");
+  }
+  return value;
+}
+
 export type ProofEmailPreference = "IMPORTANT" | "ALL" | "FINAL_ONLY";
 
 export interface ProofEmailSubscriptionView {
@@ -72,6 +87,15 @@ export class PackProofApi {
     if(!token) throw new Error("Sign in again with your verified buyer email before choosing receipt updates.");
     return this.request(`/proofs/${encodeURIComponent(proofId)}/disclosure/receipt-preference`, {method:"POST",auth:false,headers:{Authorization:`Bearer ${token}`},body:{optedIn}});
   }
+  async getCaptureShippingReview(proofId:string,sessionId:string):Promise<{currentTrackingNumber:string|null;reviewRequired:boolean;observations:Array<{observationId:string;trackingNumber:string;carrierHint:string|null;associated:boolean;resolution:null|{decision:string;reason:string;resolvedAt:string}}>}> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations`);
+  }
+  async resolveCaptureShippingObservation(proofId:string,sessionId:string,observationId:string) {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations/${encodeURIComponent(observationId)}/resolve`,{method:"POST",body:{decision:"NOT_THIS_PACKAGE",reason:"Another label visible in recording"}});
+  }
+  async bindCaptureShipping(proofId:string,sessionId:string,scan:{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;confirmed?:boolean}):Promise<{status:string;trackingNumber?:string}> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-label`,{method:"POST",body:scan});
+  }
   async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string}> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, { method: "POST", body: {client:"WEB_CAMERA",idempotencyKey,stageId} });
   }
@@ -102,6 +126,18 @@ export class PackProofApi {
       auth: false,
       body: { subject },
     });
+  }
+
+  async getAccountDeletionRequest(): Promise<AccountDeletionRequestView> {
+    return accountDeletionView(await this.request<AccountDeletionRequestView>("/me/account-deletion-request"));
+  }
+
+  async requestAccountDeletion(): Promise<AccountDeletionRequestView> {
+    const view = accountDeletionView(await this.request<AccountDeletionRequestView>("/me/account-deletion-request", {
+      method: "POST", body: { confirmation: "REQUEST_ACCOUNT_DELETION" },
+    }));
+    if (!view.request) throw new Error("Your account request has not been confirmed. Check its status before trying again.");
+    return view;
   }
 
   async getMe(): Promise<ProfileView> {

@@ -1,3 +1,4 @@
+import { getCaptureLabelReview, resolveCaptureLabel } from "../domain/capture-label-review.js";
 import { bindCaptureShipping } from '../domain/capture-shipping.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import type { AppDependencies } from '../app.js';
@@ -11,7 +12,9 @@ export function captureSessionRouter(deps:AppDependencies) {
   router.use((_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
   router.post('/',route(async(req,res)=>{res.status(201).json(await createCaptureSession(deps.db,deps.clock,user(req),req.params.id,{idempotencyKey:String(req.header('idempotency-key')??req.body?.idempotencyKey??''),client:String(req.body?.client??''),stageId:req.body?.stageId==null?undefined:String(req.body.stageId)}));}));
   router.get('/:sessionId',route(async(req,res)=>{res.json(await recoverCaptureSession(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId));}));
-  router.post('/:sessionId/shipping-label',route(async(req,res)=>{res.json(await bindCaptureShipping(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.body));}));
+  router.get('/:sessionId/shipping-observations',route(async(req,res)=>{res.json(await getCaptureLabelReview(deps.db,user(req),req.params.id,req.params.sessionId));}));
+  router.post('/:sessionId/shipping-observations/:observationId/resolve',route(async(req,res)=>{res.json(await resolveCaptureLabel(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.params.observationId,req.body));}));
+  router.post('/:sessionId/shipping-label' ,route(async(req,res)=>{res.json(await bindCaptureShipping(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.body));}));
   router.post('/:sessionId/complete',route(async(req,res)=>{res.json(await completeCaptureSession(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,{sha256:req.body?.sha256,byteSize:req.body?.byteSize,contentType:req.body?.contentType,interrupted:req.body?.interrupted,recordedDurationMs:req.body?.recordedDurationMs}));}));
   router.post('/:sessionId/recover',route(async(req,res)=>{res.json(await recoverCaptureSession(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId));}));
   router.post('/:sessionId/cancel',route(async(req,res)=>{res.json(await cancelCaptureSession(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId));}));

@@ -4,7 +4,7 @@ Android seller submission now asks the seller to authenticate this exact stateme
 
 > The item shown and attached in this Proof is the item I am shipping
 
-The recording review shows a generic fingerprint icon above the statement. Pressing it opens Android's system prompt; pressing alone does not submit. The same deliberate confirmation is required in Packing Station, including after a successful package rescan. Cancellation, unavailable biometrics, lockout, and interrupted uploads keep the local recording available. Android does not silently fall back to a PIN, password, or unsigned submission. Existing iOS, web, grading, receipt, and return workflows retain their current behavior.
+The recording review shows a generic fingerprint icon above the statement. Pressing it opens Android's system prompt; pressing alone does not submit. The same deliberate confirmation is required in Packing Station, after the single packing recording is finished and reviewed. Cancellation, unavailable biometrics, lockout, and interrupted uploads keep the local recording available. Android does not silently fall back to a PIN, password, or unsigned submission. Existing iOS, web, grading, receipt, and return workflows retain their current behavior.
 
 The regular capture flow commits the video and its attestation, then returns to the Proof. Existing finalization remains a separate server command. Packing Station preserves its existing automatic finalization after successful evidence and attestation commits, subject to the server's participation and capture requirements.
 

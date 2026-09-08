@@ -8,7 +8,7 @@ import { typography } from "../theme/tokens";
 import { formatDateTime } from "../copy/format";
 import { committedRecordEvidence, originalBookmarks, recordEvidenceKey, recordEvidenceLabel, type ProofRecordTab, type RecordEvidence } from "../copy/proof-record";
 import { type EvidenceAnchor, type SignatureView } from "../signature";
-import { isGradingWorkflow } from "../copy/custody";
+import { recordCorrectionState } from "../copy/record-context";
 import { StatusBadge, statusTone } from "./StatusBadge";
 import { Button } from "./Button";
 import { PressableScale } from "./motion";
@@ -38,12 +38,13 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   const [anchors, setAnchors] = useState<EvidenceAnchor[]>([]), [bookmarkError, setBookmarkError] = useState(false);
   const [bookmarksLoading, setBookmarksLoading] = useState(true);
   const [reload, setReload] = useState(0);
-  const scroll = useRef<RestoringScrollViewHandle>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const scroll = useRef<Partial<Record<ProofRecordTab, RestoringScrollViewHandle | null>>>({});
   const tabScroll = useRef<ScrollView>(null), tabPositions = useRef<Record<string, number>>({});
   const fade = useRef(new Animated.Value(1)).current;
   const committed = committedRecordEvidence(proof);
   const selectedEvidence = committed.find(item => item.evidenceId === selectedEvidenceId && (item.stageId ?? null) === selectedEvidenceStageId) ?? committed.find(item => item.contentType?.startsWith("video/")) ?? committed[0];
-  const grading = isGradingWorkflow(proof.workflowType);
+  const corrections = recordCorrectionState(proof, txn, app.role, Boolean(app.localCapture && app.session?.captureProofId === proof.proofId));
   const hasVideo = committed.some(item => item.contentType?.startsWith("video/"));
   const client = app.client;
   const sellerAttestation = selectedEvidence && !selectedEvidence.stageId ? proof.attestations?.find(row =>
@@ -64,9 +65,9 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     return () => { current = false; };
   }, [client, proof.proofId, proof.version, hasVideo, reload]);
 
-  function saveOffset(offset: number) {
+  function saveOffset(panelTab: ProofRecordTab, offset: number) {
     // Native scroll events only update this presentation ref, avoiding render work during a fling.
-    saved.current = { ...saved.current, offsets: { ...saved.current.offsets, [tab]: Math.max(0, offset) } };
+    saved.current = { ...saved.current, offsets: { ...saved.current.offsets, [panelTab]: Math.max(0, offset) } };
     app.saveProofRecordView(proof.proofId, saved.current);
   }
   function selectTab(next: ProofRecordTab) {
@@ -97,12 +98,19 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   function selectFilter(next: string) {
     saved.current = { ...saved.current, timelineFilter: next, offsets: { ...saved.current.offsets, Timeline: 0 } };
     app.saveProofRecordView(proof.proofId, saved.current);
-    setFilter(next); scroll.current?.scrollTo({ y: 0, animated: !reducedMotion });
+    setFilter(next); scroll.current[tab]?.scrollTo({ y: 0, animated: !reducedMotion });
   }
   function refresh() {
     void app.run(async () => {
       await app.refreshProof(proof.proofId);
       setReload(value => value + 1);
+    });
+  }
+  function refreshTracking() {
+    void app.run(async () => {
+      setTrackingError(null);
+      try { await app.client.syncShipment(proof.transactionId); await app.refreshProof(proof.proofId); }
+      catch (error) { setTrackingError("The latest tracking update could not be received."); throw error; }
     });
   }
   const shipping = proof.shipmentObservations?.identity ?? txn.shipping;
@@ -112,12 +120,12 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     saved.current = { ...saved.current, detailsExpanded: next, offsets: next ? { ...saved.current.offsets, [tab]: 0 } : saved.current.offsets };
     app.saveProofRecordView(proof.proofId, saved.current);
     setDetailsExpanded(next);
-    if (next) scroll.current?.scrollTo({ y: 0, animated: !reducedMotion });
+    if (next) scroll.current[tab]?.scrollTo({ y: 0, animated: !reducedMotion });
   }
 
-  return <View style={[styles.record, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+  return <View style={styles.record}>
     <View style={[styles.top, { borderBottomColor: colors.divider }]}>
-      <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
       <View style={styles.headerMeta}>
         <StatusBadge label={statusLabel} tone={proof.status === "FINALIZED" ? "success" : statusTone(statusLabel)} />
         <PressableScale accessibilityRole="button" accessibilityLabel="Order details" accessibilityState={{ expanded: detailsExpanded }} onPress={toggleDetails} style={styles.detailsToggle}>
@@ -133,21 +141,26 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
       </ScrollView>
     </View>
     <Animated.View style={[styles.panel, { opacity: fade }]}>
-      <RestoringScrollView key={tab} ref={scroll} contentContainerStyle={styles.body} initialOffsetY={saved.current.offsets[tab]} restorationReady={tab !== "Evidence" || !hasVideo || !bookmarksLoading} onScrollOffset={saveOffset} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={app.busy} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />}>
+      {tabs.map(({ key: panelTab }) => (
+      <View key={panelTab} style={[styles.panel, { display: panelTab === tab ? "flex" : "none" }]} importantForAccessibility={panelTab === tab ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={panelTab !== tab}>
+      <RestoringScrollView ref={value => { scroll.current[panelTab] = value; }} contentContainerStyle={styles.body} initialOffsetY={saved.current.offsets[panelTab]} restorationReady={panelTab === tab && (panelTab !== "Evidence" || !hasVideo || !bookmarksLoading)} onScrollOffset={offset => { if (panelTab === tab) saveOffset(panelTab, offset); }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={app.busy} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />}>
         {detailsExpanded ? <View style={[styles.details, { borderBottomColor: colors.divider }]}>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>Order details</Text>
+          <Text style={[styles.note, { color: colors.textSecondary }]}>{corrections.sourceLabel}</Text>
           <Text selectable style={[styles.text, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
           {txn.externalReference ? <Text selectable style={[styles.note, { color: colors.textSecondary }]}>Order {txn.externalReference}</Text> : null}
           {summaryLine ? <Text style={[styles.note, { color: colors.textSecondary }]}>{summaryLine}</Text> : null}
           <Text style={[styles.note, { color: colors.textSecondary }]}>Created {formatDateTime(proof.createdAt)}</Text>
+          <Text style={[styles.note, { color: colors.textSecondary }]}>{corrections.reason}</Text>
+          {corrections.canCorrectOrder ? <Button label="Correct order details" variant="tertiary" onPress={() => app.go("editPurchase")} /> : null}
         </View> : null}
-        {tab === "Evidence" ? <>
+        {panelTab === "Evidence" ? <>
           {!committed.length ? <View style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}><Ionicons name="videocam-outline" size={30} color={colors.accentText} /></View>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>No recording yet</Text>
           </View> : <>
             {committed.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectors} accessibilityLabel="Choose original evidence">{committed.map((item, index) => <PressableScale key={recordEvidenceKey(item)} onPress={() => selectEvidence(item)} accessibilityRole="button" accessibilityState={{ selected: selectedEvidence === item }} style={[styles.selector, { backgroundColor: selectedEvidence === item ? colors.accentSoft : colors.surface, borderColor: selectedEvidence === item ? colors.accentSoftBorder : colors.border }]}><Text style={[styles.subtitle, { color: colors.textPrimary }]}>{recordEvidenceLabel(item)} {index + 1}</Text></PressableScale>)}</ScrollView> : null}
-            {selectedEvidence ? <ProofEvidencePreview key={recordEvidenceKey(selectedEvidence)} evidence={selectedEvidence} title={recordEvidenceLabel(selectedEvidence)} bookmarks={originalBookmarks(selectedEvidence, anchors)} initialTime={saved.current.playbackTimes?.[recordEvidenceKey(selectedEvidence)] ?? 0} onTime={seconds => savePlayback(recordEvidenceKey(selectedEvidence), seconds)} labelOffsetMs={selectedEvidence.stageId ? undefined : proof.captureShipping?.observations.find(item => item.evidenceId === selectedEvidence.evidenceId)?.detectedAtMs} /> : null}
+            {selectedEvidence ? <ProofEvidencePreview key={recordEvidenceKey(selectedEvidence)} evidence={selectedEvidence} active={tab === "Evidence"} title={recordEvidenceLabel(selectedEvidence)} bookmarks={originalBookmarks(selectedEvidence, anchors)} initialTime={saved.current.playbackTimes?.[recordEvidenceKey(selectedEvidence)] ?? 0} onTime={seconds => savePlayback(recordEvidenceKey(selectedEvidence), seconds)} labelOffsetMs={selectedEvidence.stageId ? undefined : proof.captureShipping?.observations.find(item => item.evidenceId === selectedEvidence.evidenceId)?.detectedAtMs} /> : null}
             {sellerAttestation ? <View style={[styles.info, { borderColor: colors.accentSoftBorder }]}>
               <Text style={[styles.heading, { color: colors.accentText }]}>Seller attestation</Text>
               <Text style={[styles.text, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
@@ -155,37 +168,35 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
             </View> : null}
             {bookmarkError ? <Text style={[styles.note, { color: colors.textSecondary }]}>Saved bookmarks could not be loaded. Pull down to refresh; the original recording remains available.</Text> : null}
           </>}
-          {actionInContent ? action : null}
+          {action}
           {proof.evidence.some(item => item.validationStatus === "PENDING") ? <Text style={[styles.note, { color: colors.textSecondary }]}>A recording is still uploading.</Text> : null}
         </> : null}
-        {tab === "Timeline" ? <ProofRecordTimeline entries={proof.chronology ?? []} finalizedAt={proof.finalizedAt} filter={filter} onFilter={selectFilter} onSelect={entry => { app.setSelectedEvent(entry); app.go("event"); }} /> : null}
-        {tab === "Tracking" ? <>
-          <ProofTrackingPanel events={reports} carrier={shipping?.carrier} trackingNumber={shipping?.trackingNumber} selectedId={selectedShipmentId} onSelect={selectShipment} />
-          {proof.captureShipping && (detailsExpanded || proof.captureShipping.registration.errorCode || ["WAITING_FOR_CONNECTION", "FAILED"].includes(proof.captureShipping.registration.state) || proof.captureShipping.registration.mode === "test") ? <View style={[styles.info, { borderColor: colors.border }]}>
-            {detailsExpanded ? <Text style={[styles.note, { color: colors.textSecondary }]}>Label scanned at {Math.floor((proof.captureShipping.observations[0]?.detectedAtMs ?? 0) / 1000)}s in the recording.</Text> : null}
-            <Text style={[styles.note, { color: colors.textSecondary }]}>{proof.captureShipping.registration.mode === "test" ? "Test tracking data · " : ""}{proof.captureShipping.registration.state === "REGISTERED" ? `${proof.captureShipping.registration.carrier ?? "Carrier"} tracking connected` : proof.captureShipping.registration.errorCode === "SHIPPO_TEST_TRACKING_ONLY" ? "Tracking number attached · live Shippo access needed for this package" : proof.captureShipping.registration.errorCode === "SHIPMENT_CARRIER_REQUIRED" ? "Tracking number attached · choose a carrier in shipping information" : proof.captureShipping.registration.state === "WAITING_FOR_CONNECTION" ? "Tracking number attached · carrier connection needed" : proof.captureShipping.registration.state === "FAILED" ? "Tracking number attached · carrier lookup needs attention" : "Tracking number attached · carrier update pending"}</Text>
-          </View> : null}
-          {proof.shipmentSync?.available ? <Button label="Update tracking" variant="secondary" loading={app.busy} onPress={() => void app.syncShipment()} /> : null}
-          {!grading && app.role === "SELLER" && proof.status !== "FINALIZED" ? <Button label="Edit shipping information" variant="secondary" onPress={() => app.go("editShipping")} /> : null}
+        {panelTab === "Timeline" ? <ProofRecordTimeline entries={proof.chronology ?? []} auditEvents={proof.events} finalizedAt={proof.finalizedAt} filter={filter} onFilter={selectFilter} onSelect={entry => { app.setSelectedEvent(entry); app.go("event"); }} /> : null}
+        {panelTab === "Tracking" ? <>
+          <ProofTrackingPanel events={reports} carrier={shipping?.carrier} trackingNumber={shipping?.trackingNumber} selectedId={selectedShipmentId} onSelect={selectShipment} sync={proof.shipmentSync} registration={proof.captureShipping?.registration} refreshError={trackingError} />
+          {detailsExpanded && proof.captureShipping?.observations.length ? <Text style={[styles.note, { color: colors.textSecondary }]}>A shipping code was read during recording. Its observation time and source are retained with the Proof.</Text> : null}
+          {proof.shipmentSync?.available ? <Button label="Update tracking" variant="secondary" loading={app.busy} onPress={refreshTracking} /> : null}
+          {corrections.canCorrectShipping ? <Button label="Correct shipping details" variant="secondary" onPress={() => app.go("editShipping")} /> : null}
         </> : null}
       </RestoringScrollView>
+      </View>
+      ))}
     </Animated.View>
-    {tab === "Evidence" && !actionInContent && action ? <View style={[styles.actionFooter, { borderTopColor: colors.divider }]}>{action}</View> : null}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  record: { flex: 1, minHeight: 0, borderWidth: 1, borderRadius: 20, overflow: "hidden" },
-  top: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8, gap: 4, borderBottomWidth: 1 }, title: { ...typography.bodyStrong, fontSize: 18, lineHeight: 25 },
+  record: { flex: 1, minHeight: 0 },
+  top: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 8, gap: 4, borderBottomWidth: 1 }, title: { ...typography.bodyStrong, fontSize: 18, lineHeight: 25 },
   subtitle: { ...typography.secondary }, tabBorder: { borderBottomWidth: 1 }, tabs: { paddingHorizontal: 12, gap: 8, flexGrow: 1 }, tabSlot: { flex: 1 },
   tab: { minWidth: 74, minHeight: 48, paddingHorizontal: 7, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 3, alignItems: "center", justifyContent: "center" }, tabLabel: { ...typography.secondary },
-  panel: { flex: 1, minHeight: 0 }, body: { padding: 16, paddingBottom: 24, gap: 16 },
+  panel: { flex: 1, minHeight: 0 }, body: { paddingVertical: 16, paddingBottom: 24, gap: 16 },
   text: { ...typography.body }, note: { ...typography.secondary }, heading: { ...typography.sectionTitle },
   empty: { gap: 12, paddingVertical: 12 }, emptyIcon: { width: 58, height: 58, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  selectors: { gap: 8 }, selector: { minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  selectors: { gap: 8 }, selector: { minHeight: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   info: { padding: 16, borderWidth: 1, borderRadius: 14, gap: 10 }, eyebrow: { ...typography.caption, letterSpacing: 1.3, fontWeight: "700" },
   headerMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
-  detailsToggle: { minHeight: 44, flexDirection: "row", gap: 6, alignItems: "center", paddingHorizontal: 4 },
+  detailsToggle: { minHeight: 48, flexDirection: "row", gap: 6, alignItems: "center", paddingHorizontal: 4 },
   details: { gap: 8, paddingBottom: 16, borderBottomWidth: 1 },
   actionFooter: { padding: 16, paddingTop: 12, borderTopWidth: 1 },
 });

@@ -17,7 +17,7 @@
 .record-tabs button[aria-selected="true"] { color: var(--accent-text); border-bottom-color: var(--blue); }
 .record-tabs button:hover { color: var(--accent-text); background: var(--blue-soft); }
 .record-tabs button:focus-visible { outline-offset: -3px; }
-.record-body { min-height: 220px; padding: 25px; animation: pp-enter var(--motion-page, 220ms) var(--motion-ease, ease-out) both; }
+.record-body { min-height: 0; padding: 25px; animation: pp-enter var(--motion-page, 220ms) var(--motion-ease, ease-out) both; }
 .record-body > .stack { gap: 16px; }
 .record-body .shipment-tracking { margin: 0; padding: 0 !important; box-shadow: none; border: 0; background: transparent; }
 .record-body .tracking-layout { grid-template-columns: 1fr; }
@@ -98,3 +98,21 @@
 .shared-proof-activity > li { display: grid; gap: 6px; padding: 16px 0; border-bottom: 1px solid var(--divider); }
 .shared-proof-activity time { color: var(--text-secondary); font-size: 14px; }
 @media (max-width: 700px) { .proof-next-action { bottom: max(12px, env(safe-area-inset-bottom)); padding: 14px; } .record-body video, .record-body img { max-height: 37vh; } .share-proof-panel { padding: 16px; } }
+
+/* A tab switch preserves the same media element and source while hiding inactive panels. */
+.record-body[hidden] { display: none !important; }
+.record-body .evidence-placeholder { min-height: 0; padding: 20px 0; }
+.record-body video, .record-body img { width: 100%; object-fit: contain; }
+.record-declaration { border-top: 1px solid var(--divider); padding-top: 16px; }
+.record-declaration h3 { margin: 0 0 8px; font-size: 18px; line-height: 24px; }
+.record-declaration p { margin: 8px 0; }
+.record-action-sheet { padding: 8px 16px; }
+.record-action-sheet .btn { display: flex; justify-content: flex-start; text-align: left; min-height: 48px; width: 100%; margin: 0; padding: 12px 0; background: transparent; border: 0; border-radius: 0; border-bottom: 1px solid var(--divider); color: var(--text); }
+.record-action-sheet .btn:hover { color: var(--accent-text); background: var(--surface-pressed); }
+.access-event-group > summary, .full-audit-history summary { min-height: 48px; padding-block: 12px; cursor: pointer; }
+.access-event-group ol, .full-audit-history ol { padding-left: 20px; }
+.access-event-group li, .full-audit-history li { padding-block: 12px; overflow-wrap: anywhere; }
+.timeline-event-source { display: grid; gap: 4px; color: var(--text-secondary); font-size: 14px; line-height: 20px; }
+.timeline-event-source p { margin: 4px 0; }
+.full-audit-history time { display: block; }
+.full-audit-history pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }

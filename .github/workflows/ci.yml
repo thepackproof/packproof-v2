@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+  VITE_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+
 permissions:
   contents: read
 
@@ -119,6 +123,7 @@ jobs:
       - run: npm run test:build-security
       - run: npm run test:proof-record
       - run: npm run test:study-timing
+      - run: npm run test:redesign
       - run: npm run test:recovery
       - run: npm run test:api
 

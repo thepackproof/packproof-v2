@@ -13,9 +13,10 @@ const PHASES = ['started','preflight','recording','upload','confirmation','final
 const DEVICES = ['s24_ultra','a16_5g','other_android','web','unknown'] as const;
 const CHANNELS = ['ebay','stripe','paypal','manual','other','unknown'] as const;
 const ERRORS = ['network','authentication','quota','storage','capability','integrity','provider','cancelled','unknown'] as const;
+export const STUDY_INTERACTIONS = ['order_selected','recording_started','recording_stopped','label_read','label_mismatch','review_opened','consent_confirmed','consent_cancelled','consent_failed','upload_pending','server_completed','recovery_started','share_created'] as const;
 const LIMIT = 100_000;
 type ConsentRow = { event_ref:string; merchant_ref:string; decision:'grant'|'withdraw'; recorded_at:Date|string; sequence:string; facts_sha256:string };
-type TimingRow = { event_ref:string; merchant_ref:string; attempt_ref:string; consent_event_ref:string; task_kind:'packproof'|'ordinary_baseline'; phase:typeof PHASES[number]; outcome:ProgramEvent['outcome']; device_class:ProgramEvent['deviceClass']; channel:ProgramEvent['channel']; error_code:ProgramEvent['errorCode']|null; client_started_at:Date|string; elapsed_ms:number|string; active_ms:number|string; offline_ms:number|string; unattended_ms:number|string; recorded_at:Date|string; facts_sha256:string; sequence:string };
+type TimingRow = { event_ref:string; merchant_ref:string; attempt_ref:string; consent_event_ref:string; task_kind:'packproof'|'ordinary_baseline'|'interface_action'; phase:typeof PHASES[number]; outcome:ProgramEvent['outcome']; device_class:ProgramEvent['deviceClass']; channel:ProgramEvent['channel']; error_code:ProgramEvent['errorCode']|null; interaction:typeof STUDY_INTERACTIONS[number]|null; source_build_sha:string|null; client_started_at:Date|string; elapsed_ms:number|string; active_ms:number|string; offline_ms:number|string; unattended_ms:number|string; recorded_at:Date|string; facts_sha256:string; sequence:string };
 const iso = (value:Date|string) => new Date(value).toISOString();
 function runtime(value:ProgramAnalyticsRuntime) {
   if (!value || Buffer.byteLength(value.key??'')<32 || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(value.keyVersion))
@@ -62,13 +63,14 @@ async function requireConsent(db:Database,datasetRef:string,merchantRef:string) 
   return last;
 }
 async function insertTiming(tx:Database,clock:Clock,body:Record<string,unknown>) {
-  await tx.query(`INSERT INTO program_timing_events(event_ref,dataset_ref,merchant_ref,attempt_ref,task_kind,phase,outcome,device_class,channel,error_code,client_started_at,elapsed_ms,active_ms,offline_ms,unattended_ms,facts_sha256,recorded_at,consent_event_ref)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[body.eventRef,body.datasetRef,body.merchantRef,body.attemptRef,body.taskKind,body.phase,body.outcome,body.deviceClass,body.channel,body.errorCode??null,body.clientStartedAt,body.elapsedMs,body.activeMs,body.offlineMs,body.unattendedMs,body.factsSha256,clock.now().toISOString(),body.consentEventRef]);
+  await tx.query(`INSERT INTO program_timing_events(event_ref,dataset_ref,merchant_ref,attempt_ref,task_kind,phase,outcome,device_class,channel,error_code,client_started_at,elapsed_ms,active_ms,offline_ms,unattended_ms,facts_sha256,recorded_at,consent_event_ref,interaction,source_build_sha)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,[body.eventRef,body.datasetRef,body.merchantRef,body.attemptRef,body.taskKind,body.phase,body.outcome,body.deviceClass,body.channel,body.errorCode??null,body.clientStartedAt,body.elapsedMs,body.activeMs,body.offlineMs,body.unattendedMs,body.factsSha256,clock.now().toISOString(),body.consentEventRef,body.interaction??null,body.buildSha??null]);
 }
 export async function startProgramTiming(db:Database,clock:Clock,config:ProgramAnalyticsRuntime,userId:string,input:unknown) {
   try {
-    const keys=['datasetRef','operationNonce','clientStartedAt','deviceClass','channel','taskKind'];const body=record(input,keys,keys,'start');
-    nonce(body.operationNonce);timestamp(body.clientStartedAt,'clientStartedAt');enumValue(body.deviceClass,DEVICES,'deviceClass');enumValue(body.channel,CHANNELS,'channel');enumValue(body.taskKind,['packproof','ordinary_baseline'],'taskKind');
+    const keys=['datasetRef','operationNonce','clientStartedAt','deviceClass','channel','taskKind'];const body=record(input,[...keys,'buildSha'],keys,'start');
+    nonce(body.operationNonce);timestamp(body.clientStartedAt,'clientStartedAt');enumValue(body.deviceClass,DEVICES,'deviceClass');enumValue(body.channel,CHANNELS,'channel');enumValue(body.taskKind,['packproof','ordinary_baseline','interface_action'],'taskKind');
+    if(body.buildSha!==undefined&&(typeof body.buildSha!=='string'||!/^[a-f0-9]{40}$/.test(body.buildSha)))throw new Error('INVALID_BUILD_SHA');
     const factsSha256=sha256Hex(canonicalJson(body));
     return await db.transaction(async tx=>{
       const datasetRef=await dataset(tx,config,body.datasetRef,true),merchantRef=ref(config,datasetRef,'merchant',userId);
@@ -86,12 +88,13 @@ export async function startProgramTiming(db:Database,clock:Clock,config:ProgramA
 }
 export async function appendProgramTiming(db:Database,clock:Clock,config:ProgramAnalyticsRuntime,userId:string,input:unknown) {
   try {
-    const keys=['datasetRef','attemptRef','operationNonce','phase','outcome','elapsedMs','activeMs','offlineMs','unattendedMs'];const body=record(input,[...keys,'errorCode'],keys,'timing');
+    const keys=['datasetRef','attemptRef','operationNonce','phase','outcome','elapsedMs','activeMs','offlineMs','unattendedMs'];const body=record(input,[...keys,'errorCode','interaction'],keys,'timing');
     nonce(body.operationNonce);reference(body.attemptRef,'attemptRef');enumValue(body.phase,PHASES.slice(1),'phase');enumValue(body.outcome,['pending','succeeded','failed','cancelled'],'outcome');
     if(body.phase!=='ended'&&body.outcome!=='pending')throw new Error('TERMINAL_PHASE_REQUIRED');if(body.phase==='ended'&&body.outcome==='pending')throw new Error('TERMINAL_OUTCOME_REQUIRED');
     for(const key of ['elapsedMs','activeMs','offlineMs','unattendedMs']){finiteNumber(body[key],key,0,true);if(Number(body[key])>86400000)throw new Error('TIMING_LIMIT');}
     if(Number(body.activeMs)+Number(body.unattendedMs)>Number(body.elapsedMs)||Number(body.offlineMs)>Number(body.elapsedMs))throw new Error('INVALID_TIMING_SUM');
     if(body.errorCode!==undefined)enumValue(body.errorCode,ERRORS,'errorCode');
+    if(body.interaction!==undefined)enumValue(body.interaction,STUDY_INTERACTIONS,'interaction');
     const factsSha256=sha256Hex(canonicalJson(body));
     return await db.transaction(async tx=>{
       const datasetRef=await dataset(tx,config,body.datasetRef,true),merchantRef=ref(config,datasetRef,'merchant',userId);const consent=await requireConsent(tx,datasetRef,merchantRef);
@@ -104,7 +107,7 @@ export async function appendProgramTiming(db:Database,clock:Clock,config:Program
       if(history.some(row=>row.phase==='ended'))throw new DomainError('STUDY_ATTEMPT_ENDED','The original task outcome is already recorded.',409);
       if(history.length>=250)throw new DomainError('STUDY_EVENT_LIMIT','This task has reached its timing event limit.',429);
       const last=history.at(-1)!;for(const [column,key]of [['elapsed_ms','elapsedMs'],['active_ms','activeMs'],['offline_ms','offlineMs'],['unattended_ms','unattendedMs']] as const)if(Number(body[key])<Number(last[column]))throw new Error('TIMING_REGRESSION');
-      await insertTiming(tx,clock,{...body,datasetRef,merchantRef,eventRef,factsSha256,consentEventRef:first.consent_event_ref,taskKind:first.task_kind,deviceClass:first.device_class,channel:first.channel,clientStartedAt:iso(first.client_started_at)});
+      await insertTiming(tx,clock,{...body,datasetRef,merchantRef,eventRef,factsSha256,consentEventRef:first.consent_event_ref,taskKind:first.task_kind,deviceClass:first.device_class,channel:first.channel,buildSha:first.source_build_sha??undefined,clientStartedAt:iso(first.client_started_at)});
       return {eventRef,attemptRef:body.attemptRef,authority:'client' as const};
     });
   }catch(error){invalid(error);}
@@ -158,13 +161,14 @@ export async function exportProgramObservations(db:Database,clock:Clock,config:P
     for(const row of approved){const merchant=merchantRef(row.actor);if(consented(merchant,iso(row.approved_at))){const subject=ref(config,datasetRef,'export',row.id);event('export.approved',row.id,merchant,subject,subject,iso(row.approved_at),'succeeded');}}
     const timingObservations=timings.map(row=>{
       event('capture.interaction',row.event_ref,row.merchant_ref,row.attempt_ref,row.attempt_ref,iso(row.recorded_at),row.outcome,'client',row.device_class,row.channel,row.error_code??undefined);
-      return {eventRef:row.event_ref,merchantRef:row.merchant_ref,attemptRef:row.attempt_ref,taskKind:row.task_kind,phase:row.phase,outcome:row.outcome,authority:'client' as const,clientStartedAt:iso(row.client_started_at),recordedAt:iso(row.recorded_at),elapsedMs:Number(row.elapsed_ms),activeMs:Number(row.active_ms),offlineMs:Number(row.offline_ms),unattendedMs:Number(row.unattended_ms),deviceClass:row.device_class,channel:row.channel,errorCode:row.error_code};
+      return {eventRef:row.event_ref,merchantRef:row.merchant_ref,attemptRef:row.attempt_ref,taskKind:row.task_kind,phase:row.phase,outcome:row.outcome,authority:'client' as const,clientStartedAt:iso(row.client_started_at),recordedAt:iso(row.recorded_at),elapsedMs:Number(row.elapsed_ms),activeMs:Number(row.active_ms),offlineMs:Number(row.offline_ms),unattendedMs:Number(row.unattended_ms),deviceClass:row.device_class,channel:row.channel,errorCode:row.error_code,...(row.interaction!==null?{interaction:row.interaction}:{}),...(row.source_build_sha!==null?{buildSha:row.source_build_sha}:{})};
     });
-    const effortTasks=[...timingGroups.values()].map(rows=>{const first=rows[0],last=rows.at(-1)!,ended=last.phase==='ended';return {taskRef:first.attempt_ref,merchantRef:first.merchant_ref,startedAt:iso(first.client_started_at),completed:ended&&last.outcome==='succeeded',ordinaryActiveSeconds:ended&&first.task_kind==='ordinary_baseline'?Number(last.active_ms)/1000:null,packproofActiveSeconds:ended&&first.task_kind==='packproof'?Number(last.active_ms)/1000:null,unattendedSeconds:ended?Number(last.unattended_ms)/1000:null};});
+    const captureTimingGroups=[...timingGroups.values()].filter(rows=>rows[0].task_kind!=='interface_action');
+    const effortTasks=captureTimingGroups.map(rows=>{const first=rows[0],last=rows.at(-1)!,ended=last.phase==='ended';return {taskRef:first.attempt_ref,merchantRef:first.merchant_ref,startedAt:iso(first.client_started_at),completed:ended&&last.outcome==='succeeded',ordinaryActiveSeconds:ended&&first.task_kind==='ordinary_baseline'?Number(last.active_ms)/1000:null,packproofActiveSeconds:ended&&first.task_kind==='packproof'?Number(last.active_ms)/1000:null,unattendedSeconds:ended?Number(last.unattended_ms)/1000:null};});
     const observations:ProgramInput=validateProgramInput({schemaVersion:PROGRAM_SCHEMA_VERSION,evidenceClass:'observed',period:{start,end,asOf},costPeriod:{start,end},billingReconciliation:{status:'unreconciled',sourceRef:null,unexplainedDifferenceMinor:null},currency:'USD',merchants,orders:[],uploadIntents,reviewerTasks:[],effortTasks,support:[],costs:[],payments:[]});
     return {datasetRef,keyVersion:config.keyVersion,observations,events:deduplicateProgramEvents(events),timingObservations,
       captureAttempts:captures.map(row=>({captureRef:ref(config,datasetRef,'capture',row.id),merchantRef:merchantRef(row.actor_user_id),startedAt:iso(row.created_at),state:'started' as const,deviceClass:row.client==='WEB_CAMERA'?'web':'unknown'})),
-      coverage:{canonicalUploadAttempts:uploads.length,canonicalCaptureStarts:captures.length,clientTaskStarts:timingGroups.size,clientTasksWithoutTerminalEvent:[...timingGroups.values()].filter(rows=>rows.at(-1)?.phase!=='ended').length,partial:true,
-        warnings:['Only explicitly consented account/dataset time windows are included; this is not the total customer population.','Capture starts and initialized uploads are separate denominators; unfinished, failed, and cancelled starts are retained.','Client task clocks, outcomes, and device classes are self-reported; they cannot assert preservation or server finalization.','Canonical finalized status does not establish usable quality. Eligibility review, orders, qualification, reviewer tasks, assistance, costs, payment reconciliation and paid cohorts require governed sources.','Effort tasks are unpaired observations; baseline and PackProof task pairing requires governed source review.','No raw media, text, barcodes, emails, access tokens, object keys, or domain identifiers are exported.']}};
+      coverage:{canonicalUploadAttempts:uploads.length,canonicalCaptureStarts:captures.length,clientTaskStarts:captureTimingGroups.length,clientInterfaceActionStarts:timingGroups.size-captureTimingGroups.length,clientTasksWithoutTerminalEvent:captureTimingGroups.filter(rows=>rows.at(-1)?.phase!=='ended').length,partial:true,
+        warnings:['Only explicitly consented account/dataset time windows are included; this is not the total customer population.','Capture starts and initialized uploads are separate denominators; unfinished, failed, and cancelled starts are retained.','Client task clocks, outcomes, device classes, interactions, and source build identifiers are self-reported; server_completed describes the client observation and cannot assert preservation or server finalization.','Canonical finalized status does not establish usable quality. Eligibility review, orders, qualification, reviewer tasks, assistance, costs, payment reconciliation and paid cohorts require governed sources.','Effort tasks are unpaired observations; baseline and PackProof task pairing requires governed source review.','No raw media, text, barcodes, emails, access tokens, object keys, or domain identifiers are exported.']}};
   }catch(error){invalid(error);}
 }

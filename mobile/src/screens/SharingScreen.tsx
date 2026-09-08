@@ -1,3 +1,4 @@
+import { recordNativeStudyInteraction } from "../analytics/native-study";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -112,6 +113,7 @@ export function SharingScreen() {
         }
         throw e;
       }
+      if(app.session?.userId)void recordNativeStudyInteraction(app.client,app.session.userId,"share_created").catch(()=>undefined);
       setLink(currentLink);
       setLinks((current) => [currentLink!, ...current.filter((item) => item.accessLinkId !== currentLink!.accessLinkId)]);
     }

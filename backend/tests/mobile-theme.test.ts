@@ -40,20 +40,29 @@ describe("mobile appearance and theme tokens", () => {
     expect(resolveColorScheme("dark", "light")).toBe("dark");
   });
 
-  it("uses neutral light surfaces and a green primary action", () => {
+  it("uses neutral light surfaces with blue actions distinct from green success", () => {
     const colors = colorsForScheme("light");
-    expect(colors.background).toBe("#F6F7F5");
+    expect(colors.background).toBe("#F7F8FA");
     expect(colors.surface).toBe("#FFFFFF");
-    expect(colors.textPrimary).toBe("#232927");
-    expect(colors.primary).toBe("#137548");
+    expect(colors.textPrimary).toBe("#18212C");
+    expect(colors.primary).toBe("#1767D1");
+    expect(colors.accent).toBe(colors.primary);
+    expect(colors.success).toBe("#137548");
+    expect(colors.primary).not.toBe(colors.success);
+    expect(colors.accentText).not.toBe(colors.successText);
     expect(colors).toEqual(lightColors);
   });
 
   it("offers a neutral charcoal dark palette", () => {
     const colors = colorsForScheme("dark");
-    expect(colors.background).toBe("#171B19");
-    expect(colors.surface).toBe("#222824");
-    expect(colors.textPrimary).toBe("#F3F5F1");
+    expect(colors.background).toBe("#16181C");
+    expect(colors.surface).toBe("#21252B");
+    expect(colors.textPrimary).toBe("#F3F5F7");
+    expect(colors.primary).toBe("#78ACFF");
+    expect(colors.accent).toBe(colors.primary);
+    expect(colors.success).toBe("#83D4A5");
+    expect(colors.primary).not.toBe(colors.success);
+    expect(colors.accentText).not.toBe(colors.successText);
     expect(colors).toEqual(darkColors);
   });
 
@@ -78,9 +87,9 @@ describe("mobile appearance and theme tokens", () => {
   });
 
   it("uses matching system-bar colors and inverted icons for each scheme", () => {
-    expect(systemBarBackground(lightColors, false)).toBe("#F6F7F5");
+    expect(systemBarBackground(lightColors, false)).toBe("#F7F8FA");
     expect(systemBarContent("light", false)).toBe("dark");
-    expect(systemBarBackground(darkColors, false)).toBe("#171B19");
+    expect(systemBarBackground(darkColors, false)).toBe("#16181C");
     expect(systemBarContent("dark", false)).toBe("light");
     expect(systemBarBackground(lightColors, true)).toBe(lightColors.scanBackground);
     expect(systemBarContent("light", true)).toBe("light");
@@ -138,11 +147,11 @@ describe("auth session restore and user-facing errors", () => {
 });
 
 describe("capture progress labels and invitation legal URLs", () => {
-  it("exposes preparing, uploading, securing, and committed labels", () => {
+  it("describes local progress without calling an uploaded recording a completed Proof", () => {
     expect(captureStatusLabel("preparing")).toBe("Preparing");
-    expect(captureStatusLabel("uploading")).toBe("Uploading evidence");
-    expect(captureStatusLabel("uploaded")).toBe("Securing evidence");
-    expect(captureStatusLabel("committed")).toBe("Committed");
+    expect(captureStatusLabel("uploading")).toBe("Uploading recording");
+    expect(captureStatusLabel("uploaded")).toBe("Finishing your Proof");
+    expect(captureStatusLabel("committed")).toBe("Finish saving");
     const preparing = deriveNextAction({
       role: "SELLER",
       proofStatus: "READY_FOR_EVIDENCE",

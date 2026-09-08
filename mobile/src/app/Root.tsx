@@ -1,3 +1,5 @@
+import { OrdersScreen } from "../screens/OrdersScreen";
+import { MainNavigation } from "../ui/MainNavigation";
 import { SharingScreen } from "../screens/SharingScreen";
 import { SignatureProofScreen } from "../screens/SignatureProofScreen";
 import { NativeCaptureHost } from "../ui/NativeCaptureHost";
@@ -39,9 +41,10 @@ export function Root() {
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
 
   useEffect(() => {
-    if (!ready || !app.session || ["auth", "home", "station"].includes(app.route.name)) return;
+    if (!ready || !app.session || ["auth", "home", "orders", "account"].includes(app.route.name)) return;
+    if (app.route.name === "station" && app.session?.stationActive && app.localCapture && app.session.stationProofId === app.localCapture.captureProofId) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!app.busy) app.goBack();
+      if (!app.busy) { if(app.route.name === "station") app.go("orders"); else app.goBack(); }
       return true;
     });
     return () => subscription.remove();
@@ -97,7 +100,7 @@ export function Root() {
     );
   }
 
-  if (app.route.name === "station") {
+  if (app.route.name === "station" && app.session?.stationActive && app.localCapture && app.session.stationProofId === app.localCapture.captureProofId) {
     return (
       <>
         <StatusBar style="light" />
@@ -131,12 +134,14 @@ export function Root() {
   }
 
   let body = null;
-  if (app.route.name === "home") {
+  if (app.route.name === "orders" || app.route.name === "station") {
+    body = <OrdersScreen key={`${app.route.name}:${app.session.userId}`} batch={app.route.name === "station"} />;
+  } else if (app.route.name === "home") {
     body = <MyProofsScreen />;
   } else if (app.route.name === "create") {
     body = <CreateScreen />;
   } else if (app.route.name === "account") {
-    body = <AccountScreen />;
+    body = <AccountScreen key={app.route.accountSection ?? "account"} initialSection={app.route.accountSection} />;
   } else if (app.route.name === "sharing") {
     body = <SharingScreen key={app.proof?.proofId} />;
   } else if (app.route.name === "signature") {
@@ -188,6 +193,7 @@ export function Root() {
       <StatusBar style={statusStyle} />
       <NativeCaptureHost />
       {body}
+      {["home", "orders", "account"].includes(app.route.name) ? <MainNavigation /> : null}
     </>
   );
 }

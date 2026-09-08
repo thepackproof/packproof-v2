@@ -1,65 +1,30 @@
 import type { CommerceConnectionView, FulfillmentQueueItem } from "../api/types";
-import { orderReviewReason } from "@packproof/copy/commerce";
 import { PageHeader } from "../components/PageHeader";
-import { formatMoney } from "../format";
+import { orderReviewReason } from "@packproof/copy/commerce";
 
 export function FulfillmentQueueScreen(props: {
-  items: FulfillmentQueueItem[];
-  connections?: CommerceConnectionView[];
-  loading: boolean;
-  error: string | null;
-  onOpen: (proofId: string) => void;
-  onBack?: () => void;
+  items: FulfillmentQueueItem[]; connections?: CommerceConnectionView[]; loading: boolean; error: string | null;
+  onOpen: (proofId: string) => void; onBack?: () => void; onCreate?: () => void; onConnect?: () => void;
+  onBatch?: () => void; onRefresh?: () => void;
 }) {
-  const readyCount = props.items.length;
-  const reviewConnections = (props.connections ?? []).filter(connection => (connection.reviewOrderCount ?? 0) > 0);
-  return (
-    <main className="page">
-      <PageHeader title="Orders" onBack={props.onBack} />
-      <div className="section-head">
-        <p className="lede">
-          Orders imported from a connected store. Pack, record evidence, and complete the PackProof.
-        </p>
-        <span className="badge badge-state">Ready to pack {readyCount}</span>
-      </div>
-      {props.error ? (
-        <div className="banner banner-error" role="alert">
-          {props.error}
-        </div>
-      ) : null}
-      {reviewConnections.length > 0 ? <section className="section stack" aria-label="Orders requiring review">
-        <h2>Orders requiring review</h2>
-        {reviewConnections.map(connection => <div key={connection.connectionId}>
-          <p className="card-title">{connection.providerDisplay}: {connection.reviewOrderCount} orders need review</p>
-          <p className="meta">{(connection.reviewReasons ?? []).map(reason => `${orderReviewReason(reason.code)}: ${reason.count}`).join(" · ")}</p>
-        </div>)}
-        <p className="note">These orders are excluded from the automatic packing queue. Review their fulfillment details in the original selling platform before recording. Any existing Proof history is kept.</p>
-      </section> : null}
-      {props.loading ? (
-        <p className="empty">Loading fulfillment queue…</p>
-      ) : props.items.length === 0 ? (
-        <p className="empty">{reviewConnections.length ? "No eligible orders are ready to record. The orders above need review." : "No orders are waiting to be packed. Check Connections for your store’s automatic intake status."}</p>
-      ) : (
-        <div className="card-list">
-          {props.items.map((item) => (
-            <article key={item.proofId} className="fulfillment-card">
-              <div>
-                <div className="summary-title">Order #{item.externalReference || item.externalOrderId}</div>
-                <div className="meta">{item.itemSummary}</div>
-                {item.itemCount > 1 ? (
-                  <div className="meta">{item.itemCount} line items</div>
-                ) : null}
-                <div className="meta">
-                  {formatMoney(item.transactionValue, item.currency)} · {item.providerDisplay}
-                </div>
-              </div>
-              <button className="btn" type="button" onClick={() => props.onOpen(item.proofId)}>
-                Record packing
-              </button>
-            </article>
-          ))}
-        </div>
-      )}
-    </main>
-  );
+  const channels = props.connections ?? [];
+  const unhealthy = channels.filter(channel => channel.lastErrorCode || ["FAILED", "RETRYING"].includes(channel.sync?.runStatus || "") || ["NEEDS_REAUTH", "ERROR"].includes(channel.status));
+  const needsAttention = (item: FulfillmentQueueItem) => item.pendingEvidenceCount > 0 || item.evidenceCount > 0 || item.workflowState === "IN_PROGRESS";
+  const items = [...props.items].sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
+  const lastSync = channels.map(channel => channel.lastSyncAt).filter(Boolean).sort().at(-1);
+  return <main className="page orders-page"><PageHeader title="Orders" />
+    {props.error ? <div className="banner banner-error" role="alert">Orders couldn’t refresh. {props.error}</div> : null}
+    <div className="section-head"><h2>Ready to pack</h2><button type="button" className="btn btn-tertiary" disabled={props.loading} onClick={props.onRefresh}>{props.loading ? "Refreshing…" : "Refresh orders"}</button></div>
+    {lastSync ? <p className="meta">Last successful sync {new Date(lastSync).toLocaleString()}</p> : null}
+    {unhealthy.map(channel => <p className="banner" role="status" key={channel.connectionId}>{channel.providerDisplay} orders could not finish updating. {channel.status === "NEEDS_REAUTH" ? "Reconnect your account in Sales channels." : "Try refreshing again; existing orders remain available."}</p>)}
+    {channels.some(c => (c.reviewOrderCount ?? 0) > 0) ? <h2>Orders requiring review</h2> : null}
+    {channels.filter(c => (c.reviewOrderCount ?? 0) > 0).map(c => <div className="banner" key={c.connectionId}><strong>{c.providerDisplay}: {c.reviewOrderCount} orders need review</strong><p>{(c.reviewReasons ?? []).map(r => `${orderReviewReason(r.code)}: ${r.count}`).join(" · ")}. Check these orders in your marketplace.</p></div>)}
+    {props.loading && !props.items.length ? <p role="status">Loading orders…</p> : null}
+    <div className="order-list">{items.map(item => <button type="button" className="order-row" key={item.proofId} onClick={() => props.onOpen(item.proofId)}>
+      <span className="order-row-copy"><strong>{item.itemSummary || "Shipment"}</strong><span>{item.providerDisplay} · {(item.externalReference || item.externalOrderId).slice(-16)}</span></span>
+      <span>{needsAttention(item) ? "Finish saving" : "Ready to pack"}</span>
+    </button>)}</div>
+    {!props.loading && !props.items.length ? <section className="empty-card"><h2>{props.error || unhealthy.length ? "Order updates are unavailable" : channels.length ? "No orders ready to pack" : "Make a record of your next shipment"}</h2><p>Record the item as you pack and seal it. Show the shipping label in the same video.</p><div className="btn-row"><button type="button" className="btn" onClick={props.onCreate}>Record shipment</button>{!channels.length ? <button type="button" className="btn btn-tertiary" onClick={props.onConnect}>Connect a marketplace</button> : null}</div></section> : <button type="button" className="btn btn-tertiary" onClick={props.onCreate}>Order not listed?</button>}
+    {props.items.length > 1 ? <button className="btn btn-tertiary" type="button" onClick={props.onBatch}>Pack multiple orders</button> : null}
+  </main>;
 }

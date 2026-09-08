@@ -78,7 +78,7 @@ describe("signature experiences preserve source, snapshot, consent and approval 
     expect(eventAnchor.startMs).toBeNull();
   });
 
-  it("cites original imported fields separately from later seller corrections", async () => {
+  it("blocks imported-field overwrites while retaining distinct citations for historical seller corrections", async () => {
     const seller = await createUser(h);
     const imported = await importNormalizedTransaction(h.db, h.clock, seller, {
       provider: "demo-marketplace", externalTransactionId: "SIGNATURE-SOURCE-1", itemTitle: "Imported card", quantity: 2,
@@ -87,7 +87,13 @@ describe("signature experiences preserve source, snapshot, consent and approval 
     const proofId = imported.proof!.proofId;
     const before = await createSignatureSnapshot(h.db, h.clock, seller, proofId);
     expect(before.data.order.fieldSources?.itemTitle).toBe("PROVIDER_REPORTED_FIELD");
-    await updateTransaction(h.db, h.clock, seller, imported.transaction.transactionId, { itemTitle: "Seller corrected card" });
+    await expect(updateTransaction(h.db, h.clock, seller, imported.transaction.transactionId, { itemTitle: "Seller corrected card" })).rejects.toMatchObject({code:"IMPORTED_FACTS_READ_ONLY"});
+    const protectedSnapshot = await createSignatureSnapshot(h.db, h.clock, seller, proofId);
+    expect(protectedSnapshot.data.order.itemTitle).toBe("Imported card");
+    expect(protectedSnapshot.data.order.fieldSources).toMatchObject({itemTitle:"PROVIDER_REPORTED_FIELD",quantity:"PROVIDER_REPORTED_FIELD"});
+    // Historical fixture from before source locking; no current edit command permits this overwrite.
+    await h.db.query("UPDATE transactions SET item_title=$2,transaction_metadata=jsonb_set(transaction_metadata,'{sellerCorrections}',$3::jsonb) WHERE id=$1",
+      [imported.transaction.transactionId,"Legacy seller-corrected card",JSON.stringify({itemTitle:{actorUserId:seller,editedAt:h.clock.now().toISOString(),source:"PARTICIPANT_SUPPLIED"}})]);
     const after = await createSignatureSnapshot(h.db, h.clock, seller, proofId);
     expect(after.data.order.fieldSources).toMatchObject({ itemTitle: "PARTICIPANT_SUPPLIED_STATEMENT", quantity: "PROVIDER_REPORTED_FIELD" });
     const answer = await askSignatureProof(h.db, seller, proofId, { snapshotId: after.snapshotId, question: "What item was ordered?" });

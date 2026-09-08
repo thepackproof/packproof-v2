@@ -10,7 +10,6 @@ import {
   type ProofRoleFilter,
 } from "@packproof/copy/presentation";
 import type { InvitationInboxView, ProofCollectionItem } from "../api/types";
-import { CreateFab } from "../components/CreateFab";
 import { IconCheck, IconFilter, IconSearch, IconTime } from "../components/Icons";
 import { ProofCard } from "../components/ProofCard";
 import { SegmentedTabs } from "../components/SegmentedTabs";
@@ -58,16 +57,14 @@ export function HomeScreen(props: {
 
   return (
     <main className="page library-page">
-      <p className="workspace-overline">Workspace / Proofs</p>
-      <div className="workspace-heading"><div><h1 className="page-title">My Proofs</h1><p>Every shipment. Every detail. All in one place.</p></div><button className="btn" onClick={props.onCreate}><Glyph name="plus" size={16} />New Proof</button></div>
-      <div className="library-section-heading"><h2>Your Proof library</h2><span>Search, filter, and keep moving.</span></div>
+      <h1 className="page-title">Proofs</h1>
       <SegmentedTabs
         label="Proof library"
         selected={view}
         onSelect={setView}
         options={[
-          { id: "in_progress", label: "In Progress", icon: <IconTime /> },
-          { id: "completed", label: "Completed", icon: <IconCheck /> },
+          { id: "in_progress", label: "Needs attention", icon: <IconTime /> },
+          { id: "completed", label: "Saved Proofs", icon: <IconCheck /> },
         ]}
       />
       <div className="search-row">
@@ -166,23 +163,21 @@ export function HomeScreen(props: {
       {empty ? (
         <div className="empty-card empty-state">
           <p className="card-title">
-            {hasFilters ? "No matching Proofs" : view === "completed" ? "No completed Proofs" : "No Proofs in progress"}
+            {hasFilters ? "No matching Proofs" : view === "completed" ? "No saved Proofs" : "No Proofs need attention"}
           </p>
           <p>
             {hasFilters ? "Try a different search or clear your filters." : view === "completed"
-              ? "Finalized Proofs will appear here."
-              : "Create a Proof to start a record, or review an invitation."}
+              ? "Your saved packing records will appear here."
+              : "Choose an order in Orders when you are ready to pack."}
           </p>
           {hasFilters ? <button className="btn btn-secondary" onClick={clearFilters}>Clear filters</button> : view === "in_progress" ? (
-            <button className="btn" type="button" onClick={props.onCreate}>
-              Create a Proof
+            <button className="btn" type="button" onClick={() => { window.location.assign("/fulfillment"); }}>
+              Go to Orders
             </button>
           ) : null}
           <p className="visually-hidden">No Proofs to show yet.</p>
         </div>
       ) : null}
-
-      <CreateFab onPress={props.onCreate} />
     </main>
   );
 }

@@ -9,7 +9,7 @@ import { verifyManifestIntegrity } from "./manifest-signing.js";
 import { assertPolicyAccessSafe, currentPolicySequence, requireDurablePolicySequence } from "./policy-recovery.js";
 import { verifyPreservedJournalVersion } from "./recovery-journal-object.js";
 
-export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED";
+export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED" | "SOURCE_OBSERVED";
 interface RecoveryRow {
   operation_id: string; sequence: number | string; proof_id: string; kind: RecoveryKind;
   request_sha256: string; canonical_json: string; sha256: string; previous_sha256: string | null;
@@ -78,13 +78,13 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
   if (!proof) throw new DomainError("PROOF_NOT_FOUND", "Proof not found", 404);
   const transactionId = proof.transaction_id;
   const rows: Record<string, unknown> = { proofs: [proof] };
-  for (const table of ["proof_participants", "evidence", "attestations", "attestation_challenges", "capture_sessions", "audit_events", "final_manifests", "proof_external_references", "proof_retention_holds", "proof_deletion_requests", "proof_supplements", "commerce_receivers", "commerce_stages", "proof_retention_assignments", "proof_disposition_state", "proof_assets", "proof_asset_external_refs", "custody_observations", "custody_transfers", "continuity_evaluations", "shipment_events", "capture_shipping_labels", "proof_parcel_scopes", "capture_label_observations"]) {
+  for (const table of ["proof_participants", "evidence", "attestations", "attestation_challenges", "capture_sessions", "audit_events", "final_manifests", "proof_external_references", "proof_retention_holds", "proof_deletion_requests", "proof_supplements", "commerce_receivers", "commerce_stages", "proof_retention_assignments", "proof_disposition_state", "proof_assets", "proof_asset_external_refs", "custody_observations", "custody_transfers", "continuity_evaluations", "shipment_events", "capture_shipping_labels", "proof_parcel_scopes", "capture_label_observations", "capture_label_resolutions"]) {
     rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
   }
   rows.commerce_stage_evidence = (await db.query("SELECT e.* FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1", [proofId])).rows;
   rows.capture_session_reports = (await db.query("SELECT r.* FROM capture_session_reports r JOIN capture_sessions s ON s.id=r.session_id WHERE s.proof_id=$1", [proofId])).rows;
   for (const table of ["observation_assets", "observation_evidence", "observation_external_refs"]) rows[table] = (await db.query(`SELECT j.* FROM ${table} j JOIN custody_observations o ON o.id=j.observation_id WHERE o.proof_id=$1`, [proofId])).rows;
-  for (const table of ["transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities"]) {
+  for (const table of ["transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities", "transaction_source_observations"]) {
     rows[table] = (await db.query(`SELECT * FROM ${table} WHERE ${table === "transactions" ? "id" : "transaction_id"}=$1`, [transactionId])).rows;
   }
   rows.users = (await db.query("SELECT * FROM users WHERE id IN (SELECT user_id FROM proof_participants WHERE proof_id=$1) OR id IN (SELECT created_by FROM transactions WHERE id=$2) OR id IN (SELECT user_id FROM commerce_receivers WHERE proof_id=$1)", [proofId, transactionId])).rows;

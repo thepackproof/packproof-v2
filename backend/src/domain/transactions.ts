@@ -1,3 +1,4 @@
+import { assertTransactionCorrectionAllowed, hasBoundPackingCapture } from "./transaction-correction-policy.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
@@ -13,6 +14,7 @@ import {
   toTransactionView,
   type ShippingWrite,
   type TransactionView,
+  type TransactionCorrectionPolicy,
 } from "./transaction-fields.js";
 import { asMetadataRecord, readImportMetadata, provenanceFromIdentity } from "./provenance.js";
 import type {
@@ -32,6 +34,7 @@ export type { ShippingView, TransactionView } from "./transaction-fields.js";
 export { toTransactionView } from "./transaction-fields.js";
 
 export interface TransactionBundle {
+  correctionPolicy: TransactionCorrectionPolicy;
   txn: TransactionRow;
   shipping: ShippingRow | null;
   proofId: string | null;
@@ -179,6 +182,7 @@ export async function updateTransaction(
       return toView(locked);
     }
 
+    await assertTransactionCorrectionAllowed(tx, locked);
     const now = clock.now();
     try {
       await tx.query(
@@ -270,6 +274,7 @@ export async function updateShipping(
       return toView(locked);
     }
 
+    await assertTransactionCorrectionAllowed(tx, locked);
     const now = clock.now();
     const nowIso = now.toISOString();
     if (!locked.shipping) {
@@ -362,7 +367,13 @@ async function attachContext(db: Database, txn: TransactionRow): Promise<Transac
           transactionValue: asNullableNumber(txn.transaction_value),
           currency: txn.currency,
         });
+  const provenance = provenanceFromIdentity(identity.rows[0] ?? null, txn.transaction_metadata);
+  const origin = provenance?.originalSource ?? provenance?.source;
+  const reason = proofRow?.status === 'FINALIZED' ? 'FINALIZED'
+    : origin && ['MARKETPLACE_API','STOREFRONT_API','SHIPPING_PROVIDER_API'].includes(origin) ? 'IMPORTED_FACTS_READ_ONLY'
+    : await hasBoundPackingCapture(db, proofRow?.id ?? null) ? 'CAPTURE_CONTEXT_LOCKED' : null;
   return {
+    correctionPolicy: {canCorrectOrderDetails: reason === null, canCorrectShipping: reason === null, reason},
     txn,
     shipping: shipping.rows[0] ?? null,
     proofId: proofRow?.id ?? null,
@@ -473,6 +484,7 @@ function assertNotFinalizedContext(bundle: TransactionBundle): void {
 
 function toView(bundle: TransactionBundle): TransactionView {
   return toTransactionView(bundle.txn, bundle.shipping, {
+    correctionPolicy: bundle.correctionPolicy,
     proofId: bundle.proofId,
     proofStatus: bundle.proofStatus,
     buyerUserId: bundle.buyerUserId,

@@ -15,23 +15,27 @@ it("keeps finalization guidance consistent even when the server packing hint is 
   const proof = { ...canonicalProof, status: "EVIDENCE_COMMITTED", nextAction: { type: "CAPTURE", title: "Record packing", hint: "Record the item being packed and the package being sealed." } };
   render(<ProofScreen proof={proof} currentUserId="user_seller" shipmentIntegrity={null} loading={false} busy={false} error={null} onOpenFinalize={onFinalize} />);
   expect(screen.queryByText("Record the item being packed and the package being sealed.")).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Finalize Proof" }));
+  await userEvent.click(screen.getByRole("button", { name: "Finish saving" }));
   expect(onFinalize).toHaveBeenCalledOnce();
 });
 
-it("keeps access history available without overwhelming the milestone timeline", async () => {
+it("groups access counts without claiming unique viewers and retains exact records", async () => {
   const base = canonicalProof.chronology![0];
-  render(<ProofTimeline entries={[base, { ...base, id: "access", eventType: "PROOF_VIEWED_VIA_ACCESS_LINK", title: "Proof accessed" }]} />);
+  const at = "2026-09-08T12:02:00Z";
+  const access = ["one", "two"].map(id => ({ ...base, id, occurredAt: at, eventType: "PROOF_VIEWED_VIA_ACCESS_LINK", title: "Proof accessed" }));
+  const audit = access.map(entry => ({ eventId: entry.id, eventType: entry.eventType, at, actorUserId: "seller", data: { accessLinkId: "same-link" } }));
+  render(<ProofTimeline entries={[base, ...access]} audit={audit} />);
+  expect(screen.getByText("2 access events")).toBeInTheDocument();
   expect(screen.queryByText("Proof accessed")).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "View access history" }));
-  expect(screen.getByText("Proof accessed")).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Show milestones only" }));
-  expect(screen.queryByText("Proof accessed")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByText("2 access events"));
+  expect(await screen.findAllByText("Proof accessed")).toHaveLength(2);
+  expect(screen.getByText("Event ID: one")).toBeInTheDocument();
+  expect(screen.getByText("Event ID: two")).toBeInTheDocument();
 });
 
 it("shows a single tracking empty state and keeps known shipment details", () => {
   render(<ShipmentTracking events={[]} carrier="UPS" trackingNumber="1Z123" />);
-  expect(screen.getAllByText("Waiting for the first carrier update.")).toHaveLength(1);
+  expect(screen.getAllByText("Tracking number recorded. No carrier scan has been reported yet.")).toHaveLength(1);
   expect(screen.getByText("UPS")).toBeInTheDocument();
   expect(screen.getByText("1Z123")).toBeInTheDocument();
   expect(screen.queryByTitle(/Map/)).not.toBeInTheDocument();

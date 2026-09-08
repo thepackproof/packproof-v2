@@ -47,16 +47,18 @@ export function IntegrityMark(props: { state: IntegrityState; label?: string }) 
 export function statusTone(statusLabel: string): "neutral" | "info" | "success" | "warning" {
   const value = statusLabel.toLowerCase();
   if (
+    value === "proof saved" ||
     value.includes("completed") ||
     value.includes("secured") ||
     value.includes("delivered") ||
     value.includes("sealed") ||
-    value.includes("finalized") ||
-    value.includes("awaiting shipment")
+    value.includes("finalized")
   ) {
     return "success";
   }
   if (
+    value.includes("finish saving") ||
+    value.includes("finishing") ||
     value.includes("packing") ||
     value.includes("evidence") ||
     value.includes("transit") ||

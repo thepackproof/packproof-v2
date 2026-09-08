@@ -21,9 +21,9 @@ export type IntegrityState = "none" | "secured" | "finalized";
 const PROOF_STATUS_LABELS: Record<string, string> = {
   OPEN: "In progress",
   AWAITING_PARTICIPANT: "Waiting for buyer",
-  READY_FOR_EVIDENCE: "Packing evidence needed",
-  EVIDENCE_COMMITTED: "Ready to finalize",
-  FINALIZED: "Completed",
+  READY_FOR_EVIDENCE: "Recording needed",
+  EVIDENCE_COMMITTED: "Finish saving",
+  FINALIZED: "Proof saved",
 };
 
 export function proofStatusLabel(status: string | null | undefined): string {
@@ -49,11 +49,11 @@ export function captureStatusLabel(status: LocalCaptureStatus): string {
     case "preparing":
       return "Preparing";
     case "uploading":
-      return "Uploading evidence";
+      return "Uploading recording";
     case "uploaded":
-      return "Securing evidence";
+      return "Finishing your Proof";
     case "committed":
-      return "Committed";
+      return "Finish saving";
     case "retry":
       return "Waiting to upload";
     default:
@@ -102,21 +102,13 @@ export function humanProofStatus(input: {
   latestShipmentEventType?: string | null;
   hasShipping?: boolean;
 }): string {
-  if (input.proofStatus === "FINALIZED") {
-    const shipment = shipmentStatusLabel(input.latestShipmentEventType);
-    if (shipment && input.latestShipmentEventType && input.latestShipmentEventType !== "LABEL_CREATED") {
-      return shipment;
-    }
-    return "Completed";
-  }
+  // Carrier movement is shown separately; it never replaces the Proof lifecycle.
+  if (input.proofStatus === "FINALIZED") return "Proof saved";
   if (input.captureBelongsToProof && input.hasLocalCapture && input.captureStatus && input.captureStatus !== "idle") {
     const capture = captureStatusLabel(input.captureStatus);
     if (capture) {
       return capture;
     }
-  }
-  if (input.proofStatus === "EVIDENCE_COMMITTED" && input.hasShipping) {
-    return "Awaiting shipment";
   }
   return proofStatusLabel(input.proofStatus);
 }

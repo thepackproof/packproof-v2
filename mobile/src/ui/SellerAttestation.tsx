@@ -24,19 +24,19 @@ export function SellerAttestation({ onPress, disabled = false, loading = false }
       style={[styles.action, { opacity: disabled ? 0.5 : 1 }]}
     >
       <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
-        {loading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="finger-print-outline" size={44} color={colors.accentText} />}
+        {loading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="finger-print-outline" size={34} color={colors.accentText} />}
       </View>
       <Text style={[styles.statement, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
-      <Text style={[styles.instruction, { color: colors.accentText }]}>{loading ? "Preparing attestation…" : "Confirm and submit"}</Text>
+      <Text style={[styles.instruction, { color: colors.accentText }]}>{loading ? "Preparing confirmation…" : "Confirm and submit"}</Text>
     </PressableScale>
-    <Text style={[styles.privacy, { color: colors.textSecondary }]}>Android requests a supported strong biometric. PackProof receives a signed statement, never biometric images or templates.</Text>
+    <Text style={[styles.privacy, { color: colors.textSecondary }]}>Confirm with your device’s secure biometric prompt. PackProof never receives your fingerprint or face data.</Text>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  card: { padding: spacing.lg, borderRadius: 18, borderWidth: 1, gap: spacing.md },
+  card: { padding: spacing.md, borderRadius: 12, borderWidth: 1, gap: spacing.md },
   action: { alignItems: "center", gap: spacing.md, minHeight: 64 },
-  icon: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center" },
+  icon: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
   statement: { ...typography.body, fontWeight: "600", textAlign: "center" },
   instruction: { ...typography.secondary, fontWeight: "600", textAlign: "center" },
   privacy: { ...typography.caption, textAlign: "center" },

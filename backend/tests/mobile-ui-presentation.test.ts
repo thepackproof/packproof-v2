@@ -67,18 +67,18 @@ describe("mobile UI status translation", () => {
   it("maps backend Proof statuses to human labels", () => {
     expect(proofStatusLabel("OPEN")).toBe("In progress");
     expect(proofStatusLabel("AWAITING_PARTICIPANT")).toBe("Waiting for buyer");
-    expect(proofStatusLabel("READY_FOR_EVIDENCE")).toBe("Packing evidence needed");
-    expect(proofStatusLabel("EVIDENCE_COMMITTED")).toBe("Ready to finalize");
-    expect(proofStatusLabel("FINALIZED")).toBe("Completed");
+    expect(proofStatusLabel("READY_FOR_EVIDENCE")).toBe("Recording needed");
+    expect(proofStatusLabel("EVIDENCE_COMMITTED")).toBe("Finish saving");
+    expect(proofStatusLabel("FINALIZED")).toBe("Proof saved");
   });
 
   it("does not show raw backend enums in ordinary labels", () => {
     expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).not.toContain("READY_FOR_EVIDENCE");
     expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).not.toContain("BUYER");
-    expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).toBe("Packing evidence needed");
+    expect(humanProofStatus({ proofStatus: "READY_FOR_EVIDENCE" })).toBe("Recording needed");
   });
 
-  it("overlays local capture and shipment states", () => {
+  it("shows local capture progress while keeping carrier movement separate from Proof state", () => {
     expect(
       humanProofStatus({
         proofStatus: "READY_FOR_EVIDENCE",
@@ -92,14 +92,16 @@ describe("mobile UI status translation", () => {
         proofStatus: "FINALIZED",
         latestShipmentEventType: "IN_TRANSIT",
       }),
-    ).toBe("In transit");
+    ).toBe("Proof saved");
     expect(shipmentStatusLabel("CARRIER_ACCEPTED")).toBe("Package accepted");
+    expect(shipmentStatusLabel("IN_TRANSIT")).toBe("In transit");
+    expect(humanProofStatus({ proofStatus: "EVIDENCE_COMMITTED", latestShipmentEventType: "DELIVERED", hasShipping: true })).toBe("Finish saving");
     expect(
       humanProofStatus({
         proofStatus: "EVIDENCE_COMMITTED",
         hasShipping: true,
       }),
-    ).toBe("Awaiting shipment");
+    ).toBe("Finish saving");
   });
 });
 
@@ -118,7 +120,7 @@ describe("mobile UI next-action CTA", () => {
   it("asks a seller to record packing video when the Proof is ready for evidence", () => {
     const action = deriveNextAction(base);
     expect(action.key).toBe("start_capture");
-    expect(action.label).toBe("Record packing video");
+    expect(action.label).toBe("Record packing");
     expect(shouldShowRequiredAction(action)).toBe(true);
     expect(canCaptureEvidence(base)).toBe(true);
   });
@@ -167,14 +169,14 @@ describe("mobile UI next-action CTA", () => {
     expect(shouldShowRequiredAction(unspecified)).toBe(false);
   });
 
-  it("shows Record packing video for READY_FOR_EVIDENCE even when no buyer exists", () => {
+  it("shows Record packing for READY_FOR_EVIDENCE even when no buyer exists", () => {
     const action = deriveNextAction({
       ...base,
       proofStatus: "READY_FOR_EVIDENCE",
       participationPolicy: "COUNTERPARTY_OPTIONAL",
     });
     expect(action.key).toBe("start_capture");
-    expect(action.label).toBe("Record packing video");
+    expect(action.label).toBe("Record packing");
     expect(shouldShowRequiredAction(action)).toBe(true);
     expect(action.key).not.toBe("add_participant");
   });
@@ -204,7 +206,7 @@ describe("mobile UI next-action CTA", () => {
       captureStatus: "uploading",
       uploadPercent: 62,
     });
-    expect(action.label).toContain("Uploading evidence");
+    expect(action.label).toContain("Uploading recording");
     expect(action.label).toContain("62%");
     expect(action.enabled).toBe(false);
   });
@@ -222,14 +224,16 @@ describe("mobile UI next-action CTA", () => {
     expect(action.enabled).toBe(false);
   });
 
-  it("offers finalize only after evidence is committed", () => {
+  it("offers finish saving only after evidence is committed", () => {
     const action = deriveNextAction({
       ...base,
       proofStatus: "EVIDENCE_COMMITTED",
       committedEvidenceCount: 1,
     });
     expect(action.key).toBe("finalize");
-    expect(action.label).toBe("Finalize Proof");
+    expect(action.label).toBe("Finish saving");
+    expect(action.kind).toBe("primary");
+    expect(isCompletedAction(action)).toBe(false);
   });
 
   it("locks the record after finalization and shows a completion state instead of a next step", () => {
@@ -246,7 +250,7 @@ describe("mobile UI proof cards and library", () => {
   it("shows human-readable card fields instead of raw IDs", () => {
     const card = toProofCardModel(proof({}));
     expect(card.title).toBe("Vintage film camera");
-    expect(card.statusLabel).toBe("Packing evidence needed");
+    expect(card.statusLabel).toBe("Recording needed");
     expect(card.priceLabel).toContain("250.50");
     expect(card.shipping).toContain("UPS");
     expect(card.orderRef).toContain("Order #");
@@ -311,7 +315,7 @@ describe("mobile UI proof cards and library", () => {
     );
     const attention = selectAttention({ proofs: items, invitations: [] });
     expect(attention?.title).toBe("Vintage film camera");
-    expect(attention?.cta).toBe("Record packing video");
+    expect(attention?.cta).toBe("Record packing");
   });
 });
 

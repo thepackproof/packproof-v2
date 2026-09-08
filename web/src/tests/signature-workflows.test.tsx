@@ -38,5 +38,21 @@ it("uses one shared Proof and requires the exact approved preview before creatin
  await waitFor(()=>expect(screen.getByRole("combobox",{name:"Link expires"})).toBeDisabled());
 });
 it("sample footage is playable, truthfully labeled, and case export waits for review",()=>{
- window.history.replaceState({},"","/sample");render(<SampleProof/>);expect(screen.getByText(/not recorded through PackProof/)).toBeInTheDocument();expect(document.querySelector("video")?.getAttribute("src")).toBe("/sample-packing.mp4");fireEvent.click(screen.getByRole("button",{name:"Case"}));expect(screen.getByRole("button",{name:"Download sample packet"})).toBeDisabled();fireEvent.click(screen.getByRole("checkbox",{name:"I reviewed this fictional sample packet"}));expect(screen.getByRole("button",{name:"Download sample packet"})).toBeEnabled();expect(screen.getAllByText(/No final seal, shipping label/).length).toBeGreaterThan(0);
+ window.history.replaceState({},"","/sample");render(<SampleProof/>);expect(screen.getByText(/not recorded through PackProof/)).toBeInTheDocument();expect(document.querySelector("video")?.getAttribute("src")).toBe("/sample-packing.mp4");fireEvent.click(screen.getByText("More",{selector:"summary"}));fireEvent.click(screen.getByRole("button",{name:"Evidence and claim tools"}));expect(screen.getByRole("button",{name:"Download sample packet"})).toBeDisabled();fireEvent.click(screen.getByRole("checkbox",{name:"I reviewed this fictional sample packet"}));expect(screen.getByRole("button",{name:"Download sample packet"})).toBeEnabled();expect(screen.getAllByText(/No final seal, shipping label/).length).toBeGreaterThan(0);
+});
+
+it("sample uses the same three record sections and keeps its player when changing sections",()=>{
+ window.history.replaceState({},"","/sample");render(<SampleProof compact/>);
+ expect(screen.getAllByRole("tab").map(tab=>tab.textContent)).toEqual(["Recording","Activity","Tracking"]);
+ expect(screen.queryByRole("tab",{name:"Receipt"})).not.toBeInTheDocument();expect(screen.queryByRole("tab",{name:"Case"})).not.toBeInTheDocument();
+ const video=document.querySelector("video")!;video.currentTime=14;
+ fireEvent.click(screen.getByRole("tab",{name:"Activity"}));expect(screen.getByRole("tab",{name:"Activity"})).toHaveAttribute("aria-selected","true");
+ fireEvent.click(screen.getByRole("tab",{name:"Recording"}));expect(document.querySelector("video")).toBe(video);expect(video.currentTime).toBe(14);
+ fireEvent.keyDown(screen.getByRole("tab",{name:"Recording"}),{key:"End"});expect(screen.getByRole("tab",{name:"Tracking"})).toHaveAttribute("aria-selected","true");
+});
+it("sample receipt deep link stays contextual and cannot fabricate buyer acknowledgment",()=>{
+ window.history.replaceState({},"","/sample?view=receipt");render(<SampleProof/>);
+ expect(screen.getAllByRole("tab")).toHaveLength(3);expect(screen.getByText("Not recorded")).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"See how receipt recording works"}));expect(screen.getByRole("status")).toHaveTextContent("This sample does not create an acknowledgment");
+ fireEvent.click(screen.getByRole("button",{name:"Review the recording"}));expect(screen.getByRole("tabpanel",{name:"Recording"})).toBeVisible();
 });

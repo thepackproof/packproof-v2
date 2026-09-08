@@ -21,6 +21,7 @@ export function AppScreen(props: {
   bottomInset?: boolean;
   extraBottom?: number;
   initialOffsetY?: number;
+  restorationReady?: boolean;
   onScrollOffset?: (offset: number) => void;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -59,6 +60,7 @@ export function AppScreen(props: {
         automaticallyAdjustContentInsets={false}
         contentContainerStyle={contentStyle}
         initialOffsetY={props.initialOffsetY}
+        restorationReady={props.restorationReady}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         onScrollOffset={props.onScrollOffset}

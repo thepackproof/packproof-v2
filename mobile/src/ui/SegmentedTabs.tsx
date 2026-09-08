@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -12,6 +12,7 @@ export function SegmentedTabs<T extends string>(props: {
   onSelect: (id: T) => void;
 }) {
   const { colors, reducedMotion } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const [width, setWidth] = useState(0);
   const translate = useRef(new Animated.Value(0)).current;
   const index = Math.max(0, props.options.findIndex((option) => option.id === props.selected));
@@ -70,7 +71,7 @@ export function SegmentedTabs<T extends string>(props: {
             accessibilityState={{ selected }}
             style={styles.tab}
           >
-            <Ionicons name={option.icon} size={16} color={selected ? colors.textOnPrimary : colors.textPrimary} />
+            {fontScale < 1.4 ? <Ionicons name={option.icon} size={16} color={selected ? colors.textOnPrimary : colors.textPrimary} /> : null}
             <Text style={[styles.label, { color: selected ? colors.textOnPrimary : colors.textPrimary }]}>
               {option.label}
             </Text>
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
     position: "relative",
-    minHeight: 44,
+    minHeight: 48,
   },
   pill: {
     position: "absolute",
@@ -99,12 +100,14 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     zIndex: 1,
   },
-  label: { ...typography.secondaryStrong },
+  label: { ...typography.secondaryStrong, flexShrink: 1, textAlign: "center" },
 });

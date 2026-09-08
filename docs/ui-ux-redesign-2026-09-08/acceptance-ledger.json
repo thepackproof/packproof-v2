@@ -1,0 +1,557 @@
+{
+  "schema": "packproof.uiux-acceptance-ledger.v1",
+  "baselineSourceSha": "bcedec57d9a56800a1ed80f6e5c4959b6de7dab4",
+  "candidateSourceSha": null,
+  "releaseGate": "BLOCKED_PENDING_REQUIRED_EVIDENCE",
+  "requiredReleaseGates": [
+    "FINAL_SOURCE_NATIVE_AND_FULL_SUITE_CI",
+    "COMPATIBLE_DEPLOYED_API_CAPABILITIES_MIGRATIONS_052_053_AND_WEB",
+    "SIGNED_ARTIFACT_AND_DISTRIBUTION_IDENTITY",
+    "BOTH_PHYSICAL_DEVICES_AND_UPGRADE_ACCESSIBILITY",
+    "EIGHT_PERSON_UNASSISTED_USABILITY"
+  ],
+  "finalCiReference": "https://github.com/thepackproof/packproof-v2/pull/38/checks",
+  "entries": [
+    {
+      "id": "T01",
+      "scenario": "Connected seller starts a ready order",
+      "requiredOutcome": "Order opens camera preview without a chooser, duplicate global action or separate scan.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/screens/OrdersScreen.tsx",
+        "mobile/src/app/Root.tsx",
+        "mobile/src/app/PackProofProvider.tsx",
+        "web/src/screens/FulfillmentQueueScreen.tsx",
+        "web/src/App.tsx"
+      ],
+      "verificationReferences": [
+        "backend/tests/mobile-ui-presentation.test.ts",
+        "web/src/tests/app.test.tsx",
+        "mobile/tests/orders.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Observe first-use order selection on both phones; camera must not start recording automatically.",
+      "evidence": []
+    },
+    {
+      "id": "T02",
+      "scenario": "Unconnected seller / order not listed",
+      "requiredOutcome": "Only genuinely required context; no marketplace, buyer invitation or invented imported facts required.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/screens/CreateScreen.tsx",
+        "mobile/src/screens/ManualCreateScreen.tsx",
+        "web/src/screens/CreateProofScreen.tsx",
+        "backend/src/domain/transactions.ts"
+      ],
+      "verificationReferences": [
+        "backend/tests/redesign-integrity.test.ts",
+        "web/src/tests/account-creation.test.tsx",
+        "web/src/tests/app.test.tsx"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Physical unconnected task plus direct API inspection of required fields and source attribution.",
+      "evidence": []
+    },
+    {
+      "id": "T03",
+      "scenario": "One continuous recording on both phones",
+      "requiredOutcome": "One original per take; label read during recording; no restart, photo chore or end rescan.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/UnifiedCameraView.kt",
+        "mobile/src/ui/NativeCaptureHost.tsx",
+        "mobile/src/screens/CaptureScreen.tsx"
+      ],
+      "verificationReferences": [
+        "Existing CI Android attestation Kotlin job",
+        "backend/tests/fulfillment-capture.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "S24 Ultra AND A16 5G installed-candidate recording with a supported real label; inspect the actual encoded original and interruption flags.",
+      "evidence": []
+    },
+    {
+      "id": "T04",
+      "scenario": "Derived media and observation timestamps",
+      "requiredOutcome": "Every derivative remains linked to original/offset; preview and encoded-video observations are distinguished honestly.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/EncodedBarcodeReader.kt",
+        "mobile/src/capture.ts",
+        "backend/src/domain/capture-shipping.ts",
+        "backend/migrations/052_redesign_integrity.sql"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-label-review.test.ts",
+        "backend/tests/capture-shipping.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Native compile plus inspection of real encoded media/derived files; near-requested timestamps must never be reported as exact frame time.",
+      "evidence": []
+    },
+    {
+      "id": "T05",
+      "scenario": "Review, biometric declaration, automatic finalization",
+      "requiredOutcome": "Exact current statement/context authorized once; server completion without a second finalize chore.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/ui/SellerAttestation.tsx",
+        "mobile/src/capture/completion.ts",
+        "mobile/src/screens/CompletionScreen.tsx",
+        "backend/src/domain/attestation-context.ts",
+        "backend/src/domain/attestation-authorization.ts",
+        "backend/src/domain/finalize.ts"
+      ],
+      "verificationReferences": [
+        "backend/tests/seller-attestation-authorization.test.ts",
+        "backend/tests/redesign-integrity.test.ts",
+        "mobile/tests/capture-recovery.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Actual strong biometric signing and authoritative finalization on each installed phone. Browser behavior must not imply Android biometric authentication.",
+      "evidence": []
+    },
+    {
+      "id": "T06",
+      "scenario": "Pending upload / lost finalization response",
+      "requiredOutcome": "No false saved/locked state; exact recovery once without duplicate evidence, declaration or Proof.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/capture/recover-completion.ts",
+        "mobile/src/capture/completion.ts",
+        "mobile/src/copy/status.ts",
+        "web/src/capture-queue.ts",
+        "backend/src/domain/recovery-journal.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-recovery.test.ts",
+        "web/src/tests/capture-queue.test.ts",
+        "web/src/tests/central-capture-recovery.test.ts",
+        "backend/tests/durable-recovery.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Final-source transport-loss test plus installed-device response-loss run; compare stable IDs and receipts.",
+      "evidence": []
+    },
+    {
+      "id": "T07",
+      "scenario": "Imported-field mutation through UI/API",
+      "requiredOutcome": "Imported facts cannot be silently rewritten; raw/used snapshots remain attributable.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "backend/src/domain/transaction-correction-policy.ts",
+        "backend/src/domain/transaction-import.ts",
+        "backend/src/domain/transactions.ts",
+        "mobile/src/screens/EditDetailsScreen.tsx",
+        "mobile/src/copy/record-context.ts"
+      ],
+      "verificationReferences": [
+        "backend/tests/redesign-integrity.test.ts",
+        "backend/tests/transaction-import.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Run direct and stale-client mutations against candidate schema; inspect denied writes and preserved source observations.",
+      "evidence": []
+    },
+    {
+      "id": "T08",
+      "scenario": "Manual correction / stale attestation",
+      "requiredOutcome": "Pre-capture correction allowed; material context change invalidates old challenge/signature.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "backend/src/domain/attestation-context.ts",
+        "backend/src/domain/attestation-authorization.ts",
+        "backend/src/domain/transaction-correction-policy.ts",
+        "mobile/src/screens/EditDetailsScreen.tsx"
+      ],
+      "verificationReferences": [
+        "backend/tests/redesign-integrity.test.ts",
+        "backend/tests/seller-attestation-authorization.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Candidate API confirmation of old-challenge rejection and fresh challenge acceptance; ensure capture-binding locks remain understandable.",
+      "evidence": []
+    },
+    {
+      "id": "T09",
+      "scenario": "Finalized edits / stale clients",
+      "requiredOutcome": "Root evidence immutable; later tracking/receipt/return supplements do not rewrite it.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "backend/src/domain/finalize.ts",
+        "backend/src/domain/transaction-fields.ts",
+        "backend/migrations/052_redesign_integrity.sql",
+        "mobile/src/copy/record-context.ts",
+        "web/src/components/WorkspaceProofRecord.tsx"
+      ],
+      "verificationReferences": [
+        "backend/tests/finalize-requirements.test.ts",
+        "backend/tests/redesign-integrity.test.ts",
+        "real PostgreSQL release-invariants CI"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Candidate DB/storage mutation attempts and root-manifest comparison before/after later supplements.",
+      "evidence": []
+    },
+    {
+      "id": "T10",
+      "scenario": "Three-order batch with pending work",
+      "requiredOutcome": "Shared capture/review; pending discoverable; no cross-order label/session/ownership leak.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/screens/OrdersScreen.tsx",
+        "mobile/src/app/PackProofProvider.tsx",
+        "mobile/src/screens/CompletionScreen.tsx",
+        "web/src/screens/PackingStationScreen.tsx",
+        "web/src/capture-queue.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-recovery.test.ts",
+        "web/src/tests/station-recovery.test.tsx",
+        "web/src/tests/capture-queue.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Three real controlled orders: one complete, one delayed upload, one mismatched label; preserve and resume legacy station journal separately.",
+      "evidence": []
+    },
+    {
+      "id": "T11",
+      "scenario": "Connect, reconnect, sync and automatic-order setting",
+      "requiredOutcome": "One provider surface; OAuth outcome truthful; failed sync distinct from empty queue; ingestion idempotent; setting persisted.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/copy/sales-channels.ts",
+        "mobile/src/screens/AccountScreen.tsx",
+        "web/src/screens/ConnectedAccountsPanel.tsx",
+        "web/src/screens/ConnectedStoresScreen.tsx",
+        "web/src/App.tsx"
+      ],
+      "verificationReferences": [
+        "mobile/tests/sales-channels.test.ts",
+        "mobile/tests/commerce-connections.test.ts",
+        "web/src/tests/account-redesign.test.tsx",
+        "web/src/tests/etsy-connections.test.tsx",
+        "backend/tests/commerce-automation.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Live authorized provider/OAuth return, initial and later orders, off/on persistence and reconnect. Never mark a real marketplace order shipped for a UI test.",
+      "evidence": []
+    },
+    {
+      "id": "T12",
+      "scenario": "Long activity history with repeated access",
+      "requiredOutcome": "Human milestones; truthful access-event grouping; all raw IDs/time/source retained.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/copy/proof-record.ts",
+        "mobile/src/ui/ProofRecordTimeline.tsx",
+        "mobile/src/screens/EventDetailScreen.tsx",
+        "web/src/presentation/proof-record.ts",
+        "web/src/components/ProofTimeline.tsx"
+      ],
+      "verificationReferences": [
+        "mobile/tests/proof-record.test.ts",
+        "web/src/tests/redesign-record-presentation.test.tsx"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Inspect long authorized histories and grouped disclosure; confirm actor/link/30-minute UTC boundaries and no unique-person claim.",
+      "evidence": []
+    },
+    {
+      "id": "T13",
+      "scenario": "Recording viewer across screen sizes",
+      "requiredOutcome": "Original aspect ratio, reachable controls, no giant blank shell; playback position survives navigation.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/ui/ProofEvidencePreview.tsx",
+        "mobile/src/ui/ProofRecord.tsx",
+        "web/src/components/PublicMedia.tsx",
+        "web/src/components/SharedProofRecord.tsx",
+        "web/src/components/workspace-proof-record.css"
+      ],
+      "verificationReferences": [
+        "web/src/tests/workspace-proof-record.test.tsx",
+        "web/src/tests/proof-simplification.test.tsx",
+        "mobile/tests/scroll-restoration.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Real portrait/landscape recordings, large text, narrow screen and tab/detail navigation; inspect actual playback/scroll positions.",
+      "evidence": []
+    },
+    {
+      "id": "T14",
+      "scenario": "Force-stop/crash at persistence boundaries",
+      "requiredOutcome": "Recover original/journal where possible; prove playable bytes; no sole-original cleanup or false success.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/capture.ts",
+        "mobile/src/capture/recover-completion.ts",
+        "mobile/modules/packproof-unified-camera",
+        "web/src/capture-queue.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-recovery.test.ts",
+        "backend/tests/mobile-recovery.test.ts",
+        "web/src/tests/recovery.test.tsx",
+        "web/src/tests/stage-recovery-scope.test.tsx"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Force-stop each physical candidate at recording stop, journal write, upload, commit, declaration and finalization; compare exact original hash and receipt state.",
+      "evidence": []
+    },
+    {
+      "id": "T15",
+      "scenario": "Tracking absent, pending, delayed, unsupported, moved",
+      "requiredOutcome": "Actual source state and last successful sync; no fake map/ETA/movement or waiting-for-carrier during outage.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/copy/tracking-state.ts",
+        "mobile/src/ui/ProofTrackingPanel.tsx",
+        "web/src/presentation/proof-record.ts",
+        "web/src/components/ShipmentTracking.tsx",
+        "backend/src/domain/disclosure-record.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/proof-tracking.test.ts",
+        "web/src/tests/redesign-record-presentation.test.tsx",
+        "backend/tests/capture-shipping.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Candidate provider states and shared redaction cases; actual known tracking only, never fabricated carrier movement.",
+      "evidence": []
+    },
+    {
+      "id": "T16",
+      "scenario": "Expired authentication / account switch",
+      "requiredOutcome": "Original account retains work; no cross-account originals, journals or credentials.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/app/PackProofProvider.tsx",
+        "mobile/src/capture/recover-completion.ts",
+        "web/src/capture-queue.ts",
+        "web/src/screens/AccountDeletionScreen.tsx"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-recovery.test.ts",
+        "web/src/tests/capture-queue.test.ts",
+        "web/src/tests/account-redesign.test.tsx",
+        "backend/tests/disabled-account-access.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Sign out/account switch with pending recordings on physical candidate; restore original user and inspect scoped recovery.",
+      "evidence": []
+    },
+    {
+      "id": "T17",
+      "scenario": "Local cleanup and retained completed originals",
+      "requiredOutcome": "Zero pending is not zero files; cleanup requires applicable preservation/finalization receipts.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/screens/AccountScreen.tsx",
+        "web/src/screens/RecordingsSettingsPanel.tsx",
+        "web/src/components/LocalRecordingRecovery.tsx",
+        "web/src/capture-queue.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-recovery.test.ts",
+        "web/src/tests/capture-queue.test.ts",
+        "web/src/tests/stage-recovery-scope.test.tsx"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Real browser/phone retained-byte counts and export; deny cleanup when receipts are absent/mismatched; inspect stage identity.",
+      "evidence": []
+    },
+    {
+      "id": "T18",
+      "scenario": "Biometric cancel, lockout, unavailable, key invalidation",
+      "requiredOutcome": "Recording retained; no weak-auth fallback, forged declaration, stored samples or background prompt.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/ui/SellerAttestation.tsx",
+        "mobile/modules/packproof-attestation",
+        "mobile/src/capture/completion.ts",
+        "backend/src/domain/attestation-authorization.ts"
+      ],
+      "verificationReferences": [
+        "backend/tests/mobile-attestation-authorization.test.ts",
+        "backend/tests/seller-attestation-authorization.test.ts",
+        "native compilation CI"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Exercise cancellation, lockout, missing enrollment and key invalidation on both installed phones. Software mocks do not pass this gate.",
+      "evidence": []
+    },
+    {
+      "id": "T19",
+      "scenario": "Multiple codes, mismatch and hostile payload",
+      "requiredOutcome": "Only supported tracking candidates attach; unresolved mismatches block declaration/finalization; no URL execution.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/capture/shipping-scan-queue.ts",
+        "mobile/src/screens/CaptureScreen.tsx",
+        "backend/src/domain/capture-shipping.ts",
+        "backend/src/domain/capture-label-review.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-label-review.test.ts",
+        "backend/tests/redesign-integrity.test.ts",
+        "backend/tests/capture-shipping.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Real glare/multiple-code labels and wrong-package conflict; validate immutable attributed exclusion and no silent order reassociation.",
+      "evidence": []
+    },
+    {
+      "id": "T20",
+      "scenario": "Light/dark/system and token regression",
+      "requiredOutcome": "Choice persists; action and success differ; neutral surfaces and readable status; no duplicate global action.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/theme/tokens.ts",
+        "mobile/src/theme/appearance.ts",
+        "mobile/src/ui/MainNavigation.tsx",
+        "web/src/theme/ThemeProvider.tsx",
+        "web/src/styles.css",
+        "web/src/screens/account-settings.css"
+      ],
+      "verificationReferences": [
+        "backend/tests/mobile-theme.test.ts",
+        "backend/tests/mobile-ui-presentation.test.ts",
+        "web/src/tests/account-redesign.test.tsx"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Screen-by-screen review in all choices with fresh/default and existing preference; check static compatibility-token callers.",
+      "evidence": []
+    },
+    {
+      "id": "T21",
+      "scenario": "TalkBack, 200% text, narrow viewport and keyboard",
+      "requiredOutcome": "Statement/action readable, reachable and meaningfully announced; contrast, focus and targets pass.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/ui/SellerAttestation.tsx",
+        "mobile/src/ui/Button.tsx",
+        "mobile/src/ui/SegmentedTabs.tsx",
+        "mobile/src/ui/MainNavigation.tsx",
+        "web/src/screens/AccountScreen.tsx",
+        "web/src/styles.css"
+      ],
+      "verificationReferences": [
+        "Source token checks and component semantics are supporting evidence only"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Actual TalkBack, Android large text, browser 200% zoom/narrow viewport and keyboard traversal. Record clipping, focus, announcements and contrast measurements.",
+      "evidence": []
+    },
+    {
+      "id": "T22",
+      "scenario": "Android Back, sheets, scrolling and video tabs",
+      "requiredOutcome": "Correct route/sheet behavior; no jitter loop; list/playback position retained; unsaved work kept.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/app/Root.tsx",
+        "mobile/src/app/navigation.ts",
+        "mobile/src/screens/AccountScreen.tsx",
+        "mobile/src/screens/OrdersScreen.tsx",
+        "web/src/App.tsx"
+      ],
+      "verificationReferences": [
+        "mobile/tests/scroll-restoration.test.ts",
+        "mobile/tests/proof-record.test.ts",
+        "web/src/tests/app.test.tsx"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Gesture and three-button Back, Account after busy-state changes, batch queue, legacy journal, long list and player tab on both phones.",
+      "evidence": []
+    },
+    {
+      "id": "T23",
+      "scenario": "Airplane mode, storage exhaustion, slow network",
+      "requiredOutcome": "Honest preflight, verified local recovery, bounded retries; no indefinite spinner or hidden failure.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/capture.ts",
+        "mobile/src/capture/completion.ts",
+        "mobile/src/capture/recover-completion.ts",
+        "web/src/capture-preflight.ts",
+        "web/src/capture-queue.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-recovery.test.ts",
+        "web/src/tests/central-capture-recovery.test.ts",
+        "backend/tests/evidence-capture-boundary.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Physical network/storage boundaries and interrupted browser capture; disclose when media cannot be recovered.",
+      "evidence": []
+    },
+    {
+      "id": "T24",
+      "scenario": "Android/workspace/shared record parity",
+      "requiredOutcome": "Same core facts, root/stage state, attribution and chronology; permissions enforced.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/ui/ProofRecord.tsx",
+        "mobile/src/copy/proof-record.ts",
+        "web/src/components/WorkspaceProofRecord.tsx",
+        "web/src/components/SharedProofRecord.tsx",
+        "backend/src/domain/disclosure-record.ts"
+      ],
+      "verificationReferences": [
+        "mobile/tests/proof-record.test.ts",
+        "web/src/tests/redesign-record-presentation.test.tsx",
+        "backend/tests/redesign-integrity.test.ts",
+        "backend/tests/signature-route-integration.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Compare the same live candidate Proof on mobile/workspace/shared links with different scopes, old roots, later stages and redacted tracking.",
+      "evidence": []
+    },
+    {
+      "id": "T25",
+      "scenario": "Privacy/deletion and access management",
+      "requiredOutcome": "In-app/public initiation, authenticated confirmation/status, accurate retention and no owner-only sharing leaks.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/screens/AccountScreen.tsx",
+        "web/src/screens/AccountDeletionScreen.tsx",
+        "web/src/App.tsx",
+        "backend/src/domain/account-deletion.ts",
+        "backend/src/domain/disclosure-record.ts"
+      ],
+      "verificationReferences": [
+        "web/src/tests/account-redesign.test.tsx",
+        "backend/tests/redesign-integrity.test.ts",
+        "backend/tests/disabled-account-access.test.ts"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Verify actual public-host route/sign-in return and live persisted request; operational review/retention disclosure is reviewed separately from request receipt. Check terminal DECLINED/COMPLETED labels.",
+      "evidence": []
+    },
+    {
+      "id": "T26",
+      "scenario": "Upgrade existing users and old Proofs",
+      "requiredOutcome": "Existing links/journals/preferences/connections/roots/return/grading remain usable.",
+      "implementationAssessment": "SOURCE_INTEGRATED_RELEASE_EVIDENCE_PENDING",
+      "sourcePaths": [
+        "mobile/src/app/navigation.ts",
+        "mobile/src/app/PackProofProvider.tsx",
+        "mobile/src/capture/recover-completion.ts",
+        "web/src/App.tsx",
+        "backend/src/domain/recovery-restore.ts",
+        "backend/migrations/052_redesign_integrity.sql"
+      ],
+      "verificationReferences": [
+        "mobile/tests/capture-recovery.test.ts",
+        "backend/tests/recovery-restore.test.ts",
+        "web/src/tests/stage-recovery-scope.test.tsx",
+        "web/src/tests/app.test.tsx"
+      ],
+      "gate": "OPEN",
+      "remainingEvidence": "Actual signed upgrade over preceding installed release on both phones with pending ordinary/legacy-station/stage journals; compatible old client and additive migration checks.",
+      "evidence": []
+    }
+  ],
+  "candidateCommitReference": "https://github.com/thepackproof/packproof-v2/pull/38"
+}

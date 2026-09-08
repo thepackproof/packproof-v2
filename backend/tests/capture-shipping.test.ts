@@ -39,7 +39,7 @@ describe('capture shipping identity and durable carrier registration',()=>{
   it('binds once, preserves provenance, and prevents all shipping edit paths from replacing identity',async()=>{
     const first=await bind();expect(first.status).toBe('BOUND');expect(await bind()).toEqual(first);
     await expect(bind({detectedAtMs:101})).rejects.toMatchObject({code:'SHIPPING_SCAN_CONFLICT'});
-    await expect(bind({rawValue:'1Z999AA10123456785',idempotencyKey:'other'})).rejects.toMatchObject({code:'SHIPPING_LABEL_CONFLICT'});
+    expect(await bind({rawValue:'1Z999AA10123456785',idempotencyKey:'other'})).toMatchObject({status:'CONFLICT',currentTrackingNumber:tracking});
     const edit=await request(h.app).patch(`/transactions/${transactionId}/shipping`).set(auth(seller)).send({trackingNumber:'replacement'});
     expect(edit.status).toBe(409);
     await expect(h.db.query('UPDATE transaction_shipping SET tracking_number=$2 WHERE transaction_id=$1',[transactionId,'other'])).rejects.toThrow('CAPTURE_SHIPPING_IMMUTABLE');
@@ -52,7 +52,7 @@ describe('capture shipping identity and durable carrier registration',()=>{
     await expect(bindCaptureShipping(h.db,clock,other,proofId,sessionId,scan)).rejects.toMatchObject({code:'PARTICIPANT_NOT_AUTHORIZED'});
     await expect(bindCaptureShipping(h.db,clock,seller,proofId,'cap_unknown',scan)).rejects.toMatchObject({code:'CAPTURE_SESSION_NOT_FOUND'});
     const web=(await createCaptureSession(h.db,clock,seller,proofId,{client:'WEB_CAMERA',idempotencyKey:'web'})).id;
-    await expect(bindCaptureShipping(h.db,clock,seller,proofId,web,scan)).rejects.toMatchObject({code:'SHIPPING_SCAN_SESSION_INVALID'});
+    expect(await bindCaptureShipping(h.db,clock,seller,proofId,web,scan)).toMatchObject({status:'BOUND',trackingNumber:tracking});
     await cancelCaptureSession(h.db,clock,seller,proofId,sessionId);
     await expect(bind()).rejects.toMatchObject({code:'SHIPPING_SCAN_SESSION_INVALID'});
     const s=await createCaptureSession(h.db,clock,seller,proofId,{client:'NATIVE_CAMERA',idempotencyKey:'later'});

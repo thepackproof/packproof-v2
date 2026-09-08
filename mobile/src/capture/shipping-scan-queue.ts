@@ -4,6 +4,13 @@ export interface ShippingScan {
   detectedAtMs: number;
   idempotencyKey: string;
   confirmed?: boolean;
+  source?: "LIVE_CAMERA_ANALYSIS" | "ENCODED_VIDEO_FRAME";
+  coordinateSpace?: "ROTATED_ANALYSIS_PIXELS" | "DECODED_VIDEO_PIXELS";
+  decoderVersion?: string;
+  observedAtUnixMs?: number;
+  frameWidth?: number;
+  frameHeight?: number;
+  bounds?: { left: number; top: number; right: number; bottom: number } | null;
 }
 export interface ShippingScanResult {
   status: 'BOUND' | 'NEEDS_CONFIRMATION' | 'UNRECOGNIZED' | 'QUEUED' | 'CONFLICT' | 'UNAVAILABLE';
@@ -12,8 +19,22 @@ export interface ShippingScanResult {
   observationId?: string;
   proofId?: string;
   transactionId?: string;
+  currentTrackingNumber?: string | null;
 }
 export interface QueuedShippingScan { scan: ShippingScan; result: ShippingScanResult; }
+export interface CaptureShippingReview {
+  observations: Array<{ observationId: string; trackingNumber: string; carrierHint: string | null;
+    format: string; detectedAtMs: number; source?: string; associated: boolean;
+    resolution: null | { decision: "NOT_THIS_PACKAGE"; reason: string; resolvedAt: string } }>;
+  reviewRequired: boolean;
+  currentTrackingNumber: string | null;
+}
+export function labelNeedsReview(observation: CaptureShippingReview["observations"][number]): boolean {
+  return !observation.associated && observation.resolution == null;
+}
+export function shortenedTracking(value: string): string {
+  return value.length > 8 ? `…${value.slice(-8)}` : value;
+}
 export interface ShippingScanJournal {
   proofId: string; sessionId: string; userId: string;
   entries: QueuedShippingScan[];

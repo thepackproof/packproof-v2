@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
 import { getAttestationAvailability, prepareAttestationKey } from "../attestation/native";
 import type { PackProofV2Client } from "../v2-api";
-import { requireCaptureCapabilities } from "./capabilities";
+import { requireCaptureCapabilities, requireOrderCaptureCapabilities } from "./capabilities";
 
 export async function capturePreflight(client: PackProofV2Client, userId: string, sellerAttestation = true): Promise<void> {
   if (Platform.OS === "android" && !isUnifiedCameraAvailable())
@@ -14,6 +14,7 @@ export async function capturePreflight(client: PackProofV2Client, userId: string
     throw error;
   }
   const capabilities = requireCaptureCapabilities(response, sellerAttestation && Platform.OS === "android");
+  if (sellerAttestation) requireOrderCaptureCapabilities(capabilities);
   if (sellerAttestation && Platform.OS === "android") {
     const available = await getAttestationAvailability();
     if (!available.available) throw Object.assign(new Error(available.message || "Set up a supported strong biometric in Android Settings before recording."), { code: available.code });

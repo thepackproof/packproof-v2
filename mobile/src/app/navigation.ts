@@ -10,6 +10,7 @@ export type AppRouteName =
   | "boot"
   | "auth"
   | "home"
+  | "orders"
   | "create"
   | "account"
   | "sharing"
@@ -31,8 +32,12 @@ export type AppRouteName =
   | "editShipping"
   | "event";
 
+export type WorkspaceOrigin = "home" | "orders" | "station";
+export type AccountSection = "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
+export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
   name: AppRouteName;
+  accountSection?: AccountSection;
 }
 
 export interface ProofsLibraryState {
@@ -59,12 +64,11 @@ export function normalizeRouteName(name: string): AppRouteName {
   return name as AppRouteName;
 }
 
-export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
+export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigin = "home"): AppRouteName {
   switch (routeName) {
     case "sharing":
     case "signature":
     case "receipt":
-    case "capture":
     case "finalize":
     case "invite":
     case "editPurchase":
@@ -72,9 +76,17 @@ export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
     case "event":
     case "complete":
       return "proof";
+    case "capture":
+      return origin === "home" ? "proof" : origin;
+    case "station":
+      return "orders";
+    case "proof":
+    case "account":
+    case "create":
+    case "manual":
+      return origin;
     case "scan":
     case "intake":
-    case "manual":
     case "review":
       return "create";
     default:
@@ -83,7 +95,7 @@ export function resolveBackRoute(routeName: AppRouteName): AppRouteName {
 }
 
 export function showsTabBar(): boolean {
-  return false;
+  return true;
 }
 
 export function isImmersiveRoute(route: AppRoute): boolean {

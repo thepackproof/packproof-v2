@@ -28,6 +28,7 @@ export function completeSavedCapture(input: {
   let study:NativeStudyTimer|null=null;
   const run = (async () => {
     study=await nativeStudyForCapture(client,userId,capture.studyTimingRef);
+    if(!input.interactive||(capture.recovery?.attempt??0)>0)study?.event('recovery_started');
     const save = async () => { await persistCaptureMetadata(capture); input.onChange?.(capture); };
     input.assertAccount();
     if (input.interactive) {
@@ -41,6 +42,9 @@ export function completeSavedCapture(input: {
       } else if (!capture.captureSha256) { await bindRecordedCapture(client, capture, proofId, userId); input.assertAccount(); }
       await save();
     }
+    const awaitingServer = ['PRESERVATION_PENDING','FINALIZATION_PENDING','SUBMITTED'].includes(capture.recovery?.phase ?? '');
+    study?.phase(awaitingServer ? 'finalization' : 'upload');
+    study?.event('upload_pending');
     const proof = await recoverCaptureCompletion(capture as LocalCapture & { recovery: NonNullable<LocalCapture["recovery"]> }, {
       assertAccount: input.assertAccount, save,
       getProof: () => client.getProof(proofId), getRecovery: () => client.getProofRecovery(proofId),
@@ -57,13 +61,17 @@ export function completeSavedCapture(input: {
         authorization: { challengeId: authorization.challengeId, signature: authorization.signature } })).attestation,
       finalize: async () => {study?.phase('finalization');await client.finalizeProof(proofId);},
     });
+    if(proof.status==='FINALIZED')study?.event('server_completed');
     study?.end('succeeded');return proof as ProofView;
   })().catch(error=>{
     const code=String(error?.code);
     if(code==='PRESERVATION_PENDING')study?.phase('finalization');
-    else if(code==='ATTESTATION_CONFIRMATION_NEEDED')study?.phase('confirmation');
-    else if(capture.recovery?.lastError?.retryable)study?.problem('network');
-    else study?.end('failed',/AUTH|ACCOUNT/.test(code)?'authentication':'unknown');
+    else if(/ATTESTATION_|BIOMETRIC_|LABEL_REVIEW_REQUIRED/.test(code))study?.phase('confirmation');
+    // A recoverable recording remains one open task; cancellation of a biometric
+    // dialog or a transient upload problem is not abandonment of that recording.
+    if(capture.recovery?.lastError?.retryable)study?.problem('network');
+    else if(/AUTH|ACCOUNT|BIOMETRIC/.test(code))study?.problem('authentication');
+    else if(code!=='PRESERVATION_PENDING')study?.problem('unknown');
     throw error;
   }).finally(() => { active.delete(operationId); });
   active.set(operationId, run);

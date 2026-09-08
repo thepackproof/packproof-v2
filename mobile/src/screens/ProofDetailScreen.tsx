@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
@@ -22,10 +22,11 @@ import {
 } from "../copy/format";
 import {
   deriveNextAction,
-  fieldsLocked,
   isCompletedAction,
   shouldShowRequiredAction,
 } from "../copy/next-action";
+import { recordCorrectionState } from "../copy/record-context";
+import { PressableScale } from "../ui/motion";
 import { proofStatusLabel } from "../copy/status";
 import { recordNextStepCopy, recordProofStatus } from "../copy/proof-record";
 import { spacing, typography } from "../theme/tokens";
@@ -101,8 +102,7 @@ export function ProofDetailScreen() {
   const statusLabel = recordProofStatus(proof.status);
   const seller = proof.participants.find((p) => p.role === "SELLER");
   const buyer = proof.participants.find((p) => p.role === "BUYER");
-  const locked = fieldsLocked(proof.status);
-  const canEdit = !locked && app.role === "SELLER" && !grading;
+  const corrections = recordCorrectionState(proof, txn, app.role, Boolean(app.localCapture && captureBelongs));
   const roleLabel = participantFacingRole(proof.workflowType, app.role);
   const yourRole = roleLabel ? (app.role ? `You • ${roleLabel}` : roleLabel) : "";
   const summaryLine = [
@@ -161,7 +161,7 @@ export function ProofDetailScreen() {
         app.go("capture");
         return;
       case "finalize":
-        app.go("finalize");
+        void app.finalizeProof();
         return;
       case "add_participant":
         app.go("invite");
@@ -330,9 +330,9 @@ export function ProofDetailScreen() {
       />
 
       <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
-        <Button label="Evidence and claim tools" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
-        {!grading && proof.status === "FINALIZED" ? <Button label="Receipt and returns" variant="secondary" onPress={() => { setMenuOpen(false); app.openReceipt(proof.proofId); }} /> : null}
-        {app.role === "SELLER" ? <Button
+        <MoreAction label="Evidence and claim tools" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
+        {!grading && proof.status === "FINALIZED" ? <MoreAction label="Receipt and returns" variant="secondary" onPress={() => { setMenuOpen(false); app.openReceipt(proof.proofId); }} /> : null}
+        {app.role === "SELLER" ? <MoreAction
           label="Share Proof"
           variant="secondary"
           loading={app.busy}
@@ -342,7 +342,7 @@ export function ProofDetailScreen() {
           }}
         /> : null}
         {app.role === "SELLER" && !buyer && proof.status !== "FINALIZED" ? (
-          <Button
+          <MoreAction
             label={inviteParticipantTitle(proof.workflowType)}
             variant="secondary"
             onPress={() => {
@@ -351,9 +351,9 @@ export function ProofDetailScreen() {
             }}
           />
         ) : null}
-        {canEdit ? (
-          <Button
-            label="Edit order details"
+        {!grading && corrections.canCorrectOrder ? (
+          <MoreAction
+            label="Correct order details"
             variant="secondary"
             onPress={() => {
               setMenuOpen(false);
@@ -361,9 +361,9 @@ export function ProofDetailScreen() {
             }}
           />
         ) : null}
-        {canEdit ? (
-          <Button
-            label="Edit shipping information"
+        {!grading && corrections.canCorrectShipping ? (
+          <MoreAction
+            label="Correct shipping details"
             variant="secondary"
             onPress={() => {
               setMenuOpen(false);
@@ -372,7 +372,7 @@ export function ProofDetailScreen() {
           />
         ) : null}
         {proof.shipmentSync?.available ? (
-          <Button
+          <MoreAction
             label={
               ["easypost", "shippo"].includes(proof.shipmentSync.provider ?? "")
                 ? "Update tracking"
@@ -386,8 +386,8 @@ export function ProofDetailScreen() {
             }}
           />
         ) : null}
-        {grading || Boolean(proof.assets?.length || proof.observations?.length || proof.continuityObservations?.length) ? <Button label="Items and custody details" variant="secondary" onPress={() => { setMenuOpen(false); setWorkflowDetailsOpen(true); }} /> : null}
-        <Button
+        {grading || Boolean(proof.assets?.length || proof.observations?.length || proof.continuityObservations?.length) ? <MoreAction label="Items and custody details" variant="secondary" onPress={() => { setMenuOpen(false); setWorkflowDetailsOpen(true); }} /> : null}
+        <MoreAction
           label="Technical details"
           variant="tertiary"
           onPress={() => {
@@ -447,7 +447,23 @@ export function ProofDetailScreen() {
   );
 }
 
+function MoreAction({ label, onPress, loading }: Pick<ComponentProps<typeof Button>, "label" | "onPress" | "loading" | "variant">) {
+  const { colors } = useTheme();
+  const icon: ComponentProps<typeof Ionicons>["name"] = label.includes("Share") ? "share-outline"
+    : label.includes("tracking") || label.includes("shipment") ? "location-outline"
+    : label.includes("Correct") ? "create-outline"
+    : label.includes("Technical") ? "document-text-outline"
+    : label.includes("Receipt") ? "return-down-back-outline"
+    : label.includes("buyer") ? "person-add-outline" : "folder-open-outline";
+  return <PressableScale accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: Boolean(loading), busy: Boolean(loading) }} disabled={loading} onPress={onPress} style={[styles.moreRow, { borderBottomColor: colors.divider }]}>
+    <Ionicons name={icon} size={22} color={colors.textSecondary} />
+    <Text style={[styles.body, { color: colors.textPrimary, flex: 1 }]}>{label}</Text>
+    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+  </PressableScale>;
+}
+
 const styles = StyleSheet.create({
+  moreRow: { minHeight: 52, paddingVertical: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1 },
   action: { gap: spacing.sm },
   workflowDetails: { gap: spacing.md, paddingBottom: spacing.lg },
   row: {

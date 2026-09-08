@@ -4,7 +4,7 @@ import { SignatureWorkbench } from "../components/SignatureWorkbench";
 import { PrivacySharePanel } from "../components/PrivacySharePanel";
 import { WorkspaceProofRecord } from "../components/WorkspaceProofRecord";
 import { EvidenceReviewPanel } from "../components/EvidenceReviewPanel";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useViewState } from "../navigation-context";
 import { SharingCode } from "../components/SharingCode";
 import { RetentionPanel } from "../components/RetentionPanel";
@@ -20,6 +20,7 @@ import {
 } from "@packproof/copy/custody";
 import type { CanonicalProof, ChronologyEntry, ShipmentIntegrityView } from "../api/types";
 import { ContinuityCompare } from "../components/ContinuityCompare";
+import { Glyph } from "../site/Brand";
 import { IconMore } from "../components/Icons";
 import { PageHeader } from "../components/PageHeader";
 import {
@@ -76,6 +77,7 @@ export function ProofScreen(props: {
   onSyncShipment?: () => void;
   onConnectTrustedDemo?: () => void;
 }) {
+  const menuTrigger = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const opensEvidenceTools = new URLSearchParams(location.search).has("historyShare") || new URLSearchParams(location.search).has("snapshot") || /(?:anchor|evidence)=/.test(location.hash);
   const [detailed, setDetailed] = useViewState(`proof.${window.location.pathname}.detailed`, opensEvidenceTools);
@@ -99,15 +101,16 @@ export function ProofScreen(props: {
       })
     : null;
   const serverAction = proof?.nextAction ?? null;
-  const actionTitle = (grading ? serverAction?.title : localAction?.label) || "";
-  const actionHint = (grading ? serverAction?.hint : localAction?.hint) || "";
+  const savedSellerProof = !grading && role === "SELLER" && proof?.status === "FINALIZED" && Boolean(props.api);
+  const actionTitle = savedSellerProof ? "Share Proof" : !grading && localAction?.key === "finalize" ? "Finish saving" : (grading ? serverAction?.title : localAction?.label) || "";
+  const actionHint = savedSellerProof ? "Your packing record is locked. Share it when you need it." : !grading && localAction?.key === "finalize" ? "Your recording is received. Finish saving to lock the Proof." : (grading ? serverAction?.hint : localAction?.hint) || "";
   const actionEnabled = grading
     ? Boolean(
         serverAction &&
           serverAction.type !== "WAIT_FOR_RECEIPT" &&
           serverAction.type !== "COMPLETE",
       )
-    : Boolean(localAction?.enabled && localAction.label);
+    : savedSellerProof || Boolean(localAction?.enabled && localAction.label);
   const canInvite = Boolean(proof && role === "SELLER" && proof.status !== "FINALIZED");
   const canImportDemoCarrier =
     Boolean(props.development) &&
@@ -149,6 +152,7 @@ export function ProofScreen(props: {
   }
 
   function handlePrimary() {
+    if (savedSellerProof) { reviewSharing(); return; }
     if (grading && serverAction) {
       if (serverAction.type === "FINALIZE") {
         props.onOpenFinalize?.();
@@ -203,6 +207,7 @@ export function ProofScreen(props: {
         right={
           <button
             type="button"
+            ref={menuTrigger}
             className="icon-btn"
             aria-label="Proof actions"
             aria-expanded={menuOpen}
@@ -213,7 +218,7 @@ export function ProofScreen(props: {
         }
       />
       {menuOpen ? (
-        <div className="action-sheet" role="menu">
+        <div className="action-sheet record-action-sheet" role="group" aria-label="Proof actions" onKeyDown={event => { if (event.key === "Escape") { setMenuOpen(false); menuTrigger.current?.focus(); } }}>
           {props.api && role === "SELLER" ? (
             <button
               className="btn btn-secondary"
@@ -223,11 +228,11 @@ export function ProofScreen(props: {
                 reviewSharing();
               }}
             >
-              Share Proof
+              <Glyph name="share" size={18} /> Share Proof
             </button>
           ) : null}
-          <button className="btn btn-secondary" onClick={() => { setMenuOpen(false); setDetailed(true); requestAnimationFrame(() => document.getElementById("proof-tools")?.scrollIntoView({ block: "start", behavior: "smooth" })); }}>Proof tools and details</button>
-          {!grading && ["SELLER", "BUYER"].includes(role || "") && proof.status === "FINALIZED" && props.onOpenReceipt && <button className="btn btn-secondary" onClick={() => { setMenuOpen(false); props.onOpenReceipt?.(); }}>Document receipt or return</button>}
+          <button className="btn btn-secondary" onClick={() => { setMenuOpen(false); setDetailed(true); requestAnimationFrame(() => document.getElementById("proof-tools")?.scrollIntoView({ block: "start", behavior: "smooth" })); }}><Glyph name="file" size={18} /> Evidence and claim tools</button>
+          {!grading && ["SELLER", "BUYER"].includes(role || "") && proof.status === "FINALIZED" && props.onOpenReceipt && <button className="btn btn-secondary" onClick={() => { setMenuOpen(false); props.onOpenReceipt?.(); }}><Glyph name="box" size={18} /> Document receipt or return</button>}
           {canInvite ? (
             <button
               className="btn btn-secondary"
@@ -237,7 +242,7 @@ export function ProofScreen(props: {
                 props.onOpenInvite?.();
               }}
             >
-              {inviteParticipantTitle(proof.workflowType)}
+              <Glyph name="mail" size={18} /> {inviteParticipantTitle(proof.workflowType)}
             </button>
           ) : null}
         </div>
@@ -262,7 +267,7 @@ export function ProofScreen(props: {
         onOpenReceipt={props.onOpenReceipt}
         onReviewSharing={props.api && role === "SELLER" ? reviewSharing : undefined}
         trackingTools={<details className="record-order-details"><summary>Shipping details and tools</summary>
-      {proof.captureShipping ? <section className="panel stack" aria-label="Captured shipping label">
+      {proof.captureShipping && proof.captureShipping.observations.length > 0 ? <section className="panel stack" aria-label="Captured shipping label">
         <h2>Shipping label captured during packing</h2>
         <p>{proof.captureShipping.observations[0]?.trackingNumber} · {Math.floor((proof.captureShipping.observations[0]?.detectedAtMs??0)/1000)}s into the recording</p>
         <p className="muted">Label recognition and timing are reported by the recording device. Carrier observations appear separately below.</p>
@@ -342,15 +347,9 @@ export function ProofScreen(props: {
         ) : null}
         {canSyncShipment ? (
           <section className="section stack">
-            <h2>
-              {proof.shipmentSync?.provider === "easypost"
-                ? "Tracking via EasyPost"
-                : "Trusted shipment sync"}
-            </h2>
+            <h2>Refresh tracking</h2>
             <p className="note">
-              {proof.shipmentSync?.provider === "easypost"
-                ? "PackProof asks EasyPost for carrier tracking observations. EasyPost is not the carrier."
-                : "Asks PackProof to refresh observations through the server-side trusted adapter."}
+              Check for new carrier reports. This does not change the locked packing record.
             </p>
             <button
               className="btn"
@@ -358,7 +357,7 @@ export function ProofScreen(props: {
               disabled={props.busy}
               onClick={props.onSyncShipment}
             >
-              Sync shipment
+              Refresh tracking
             </button>
           </section>
         ) : null}
@@ -408,7 +407,7 @@ export function ProofScreen(props: {
       </details>}
       {props.api && role === "SELLER" && <details className="proof-supporting-tools">
         <summary>Share Proof</summary>
-        <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} /></div>
+        <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} currentUserId={props.currentUserId} /></div>
       </details>}
       {detailed ? (
         <EvidenceReviewPanel

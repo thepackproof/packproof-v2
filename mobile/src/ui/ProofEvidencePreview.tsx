@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Modal, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Modal, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as FileSystem from "expo-file-system";
@@ -12,9 +12,10 @@ import type { RecordEvidence } from "../copy/proof-record";
 import { Button, IconButton } from "./Button";
 import { PressableScale } from "./motion";
 
-export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs, initialTime = 0, onTime }: {
+export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs, active = true, initialTime = 0, onTime }: {
   evidence: RecordEvidence;
   title: string;
+  active?: boolean;
   bookmarks: EvidenceAnchor[];
   labelOffsetMs?: number;
   initialTime?: number;
@@ -25,6 +26,9 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
   const [expanded, setExpanded] = useState(false), [imageError, setImageError] = useState(false);
   const [playbackAttempt, setPlaybackAttempt] = useState(0), [retrying, setRetrying] = useState(false);
   const playbackPosition = useRef(initialTime);
+  const [imageRatio, setImageRatio] = useState(1);
+  const dimensions = useWindowDimensions();
+  useEffect(() => { if (!active) setExpanded(false); }, [active]);
   const lock = useRef(false);
   const contentType = (evidence.contentType ?? "application/octet-stream").split(";")[0].trim().toLowerCase();
   // Both routes authorize access and verify the stored original against its committed digest.
@@ -70,9 +74,9 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
         <View style={styles.heading}><Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text></View>
         <IconButton label="Save original evidence" onPress={() => void download()} disabled={downloading}>{downloading ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="download-outline" size={23} color={colors.textPrimary} />}</IconButton>
       </View>
-      {video ? <OriginalVideo key={playbackAttempt} uri={uri} token={token} bookmarks={bookmarks} labelOffsetMs={labelOffsetMs} initialTime={playbackPosition.current} onTime={seconds => { playbackPosition.current = seconds; onTime?.(seconds); }} onRetry={() => void retryPlayback()} retrying={retrying} /> : picture ? <View style={styles.canvas}>
+      {video ? <OriginalVideo key={playbackAttempt} uri={uri} token={token} active={active} bookmarks={bookmarks} labelOffsetMs={labelOffsetMs} initialTime={playbackPosition.current} onTime={seconds => { playbackPosition.current = seconds; onTime?.(seconds); }} onRetry={() => void retryPlayback()} retrying={retrying} /> : picture ? <View style={styles.canvas}>
         <PressableScale onPress={() => setExpanded(true)} accessibilityRole="button" accessibilityLabel="Expand original image">
-          <Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={styles.image} resizeMode="contain" accessibilityLabel={title} onError={() => setImageError(true)} />
+          <Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={[styles.image, { aspectRatio: imageRatio, maxHeight: dimensions.height * 0.6 }]} onLoad={event => { const { width, height } = event.nativeEvent.source; if (width > 0 && height > 0) setImageRatio(width / height); }} resizeMode="contain" accessibilityLabel={title} onError={() => setImageError(true)} />
         </PressableScale>
         {imageError ? <Text style={[styles.meta, { color: colors.error }]}>The image could not load. Refresh the Proof or save the original to view it.</Text> : <Text style={[styles.meta, { color: colors.textSecondary }]}>Tap the image to expand.</Text>}
       </View> : <View style={styles.canvas}><Text style={[styles.meta, { color: colors.textSecondary }]}>Save the original to open this file on your device.</Text><Button label="Save original" variant="secondary" loading={downloading} onPress={() => void download()} /></View>}
@@ -82,7 +86,7 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
   </View>;
 }
 
-function OriginalVideo({ uri, token, bookmarks, labelOffsetMs, initialTime, onTime, onRetry, retrying }: { uri: string; token: string; bookmarks: EvidenceAnchor[]; labelOffsetMs?: number; initialTime: number; onTime?: (seconds: number) => void; onRetry: () => void; retrying: boolean }) {
+function OriginalVideo({ uri, token, active, bookmarks, labelOffsetMs, initialTime, onTime, onRetry, retrying }: { uri: string; token: string; active: boolean; bookmarks: EvidenceAnchor[]; labelOffsetMs?: number; initialTime: number; onTime?: (seconds: number) => void; onRetry: () => void; retrying: boolean }) {
   const { colors } = useTheme();
   const [selected, setSelected] = useState<string | null>(null), [error, setError] = useState(false);
   const restored = useRef(false), timeCallback = useRef(onTime);
@@ -103,6 +107,7 @@ function OriginalVideo({ uri, token, bookmarks, labelOffsetMs, initialTime, onTi
     restore();
     return () => { subscription.remove(); position.remove(); };
   }, [player]);
+  useEffect(() => { if (!active) player.pause(); }, [active, player]);
   function seek(key: string, startMs: number) {
     player.currentTime = Math.max(0, startMs / 1000);
     setSelected(key); player.play();
@@ -114,9 +119,9 @@ function OriginalVideo({ uri, token, bookmarks, labelOffsetMs, initialTime, onTi
     {bookmarks.length || scannerBookmark ? <View style={styles.bookmarks} accessibilityLabel="Original recording bookmarks">
       {bookmarks.map(anchor => <PressableScale key={anchor.anchorId} accessibilityRole="button" accessibilityState={{ selected: selected === anchor.anchorId }} accessibilityLabel={`Play ${anchor.label} at ${elapsedLabel(anchor.startMs)}`} onPress={() => seek(anchor.anchorId, anchor.startMs)} style={[styles.bookmark, { backgroundColor: colors.accentSoft, borderColor: selected === anchor.anchorId ? colors.accent : colors.accentSoftBorder }]}>
         <Text style={[styles.bookmarkLabel, { color: colors.accentText }]}>{elapsedLabel(anchor.startMs)} · {anchor.label}</Text>
-        <Text style={[styles.caption, { color: colors.textSecondary }]}>{anchor.sourceType === "SCANNER_TRIGGERED" ? "Label scan" : "Marked by a participant"}</Text>
+        <Text style={[styles.caption, { color: colors.textSecondary }]}>{anchor.sourceType === "SCANNER_TRIGGERED" ? "Capture label observation" : "Marked by a participant"}</Text>
       </PressableScale>)}
-      {scannerBookmark ? <PressableScale accessibilityRole="button" accessibilityLabel={`Replay shipping label at ${elapsedLabel(labelOffsetMs!)}`} onPress={() => seek("shipping-label", labelOffsetMs!)} style={[styles.bookmark, { backgroundColor: colors.accentSoft, borderColor: selected === "shipping-label" ? colors.accent : colors.accentSoftBorder }]}><Text style={[styles.bookmarkLabel, { color: colors.accentText }]}>{elapsedLabel(labelOffsetMs!)} · Shipping label detected</Text><Text style={[styles.caption, { color: colors.textSecondary }]}>Label scan</Text></PressableScale> : null}
+      {scannerBookmark ? <PressableScale accessibilityRole="button" accessibilityLabel={`Replay shipping label at ${elapsedLabel(labelOffsetMs!)}`} onPress={() => seek("shipping-label", labelOffsetMs!)} style={[styles.bookmark, { backgroundColor: colors.accentSoft, borderColor: selected === "shipping-label" ? colors.accent : colors.accentSoftBorder }]}><Text style={[styles.bookmarkLabel, { color: colors.accentText }]}>{elapsedLabel(labelOffsetMs!)} · Label read during capture</Text><Text style={[styles.caption, { color: colors.textSecondary }]}>Capture label observation</Text></PressableScale> : null}
     </View> : null}
   </View>;
 }
@@ -126,8 +131,8 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 4, alignItems: "center" },
   fileIcon: { width: 40, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   heading: { flex: 1, gap: 4 }, title: { ...typography.bodyStrong }, meta: { ...typography.secondary }, caption: { ...typography.caption },
-  canvas: { padding: 8, gap: 12 }, video: { width: "100%", aspectRatio: 16 / 9, minHeight: 170, backgroundColor: "#000", borderRadius: 10 },
-  image: { width: "100%", height: 240, borderRadius: 10 }, bookmarks: { gap: 8, flexDirection: "row", flexWrap: "wrap" },
+  canvas: { padding: 8, gap: 12 }, video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000", borderRadius: 10 },
+  image: { width: "100%", borderRadius: 10 }, bookmarks: { gap: 8, flexDirection: "row", flexWrap: "wrap" },
   bookmark: { padding: 12, gap: 4, minHeight: 48, borderRadius: 10, borderWidth: 1 }, bookmarkLabel: { ...typography.body },
   expanded: { flex: 1, padding: 24, paddingTop: 56, gap: 16 }, fullImage: { flex: 1, width: "100%" },
 });

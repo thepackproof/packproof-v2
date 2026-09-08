@@ -6,6 +6,10 @@ The historical release-candidate scope below is retained as context; its exclusi
 
 PackProof V2 is an independent repository. It is not a branch of PackProof.
 
+## September 8 UI/UX candidate
+
+The authorized September 7 UI/UX redesign governs the current mobile and web candidate. See [implementation and acceptance record](ui-ux-redesign-2026-09-08/README.md). The ordinary seller path is Orders → camera preview → one uninterrupted video → review and deliberate confirmation → authoritative automatic finalization. Separate pre-scans, photos, finish rescans and a second manual finalize step are legacy behavior. Preserve their recoverable journals, not their obsolete visible choreography. Device/usability and signed-build gates are explicitly pending until evidenced.
+
 ## Core principle
 
 A PackProof is one immutable, transaction-bound evidence record whose history can only be appended to, whose state can only be changed through validated server-side transitions, and whose final contents can be independently integrity-verified.

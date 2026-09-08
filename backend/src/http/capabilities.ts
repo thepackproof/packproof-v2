@@ -6,7 +6,11 @@ export function captureCapabilities(release: ReleaseIdentity, durableReceiptsReq
   return {
     schemaVersion: 1,
     capture: { protocolVersions: [1], maxBytes: 250_000_000, maxDurationSeconds: 300, maxActiveUploads: 2 },
+    accountDeletion: { requestSupported: true },
+    correctionPolicy: { importedFactsReadOnly: true, captureBindingLocksManualDetails: true },
+    shippingReview: { requiredForObservedConflicts: true, noLabelAllowed: true },
     sellerAttestation: {
+      contextBindingVersion: 1,
       challengeVersions: [1], statementVersion: 1, statement: SELLER_SHIPPING_STATEMENT,
       methods: ["ANDROID_BIOMETRIC_STRONG"], hardwareOriginVerified: false,
     },

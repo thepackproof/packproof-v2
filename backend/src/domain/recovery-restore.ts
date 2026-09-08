@@ -19,14 +19,15 @@ const CORE_KEYS: Record<string, string[]> = {
   observation_assets:["observation_id","asset_id"], observation_evidence:["observation_id","evidence_id"], observation_external_refs:["observation_id","tenant_key","external_id"],
   proof_external_references:["id"], shipment_events:["id"], capture_shipping_labels:["id"], capture_label_observations:["id"], proof_parcel_scopes:["proof_id"],
   proof_retention_holds:["id"], proof_retention_assignments:["id"], proof_deletion_requests:["id"], proof_disposition_state:["proof_id"],
+  transaction_source_observations:["id"], capture_label_resolutions:["id"],
   final_manifests:["id"], proof_supplements:["id"],
 };
 const RESTORE_KEYS = {...CORE_KEYS, ...POLICY_RECOVERY_KEYS};
 const ORDER = [
-  "users","auth_identities","api_tenants","api_keys","transactions","transaction_shipping","transaction_items","transaction_integration_identities",
+  "users","auth_identities","api_tenants","api_keys","transactions","transaction_shipping","transaction_items","transaction_integration_identities","transaction_source_observations",
   "proofs","proof_participants","commerce_receivers","commerce_stages","capture_sessions","capture_session_reports","evidence","commerce_stage_evidence","audit_events","attestations","attestation_challenges",
   "proof_assets","custody_observations","custody_transfers","proof_asset_external_refs","observation_assets","observation_evidence","observation_external_refs","continuity_evaluations",
-  "proof_external_references","shipment_events","capture_shipping_labels","capture_label_observations","proof_parcel_scopes","invitations","api_tenant_proofs",
+  "proof_external_references","shipment_events","capture_shipping_labels","capture_label_observations","capture_label_resolutions","proof_parcel_scopes","invitations","api_tenant_proofs",
   "proof_access_links","proof_disclosure_grants","proof_notification_subscriptions","proof_receipt_preferences","user_verified_contacts","proof_media_derivatives","support_access_grants","support_access_revocations",
   "proof_retention_holds","proof_retention_assignments","proof_deletion_requests","proof_disposition_state","final_manifests","proof_supplements",
 ];
