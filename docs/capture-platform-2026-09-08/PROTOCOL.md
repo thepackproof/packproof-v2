@@ -6,6 +6,7 @@ All endpoints require the existing authenticated participant session unless `/v1
 |---|---|
 | POST `/capture-intents` | `{proofId, allowedSurfaces?}` → opaque launch token, intent ID, 10-minute expiry, native/browser fragment paths. |
 | POST `/v1/proofs/:id/capture-intents` | Same intent operation; tenant-bound, `evidence:write`, required stable Idempotency-Key; encrypted replay result. |
+| GET `/capture-intents/:intentId/context` | Authenticated same-owner recovery after a lost bind response, only while the bound session remains unstarted and unexpired; never redeems the token again. |
 | POST `/capture-sessions/bind` | `{launchToken, capabilities}` → existing source session plus immutable CaptureContext. Redeem once. |
 | POST `/capture-sessions/:id/receipts` | `{sequence,observations,segments}` → exact idempotent batch receipt; bytes remain unverified until source commitment. |
 | POST `/proofs/:proofId/capture-sessions/:id/complete` | Existing original media registration before seal. |

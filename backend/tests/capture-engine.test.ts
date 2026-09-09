@@ -3,7 +3,7 @@ import request from 'supertest';
 import {readFile} from 'node:fs/promises';
 import {createHarness,createUser,auth,type TestHarness} from './helpers.js';
 import {sha256Hex} from '../src/hash.js';
-import {issueIntent,bindIntent,sealCapture,verifySegmentStream,receiveBatch} from '../src/capture/service.js';
+import {issueIntent,bindIntent,sealCapture,verifySegmentStream,receiveBatch,recoverIntentContext} from '../src/capture/service.js';
 import {CAPTURE_SCHEMA,CORE_VERSION,POLICY,canonical,createManifest,manifestDigest,chainSegment,transition,guidance,evaluate,type CaptureContext,type Observation,type CapabilitySnapshot} from '../src/capture/core.js';
 import {completeCaptureSession} from '../src/domain/capture-sessions.js';
 import {initializeEvidenceUpload,commitEvidence} from '../src/domain/evidence.js';
@@ -15,6 +15,7 @@ const context:CaptureContext={schema:CAPTURE_SCHEMA,captureId:'capture',intentId
 const observations=(captureId:string):Observation[]=>[{id:'start',captureId,type:'CAPTURE_STARTED',startMs:0,endMs:0,source:'DEVICE',model:null,confidence:null,value:null,timePrecision:'APPROXIMATE'},{id:'end',captureId,type:'CAPTURE_ENDED',startMs:200,endMs:200,source:'DEVICE',model:null,confidence:null,value:null,timePrecision:'APPROXIMATE'}];
 async function manifest(c:CaptureContext,bytes:Buffer){const segment=await chainSegment({sequence:0,offsetBytes:0,byteSize:bytes.length,sha256:sha256Hex(bytes),previous:null,startMs:0,endMs:200,timing:'WHOLE_RECORDING'},hash);return createManifest(c,{sha256:sha256Hex(bytes),byteSize:bytes.length,contentType:'video/mp4',durationMs:200},[segment],observations(c.captureId),hash);}
 it('canonical ordering, state transitions and domain-separated hash vectors are deterministic',async()=>{
+ const fixture=JSON.parse(await readFile(new URL('../../docs/capture-platform-2026-09-08/conformance-v1.json',import.meta.url),'utf8'));const {commitment,...input}=fixture.segment;expect(canonical(input)).toBe(fixture.canonicalSegment);expect(await chainSegment(input,hash)).toEqual(fixture.segment);expect(sha256Hex(fixture.sourceUtf8)).toBe(input.sha256);
  expect(canonical({b:2,a:[true,null,'x']})).toBe('{"a":[true,null,"x"],"b":2}');expect(()=>canonical({x:NaN})).toThrow();expect(transition('CAPTURING','INTERRUPTED')).toBe('INTERRUPTED');expect(()=>transition('BOUND','FINALIZED')).toThrow();
  const m=await manifest(context,Buffer.from('source'));expect(await manifestDigest(m,hash)).toBe(await manifestDigest(await manifest(JSON.parse(JSON.stringify(context)),Buffer.from('source')),hash));
 });
@@ -41,6 +42,8 @@ describe('server-bound capture',()=>{
   const p=await proof();const intent=await issueIntent(h.db,clock,actor,p,['WEB']);
   await expect(bindIntent(h.db,clock,other,{launchToken:intent.launchToken,capabilities})).rejects.toMatchObject({code:'CAPTURE_INTENT_INVALID'});
   const bound=await bindIntent(h.db,clock,actor,{launchToken:intent.launchToken,capabilities});expect(bound.context.proofId).toBe(p);
+  expect((await recoverIntentContext(h.db,clock,actor,intent.intentId)).session.id).toBe(bound.session.id);
+  await expect(recoverIntentContext(h.db,clock,other,intent.intentId)).rejects.toMatchObject({code:'CAPTURE_INTENT_NOT_BOUND'});
   await expect(bindIntent(h.db,clock,actor,{launchToken:intent.launchToken,capabilities})).rejects.toMatchObject({code:'CAPTURE_INTENT_USED'});
   await expect(h.db.query("UPDATE capture_engine_sessions SET proof_id='another' WHERE session_id=$1",[bound.session.id])).rejects.toThrow();
   const stale=await issueIntent(h.db,clock,actor,await proof());now=new Date(now.getTime()+600001);await expect(bindIntent(h.db,clock,actor,{launchToken:stale.launchToken,capabilities})).rejects.toMatchObject({code:'CAPTURE_INTENT_EXPIRED'});
@@ -54,6 +57,7 @@ describe('server-bound capture',()=>{
   await sealCapture(h.db,clock,actor,b.session.id,{source:m.source,segments:m.segments,observations:m.observations,sha256:digest});
   const upload=await initializeEvidenceUpload(h.db,clock,h.objectStore,actor,p,{contentType:'video/mp4',evidenceType:'FULFILLMENT_CAPTURE',captureSessionId:b.session.id,idempotencyKey:'source'});await h.objectStore.put(upload.objectKey,bytes,'video/mp4');
   await commitEvidence(h.db,clock,h.objectStore,actor,p,upload.evidenceId);
+  await expect(recoverIntentContext(h.db,clock,actor,intent.intentId)).rejects.toMatchObject({code:'CAPTURE_ALREADY_STARTED'});
   await commitAttestation(h.db,clock,actor,p,{statement:'PACKED_DESCRIBED_ITEM',relatedEvidenceId:upload.evidenceId});const result=await finalizeProof(h.db,clock,actor,p);
   expect((result.manifest.manifest as any).captureManifests[0].sha256).toBe(digest);expect((await finalizeProof(h.db,clock,actor,p)).manifest.sha256).toBe(result.manifest.sha256);
   const response=await request(h.app).get(`/proofs/${p}/capture-capsule`).set(auth(actor));expect(response.status).toBe(200);expect(response.body.captures[0].events[0].startMs).toBe(0);

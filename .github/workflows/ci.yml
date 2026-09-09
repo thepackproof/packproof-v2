@@ -269,6 +269,8 @@ jobs:
         run: node --test browser-companion/tests/*.test.cjs
       - name: Verify BOM refusal and artifact identity behavior
         run: node --test scripts/release-bom.test.mjs scripts/publication-policy-gate.test.mjs
+      - name: Verify capture host handoff and signed receipts
+        run: node --test packages/capture-sdk/server.test.mjs
       - name: Verify portable signatures and received supplement snapshots
         run: |
           python3 --version

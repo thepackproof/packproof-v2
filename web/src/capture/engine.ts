@@ -9,7 +9,24 @@ export type EngineSession={id:string;state:string;context:CaptureContext};
 type Record={key:string;apiScope:string;userId:string;context:CaptureContext;segments:MediaSegment[];observations:Observation[];metadata:Omit<PendingStationCapture,'file'>;finished:boolean;};
 const open=()=>new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('packproof-capture-engine',1);r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'key'});r.result.createObjectStore('chunks',{keyPath:'key'});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(new Error('Browser storage is unavailable.'));});
 async function read<T>(store:string,key?:string):Promise<T>{const db=await open();try{return await new Promise((resolve,reject)=>{const t=db.transaction(store,'readonly'),r=key===undefined?t.objectStore(store).getAll():t.objectStore(store).get(key);t.oncomplete=()=>resolve(r.result as T);t.onerror=()=>reject(t.error);});}finally{db.close();}}
-async function write(record:Record,chunk?:{key:string;blob:Blob}){const db=await open();try{await new Promise<void>((resolve,reject)=>{const t=db.transaction(['sessions','chunks'],'readwrite');t.objectStore('sessions').put(record);if(chunk)t.objectStore('chunks').add(chunk);t.oncomplete=()=>resolve();t.onabort=t.onerror=()=>reject(new Error('Free browser storage before continuing. Your committed chunks are kept.'));});}finally{db.close();}}
+async function write(record:Record,chunk?:{key:string;blob:Blob},create=false){
+  const db=await open();
+  try {
+    await new Promise<void>((resolve,reject)=>{
+      const transaction=db.transaction(['sessions','chunks'],'readwrite');
+      if(create)transaction.objectStore('sessions').add(record);
+      else transaction.objectStore('sessions').put(record);
+      if(chunk)transaction.objectStore('chunks').add(chunk);
+      transaction.oncomplete=()=>resolve();
+      transaction.onabort=transaction.onerror=event=>{
+        const cause=transaction.error??(event.target as IDBRequest)?.error;
+        const exists=cause?.name==='ConstraintError';
+        reject(Object.assign(new Error(exists?'A recording already exists. Recover it from its original order.':'Free browser storage before continuing. Your committed chunks are kept.'),{code:exists?'CAPTURE_JOURNAL_EXISTS':'CAPTURE_STORAGE_FAILED'}));
+      };
+    });
+  } finally {db.close();}
+}
+
 const keyFor=(scope:string,userId:string,captureId:string)=>canonical([scope,userId,captureId]);
 export async function beginBrowserEngine(api:PackProofApi,proofId:string|undefined,launchToken?:string):Promise<EngineSession> {
   if(!isSecureContext||!crypto.subtle||!indexedDB)throw new Error('Use a secure camera browser with local storage.');
@@ -17,7 +34,11 @@ export async function beginBrowserEngine(api:PackProofApi,proofId:string|undefin
   if(estimate?.quota&&reserve<64*1024*1024)throw new Error('Free browser storage before recording.');
   const capabilities:CapabilitySnapshot={surface:'WEB',cameraSource:'UNKNOWN',timing:'MONOTONIC',barcode:typeof (globalThis as {BarcodeDetector?:unknown}).BarcodeDetector==='function',itemVisibility:false,durableJournal:true,incrementalMedia:true,audio:false,deviceAuthentication:'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:reserve,coreVersion:CORE_VERSION};
   const intent=launchToken?{launchToken}:await api.captureEngineRequest<{launchToken:string}>('/capture-intents','POST',{proofId,allowedSurfaces:['WEB']});
-  const bound=await api.captureEngineRequest<{session:{id:string;state:string};context:CaptureContext}>('/capture-sessions/bind','POST',{launchToken:intent.launchToken,capabilities});
+  const bound=await api.captureEngineRequest<{session:{id:string;state:string};context:CaptureContext}>('/capture-sessions/bind','POST',{launchToken:intent.launchToken,capabilities}).catch(error=>{
+    if(error?.status!==undefined&&error?.code!=='CAPTURE_INTENT_USED')throw error;
+    return api.captureEngineRequest<{session:{id:string;state:string};context:CaptureContext}>(`/capture-intents/${encodeURIComponent(intent.launchToken.split('.')[0])}/context`);
+  });
+  if(bound.session.state!=='ISSUED'||canonical({...bound.context.capabilities,storageReserveBytes:0})!==canonical({...capabilities,storageReserveBytes:0}))throw new Error('Recover this recording on its original device, or open a new capture link.');
   if((proofId!==undefined&&bound.context.proofId!==proofId)||bound.context.captureId!==bound.session.id)throw new Error('This capture link belongs to another order.');
   return {...bound.session,context:bound.context};
 }
@@ -27,7 +48,7 @@ export class BrowserCaptureJournal {
     if(context.actorId!==userId||context.proofId!==metadata.order.proofId)throw new Error('Capture account or order mismatch.');
     this.record={key:keyFor(apiScope,userId,context.captureId),apiScope,userId,context,metadata,segments:[],observations:[],finished:false};
   }
-  async start(){await write(this.record);}
+  async start(){await write(this.record,undefined,true);}
   append(blob:Blob,timeMs:number){
     this.serial=this.serial.then(async()=>{
       if(this.error)throw this.error;

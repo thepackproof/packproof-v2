@@ -76,11 +76,13 @@ All table prefixes are `CAP-`. “Pending” means not implemented or not qualif
 Local checks run in this turn:
 
 - Backend typecheck passed.
-- Android/React Native TypeScript check passed; this is not Kotlin compilation or physical-device validation.
+- Android/React Native TypeScript check passed. CI also compiled the native CameraX/attestation modules and assembled a debug APK; physical-device validation is still pending.
 - Browser production build passed.
-- Focused backend capture/attestation/relay checks: 24 passed.
+- Focused backend capture/attestation/relay/partner checks: 35 passed.
 - Focused browser journal/camera/reviewer checks: 13 passed.
-- Host SDK request and signed-receipt checks: 2 passed.
+- Host SDK request and signed-receipt checks: 2 passed, now included in CI.
+
+Fixed conformance vectors are checked by the backend suite. Recovery checks also cover lost bind responses, ownership, completed-session refusal and prevention of browser journal overwrite.
 
 Later checks and remote CI results are recorded in the delivery response/PR. No live service or device behavior is inferred from these local passes.
 

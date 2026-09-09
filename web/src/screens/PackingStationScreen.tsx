@@ -414,7 +414,7 @@ export function PackingStationScreen(props: {
           journalRef.current=engineJournalRef.current.flush().catch(()=>{
             interruptedRef.current=true;
             setLocalError("Browser storage is full. Keep this page open and save the original recording.");
-            if(recorder.state==='recording')recorder.stop();
+            if(recorder.state==='recording'&&!finishingRef.current)void finishPacking('MANUAL',false);
           });
         } else journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
         if (partial.size > capabilities.capture.maxBytes * 0.92 || durationRef.current >= capabilities.capture.maxDurationSeconds * 1000) {
@@ -428,6 +428,7 @@ export function PackingStationScreen(props: {
       dispatch({type:"START_RECORDING",trigger:"MANUAL"}); recorder.start(2000); recordingStarted = true; dispatch({type:"RECORDING_STARTED"});
       return session.id;
     } catch (error) {
+      if((error as {code?:string})?.code==='CAPTURE_JOURNAL_EXISTS')issuedSessionId=null;
       studyTimer.current?.problem('capability');
       stopLiveTracks();
       setLocalError(error instanceof DOMException && error.name === "NotAllowedError" ? "Allow camera access in your browser’s site settings, then retry. No recording has been uploaded." : error instanceof Error ? error.message : "Camera unavailable. Check that another app is not using it, then retry camera.");
@@ -457,9 +458,10 @@ export function PackingStationScreen(props: {
         recorder.onstop = () => { studyTimer.current?.event('recording_stopped'); resolve(assembled()); };
         recorder.stop();
       });
+      heldBlobRef.current=blob;setHeldBlob(blob);setPreviewUrl(URL.createObjectURL(blob));
+      stopLiveTracks();
       await journalRef.current;
       await engineJournalRef.current?.finish();
-      stopLiveTracks();
       // Preserve the final original immediately. Carrier-network work never blocks review.
       await acceptLiveVideo(blob, blob.type || "video/webm", trigger, finishConfirmed);
     })().catch(error => {

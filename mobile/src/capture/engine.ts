@@ -13,7 +13,11 @@ export async function beginNativeEngine(client:PackProofV2Client,proofId:string|
   if(!isNativeCaptureEngineAvailable())throw new Error('Install the current Android capture build before opening this link.');
   const capabilities:CapabilitySnapshot={surface:'ANDROID',cameraSource:'INTEGRATED',timing:'ENCODER_PROGRESS',barcode:true,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:(await getAttestationAvailability()).available?'ANDROID_BIOMETRIC_STRONG':'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:await FileSystem.getFreeDiskStorageAsync(),coreVersion:CORE_VERSION};
   const intent=launchToken?{launchToken}:await client.captureEngineRequest<{launchToken:string}>('/capture-intents','POST',{proofId,allowedSurfaces:['ANDROID']});
-  const result=await client.captureEngineRequest<{session:{id:string;proofId:string;policyVersion:string;state:string;expiresAt:string;recoverUntil:string};context:CaptureContext}>('/capture-sessions/bind','POST',{launchToken:intent.launchToken,capabilities});
+  const result=await client.captureEngineRequest<{session:{id:string;proofId:string;policyVersion:string;state:string;expiresAt:string;recoverUntil:string};context:CaptureContext}>('/capture-sessions/bind','POST',{launchToken:intent.launchToken,capabilities}).catch(error=>{
+    if(error?.status!==undefined&&error?.code!=='CAPTURE_INTENT_USED')throw error;
+    return client.captureEngineRequest<{session:{id:string;proofId:string;policyVersion:string;state:string;expiresAt:string;recoverUntil:string};context:CaptureContext}>(`/capture-intents/${encodeURIComponent(intent.launchToken.split('.')[0])}/context`);
+  });
+  if(result.session.state!=='ISSUED'||canonical({...result.context.capabilities,storageReserveBytes:0})!==canonical({...capabilities,storageReserveBytes:0}))throw new Error('Recover this recording on its original device, or open a new capture link.');
   if((proofId!==undefined&&result.context.proofId!==proofId)||result.context.captureId!==result.session.id)throw new Error('The capture link belongs to another order.');
   await bindNativeCaptureContext(result.session.id,result.context.proofId,canonical(result.context));
   return {...result.session,captureContext:result.context};

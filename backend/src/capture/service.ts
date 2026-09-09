@@ -6,7 +6,7 @@ import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { DomainError } from '../domain/errors.js';
 import { loadProof, requireParticipant, assertNotFinalized } from '../domain/proof-access.js';
-import { createCaptureSession, loadCaptureSession } from '../domain/capture-sessions.js';
+import { createCaptureSession, loadCaptureSession, captureSessionView } from '../domain/capture-sessions.js';
 import { loadTransactionView } from '../domain/transactions.js';
 import { appendAudit } from '../domain/audit.js';
 import { CAPTURE_SCHEMA, CORE_VERSION, POLICY, canonical, createManifest, manifestDigest, validateCapabilities, validateObservation, check, CaptureError, type CapabilitySnapshot, type CaptureContext, type CaptureManifest, type Observation, type MediaSegment, type Surface } from './core.js';
@@ -129,3 +129,13 @@ export async function captureCapsules(db:Database,actor:string,proofId:string) {
 export function asDomainError(error:unknown):unknown { return error instanceof CaptureError?new DomainError(error.code,error.message,409):error; }
 
 export async function verifySegmentStream(manifest:CaptureManifest,stream:AsyncIterable<Uint8Array>):Promise<void> { for await (const _ of inspectSegmentStream(manifest,stream)) { /* Validate every byte. */ } }
+
+/** Lost-bind-response recovery is an authenticated read, never a second token redemption. */
+export async function recoverIntentContext(db:Database,clock:Clock,actor:string,intentId:string){
+  const intent=(await db.query<IntentRow>('SELECT * FROM capture_intents WHERE id=$1 AND actor_user_id=$2',[intentId,actor])).rows[0];
+  check(intent&&intent.session_id,'CAPTURE_INTENT_NOT_BOUND','This link has not opened a recording for your account');
+  const row=await access(db,actor,intent.session_id);const session=await loadCaptureSession(db,actor,row.proof_id,intent.session_id);
+  assertNotFinalized(await loadProof(db,row.proof_id));
+  check(session.state==='ISSUED'&&new Date(session.expires_at).getTime()>clock.now().getTime(),'CAPTURE_ALREADY_STARTED','Recover the existing recording from its original device and order');
+  return {session:captureSessionView(session),context:row.context_json,contextSha256:row.context_sha256};
+}
