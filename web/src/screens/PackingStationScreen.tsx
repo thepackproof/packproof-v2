@@ -1,3 +1,4 @@
+import { beginBrowserEngine, BrowserCaptureJournal, captureEngineEnabled, type EngineSession } from "../capture/engine";
 import { randomId } from "../random-id";
 import type { IntakeSnapshot } from '../intake-types';
 import {startStationStudy,resumeStationStudy,type StationStudyTimer} from '../analytics/study-capture';
@@ -20,6 +21,7 @@ import { recoverStationCapture, saveStationCapture, updateStationCaptureScans, s
 
 
 export function PackingStationScreen(props: {
+  authorizedEngineSession?:EngineSession|null;
   api: PackProofApi;
   userId: string;
   queue: FulfillmentQueueItem[];
@@ -44,6 +46,8 @@ export function PackingStationScreen(props: {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const engineRef = useRef<EngineSession|null>(null);
+  const engineJournalRef = useRef<BrowserCaptureJournal|null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -123,6 +127,7 @@ export function PackingStationScreen(props: {
     reviewRevision.current += 1;
     setShippingReview(null);
     const sessionId = captureSessionRef.current;
+    engineJournalRef.current?.recordScans(next);
     if (sessionId) journalRef.current = journalRef.current.then(() => updateStationCaptureScans(props.userId, sessionId, next)).catch(() => {
       if (mountedRef.current) setLocalError("Label details could not be saved locally. Keep this page open and retry before leaving.");
     });
@@ -139,9 +144,10 @@ export function PackingStationScreen(props: {
   useEffect(() => {
     let cancelled = false;
     setBusy(true);
-    void recoverStationCapture(props.userId).then(async (pending) => {
+    void recoverStationCapture(props.userId,props.api.recoveryScope).then(async (pending) => {
       if (cancelled) return;
       if (pending) {
+        if(pending.captureContext)engineRef.current={id:pending.captureSessionId!,state:"RECORDED",context:pending.captureContext};
         if (pending.apiScope && pending.apiScope !== props.api.recoveryScope) throw new Error("A recording is saved for the original server. Return there to finish it before starting another shipment.");
         if (props.initialProofId && pending.order.proofId !== props.initialProofId && props.onRecoverProof) { props.onRecoverProof(pending.order.proofId); return; }
         studyTimer.current = await resumeStationStudy(props.api, props.userId, pending.studyTaskRef);
@@ -371,9 +377,11 @@ export function PackingStationScreen(props: {
       const snapshot=intakeSnapshot.current;
       const usesIntakeSnapshot=!!snapshot && snapshot.proofId===order.proofId;
       const authorizeIntakeCapture=async()=> (await props.api.intakeRequest<{session:{id:string;state:string}}>('/orders/'+encodeURIComponent(snapshot!.id)+'/capture','POST',{idempotencyKey:intakeRetryKey.current,client:'WEB_CAMERA'})).session;
-      let session = usesIntakeSnapshot
+      engineRef.current = props.authorizedEngineSession ?? (captureEngineEnabled() ? await beginBrowserEngine(props.api,order.proofId) : null);
+      if(engineRef.current&&engineRef.current.context.proofId!==order.proofId)throw new Error("Open the original order for this capture link.");
+      let session = engineRef.current ?? (usesIntakeSnapshot
         ? await authorizeIntakeCapture()
-        : await props.api.createCaptureSession(order.proofId, newIdempotencyKey());
+        : await props.api.createCaptureSession(order.proofId, newIdempotencyKey()));
       if(usesIntakeSnapshot && session.state==='CANCELLED') {
         // A cancellation may have succeeded even when its response was lost.
         // The authoritative replay confirms cancellation; this explicit Record
@@ -392,12 +400,23 @@ export function PackingStationScreen(props: {
       if (!stillReady()) { stopLiveTracks(); return; }
       const mime = ["video/webm;codecs=vp8", "video/mp4", "video/webm"].find(type => MediaRecorder.isTypeSupported(type));
       const recorder = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 2_000_000 });
+      engineJournalRef.current = engineRef.current ? new BrowserCaptureJournal(props.api.recoveryScope,props.userId,engineRef.current.context,{
+        key:stationCaptureKey(props.userId),order,userId:props.userId,apiScope:props.api.recoveryScope,uploadKey:newIdempotencyKey(),captureSessionId:session.id,finishConfirmed:false,
+      }) : null;
+      await engineJournalRef.current?.start();
       recorder.ondataavailable = event => {
         if (!event.data.size) return;
         chunksRef.current.push(event.data);
         const partial = new Blob(chunksRef.current, {type: recorder.mimeType || "video/webm"});
         durationRef.current = Math.max(1, Math.round(performance.now()-startedAt.current));
-        journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
+        if(engineJournalRef.current) {
+          engineJournalRef.current.append(event.data,durationRef.current);
+          journalRef.current=engineJournalRef.current.flush().catch(()=>{
+            interruptedRef.current=true;
+            setLocalError("Browser storage is full. Keep this page open and save the original recording.");
+            if(recorder.state==='recording')recorder.stop();
+          });
+        } else journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
         if (partial.size > capabilities.capture.maxBytes * 0.92 || durationRef.current >= capabilities.capture.maxDurationSeconds * 1000) {
           setLocalError("Recording reached this device’s safe limit. Saving the recorded segment now.");
           if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); }
@@ -439,6 +458,7 @@ export function PackingStationScreen(props: {
         recorder.stop();
       });
       await journalRef.current;
+      await engineJournalRef.current?.finish();
       stopLiveTracks();
       // Preserve the final original immediately. Carrier-network work never blocks review.
       await acceptLiveVideo(blob, blob.type || "video/webm", trigger, finishConfirmed);
@@ -462,6 +482,7 @@ export function PackingStationScreen(props: {
       evidenceId: previous?.order.proofId === order.proofId ? previous.evidenceId : undefined,
       shippingScans:scanResultsRef.current,
       studyTaskRef: previous?.studyTaskRef ?? studyTimer.current?.localRef,
+      captureContext: engineRef.current?.context,
       finishConfirmed, captureSessionId: captureSessionRef.current, bookmarks: bookmarksRef.current, durationMs: durationRef.current, interrupted,
     };
     await saveStationCapture(pending);

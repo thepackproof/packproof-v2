@@ -25,6 +25,18 @@ class UnifiedCameraModule : Module() {
         catch (_: Exception) { promise.reject("CAPTURE_REVIEW_UNAVAILABLE", "The recording is kept. Automatic label review could not finish.", null) }
       }
     }
+    AsyncFunction("bindCaptureContext") { sessionId: String, proofId: String, contextJson: String, promise: Promise ->
+      val context=appContext.reactContext
+      if(context==null) promise.reject("CAPTURE_UNAVAILABLE","Open the camera again.",null)
+      else inspectionExecutor.execute { try { CaptureJournal.bind(context,sessionId,proofId,contextJson);promise.resolve(null) }
+        catch(_:Exception) { promise.reject("CAPTURE_BINDING_FAILED","The recording could not be bound safely. Open its original order.",null) } }
+    }
+    AsyncFunction("readCaptureJournal") { sessionId: String, promise: Promise ->
+      val context=appContext.reactContext
+      if(context==null) promise.reject("CAPTURE_UNAVAILABLE","Open the recording again.",null)
+      else inspectionExecutor.execute { try { promise.resolve(CaptureJournal.read(context,sessionId)) }
+        catch(_:Exception) { promise.reject("CAPTURE_JOURNAL_UNAVAILABLE","The recording journal is unavailable. Keep the original.",null) } }
+    }
     OnDestroy { inspectionExecutor.shutdown() }
 
     View(UnifiedCameraView::class) {

@@ -1,3 +1,4 @@
+import { issueIntent, asDomainError } from "../capture/service.js";
 import { getProofRecoveryStatus } from "../domain/recovery-journal.js";
 import { pipeline } from "node:stream/promises";
 import {guardAuthorizedStream} from "../domain/authorized-stream.js";
@@ -122,7 +123,7 @@ export function createPlatformRouter(deps: AppDependencies) {
         let value: unknown;
         if (method === "get") value = await fn(deps.db, principal, req);
         else {
-          const createsAccessLink = path.endsWith("/access-links") && method === "post";
+          const createsAccessLink = (path.endsWith("/access-links") || path.endsWith("/capture-intents")) && method === "post";
           if (createsAccessLink && Buffer.from(config.encryptionKey, "base64").length !== 32) {
             throw new DomainError(
               "ACCESS_LINKS_UNAVAILABLE",
@@ -273,6 +274,9 @@ export function createPlatformRouter(deps: AppDependencies) {
       }),
     201,
   );
+  endpoint("post", "/proofs/:id/capture-intents", "evidence:write", async(db,p,req)=>{
+    try { return await issueIntent(db,deps.clock,p.userId,req.params.id,req.body?.allowedSurfaces); } catch(e) {throw asDomainError(e);}
+  },201);
   endpoint("post", "/proofs/:id/capture-sessions", "evidence:write", (db,p,req)=>
     createCaptureSession(db,deps.clock,p.userId,req.params.id,{client:String(req.body?.client??""),stageId:req.body?.stageId==null?undefined:String(req.body.stageId),idempotencyKey:sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`)}),201);
   endpoint("post", "/proofs/:id/capture-sessions/:sessionId/complete", "evidence:write", (db,p,req)=>

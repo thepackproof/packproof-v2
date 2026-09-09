@@ -1,3 +1,4 @@
+import { engineRow } from "../capture/service.js";
 import { attestationContext, assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
 import { assertShippingReviewComplete } from "./capture-label-review.js";
 import { createPublicKey, randomBytes, verify, type KeyObject } from "node:crypto";
@@ -92,6 +93,8 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
     }
     await assertShippingReviewComplete(tx, proofId, captureSessionId);
     const context = await attestationContext(tx, proof.transaction_id);
+    const engine = await engineRow(tx, captureSessionId);
+    if (engine && !engine.manifest_sha256) throw new DomainError("CAPTURE_SEAL_REQUIRED", "Seal this recording before confirming it", 409);
     const now = clock.now();
     if (session.state !== "COMMITTED" && now.getTime() >= new Date(session.recover_until).getTime()) {
       throw new DomainError("CAPTURE_RECOVERY_EXPIRED", "This recording is beyond its upload recovery window", 409);
@@ -113,7 +116,7 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
     const payload = canonicalize({
       version: 1, method: "ANDROID_BIOMETRIC_STRONG", challengeId,
       nonce: randomBytes(32).toString("hex"), actorUserId, proofId, captureSessionId,
-      ...context, sha256, statement: SELLER_SHIPPING_STATEMENT, publicKeySha256: publicKey.sha256, expiresAt,
+      ...context, ...(engine ? {captureManifestSha256:engine.manifest_sha256,statementSha256:sha256Hex(SELLER_SHIPPING_STATEMENT)} : {}), sha256, statement: SELLER_SHIPPING_STATEMENT, publicKeySha256: publicKey.sha256, expiresAt,
     });
     await tx.query(
       `INSERT INTO attestation_challenges (id, proof_id, actor_user_id, capture_session_id,
@@ -153,6 +156,8 @@ export async function verifyAttestationAuthorization(
     await assertShippingReviewComplete(db, proofId, challenge.capture_session_id);
     await assertAttestationContextCurrent(db, proof.transaction_id, challenge.payload);
   }
+  const engine = await engineRow(db, challenge.capture_session_id);
+  if (engine && JSON.parse(challenge.payload).captureManifestSha256 !== engine.manifest_sha256) throw new DomainError("ATTESTATION_CAPTURE_MISMATCH", "The attestation must cover this sealed capture manifest", 409);
   const publicKey = publicKeyFromInput(challenge.public_key_base64);
   let valid = false;
   try { valid = verify("sha256", Buffer.from(challenge.payload, "utf8"), { key: publicKey.key, dsaEncoding: "der" }, signature); } catch { /* Invalid DER signatures are rejected. */ }

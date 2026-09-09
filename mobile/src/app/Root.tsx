@@ -35,6 +35,7 @@ export function Root() {
   const app = usePackProof();
   const theme = useTheme();
   const immersive = isImmersiveRoute(app.route) && app.route.name !== "capture" && app.route.name !== "station";
+  const [captureIntent,setCaptureIntent]=useState<string|null>(null);
   const [linkedProofId, setLinkedProofId] = useState<string | null>(null);
   const [sharedText, setSharedText] = useState<string | null>(null);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
@@ -62,6 +63,13 @@ export function Root() {
 
   useEffect(() => {
     const receive = (url: string) => {
+      try {
+        const link=new URL(url);
+        const hostAllowed=link.protocol==="packproof:"||((link.protocol==="https:")&&["thepackproof.com","www.thepackproof.com"].includes(link.hostname));
+        const captureRoute=link.protocol==="packproof:"?link.hostname==="capture":link.pathname==="/capture";
+        const token=new URLSearchParams(link.hash.slice(1)).get("intent");
+        if(hostAllowed&&captureRoute&&token&&/^intent_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(token)){setCaptureIntent(token);return;}
+      } catch { /* Other supported link handlers retain their validation. */ }
       const proofId = proofIdFromLink(url);
       if (proofId) { setLinkedProofId(proofId); return; }
       const text = sharedOrderText(url);
@@ -82,6 +90,11 @@ export function Root() {
   useEffect(() => {
     if (ready && app.session && linkedProofId) { const id = linkedProofId; setLinkedProofId(null); app.go("home"); void app.run(() => app.openProof(id)); }
   }, [ready, app.session?.userId, linkedProofId]);
+
+  useEffect(()=>{
+    if(!ready||!app.session||!captureIntent||app.busy)return;
+    const token=captureIntent;setCaptureIntent(null);void app.startCaptureIntent(token);
+  },[ready,app.session?.userId,captureIntent,app.busy]);
 
   const statusStyle = immersive || theme.scheme === "dark" || !ready ? "light" : "dark";
 

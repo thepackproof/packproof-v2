@@ -1,3 +1,4 @@
+import {CaptureCapsule} from "./CaptureCapsule";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { moneyLabel, orderReferenceLabel, quantityLabel } from "@packproof/copy/format";
 import { providerDisplay } from "@packproof/copy/status";
@@ -177,6 +178,7 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
   if (!load && !api) return <div className="evidence-placeholder"><span><Glyph name="film" size={28} /></span><strong>{evidence.length} saved file{evidence.length === 1 ? "" : "s"}</strong><p>Media playback isn’t available in this view.</p></div>;
 
   return <div className="record-evidence stack">
+    {api?<CaptureCapsule api={api} proofId={proof.proofId} onSeek={(id,time)=>void open(id,time)}/>:null}
     {preview.url && current ? <EvidencePreview
       url={preview.url}
       contentType={preview.contentType}

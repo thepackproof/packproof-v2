@@ -99,6 +99,11 @@ export class PackProofApi {
   async bindCaptureShipping(proofId:string,sessionId:string,scan:{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;confirmed?:boolean}):Promise<{status:string;trackingNumber?:string}> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-label`,{method:"POST",body:scan});
   }
+  async captureEngineRequest<T>(path:string,method="GET",body?:unknown):Promise<T> {
+    if(!/^\/(capture-intents|capture-sessions)(\/|$)/.test(path)) throw new Error('Invalid capture route');
+    return this.request(path,{method,body});
+  }
+
   async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string}> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, { method: "POST", body: {client:"WEB_CAMERA",idempotencyKey,stageId} });
   }

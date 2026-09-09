@@ -1,3 +1,5 @@
+import type { CaptureContext } from "../../backend/src/capture/core";
+import { sealBrowserEngine, recoverBrowserEngine, forgetBrowserEngine } from "./capture/engine";
 import { randomId } from "./random-id";
 import { resumeStationStudy } from "./analytics/study-capture";
 import { requiresDurableReceipts } from "./capture-preflight";
@@ -73,6 +75,7 @@ export async function recoverCapture(key: string): Promise<File | null> {
 }
 
 export type PendingStationCapture = {
+  captureContext?: CaptureContext;
   /** Opaque local timing journal reference; never sent with capture/evidence data. */
   studyTaskRef?: string;
   shippingScans?: Array<{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;status:string;trackingNumber?:string}>;
@@ -98,10 +101,10 @@ export type PendingStationCapture = {
   interrupted?: boolean;
 };
 export const stationCaptureKey = (userId: string) => `${userId}:station`;
-export async function recoverStationCapture(userId: string): Promise<PendingStationCapture | null> {
+export async function recoverStationCapture(userId: string, apiScope?:string): Promise<PendingStationCapture | null> {
   return (await queue<PendingStationCapture | undefined>("readonly", (store) =>
     store.get(stationCaptureKey(userId)),
-  )) ?? null;
+  )) ?? (apiScope ? await recoverBrowserEngine(userId,apiScope) : null);
 }
 export async function saveStationCapture(capture: PendingStationCapture): Promise<void> {
   return serializeJournalWrite(capture.key, async () => {
@@ -367,6 +370,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       if (proof.status !== "FINALIZED" && !proof.evidence.some(item=>item.evidenceId===pending.evidenceId&&item.validationStatus==="COMMITTED")) {
         pending.digest ??= await fileDigest(pending.file); assertCurrent(active); await saveStationCapture(pending); assertCurrent(active);
         await api.completeCaptureSession(pending.order.proofId,pending.captureSessionId,{sha256:pending.digest,byteSize:pending.file.size,contentType:pending.file.type,interrupted:pending.interrupted,recordedDurationMs:pending.durationMs}); assertCurrent(active);
+        await sealBrowserEngine(api,pending); assertCurrent(active);
       }
       const result = await submitStationSession({
         proof, actorUserId:userId,
@@ -400,6 +404,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
         throw Object.assign(new Error("Recording received. Preservation in progress. Your local original remains saved."),{code:"PRESERVATION_PENDING",status:503});
       for(const mark of pending.bookmarks??[])try{assertCurrent(active);await api.featureRequest(pending.order.proofId,"signature/anchors","POST",{evidenceId:pending.evidenceId,startMs:mark.startMs,endMs:Math.min(mark.startMs+1000,pending.durationMs||mark.startMs+1000),label:mark.label,sourceType:mark.sourceType,recipeVersion:mark.recipeVersion,idempotencyKey:mark.id});}catch{assertCurrent(active);}
       assertCurrent(active);await archiveReceivedRecording(userId,pending.order.proofId,pending.evidenceId!,pending.file,!!pending.preserved,{apiScope:api.recoveryScope,finalized:durablyFinalized,submitted:true});assertCurrent(active);
+      if(pending.captureContext) await forgetBrowserEngine(api.recoveryScope,userId,pending.captureSessionId!);
       await clearStationCapture(userId,pending.uploadKey);
       if (proof.status === "FINALIZED" && result.completion === "FINALIZED") {
         study?.phase('finalization'); study?.event('server_completed'); study?.end('succeeded');

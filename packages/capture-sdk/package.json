@@ -1,0 +1,8 @@
+{
+  "name": "@packproof/capture-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {".": "./server.mjs"},
+  "engines": {"node": ">=22"}
+}

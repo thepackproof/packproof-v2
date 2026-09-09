@@ -51,7 +51,7 @@ export interface EncodedVideoInspection {
   timestampPrecision: "NEAR_REQUESTED_TIME";
 }
 
-const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
+const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
 const nativeAvailable = nativeModule != null;
 export function newStudyOperationNonce():string {
   if(!nativeModule?.newOperationNonce)throw new Error('This build cannot enable study collection. Install the current native build.');
@@ -82,3 +82,14 @@ export const UnifiedCameraView = React.forwardRef<UnifiedCameraViewRef, UnifiedC
     return <NativeView {...props} ref={ref} />;
   },
 );
+
+export async function bindNativeCaptureContext(sessionId:string,proofId:string,contextJson:string):Promise<void> {
+  if(!nativeModule?.bindCaptureContext) throw new Error('Install the current capture build before opening this recording.');
+  await nativeModule.bindCaptureContext(sessionId,proofId,contextJson);
+}
+export async function readNativeCaptureJournal(sessionId:string):Promise<string> {
+  if(!nativeModule?.readCaptureJournal) throw new Error('This build cannot recover the native capture journal.');
+  return nativeModule.readCaptureJournal(sessionId);
+}
+
+export function isNativeCaptureEngineAvailable():boolean {return !!nativeModule?.bindCaptureContext && !!nativeModule?.readCaptureJournal;}

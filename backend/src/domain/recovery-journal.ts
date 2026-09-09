@@ -78,10 +78,11 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
   if (!proof) throw new DomainError("PROOF_NOT_FOUND", "Proof not found", 404);
   const transactionId = proof.transaction_id;
   const rows: Record<string, unknown> = { proofs: [proof] };
-  for (const table of ["proof_participants", "evidence", "attestations", "attestation_challenges", "capture_sessions", "audit_events", "final_manifests", "proof_external_references", "proof_retention_holds", "proof_deletion_requests", "proof_supplements", "commerce_receivers", "commerce_stages", "proof_retention_assignments", "proof_disposition_state", "proof_assets", "proof_asset_external_refs", "custody_observations", "custody_transfers", "continuity_evaluations", "shipment_events", "capture_shipping_labels", "proof_parcel_scopes", "capture_label_observations", "capture_label_resolutions"]) {
+  for (const table of ["proof_participants", "evidence", "attestations", "attestation_challenges", "capture_sessions", "capture_intents", "capture_engine_sessions", "audit_events", "final_manifests", "proof_external_references", "proof_retention_holds", "proof_deletion_requests", "proof_supplements", "commerce_receivers", "commerce_stages", "proof_retention_assignments", "proof_disposition_state", "proof_assets", "proof_asset_external_refs", "custody_observations", "custody_transfers", "continuity_evaluations", "shipment_events", "capture_shipping_labels", "proof_parcel_scopes", "capture_label_observations", "capture_label_resolutions"]) {
     rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
   }
   rows.commerce_stage_evidence = (await db.query("SELECT e.* FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1", [proofId])).rows;
+  rows.capture_engine_batches = (await db.query("SELECT b.* FROM capture_engine_batches b JOIN capture_engine_sessions s ON s.session_id=b.session_id WHERE s.proof_id=$1",[proofId])).rows;
   rows.capture_session_reports = (await db.query("SELECT r.* FROM capture_session_reports r JOIN capture_sessions s ON s.id=r.session_id WHERE s.proof_id=$1", [proofId])).rows;
   for (const table of ["observation_assets", "observation_evidence", "observation_external_refs"]) rows[table] = (await db.query(`SELECT j.* FROM ${table} j JOIN custody_observations o ON o.id=j.observation_id WHERE o.proof_id=$1`, [proofId])).rows;
   for (const table of ["transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities", "transaction_source_observations"]) {

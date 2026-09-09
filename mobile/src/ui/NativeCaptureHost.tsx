@@ -1,3 +1,4 @@
+import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
 import { haptic } from "../theme/haptics";
 import { UnifiedCameraView, isUnifiedCameraAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
 import { newIdempotencyKey } from "../v2-api";
@@ -125,6 +126,10 @@ function CameraSession({
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
   const useUnified = isUnifiedCameraAvailable() && Boolean(request.captureSessionId);
+  const engineObservations=useRef<Observation[]>([]);
+  const [enginePrompt,setEnginePrompt]=useState<string|null>(null);
+  const [matchConfirmation,setMatchConfirmation]=useState(false);
+  useEffect(()=>{if(!matchConfirmation)return;const timer=setTimeout(()=>setMatchConfirmation(false),1800);return()=>clearTimeout(timer);},[matchConfirmation]);
   const [shipping, setShipping] = useState<ShippingScanResult|null>(null);
   const [detectingShipping,setDetectingShipping] = useState(false);
   const [shippingError,setShippingError] = useState<string|null>(null);
@@ -136,6 +141,12 @@ function CameraSession({
     const key=event.rawValue.replace(/[ \t\r\n-]/g,'').toUpperCase();
     if(observed.current.has(key) || observed.current.size>=8) return;
     observed.current.add(key);
+    if(request.captureContext){
+      const time=Math.max(0,Math.floor(event.detectedAtMs));
+      engineObservations.current.push({id:`label:${key}`,captureId:request.captureContext.captureId,type:'LABEL',startMs:time,endMs:time,source:'LIVE_ANALYSIS',model:{id:'mlkit-barcode',version:'17.2.0',configuration:'tracking-2-frame-consensus',calibration:'NOT_CALIBRATED'},confidence:null,value:key,timePrecision:'APPROXIMATE'});
+      const requirements=evaluate(request.captureContext,engineObservations.current);setEnginePrompt(guidance(requirements));
+      setMatchConfirmation(requirements[0].state==='SATISFIED');
+    }
     setDetectingShipping(true);
     try {
       const result = await request.onShippingBarcode({rawValue:event.rawValue,format:event.format,detectedAtMs:Math.floor(event.detectedAtMs),idempotencyKey:newIdempotencyKey(),
@@ -332,7 +343,7 @@ function CameraSession({
         <ScrollView contentContainerStyle={styles.controls}>
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
             <Text style={{color:shipping?.status==='BOUND'?colors.success:colors.textSecondary}}>
-              {detectingShipping ? 'Reading tracking number…'
+              {request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'
                 : shipping?.status==='BOUND' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')}`
                 : shipping?.status==='QUEUED' ? 'Tracking number read · saved on this device'
                 : shipping?.status==='UNAVAILABLE' ? 'Keep recording. We’ll check the label at review.'

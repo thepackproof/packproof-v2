@@ -1,3 +1,4 @@
+import { captureEngineRouter } from "./capture/router.js";
 import { getAccountDeletionRequest, requestAccountDeletion } from "./domain/account-deletion.js";
 import { supportAccessRouter } from "./support/router.js";
 import { createReadiness, liveness, type DependencyProbe } from "./operations/readiness.js";
@@ -493,6 +494,7 @@ export function createApp(deps: AppDependencies): Express {
   }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
+  app.use(captureEngineRouter(deps));
   app.use("/proofs/:id/capture-sessions", captureSessionRouter(deps));
   app.use("/me/packing-relay", packingRelayRouter(deps));
   app.use((req,res,next)=>{
