@@ -2248,6 +2248,113 @@
           }
         }
       }
+    },
+    "/proofs/{id}/capture-intents": {
+      "post": {
+        "operationId": "post_proofs_id_capture_intents",
+        "summary": "Create a bound capture launch intent",
+        "description": "Private capture-platform candidate. Requires evidence:write and encrypted idempotency storage. The tenant owner redeems the opaque token once using first-party authentication. Allowed surface names do not certify an adapter. Tokens expire after ten minutes; replaying this API request returns the original token and expiry.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "allowedSurfaces": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ANDROID",
+                        "IOS",
+                        "WEB",
+                        "WAREHOUSE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Single-use opaque launch intent. Keep tokens out of logs and query strings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema",
+                    "intentId",
+                    "launchToken",
+                    "expiresAt",
+                    "allowedSurfaces",
+                    "launchPath",
+                    "nativePath"
+                  ],
+                  "properties": {
+                    "schema": {
+                      "const": "packproof.capture/1"
+                    },
+                    "intentId": {
+                      "type": "string"
+                    },
+                    "launchToken": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "allowedSurfaces": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "ANDROID",
+                          "IOS",
+                          "WEB",
+                          "WAREHOUSE"
+                        ]
+                      }
+                    },
+                    "launchPath": {
+                      "type": "string"
+                    },
+                    "nativePath": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

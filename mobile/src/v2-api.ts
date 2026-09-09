@@ -1052,6 +1052,11 @@ export class PackProofV2Client {
     });
   }
 
+  async captureEngineRequest<T>(path:string,method="GET",body?:unknown):Promise<T> {
+    if(!/^\/(capture-intents|capture-sessions)(\/|$)/.test(path)) throw new Error('Invalid capture route');
+    return this.request(path,{method,body});
+  }
+
   async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, {
       method: "POST", body: { idempotencyKey, client: "NATIVE_CAMERA", ...(stageId ? { stageId } : {}) },

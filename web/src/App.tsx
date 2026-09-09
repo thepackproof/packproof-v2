@@ -1,3 +1,5 @@
+import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchScreen";
+import type {EngineSession} from "./capture/engine";
 import { applyLocalWork } from "./proof-presentation";
 import { listRecoverableRecordings } from "./capture-queue";
 import { randomId } from "./random-id";
@@ -63,6 +65,7 @@ import { AuthFrame } from "./site/PublicSite";
 
 type Route =
   | { name: "proofs"; view: "all" | "attention" | "completed"; query: string }
+  | { name: "capture-launch" }
   | { name: "create" }
   | { name: "scan" }
   | { name: "account" }
@@ -99,6 +102,7 @@ function parseHref(href: string): Route {
   if (pathname === "/proofs") {
     return { name: "proofs", ...readProofListState(url) };
   }
+  if (pathname === "/capture") return {name:"capture-launch"};
   if (pathname === "/developer") return { name: "developer" };
   if (pathname === "/account") {
     return { name: "account" };
@@ -273,6 +277,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   const [proofs, setProofs] = useState<ProofCollectionItem[]>([]);
   const [invitations, setInvitations] = useState<InvitationInboxView[]>([]);
   const [proof, setProof] = useState<CanonicalProof | null>(null);
+  const [captureEngineSession,setCaptureEngineSession]=useState<EngineSession|null>(null);
   const [acceptedIntakeSnapshot,setAcceptedIntakeSnapshot]=useState<IntakeSnapshot|null>(null);
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [loading, setLoading] = useState(() => Boolean(loadSession()));
@@ -919,8 +924,10 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         />
       ) : null}
 
+      {route.name === "capture-launch" ? <CaptureLaunchScreen api={api} onBound={bound=>{setCaptureEngineSession(bound);go(`/proofs/${encodeURIComponent(bound.context.proofId)}/capture`);}} /> : null}
       {route.name === "station" ? (
         <PackingStationScreen
+          authorizedEngineSession={captureEngineSession?.context.proofId===route.proofId?captureEngineSession:null}
           acceptedIntakeSnapshot={acceptedIntakeSnapshot?.proofId===route.proofId?acceptedIntakeSnapshot:null}
           onIntakeIntentConsumed={()=>setAcceptedIntakeSnapshot(null)}
           key={`${session.apiBaseUrl}:${session.userId}:${route.proofId || "queue"}`}
@@ -1213,6 +1220,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 }
 
 export function App({ authInitialView }: { authInitialView?: "sign-in" | "create-account" } = {}) {
+  retainCaptureLaunch();
   return (
     <ThemeProvider>
       <PackProofApp authInitialView={authInitialView} />

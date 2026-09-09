@@ -1,3 +1,4 @@
+import {beginNativeEngine} from "../capture/engine";
 import { IntakeApi } from "../intake/api";
 import { assertIntakeAcceptance } from "../intake/model";
 import { clearIntakeRequestKey, forgetIntakeDevice, intakeRequestKey, readIntakeDevice, revokeIntakeDevice } from "../intake/storage";
@@ -282,6 +283,7 @@ export interface PackProofContextValue {
   continueFromScan: () => Promise<void>;
   savePurchaseDetails: () => Promise<void>;
   saveShippingDetails: () => Promise<void>;
+  startCaptureIntent: (token:string) => Promise<void>;
   startCapture: () => Promise<void>;
   startIntakeCapture: (input: { snapshotId: string; handoffId?: string }) => Promise<void>;
   discardCapture: () => Promise<void>;
@@ -1639,6 +1641,24 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await refreshProof(proof.proofId);
         go("proof");
       }),
+    startCaptureIntent: async token => {
+      if(intakeCaptureLock.current)return;
+      intakeCaptureLock.current=true;
+      try { await run(async()=>{
+        const account=sessionRef.current;if(!account)return;
+        if(localCapture&&!["FINALIZED","SUBMITTED"].includes(localCapture.recovery?.phase??""))throw new Error("Finish the recording already open before accepting another order. It is kept on this phone.");
+        if(Platform.OS!=="android")throw new Error("Open this link in the browser. Native capture links currently require Android.");
+        const accepted=await beginNativeEngine(client,undefined,token);
+        if(sessionRef.current?.userId!==account.userId)throw new Error("Open this link in the original account.");
+        const view=await client.getProof(accepted.proofId);setProof(view);
+        setCaptureStatus("capturing");
+        const captured=await recordPackingEvidence({client,proofId:accepted.proofId,userId:account.userId,orderLabel:view.transaction.itemTitle||"Packing this order",authorizedSession:accepted,autoStart:false});
+        if(!captured){setCaptureStatus("idle");return;}
+        await queueRetiredUpload(accepted.proofId);
+        await persistCapture(captured,captured.recovery?.evidenceIdempotencyKey??newIdempotencyKey());
+        setCaptureStatus("captured");go("capture");
+      }); } finally {intakeCaptureLock.current=false;}
+    },
     startIntakeCapture: async input => {
       if (intakeCaptureLock.current) return;
       intakeCaptureLock.current = true;

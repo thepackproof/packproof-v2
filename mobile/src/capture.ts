@@ -1,3 +1,5 @@
+import { beginNativeEngine, captureEngineEnabled, sealNativeEngine } from "./capture/engine";
+import type { CaptureContext, CaptureManifest } from "../../backend/src/capture/core";
 import type { CaptureSessionGrant } from "./intake/model";
 import { inspectRecordedVideo, type EncodedVideoInspection } from "../modules/packproof-unified-camera";
 import { capturePreflight } from "./capture/preflight";
@@ -22,6 +24,9 @@ import {
 const LOCAL_CAPTURE_NAME = "packproof-seller-evidence.mp4";
 
 export interface LocalCapture {
+  captureContext?: CaptureContext;
+  captureManifest?: CaptureManifest;
+  captureManifestSha256?: string;
   studyTimingRef?: string;
   recovery?: CaptureRecoveryState;
   uri: string;
@@ -41,7 +46,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED" | "SCANNER_TRIGGERED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -103,7 +108,8 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;author
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
   // Authorization exists before a frame is recorded. No gallery or camera-error file path.
-  const session = input.authorizedSession ?? await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId);
+  const session = input.authorizedSession ?? (captureEngineEnabled() && !input.stageId ? await beginNativeEngine(input.client,input.proofId) : await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId));
+  const captureContext = "captureContext" in session ? session.captureContext as CaptureContext : undefined;
   if (session.proofId !== input.proofId || session.state !== "ISSUED" || Date.parse(session.expiresAt) <= Date.now())
     throw new Error("This camera authorization is no longer ready. Open the original order to recover or restart its recording.");
   const journal: ShippingScanJournal = {proofId:input.proofId,sessionId:session.id,userId:input.userId,entries:[]};
@@ -114,8 +120,8 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;author
     submitRequested: false, needsSellerAttestation: !input.stageId, attempt: 0, nextRetryAt: null, updatedAt: new Date().toISOString() };
   // Write the account binding before native acquisition. A process restart can discover finalized native media.
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
-    recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
-  const captured = await nativeRecorder({ autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+    captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  const captured = await nativeRecorder({ captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
     onRecordingStarted:()=>{study?.phase('recording');study?.event('recording_started');},
     onRecordingStopped:()=>{study?.event('recording_stopped');study?.phase('confirmation');},
     ...(!input.stageId ? {onShippingBarcode:async (scan:ShippingScan)=>{
@@ -141,7 +147,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;author
   }
   const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
   study?.phase('confirmation');
-  return persistLocalCapture({ ...captured,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  return persistLocalCapture({ ...captured,captureContext,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
 }
 
 const inspections = new Map<string, Promise<EncodedVideoInspection | null>>();
@@ -250,6 +256,8 @@ export async function bindRecordedCapture(client: PackProofV2Client, capture: Lo
   capture.captureSha256 = digest;
   if (capture.encodedInspection) capture.encodedInspection.originalSha256 = digest;
   capture.byteSize = info.size;
+  await persistCaptureMetadata(capture);
+  await sealNativeEngine(client,capture);
   await persistCaptureMetadata(capture);
   releaseShippingQueue(capture.captureSessionId);
 }

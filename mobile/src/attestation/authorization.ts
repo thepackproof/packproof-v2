@@ -4,7 +4,7 @@ import { SELLER_SHIPPING_STATEMENT } from "./statement";
 import type { ProofView, SellerAttestationAuthorization } from "../v2-api";
 
 export function validateSellerChallenge(challenge: { challengeId: string; payload: string; expiresAt: string }, expected: {
-  proofId: string; userId: string; captureSessionId: string; sha256: string; publicKey: string;
+  proofId: string; userId: string; captureSessionId: string; sha256: string; publicKey: string; captureManifestSha256?:string;
 }, now = Date.now()): void {
   let payload: Record<string, unknown>;
   try { payload = JSON.parse(challenge.payload); } catch { throw new Error("The attestation could not be prepared. Your recording is saved; try again."); }
@@ -12,6 +12,7 @@ export function validateSellerChallenge(challenge: { challengeId: string; payloa
   if (!payload || payload.version !== 1 || payload.method !== "ANDROID_BIOMETRIC_STRONG" ||
       payload.challengeId !== challenge.challengeId || payload.actorUserId !== expected.userId ||
       payload.proofId !== expected.proofId || payload.captureSessionId !== expected.captureSessionId ||
+      (expected.captureManifestSha256!==undefined && payload.captureManifestSha256!==expected.captureManifestSha256) ||
       payload.sha256 !== expected.sha256 || payload.statement !== SELLER_SHIPPING_STATEMENT ||
       payload.publicKeySha256 !== keyHash || payload.expiresAt !== challenge.expiresAt ||
       typeof payload.nonce !== "string" || !/^[a-f0-9]{64}$/.test(payload.nonce) ||

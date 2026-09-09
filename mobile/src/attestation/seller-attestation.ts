@@ -28,7 +28,7 @@ export async function authorizeSellerCapture({ client, capture, proofId, userId 
     sha256: capture.captureSha256,
     publicKey,
   });
-  validateSellerChallenge(challenge, { proofId, userId, captureSessionId: capture.captureSessionId, sha256: capture.captureSha256, publicKey });
+  validateSellerChallenge(challenge, { proofId, userId, captureSessionId: capture.captureSessionId, sha256: capture.captureSha256, publicKey, captureManifestSha256:capture.captureManifestSha256 });
   const study=await nativeStudyForCapture(client,userId,capture.studyTimingRef);
   let signature:string;
   try {

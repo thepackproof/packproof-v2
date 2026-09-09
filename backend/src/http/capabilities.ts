@@ -5,6 +5,7 @@ import { SELLER_SHIPPING_STATEMENT } from "../domain/attestation-authorization.j
 export function captureCapabilities(release: ReleaseIdentity, durableReceiptsRequired = false) {
   return {
     schemaVersion: 1,
+    captureEngine: {schemas:["packproof.capture/1"],coreVersions:["1.0.0"],intentTtlSeconds:600,productionQualified:false,experimentalDetectorsEnabled:false},
     capture: { protocolVersions: [1], maxBytes: 250_000_000, maxDurationSeconds: 300, maxActiveUploads: 2 },
     accountDeletion: { requestSupported: true },
     correctionPolicy: { importedFactsReadOnly: true, captureBindingLocksManualDetails: true },

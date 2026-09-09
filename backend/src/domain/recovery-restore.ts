@@ -13,7 +13,7 @@ import { MEDIA_MAX_BYTES } from "./media-admission.js";
 type Row = Record<string, unknown>;
 const CORE_KEYS: Record<string, string[]> = {
   users:["id"], transactions:["id"], transaction_shipping:["id"], transaction_items:["id"], transaction_integration_identities:["id"],
-  proofs:["id"], proof_participants:["id"], commerce_receivers:["proof_id"], commerce_stages:["id"], capture_sessions:["id"], capture_session_reports:["id"],
+  proofs:["id"], proof_participants:["id"], commerce_receivers:["proof_id"], commerce_stages:["id"], capture_sessions:["id"], capture_intents:["id"], capture_engine_sessions:["session_id"], capture_engine_batches:["session_id","sequence"], capture_session_reports:["id"],
   evidence:["id"], commerce_stage_evidence:["id"], audit_events:["id"], attestations:["id"], attestation_challenges:["id"], proof_assets:["id"],
   custody_observations:["id"], custody_transfers:["id"], proof_asset_external_refs:["id"], continuity_evaluations:["id"],
   observation_assets:["observation_id","asset_id"], observation_evidence:["observation_id","evidence_id"], observation_external_refs:["observation_id","tenant_key","external_id"],
@@ -25,7 +25,7 @@ const CORE_KEYS: Record<string, string[]> = {
 const RESTORE_KEYS = {...CORE_KEYS, ...POLICY_RECOVERY_KEYS};
 const ORDER = [
   "users","auth_identities","api_tenants","api_keys","transactions","transaction_shipping","transaction_items","transaction_integration_identities","transaction_source_observations",
-  "proofs","proof_participants","commerce_receivers","commerce_stages","capture_sessions","capture_session_reports","evidence","commerce_stage_evidence","audit_events","attestations","attestation_challenges",
+  "proofs","proof_participants","commerce_receivers","commerce_stages","capture_sessions","capture_intents","capture_engine_sessions","capture_engine_batches","capture_session_reports","evidence","commerce_stage_evidence","audit_events","attestations","attestation_challenges",
   "proof_assets","custody_observations","custody_transfers","proof_asset_external_refs","observation_assets","observation_evidence","observation_external_refs","continuity_evaluations",
   "proof_external_references","shipment_events","capture_shipping_labels","capture_label_observations","capture_label_resolutions","proof_parcel_scopes","invitations","api_tenant_proofs",
   "proof_access_links","proof_disclosure_grants","proof_notification_subscriptions","proof_receipt_preferences","user_verified_contacts","proof_media_derivatives","support_access_grants","support_access_revocations",
