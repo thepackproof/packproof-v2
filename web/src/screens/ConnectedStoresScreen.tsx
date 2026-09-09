@@ -13,7 +13,6 @@ export function ConnectedStoresScreen(props: {
   busy: boolean;
   development: boolean;
   ebay: EbayMarketplaceView | null;
-  onConnectDemo: () => void;
   onConnectEbay: () => void;
   onDisconnectEbay: () => void;
   onImportSales: () => void;

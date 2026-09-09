@@ -2,6 +2,7 @@ import { captureEngineRouter } from "./capture/router.js";
 import { getAccountDeletionRequest, requestAccountDeletion } from "./domain/account-deletion.js";
 import { supportAccessRouter } from "./support/router.js";
 import { createReadiness, liveness, type DependencyProbe } from "./operations/readiness.js";
+import { integrationReadiness } from './operations/integration-readiness.js';
 import { getAccountUsageSummary, ingestVerifiedBillingEvent } from "./billing/usage-ledger.js";
 import type { StripeBillingAdapter } from "./billing/stripe-adapter.js";
 import {createObservationRouter,type ProgramObservationConfig} from "./analytics/observation-router.js";
@@ -215,6 +216,7 @@ export interface AppDependencies {
   auth: AuthenticationAdapter;
   publicBaseUrl: string;
   devAuth: boolean;
+  testFixtures?: boolean;
   corsOrigins?: string[];
   integrations?: IntegrationAdapterRegistry;
   credentialStore?: IntegrationCredentialStore & {
@@ -325,6 +327,10 @@ export function createApp(deps: AppDependencies): Express {
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+  app.get('/ready/integrations',(_req,res)=>{
+    const report=integrationReadiness();
+    res.status(report.status==='BLOCKED'?503:200).json({status:report.status,liveValidation:report.liveValidation,providers:report.checks.map(({provider,status})=>({provider,status}))});
   });
 
   app.get("/capabilities", (_req, res) => {
@@ -883,7 +889,7 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
-  if (deps.devAuth) {
+  if (deps.devAuth && deps.testFixtures && releaseIdentity.environment !== "staging" && releaseIdentity.environment !== "production") {
     app.post(
       "/dev/integrations/trusted-demo/connect",
       asyncRoute(async (req, res) => {

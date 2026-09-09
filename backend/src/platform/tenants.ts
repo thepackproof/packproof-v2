@@ -16,6 +16,7 @@ export const API_SCOPES = [
   "events:read",
   "webhooks:manage",
   "intake:write",
+  "claims:read",
 ] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 export interface ApiPrincipal {

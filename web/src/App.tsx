@@ -987,16 +987,6 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
               .finally(() => setBusy(false));
           }}
           onImportSales={() => go("/new")}
-          onConnectDemo={() => {
-            setBusy(true);
-            setError(null);
-            void api
-              .connectDemoStorefront()
-              .then(() => api.listCommerceConnections())
-              .then((result) => setConnections(result.connections))
-              .catch((caught) => setError(handleError(caught)))
-              .finally(() => setBusy(false));
-          }}
           onAutomation={(connectionId,enabled)=>{setBusy(true);setError(null);void api.setCommerceAutomation(connectionId,enabled).then(()=>api.listCommerceConnections()).then(result=>setConnections(result.connections)).catch(e=>setError(handleError(e))).finally(()=>setBusy(false));}}
           onSync={(connectionId) => {
             setBusy(true);

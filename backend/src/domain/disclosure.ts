@@ -52,6 +52,10 @@ export async function disclosureContextForLink(db: Database, link: ProofAccessLi
   if (!creator.rows[0]) forbidden();
   const subscription=(await db.query<{recipient_grant_id:string|null}>('SELECT recipient_grant_id FROM proof_notification_subscriptions WHERE access_link_id=$1',[link.id])).rows[0];
   let effectiveLinkId=link.id;
+  const claim=(await db.query<{access_link_id:string}>(`SELECT a.access_link_id FROM claims_viewer_sessions c JOIN claims_authorizations a ON a.id=c.authorization_id
+    JOIN api_keys k ON k.id=c.key_id JOIN proof_access_links parent ON parent.id=a.access_link_id
+    WHERE c.access_link_id=$1 AND a.revoked_at IS NULL AND k.revoked_at IS NULL AND parent.revoked_at IS NULL AND parent.expires_at>$2`,[link.id,now.toISOString()])).rows[0];
+  if(claim)effectiveLinkId=claim.access_link_id;
   if(subscription?.recipient_grant_id) {
     const parent=(await db.query<ProofAccessLinkRow>('SELECT * FROM proof_access_links WHERE id=$1 AND proof_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>$3)',[subscription.recipient_grant_id,link.proof_id,now.toISOString()])).rows[0];
     if(!parent) throw new DomainError('ACCESS_LINK_REVOKED','This viewing link is no longer available',404);
@@ -117,6 +121,8 @@ export async function validateDisclosureInput(db: Database, actorUserId:string,p
 
 export async function getDisclosureProjection(db:Database,ctx:DisclosureContext) {
   const proof=await loadProof(db,ctx.proofId);
+  const manifest=(await db.query<{canonical_json:string;sha256:string}>('SELECT canonical_json,sha256 FROM final_manifests WHERE proof_id=$1',[ctx.proofId])).rows[0];
+  const integrity={result:!manifest?'NOT_FINALIZED':sha256Hex(manifest.canonical_json)===manifest.sha256?'MANIFEST_HASH_MATCH':'MANIFEST_HASH_MISMATCH',scope:'Stored manifest bytes. This check does not establish package contents or decide a claim.'};
   const source=await buildProofTracker(db,ctx.proofId);
   const committed=(await db.query<{evidence_type:string}>('SELECT evidence_type FROM evidence WHERE proof_id=$1 AND validation_status=\'COMMITTED\'',[ctx.proofId])).rows;
   const packingAttested=(await db.query('SELECT 1 FROM attestations WHERE proof_id=$1 AND statement=\'PACKED_DESCRIBED_ITEM\'',[ctx.proofId])).rows.length>0;
@@ -163,7 +169,7 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
     : pendingEvidence ? {code:'UPLOADING',message:'Evidence is still uploading'}
     : evidence.length === 0 ? ctx.purpose === 'SHARED_PROOF' ? {code:'NOT_RECORDED',message:'Recording has not been added yet'} : {code:'NOT_SHARED',message:'Recordings are not included in this link'}
     : {code:'AVAILABLE',message:proof.status === 'FINALIZED' ? 'Proof completed' : 'Recording added; confirmation is pending'};
-  const value={...record,evidenceState,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
+  const value={...record,integrity,evidenceState,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
     join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
     evidence:ctx.fields.includes('evidence')?evidence:[],
     statements,

@@ -11,7 +11,7 @@ describe("bounded commerce cursor progress", () => {
   afterEach(async () => { await h?.close(); });
 
   it("resumes from completed pages after the batch limit and a provider failure", async () => {
-    const registry = createDefaultIntegrationRegistry(systemClock);
+    const registry = createDefaultIntegrationRegistry(systemClock, {testFixtures:true});
     const adapter = registry.getCommerce("demo-storefront");
     const original = adapter.listFulfillmentOrders.bind(adapter);
     const pages: Array<string | null> = [];
@@ -51,7 +51,7 @@ describe("bounded commerce cursor progress", () => {
   });
 
   it("rejects a provider cursor cycle instead of looping or reporting completion", async () => {
-    const registry = createDefaultIntegrationRegistry(systemClock);
+    const registry = createDefaultIntegrationRegistry(systemClock, {testFixtures:true});
     registry.getCommerce("demo-storefront").listFulfillmentOrders = async () => ({ orders: [], cursor: "same" });
     h = await createHarness(undefined, { integrations: registry });
     const seller = await login(h.app, "cycle-owner");

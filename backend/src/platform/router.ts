@@ -1,4 +1,5 @@
 import { issueIntent, asDomainError } from "../capture/service.js";
+import { authorizeClaimsProof, revokeClaimsAuthorization, lookupClaims, openClaimsProof } from './claims.js';
 import { getProofRecoveryStatus } from "../domain/recovery-journal.js";
 import { pipeline } from "node:stream/promises";
 import {guardAuthorizedStream} from "../domain/authorized-stream.js";
@@ -94,8 +95,8 @@ export function createPlatformRouter(deps: AppDependencies) {
   const config = deps.webhookConfig ?? webhookConfigFromEnv();
   // API keys never authenticate first-party routes; user tokens never authenticate /v1.
   router.use((req: ApiRequest, res, next) => {
-    req.apiRequestId = newId("req");
-    res.setHeader("X-Request-Id", req.apiRequestId);
+    req.apiRequestId = res.locals.operationId ?? newId("req");
+    res.setHeader("X-Request-Id", req.apiRequestId!);
     res.setHeader("PackProof-API-Version", "v1");
     res.setHeader("Cache-Control", "no-store");
     void (async () => {
@@ -155,6 +156,20 @@ export function createPlatformRouter(deps: AppDependencies) {
       }),
     );
   }
+  router.post('/claims/lookup',route(async(raw,res)=>{
+    const req=raw as ApiRequest,p=req.apiPrincipal!;
+    requireScope(p,'claims:read');
+    const value=await lookupClaims(deps.db,deps.clock,p,req.body,req.apiRequestId!);
+    await auditRequest(deps.db,deps,req,'POST /claims/lookup',200);
+    res.json(value);
+  }));
+  router.post('/claims/proofs/:id/open',route(async(raw,res)=>{
+    const req=raw as ApiRequest,p=req.apiPrincipal!;
+    requireScope(p,'claims:read');
+    const value=await openClaimsProof(deps.db,deps.clock,p,req.params.id,req.body,req.apiRequestId!,webBase);
+    await auditRequest(deps.db,deps,req,'POST /claims/proofs/:id/open',201);
+    res.status(201).json(value);
+  }));
   function envelope(proof: ProofView, externalId: string) {
     return {
       apiVersion: "v1",
@@ -654,6 +669,13 @@ export function createTenantManagementRouter(deps: AppDependencies) {
       throw new DomainError("UNAUTHENTICATED", "Sign in to manage API access", 401);
     return req.packproofUserId;
   };
+  router.post('/:tenantId/claims-proofs/:proofId',route(async(req,res)=>{
+    res.status(201).json(await authorizeClaimsProof(deps.db,deps.clock,user(req),req.params.tenantId,req.params.proofId,req.body));
+  }));
+  router.delete('/:tenantId/claims-authorizations/:authorizationId',route(async(req,res)=>{
+    await revokeClaimsAuthorization(deps.db,deps.clock,user(req),req.params.tenantId,req.params.authorizationId);
+    res.status(204).end();
+  }));
   router.get(
     "/",
     route(async (req, res) => {

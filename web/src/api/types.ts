@@ -569,6 +569,7 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
+  integrity?: {result:string;scope:string};
   evidenceState?: { code: string; message: string };
   disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[];liveProof?:boolean;sharingNotice?:string};
   recordAsOf?: {supplementSequence:number;supplementSha256:string|null;scopeStatement:string};

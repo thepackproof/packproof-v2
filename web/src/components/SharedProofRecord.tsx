@@ -59,6 +59,7 @@ export function SharedProofRecord({ proof, loadMedia }: {
     </header>
     <p className="record-source-note">Shipment: {shipments.at(-1)?.label || "No carrier update yet"}</p>
     {proof.recordAsOf && <p className="record-source-note">{proof.recordAsOf.scopeStatement}</p>}
+    {proof.integrity && <details className="record-source-note"><summary>{proof.integrity.result==='MANIFEST_HASH_MATCH'?'Preserved manifest integrity checked':proof.integrity.result==='MANIFEST_HASH_MISMATCH'?'Manifest integrity mismatch':'Integrity check available after finalization'}</summary><p>{proof.integrity.scope}</p></details>}
     <div className="record-tabs" role="tablist" aria-label="Proof record views">
       {tabs.map((name, index) => <button key={name} type="button" role="tab" ref={element => { buttons.current[index] = element; }}
         id={`shared-${proof.proofId}-${name}-tab`} aria-controls={`shared-${proof.proofId}-${name}-panel`}

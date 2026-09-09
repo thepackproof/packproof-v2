@@ -9,6 +9,7 @@ import {observationConfigFromEnv} from "./analytics/observation-router.js";
 import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
+import { assertRealDataRuntime } from './operations/integration-readiness.js';
 import { dispatchCaptureShipments } from './workers/capture-shipment-worker.js';
 import { startOperationsWorkers } from './operations/runtime-jobs.js';
 import { assertSchemaCurrent } from './db/migrate.js';
@@ -41,6 +42,7 @@ import {
 } from "./integrations/connected-accounts/from-config.js";
 
 loadEnvFile(path.resolve(process.cwd()));
+assertRealDataRuntime();
 
 const config = loadConfig();
 // Validate signing configuration before opening the database or starting workers.

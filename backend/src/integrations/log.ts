@@ -1,3 +1,4 @@
+import { requestContext } from '../operations/request-context.js';
 export function logIntegrationEvent(entry: {
   adapterKey: string;
   connectionId: string;
@@ -13,6 +14,7 @@ export function logIntegrationEvent(entry: {
   console.log(
     JSON.stringify({
       source: "packproof.integration",
+      requestId: requestContext.getStore()?.requestId,
       adapterKey: entry.adapterKey,
       connectionId: entry.connectionId,
       transactionId: entry.transactionId,

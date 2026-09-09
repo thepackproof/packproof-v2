@@ -274,15 +274,6 @@ export class PackProofApi {
     });
   }
 
-  async connectDemoStorefront(
-    externalAccountReference?: string,
-  ): Promise<{ connection: CommerceConnectionView }> {
-    return this.request("/dev/integrations/demo-storefront/connect", {
-      method: "POST",
-      body: externalAccountReference ? { externalAccountReference } : {},
-    });
-  }
-
   async listInvitations(): Promise<{ invitations: InvitationInboxView[] }> {
     return this.request("/invitations");
   }

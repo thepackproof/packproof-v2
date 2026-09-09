@@ -1,4 +1,5 @@
 import { randomUUID,createHash } from "node:crypto";
+import { requestContext } from '../operations/request-context.js';
 import { isIP } from "node:net";
 import type { Express,Request,Response } from "express";
 import type { Database } from "../db/database.js";
@@ -19,6 +20,7 @@ export function httpBoundary(corsOrigins: readonly string[]): RequestHandler {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-PackProof-Station-Token, X-Intake-Device-Token, X-PackProof-Intake-Version, Range");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
+      res.setHeader('Access-Control-Expose-Headers','X-PackProof-Operation-Id, X-Request-Id');
     }
     if (req.method === "OPTIONS") {
       res.status(204).end();
@@ -44,7 +46,9 @@ export const requestBodyErrors: ErrorRequestHandler = (error, _req, res, next) =
 /** Generated locally: a caller cannot inject a log/correlation identifier. */
 export const requestCorrelation:RequestHandler=(_req,res,next)=>{
   if(!res.locals.operationId)res.locals.operationId=randomUUID();
-  res.setHeader('X-PackProof-Operation-Id',res.locals.operationId);next();
+  res.setHeader('X-PackProof-Operation-Id',res.locals.operationId);
+  res.setHeader('X-Request-Id',res.locals.operationId);
+  requestContext.run({requestId:res.locals.operationId},next);
 };
 export function configureTrustedProxy(app:Pick<Express,'set'>,env:NodeJS.ProcessEnv=process.env):void {
   const values=(env.PACKPROOF_TRUSTED_PROXIES??'').split(',').map(value=>value.trim()).filter(Boolean);

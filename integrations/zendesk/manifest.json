@@ -1,0 +1,51 @@
+{
+  "name": "PackProof Claims",
+  "author": {
+    "name": "PackProof",
+    "email": "support@thepackproof.com",
+    "url": "https://thepackproof.com"
+  },
+  "defaultLocale": "en",
+  "private": true,
+  "version": "1.0.0",
+  "frameworkVersion": "2.0",
+  "location": {
+    "support": {
+      "ticket_sidebar": "assets/sidebar.html"
+    }
+  },
+  "domainWhitelist": [
+    "pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws"
+  ],
+  "parameters": [
+    {
+      "name": "claims_token",
+      "type": "text",
+      "secure": true,
+      "required": true,
+      "scopes": [
+        "header"
+      ]
+    },
+    {
+      "name": "proof_id_field",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "order_id_field",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "tracking_field",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "reference_field",
+      "type": "text",
+      "required": false
+    }
+  ]
+}

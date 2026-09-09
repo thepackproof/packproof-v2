@@ -10,7 +10,8 @@
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:integrations": "tsx src/operations/check-integrations-cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "3.1120.0",
