@@ -203,6 +203,7 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
       {visibleBookmarks.length > 0 ? <div className="record-chapters" aria-label="Recorded source moments">{visibleBookmarks.map(bookmark => <button type="button" key={bookmark.anchorId} onClick={() => void open(bookmark.evidenceId!, bookmark.startMs! / 1000)} title={`Source: ${bookmark.sourceCategory.replaceAll("_", " ").toLowerCase()}`}>{elapsed(bookmark.startMs!)} · {bookmark.label}</button>)}</div> : null}
     </>}
     {(proof.attestations ?? []).filter(statement => !statement.relatedEvidenceId || statement.relatedEvidenceId === current?.evidenceId).map(statement => <section className="record-declaration" key={statement.attestationId} aria-label="Participant statement">
+      <StatusBadge label="Attestation recorded" tone="success" />
       <h3>{proof.participants.find(participant => participant.userId === statement.attestedBy)?.role === "SELLER" ? "Seller declaration" : "Participant statement"}</h3>
       <p>{statement.statementText || (statement.statement === "PACKED_DESCRIBED_ITEM" ? "Seller attested to packing the described item" : statement.statement)}</p>
       <p className="note">Recorded {formatWhen(statement.createdAt)}. This is the participant’s declaration about the shipment.</p>

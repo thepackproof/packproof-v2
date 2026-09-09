@@ -50,7 +50,7 @@ export function SegmentedTabs<T extends string>(props: {
             styles.pill,
             {
               width: segmentWidth,
-              backgroundColor: colors.primary,
+              backgroundColor: colors.accentSoft,
               transform: [{ translateX: translate }],
             },
           ]}
@@ -71,8 +71,8 @@ export function SegmentedTabs<T extends string>(props: {
             accessibilityState={{ selected }}
             style={styles.tab}
           >
-            {fontScale < 1.4 ? <Ionicons name={option.icon} size={16} color={selected ? colors.textOnPrimary : colors.textPrimary} /> : null}
-            <Text style={[styles.label, { color: selected ? colors.textOnPrimary : colors.textPrimary }]}>
+            {fontScale < 1.4 ? <Ionicons name={option.icon} size={16} color={selected ? colors.accentText : colors.textSecondary} /> : null}
+            <Text style={[styles.label, { color: selected ? colors.accentText : colors.textSecondary }]}>
               {option.label}
             </Text>
           </Pressable>

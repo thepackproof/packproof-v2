@@ -30,6 +30,7 @@ export function Button(props: {
         props.onPress();
       }}
       disabled={disabled}
+      pressedStyle={disabled ? undefined : { opacity: 1, backgroundColor: variant === "primary" || variant === "success" ? colors.primaryPressed : colors.surfacePressed }}
       accessibilityRole="button"
       accessibilityLabel={props.label}
       accessibilityHint={props.accessibilityHint}
@@ -82,11 +83,11 @@ function buttonPalette(
 ): { background: string; foreground: string; border: string; borderWidth: number } {
   switch (variant) {
     case "secondary":
-      return { background: colors.surface, foreground: colors.textPrimary, border: colors.border, borderWidth: 1 };
+      return { background: colors.accentSoft, foreground: colors.accentText, border: colors.border, borderWidth: 1 };
     case "tertiary":
-      return { background: "transparent", foreground: colors.textPrimary, border: "transparent", borderWidth: 0 };
+      return { background: "transparent", foreground: colors.accentText, border: "transparent", borderWidth: 0 };
     case "success":
-      return { background: colors.success, foreground: colors.textOnPrimary, border: colors.success, borderWidth: 0 };
+      return { background: colors.primary, foreground: colors.textOnPrimary, border: colors.primary, borderWidth: 0 };
     case "destructive":
       return { background: colors.surface, foreground: colors.error, border: colors.errorMuted, borderWidth: 1 };
     default:

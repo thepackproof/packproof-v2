@@ -81,7 +81,7 @@ function ScanMap({ point, zoom, onZoom, height, onOpenLink }: {
   return <View style={[styles.map, { height, backgroundColor: colors.surfacePressed }]} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
     {tiles.map((tile) => <CachedMapTile key={tile.key} tile={tile} onError={() => setFailed(true)} />)}
     {!failed && <View pointerEvents="none" style={styles.marker} accessibilityLabel={`Reported scan: ${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}`}>
-      <Ionicons name="location" size={48} color={colors.success} style={styles.markerShadow} />
+      <Ionicons name="location" size={48} color={colors.accent} style={styles.markerShadow} />
     </View>}
     {failed && <View style={[styles.mapFailure, { backgroundColor: colors.surfaceElevated }]}>
       <Ionicons name="map-outline" size={32} color={colors.textSecondary} />

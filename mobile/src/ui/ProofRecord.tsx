@@ -129,7 +129,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   return <View style={[styles.record,{backgroundColor:colors.surface}]}>
     <View style={[styles.tabBorder, { borderBottomColor: colors.divider }]}>
       <ScrollView ref={tabScroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Proof record views">
-        {tabs.map(({ key, label }) => <View key={key} style={styles.tabSlot} onLayout={event => { tabPositions.current[key] = event.nativeEvent.layout.x; if (tab === key) tabScroll.current?.scrollTo({ x: Math.max(0, event.nativeEvent.layout.x - 12), animated: false }); }}><PressableScale accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === key }} onPress={() => selectTab(key)} style={[styles.tab, { borderBottomColor: tab === key ? colors.accent : "transparent" }]}>
+        {tabs.map(({ key, label }) => <View key={key} style={styles.tabSlot} onLayout={event => { tabPositions.current[key] = event.nativeEvent.layout.x; if (tab === key) tabScroll.current?.scrollTo({ x: Math.max(0, event.nativeEvent.layout.x - 12), animated: false }); }}><PressableScale accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === key }} onPress={() => selectTab(key)} style={[styles.tab, { borderBottomColor: tab === key ? colors.accent : "transparent", backgroundColor: tab === key ? colors.accentSoft : colors.surface }]}>
           <Text style={[styles.tabLabel, { color: tab === key ? colors.accentText : colors.textSecondary }]}>{label}</Text>
         </PressableScale></View>)}
       </ScrollView>
@@ -143,7 +143,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
       <Text selectable style={[styles.note,{color:colors.textSecondary}]}>{txn.externalReference ? `Order ${txn.externalReference}` : `Proof ${proof.proofId.slice(0,8)}`}</Text>
       <Text style={[styles.note,{color:colors.textSecondary}]}>Shipment: {presentation.shipmentStatus || "No carrier update yet"}</Text>
       <View style={styles.headerMeta}>
-        <StatusBadge label={statusLabel} tone={presentation.completed ? "success" : "neutral"} />
+        <StatusBadge label={statusLabel} tone={presentation.completed ? "success" : statusTone(statusLabel)} />
         <PressableScale accessibilityRole="button" accessibilityLabel="Order details" accessibilityState={{ expanded: detailsExpanded }} onPress={toggleDetails} style={styles.detailsToggle}>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Details</Text><Ionicons name={detailsExpanded ? "chevron-up" : "chevron-down"} size={15} color={colors.textSecondary} />
         </PressableScale>
@@ -161,14 +161,14 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
         </View> : null}
         {panelTab === "Evidence" ? <>
           {action}
-          {!committed.length ? <View style={styles.empty}>
-            <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}><Ionicons name="videocam-outline" size={30} color={colors.accentText} /></View>
+          {!committed.length ? <View style={[styles.empty, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceElevated }]}><Ionicons name="videocam-outline" size={30} color={colors.textSecondary} /></View>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>{pendingUpload ? "Evidence is still uploading" : "Recording has not been added yet"}</Text>
           </View> : <>
             {committed.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectors} accessibilityLabel="Choose original evidence">{committed.map((item, index) => <PressableScale key={recordEvidenceKey(item)} onPress={() => selectEvidence(item)} accessibilityRole="button" accessibilityState={{ selected: selectedEvidence === item }} style={[styles.selector, { backgroundColor: selectedEvidence === item ? colors.accentSoft : colors.surface, borderColor: selectedEvidence === item ? colors.accentSoftBorder : colors.border }]}><Text style={[styles.subtitle, { color: colors.textPrimary }]}>{recordEvidenceLabel(item)} {index + 1}</Text></PressableScale>)}</ScrollView> : null}
             {selectedEvidence ? <ProofEvidencePreview key={recordEvidenceKey(selectedEvidence)} evidence={selectedEvidence} active={tab === "Evidence"} title={recordEvidenceLabel(selectedEvidence)} bookmarks={originalBookmarks(selectedEvidence, anchors)} initialTime={saved.current.playbackTimes?.[recordEvidenceKey(selectedEvidence)] ?? 0} onTime={seconds => savePlayback(recordEvidenceKey(selectedEvidence), seconds)} labelOffsetMs={selectedEvidence.stageId ? undefined : proof.captureShipping?.observations.find(item => item.evidenceId === selectedEvidence.evidenceId)?.detectedAtMs} /> : null}
-            {sellerAttestation ? <View style={[styles.info, { borderColor: colors.accentSoftBorder }]}>
-              <Text style={[styles.heading, { color: colors.accentText }]}>Seller attestation</Text>
+            {sellerAttestation ? <View style={[styles.info, { borderColor: colors.border, backgroundColor: colors.successSoft }]}>
+              <StatusBadge label="Attestation recorded" tone="success" />
               <Text style={[styles.text, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
               <Text style={[styles.note, { color: colors.textSecondary }]}>Recorded {formatDateTime(sellerAttestation.createdAt)} · Signature verified</Text>
             </View> : null}

@@ -65,6 +65,9 @@ function applyCssVars(scheme: ColorScheme) {
     "--accent-soft-border": colors.accentSoftBorder,
     "--accent-text": colors.accentText,
     "--primary": colors.primary,
+    "--primary-hover": colors.primaryHover,
+    "--logo-blue": colors.logoBlue,
+    "--logo-green": colors.logoGreen,
     "--primary-pressed": colors.primaryPressed,
     "--success": colors.success,
     "--success-text": colors.successText,
@@ -83,10 +86,8 @@ function applyCssVars(scheme: ColorScheme) {
     "--scan-bg": colors.scanBackground,
     "--scan-text": colors.scanText,
     "--fab": colors.fab,
-    "--shadow":
-      scheme === "dark" ? "0 2px 8px rgba(0, 0, 0, 0.35)" : "0 2px 8px rgba(20, 39, 53, 0.06)",
-    "--shadow-fab":
-      scheme === "dark" ? "0 4px 10px rgba(0, 0, 0, 0.45)" : "0 4px 10px rgba(20, 39, 53, 0.18)",
+    "--shadow": "none",
+    "--shadow-fab": "none",
   };
   root.dataset.theme = scheme;
   root.style.colorScheme = scheme;

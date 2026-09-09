@@ -49,7 +49,7 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
       const title = group.access ? `${group.entries.length} access ${group.entries.length === 1 ? "event" : "events"}` : humanChronologyTitle(entry.eventType, entry.title);
       const previous = visible[index - 1]?.entry;
       const newDay = !previous || new Date(previous.occurredAt).toDateString() !== new Date(entry.occurredAt).toDateString();
-      const tone = preserved ? colors.success : entry.category === "COMMERCE" ? colors.accent : colors.textSecondary;
+      const tone = preserved ? colors.textPrimary : entry.category === "COMMERCE" ? colors.accent : colors.textSecondary;
       return <View key={group.key} style={styles.entry}>
         <View style={styles.dateRow}>
           {newDay ? <Text style={[styles.date, { color: colors.textSecondary }]}>{formatDate(entry.occurredAt) || "Time unavailable"}</Text> : null}
@@ -66,7 +66,7 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
             <PressableScale onPress={() => group.access ? toggleGroup() : onSelect(entry)} accessibilityRole="button" accessibilityState={group.access ? { expanded } : undefined} accessibilityLabel={`${title}. ${formatDate(entry.occurredAt)}, ${formatTime(entry.occurredAt)}. View event details.`} style={[styles.card, { borderColor: preserved ? colors.successSoftBorder : colors.border, backgroundColor: preserved ? colors.successSoft : colors.surface }]}>
               {detailed ? <View style={styles.cardTop}>
                 <Text style={[styles.source, { color: colors.textSecondary }]}>{chronologyCategoryLabel(entry.category, entry.source, entry.provider, entry.eventType)}</Text>
-                {preserved ? <View style={styles.preserved}><Ionicons name="shield-checkmark-outline" size={13} color={colors.successText} /><Text style={[styles.time, { color: colors.successText }]}>Preserved</Text></View> : <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />}
+                {preserved ? <View style={styles.preserved}><Ionicons name="shield-checkmark-outline" size={13} color={colors.successText} /><Text style={[styles.time, { color: colors.textPrimary }]}>Preserved</Text></View> : <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />}
               </View> : null}
               <View style={styles.cardTop}><Text style={[styles.title, { color: colors.textPrimary, flex: 1 }]}>{title}</Text>{!detailed ? <Ionicons name="chevron-forward" size={14} color={colors.textMuted} /> : null}</View>
               {detailed && entry.description ? <Text style={[styles.body, { color: colors.textSecondary }]}>{entry.description}</Text> : null}

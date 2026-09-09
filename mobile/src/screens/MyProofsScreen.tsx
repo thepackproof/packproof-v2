@@ -13,6 +13,7 @@ import { BottomSheet } from '../ui/Sheets';
 import { EmptyState, ErrorBanner, OfflineBanner } from '../ui/EmptyState';
 import { ProofCardSkeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
+import { StatusBadge } from '../ui/StatusBadge';
 import { PressableScale } from '../ui/motion';
 import type { ProofCollectionItem, InvitationInboxView } from '../v2-api';
 
@@ -81,8 +82,8 @@ export function MyProofsScreen() {
       {([{id:'all',label:'All'},{id:'attention',label:'Needs attention'},{id:'completed',label:'Completed'}] as const).map(option => <PressableScale key={option.id} onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { borderBottomColor:library.view === option.id ? colors.accent : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale>)}
     </View>
     <View style={styles.searchRow}>
-      <View style={[styles.search,{borderColor:scheme === "dark" ? "#8B9790" : "#7B8580",backgroundColor:colors.surface}]}><Ionicons name="search-outline" size={20} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search Proofs" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
-      <PressableScale onPress={() => setFilterOpen(true)} accessibilityRole="button" accessibilityLabel="Filters" style={[styles.filter,{borderColor:scheme === "dark" ? "#8B9790" : "#7B8580"}]}><Ionicons name="options-outline" size={22} color={colors.textPrimary}/></PressableScale>
+      <View style={[styles.search,{borderColor:colors.textSecondary,backgroundColor:colors.surface}]}><Ionicons name="search-outline" size={20} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search Proofs" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
+      <PressableScale onPress={() => setFilterOpen(true)} accessibilityRole="button" accessibilityLabel="Filters" style={[styles.filter,{borderColor:colors.textSecondary}]}><Ionicons name="options-outline" size={22} color={colors.textPrimary}/></PressableScale>
     </View>
     <OfflineBanner visible={app.offline} />
     <ErrorBanner message={app.error || (app.offline && !snapshot.rows.length ? "Proofs could not be loaded while offline. Reconnect and try again." : null)}/>
@@ -94,7 +95,7 @@ export function MyProofsScreen() {
       <PressableScale onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
         <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>{item.transaction.itemTitle || 'Shipment Proof'}</Text>
         <Text style={[styles.meta,{color:colors.textSecondary}]}>{item.transaction.externalReference ? `Order ${item.transaction.externalReference}` : `Proof ${item.proofId.slice(0,8)}`}</Text>
-        <Text accessibilityLiveRegion="polite" style={[styles.status,{color:item.presentation.completed ? colors.successText : colors.textPrimary}]}>{item.presentation.displayStatus}</Text>
+        <View accessibilityLiveRegion="polite"><StatusBadge label={item.presentation.displayStatus} /></View>
         <Text style={[styles.meta,{color:colors.textSecondary}]}>{[item.transaction.provider, `Updated ${formatDate(item.updatedAt)}`].filter(Boolean).join(' · ')}</Text>
       </PressableScale>
       <Button label={item.presentation.nextAction.label} variant="tertiary" onPress={() => void open(item,true)} loading={app.busy} />

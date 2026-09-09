@@ -342,7 +342,7 @@ function CameraSession({
         </View>
         <ScrollView contentContainerStyle={styles.controls}>
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
-            <Text style={{color:shipping?.status==='BOUND'?colors.success:colors.textSecondary}}>
+            <Text style={{color:shipping?.status==='BOUND'?colors.accentText:colors.textSecondary}}>
               {request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'
                 : shipping?.status==='BOUND' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')}`
                 : shipping?.status==='QUEUED' ? 'Tracking number read · saved on this device'
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   heading: { padding: 16, gap: 6 },
   title: { fontSize: 19, fontWeight: "600" },
-  camera: { flex: 1, minHeight: 200, backgroundColor: "#101b2b" },
+  camera: { flex: 1, minHeight: 200, backgroundColor: "#23262D" },
   frame: {
     position: "absolute",
     top: "12%",
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     width: "76%",
     height: "76%",
     borderWidth: 2,
-    borderColor: "#7DE4ED",
+    borderColor: "#2583E9",
     borderRadius: 16,
   },
   controls: { padding: 16, gap: 12 },
