@@ -1,3 +1,4 @@
+import { StatusBadge } from "./StatusBadge";
 import { useEffect, useState } from "react";
 import { useViewState } from "../navigation-context";
 import type { ShipmentEventView } from "../api/types";
@@ -67,7 +68,7 @@ export function ShipmentTracking({ events, carrier, trackingNumber, demo = false
     <Glyph name="pin" size={23} /><div><h3>{carrier || "Shipment tracking"}</h3><p role="status">{availability || "Tracking number recorded. No carrier scan has been reported yet."}</p>{trackingNumber && <p className="tracking-number">{trackingNumber}</p>}</div>
   </section>;
   return <section className={`section shipment-tracking ${expanded ? "tracking-expanded" : ""}`} aria-label="Shipment tracking">
-    <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="pin" size={15} /> {demo ? "ILLUSTRATIVE SHIPMENT" : "CARRIER UPDATES"}</span><h2>Shipment tracking</h2></div><span className="tracking-status"><span />{ordered[0] ? eventLabel(ordered[0].eventType) : "Awaiting updates"}</span></div>
+    <div className="panel-heading"><div><span className="panel-eyebrow"><Glyph name="pin" size={15} /> {demo ? "ILLUSTRATIVE SHIPMENT" : "CARRIER UPDATES"}</span><h2>Shipment tracking</h2></div><StatusBadge label={ordered[0] ? eventLabel(ordered[0].eventType) : "Awaiting updates"} /></div>
     {availability && <p role="status" className="map-unavailable">{availability}</p>}
     <p className="note">Latest carrier report: <time dateTime={ordered[0].occurredAt}>{formatWhen(ordered[0].occurredAt)}</time>.{sync?.lastSuccessfulSyncAt ? <> Last successful check: <time dateTime={sync.lastSuccessfulSyncAt}>{formatWhen(sync.lastSuccessfulSyncAt)}</time>.</> : null}</p>
     {events.some(event=>event.eventData.test===true)&&<p role="status" className="map-unavailable">Test tracking data · simulated shipment events, not real carrier evidence.</p>}

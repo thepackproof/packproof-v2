@@ -39,12 +39,12 @@ export function SuccessState(props: {
   }, [check, reducedMotion]);
 
   return (
-    <View style={styles.wrap} accessibilityRole="summary" accessibilityLiveRegion="polite">
+    <View style={[styles.wrap, { backgroundColor: colors.surface }]} accessibilityRole="summary" accessibilityLiveRegion="polite">
       <Logo size={72} />
       <Animated.View style={{ transform: [{ scale: check }] }}>
         <Ionicons name="checkmark-circle" size={44} color={colors.success} accessibilityLabel="Finalized" />
       </Animated.View>
-      <Text style={[styles.kicker, { color: colors.success }]}>PACKPROOF COMPLETE</Text>
+      <Text style={[styles.kicker, { color: colors.successText }]}>PACKPROOF COMPLETE</Text>
       <Text style={[styles.title, { color: colors.textPrimary }]}>{props.title}</Text>
       <Text style={[styles.body, { color: colors.textSecondary }]}>{props.body}</Text>
       {props.detail ? <Text style={[styles.detail, { color: colors.textMuted }]}>{props.detail}</Text> : null}

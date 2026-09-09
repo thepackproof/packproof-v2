@@ -3,15 +3,15 @@
 .sample-record.sample-canonical .sample-label { margin-left: 0; }
 .sample-record.sample-canonical .sample-tabs { gap: 0; padding-inline: 16px; }
 .sample-record.sample-canonical .sample-tabs button { flex: 1; min-width: 0; min-height: 48px; padding: 12px 8px; font-size: 14px; }
-.sample-record.sample-canonical .sample-tabs button[aria-selected=true] { color: #1767D1; border-bottom-color: #1767D1; }
+.sample-record.sample-canonical .sample-tabs button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
 .sample-record.sample-canonical .sample-body { min-height: 0; }
 .sample-record.sample-canonical [hidden] { display: none !important; }
 .sample-more { position: relative; }
-.sample-more summary { min-height: 48px; display: flex; align-items: center; padding-inline: 12px; cursor: pointer; list-style: none; border-radius: 8px; color: #18212C; }
+.sample-more summary { min-height: 48px; display: flex; align-items: center; padding-inline: 12px; cursor: pointer; list-style: none; border-radius: 8px; color: var(--text); }
 .sample-more summary::-webkit-details-marker { display: none; }
-.sample-more[open] summary { background: #EFF2F6; }
-.sample-more > div { position: absolute; z-index: 3; right: 0; width: min(250px, 75vw); padding: 8px; background: #fff; border: 1px solid #DCE3EB; border-radius: 10px; box-shadow: 0 8px 24px #18212C18; }
-.sample-more button { width: 100%; min-height: 48px; text-align: left; padding: 12px; border: 0; background: transparent; color: #18212C; }
-.sample-more button:hover { background: #EFF2F6; }
+.sample-more[open] summary { background: var(--surface-elevated); }
+.sample-more > div { position: absolute; z-index: 3; right: 0; width: min(250px, 75vw); padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: none; }
+.sample-more button { width: 100%; min-height: 48px; text-align: left; padding: 12px; border: 0; background: transparent; color: var(--text); }
+.sample-more button:hover { background: var(--surface-elevated); }
 .sample-back { min-height: 48px; margin-bottom: 12px; }
-.sample-record.sample-canonical :is(button, summary):focus-visible { outline: 2px solid #1767D1; outline-offset: 3px; }
+.sample-record.sample-canonical :is(button, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

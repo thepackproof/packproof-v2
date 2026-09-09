@@ -31,7 +31,7 @@
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 
 .legal-toc a {
@@ -84,7 +84,7 @@
 }
 
 .legal-placeholder {
-  background: #fff4cc;
+  background: var(--warning-soft);
   color: var(--navy);
   padding: 0.05em 0.3em;
   border-radius: 4px;
