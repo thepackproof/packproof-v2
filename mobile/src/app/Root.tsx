@@ -5,7 +5,7 @@ import { NativeCaptureHost } from "../ui/NativeCaptureHost";
 import { OrderIntakeScreen } from "../screens/OrderIntakeScreen";
 import { CommerceReceiptScreen } from "../screens/CommerceReceiptScreen";
 import { sharedOrderText } from "../copy/share-intake";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BackHandler, StyleSheet, Text, View, Linking, Keyboard } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
@@ -30,6 +30,8 @@ import { EventDetailScreen } from "../screens/EventDetailScreen";
 import { EditPurchaseScreen, EditShippingScreen } from "../screens/EditDetailsScreen";
 import { DevToolsScreen } from "../screens/DevToolsScreen";
 import { PackingStationScreen } from "../screens/PackingStationScreen";
+import { CinematicCompletion } from "../ui/CinematicCompletion";
+import { RouteReveal } from "../ui/motion";
 
 export function Root() {
   const app = usePackProof();
@@ -38,7 +40,19 @@ export function Root() {
   const [captureIntent,setCaptureIntent]=useState<string|null>(null);
   const [linkedProofId, setLinkedProofId] = useState<string | null>(null);
   const [sharedText, setSharedText] = useState<string | null>(null);
+  const [completionVisible, setCompletionVisible] = useState(false);
+  const previousRoute = useRef(app.route.name);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
+
+  useEffect(() => {
+    const previous = previousRoute.current;
+    previousRoute.current = app.route.name;
+    if (previous === "finalize" && app.route.name === "proof" && app.proof?.status === "FINALIZED") {
+      setCompletionVisible(true);
+      const timer = setTimeout(() => setCompletionVisible(false), theme.reducedMotion ? 650 : 1700);
+      return () => clearTimeout(timer);
+    }
+  }, [app.route.name, app.proof?.status, app.proof?.proofId, theme.reducedMotion]);
 
   useEffect(() => {
     if (!ready || !app.session || ["auth", "account"].includes(app.route.name)) return;
@@ -104,20 +118,13 @@ export function Root() {
         <StatusBar style={theme.scheme === "dark" ? "light" : "dark"} />
         <Logo size={72} />
         <Text style={[styles.splashTitle, { color: theme.colors.textPrimary }]}>PackProof</Text>
-        <Text style={[styles.splashCopy, { color: theme.colors.textSecondary }]}>
-          Loading PackProof
-        </Text>
+        <Text style={[styles.splashCopy, { color: theme.colors.textSecondary }]}>Loading PackProof</Text>
       </View>
     );
   }
 
   if (app.route.name === "auth" || !app.session) {
-    return (
-      <>
-        <StatusBar style={statusStyle} />
-        <AuthScreen />
-      </>
-    );
+    return <><StatusBar style={statusStyle} /><AuthScreen /></>;
   }
 
   if (app.route.name === "station" && app.session?.stationActive && app.localCapture && app.session.stationProofId === app.localCapture.captureProofId) {
@@ -154,62 +161,38 @@ export function Root() {
   }
 
   let body = null;
-  if (["home", "orders", "station"].includes(app.route.name)) {
-    body = <MyProofsScreen />;
-  } else if (app.route.name === "create") {
-    body = <CreateScreen />;
-  } else if (app.route.name === "account") {
-    body = <AccountScreen key={app.route.accountSection ?? "account"} initialSection={app.route.accountSection} />;
-  } else if (app.route.name === "sharing") {
-    body = <SharingScreen key={app.proof?.proofId} />;
-  } else if (app.route.name === "signature") {
-    body = <SignatureProofScreen key={app.proof?.proofId} />;
-  } else if (app.route.name === "proof" || app.route.name === "event") {
+  if (["home", "orders", "station"].includes(app.route.name)) body = <MyProofsScreen />;
+  else if (app.route.name === "create") body = <CreateScreen />;
+  else if (app.route.name === "account") body = <AccountScreen key={app.route.accountSection ?? "account"} initialSection={app.route.accountSection} />;
+  else if (app.route.name === "sharing") body = <SharingScreen key={app.proof?.proofId} />;
+  else if (app.route.name === "signature") body = <SignatureProofScreen key={app.proof?.proofId} />;
+  else if (app.route.name === "proof" || app.route.name === "event") {
     body = <View style={{ flex: 1 }}>
       <View key={app.proof?.proofId} style={{ flex: 1, display: app.route.name === "event" ? "none" : "flex" }} accessibilityElementsHidden={app.route.name === "event"} importantForAccessibility={app.route.name === "event" ? "no-hide-descendants" : "auto"}>
         <ProofDetailScreen />
       </View>
       {app.route.name === "event" ? <EventDetailScreen /> : null}
     </View>;
-  } else if (app.route.name === "receipt" && app.receiptProofId) {
-    body = <CommerceReceiptScreen key={app.receiptProofId} />;
-  } else if (app.route.name === "capture") {
-    body = <CaptureScreen />;
-  } else if (app.route.name === "scan") {
-    body = <ScanScreen />;
-  } else if (app.route.name === "review") {
-    body = <PurchaseReviewScreen />;
-  } else if (app.route.name === "intake") {
-    body = (
-      <OrderIntakeScreen
-        key={sharedText ?? "paste"}
-        sharedText={sharedText}
-        onConsumed={() => setSharedText(null)}
-      />
-    );
-  } else if (app.route.name === "manual") {
-    body = <ManualCreateScreen />;
-  } else if (app.route.name === "finalize") {
-    body = <FinalizeScreen />;
+  } else if (app.route.name === "receipt" && app.receiptProofId) body = <CommerceReceiptScreen key={app.receiptProofId} />;
+  else if (app.route.name === "capture") body = <CaptureScreen />;
+  else if (app.route.name === "scan") body = <ScanScreen />;
+  else if (app.route.name === "review") body = <PurchaseReviewScreen />;
+  else if (app.route.name === "intake") body = <OrderIntakeScreen key={sharedText ?? "paste"} sharedText={sharedText} onConsumed={() => setSharedText(null)} />;
+  else if (app.route.name === "manual") body = <ManualCreateScreen />;
+  else if (app.route.name === "finalize") body = <FinalizeScreen />;
+  else if (app.route.name === "invite") body = <InviteScreen />;
+  else if (app.route.name === "invitation") body = <InvitationReviewScreen />;
+  else if (app.route.name === "editPurchase") body = <EditPurchaseScreen />;
+  else if (app.route.name === "editShipping") body = <EditShippingScreen />;
+  else if (app.route.name === "dev") body = <DevToolsScreen />;
 
-  } else if (app.route.name === "invite") {
-    body = <InviteScreen />;
-  } else if (app.route.name === "invitation") {
-    body = <InvitationReviewScreen />;
-
-  } else if (app.route.name === "editPurchase") {
-    body = <EditPurchaseScreen />;
-  } else if (app.route.name === "editShipping") {
-    body = <EditShippingScreen />;
-  } else if (app.route.name === "dev") {
-    body = <DevToolsScreen />;
-  }
-
+  const routeKey = `${app.route.name}:${app.route.name === "proof" || app.route.name === "event" ? app.proof?.proofId ?? "" : ""}`;
   return (
     <>
       <StatusBar style={statusStyle} />
       <NativeCaptureHost />
-      {body}
+      <RouteReveal routeKey={routeKey}>{body}</RouteReveal>
+      <CinematicCompletion visible={completionVisible} />
     </>
   );
 }
