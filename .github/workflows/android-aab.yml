@@ -2,7 +2,7 @@ name: Android AAB
 
 on:
   push:
-    branches: [main, codex/proof-record-parity]
+    branches: [main, codex/proof-record-parity, codex/cinematic-motion-2026-09-10]
     paths:
       - "mobile/**"
       - ".github/workflows/android-aab.yml"
