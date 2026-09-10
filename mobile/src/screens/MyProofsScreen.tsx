@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePackProof } from '../app/PackProofProvider';
 import { localProofWork, mergeProofInvitations, presentationForProof, selectProofRows, type PresentedProof } from '../copy/proof-list';
 import { formatDate } from '../copy/format';
+import { cinematicForScheme } from '../theme/cinematic';
 import { spacing, typography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { AppScreen } from '../ui/AppScreen';
@@ -14,12 +15,13 @@ import { EmptyState, ErrorBanner, OfflineBanner } from '../ui/EmptyState';
 import { ProofCardSkeleton } from '../ui/Skeleton';
 import { Button } from '../ui/Button';
 import { StatusBadge } from '../ui/StatusBadge';
-import { PressableScale } from '../ui/motion';
+import { FadeSlideIn, LiftPressable, PressableScale } from '../ui/motion';
 import type { ProofCollectionItem, InvitationInboxView } from '../v2-api';
 
 export function MyProofsScreen() {
   const app = usePackProof();
   const { colors, scheme } = useTheme();
+  const accents = cinematicForScheme(scheme);
   const [filterOpen, setFilterOpen] = useState(false);
   const [preparedProofIds, setPreparedProofIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(!app.proofCollection.length);
@@ -79,7 +81,7 @@ export function MyProofsScreen() {
     </View>
     <View style={styles.heading}><Text style={[styles.pageTitle, { color:colors.textPrimary }]}>Proofs</Text><Button label="New Proof" icon="add-outline" onPress={() => app.go('create')} /></View>
     <View style={[styles.tabs, { borderBottomColor:colors.divider }]} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
-      {([{id:'all',label:'All'},{id:'attention',label:'Needs attention'},{id:'completed',label:'Completed'}] as const).map(option => <PressableScale key={option.id} onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { borderBottomColor:library.view === option.id ? colors.accent : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale>)}
+      {([{id:'all',label:'All'},{id:'attention',label:'Needs attention'},{id:'completed',label:'Completed'}] as const).map(option => <PressableScale key={option.id} onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { borderBottomColor:library.view === option.id ? colors.accent : 'transparent', backgroundColor: library.view === option.id ? colors.accentSoft : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale>)}
     </View>
     <View style={styles.searchRow}>
       <View style={[styles.search,{borderColor:colors.textSecondary,backgroundColor:colors.surface}]}><Ionicons name="search-outline" size={20} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search Proofs" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
@@ -91,15 +93,20 @@ export function MyProofsScreen() {
     {library.view !== "completed" && !library.query.trim() ? <ReadyOrders onPreparedProofsChange={setPreparedProofIds} /> : null}
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
-    {rows.filter(item => !preparedProofIds.includes(item.proofId)).map(item => <View key={item.proofId} style={[styles.row,{backgroundColor:colors.surface,borderBottomColor:colors.divider}]}>
-      <PressableScale onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
-        <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>{item.transaction.itemTitle || 'Shipment Proof'}</Text>
-        <Text style={[styles.meta,{color:colors.textSecondary}]}>{item.transaction.externalReference ? `Order ${item.transaction.externalReference}` : `Proof ${item.proofId.slice(0,8)}`}</Text>
-        <View accessibilityLiveRegion="polite"><StatusBadge label={item.presentation.displayStatus} /></View>
-        <Text style={[styles.meta,{color:colors.textSecondary}]}>{[item.transaction.provider, `Updated ${formatDate(item.updatedAt)}`].filter(Boolean).join(' · ')}</Text>
-      </PressableScale>
-      <Button label={item.presentation.nextAction.label} variant="tertiary" onPress={() => void open(item,true)} loading={app.busy} />
-    </View>)}
+    {rows.filter(item => !preparedProofIds.includes(item.proofId)).map((item, index) => {
+      const accent = item.presentation.completed ? accents.green : item.presentation.needsAttention ? accents.amber : item.presentation.displayStatus.startsWith('Uploading') ? accents.teal : accents.blue;
+      return <FadeSlideIn key={item.proofId} index={index}>
+        <View style={[styles.row,{backgroundColor:colors.surface,borderColor:colors.border,borderLeftColor:accent}]}>
+          <LiftPressable onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
+            <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>{item.transaction.itemTitle || 'Shipment Proof'}</Text>
+            <Text style={[styles.meta,{color:colors.textSecondary}]}>{item.transaction.externalReference ? `Order ${item.transaction.externalReference}` : `Proof ${item.proofId.slice(0,8)}`}</Text>
+            <View accessibilityLiveRegion="polite"><StatusBadge label={item.presentation.displayStatus} /></View>
+            <Text style={[styles.meta,{color:colors.textSecondary}]}>{[item.transaction.provider, `Updated ${formatDate(item.updatedAt)}`].filter(Boolean).join(' · ')}</Text>
+          </LiftPressable>
+          <Button label={item.presentation.nextAction.label} variant="tertiary" onPress={() => void open(item,true)} loading={app.busy} />
+        </View>
+      </FadeSlideIn>;
+    })}
     {!loading && !app.error && !app.offline && !rows.length && !preparedProofIds.length ? <EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /> : null}
     <BottomSheet visible={filterOpen} title="Filters" onClose={() => setFilterOpen(false)}>
       <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>Your role</Text>
@@ -111,7 +118,7 @@ export function MyProofsScreen() {
 const styles = StyleSheet.create({
   topBar:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:16},wordmark:{width:170,height:40},
   heading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12},pageTitle:{...typography.pageTitle},
-  tabs:{flexDirection:'row',flexWrap:'wrap',borderBottomWidth:1,gap:8},tab:{minHeight:48,paddingHorizontal:8,paddingVertical:12,borderBottomWidth:2,justifyContent:'center'},tabText:{...typography.secondaryStrong},
-  searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:48,flexDirection:'row',alignItems:'center',paddingHorizontal:12,borderWidth:1,borderRadius:6,gap:8},input:{flex:1,...typography.body,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:6},
-  row:{padding:16,borderBottomWidth:1,gap:8},rowCopy:{gap:6,minHeight:48},rowTitle:{...typography.bodyStrong},meta:{...typography.secondary},status:{...typography.secondaryStrong},
+  tabs:{flexDirection:'row',flexWrap:'wrap',borderBottomWidth:1,gap:8},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:12,borderBottomWidth:2,borderTopLeftRadius:8,borderTopRightRadius:8,justifyContent:'center'},tabText:{...typography.secondaryStrong},
+  searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:48,flexDirection:'row',alignItems:'center',paddingHorizontal:12,borderWidth:1,borderRadius:8,gap:8},input:{flex:1,...typography.body,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:8},
+  row:{marginBottom:12,padding:16,borderWidth:1,borderLeftWidth:4,borderRadius:14,gap:8,shadowColor:'#23262D',shadowOffset:{width:0,height:4},shadowOpacity:0.06,shadowRadius:12,elevation:1},rowCopy:{gap:6,minHeight:48},rowTitle:{...typography.bodyStrong},meta:{...typography.secondary},status:{...typography.secondaryStrong},
 });
