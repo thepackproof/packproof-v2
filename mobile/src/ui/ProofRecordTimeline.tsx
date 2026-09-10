@@ -6,8 +6,11 @@ import { chronologyCategoryLabel, humanChronologyTitle, isShipmentAfterFinalizat
 import { formatDate, formatTime } from "../copy/format";
 import { recordActivityEvents, recordActivityGroups, recordEventFilters } from "../copy/proof-record";
 import { useTheme } from "../theme/ThemeProvider";
+import { cinematicForScheme } from "../theme/cinematic";
 import { typography } from "../theme/tokens";
-import { PressableScale } from "./motion";
+import { FadeSlideIn, PressableScale, PulseScale } from "./motion";
+
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
 export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter, onFilter, onSelect }: {
   entries: ChronologyEntry[];
@@ -17,7 +20,8 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
   onFilter: (category: string) => void;
   onSelect: (entry: ChronologyEntry) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
+  const accents = cinematicForScheme(scheme);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const detailed = filter !== "MILESTONES";
   const ordered = recordActivityEvents(entries, detailed);
@@ -26,6 +30,18 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
   const visible = detailed
     ? ordered.filter(entry => selected === "ALL" || entry.category === selected).map(entry => ({ key: entry.id, entry, entries: [entry], access: false }))
     : recordActivityGroups(entries, auditEvents);
+
+  function visualFor(entry: ChronologyEntry, preserved: boolean): { color: string; soft: string; icon: IconName } {
+    const type = `${entry.eventType} ${entry.title ?? ""}`.toUpperCase();
+    if (preserved) return { color: accents.green, soft: accents.greenSoft, icon: "shield-checkmark-outline" };
+    if (/ATTEST|SIGNATURE|INTEGRITY|BIOMETRIC/.test(type)) return { color: accents.violet, soft: accents.violetSoft, icon: "finger-print-outline" };
+    if (entry.category === "SHIPMENT" || /CARRIER|TRACK|SHIPMENT|DELIVER/.test(type)) return { color: accents.teal, soft: accents.tealSoft, icon: "navigate-outline" };
+    if (/CAPTURE|VIDEO|EVIDENCE|RECORD/.test(type)) return { color: accents.blue, soft: accents.blueSoft, icon: "videocam-outline" };
+    if (/ACCESS|VIEWER|SHARE/.test(type)) return { color: accents.violet, soft: accents.violetSoft, icon: "eye-outline" };
+    if (entry.category === "COMMERCE") return { color: accents.amber, soft: accents.amberSoft, icon: "storefront-outline" };
+    return { color: accents.blue, soft: accents.blueSoft, icon: "cube-outline" };
+  }
+
   return <View style={styles.root} accessibilityLabel="Proof activity">
     <View style={styles.modeRow}>
       {[{ key: "MILESTONES", label: "Highlights" }, { key: "ALL", label: "Detailed history" }].map(mode => <PressableScale key={mode.key} accessibilityRole="button" accessibilityState={{ selected: mode.key === "MILESTONES" ? !detailed : detailed }} onPress={() => onFilter(mode.key)} style={styles.modeButton}>
@@ -49,33 +65,35 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
       const title = group.access ? `${group.entries.length} access ${group.entries.length === 1 ? "event" : "events"}` : humanChronologyTitle(entry.eventType, entry.title);
       const previous = visible[index - 1]?.entry;
       const newDay = !previous || new Date(previous.occurredAt).toDateString() !== new Date(entry.occurredAt).toDateString();
-      const tone = preserved ? colors.textPrimary : entry.category === "COMMERCE" ? colors.accent : colors.textSecondary;
-      return <View key={group.key} style={styles.entry}>
+      const visual = visualFor(entry, preserved);
+      return <FadeSlideIn key={group.key} index={index} style={styles.entry}>
         <View style={styles.dateRow}>
           {newDay ? <Text style={[styles.date, { color: colors.textSecondary }]}>{formatDate(entry.occurredAt) || "Time unavailable"}</Text> : null}
           <Text style={[styles.time, { color: colors.textMuted }]}>{formatTime(entry.occurredAt)}</Text>
         </View>
         <View style={styles.eventRow}>
           <View style={styles.rail}>
-            <View style={[styles.node, { borderColor: preserved ? colors.success : colors.border, backgroundColor: preserved ? colors.success : entry.category === "COMMERCE" ? colors.accentSoft : colors.surface }]}>
-              <Ionicons name={preserved ? "shield-checkmark-outline" : entry.category === "SHIPMENT" ? "location-outline" : entry.category === "COMMERCE" ? "storefront-outline" : "cube-outline"} size={18} color={preserved ? colors.background : tone} />
-            </View>
+            <PulseScale active={preserved} amount={1.055}>
+              <View style={[styles.node, { borderColor: visual.color, backgroundColor: preserved ? visual.color : visual.soft }]}>
+                <Ionicons name={visual.icon} size={18} color={preserved ? colors.textOnPrimary : visual.color} />
+              </View>
+            </PulseScale>
             {index < visible.length - 1 ? <View style={[styles.line, { backgroundColor: colors.divider }]} /> : null}
           </View>
           <View style={styles.cardColumn}>
-            <PressableScale onPress={() => group.access ? toggleGroup() : onSelect(entry)} accessibilityRole="button" accessibilityState={group.access ? { expanded } : undefined} accessibilityLabel={`${title}. ${formatDate(entry.occurredAt)}, ${formatTime(entry.occurredAt)}. View event details.`} style={[styles.card, { borderColor: preserved ? colors.successSoftBorder : colors.border, backgroundColor: preserved ? colors.successSoft : colors.surface }]}>
+            <PressableScale onPress={() => group.access ? toggleGroup() : onSelect(entry)} accessibilityRole="button" accessibilityState={group.access ? { expanded } : undefined} accessibilityLabel={`${title}. ${formatDate(entry.occurredAt)}, ${formatTime(entry.occurredAt)}. View event details.`} style={[styles.card, { borderColor: preserved ? visual.color : colors.border, backgroundColor: preserved ? visual.soft : colors.surface }]}>
               {detailed ? <View style={styles.cardTop}>
-                <Text style={[styles.source, { color: colors.textSecondary }]}>{chronologyCategoryLabel(entry.category, entry.source, entry.provider, entry.eventType)}</Text>
-                {preserved ? <View style={styles.preserved}><Ionicons name="shield-checkmark-outline" size={13} color={colors.successText} /><Text style={[styles.time, { color: colors.textPrimary }]}>Preserved</Text></View> : <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />}
+                <Text style={[styles.source, { color: visual.color }]}>{chronologyCategoryLabel(entry.category, entry.source, entry.provider, entry.eventType)}</Text>
+                {preserved ? <View style={styles.preserved}><Ionicons name="shield-checkmark-outline" size={13} color={visual.color} /><Text style={[styles.time, { color: visual.color }]}>Preserved</Text></View> : <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />}
               </View> : null}
               <View style={styles.cardTop}><Text style={[styles.title, { color: colors.textPrimary, flex: 1 }]}>{title}</Text>{!detailed ? <Ionicons name="chevron-forward" size={14} color={colors.textMuted} /> : null}</View>
               {detailed && entry.description ? <Text style={[styles.body, { color: colors.textSecondary }]}>{entry.description}</Text> : null}
-              {detailed && afterCore ? <Text style={[styles.time, { color: colors.textSecondary }]}>Shipment update · recorded separately from the frozen core</Text> : null}
+              {detailed && afterCore ? <Text style={[styles.time, { color: accents.teal }]}>Shipment update · recorded separately from the frozen core</Text> : null}
             </PressableScale>
             {group.access && expanded ? <View style={[styles.accessDetails, { borderColor: colors.divider }]}>{group.entries.map(access => <PressableScale key={access.id} accessibilityRole="button" accessibilityLabel={`Access event at ${access.occurredAt}. View exact details.`} onPress={() => onSelect(access)} style={styles.accessRow}><View style={{ flex: 1, gap: 4 }}><Text style={[styles.body, { color: colors.textPrimary }]}>{humanChronologyTitle(access.eventType, access.title)}</Text><Text style={[styles.time, { color: colors.textSecondary }]}>{formatDate(access.occurredAt)} · {formatTime(access.occurredAt)}</Text></View><Ionicons name="chevron-forward" size={16} color={colors.textSecondary} /></PressableScale>)}</View> : null}
           </View>
         </View>
-      </View>;
+      </FadeSlideIn>;
     })}
   </View>;
 }
@@ -88,7 +106,7 @@ const styles = StyleSheet.create({
   date: { ...typography.caption }, time: { ...typography.caption }, eventRow: { flexDirection: "row", gap: 12 },
   rail: { width: 36, alignItems: "center" }, node: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   line: { width: 1, flex: 1, minHeight: 22, marginTop: 5 }, cardColumn: { flex: 1, paddingBottom: 16 },
-  card: { borderRadius: 10, padding: 10, gap: 8, minHeight: 48 }, cardTop: { flexDirection: "row", gap: 6, alignItems: "center", flexWrap: "wrap" },
+  card: { borderRadius: 12, padding: 12, gap: 8, minHeight: 48 }, cardTop: { flexDirection: "row", gap: 6, alignItems: "center", flexWrap: "wrap" },
   source: { ...typography.caption, flex: 1 }, preserved: { flexDirection: "row", gap: 4, alignItems: "center" }, title: { ...typography.bodyStrong },
   body: { ...typography.body }, end: { flexDirection: "row", gap: 10, alignItems: "center", paddingTop: 8 }, endDot: { width: 6, height: 6, borderRadius: 3 },
 });
