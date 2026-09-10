@@ -4,6 +4,7 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { FINALIZE_DISCLOSURE } from "../copy/errors";
 import { displayName, orderReferenceLabel, shippingSummary } from "../copy/format";
+import { cinematicForScheme } from "../theme/cinematic";
 import { typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
@@ -12,62 +13,54 @@ import { Button } from "../ui/Button";
 import { ConfirmationSheet } from "../ui/Sheets";
 import { InfoCard } from "../ui/ProofCard";
 import { ErrorBanner } from "../ui/EmptyState";
+import { FadeSlideIn } from "../ui/motion";
 
 export function FinalizeScreen() {
   const app = usePackProof();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
+  const accents = cinematicForScheme(scheme);
   const proof = app.proof;
   const txn = app.transactionDetail ?? proof?.transaction;
   const buyer = proof?.participants.find((p) => p.role === "BUYER");
-  if (!proof || !txn) {
-    return null;
-  }
+  if (!proof || !txn) return null;
   const evidence = proof.evidence.find(row=>row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE" && row.submittedBy === app.session?.userId);
   const nativeConfirmation = Platform.OS === "android" && app.role === "SELLER" && Boolean(evidence?.captureSessionId && evidence.captureClient === "NATIVE_CAMERA") && !recordedSellerAuthorization(proof,evidence?.evidenceId,app.session?.userId ?? "");
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Review and confirm" onBack={app.goBack} />
       <ErrorBanner message={app.error} />
-      <InfoCard>
+      <FadeSlideIn index={0}>
+        <View style={[styles.stage, { borderColor: accents.green, backgroundColor: colors.surface }]}>
+          <View style={[styles.stageIcon, { backgroundColor: accents.greenSoft }]}><Text style={[styles.stageCheck, { color: accents.green }]}>✓</Text></View>
+          <View style={styles.stageCopy}><Text style={[styles.stageTitle, { color: colors.textPrimary }]}>Evidence secured</Text><Text style={[styles.note, { color: colors.textSecondary }]}>One confirmation remains before this Proof is frozen.</Text></View>
+        </View>
+      </FadeSlideIn>
+      <FadeSlideIn index={1}><InfoCard>
         <Row label="Order" value={orderReferenceLabel(txn.externalReference) || "No order reference"} />
         <Row label="Item" value={txn.itemTitle || "Untitled item"} />
-        <Row
-          label="Buyer"
-          value={buyer ? displayName({ fallback: "Buyer joined" }) : "No buyer on this record yet"}
-        />
+        <Row label="Buyer" value={buyer ? displayName({ fallback: "Buyer joined" }) : "No buyer on this record yet"} />
         <Row label="Shipping" value={shippingSummary(txn.shipping ?? {}) || "No shipping details"} />
-        <Row
-          label="Evidence"
-          value={(proof.evidence ?? []).some((item) => item.validationStatus === "COMMITTED") ? "Evidence secured" : "Not secured"}
-        />
-      </InfoCard>
+        <Row label="Evidence" value={(proof.evidence ?? []).some((item) => item.validationStatus === "COMMITTED") ? "Evidence secured" : "Not secured"} />
+      </InfoCard></FadeSlideIn>
       <Text style={[styles.note, { color: colors.textSecondary }]}>{FINALIZE_DISCLOSURE}</Text>
       <Button label="Review recording" variant="tertiary" onPress={() => app.go("proof")} />
       {nativeConfirmation ? <SellerAttestation onPress={() => void app.confirmCommittedProof()} loading={app.busy} /> : <Button label="Review and confirm" onPress={() => app.setConfirmFinalize(true)} disabled={app.busy} haptic="medium" />}
-      <ConfirmationSheet
-        visible={app.confirmFinalize}
-        title="Review and confirm"
-        message={FINALIZE_DISCLOSURE}
-        confirmLabel="Finalize PackProof"
-        busy={app.busy}
-        onConfirm={() => void app.finalizeProof()}
-        onClose={() => app.setConfirmFinalize(false)}
-      />
+      <ConfirmationSheet visible={app.confirmFinalize} title="Review and confirm" message={FINALIZE_DISCLOSURE} confirmLabel="Finalize PackProof" busy={app.busy} onConfirm={() => void app.finalizeProof()} onClose={() => app.setConfirmFinalize(false)} />
     </AppScreen>
   );
 }
 
 function Row(props: { label: string; value: string }) {
   const { colors } = useTheme();
-  return (
-    <View style={{ gap: 2 }}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{props.label}</Text>
-      <Text style={[styles.value, { color: colors.textPrimary }]}>{props.value}</Text>
-    </View>
-  );
+  return <View style={{ gap: 2 }}><Text style={[styles.label, { color: colors.textSecondary }]}>{props.label}</Text><Text style={[styles.value, { color: colors.textPrimary }]}>{props.value}</Text></View>;
 }
 
 const styles = StyleSheet.create({
+  stage: { borderWidth: 1, borderRadius: 14, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 },
+  stageIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  stageCheck: { fontSize: 24, fontWeight: "800" },
+  stageCopy: { flex: 1, gap: 2 },
+  stageTitle: { ...typography.bodyStrong },
   label: { ...typography.caption },
   value: { ...typography.bodyStrong },
   note: { ...typography.secondary },
