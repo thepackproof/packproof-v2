@@ -32,25 +32,9 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      - name: Check Expo automation token
-        id: expo-auth
-        run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::error::The signed Android App Bundle was not built because EXPO_TOKEN is not configured. Configure the authorized Expo automation token and re-run; the existing EAS remote Play signing credentials will be reused."
-            exit 1
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install mobile dependencies
-        if: steps.expo-auth.outputs.available == 'true'
         working-directory: mobile
         run: npm ci
-
-      - name: Install EAS CLI
-        if: steps.expo-auth.outputs.available == 'true'
-        run: npm install --global eas-cli@latest
 
       - name: Validate mobile and resolve release identity
         id: release
@@ -65,6 +49,21 @@ jobs:
           if (!/^\d+\.\d+\.\d+$/.test(expo.version) || !Number.isSafeInteger(expo.android.versionCode)) throw new Error('Invalid release identity');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact=packproof-${expo.version}-${expo.android.versionCode}\n`);
           NODE
+
+      - name: Check Expo automation token
+        id: expo-auth
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::error::The signed Android App Bundle was not built because EXPO_TOKEN is not configured. Configure the authorized Expo automation token and re-run; the existing EAS remote Play signing credentials will be reused."
+            exit 1
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install EAS CLI
+        if: steps.expo-auth.outputs.available == 'true'
+        run: npm install --global eas-cli@latest
 
       - name: Build signed Android App Bundle
         if: steps.expo-auth.outputs.available == 'true'
