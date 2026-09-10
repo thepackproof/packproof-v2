@@ -40,7 +40,7 @@ module.exports = {
     name: isCameraSpike ? "PackProof Camera Test" : "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
-    version: "0.3.12",
+    version: "0.3.13",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
@@ -63,7 +63,7 @@ module.exports = {
     },
     android: {
       package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
-      versionCode: 41,
+      versionCode: 42,
       allowBackup: false,
       usesCleartextTraffic: !isPlayRelease,
       adaptiveIcon: {
