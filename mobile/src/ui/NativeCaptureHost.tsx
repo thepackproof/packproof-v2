@@ -1,12 +1,16 @@
 import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
 import { haptic } from "../theme/haptics";
+import { cinematicForScheme } from "../theme/cinematic";
+import { motion, shouldUseLargeMotion } from "../theme/motion";
 import { UnifiedCameraView, isUnifiedCameraAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
 import { newIdempotencyKey } from "../v2-api";
 import { shortenedTracking, type ShippingScanResult } from "../capture/shipping-scan-queue";
 import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   AppState,
   Alert,
+  Easing,
   Image,
   Modal,
   Platform,
@@ -27,43 +31,19 @@ import { Button } from "./Button";
 import { useTheme } from "../theme/ThemeProvider";
 
 const packingRecipe = [
-  {
-    label: "Item view",
-    hint: "Keep the whole item in frame. Use even light and avoid glare.",
-  },
-  {
-    label: "Identifier",
-    hint: "Move close enough to read the identifier, then hold steady.",
-  },
-  {
-    label: "Packing",
-    hint: "Show the item going into the packaging without leaving the frame.",
-  },
+  { label: "Item view", hint: "Keep the whole item in frame. Use even light and avoid glare." },
+  { label: "Identifier", hint: "Move close enough to read the identifier, then hold steady." },
+  { label: "Packing", hint: "Show the item going into the packaging without leaving the frame." },
   { label: "Closed box", hint: "Show the closed package and its seal." },
-  {
-    label: "Shipping label",
-    hint: "Keep the label readable. Review sharing privacy before sending.",
-  },
+  { label: "Shipping label", hint: "Keep the label readable. Review sharing privacy before sending." },
 ];
 
 const receivingRecipe = [
-  {
-    label: "Unopened package",
-    hint: "Show the package and seals before opening it.",
-  },
+  { label: "Unopened package", hint: "Show the package and seals before opening it." },
   { label: "Opening", hint: "Keep the package in frame as you open it." },
-  {
-    label: "Item view",
-    hint: "Show the item and included accessories in even light.",
-  },
-  {
-    label: "Identifier",
-    hint: "Move close enough to read the identifier, then hold steady.",
-  },
-  {
-    label: "Visible condition",
-    hint: "Show useful angles. Describe uncertain or missing views without inferring a cause.",
-  },
+  { label: "Item view", hint: "Show the item and included accessories in even light." },
+  { label: "Identifier", hint: "Move close enough to read the identifier, then hold steady." },
+  { label: "Visible condition", hint: "Show useful angles. Describe uncertain or missing views without inferring a cause." },
 ];
 
 type Request = NativeRecordingRequest & {
@@ -71,61 +51,47 @@ type Request = NativeRecordingRequest & {
   reject: (error: Error) => void;
 };
 
+type ScanFeedback = {
+  key: string;
+  event: UnifiedBarcodeDetection;
+  result: ShippingScanResult;
+};
+
 /** The recorder is a first-party camera surface; this host never accepts an external file. */
 export function NativeCaptureHost() {
   const [request, setRequest] = useState<Request | null>(null);
   const active = useRef<Request | null>(null);
   useEffect(
-    () =>
-      registerNativeRecorder(
-        (value) =>
-          new Promise((resolve, reject) => {
-            if (active.current) {
-              reject(new Error("A recording is already in progress."));
-              return;
-            }
-            active.current = { ...value, resolve, reject };
-            setRequest(active.current);
-          }),
-      ),
+    () => registerNativeRecorder((value) => new Promise((resolve, reject) => {
+      if (active.current) {
+        reject(new Error("A recording is already in progress."));
+        return;
+      }
+      active.current = { ...value, resolve, reject };
+      setRequest(active.current);
+    })),
     [],
   );
-  useEffect(
-    () => () => {
-      active.current?.reject(
-        new Error(
-          "Capture was interrupted. Check saved work before starting again.",
-        ),
-      );
-      active.current = null;
-    },
-    [],
-  );
+  useEffect(() => () => {
+    active.current?.reject(new Error("Capture was interrupted. Check saved work before starting again."));
+    active.current = null;
+  }, []);
   if (!request) return null;
   const finish = (result: LocalCapture | null) => {
     active.current = null;
     setRequest(null);
     request.resolve(result);
   };
-  return (
-    <CameraSession
-      key={request.captureSessionId ?? request.proofId}
-      request={request}
-      onFinish={finish}
-    />
-  );
+  return <CameraSession key={request.captureSessionId ?? request.proofId} request={request} onFinish={finish} />;
 }
 
-function CameraSession({
-  request,
-  onFinish,
-}: {
-  request: Request;
-  onFinish: (result: LocalCapture | null) => void;
-}) {
+function CameraSession({ request, onFinish }: { request: Request; onFinish: (result: LocalCapture | null) => void }) {
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
   const useUnified = isUnifiedCameraAvailable() && Boolean(request.captureSessionId);
+  const { colors, scheme, reducedMotion } = useTheme();
+  const accents = cinematicForScheme(scheme);
+  const insets = useSafeAreaInsets();
   const engineObservations=useRef<Observation[]>([]);
   const [enginePrompt,setEnginePrompt]=useState<string|null>(null);
   const [matchConfirmation,setMatchConfirmation]=useState(false);
@@ -133,8 +99,23 @@ function CameraSession({
   const [shipping, setShipping] = useState<ShippingScanResult|null>(null);
   const [detectingShipping,setDetectingShipping] = useState(false);
   const [shippingError,setShippingError] = useState<string|null>(null);
+  const [scanFeedback, setScanFeedback] = useState<ScanFeedback | null>(null);
+  const [cameraLayout, setCameraLayout] = useState({ width: 0, height: 0 });
+  const scanAnim = useRef(new Animated.Value(0)).current;
   const notified = useRef(new Set<string>());
   const observed = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!scanFeedback) return;
+    scanAnim.stopAnimation();
+    scanAnim.setValue(shouldUseLargeMotion(reducedMotion) ? 0 : 1);
+    if (shouldUseLargeMotion(reducedMotion)) {
+      Animated.spring(scanAnim, { toValue: 1, useNativeDriver: true, ...motion.spring.cinematic }).start();
+    }
+    const timer = setTimeout(() => setScanFeedback(current => current?.key === scanFeedback.key ? null : current), reducedMotion ? 650 : 1550);
+    return () => clearTimeout(timer);
+  }, [reducedMotion, scanAnim, scanFeedback?.key]);
+
   async function detected(event: UnifiedBarcodeDetection) {
     if (!recordingRef.current || !request.onShippingBarcode) return;
     if (/EAN|UPC/i.test(event.format) || !/^[a-z0-9 \t\r\n-]{10,64}$/i.test(event.rawValue)) return;
@@ -154,36 +135,24 @@ function CameraSession({
         frameWidth:event.frameWidth,frameHeight:event.frameHeight,bounds:event.bounds});
       if (result.status==='UNRECOGNIZED') return;
       setShipping(result);
+      setScanFeedback({ key: `${key}:${event.detectedAtMs}`, event, result });
       if (!notified.current.has(key)) {
         notified.current.add(key);
-        void haptic("selection");
+        void haptic(result.status === "BOUND" ? "success" : result.status === "CONFLICT" ? "error" : "selection");
       }
     } catch {
       setShippingError('Keep recording. We’ll check the label at review.');
     } finally {setDetectingShipping(false);}
   }
-  const recipe =
-    request.stageType && request.stageType !== "RETURN_PACKING"
-      ? receivingRecipe
-      : packingRecipe;
-  const { colors, reducedMotion } = useTheme();
-  const insets = useSafeAreaInsets();
-  const [ready, setReady] = useState(false),
-    [recording, setRecording] = useState(false),
-    [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null),
-    [coach, setCoach] = useState(true),
-    [elapsed, setElapsed] = useState(0);
-  const started = useRef(0),
-    recordingRef = useRef(false),
-    interrupted = useRef(false),
-    bookmarks = useRef<CaptureBookmark[]>([]);
+
+  const recipe = request.stageType && request.stageType !== "RETURN_PACKING" ? receivingRecipe : packingRecipe;
+  const [ready, setReady] = useState(false), [recording, setRecording] = useState(false), [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null), [coach, setCoach] = useState(true), [elapsed, setElapsed] = useState(0);
+  const started = useRef(0), recordingRef = useRef(false), interrupted = useRef(false), bookmarks = useRef<CaptureBookmark[]>([]);
+
   useEffect(() => {
     if (!recording) return;
-    const timer = setInterval(
-      () => setElapsed(Date.now() - started.current),
-      500,
-    );
+    const timer = setInterval(() => setElapsed(Date.now() - started.current), 500);
     return () => clearInterval(timer);
   }, [recording]);
   useEffect(() => {
@@ -195,13 +164,12 @@ function CameraSession({
       }
     });
     return () => listener.remove();
-  }, []);
+  }, [useUnified]);
+
   async function start() {
     if (!(useUnified ? unifiedCamera.current : camera.current) || !ready || recordingRef.current) return;
     if (request.expiresAt && Date.now() >= Date.parse(request.expiresAt)) {
-      setError(
-        "This camera authorization expired before recording began. Cancel and reopen the camera to continue.",
-      );
+      setError("This camera authorization expired before recording began. Cancel and reopen the camera to continue.");
       return;
     }
     setError(null);
@@ -211,15 +179,10 @@ function CameraSession({
     recordingRef.current = true;
     setRecording(true);
     try {
-      const video = useUnified
-        ? await unifiedCamera.current!.startRecording(request.captureSessionId!, false)
-        : await camera.current!.recordAsync({ maxDuration: 300 });
+      const video = useUnified ? await unifiedCamera.current!.startRecording(request.captureSessionId!, false) : await camera.current!.recordAsync({ maxDuration: 300 });
       setSaving(true);
       void haptic("light");
-      if (!video?.uri)
-        throw new Error(
-          "The camera returned no recording. No save was confirmed.",
-        );
+      if (!video?.uri) throw new Error("The camera returned no recording. No save was confirmed.");
       const durationMs = video && "durationMs" in video && typeof video.durationMs === "number" ? video.durationMs : Math.max(1, Date.now() - started.current);
       request.onRecordingStopped?.();
       onFinish({
@@ -227,29 +190,20 @@ function CameraSession({
         contentType: Platform.OS === "ios" ? "video/quicktime" : "video/mp4",
         byteSize: "byteSize" in video && typeof video.byteSize === "number" ? video.byteSize : null,
         durationMs,
-        bookmarks: bookmarks.current
-          .filter((bookmark) => bookmark.startMs < durationMs)
-          .map((bookmark) => ({
-            ...bookmark,
-            endMs: Math.min(bookmark.endMs, durationMs),
-          })),
+        bookmarks: bookmarks.current.filter((bookmark) => bookmark.startMs < durationMs).map((bookmark) => ({ ...bookmark, endMs: Math.min(bookmark.endMs, durationMs) })),
         interrupted: interrupted.current || ("interrupted" in video && video.interrupted === true),
       });
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Recording failed. Try the camera again.",
-      );
+      setError(e instanceof Error ? e.message : "Recording failed. Try the camera again.");
     } finally {
       recordingRef.current = false;
       setRecording(false);
       setSaving(false);
     }
   }
+
   const acceptedStart = useRef(false);
   useEffect(() => {
-    // Only an explicit intake Record action sets autoStart. Handoff polling never does.
     if (request.autoStart && ready && !acceptedStart.current && !recordingRef.current && AppState.currentState === "active") {
       acceptedStart.current = true;
       void start();
@@ -262,46 +216,52 @@ function CameraSession({
       else camera.current?.stopRecording();
     }
   };
+
+  const scanRect = (() => {
+    const event = scanFeedback?.event;
+    const bounds = event?.bounds;
+    if (!event || !bounds || !event.frameWidth || !event.frameHeight || !cameraLayout.width || !cameraLayout.height) return null;
+    const scale = Math.max(cameraLayout.width / event.frameWidth, cameraLayout.height / event.frameHeight);
+    const renderedWidth = event.frameWidth * scale;
+    const renderedHeight = event.frameHeight * scale;
+    const offsetX = (cameraLayout.width - renderedWidth) / 2;
+    const offsetY = (cameraLayout.height - renderedHeight) / 2;
+    const pad = 14;
+    return {
+      left: Math.max(8, offsetX + bounds.left * scale - pad),
+      top: Math.max(8, offsetY + bounds.top * scale - pad),
+      width: Math.min(cameraLayout.width - 16, Math.max(72, (bounds.right - bounds.left) * scale + pad * 2)),
+      height: Math.min(cameraLayout.height - 16, Math.max(52, (bounds.bottom - bounds.top) * scale + pad * 2)),
+    };
+  })();
+  const feedbackAccent = scanFeedback?.result.status === "CONFLICT" ? accents.amber : accents.teal;
+  const feedbackSoft = scanFeedback?.result.status === "CONFLICT" ? accents.amberSoft : accents.tealSoft;
+  const feedbackLabel = scanFeedback?.result.status === "BOUND"
+    ? `Tracking captured · ${shortenedTracking(scanFeedback.result.trackingNumber ?? "")}`
+    : scanFeedback?.result.status === "QUEUED"
+      ? "Tracking captured · saved on this device"
+      : scanFeedback?.result.status === "CONFLICT"
+        ? "Label differs from this order"
+        : scanFeedback?.result.status === "NEEDS_CONFIRMATION"
+          ? `Tracking read · ${shortenedTracking(scanFeedback.result.trackingNumber ?? "")}`
+          : "Shipping label detected";
+
   return (
     <Modal
       visible
       animationType={reducedMotion ? "none" : "slide"}
       onRequestClose={() => recordingRef.current ? Alert.alert("Finish this recording?", "Keep recording or finish and review what you recorded.", [{text:"Keep recording",style:"cancel"},{text:"Finish recording",onPress:stop}]) : saving ? undefined : onFinish(null)}
     >
-      <View
-        style={[
-          styles.root,
-          {
-            backgroundColor: colors.background,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
-          },
-        ]}
-      >
+      <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.heading}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            {recording
-              ? request.stageType
-                ? "Recording receipt / return"
-                : "Recording packing"
-              : "Record packing"}
-          </Text>
-          <Text style={{ color: colors.textSecondary }}>
-            {request.orderLabel}
-          </Text>
-          {request.compatibilityWorkflow ? <Text style={{ color: colors.textSecondary }}>
-            Grading workflow recording · the existing grading recipe and participant checks apply.
-          </Text> : null}
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{ color: colors.textSecondary }}
-          >
-            {recording
-              ? `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= 270000 ? " · under 30 seconds left" : ""}`
-              : "Camera recording · up to 5 minutes · audio is not required"}
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{recording ? request.stageType ? "Recording receipt / return" : "Recording packing" : "Record packing"}</Text>
+          <Text style={{ color: colors.textSecondary }}>{request.orderLabel}</Text>
+          {request.compatibilityWorkflow ? <Text style={{ color: colors.textSecondary }}>Grading workflow recording · the existing grading recipe and participant checks apply.</Text> : null}
+          <Text accessibilityLiveRegion="polite" style={{ color: recording ? colors.error : colors.textSecondary }}>
+            {recording ? `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= 270000 ? " · under 30 seconds left" : ""}` : "Camera recording · up to 5 minutes · audio is not required"}
           </Text>
         </View>
-        <View style={styles.camera}>
+        <View style={styles.camera} onLayout={(event) => setCameraLayout({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}>
           {useUnified ? <UnifiedCameraView
             ref={unifiedCamera}
             style={StyleSheet.absoluteFill}
@@ -322,27 +282,24 @@ function CameraSession({
             mute
             videoQuality="720p"
             onCameraReady={() => setReady(true)}
-            onMountError={(event) => {
-              setReady(false);
-              setError(event.message);
-            }}
-          />
-          }
-          {request.guide ? (
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <Image
-                source={request.guide}
-                style={[StyleSheet.absoluteFill, { opacity: 0.3 }]}
-                resizeMode="contain"
-                accessibilityLabel="Outbound frame alignment guide; this overlay is not recorded"
-              />
-            </View>
-          ) : null}
+            onMountError={(event) => { setReady(false); setError(event.message); }}
+          />}
+          {request.guide ? <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Image source={request.guide} style={[StyleSheet.absoluteFill, { opacity: 0.3 }]} resizeMode="contain" accessibilityLabel="Outbound frame alignment guide; this overlay is not recorded" />
+          </View> : null}
           {coach ? <View pointerEvents="none" style={styles.frame} /> : null}
+          {scanFeedback ? <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: scanFeedback.result.status === "CONFLICT" ? "rgba(179,107,0,0.08)" : "rgba(0,151,167,0.08)", opacity: scanAnim.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 0.9, 0] }) }]} />
+            {scanRect ? <Animated.View style={[styles.scanReticle, scanRect, { borderColor: feedbackAccent, opacity: scanAnim, transform: [{ scale: scanAnim.interpolate({ inputRange: [0, 1], outputRange: [0.90, 1] }) }] }]} /> : null}
+            <Animated.View style={[styles.scanChip, { backgroundColor: feedbackSoft, borderColor: feedbackAccent, opacity: scanAnim, transform: [{ translateY: scanAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }, { scale: scanAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
+              <View style={[styles.scanDot, { backgroundColor: feedbackAccent }]} />
+              <Text style={[styles.scanChipText, { color: feedbackAccent }]}>{feedbackLabel}</Text>
+            </Animated.View>
+          </View> : null}
         </View>
         <ScrollView contentContainerStyle={styles.controls}>
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
-            <Text style={{color:shipping?.status==='BOUND'?colors.accentText:colors.textSecondary}}>
+            <Text style={{color:shipping?.status==='BOUND'?accents.teal:colors.textSecondary}}>
               {request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'
                 : shipping?.status==='BOUND' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')}`
                 : shipping?.status==='QUEUED' ? 'Tracking number read · saved on this device'
@@ -353,44 +310,12 @@ function CameraSession({
             </Text>
             {shippingError ? <Text style={{color:colors.error}}>{shippingError}</Text> : null}
           </View> : null}
-          {request.guide ? (
-            <Text style={{ color: colors.textSecondary }}>
-              Match the translucent outbound view where practical. The guide
-              does not alter the new recording.
-            </Text>
-          ) : null}
-          {error ? (
-            <Text accessibilityRole="alert" style={{ color: colors.error }}>
-              {error} Check camera permission or close another camera app, then
-              retry.
-            </Text>
-          ) : null}
-          {coach ? <Text style={{ color: colors.textSecondary }}>
-            {recipe === receivingRecipe
-              ? "Keep the unopened package in view as you open it. Show the contents and their visible condition."
-              : "Keep the item and package in view as you pack and seal it. Show the shipping label during the recording."}
-          </Text> : null}
-          {recording ? (
-            <Button label="Finish recording" loading={saving} onPress={stop} />
-          ) : (
-            <Button
-              label={request.stageType ? "Record this stage" : "Record packing"}
-              disabled={!ready || saving}
-              onPress={() => void start()}
-            />
-          )}
-          <Button
-            label={coach ? "Hide guidance" : "Show guidance"}
-            variant="tertiary"
-            onPress={() => setCoach(!coach)}
-          />
-          {!recording ? (
-            <Button
-              label="Cancel camera"
-              variant="tertiary"
-              onPress={() => onFinish(null)}
-            />
-          ) : null}
+          {request.guide ? <Text style={{ color: colors.textSecondary }}>Match the translucent outbound view where practical. The guide does not alter the new recording.</Text> : null}
+          {error ? <Text accessibilityRole="alert" style={{ color: colors.error }}>{error} Check camera permission or close another camera app, then retry.</Text> : null}
+          {coach ? <Text style={{ color: colors.textSecondary }}>{recipe === receivingRecipe ? "Keep the unopened package in view as you open it. Show the contents and their visible condition." : "Keep the item and package in view as you pack and seal it. Show the shipping label during the recording."}</Text> : null}
+          {recording ? <Button label="Finish recording" loading={saving} onPress={stop} /> : <Button label={request.stageType ? "Record this stage" : "Record packing"} disabled={!ready || saving} onPress={() => void start()} />}
+          <Button label={coach ? "Hide guidance" : "Show guidance"} variant="tertiary" onPress={() => setCoach(!coach)} />
+          {!recording ? <Button label="Cancel camera" variant="tertiary" onPress={() => onFinish(null)} /> : null}
         </ScrollView>
       </View>
     </Modal>
@@ -400,16 +325,11 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   heading: { padding: 16, gap: 6 },
   title: { fontSize: 19, fontWeight: "600" },
-  camera: { flex: 1, minHeight: 200, backgroundColor: "#23262D" },
-  frame: {
-    position: "absolute",
-    top: "12%",
-    left: "12%",
-    width: "76%",
-    height: "76%",
-    borderWidth: 2,
-    borderColor: "#2583E9",
-    borderRadius: 16,
-  },
+  camera: { flex: 1, minHeight: 200, backgroundColor: "#23262D", overflow: "hidden" },
+  frame: { position: "absolute", top: "12%", left: "12%", width: "76%", height: "76%", borderWidth: 2, borderColor: "#2583E9", borderRadius: 16 },
+  scanReticle: { position: "absolute", borderWidth: 3, borderRadius: 14, shadowColor: "#00A4B4", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 4 },
+  scanChip: { position: "absolute", left: 24, right: 24, bottom: 24, minHeight: 46, borderRadius: 23, borderWidth: 1, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  scanDot: { width: 8, height: 8, borderRadius: 4 },
+  scanChipText: { fontSize: 14, fontWeight: "700", textAlign: "center", flexShrink: 1 },
   controls: { padding: 16, gap: 12 },
 });
