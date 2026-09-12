@@ -1,0 +1,37 @@
+name: Transfer Play-signed AAB
+
+on:
+  push:
+    branches: [build/local-aab-2026-09-11]
+    paths:
+      - ".github/workflows/transfer-play-signed-aab.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download signed AAB
+        run: |
+          set -euo pipefail
+          curl --fail --location "https://expo.dev/artifacts/eas/NE9JJGJf2YItny6wti-BbsNAGh7NEbjqper4jISvHWw.aab" --output packproof-0.3.18-47.aab
+          test -s packproof-0.3.18-47.aab
+      - name: Verify signing certificate
+        run: |
+          set -euo pipefail
+          keytool -printcert -jarfile packproof-0.3.18-47.aab | tee certificate.txt
+          grep -q "SHA1: 75:25:B4:FC:9A:9D:03:4A:E2:94:92:2A:D4:3D:B1:84:43:D0:E1:4D" certificate.txt
+          jarsigner -verify packproof-0.3.18-47.aab
+          sha256sum packproof-0.3.18-47.aab | tee packproof-0.3.18-47.aab.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-0.3.18-47-play-signed
+          path: |
+            packproof-0.3.18-47.aab
+            packproof-0.3.18-47.aab.sha256
+            certificate.txt
+          if-no-files-found: error
+          retention-days: 30
