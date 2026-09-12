@@ -71,7 +71,17 @@ export function classifyProofPresentation(input: ProofPresentationInput): ProofP
 /** Local recovery changes presentation only; it never commits or finalizes a Proof. */
 export function withLocalProofWork(presentation: ProofPresentation, work?: LocalProofWork | null): ProofPresentation {
   if (!work || presentation.nextAction.type === 'ACCEPT_INVITATION' || !presentation.canContribute || presentation.diagnostic) return presentation;
-  if (work.state === 'UPLOADING') return {...presentation, displayStatus: typeof work.progress === 'number' && Number.isFinite(work.progress) ? `Uploading · ${Math.round(Math.max(0,Math.min(100,work.progress)))}%` : 'Uploading', needsAttention:false, nextAction:{type:'VIEW_PROOF',label:'View Proof'}};
+  if (work.state === 'UPLOADING') {
+    const progress = typeof work.progress === 'number' && Number.isFinite(work.progress)
+      ? Math.round(Math.max(0, Math.min(100, work.progress)))
+      : null;
+    return {
+      ...presentation,
+      displayStatus: progress !== null && progress >= 100 ? 'Upload complete · sealing Proof…' : progress !== null ? `Uploading · ${progress}%` : 'Uploading',
+      needsAttention: false,
+      nextAction: { type: 'VIEW_PROOF', label: 'View Proof' },
+    };
+  }
   if (work.state === 'UPLOAD_INTERRUPTED') return {...presentation,displayStatus:'Upload interrupted',needsAttention:true,nextAction:{type:'RESUME_UPLOAD',label:'Resume upload'}};
   if (work.state === 'CAPTURE_UNFINISHED') return {...presentation,displayStatus:'Recording unfinished',needsAttention:true,nextAction:{type:work.canResumeCapture?'CONTINUE_RECORDING':'RECOVER_RECORDING',label:work.canResumeCapture?'Continue recording':'Review interrupted recording'}};
   return {...presentation,displayStatus:'Confirmation needed',needsAttention:true,nextAction:{type:'REVIEW_CONFIRM',label:'Review and confirm'}};

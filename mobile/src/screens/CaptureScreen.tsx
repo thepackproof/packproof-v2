@@ -82,8 +82,17 @@ export function CaptureScreen() {
 
   const unresolved = labels?.observations.filter(labelNeedsReview) ?? [];
   const labelBlocked = ordinaryCapture && (checkingLabel || Boolean(labelError) || !labels || labels.reviewRequired || inspection?.playable === false);
-  const progressLabel = capture?.recovery ? captureRecoveryLabel(capture.recovery.phase) : app.captureStatus === "uploading"
-    ? `Uploading${app.uploadPercent != null ? ` · ${app.uploadPercent}%` : ""}` : "Finishing your Proof…";
+  const progressLabel = app.captureStatus === "uploading"
+    ? app.uploadPercent != null && app.uploadPercent >= 100
+      ? "Upload complete · sealing Proof…"
+      : `Uploading${app.uploadPercent != null ? ` · ${app.uploadPercent}%` : ""}`
+    : app.captureStatus === "uploaded" || app.captureStatus === "committed"
+      ? "Upload complete · sealing Proof…"
+      : app.captureStatus === "preparing"
+        ? "Preparing your saved recording…"
+        : capture?.recovery
+          ? captureRecoveryLabel(capture.recovery.phase)
+          : "Finishing your Proof…";
 
   return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={[
     styles.root, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 20) },
@@ -99,7 +108,7 @@ export function CaptureScreen() {
       if (app.session?.captureProofId) void app.run(() => app.openProof(app.session!.captureProofId!)); else app.goBack();
     }} /> : null}
     {app.offline && capture ? <Text style={[styles.note, { color: colors.textSecondary }]}>{OFFLINE_CAPTURE_MESSAGE}</Text> : null}
-    {inFlight ? <ProgressState label={progressLabel} percent={app.captureStatus === "uploading" ? app.uploadPercent : null} /> : null}
+    {inFlight ? <ProgressState label={progressLabel} percent={app.captureStatus === "uploading" && (app.uploadPercent ?? 0) < 100 ? app.uploadPercent : null} /> : null}
     {reviewing && capture ? <View style={styles.preview}>
       <VideoReview key={capture.uri} uri={capture.uri} />
       <Text style={[styles.note, { color: colors.textSecondary }]}>
@@ -114,7 +123,7 @@ export function CaptureScreen() {
           : labelError ?? (inspection?.playable === false ? "This recording could not be played. Its bytes are kept for review."
           : unresolved.length ? "Check the label below before confirming your shipment."
           : labels?.currentTrackingNumber ? `Tracking ${shortenedTracking(labels.currentTrackingNumber)}`
-          : "We couldn’t read a shipping label in this recording. You can submit it without tracking.")}</Text>
+          : "No shipping label detected. You can still submit this Proof without tracking.")}</Text>
         {labelError ? <Button label="Check again" variant="secondary" onPress={() => setReviewVersion(version => version + 1)} /> : null}
         {unresolved.map(observation => {
           const mismatch = Boolean(labels?.currentTrackingNumber && labels.currentTrackingNumber !== observation.trackingNumber);
