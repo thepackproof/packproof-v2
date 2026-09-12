@@ -1,0 +1,67 @@
+name: Local Android AAB
+
+on:
+  push:
+    branches: [build/local-aab-2026-09-11]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/local-android-aab.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: "1"
+      EAS_BUILD_PROFILE: shipping-integration
+      EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+      EXPO_PUBLIC_PACKPROOF_AUTH_MODE: cognito
+      EXPO_PUBLIC_PACKPROOF_API_BASE_URL: https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+      - name: Validate mobile
+        working-directory: mobile
+        run: |
+          npm run typecheck
+          npm run test:proof-record
+      - name: Generate Android project
+        working-directory: mobile
+        run: npx expo prebuild --platform android --no-install
+      - name: Build release bundle
+        working-directory: mobile/android
+        run: ./gradlew bundleRelease --no-daemon
+      - name: Verify bundle
+        run: |
+          set -euo pipefail
+          AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
+          test -s "$AAB"
+          jarsigner -verify "$AAB"
+          mkdir -p mobile/dist
+          cp "$AAB" mobile/dist/packproof-0.3.18-47.aab
+          sha256sum mobile/dist/packproof-0.3.18-47.aab | tee mobile/dist/packproof-0.3.18-47.aab.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-0.3.18-47-aab
+          path: |
+            mobile/dist/packproof-0.3.18-47.aab
+            mobile/dist/packproof-0.3.18-47.aab.sha256
+          if-no-files-found: error
+          retention-days: 30
