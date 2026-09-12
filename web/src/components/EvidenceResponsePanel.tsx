@@ -1,6 +1,7 @@
 import { randomId } from "../random-id";
 import { useEffect, useRef, useState } from "react";
 import type { PackProofApi } from "../api/client";
+
 type Supplement = { supplementId:string; proofId:string; sequence:number; kind:string; canonicalJson:string; createdAt:string };
 type Intent = { version:1; scope:string; userId:string; proofId:string; operationId:string; text:string; kind:"RECIPIENT_RESPONSE"|"CORRECTION"; phase:"DRAFT"|"SUBMITTING" };
 type Props = { api:PackProofApi; proofId:string; userId:string; role:string };
@@ -18,6 +19,10 @@ function readIntent(key:string,scope:string,userId:string,proofId:string):Intent
   if(!object(parsed)||parsed.version!==1||parsed.scope!==scope||parsed.userId!==userId||parsed.proofId!==proofId||typeof parsed.operationId!=='string'||!/^[A-Za-z0-9:_-]{8,200}$/.test(parsed.operationId)||typeof parsed.text!=='string'||parsed.text.length>4000||!['CORRECTION','RECIPIENT_RESPONSE'].includes(String(parsed.kind))||!['DRAFT','SUBMITTING'].includes(String(parsed.phase)))throw new Error('The saved statement needs recovery. Contact support before submitting another statement.');
   return parsed as Intent;
 }
+function formatStatementWhen(value:string):string {
+  return new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(value));
+}
+
 /** A new account/API/Proof gets a separate component and durable local intent. */
 export function EvidenceResponsePanel(props:Props) {return <ScopedResponse key={JSON.stringify([props.api.recoveryScope,props.userId,props.proofId])} {...props}/>;}
 function ScopedResponse({api,proofId,userId,role}:Props) {
@@ -64,12 +69,14 @@ function ScopedResponse({api,proofId,userId,role}:Props) {
     }catch(e){if(active.current)setError(e instanceof Error?e.message:'Your response could not be confirmed. Retry the same statement shortly.');}
     finally{sending.current=false;if(active.current)setBusy(false);}
   }
-  return <details className="proof-supporting-tools"><summary>Responses and corrections</summary><div className="stack">
-    <p>Add an attributed statement to this Proof. Existing recordings, statements and the finalized record remain unchanged.</p>
-    {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
-    {records.map(item=>{const value=facts(item),source=object(value.facts)?value.facts:{};return <article key={item.supplementId}><strong>{item.kind==='RECIPIENT_RESPONSE'?'Recipient response':item.kind==='CORRECTION'?'Correction':'Record update'} · {item.sequence}</strong><p>{typeof source.statement==='string'?source.statement:'Source facts are available in the integrity record.'}</p><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></article>;})}
-    {intent?.phase==='SUBMITTING'&&<p role="status">This statement is awaiting confirmation. Retry uses the same saved statement and cannot create a second response.</p>}
-    <label className="field"><span>{role==='BUYER'?'Your response':'Your correction or additional context'}</span><textarea maxLength={4000} value={intent?.text??''} readOnly={intent?.phase==='SUBMITTING'||!!loaded.error} onChange={e=>edit(e.target.value)}/></label>
-    <button className="btn btn-secondary" disabled={busy||storageError||!intent?.text.trim()} onClick={()=>void submit()}>{busy?'Recording statement…':intent?.phase==='SUBMITTING'?'Retry saved statement':'Add statement to Proof'}</button>
-  </div></details>;
+  return <details className="proof-supporting-tools"><summary>Responses and corrections</summary>
+    <div className="stack" style={{gap:'1rem',paddingTop:'0.85rem'}}>
+      <p className="note" style={{margin:0,maxWidth:'52rem'}}>Add context without altering the original Proof record. Existing recordings, statements and the finalized record remain unchanged.</p>
+      {error&&<p role="alert" className="banner banner-error">{error}</p>}{notice&&<p role="status" className="note">{notice}</p>}
+      {records.length ? <div className="stack" style={{gap:'0.75rem'}}>{records.map(item=>{const value=facts(item),source=object(value.facts)?value.facts:{};return <article key={item.supplementId} className="info-card" style={{boxShadow:'none',padding:'0.9rem 1rem'}}><div className="row"><strong>{item.kind==='RECIPIENT_RESPONSE'?'Recipient response':item.kind==='CORRECTION'?'Correction':'Record update'} · {item.sequence}</strong><time className="meta" dateTime={item.createdAt}>{formatStatementWhen(item.createdAt)}</time></div><p style={{margin:'0.55rem 0 0'}}>{typeof source.statement==='string'?source.statement:'Source facts are available in the integrity record.'}</p></article>;})}</div> : null}
+      {intent?.phase==='SUBMITTING'&&<p role="status" className="note">This statement is awaiting confirmation. Retry uses the same saved statement and cannot create a second response.</p>}
+      <label className="field" style={{maxWidth:'64rem'}}><span>{role==='BUYER'?'Your response':'Your correction or additional context'}</span><textarea style={{minHeight:'140px',resize:'vertical'}} maxLength={4000} value={intent?.text??''} readOnly={intent?.phase==='SUBMITTING'||!!loaded.error} onChange={e=>edit(e.target.value)}/></label>
+      <button style={{width:'fit-content',minWidth:'13rem'}} className="btn btn-secondary" disabled={busy||storageError||!intent?.text.trim()} onClick={()=>void submit()}>{busy?'Recording statement…':intent?.phase==='SUBMITTING'?'Retry saved statement':'Add statement to Proof'}</button>
+    </div>
+  </details>;
 }
