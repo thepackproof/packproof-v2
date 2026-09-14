@@ -1,3 +1,4 @@
+import { connectionReturnFromLink } from "./deep-links";
 import { unregisterProofPush } from "../notifications/client";
 import {beginNativeEngine} from "../capture/engine";
 import { IntakeApi } from "../intake/api";
@@ -1068,7 +1069,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [connectionReturn, setConnectionReturn] = useState<string | null>(null);
   useEffect(() => {
     const receive = (url: string | null) => {
-      if (url && /^packproof-v2:\/\/connections\/ebay(?:\?|$)/.test(url)) setConnectionReturn(url);
+      if (url && connectionReturnFromLink(url)) setConnectionReturn(url);
     };
     void Linking.getInitialURL().then(receive).catch(() => undefined);
     const listener = Linking.addEventListener("url", event => receive(event.url));
@@ -1076,13 +1077,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     if (!connectionReturn || !hydrated || !session?.userId || busy || route.name === "capture" || route.name === "station") return;
-    const url = new URL(connectionReturn);
+    const connection = connectionReturnFromLink(connectionReturn);
     setConnectionReturn(null);
     void run(async () => {
       await syncWorkspace();
       go("account", { accountSection: "channels" });
-      if (url.searchParams.get("ebay") === "error") {
-        const issue = presentError(Object.assign(new Error("eBay connection could not finish"), { code: url.searchParams.get("code") || "EBAY_OAUTH_FAILED" }));
+      if (connection?.failed) {
+        const issue = presentError(Object.assign(new Error("Store connection could not finish"), { code: connection.code || "OAUTH_FAILED" }));
         Alert.alert(issue.title, issue.message);
       }
     });
@@ -1106,7 +1107,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   }, [hydrated, session?.userId, session?.captureUri, busy, route.name, notificationTap]);
 
   // The retry owner lives above screens. Foreground wake and a bounded timer resume saved work
-  // wherever the user navigates; Android may suspend JS while the app is backgrounded.
+  // wherever the user navigates; The operating system may suspend JavaScript while the app is backgrounded.
   recoveryTickRef.current = async () => {
     const current = sessionRef.current;
     if (!hydrated || !current || !tokenRef.current || current.needsReauthentication || recoveryTickBusy.current) return;
@@ -1787,7 +1788,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       try { await run(async()=>{
         const account=sessionRef.current;if(!account)return;
         if(localCapture&&!["FINALIZED","SUBMITTED"].includes(localCapture.recovery?.phase??""))throw new Error("Finish the recording already open before accepting another order. It is kept on this phone.");
-        if(Platform.OS!=="android")throw new Error("Open this link in the browser. Native capture links currently require Android.");
+
         const accepted=await beginNativeEngine(client,undefined,token);
         if(sessionRef.current?.userId!==account.userId)throw new Error("Open this link in the original account.");
         const view=await client.getProof(accepted.proofId);setProof(view);
@@ -1907,7 +1908,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             setCaptureStatus("preparing");
             try {
               await prepareSavedCapture({ client, capture: localCapture, userId, interactive: true, idempotencyKey: sessionRef.current?.evidenceIdempotencyKey,
-                needsSellerAttestation: Platform.OS === "android" && proof.participants.some(item => item.role === "SELLER" && item.userId === userId),
+                needsSellerAttestation: (Platform.OS === "android" || Platform.OS === "ios") && proof.participants.some(item => item.role === "SELLER" && item.userId === userId),
                 assertAccount,
                 onChange: capture => { if (sessionRef.current?.userId === userId) {
                   if (sessionRef.current.captureUri === uri) setLocalCapture({ ...capture });
@@ -1940,7 +1941,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
               if (sessionRef.current?.userId !== submittingUserId || sessionRef.current?.captureProofId !== proof.proofId || sessionRef.current?.captureUri !== localCapture.uri)
                 throw new Error("Your account or recording changed. Open the original Proof and authenticate again.");
             };
-            const needsSellerAttestation = Platform.OS === "android" && evidenceType === "FULFILLMENT_CAPTURE" &&
+            const needsSellerAttestation = (Platform.OS === "android" || Platform.OS === "ios") && evidenceType === "FULFILLMENT_CAPTURE" &&
               proof.participants.some(item => item.role === "SELLER" && item.userId === submittingUserId);
             // No upload is initialized until the system has authorized the exact declaration.
             // Canceling or failing this step leaves the original recording available for retry.
@@ -2150,12 +2151,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }),
     connectConnectedAccount: async (provider, extra) =>
       run(async () => {
-        const started = await client.startConnectedAccountConnect(provider, { ...extra, surface: "android" });
+        const started = await client.startConnectedAccountConnect(provider, { ...extra, surface: Platform.OS === "ios" ? "ios" : "android" });
         await Linking.openURL(started.authorizationUrl);
       }),
     reauthorizeConnectedAccount: async (accountId) =>
       run(async () => {
-        const started = await client.reauthorizeConnectedAccount(accountId, "android");
+        const started = await client.reauthorizeConnectedAccount(accountId, Platform.OS === "ios" ? "ios" : "android");
         await Linking.openURL(started.authorizationUrl);
       }),
     disconnectConnectedAccount: async (accountId) =>

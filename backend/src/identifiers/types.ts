@@ -1,7 +1,8 @@
-/** Optional, versioned enrichment shared by the API, Android and web. */
+/** Optional, versioned enrichment shared by every supported capture surface. */
+export type IdentifierSurface = 'ANDROID' | 'IOS' | 'WEB' | 'WAREHOUSE';
 export interface IdentifierPolicy {
   version: 1; captureEnabled: boolean; autofillEnabled: boolean; reviewEnabled: boolean;
-  surface: 'ANDROID' | 'WEB';
+  surface: IdentifierSurface;
 }
 export type IdentifierCoverage = 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE';
 export interface IdentifierObservation {

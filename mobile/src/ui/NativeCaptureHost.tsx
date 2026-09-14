@@ -188,7 +188,7 @@ function CameraSession({
     observed.current.add(key);
     if(request.captureContext){
       const time=Math.max(0,Math.floor(event.detectedAtMs));
-      engineObservations.current.push({id:`label:${key}`,captureId:request.captureContext.captureId,type:'LABEL',startMs:time,endMs:time,source:'LIVE_ANALYSIS',model:{id:'mlkit-barcode',version:'17.2.0',configuration:'tracking-2-frame-consensus',calibration:'NOT_CALIBRATED'},confidence:null,value:key,timePrecision:'APPROXIMATE'});
+      engineObservations.current.push({id:`label:${key}`,captureId:request.captureContext.captureId,type:'LABEL',startMs:time,endMs:time,source:'LIVE_ANALYSIS',model:{id:Platform.OS === 'ios' ? 'apple-avfoundation' : 'mlkit-barcode',version:event.decoderVersion ?? 'UNREPORTED',configuration:'tracking-2-frame-consensus',calibration:'NOT_CALIBRATED'},confidence:null,value:key,timePrecision:'APPROXIMATE'});
       const requirements=evaluate(request.captureContext,engineObservations.current);setEnginePrompt(guidance(requirements));
       setMatchConfirmation(requirements[0].state==='SATISFIED');
     }
@@ -267,7 +267,7 @@ function CameraSession({
       request.onRecordingStopped?.();
       onFinish({
         uri: video.uri,
-        contentType: Platform.OS === "ios" ? "video/quicktime" : "video/mp4",
+        contentType: "contentType" in video && typeof video.contentType === "string" ? video.contentType : /\.mov$/i.test(video.uri) ? "video/quicktime" : "video/mp4",
         byteSize: "byteSize" in video && typeof video.byteSize === "number" ? video.byteSize : null,
         durationMs,
         bookmarks: bookmarks.current

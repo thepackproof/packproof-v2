@@ -72,7 +72,7 @@ describe("Etsy canonical automatic fulfillment intake", () => {
     h = await createHarness(clock, { integrations, etsy: { enabled: true, clientId: "synthetic-etsy-key", appCredentialReference: "memory:etsy-app", redirectUri: "https://thepackproof.com/api/oauth/etsy/callback", client } });
     await h.credentialStore.put({ adapterKey: "etsy", credentialReference: "memory:etsy-app", material: { sharedSecret: "synthetic-etsy-secret" } });
     const user = await login(h.app, "etsy-http-seller"), stranger = await login(h.app, "etsy-http-stranger");
-    const start = await request(h.app).post("/me/connected-accounts/etsy/connect").set(auth(user)).send({});
+    const start = await request(h.app).post("/me/connected-accounts/etsy/connect").set(auth(user)).send({surface:'ios'});
     expect(start.status).toBe(201);
     const url = new URL(start.body.authorizationUrl);
     expect(url.origin).toBe("https://www.etsy.com");
@@ -81,6 +81,7 @@ describe("Etsy canonical automatic fulfillment intake", () => {
     const callback = await request(h.app).get("/oauth/etsy/callback").query({ code: "synthetic-code", state: url.searchParams.get("state") });
     expect(callback.status).toBe(302);
     expect(callback.headers.location).toContain("connected=etsy");
+    expect(callback.headers.location).toMatch(/^packproof-v2:\/\/connections\/etsy\?/);
     const accounts = await request(h.app).get("/me/connected-accounts").set(auth(user));
     const connectionId = accounts.body.accounts[0].id;
     expect(accounts.body.accounts[0]).toMatchObject({ provider: "etsy", externalAccountId: "501", status: "CONNECTED" });

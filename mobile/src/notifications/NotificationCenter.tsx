@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { Linking,Switch,Text,View } from 'react-native';
+import { Linking,Platform,Switch,Text,View } from 'react-native';
 import { usePackProof } from '../app/PackProofProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { typography } from '../theme/tokens';
@@ -13,9 +13,9 @@ export function NotificationCenter(){
   async function change(key:keyof NotificationPreferences,value:boolean){setBusy(true);try{const next=await app.client.notificationRequest<NotificationPreferences>('notification-preferences','PATCH',{[key]:value});setPrefs(next);await syncLocalNotificationSettings(next);setError(null);}catch{setError('This setting was not saved. Try again.');}finally{setBusy(false);}}
   return <View style={{gap:16}}>
     <Text style={[typography.secondary,{color:colors.textSecondary}]}>{status}</Text>
-    <View style={{gap:6}}><Button label="Enable or reconnect device notifications" variant="secondary" onPress={()=>{void registerProofPush(app.client,true).then(setStatus).catch(()=>setError('Reconnect and try again.'));}}/><Button label="Android notification settings" variant="tertiary" onPress={()=>void Linking.openSettings()}/></View>
+    <View style={{gap:6}}><Button label="Enable or reconnect device notifications" variant="secondary" onPress={()=>{void registerProofPush(app.client,true).then(setStatus).catch(()=>setError('Reconnect and try again.'));}}/><Button label="Device notification settings" variant="tertiary" onPress={()=>void Linking.openSettings()}/></View>
     {prefs?([['enabled','Proof notifications'],...categories] as const).map(([key,label])=><View key={key} style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12,minHeight:48}}><Text style={[typography.body,{color:colors.textPrimary,flex:1}]}>{label}</Text><Switch accessibilityLabel={label} value={prefs[key]} disabled={busy||(key!=='enabled'&&!prefs.enabled)} onValueChange={value=>void change(key,value)}/></View>):null}
-    <Text style={[typography.finePrint,{color:colors.textSecondary}]}>Muted updates stay in your history. Android may still show the upload service while a transfer runs.</Text>
+    <Text style={[typography.finePrint,{color:colors.textSecondary}]}>Muted updates stay in your history.{Platform.OS==='android' ? ' Android may still show the upload service while a transfer runs.' : ''}</Text>
     {error?<Text accessibilityRole="alert" style={[typography.secondary,{color:colors.error}]}>{error}</Text>:null}
     <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}><Text style={[typography.sectionTitle,{color:colors.textPrimary}]}>Notification history</Text><Button label="Refresh" variant="tertiary" onPress={()=>void load()}/></View>
     {!updates.length?<Text style={[typography.body,{color:colors.textSecondary}]}>Meaningful Proof updates will appear here.</Text>:updates.map(update=><View key={update.id} style={{borderLeftWidth:2,borderColor:colors.accent,paddingLeft:12,gap:4}}><Button label={update.title} variant="tertiary" onPress={()=>{void app.client.notificationRequest(`notifications/${encodeURIComponent(update.id)}/read`,'POST',{}).catch(()=>undefined);app.saveProofRecordView(update.proofId,{...app.readProofRecordView(update.proofId),tab:'Timeline',timelineFilter:'MILESTONES'});void app.run(()=>app.openProof(update.proofId));}}/><Text style={[typography.finePrint,{color:colors.textSecondary}]}>{new Date(update.createdAt).toLocaleString()}</Text></View>)}

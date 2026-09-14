@@ -14,6 +14,7 @@ import type { ShippingScan, ShippingScanResult, ShippingScanJournal } from "./ca
 import { sha256 } from "@noble/hashes/sha256";
 import { toByteArray } from "base64-js";
 import * as FileSystem from "expo-file-system";
+import { Platform } from "react-native";
 import type { FileSystemUploadResult } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { withRequestTimeout } from "./request-timeout";
@@ -70,7 +71,7 @@ export async function requestCapturePermissions(): Promise<void> {
   }
   if (!camera.canAskAgain) {
     throw new Error(
-      "Camera permission denied. Enable camera access in Android settings to record packing evidence.",
+      "Camera permission denied. Enable camera access in your device Settings to record packing evidence.",
     );
   }
   throw new Error("Camera permission is required to record packing evidence.");
@@ -117,7 +118,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;author
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
   // Authorization exists before a frame is recorded. No gallery or camera-error file path.
-  const session = input.authorizedSession ?? (captureEngineEnabled() && !input.stageId ? await beginNativeEngine(input.client,input.proofId) : await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId));
+  const session = input.authorizedSession ?? (captureEngineEnabled() && !input.stageId ? await beginNativeEngine(input.client,input.proofId) : await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId, Platform.OS === "ios" ? "IOS" : "ANDROID"));
   const captureContext = "captureContext" in session ? session.captureContext as CaptureContext : undefined;
   if (session.proofId !== input.proofId || session.state !== "ISSUED" || Date.parse(session.expiresAt) <= Date.now())
     throw new Error("This camera authorization is no longer ready. Open the original order to recover or restart its recording.");
@@ -493,6 +494,7 @@ export async function uploadCaptureFile(input: {
     input.fileUri,
     {
       httpMethod: input.target.method,
+      sessionType: FileSystem.FileSystemSessionType.BACKGROUND,
       uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
       headers: {
         ...input.target.headers,

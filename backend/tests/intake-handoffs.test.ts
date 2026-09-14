@@ -84,6 +84,16 @@ describe('durable exact-order handoffs', () => {
     await expect(h.db.query("UPDATE intake_handoffs SET snapshot_sha256=$2 WHERE id=$1", [a.handoff.id, '0'.repeat(64)])).rejects.toThrow('INTAKE_HANDOFF_IMMUTABLE');
   });
 
+  it('pins the iOS surface when claiming an order and cannot reclassify it on replay', async () => {
+    const snapshot = await order('ios-order'), phone = await pair('iPhone');
+    const handoff = await send(snapshot,phone.deviceId,'ios-handoff');
+    const input = {deviceId:phone.deviceId,deviceToken:phone.deviceToken,idempotencyKey:'ios-claim',client:'NATIVE_CAMERA',surface:'IOS'};
+    const first = await claimIntakeHandoff(h.db,clock,seller,handoff.id,input);
+    expect(first.session.identifierPolicy?.surface).toBe('IOS');
+    expect(await claimIntakeHandoff(h.db,clock,seller,handoff.id,input)).toEqual(first);
+    await expect(claimIntakeHandoff(h.db,clock,seller,handoff.id,{...input,surface:'ANDROID'})).rejects.toMatchObject({code:'INTAKE_HANDOFF_ALREADY_CLAIMED'});
+  });
+
   it('keeps later orders queued across a lost lease and recording; explicit cancellation unlocks the next order', async () => {
     const phone = await pair();
     const first = await order('first');

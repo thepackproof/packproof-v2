@@ -1,3 +1,4 @@
+import {Platform} from "react-native";
 import {getAttestationAvailability} from "../attestation/native";
 import * as FileSystem from 'expo-file-system';
 import { sha256 } from '@noble/hashes/sha256';
@@ -13,9 +14,9 @@ const hex=(bytes:Uint8Array)=>Array.from(bytes,b=>b.toString(16).padStart(2,'0')
 const hash=async(text:string)=>hex(sha256(text));
 export const captureEngineEnabled=()=>process.env.EXPO_PUBLIC_PACKPROOF_CAPTURE_ENGINE==='1';
 export async function beginNativeEngine(client:PackProofV2Client,proofId:string|undefined,launchToken?:string) {
-  if(!isNativeCaptureEngineAvailable())throw new Error('Install the current Android capture build before opening this link.');
-  const capabilities:CapabilitySnapshot={surface:'ANDROID',cameraSource:'INTEGRATED',timing:'ENCODER_PROGRESS',barcode:true,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:(await getAttestationAvailability()).available?'ANDROID_BIOMETRIC_STRONG':'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:await FileSystem.getFreeDiskStorageAsync(),coreVersion:CORE_VERSION};
-  const intent=launchToken?{launchToken}:await client.captureEngineRequest<{launchToken:string}>('/capture-intents','POST',{proofId,allowedSurfaces:['ANDROID']});
+  if(!isNativeCaptureEngineAvailable())throw new Error('Install the current PackProof build before opening this link.');
+  const capabilities:CapabilitySnapshot={surface:Platform.OS === 'ios' ? 'IOS' : 'ANDROID',cameraSource:'INTEGRATED',timing:'ENCODER_PROGRESS',barcode:true,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:(await getAttestationAvailability()).available?(Platform.OS==='ios'?'IOS_DEVICE_AUTH':'ANDROID_BIOMETRIC_STRONG'):'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:await FileSystem.getFreeDiskStorageAsync(),coreVersion:CORE_VERSION};
+  const intent=launchToken?{launchToken}:await client.captureEngineRequest<{launchToken:string}>('/capture-intents','POST',{proofId,allowedSurfaces:[capabilities.surface]});
   const result=await client.captureEngineRequest<{session:{id:string;proofId:string;policyVersion:string;state:string;expiresAt:string;recoverUntil:string;identifierPolicy?:IdentifierPolicy};context:CaptureContext}>('/capture-sessions/bind','POST',{launchToken:intent.launchToken,capabilities}).catch(error=>{
     if(error?.status!==undefined&&error?.code!=='CAPTURE_INTENT_USED')throw error;
     return client.captureEngineRequest<{session:{id:string;proofId:string;policyVersion:string;state:string;expiresAt:string;recoverUntil:string;identifierPolicy?:IdentifierPolicy};context:CaptureContext}>(`/capture-intents/${encodeURIComponent(intent.launchToken.split('.')[0])}/context`);
@@ -39,7 +40,7 @@ export async function sealNativeEngine(client:PackProofV2Client,capture:LocalCap
     if(type==='LABEL'&&(identifierCaptureEnabled(capture.identifierPolicy)||!/^[A-Z0-9]{10,64}$/.test(event.value)))continue;
     const time=Math.min(Math.floor(capture.durationMs),Math.max(0,Math.floor(event.mediaTimeMs)));
     observations.push({id:`native:${event.sequence}`,captureId:context.captureId,type,startMs:time,endMs:time,
-      source:type==='LABEL'?'LIVE_ANALYSIS':'DEVICE',model:type==='LABEL'?{id:'mlkit-barcode',version:'17.2.0',configuration:'tracking-2-frame-consensus',calibration:'NOT_CALIBRATED'}:null,
+      source:type==='LABEL'?'LIVE_ANALYSIS':'DEVICE',model:type==='LABEL'?{id:context.capabilities.surface==='IOS'?'apple-avfoundation':'mlkit-barcode',version:context.capabilities.surface==='IOS'?'UNREPORTED':'17.2.0',configuration:'tracking-2-frame-consensus',calibration:'NOT_CALIBRATED'}:null,
       confidence:null,value:event.value,timePrecision:'APPROXIMATE'});
   }
   if (identifierCaptureEnabled(capture.identifierPolicy)) {
@@ -50,7 +51,7 @@ export async function sealNativeEngine(client:PackProofV2Client,capture:LocalCap
       if (!/^[A-Z0-9]{10,64}$/.test(value)) continue;
       const time = Math.min(Math.floor(capture.durationMs), row.observation.mediaTimeMs);
       observations.push({ id: `identifier:${row.clientEventId}`, captureId: context.captureId, type: 'LABEL', startMs: time, endMs: time,
-        source: row.observation.source === 'ENCODED_VIDEO_FRAME' ? 'ENCODED_ANALYSIS' : 'LIVE_ANALYSIS', model: { id: 'mlkit-barcode', version: '17.2.0', configuration: 'server-shipping-resolution-v1', calibration: 'NOT_CALIBRATED' },
+        source: row.observation.source === 'ENCODED_VIDEO_FRAME' ? 'ENCODED_ANALYSIS' : 'LIVE_ANALYSIS', model: { id: context.capabilities.surface==='IOS' ? (row.observation.source==='ENCODED_VIDEO_FRAME'?'apple-vision':'apple-avfoundation') : 'mlkit-barcode', version: row.observation.decoderVersion, configuration: 'server-shipping-resolution-v1', calibration: 'NOT_CALIBRATED' },
         confidence: null, value, timePrecision: 'APPROXIMATE' });
     }
   }

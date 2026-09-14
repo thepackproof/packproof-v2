@@ -4,7 +4,9 @@ Migration `060_identifier_enrichment` is additive. It pins optional policy on ne
 
 ## Rollout and kill switch
 
-All values default off. An enabled session requires an ACTIVE connection owned by the recording account, an exact `IDENTIFIER_TENANTS` entry and a permitted `IDENTIFIER_SURFACES` entry (`ANDROID`, `WEB`, comma separated). `IDENTIFIER_STORES`, when set, additionally limits connection IDs.
+All values default off. An enabled session requires an ACTIVE connection owned by the recording account, an exact `IDENTIFIER_TENANTS` entry and a permitted `IDENTIFIER_SURFACES` entry (`ANDROID`, `IOS`, `WEB`, comma separated; `WAREHOUSE` remains reserved for a future adapter). `IDENTIFIER_STORES`, when set, additionally limits connection IDs.
+
+iOS capture clients declare `surface: "IOS"` alongside `client: "NATIVE_CAMERA"` for direct recording and intake handoff requests. Capture-engine intents propagate their capability surface. Apply migration `066_ios_capture_surfaces.sql` before deploying this API; it extends the allowed policy and study-device values without rewriting prior sessions. A pinned policy cannot change on retry. `IOS` must be explicitly added to the operator's eligible surface list to enable optional item enrichment; Android-only rollout configuration does not implicitly enable it on iOS. The surface remains a client declaration, never hardware-origin attestation.
 
 - `IDENTIFIER_CAPTURE_ENABLED=true`: optional observation protocol.
 - `IDENTIFIER_AUTOFILL_ENABLED=true`: exact authorized source resolution; also requires the review flag, so a known mismatch cannot be admitted without its review path.

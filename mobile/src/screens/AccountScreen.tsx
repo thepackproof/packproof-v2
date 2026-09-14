@@ -1,3 +1,4 @@
+import { BillingPanel } from "../billing/BillingPanel";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { IntakeSettings } from "../intake/IntakeSettings";
 import * as Sharing from "expo-sharing";
@@ -27,7 +28,7 @@ import { StudyConsentCard } from "../ui/StudyConsentCard";
 import type { AccountSection } from "../app/navigation";
 type DeletionRequest = { requestId: string; state: string; requestedAt: string; updatedAt: string };
 const SECTION_TITLES: Record<AccountSection, string> = {
-  notifications: "Notifications", profile: "Profile", channels: "Connections", recordings: "Recordings on this device",
+  billing: "Plan and billing", notifications: "Notifications", profile: "Profile", channels: "Connections", recordings: "Recordings on this device",
   appearance: "Appearance", help: "Help & support", privacy: "Privacy & account",
 };
 const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
@@ -119,6 +120,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
           <AccountRow title="Connections" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
           <AccountRow title="Recordings on this device" detail={unfinished.length ? `${unfinished.length} ${unfinished.length === 1 ? "recording needs" : "recordings need"} attention` : retained.length ? `${retained.length} completed ${retained.length === 1 ? "copy" : "copies"} retained` : "No recordings stored here"} icon="videocam-outline" onPress={() => openSection("recordings")} />
+          <AccountRow title="Plan and billing" detail="Your plan, Proof allowance, and invoices" icon="card-outline" onPress={() => openSection("billing")} />
           <AccountRow title="Notifications" detail="Proof updates, delivery preferences and history" icon="notifications-outline" onPress={() => openSection("notifications")} />
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
           <AccountRow title="Help & support" detail="Recording, recovery, and invitations" icon="help-circle-outline" onPress={() => openSection("help")} />
@@ -128,6 +130,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
         <Button label="Sign out" variant="tertiary" loading={signingOut} disabled={app.busy || signingOut} onPress={() => { setSigningOut(true); void app.signOut().finally(() => setSigningOut(false)); }} />
       </> : null}
 
+      {section === "billing" ? <BillingPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
       {section === "notifications" ? <NotificationCenter key={session.userId}/> : null}
       {section === "profile" ? <>
         {session.username ? <Text style={[styles.body, { color: colors.textSecondary }]}>@{session.username}</Text> : <FormField label="Username" value={app.usernameInput} onChangeText={app.setUsernameInput} />}

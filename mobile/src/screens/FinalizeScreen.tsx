@@ -24,7 +24,7 @@ export function FinalizeScreen() {
   const buyer = proof?.participants.find((p) => p.role === "BUYER");
   if (!proof || !txn) return null;
   const evidence = proof.evidence.find(row=>row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE" && row.submittedBy === app.session?.userId);
-  const nativeConfirmation = Platform.OS === "android" && app.role === "SELLER" && Boolean(evidence?.captureSessionId && evidence.captureClient === "NATIVE_CAMERA") && !recordedSellerAuthorization(proof,evidence?.evidenceId,app.session?.userId ?? "");
+  const nativeConfirmation = (Platform.OS === "android" || Platform.OS === "ios") && app.role === "SELLER" && Boolean(evidence?.captureSessionId && evidence.captureClient === "NATIVE_CAMERA") && !recordedSellerAuthorization(proof,evidence?.evidenceId,app.session?.userId ?? "");
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Review and confirm" onBack={app.goBack} />

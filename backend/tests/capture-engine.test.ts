@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {createHarness,createUser,auth,type TestHarness} from './helpers.js';
 import {sha256Hex} from '../src/hash.js';
 import {issueIntent,bindIntent,sealCapture,verifySegmentStream,receiveBatch,recoverIntentContext} from '../src/capture/service.js';
-import {CAPTURE_SCHEMA,CORE_VERSION,POLICY,canonical,createManifest,manifestDigest,chainSegment,transition,guidance,evaluate,type CaptureContext,type Observation,type CapabilitySnapshot} from '../src/capture/core.js';
+import {CAPTURE_SCHEMA,CORE_VERSION,POLICY,canonical,createManifest,manifestDigest,chainSegment,transition,guidance,evaluate,validateCapabilities,type CaptureContext,type Observation,type CapabilitySnapshot} from '../src/capture/core.js';
 import {completeCaptureSession} from '../src/domain/capture-sessions.js';
 import {initializeEvidenceUpload,commitEvidence} from '../src/domain/evidence.js';
 import {commitAttestation} from '../src/domain/attestations.js';
@@ -34,6 +34,12 @@ it('checks received bytes across arbitrary network chunk boundaries',async()=>{
  await expect(verifySegmentStream(m,(async function*(){yield Buffer.from('abcdeg');})())).rejects.toMatchObject({code:'CAPTURE_SEGMENT_MISMATCH'});
  await expect(verifySegmentStream(m,(async function*(){yield bytes.subarray(1);})())).rejects.toThrow();
 });
+it('keeps platform authentication declarations distinct without elevating camera assurance',()=>{
+ const ios:CapabilitySnapshot={...capabilities,surface:'IOS',cameraSource:'INTEGRATED',deviceAuthentication:'IOS_DEVICE_AUTH'};
+ expect(()=>validateCapabilities(ios)).not.toThrow();
+ expect(()=>validateCapabilities({...ios,deviceAuthentication:'ANDROID_BIOMETRIC_STRONG'})).toThrow();
+ expect(()=>validateCapabilities({...ios,surface:'ANDROID'})).toThrow();
+});
 describe('server-bound capture',()=>{
  let h:TestHarness,actor:string,other:string;let now=new Date('2026-09-09T00:00:00Z');const clock={now:()=>new Date(now)};
  beforeAll(async()=>{h=await createHarness(clock);actor=await createUser(h);other=await createUser(h);});afterAll(async()=>h.close());
@@ -48,8 +54,11 @@ describe('server-bound capture',()=>{
   await expect(h.db.query("UPDATE capture_engine_sessions SET proof_id='another' WHERE session_id=$1",[bound.session.id])).rejects.toThrow();
   const stale=await issueIntent(h.db,clock,actor,await proof());now=new Date(now.getTime()+600001);await expect(bindIntent(h.db,clock,actor,{launchToken:stale.launchToken,capabilities})).rejects.toMatchObject({code:'CAPTURE_INTENT_EXPIRED'});
  });
- it('seals, independently verifies source, finalizes and retains the capsule in the signed manifest input',async()=>{
-  const p=await proof();const intent=await issueIntent(h.db,clock,actor,p);const b=await bindIntent(h.db,clock,actor,{launchToken:intent.launchToken,capabilities});
+ it.each(['WEB','IOS'] as const)('seals %s capture, independently verifies source and retains the capsule in the finalized manifest',async(surface)=>{
+  const selectedCapabilities:CapabilitySnapshot=surface==='IOS'?{...capabilities,surface,cameraSource:'INTEGRATED',deviceAuthentication:'IOS_DEVICE_AUTH'}:capabilities;
+  const p=await proof();const intent=await issueIntent(h.db,clock,actor,p);const b=await bindIntent(h.db,clock,actor,{launchToken:intent.launchToken,capabilities:selectedCapabilities});
+  expect(b.session.identifierPolicy?.surface).toBe(surface);
+  expect(b.session.assurance).toContain('Camera origin is not independently attested');
   const bytes=await readFile(new URL('./fixtures/camera-recording.mp4',import.meta.url));const m=await manifest(b.context,bytes);const digest=await manifestDigest(m,hash);
   await completeCaptureSession(h.db,clock,actor,p,b.session.id,{...m.source,recordedDurationMs:200});
   const batch={sequence:0,observations:m.observations,segments:m.segments};await receiveBatch(h.db,clock,actor,b.session.id,batch);await receiveBatch(h.db,clock,actor,b.session.id,batch);

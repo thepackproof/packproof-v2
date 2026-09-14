@@ -20,18 +20,22 @@ function isReleaseSafeApiUrl(url) {
 const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
 const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
+const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
+const isRelease = isPlayRelease || isIosRelease;
 const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
-const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isPlayRelease ? "cognito" : "dev");
+const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
+const iosBuildNumber = env("PACKPROOF_IOS_BUILD_NUMBER", "1");
+if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUMBER must be a positive integer");
 
-if (isPlayRelease) {
-  if (isCameraSpike) throw new Error("Camera spike builds cannot use the Play release profile");
+if (isRelease) {
+  if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");
   if (apiBaseUrl && !isReleaseSafeApiUrl(apiBaseUrl)) {
     throw new Error(
-      "internal-staging builds must target a public HTTPS API, not localhost or a private development host",
+      "Release builds must target a public HTTPS API, not localhost or a private development host",
     );
   }
   if (authMode !== "cognito") {
-    throw new Error("internal-staging builds must use Cognito authentication");
+    throw new Error("Release builds must use Cognito authentication");
   }
 }
 
@@ -55,10 +59,19 @@ module.exports = {
     icon: "./assets/icon.png",
     scheme: isCameraSpike ? "packproof-camera-test" : "packproof-v2",
     ios: {
+      bundleIdentifier: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
+      buildNumber: iosBuildNumber,
       supportsTablet: false,
+      config: { usesNonExemptEncryption: false },
       infoPlist: {
         NSCameraUsageDescription:
-          "Scan shipping labels and record evidence with the camera for this Proof.",
+          "Record packing evidence and read shipping labels during your recording.",
+        NSFaceIDUsageDescription:
+          "Use Face ID to confirm that the item shown in this Proof is the item you are shipping.",
+        UIBackgroundModes: ["remote-notification"],
+        // Evidence stays in the private app container and is never shared through Files.
+        UIFileSharingEnabled: false,
+        LSSupportsOpeningDocumentsInPlace: false,
       },
     },
     android: {
@@ -99,6 +112,7 @@ module.exports = {
       [
         "expo-build-properties",
         {
+          ios: { deploymentTarget: "15.1" },
           android: {
             compileSdkVersion: 36,
             targetSdkVersion: 36,
@@ -111,7 +125,7 @@ module.exports = {
       eas: {
         projectId: "0196c3f7-cb3a-472c-99be-825558f227e8",
       },
-      packproofApiBaseUrl: apiBaseUrl || (isPlayRelease ? STAGING_API_BASE_URL : ""),
+      packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
     },
   },
 };

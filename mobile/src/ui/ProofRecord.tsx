@@ -1,3 +1,4 @@
+import { isNativeAttestationMethod } from "../attestation/authorization";
 import { TrackingIntake } from "./TrackingIntake";
 import { proofReference, shipmentRecordLabel } from "../copy/evidence-record";
 import { RecordSeal } from "./RecordSeal";
@@ -58,7 +59,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   const client = app.client;
   const sellerAttestation = selectedEvidence && !selectedEvidence.stageId ? proof.attestations?.find(row =>
     row.statement === "PACKED_DESCRIBED_ITEM" && row.relatedEvidenceId === selectedEvidence.evidenceId &&
-    row.authorization?.signatureVerification === "SERVER_VERIFIED" && row.authorization.method === "ANDROID_BIOMETRIC_STRONG" &&
+    row.authorization?.signatureVerification === "SERVER_VERIFIED" && isNativeAttestationMethod(row.authorization.method) &&
     proof.participants.some(person => person.role === "SELLER" && person.userId === row.attestedBy)) : undefined;
 
   useEffect(() => {

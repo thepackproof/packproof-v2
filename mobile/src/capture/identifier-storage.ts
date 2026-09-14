@@ -49,7 +49,7 @@ export class IdentifierCapture {
   }
   async observe(event: UnifiedBarcodeDetection): Promise<void> {
     if (!this.accepting || this.stopped) return;
-    await this.journal.observe(identifierObservation(event, this.journal.snapshot().sessionId));
+    await this.journal.observe(identifierObservation(event, this.journal.snapshot().sessionId, this.journal.snapshot().policy.surface));
   }
   markUnavailable(): void { this.journal.markUnavailable(); }
   async flush(): Promise<IdentifierReview | null> {

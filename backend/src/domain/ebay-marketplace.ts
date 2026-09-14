@@ -27,6 +27,7 @@ import {
   integrationNotFound,
 } from "./integration-errors.js";
 import { createOAuthAttempt, consumeOAuthAttempt } from "./oauth-attempts.js";
+import { connectedAccountReturnUrl } from "./oauth-return.js";
 import {
   markConnectedAccountDisconnected,
   upsertConnectedAccountFromMarketplace,
@@ -168,7 +169,7 @@ export async function completeEbayOAuth(
     }
     const attemptUserId = attempt.userId;
     // Return destinations are fixed, and selected only from a consumed server-side attempt.
-    if (attempt.metadata.surface === "android") returnUrl = "packproof-v2://connections/ebay";
+    returnUrl = connectedAccountReturnUrl(returnUrl, EBAY_PROVIDER, attempt.metadata.surface);
     if (typeof query.error === "string" && query.error.trim()) {
       throw new DomainError("CONNECTED_ACCOUNT_AUTH_DENIED", "eBay authorization was declined", 400);
     }

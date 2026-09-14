@@ -43,6 +43,20 @@ test("lost declaration response recovers accepted signature even after local cha
   await recoverCaptureCompletion(f.capture, f.deps);
   assert.equal(f.calls.filter(c => c === "attest").length, 1); assert.equal(f.capture.recovery.phase, "FINALIZED");
 });
+test("an accepted iOS declaration survives a lost response without duplicate consent or another upload", async () => {
+  const f = fixture();
+  f.deps.attest = async id => {
+    f.calls.push('attest-ios');
+    f.proof.attestations!.push({ attestedBy: 'seller', relatedEvidenceId: id, authorization: { signatureVerification: 'SERVER_VERIFIED', method: 'IOS_BIOMETRIC' } });
+    throw new Error('response lost');
+  };
+  await assert.rejects(recoverCaptureCompletion(f.capture, f.deps));
+  f.capture.recovery.authorization!.expiresAt = '2020-01-01T00:00:00Z';
+  await recoverCaptureCompletion(f.capture, f.deps);
+  assert.equal(f.calls.filter(call => call === 'attest-ios').length, 1);
+  assert.equal(f.calls.filter(call => call === 'upload').length, 1);
+  assert.equal(f.capture.recovery.phase, 'FINALIZED');
+});
 test("pending durability keeps a truthful phase and local bytes; later retry finalizes", async () => {
   const f = fixture(); f.setDurability(false);
   await assert.rejects(recoverCaptureCompletion(f.capture, f.deps), { code: "PRESERVATION_PENDING" });

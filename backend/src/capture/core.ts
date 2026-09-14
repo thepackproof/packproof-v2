@@ -54,6 +54,7 @@ export function validateCapabilities(c:CapabilitySnapshot): void {
   check(['ANDROID','IOS','WEB','WAREHOUSE'].includes(c.surface)&&['INTEGRATED','EXTERNAL','UNKNOWN'].includes(c.cameraSource)&&['MONOTONIC','ENCODER_PROGRESS','UNAVAILABLE'].includes(c.timing),'CAPTURE_CAPABILITIES_INVALID','Declare the actual capture surface and clock');
   for(const k of ['barcode','itemVisibility','durableJournal','incrementalMedia','audio'] as const) check(typeof c[k]==='boolean','CAPTURE_CAPABILITIES_INVALID','Declare available capabilities');
   check(['ANDROID_BIOMETRIC_STRONG','IOS_DEVICE_AUTH','UNAVAILABLE'].includes(c.deviceAuthentication)&&['UNAVAILABLE','CLIENT_ASSERTED'].includes(c.appIntegrity),'CAPTURE_CAPABILITIES_INVALID','Unsupported authentication assurance');
+  check(!(c.surface==='IOS' && c.deviceAuthentication==='ANDROID_BIOMETRIC_STRONG') && !(c.surface==='ANDROID' && c.deviceAuthentication==='IOS_DEVICE_AUTH'),'CAPTURE_CAPABILITIES_INVALID','Device authentication must match its recording platform');
   check(Number.isSafeInteger(c.storageReserveBytes)&&c.storageReserveBytes>=0&&c.coreVersion===CORE_VERSION,'CAPTURE_VERSION_UNSUPPORTED','Update the capture client to a supported version');
   check(!(c.surface==='WEB' && (c.cameraSource!=='UNKNOWN'||c.deviceAuthentication!=='UNAVAILABLE'||c.appIntegrity!=='UNAVAILABLE')),'CAPTURE_CAPABILITIES_INVALID','Browser camera and device origin are not independently attested');
 }

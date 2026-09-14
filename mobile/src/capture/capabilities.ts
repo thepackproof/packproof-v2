@@ -12,7 +12,7 @@ export function requiresDurableCaptureReceipts(value: unknown): boolean {
     capabilities.preservation.durableReceiptsRequired === false);
 }
 
-export function requireCaptureCapabilities(value: unknown, sellerAttestation: boolean): ApiCapabilities {
+export function requireCaptureCapabilities(value: unknown, sellerAttestation: boolean, attestationMethod: "ANDROID_BIOMETRIC_STRONG" | "IOS_BIOMETRIC" = "ANDROID_BIOMETRIC_STRONG"): ApiCapabilities {
   const capabilities = value as Partial<ApiCapabilities> | null;
   if (!capabilities || capabilities.schemaVersion !== 1 ||
       !Array.isArray(capabilities.capture?.protocolVersions) || !capabilities.capture.protocolVersions.includes(1) ||
@@ -24,7 +24,7 @@ export function requireCaptureCapabilities(value: unknown, sellerAttestation: bo
     throw Object.assign(new Error("This app cannot safely complete a new recording with the current server. Update PackProof or retry later. Saved recordings remain available."), { code: "CAPABILITY_UPDATE_REQUIRED" });
   if (sellerAttestation && (!Array.isArray(capabilities.sellerAttestation?.challengeVersions) || !capabilities.sellerAttestation.challengeVersions.includes(1) ||
       capabilities.sellerAttestation.statementVersion !== 1 || !Array.isArray(capabilities.sellerAttestation.methods) ||
-      !capabilities.sellerAttestation.methods.includes("ANDROID_BIOMETRIC_STRONG")))
+      !capabilities.sellerAttestation.methods.includes(attestationMethod)))
     throw Object.assign(new Error("Shipment confirmation is not available on this server yet. Return to your order and retry later."), { code: "CAPABILITY_ATTESTATION_REQUIRED" });
   return capabilities as ApiCapabilities;
 }

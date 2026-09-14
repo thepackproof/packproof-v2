@@ -288,11 +288,11 @@ describe("eBay seller OAuth and order import", () => {
     expect(connect.body.error.code).toBe("EBAY_INTEGRATION_DISABLED");
   });
 
-  it("returns Android consent and denial to the fixed app destination after consuming state", async () => {
+  it.each(['android','ios'])("returns %s consent and denial to the fixed app destination after consuming state", async (surface) => {
     harness = await createHarness(undefined, { ebay: ebayRuntime(new FakeEbayClient()) });
     const userId = await connectEbay(harness);
     for (const denied of [false, true]) {
-      const started = await request(harness.app).post("/me/connected-accounts/ebay/connect").set(auth(userId)).send({surface:"android",returnUrl:"https://untrusted.invalid"});
+      const started = await request(harness.app).post("/me/connected-accounts/ebay/connect").set(auth(userId)).send({surface,returnUrl:"https://untrusted.invalid"});
       const state = new URL(started.body.authorizationUrl).searchParams.get("state");
       const result = await request(harness.app).get("/oauth/ebay/callback").query({state,...(denied?{error:"access_denied"}:{code:"valid-ebay-code"})});
       expect(result.headers.location).toMatch(/^packproof-v2:\/\/connections\/ebay\?/);

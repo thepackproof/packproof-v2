@@ -1,3 +1,4 @@
+import { isNativeAttestationMethod } from "../attestation/authorization";
 import { hasDurableReceipt, recoveryRetry, type CaptureRecoveryState, type ProofRecovery } from "./recovery-model";
 import { requiresDurableCaptureReceipts } from "./capabilities";
 
@@ -66,7 +67,7 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
     const preserved = server.evidence.find(item => item.evidenceId === evidenceId);
     if (hasDurableReceipt(preserved)) state.preservationReceipt = preserved.receipt;
     await phase(hasDurableReceipt(preserved) ? "CONFIRMATION_NEEDED" : "PRESERVATION_PENDING");
-    const accepted = proof.attestations?.find(item => item.attestedBy === state.userId && item.relatedEvidenceId === evidenceId && item.authorization?.signatureVerification === "SERVER_VERIFIED" && item.authorization.method === "ANDROID_BIOMETRIC_STRONG");
+    const accepted = proof.attestations?.find(item => item.attestedBy === state.userId && item.relatedEvidenceId === evidenceId && item.authorization?.signatureVerification === "SERVER_VERIFIED" && isNativeAttestationMethod(item.authorization.method));
     if (state.needsSellerAttestation && !accepted) {
       const authorization = state.authorization;
       if (!authorization || authorization.sha256 !== capture.captureSha256 || Date.parse(authorization.expiresAt) <= now()) {

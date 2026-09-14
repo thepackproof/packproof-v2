@@ -33,7 +33,7 @@ export type AppRouteName =
   | "event";
 
 export type WorkspaceOrigin = "home" | "orders" | "station";
-export type AccountSection = "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
+export type AccountSection = "billing" | "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
 export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
   name: AppRouteName;

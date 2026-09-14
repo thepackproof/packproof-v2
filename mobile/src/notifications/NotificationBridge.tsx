@@ -2,13 +2,14 @@ import { useEffect } from 'react';
 import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { usePackProof } from '../app/PackProofProvider';
-import { registerProofPush } from './client';
+import { registerProofPush, setNotificationAccount } from './client';
 const presented=new Set<string>();
 export function NotificationBridge(){
   const app=usePackProof();
   useEffect(()=>{
     if(!app.session?.userId)return;
     const userId=app.session.userId;
+    const clearAccount=setNotificationAccount(app.client,userId);
     Notifications.setNotificationHandler({handleNotification:async notification=>{
       const data=notification.request.content.data,id=String(data.notificationId??notification.request.identifier);
       const show=data.userId===userId&&!presented.has(id);
@@ -25,7 +26,7 @@ export function NotificationBridge(){
     };
     void Notifications.getLastNotificationResponseAsync().then(response=>{open(response);void Notifications.clearLastNotificationResponseAsync();}).catch(()=>undefined);
     const listener=Notifications.addNotificationResponseReceivedListener(open);
-    return()=>listener.remove();
+    return()=>{listener.remove();clearAccount();Notifications.setNotificationHandler(null);};
   },[app.session?.userId,app.client]);
   return null;
 }

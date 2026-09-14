@@ -19,6 +19,7 @@ import {
   type ConnectedAccountProviderId,
 } from "./identity-providers.js";
 import { consumeOAuthAttempt, createOAuthAttempt } from "./oauth-attempts.js";
+import { connectedAccountReturnUrl, connectSurface } from "./oauth-return.js";
 import {
   createIntegrationConnection,
   findOwnerConnection,
@@ -139,7 +140,7 @@ export async function reauthorizeConnectedAccount(
   input: { surface?: unknown } = {},
 ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
   const record = await requireOwnedAccount(db, userId, accountId);
-  const extra: ConnectExtra = { ...record.providerMetadata, reauthorizeAccountId: record.id, surface: input.surface === "android" ? "android" : "web" };
+  const extra: ConnectExtra = { ...record.providerMetadata, reauthorizeAccountId: record.id, surface: connectSurface(input.surface) };
   if (record.provider === "shopify") {
     extra.shop = record.externalAccountId;
   }
@@ -155,7 +156,7 @@ export async function completeConnectedAccountOAuth(
 ): Promise<{ redirectTo: string }> {
   const providerId = requireConnectedAccountProvider(providerRaw);
   const provider = service.registry.get(providerId);
-  const returnUrl = service.webReturnUrl || "/account";
+  let returnUrl = service.webReturnUrl || "/account";
   let actorUserId: string | null = null;
   try {
     if (!provider.isEnabled()) {
@@ -168,12 +169,13 @@ export async function completeConnectedAccountOAuth(
     await provider.verifyCallback?.(query);
     const attempt = await consumeOAuthAttempt(db, clock, query.state);
     actorUserId = attempt.userId;
-    if (attempt.provider !== providerId) {
+    if (attempt.provider !== providerId || attempt.purpose !== provider.oauthPurpose()) {
       throw new DomainError("OAUTH_STATE_INVALID", "OAuth state is invalid", 400);
     }
     if (!attempt.userId) {
       throw new DomainError("UNAUTHENTICATED", "An authenticated PackProof session is required", 401);
     }
+    returnUrl = connectedAccountReturnUrl(returnUrl, providerId, attempt.metadata.surface);
     if (typeof query.error === "string" && query.error.trim()) {
       throw new DomainError("CONNECTED_ACCOUNT_AUTH_DENIED", "Account authorization was declined", 400);
     }
@@ -583,11 +585,12 @@ function toView(record: ConnectedAccountRecord, provider: ConnectedAccountProvid
 }
 
 function connectMetadata(provider: ConnectedAccountProviderId, extra: ConnectExtra): ConnectExtra {
+  const metadata = { ...extra, surface: connectSurface(extra.surface) };
   if (provider === "shopify") {
     const shop = normalizeShopifyShop(extra.shop);
-    return { ...extra, shop };
+    return { ...metadata, shop };
   }
-  return { ...extra };
+  return metadata;
 }
 
 function callbackRedirect(
@@ -608,7 +611,7 @@ function callbackRedirect(
       url.searchParams.set("code", code);
     }
   }
-  if (base.startsWith("http://") || base.startsWith("https://")) {
+  if (base.startsWith("http://") || base.startsWith("https://") || base.startsWith("packproof-v2://")) {
     return url.toString();
   }
   return `${url.pathname}${url.search}`;

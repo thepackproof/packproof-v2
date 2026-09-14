@@ -19,7 +19,7 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
   },
   BIOMETRIC_NOT_ENROLLED: {
     title: "Set up device biometrics.",
-    message: "Add a fingerprint in Android Settings, then return to attest and submit. Your recording is kept.",
+    message: "Set up Face ID, Touch ID, or fingerprint authentication in your device Settings, then return to confirm and submit. Your recording is kept.",
     action: "retry",
   },
   ATTESTATION_CHALLENGE_EXPIRED: {

@@ -7,6 +7,7 @@ import { appendAudit } from '../domain/audit.js';
 import { requireActiveAccount } from '../domain/account-access.js';
 import { DomainError } from '../domain/errors.js';
 import { createCaptureSession, loadCaptureSession, captureSessionView } from '../domain/capture-sessions.js';
+import { captureSurface } from '../identifiers/policy.js';
 import { loadProof } from '../domain/proof-access.js';
 import { asRequiredIso } from '../domain/types.js';
 import { readApprovedIntakeSnapshot, pinIntakeSnapshotForCapture, type IntakeSnapshot } from './context.js';
@@ -188,7 +189,7 @@ export async function listIntakeHandoffs(db: Database, clock: Clock, actor: stri
     return { device: deviceView(fresh, clock), handoffs: rows.map(row => handoffView(row)), activeCapture };
   });
 }
-export async function claimIntakeHandoff(db: Database, clock: Clock, actor: string, handoffId: string, input: { deviceId: string; deviceToken: string; idempotencyKey: string; client: string }): Promise<ClaimResult> {
+export async function claimIntakeHandoff(db: Database, clock: Clock, actor: string, handoffId: string, input: { deviceId: string; deviceToken: string; idempotencyKey: string; client: string; surface?: unknown }): Promise<ClaimResult> {
   if (!validKey(input.idempotencyKey) || !['NATIVE_CAMERA', 'WEB_CAMERA'].includes(input.client))
     throw new DomainError('INTAKE_CLAIM_INVALID', 'Start this order using the existing camera workflow.', 400);
   return db.transaction(async tx => {
@@ -196,7 +197,8 @@ export async function claimIntakeHandoff(db: Database, clock: Clock, actor: stri
     const row = (await tx.query<HandoffRow>('SELECT * FROM intake_handoffs WHERE id=$1 AND actor_user_id=$2 AND target_device_id=$3 FOR UPDATE', [handoffId, actor, device.id])).rows[0];
     if (!row) throw new DomainError('INTAKE_HANDOFF_NOT_FOUND', 'This order handoff is not available for this recording device.', 404);
     if (row.state === 'CLAIMED') {
-      if (row.claim_key !== input.idempotencyKey || row.claim_response?.session.client !== input.client)
+      if (row.claim_key !== input.idempotencyKey || row.claim_response?.session.client !== input.client ||
+          (row.claim_response?.session.identifierPolicy && row.claim_response.session.identifierPolicy.surface !== captureSurface(input.client,input.surface)))
         throw new DomainError('INTAKE_HANDOFF_ALREADY_CLAIMED', 'This order already has a recording session. Resume the original recording.', 409);
       return row.claim_response!;
     }
@@ -211,7 +213,7 @@ export async function claimIntakeHandoff(db: Database, clock: Clock, actor: stri
     await loadProof(tx, row.proof_id, true);
     const previousCapture = (await tx.query<{ id: string }>(`SELECT c.id FROM intake_handoffs h JOIN capture_sessions c ON c.id=h.capture_session_id WHERE h.proof_id=$1 AND h.state='CLAIMED' AND c.state<>'CANCELLED' LIMIT 1`, [row.proof_id])).rows[0];
     if (previousCapture) throw new DomainError('INTAKE_ORDER_ALREADY_RECORDING', 'This order already has a recording. Resume its original Proof.', 409);
-    const session = await createCaptureSession(tx, clock, actor, row.proof_id, { client: input.client, idempotencyKey: `intake:${row.id}` });
+    const session = await createCaptureSession(tx, clock, actor, row.proof_id, { client: input.client, surface: input.surface, idempotencyKey: `intake:${row.id}` });
     await pinIntakeSnapshotForCapture(tx, clock, actor, session.id, snapshot.id);
     const claimedAt = clock.now().toISOString();
     const response: ClaimResult = { handoff: handoffView({ ...row, state: 'CLAIMED', claimed_at: claimedAt, claim_key: input.idempotencyKey, capture_session_id: session.id }), session, proofId: row.proof_id, transactionId: row.transaction_id, orderSnapshot: snapshot };

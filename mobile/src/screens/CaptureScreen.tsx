@@ -43,7 +43,7 @@ export function CaptureScreen() {
   const belongs = app.session?.captureProofId === app.proof?.proofId;
   const inFlight = ["preparing", "uploading", "uploaded", "committed"].includes(app.captureStatus);
   const reviewing = Boolean(capture) && belongs && !inFlight;
-  const sellerAttestation = Platform.OS === "android" && app.role === "SELLER" && !isGradingWorkflow(app.proof?.workflowType);
+  const sellerAttestation = (Platform.OS === "android" || Platform.OS === "ios") && app.role === "SELLER" && !isGradingWorkflow(app.proof?.workflowType);
   const ordinaryCapture = Boolean(capture?.captureSessionId) && !capture?.captureStageId && !isGradingWorkflow(app.proof?.workflowType);
 
   useEffect(() => {
@@ -216,7 +216,7 @@ export function CaptureScreen() {
         { text: "Keep this recording", style: "cancel" }, { text: "Open camera", onPress: () => void app.startCapture() },
       ])} variant="secondary" disabled={app.busy || Boolean(capture.uploadEvidenceId)} />
       {sellerAttestation && /biometric|fingerprint|enroll|lock/i.test(app.error ?? "") ? <Button label="Open biometric settings"
-        onPress={() => void Linking.sendIntent("android.settings.BIOMETRIC_ENROLL").catch(() => Linking.openSettings())} variant="tertiary" disabled={app.busy} /> : null}
+        onPress={() => void (Platform.OS === "android" ? Linking.sendIntent("android.settings.BIOMETRIC_ENROLL").catch(() => Linking.openSettings()) : Linking.openSettings())} variant="tertiary" disabled={app.busy} /> : null}
       <Button label="Discard recording" onPress={() => Alert.alert("Discard this local recording?", "This removes the recording from this device. An unpreserved recording cannot be recovered. Existing committed server evidence stays in the Proof.", [
         { text: "Keep recording", style: "cancel" }, { text: "Discard local copy", style: "destructive", onPress: () => void app.discardCapture() },
       ])} variant="tertiary" disabled={app.busy} />

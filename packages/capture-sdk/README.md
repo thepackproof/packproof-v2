@@ -10,7 +10,7 @@ const capture = new CaptureHostClient({
   apiKey: process.env.PACKPROOF_API_KEY,
 });
 const {launchUrl,expiresAt} = await capture.createIntent(proofId, {
-  idempotencyKey: `${fulfillmentId}:capture:1`, allowedSurfaces:['ANDROID','WEB'],
+  idempotencyKey: `${fulfillmentId}:capture:1`, allowedSurfaces:['ANDROID','IOS','WEB'],
 });
 // Render launchUrl as an order-page action or QR. Do not log it or send it to analytics.
 // Completion is polled through the existing authorized Proof/manifest API.
@@ -19,6 +19,6 @@ const valid = verifyCaptureReceipt(receipt,{proofId,captureId,trustedKeys});
 
 The browser launch page offers native handoff and browser fallback. Opening the page does not redeem the token. Only an authenticated POST consumes it. A receipt contains the signed canonical Proof manifest, which covers the capture root, source commitments and event timeline. Missing signatures, untrusted keys, wrong Proofs, changed manifests and incomplete capture states fail receipt verification. Never infer a signature from an HTTP success.
 
-Capture Core source: `backend/src/capture/core.ts`. Android's React Native bridge and web adapter import that same pure module. It has no Node, camera, UI, network or wall-clock dependencies. The core is currently TypeScript; Rust/WASM/Swift/AAR distribution and partner certification have not passed their release gates. Do not publish this package as a certified public SDK.
+Capture Core source: `backend/src/capture/core.ts`. The Android/iOS React Native bridge and web adapter import that same pure module. It has no Node, camera, UI, network or wall-clock dependencies. The core is currently TypeScript; standalone Rust/WASM/Swift/AAR SDK distribution and partner certification have not passed their release gates. Do not publish this package as a certified public SDK.
 
-Existing Proofs and final manifests retain their versions and bytes. New capture clients negotiate `packproof.capture/1` and core `1.0.0`; unsupported versions fail before binding. Breaking canonical changes require a new schema and retained verifier. Android/WEB can run this candidate; iOS/warehouse identifiers in the schema describe future adapters and do not indicate production support.
+Existing Proofs and final manifests retain their versions and bytes. New capture clients negotiate `packproof.capture/1` and core `1.0.0`; unsupported versions fail before binding. Breaking canonical changes require a new schema and retained verifier. New launch intents permit Android, iOS and web by default; an explicit `allowedSurfaces` list remains authoritative. iOS requires the updated API and migration `066_ios_capture_surfaces.sql`; installation, camera and biometric behavior still require validation on physical iPhones before production release. The warehouse surface remains reserved for a future adapter.

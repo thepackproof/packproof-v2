@@ -4,6 +4,7 @@ import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modu
 
 export type UnifiedCameraResult = {
   uri: string;
+  contentType?: "video/mp4" | "video/quicktime";
   durationMs: number;
   byteSize: number;
   interrupted: boolean;
@@ -15,7 +16,7 @@ export type UnifiedBarcodeDetection = {
   decoderEncoding?: string | null;
   symbologyIdentifier?: string | null;
   format: string;
-  /** Approximate video seek point from CameraX encoder progress; not an exact frame PTS. */
+  /** Approximate video seek point from the native encoder; not an exact frame PTS. */
   detectedAtMs: number;
   detectedAtUnixMs: number;
   latencyMs: number;
@@ -29,7 +30,7 @@ export type UnifiedBarcodeDetection = {
 };
 
 export type UnifiedCameraViewRef = {
-  /** Resolves after VideoRecordEvent.Finalize; do not await this before enabling Stop. */
+  /** Resolves after native recording finalization; do not await this before enabling Stop. */
   startRecording(sessionId: string, audioEnabled: boolean): Promise<UnifiedCameraResult>;
   /** Requests finalization. Await startRecording's promise for the completed file. */
   stopRecording(): Promise<void>;
@@ -56,7 +57,7 @@ export interface EncodedVideoInspection {
   timestampPrecision: "NEAR_REQUESTED_TIME";
 }
 
-const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ identifierScannerVersion?(): number; bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection>; inspectIdentifierVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
+const nativeModule = (Platform.OS === 'android' || Platform.OS === 'ios') ? requireOptionalNativeModule<{ identifierScannerVersion?(): number; bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection>; inspectIdentifierVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
 const nativeAvailable = nativeModule != null;
 export function newStudyOperationNonce():string {
   if(!nativeModule?.newOperationNonce)throw new Error('This build cannot enable study collection. Install the current native build.');
@@ -83,7 +84,7 @@ const NativeView = nativeAvailable
   ? requireNativeViewManager<UnifiedCameraViewProps & React.RefAttributes<UnifiedCameraViewRef>>('PackProofUnifiedCamera')
   : null;
 
-/** Android-only hardware spike. The caller must unmount every other camera first. */
+/** Shared native recorder. The caller must unmount every other camera first. */
 export const UnifiedCameraView = React.forwardRef<UnifiedCameraViewRef, UnifiedCameraViewProps>(
   function UnifiedCameraView(props, ref) {
     if (!NativeView) return null;

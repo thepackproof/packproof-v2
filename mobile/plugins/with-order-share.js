@@ -59,11 +59,12 @@ module.exports = function withOrderShare(config) {
     }
     return mod;
   });
-  return withMainActivity(config, (mod) => {
+  config = withMainActivity(config, (mod) => {
     if (mod.modResults.language !== "kt")
       throw new Error("PackProof share plugin expects Kotlin MainActivity");
     mod.modResults.contents = transformMainActivity(mod.modResults.contents);
     return mod;
   });
+  return require('./with-ios-order-share')(config);
 };
 module.exports.transformMainActivity = transformMainActivity;

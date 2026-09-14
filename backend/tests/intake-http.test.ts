@@ -45,14 +45,19 @@ describe('intake HTTP boundary and compatible admission',()=>{
   expect((await request(app).post(`/me/intake/devices/${id}/revoke`).set(auth(seller)).send({})).body.revoked).toBe(true);
   expect((await claim()).status).toBe(403);
  });
- it('returns pinned direct-capture context, permits accepted retries and blocks unbound resolution admission while paused',async()=>{
+ it.each(['WEB','IOS','ANDROID'])('pins %s direct-capture context and permits matching retries while paused',async(surface)=>{
   const order=await submitIntakeObservation(h.db,h.clock,seller,source('direct'),scope);
   const incomplete=await submitIntakeObservation(h.db,h.clock,seller,source('incomplete',false),scope);
-  const accepted=await request(app).post(`/me/intake/orders/${order.snapshot!.id}/capture`).set(auth(seller)).send({idempotencyKey:'record',client:'WEB_CAMERA'});
-  expect(accepted.status).toBe(200);expect(accepted.body).toMatchObject({proofId:order.proofId,transactionId:order.transactionId,orderSnapshot:{id:order.snapshot!.id},session:{orderSnapshotId:order.snapshot!.id,client:'WEB_CAMERA'}});
+  const client=surface==='WEB'?'WEB_CAMERA':'NATIVE_CAMERA';
+  const accepted=await request(app).post(`/me/intake/orders/${order.snapshot!.id}/capture`).set(auth(seller)).send({idempotencyKey:'record',client,surface});
+  expect(accepted.status).toBe(200);expect(accepted.body).toMatchObject({proofId:order.proofId,transactionId:order.transactionId,orderSnapshot:{id:order.snapshot!.id},session:{orderSnapshotId:order.snapshot!.id,client,identifierPolicy:{surface}}});
   config.enabled=false;
-  const retried=await request(app).post(`/me/intake/orders/${order.snapshot!.id}/capture`).set(auth(seller)).send({idempotencyKey:'record',client:'WEB_CAMERA'});
+  const retried=await request(app).post(`/me/intake/orders/${order.snapshot!.id}/capture`).set(auth(seller)).send({idempotencyKey:'record',client,surface});
   expect(retried.status).toBe(200);expect(retried.body.session.id).toBe(accepted.body.session.id);
+  if(surface!=='WEB'){
+    const changed=await request(app).post(`/me/intake/orders/${order.snapshot!.id}/capture`).set(auth(seller)).send({idempotencyKey:'record',client,surface:surface==='IOS'?'ANDROID':'IOS'});
+    expect(changed.status).toBe(409);expect(changed.body.error.code).toBe('INTAKE_CAPTURE_CONFLICT');
+  }
   const resolved=await request(app).post(`/me/intake/observations/${incomplete.observationId}/resolve`).set(auth(seller)).send({receiptId:'resolve-paused',items:[{title:'Camera lens',quantity:1}],reason:'Verified the purchased quantity'});
   expect(resolved.status).toBe(409);expect(resolved.body.error.code).toBe('INTAKE_PAUSED');
   expect((await h.db.query('SELECT proof_id FROM intake_delivery_receipts WHERE observation_id=$1',[incomplete.observationId])).rows[0].proof_id).toBeNull();

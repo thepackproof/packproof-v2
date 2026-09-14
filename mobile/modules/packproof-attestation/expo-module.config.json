@@ -1,5 +1,8 @@
 {
-  "platforms": ["android"],
+  "platforms": ["android", "ios"],
+  "ios": {
+    "modules": ["PackProofAttestationModule"]
+  },
   "android": {
     "modules": ["com.packproof.attestation.AttestationModule"]
   }

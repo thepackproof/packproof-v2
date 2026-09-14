@@ -10,7 +10,7 @@ export const STUDY_STATEMENT_VERSION = 'capture-timing-study-v1';
 export const STUDY_STATEMENT = 'I agree to contribute capture task timings and operational outcomes from this account to this study dataset. Collection starts only after I agree. No recording content, label text, barcodes, names, email, or access tokens are collected. References are pseudonymous. I can stop future collection by withdrawing; observations already contributed remain in this dataset.';
 export interface ProgramAnalyticsRuntime { key: string | Buffer; keyVersion: string; }
 const PHASES = ['started','preflight','recording','upload','confirmation','finalization','ended'] as const;
-const DEVICES = ['s24_ultra','a16_5g','other_android','web','unknown'] as const;
+const DEVICES = ['s24_ultra','a16_5g','other_android','ios','web','unknown'] as const;
 const CHANNELS = ['ebay','stripe','paypal','manual','other','unknown'] as const;
 const ERRORS = ['network','authentication','quota','storage','capability','integrity','provider','cancelled','unknown'] as const;
 export const STUDY_INTERACTIONS = ['order_selected','recording_started','recording_stopped','label_read','label_mismatch','review_opened','consent_confirmed','consent_cancelled','consent_failed','upload_pending','server_completed','recovery_started','share_created'] as const;

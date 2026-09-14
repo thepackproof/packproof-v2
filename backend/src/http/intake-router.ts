@@ -7,6 +7,7 @@ import {getIntakeSnapshot,readApprovedIntakeSnapshot,submitIntakeObservation,pre
 import {registerIntakeDevice,approveIntakeDevice,listIntakeDevices,revokeIntakeDevice,createIntakeHandoff,listIntakeHandoffs,claimIntakeHandoff,releaseIntakeDevice} from '../intake/handoffs.js';
 import {createMailAlias,listMailSetup,revokeMailAlias,acknowledgeMailVerification,replayMailReceipt} from '../intake/mail.js';
 import {createCaptureSession,loadCaptureSession,captureSessionView} from '../domain/capture-sessions.js';
+import {captureSurface} from '../identifiers/policy.js';
 import {resolveIntakeIssue} from '../intake/context.js';
 const route=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req,res).catch(next);};
 function actor(req:Request):string{if(!req.packproofUserId)throw new DomainError('UNAUTHENTICATED','Sign in to prepare an order.',401);return req.packproofUserId;}
@@ -45,18 +46,20 @@ export function intakeRouter(deps:AppDependencies){
   }));
   router.post('/orders/prepare',route(async(req,res)=>{const user=actor(req);admit(deps,user);res.json(await prepareExistingIntakeOrder(deps.db,deps.clock,user,text(req.body?.transactionId)));}));
   router.post('/orders/:snapshotId/capture',route(async(req,res)=>{
-    const user=actor(req),idempotencyKey=text(req.body?.idempotencyKey),client=text(req.body?.client);
+    const user=actor(req),idempotencyKey=text(req.body?.idempotencyKey),client=text(req.body?.client),surface=captureSurface(client,req.body?.surface);
     const result=await deps.db.transaction(async tx=>{
       await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[user]);
       const snapshot=await getIntakeSnapshot(tx,user,req.params.snapshotId);
       const existing=(await tx.query<{id:string;client:string;order_snapshot_id:string}>('SELECT id,client,order_snapshot_id FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND idempotency_key=$3',[snapshot.proofId,user,idempotencyKey])).rows[0];
       if(existing){
         if(existing.client!==client||existing.order_snapshot_id!==snapshot.id)throw new DomainError('INTAKE_CAPTURE_CONFLICT','This retry belongs to another recording.',409);
-        return {session:captureSessionView(await loadCaptureSession(tx,user,snapshot.proofId,existing.id)),proofId:snapshot.proofId,transactionId:snapshot.transactionId,orderSnapshot:snapshot};
+        const session=captureSessionView(await loadCaptureSession(tx,user,snapshot.proofId,existing.id));
+        if(session.identifierPolicy && session.identifierPolicy.surface!==surface)throw new DomainError('INTAKE_CAPTURE_CONFLICT','This retry belongs to another recording platform.',409);
+        return {session,proofId:snapshot.proofId,transactionId:snapshot.transactionId,orderSnapshot:snapshot};
       }
       admit(deps,user);
       await readApprovedIntakeSnapshot(tx,user,snapshot.id);
-      const session=await createCaptureSession(tx,deps.clock,user,snapshot.proofId,{idempotencyKey,client});
+      const session=await createCaptureSession(tx,deps.clock,user,snapshot.proofId,{idempotencyKey,client,surface});
       await pinIntakeSnapshotForCapture(tx,deps.clock,user,session.id,snapshot.id);
       return {session,proofId:snapshot.proofId,transactionId:snapshot.transactionId,orderSnapshot:snapshot};
     });res.json(result);
@@ -91,7 +94,7 @@ export function intakeRouter(deps:AppDependencies){
       const claimed=(await deps.db.query('SELECT id FROM intake_handoffs WHERE id=$1 AND actor_user_id=$2 AND state=\'CLAIMED\'',[req.params.id,user])).rows[0];
       if(!claimed)admit(deps,user,'handoffEnabled');
     }
-    res.json(await claimIntakeHandoff(deps.db,deps.clock,user,req.params.id,{deviceId:text(req.body?.deviceId),deviceToken:token(req),idempotencyKey:text(req.body?.idempotencyKey),client:text(req.body?.client)}));
+    res.json(await claimIntakeHandoff(deps.db,deps.clock,user,req.params.id,{deviceId:text(req.body?.deviceId),deviceToken:token(req),idempotencyKey:text(req.body?.idempotencyKey),client:text(req.body?.client),surface:req.body?.surface}));
   }));
   router.get('/mail',route(async(req,res)=>{res.json({aliases:await listMailSetup(deps.db,deps.clock,actor(req))});}));
   router.post('/mail',route(async(req,res)=>{const user=actor(req);admit(deps,user,'emailEnabled');if(!deps.intake?.mailDomain)throw new DomainError('MAIL_NOT_CONFIGURED','Order email forwarding is not configured yet.',503);res.status(201).json({alias:await createMailAlias(deps.db,deps.clock,{ownerUserId:user,connectionId:text(req.body?.connectionId),domain:deps.intake.mailDomain})});}));

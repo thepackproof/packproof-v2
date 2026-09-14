@@ -1,4 +1,4 @@
-import { identifierSessionPolicy } from '../identifiers/policy.js';
+import { captureSurface, identifierSessionPolicy } from '../identifiers/policy.js';
 import type { IdentifierPolicy } from '../identifiers/types.js';
 import { pinCurrentIntakeCaptureContext, prepareIntakeCaptureEntry } from "../intake/context.js";
 import { sha256Hex } from "../hash.js";
@@ -91,11 +91,12 @@ export async function loadCaptureSession(db: Database, actor: string, proofId: s
   if (!result.rows[0]) throw new DomainError('CAPTURE_SESSION_NOT_FOUND','Capture session does not belong to this participant and Proof',404);
   return {...result.rows[0],client_reported_context:await readCaptureClientContext(db,sessionId)};
 }
-export async function createCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, input: {idempotencyKey: string; client: string; stageId?: string}) {
+export async function createCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, input: {idempotencyKey: string; client: string; stageId?: string; surface?: unknown}) {
   if (typeof input.idempotencyKey !== 'string' || !input.idempotencyKey.trim() || input.idempotencyKey.length > 200)
     throw new DomainError('IDEMPOTENCY_KEY_REQUIRED','A capture idempotency key is required',400);
   if (!['WEB_CAMERA','NATIVE_CAMERA'].includes(input.client))
     throw new DomainError('CAPTURE_CLIENT_REQUIRED','Start recording using the web or native camera workflow',400);
+  const surface=captureSurface(input.client,input.surface);
   if (!input.stageId) await prepareIntakeCaptureEntry(db,clock,actor,proofId);
   return db.transaction(async tx => {
     await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[actor]);
@@ -103,6 +104,8 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
     const existing = await tx.query<CaptureSessionRow>('SELECT * FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND idempotency_key=$3',[proofId,actor,input.idempotencyKey]);
     if (existing.rows[0]) {
       if (existing.rows[0].client !== input.client || (existing.rows[0].stage_id ?? undefined)!==input.stageId) throw new DomainError('CAPTURE_SESSION_CONFLICT','Capture retry cannot change its client',409);
+      if (existing.rows[0].identifier_policy && existing.rows[0].identifier_policy.surface !== surface)
+        throw new DomainError('CAPTURE_SESSION_CONFLICT','Capture retry cannot change its recording platform',409);
       return captureSessionView(existing.rows[0]);
     }
     if (!input.stageId) {
@@ -118,7 +121,7 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
     const maxRecordingBytes = Math.min(CAPTURE_MAX_BYTES,allowance.enforced ? allowance.maxRecordingBytes! : CAPTURE_MAX_BYTES);
     const maxDurationMs = Math.min(CAPTURE_MAX_DURATION_MS,allowance.enforced ? allowance.maxRecordingSeconds!*1000 : CAPTURE_MAX_DURATION_MS);
     const now=clock.now(); const id=newId('cap');
-    const identifierPolicy = input.stageId ? null : await identifierSessionPolicy(tx,actor,proofId,input.client);
+    const identifierPolicy = input.stageId ? null : await identifierSessionPolicy(tx,actor,proofId,input.client,surface);
     const result=await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step,max_duration_ms,max_recording_bytes,identifier_policy) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11,$12,$13,$14::jsonb) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,CAPTURE_POLICY_VERSION,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep,maxDurationMs,maxRecordingBytes,identifierPolicy?JSON.stringify(identifierPolicy):null]);
     if (!input.stageId) await pinCurrentIntakeCaptureContext(tx,clock,actor,proofId,id);
     await appendAudit(tx,{proofId,actorUserId:actor,eventType:'CAPTURE_SESSION_ISSUED',eventData:{sessionId:id,client:input.client,policyVersion:CAPTURE_POLICY_VERSION,assurance:CAPTURE_ASSURANCE},at:now});

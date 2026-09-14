@@ -15,6 +15,12 @@ describe("seller statement challenge binding before Android authentication", () 
   it("accepts the server payload for this exact account, original, statement, and key", () => {
     expect(() => validateSellerChallenge(challenge, expected, now)).not.toThrow();
   });
+  it("binds iOS authorization to its own method and rejects platform substitution", () => {
+    const ios = { ...challenge, payload: JSON.stringify({ ...payload, method: "IOS_BIOMETRIC" }) };
+    expect(() => validateSellerChallenge(ios, { ...expected, method: "IOS_BIOMETRIC" }, now)).not.toThrow();
+    expect(() => validateSellerChallenge(ios, expected, now)).toThrow();
+    expect(() => validateSellerChallenge(challenge, { ...expected, method: "IOS_BIOMETRIC" }, now)).toThrow();
+  });
   it.each([
     ["actorUserId", "another-seller"], ["proofId", "another-proof"], ["captureSessionId", "retaken-video"],
     ["sha256", "c".repeat(64)], ["statement", "A different assertion"], ["publicKeySha256", "d".repeat(64)],
@@ -31,6 +37,8 @@ describe("seller statement challenge binding before Android authentication", () 
     const receipt = { challengeId: "challenge_1", signature: "signed", signatureVerification: "SERVER_VERIFIED", method: "ANDROID_BIOMETRIC_STRONG" };
     const proof = { evidence: [{ evidenceId: "evidence_1", validationStatus: "COMMITTED" }], attestations: [{ statement: "PACKED_DESCRIBED_ITEM", attestedBy: "seller_1", relatedEvidenceId: "evidence_1", authorization: receipt }] } as unknown as ProofView;
     expect(recordedSellerAuthorization(proof, "evidence_1", "seller_1")).toEqual({ challengeId: "challenge_1", signature: "signed" });
+    const ios = { ...proof, attestations: proof.attestations!.map(row => ({ ...row, authorization: { ...row.authorization!, method: "IOS_BIOMETRIC" as const } })) };
+    expect(recordedSellerAuthorization(ios, "evidence_1", "seller_1")).toEqual({ challengeId: "challenge_1", signature: "signed" });
     expect(recordedSellerAuthorization(proof, "different-original", "seller_1")).toBeNull();
     expect(recordedSellerAuthorization(proof, "evidence_1", "another-seller")).toBeNull();
     expect(recordedSellerAuthorization({ ...proof, evidence: [] }, "evidence_1", "seller_1")).toBeNull();

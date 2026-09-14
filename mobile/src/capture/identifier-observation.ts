@@ -16,7 +16,7 @@ export function shippingReadFeedback(review: IdentifierReview | null, event: Uni
 }
 
 export function identifierCaptureEnabled(policy: IdentifierPolicy | undefined | null): boolean {
-  return policy?.version === 1 && policy.surface === 'ANDROID' && policy.captureEnabled === true;
+  return policy?.version === 1 && (policy.surface === 'ANDROID' || policy.surface === 'IOS') && policy.captureEnabled === true;
 }
 
 /** Shared classification also prevents unrelated QR secrets entering capture metadata. */
@@ -24,7 +24,7 @@ export function mayRetainIdentifier(event: UnifiedBarcodeDetection): boolean {
   return classifyIdentifier({ rawText: event.rawValue, symbology: event.format, symbologyIdentifier: event.symbologyIdentifier }).kind !== 'UNSUPPORTED';
 }
 
-export function identifierObservation(event: UnifiedBarcodeDetection, sessionId: string): Omit<IdentifierObservation, 'schemaVersion' | 'clientEventId' | 'captureSessionId' | 'sequence' | 'firstSeenMs' | 'lastSeenMs' | 'sightings'> {
+export function identifierObservation(event: UnifiedBarcodeDetection, sessionId: string, surface: IdentifierPolicy['surface'] = 'ANDROID'): Omit<IdentifierObservation, 'schemaVersion' | 'clientEventId' | 'captureSessionId' | 'sequence' | 'firstSeenMs' | 'lastSeenMs' | 'sightings'> {
   return {
     rawText: event.rawValue, rawBytes: event.rawBytes ?? null, decoderEncoding: event.decoderEncoding ?? null,
     symbology: normalizeSymbology(event.format), symbologyIdentifier: event.symbologyIdentifier ?? null,
@@ -33,8 +33,8 @@ export function identifierObservation(event: UnifiedBarcodeDetection, sessionId:
     // Encoded reader returns a requested time, not a decoded frame PTS. Null uncertainty means unknown.
     timestampOrigin: event.source === 'ENCODED_VIDEO_FRAME' ? 'ENCODED_MEDIA' : 'MONOTONIC_APPROXIMATE',
     timestampUncertaintyMs: event.timestampUncertaintyMs ?? null,
-    recordingRef: sessionId, adapterVersion: 'android-identifiers-1', decoderVersion: event.decoderVersion ?? 'UNREPORTED',
-    capabilityProfile: 'ANDROID_MLKIT_17_2_0_V1_UNQUALIFIED',
+    recordingRef: sessionId, adapterVersion: surface === 'IOS' ? 'ios-identifiers-1' : 'android-identifiers-1', decoderVersion: event.decoderVersion ?? 'UNREPORTED',
+    capabilityProfile: surface === 'IOS' ? 'IOS_AVFOUNDATION_VISION_V1_UNQUALIFIED' : 'ANDROID_MLKIT_17_2_0_V1_UNQUALIFIED',
     frameWidth: event.frameWidth ?? null, frameHeight: event.frameHeight ?? null,
     coordinateSpace: event.coordinateSpace ?? null,
     bounds: event.bounds ? { x: event.bounds.left, y: event.bounds.top, width: event.bounds.right - event.bounds.left, height: event.bounds.bottom - event.bounds.top } : null,

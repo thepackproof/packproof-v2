@@ -6,6 +6,7 @@ import { NativeCaptureHost } from "../ui/NativeCaptureHost";
 import { OrderIntakeScreen } from "../screens/OrderIntakeScreen";
 import { CommerceReceiptScreen } from "../screens/CommerceReceiptScreen";
 import { sharedOrderText } from "../copy/share-intake";
+import { useSharedOrder } from "../intake/use-shared-order";
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, StyleSheet, Text, View, Linking, Keyboard } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -45,6 +46,24 @@ export function Root() {
   const [completionVisible, setCompletionVisible] = useState(false);
   const previousRoute = useRef(app.route.name);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
+  const nativeShare = useSharedOrder(ready && !!app.session && app.route.name === "home" && sharedText === null && !app.busy);
+
+  useEffect(() => {
+    if (!nativeShare.sharedOrder) return;
+    setSharedAsOrder(nativeShare.sharedOrder.attachmentCount > 0);
+    setSharedText(nativeShare.sharedOrder.text);
+    app.go("intake");
+  }, [nativeShare.sharedOrder?.id]);
+
+  async function consumeSharedOrder() {
+    await nativeShare.acknowledge();
+    setSharedText(null);
+  }
+
+  function deferSharedOrder() {
+    nativeShare.defer();
+    setSharedText(null);
+  }
 
   useEffect(() => {
     const previous = previousRoute.current;
@@ -95,7 +114,7 @@ export function Root() {
       const proofId = proofIdFromLink(url);
       if (proofId) { setLinkedProofId(proofId); return; }
       const text = sharedOrderText(url);
-      if (text) {setSharedAsOrder(false);setSharedText(text);}
+      if (text) {nativeShare.defer();setSharedAsOrder(false);setSharedText(text);}
     };
     void Linking.getInitialURL()
       .then((url) => {
@@ -185,7 +204,7 @@ export function Root() {
   else if (app.route.name === "capture") body = <CaptureScreen />;
   else if (app.route.name === "scan") body = <ScanScreen />;
   else if (app.route.name === "review") body = <PurchaseReviewScreen />;
-  else if (app.route.name === "intake") body = sharedText&&!sharedAsOrder&&looksLikeSharedTracking(sharedText) ? <SharedTrackingScreen text={sharedText} onConsumed={()=>setSharedText(null)} onOrder={()=>setSharedAsOrder(true)}/> : <OrderIntakeScreen key={sharedText ?? "paste"} sharedText={sharedText} onConsumed={() => setSharedText(null)} />;
+  else if (app.route.name === "intake") body = sharedText&&!sharedAsOrder&&looksLikeSharedTracking(sharedText) ? <SharedTrackingScreen text={sharedText} onConsumed={()=>{void consumeSharedOrder().catch(()=>app.setError("Could not remove the shared order from this device. Try again."));}} onOrder={()=>setSharedAsOrder(true)}/> : <OrderIntakeScreen key={nativeShare.sharedOrder?.id ?? sharedText ?? "paste"} sharedText={sharedText} sharedWarnings={nativeShare.sharedOrder?.warnings} sharedAttachmentCount={nativeShare.sharedOrder?.attachmentCount} onConsumed={consumeSharedOrder} onDeferred={nativeShare.sharedOrder ? deferSharedOrder : undefined} />;
   else if (app.route.name === "manual") body = <ManualCreateScreen />;
   else if (app.route.name === "finalize") body = <FinalizeScreen />;
   else if (app.route.name === "invite") body = <InviteScreen />;

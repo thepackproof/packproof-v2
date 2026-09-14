@@ -75,7 +75,7 @@ export function PackingStationScreen(props: {
   const contextRef = useRef({ userId: props.userId, client: props.client });
   const actionLock = useRef(false);
   const submitLock = useRef(false);
-  const biometricAttestation = Platform.OS === "android";
+  const biometricAttestation = (Platform.OS === "android" || Platform.OS === "ios");
   stateRef.current = state;
   heldCaptureRef.current = heldCapture;
   contextRef.current = { userId: props.userId, client: props.client };

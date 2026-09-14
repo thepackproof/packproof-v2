@@ -7,7 +7,7 @@ export class CaptureHostClient {
     this.apiBaseUrl=new URL(apiBaseUrl);this.siteOrigin=new URL(siteOrigin).origin;this.apiKey=apiKey;this.transport=transport;
     if(this.apiBaseUrl.protocol!=='https:'||new URL(this.siteOrigin).protocol!=='https:')throw new Error('Capture hosts require HTTPS');
   }
-  async createIntent(proofId,{idempotencyKey,allowedSurfaces=['ANDROID','WEB']}={}){
+  async createIntent(proofId,{idempotencyKey,allowedSurfaces=['ANDROID','IOS','WEB']}={}){
     if(!idempotencyKey)throw new Error('A stable idempotency key is required');
     const response=await this.transport(new URL(`/v1/proofs/${encodeURIComponent(proofId)}/capture-intents`,this.apiBaseUrl),{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json','Idempotency-Key':idempotencyKey},body:JSON.stringify({allowedSurfaces}),redirect:'error',signal:AbortSignal.timeout(15000)});
     if(!response.ok)throw new Error(`Capture intent request failed (${response.status})`);

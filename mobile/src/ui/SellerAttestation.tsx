@@ -19,7 +19,7 @@ export function SellerAttestation({ onPress, disabled = false, loading = false }
       <PressableScale
         accessibilityRole="button"
         accessibilityLabel={`Confirm and submit. ${SELLER_SHIPPING_STATEMENT}`}
-        accessibilityHint="Android requests a supported strong biometric, such as fingerprint or supported face authentication."
+        accessibilityHint="Your device requests secure biometric authentication, such as Face ID, Touch ID, or a fingerprint."
         accessibilityState={{ disabled: disabled || loading, busy: loading }}
         disabled={disabled || loading}
         onPress={() => { void haptic("medium"); onPress(); }}

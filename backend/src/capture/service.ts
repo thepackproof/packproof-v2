@@ -53,7 +53,7 @@ export async function bindIntent(db:Database,clock:Clock,actor:string,value:unkn
     check(row.surfaces.includes(capabilities.surface),'CAPTURE_SURFACE_INVALID','This link does not allow that capture surface');
     const currentSnapshot=await attestationContext(tx,row.context_json.transactionId);
     check(currentSnapshot.contextSha256===row.context_json.transactionDigest,"CAPTURE_CONTEXT_CHANGED","The order changed. Open a fresh capture link from the order");
-    const session=await createCaptureSession(tx,clock,actor,row.proof_id,{client:capabilities.surface==='WEB'?'WEB_CAMERA':'NATIVE_CAMERA',idempotencyKey:`intent:${id}`});
+    const session=await createCaptureSession(tx,clock,actor,row.proof_id,{client:capabilities.surface==='WEB'?'WEB_CAMERA':'NATIVE_CAMERA',surface:capabilities.surface,idempotencyKey:`intent:${id}`});
     const context:CaptureContext={...row.context_json,captureId:session.id,capabilities};
     await tx.query('INSERT INTO capture_engine_sessions(session_id,intent_id,proof_id,actor_user_id,context_json,context_sha256) VALUES($1,$2,$3,$4,$5::jsonb,$6)',[session.id,id,row.proof_id,actor,JSON.stringify(context),sha256Hex(canonical(context))]);
     await tx.query('UPDATE capture_intents SET consumed_at=$2,session_id=$3 WHERE id=$1',[id,clock.now().toISOString(),session.id]);

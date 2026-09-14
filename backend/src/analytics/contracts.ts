@@ -74,7 +74,7 @@ export interface ProgramEvent {
   eventName: typeof EVENT_NAMES[number];
   occurredAt: string;
   authority: "server" | "billing" | "client";
-  deviceClass: "s24_ultra" | "a16_5g" | "other_android" | "web" | "unknown";
+  deviceClass: "s24_ultra" | "a16_5g" | "other_android" | "ios" | "web" | "unknown";
   channel: "ebay" | "stripe" | "paypal" | "manual" | "other" | "unknown";
   outcome: "succeeded" | "failed" | "pending" | "cancelled";
   errorCode?: "network" | "authentication" | "quota" | "storage" | "capability" | "integrity" | "provider" | "cancelled" | "unknown";
@@ -88,7 +88,7 @@ export function validateProgramEvent(value: unknown): ProgramEvent {
   timestamp(row.occurredAt, "occurredAt");
   enumValue(row.eventName, EVENT_NAMES, "eventName");
   enumValue(row.authority, ["server", "billing", "client"], "authority");
-  enumValue(row.deviceClass, ["s24_ultra", "a16_5g", "other_android", "web", "unknown"], "deviceClass");
+  enumValue(row.deviceClass, ["s24_ultra", "a16_5g", "other_android", "ios", "web", "unknown"], "deviceClass");
   enumValue(row.channel, ["ebay", "stripe", "paypal", "manual", "other", "unknown"], "channel");
   enumValue(row.outcome, ["succeeded", "failed", "pending", "cancelled"], "outcome");
   if ("errorCode" in row) enumValue(row.errorCode, ["network", "authentication", "quota", "storage", "capability", "integrity", "provider", "cancelled", "unknown"], "errorCode");

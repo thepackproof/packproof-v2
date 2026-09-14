@@ -21,6 +21,16 @@ describe('governed operational observations',()=>{
   const start=(datasetRef:string)=>({datasetRef,operationNonce:randomUUID(),clientStartedAt:clock.now().toISOString(),deviceClass:'web',channel:'manual',taskKind:'packproof'});
   const ended=(datasetRef:string,attemptRef:string)=>({datasetRef,attemptRef,operationNonce:randomUUID(),phase:'ended',outcome:'failed',elapsedMs:5500,activeMs:700,offlineMs:4800,unattendedMs:400,errorCode:'network'});
   const period=(datasetRef:string)=>({datasetRef,start:'2026-09-07T00:00:00.000Z',end:'2026-09-08T00:00:00.000Z',asOf:clock.now().toISOString()});
+  it('stores and exports consented iOS timings without classifying them as Android',async()=>{
+    const f=await setup();await recordProgramConsent(h.db,clock,config,f.user,consent(f.datasetRef));
+    const attempt=await startProgramTiming(h.db,clock,config,f.user,{...start(f.datasetRef),deviceClass:'ios'});
+    await appendProgramTiming(h.db,clock,config,f.user,ended(f.datasetRef,attempt.attemptRef));
+    now=new Date(now.getTime()+6000);
+    const exported=await exportProgramObservations(h.db,clock,config,period(f.datasetRef));
+    expect(exported.timingObservations).toHaveLength(2);
+    expect(exported.timingObservations.every(row=>row.deviceClass==='ios')).toBe(true);
+    expect(exported.events.every(row=>row.deviceClass==='ios')).toBe(true);
+  });
   it('requires explicit consent for this account and dataset and rejects arbitrary metadata',async()=>{
     const f=await setup();expect((await getProgramConsent(h.db,config,f.user,f.datasetRef)).granted).toBe(false);
     await expect(startProgramTiming(h.db,clock,config,f.user,start(f.datasetRef))).rejects.toMatchObject({code:'STUDY_CONSENT_REQUIRED'});

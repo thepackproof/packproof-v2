@@ -21,7 +21,7 @@ export interface SellerAttestationAuthorization {
 
 export interface SellerAttestationReceipt extends SellerAttestationAuthorization {
   version: 1;
-  method: "ANDROID_BIOMETRIC_STRONG";
+  method: "ANDROID_BIOMETRIC_STRONG" | "IOS_BIOMETRIC";
   biometricMethodProvenance: "CLIENT_ASSERTED_NOT_INDEPENDENTLY_VERIFIED";
   signatureVerification: "SERVER_VERIFIED";
   algorithm: "ECDSA_SHA256";
@@ -750,7 +750,7 @@ export class PackProofV2Client {
 
   async startConnectedAccountConnect(
     provider: string,
-    input: { shop?: string; surface?: "android" | "web" } = {},
+    input: { shop?: string; surface?: "android" | "ios" | "web" } = {},
   ): Promise<{
     authorizationUrl: string;
     expiresAt: string;
@@ -762,7 +762,7 @@ export class PackProofV2Client {
     });
   }
 
-  async reauthorizeConnectedAccount(accountId: string, surface?: "android" | "web"): Promise<{
+  async reauthorizeConnectedAccount(accountId: string, surface?: "android" | "ios" | "web"): Promise<{
     authorizationUrl: string;
     expiresAt: string;
     provider: string;
@@ -1070,7 +1070,7 @@ export class PackProofV2Client {
 
   async createAttestationChallenge(
     proofId: string,
-    input: { captureSessionId: string; sha256: string; publicKey: string },
+    input: { captureSessionId: string; sha256: string; publicKey: string; method?: "ANDROID_BIOMETRIC_STRONG" | "IOS_BIOMETRIC" },
   ): Promise<{ challengeId: string; payload: string; expiresAt: string }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/attestation-challenges`, {
       method: "POST",
@@ -1083,9 +1083,9 @@ export class PackProofV2Client {
     return this.request(path,{method,body});
   }
 
-  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string; identifierPolicy?: IdentifierPolicy }> {
+  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string, surface?: "ANDROID" | "IOS"): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string; identifierPolicy?: IdentifierPolicy }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, {
-      method: "POST", body: { idempotencyKey, client: "NATIVE_CAMERA", ...(stageId ? { stageId } : {}) },
+      method: "POST", body: { idempotencyKey, client: "NATIVE_CAMERA", ...(stageId ? { stageId } : {}), ...(surface ? { surface } : {}) },
     });
   }
 
@@ -1253,6 +1253,14 @@ export class PackProofV2Client {
 
   async getManifest(proofId: string): Promise<ManifestView> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/manifest`);
+  }
+
+  async getUsage<T>(): Promise<T> { return this.request("/me/usage"); }
+  async billingRequest<T>(path: string, body?: unknown): Promise<T> {
+    return this.request(`/me/billing/${path}`, { method: body === undefined ? "GET" : "POST", body });
+  }
+  async getBillingInvoices<T>(startingAfter?: string): Promise<T> {
+    return this.request(`/me/billing/invoices${startingAfter ? `?startingAfter=${encodeURIComponent(startingAfter)}` : ""}`);
   }
 
   private async request<T>(

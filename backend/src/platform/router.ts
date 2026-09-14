@@ -347,7 +347,7 @@ export function createPlatformRouter(deps: AppDependencies) {
     return readCaptureCompletionReceipt(db, p.userId, req.params.sessionId);
   });
   endpoint("post", "/proofs/:id/capture-sessions", "evidence:write", (db,p,req)=>
-    createCaptureSession(db,deps.clock,p.userId,req.params.id,{client:String(req.body?.client??""),stageId:req.body?.stageId==null?undefined:String(req.body.stageId),idempotencyKey:sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`)}),201);
+    createCaptureSession(db,deps.clock,p.userId,req.params.id,{client:String(req.body?.client??""),surface:req.body?.surface,stageId:req.body?.stageId==null?undefined:String(req.body.stageId),idempotencyKey:sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`)}),201);
   endpoint("post", "/proofs/:id/capture-sessions/:sessionId/complete", "evidence:write", (db,p,req)=>
     completeCaptureSession(db,deps.clock,p.userId,req.params.id,req.params.sessionId,{sha256:req.body?.sha256,byteSize:req.body?.byteSize,contentType:req.body?.contentType,interrupted:req.body?.interrupted,recordedDurationMs:req.body?.recordedDurationMs}));
   endpoint("get", "/proofs/:id/capture-sessions/:sessionId", "evidence:write", (db,p,req)=>

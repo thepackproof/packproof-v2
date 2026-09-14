@@ -1,5 +1,5 @@
 import type { ReleaseIdentity } from "../config.js";
-import { SELLER_SHIPPING_STATEMENT } from "../domain/attestation-authorization.js";
+import { NATIVE_ATTESTATION_METHODS, SELLER_SHIPPING_STATEMENT } from "../domain/attestation-authorization.js";
 
 /** Public protocol information, never credentials or deployment configuration. */
 export function captureCapabilities(release: ReleaseIdentity, durableReceiptsRequired = false) {
@@ -14,7 +14,7 @@ export function captureCapabilities(release: ReleaseIdentity, durableReceiptsReq
     sellerAttestation: {
       contextBindingVersion: 1,
       challengeVersions: [1], statementVersion: 1, statement: SELLER_SHIPPING_STATEMENT,
-      methods: ["ANDROID_BIOMETRIC_STRONG"], hardwareOriginVerified: false,
+      methods: NATIVE_ATTESTATION_METHODS, hardwareOriginVerified: false,
     },
     preservation: { receiptVersions: [1], durableReceiptsRequired },
     release: { commit: release.commit, version: release.version },

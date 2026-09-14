@@ -39,7 +39,7 @@ export function CameraSpikeScreen() {
   const session = useRef<ReturnType<typeof createSpikeSession> | null>(null);
   const clockStart = useRef(0);
   const mounted = useRef(true);
-  const available = Platform.OS === "android" && isUnifiedCameraAvailable();
+  const available = isUnifiedCameraAvailable();
 
   function changePhase(next: Phase) { phaseRef.current = next; if (mounted.current) setPhase(next); }
   async function refreshSaved() {
@@ -187,7 +187,7 @@ export function CameraSpikeScreen() {
           if (!["BARCODE_ANALYSIS_FAILED", "TORCH_UNAVAILABLE"].includes(nativeEvent.code)) setCameraReady(false);
           setNotice(nativeEvent.code === "BARCODE_ANALYSIS_FAILED" ? "Barcode analysis had a problem. Video recording continues." : nativeEvent.code === "TORCH_UNAVAILABLE" ? "The torch could not change. Video recording can continue." : "The camera reported a problem. Finish any recording and review the saved test.");
         }}
-      /> : <View style={styles.cameraMessage}><Text style={{color: "white", textAlign: "center"}}>{!available ? "Install the Android camera-test build to run this hardware test." : "Allow camera access to begin."}</Text></View>}
+      /> : <View style={styles.cameraMessage}><Text style={{color: "white", textAlign: "center"}}>{!available ? "Install the native camera-test build to run this hardware test." : "Allow camera access to begin."}</Text></View>}
       <View pointerEvents="none" style={styles.overlay}>
         <PulseOpacity active={phase === "RECORDING"}><Text style={styles.rec}>{phase === "RECORDING" ? "● REC" : phase === "STARTING" ? "Starting…" : phase === "SAVING" ? "Saving…" : "CAMERA TEST"}  {clock(elapsed)}</Text></PulseOpacity>
         {lastScan ? <FadeSlideIn key={`${session.current?.sessionId}:${lastScan.detectionIndex}`} style={styles.scanChip}>

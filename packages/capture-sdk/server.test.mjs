@@ -4,6 +4,9 @@ const hash=s=>createHash('sha256').update(s).digest('hex');
 test('host key stays on the server and launch URL has only the opaque token',async()=>{
  let sent;const token='intent_one.'+'A'.repeat(43);const client=new CaptureHostClient({apiBaseUrl:'https://api.example.test',siteOrigin:'https://packproof.example.test',apiKey:'server-secret',fetch:async(url,options)=>{sent={url,options};return {ok:true,json:async()=>({schema:'packproof.capture/1',intentId:'intent_one',launchToken:token,expiresAt:'later'})};}});
  const result=await client.createIntent('proof_one',{idempotencyKey:'order-1'});assert.equal(new URL(result.launchUrl).search,'');assert.equal(sent.options.headers.Authorization,'Bearer server-secret');assert(!result.launchUrl.includes('server-secret'));assert(!result.launchUrl.includes('proof_one'));
+ assert.deepEqual(JSON.parse(sent.options.body).allowedSurfaces,['ANDROID','IOS','WEB']);
+ await client.createIntent('proof_one',{idempotencyKey:'order-2',allowedSurfaces:['WEB']});
+ assert.deepEqual(JSON.parse(sent.options.body).allowedSurfaces,['WEB']);
 });
 test('receipt verifier rejects unsigned, changed and cross-Proof completions',()=>{
  const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});const capture={context:{captureId:'cap_one',proofId:'proof_one'}};const root=hash('packproof:manifest:1\n'+JSON.stringify(capture));

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import type { NativeAttestationMethod } from '../../src/attestation/authorization';
 
 export type AttestationAvailability = {
   available: boolean;
@@ -14,14 +15,21 @@ type NativeAttestation = {
   cancel(): Promise<void>;
 };
 
-const nativeModule = Platform.OS === 'android'
+const nativeModule = Platform.OS === 'android' || Platform.OS === 'ios'
   ? requireOptionalNativeModule<NativeAttestation>('PackProofAttestation')
   : null;
 
 function unavailable(): AttestationAvailability {
-  return Platform.OS !== 'android'
-    ? { available: false, code: 'ATTESTATION_ANDROID_REQUIRED', message: 'Use the Android app to attest and submit this Proof.' }
-    : { available: false, code: 'ATTESTATION_UPGRADE_REQUIRED', message: 'Update PackProof to use fingerprint attestation.' };
+  return Platform.OS !== 'android' && Platform.OS !== 'ios'
+    ? { available: false, code: 'ATTESTATION_NATIVE_REQUIRED', message: 'Use the PackProof mobile app to attest and submit this recording.' }
+    : { available: false, code: 'ATTESTATION_UPGRADE_REQUIRED', message: 'Update PackProof to use biometric attestation.' };
+}
+
+export function getAttestationMethod(): NativeAttestationMethod {
+  if (Platform.OS === 'ios') return 'IOS_BIOMETRIC';
+  if (Platform.OS === 'android') return 'ANDROID_BIOMETRIC_STRONG';
+  const status = unavailable();
+  throw Object.assign(new Error(status.message), { code: status.code });
 }
 
 function native(): NativeAttestation {
@@ -35,12 +43,12 @@ export async function getAttestationAvailability(): Promise<AttestationAvailabil
   return nativeModule ? nativeModule.getAvailability() : unavailable();
 }
 
-/** Returns only an SPKI DER public key, encoded as base64. The private key stays in Android Keystore. */
+/** Returns only a base64 SPKI DER public key; private keys stay in the native key store. */
 export async function prepareAttestationKey(userId: string): Promise<{ publicKey: string }> {
   return native().prepareKey(userId);
 }
 
-/** Android authorizes this exact signature using a fresh strong biometric prompt. */
+/** The operating system authorizes this exact signature using a fresh biometric prompt. */
 export async function signAttestationPayload(userId: string, payload: string): Promise<{ signature: string }> {
   return native().sign(userId, payload);
 }
