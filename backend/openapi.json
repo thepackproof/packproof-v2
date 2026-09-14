@@ -2248,6 +2248,371 @@
           }
         }
       }
+    },
+    "/proofs/{id}/capture-intents": {
+      "post": {
+        "operationId": "post_proofs_id_capture_intents",
+        "summary": "Create a bound capture launch intent",
+        "description": "Private capture-platform candidate. Requires evidence:write and encrypted idempotency storage. The tenant owner redeems the opaque token once using first-party authentication. Allowed surface names do not certify an adapter. Tokens expire after ten minutes; replaying this API request returns the original token and expiry.",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "allowedSurfaces": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ANDROID",
+                        "IOS",
+                        "WEB",
+                        "WAREHOUSE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Single-use opaque launch intent. Keep tokens out of logs and query strings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema",
+                    "intentId",
+                    "launchToken",
+                    "expiresAt",
+                    "allowedSurfaces",
+                    "launchPath",
+                    "nativePath"
+                  ],
+                  "properties": {
+                    "schema": {
+                      "const": "packproof.capture/1"
+                    },
+                    "intentId": {
+                      "type": "string"
+                    },
+                    "launchToken": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "allowedSurfaces": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "ANDROID",
+                          "IOS",
+                          "WEB",
+                          "WAREHOUSE"
+                        ]
+                      }
+                    },
+                    "launchPath": {
+                      "type": "string"
+                    },
+                    "nativePath": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle-snapshots": {
+      "post": {
+        "operationId": "createLifecycleSnapshot",
+        "summary": "createLifecycleSnapshot",
+        "description": "Opt-in future.v1 extension. Required scope: proofs:write. Disabled by default; explicit tenant canary required. Write pause blocks POST while preserving GET. Frozen release endpoints remain unchanged. Snapshot scope is sealed records only; offline freshness is unknown.",
+        "x-packproof-profile": "future.v1",
+        "x-packproof-scope": "proofs:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleSnapshot"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "purpose": {
+                    "enum": [
+                      "REVIEW",
+                      "CLAIM",
+                      "ARCHIVE"
+                    ],
+                    "default": "REVIEW"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle-snapshots/{snapshotId}": {
+      "get": {
+        "operationId": "getLifecycleSnapshot",
+        "summary": "getLifecycleSnapshot",
+        "description": "Opt-in future.v1 extension. Required scope: proofs:read. Disabled by default; explicit tenant canary required. Write pause blocks POST while preserving GET. Frozen release endpoints remain unchanged. Snapshot scope is sealed records only; offline freshness is unknown.",
+        "x-packproof-profile": "future.v1",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleSnapshot"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/lifecycle-snapshots/{snapshotId}/download": {
+      "get": {
+        "operationId": "downloadLifecycleSnapshot",
+        "summary": "downloadLifecycleSnapshot",
+        "description": "Opt-in future.v1 extension. Required scope: proofs:read. Disabled by default; explicit tenant canary required. Write pause blocks POST while preserving GET. Frozen release endpoints remain unchanged. Snapshot scope is sealed records only; offline freshness is unknown.",
+        "x-packproof-profile": "future.v1",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/proofs/{id}/capture-sessions/{sessionId}/completion-receipt": {
+      "post": {
+        "operationId": "issueCaptureCompletionReceipt",
+        "summary": "issueCaptureCompletionReceipt",
+        "description": "Opt-in future.v1 extension. Required scope: evidence:write. Disabled by default; explicit tenant canary required. Write pause blocks POST while preserving GET. Frozen release endpoints remain unchanged. Snapshot scope is sealed records only; offline freshness is unknown.",
+        "x-packproof-profile": "future.v1",
+        "x-packproof-scope": "evidence:write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureCompletionReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "readCaptureCompletionReceipt",
+        "summary": "readCaptureCompletionReceipt",
+        "description": "Opt-in future.v1 extension. Required scope: proofs:read. Disabled by default; explicit tenant canary required. Write pause blocks POST while preserving GET. Frozen release endpoints remain unchanged. Snapshot scope is sealed records only; offline freshness is unknown.",
+        "x-packproof-profile": "future.v1",
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureCompletionReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2305,6 +2670,245 @@
                 "error"
               ]
             }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "FutureSignature": {
+        "type": "object",
+        "required": [
+          "algorithm",
+          "keyId",
+          "signatureBase64",
+          "signedAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "enum": [
+              "ECDSA_SHA_256",
+              "RSASSA_PSS_SHA_256"
+            ]
+          },
+          "keyId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "signatureBase64": {
+            "type": "string"
+          },
+          "signedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LifecycleSnapshot": {
+        "type": "object",
+        "required": [
+          "snapshotId",
+          "proofId",
+          "canonicalJson",
+          "sha256",
+          "signature",
+          "root",
+          "supplements",
+          "stages"
+        ],
+        "properties": {
+          "snapshotId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "proofId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "canonicalJson": {
+            "type": "string",
+            "description": "Exact signed packproof.sorted-json.v1 index. Includes transactionId, nullable tenantId, purpose, cutoffAt, root, sealed inventory, watermark and bounded limitations."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/FutureSignature"
+          },
+          "root": {
+            "type": "object",
+            "required": [
+              "manifestId",
+              "proofId",
+              "canonicalJson",
+              "sha256"
+            ],
+            "properties": {
+              "manifestId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "proofId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "canonicalJson": {
+                "type": "string",
+                "description": "Stored legacy bytes; never serialized under a new profile."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "signature": {
+                "$ref": "#/components/schemas/FutureSignature"
+              }
+            }
+          },
+          "supplements": {
+            "type": "array",
+            "maxItems": 256,
+            "items": {
+              "type": "object"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "CaptureCompletionReceipt": {
+        "type": "object",
+        "required": [
+          "payload",
+          "canonicalJson",
+          "sha256",
+          "signature"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": [
+              "schema",
+              "receiptId",
+              "state",
+              "issuedAt",
+              "intentId",
+              "captureId",
+              "proofId",
+              "actorId",
+              "transactionId",
+              "transactionDigest",
+              "contextSha256",
+              "captureManifestSha256",
+              "evidenceId",
+              "sourceSha256",
+              "finalManifestId",
+              "finalManifestSha256",
+              "audience",
+              "returnTarget"
+            ],
+            "properties": {
+              "schema": {
+                "const": "packproof.capture-completion/1"
+              },
+              "state": {
+                "const": "FINALIZED"
+              },
+              "issuedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "receiptId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "intentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "captureId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "proofId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "actorId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "transactionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "evidenceId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "finalManifestId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "transactionDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "contextSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "captureManifestSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "sourceSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "finalManifestSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "audience": {
+                "type": "string",
+                "description": "Server-derived packproof:capture-intent:<intentId>"
+              },
+              "returnTarget": {
+                "type": "string",
+                "description": "Server-derived canonical Proof path, never an arbitrary external URL."
+              }
+            }
+          },
+          "canonicalJson": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/FutureSignature"
           }
         }
       }

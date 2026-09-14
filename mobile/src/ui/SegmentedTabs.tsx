@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -26,11 +26,14 @@ export function SegmentedTabs<T extends string>(props: {
       translate.setValue(index * segmentWidth);
       return;
     }
-    Animated.spring(translate, {
+    const animation = Animated.timing(translate, {
       toValue: index * segmentWidth,
       useNativeDriver: true,
-      ...motion.spring.pill,
-    }).start();
+      duration: motion.duration.fast,
+      easing: Easing.out(Easing.cubic),
+    });
+    animation.start();
+    return () => animation.stop();
   }, [index, reducedMotion, segmentWidth, translate]);
 
   function onLayout(event: LayoutChangeEvent) {
@@ -50,7 +53,8 @@ export function SegmentedTabs<T extends string>(props: {
             styles.pill,
             {
               width: segmentWidth,
-              backgroundColor: colors.primary,
+              backgroundColor: colors.surfaceElevated,
+              borderBottomColor: colors.accent,
               transform: [{ translateX: translate }],
             },
           ]}
@@ -71,8 +75,8 @@ export function SegmentedTabs<T extends string>(props: {
             accessibilityState={{ selected }}
             style={styles.tab}
           >
-            {fontScale < 1.4 ? <Ionicons name={option.icon} size={16} color={selected ? colors.textOnPrimary : colors.textPrimary} /> : null}
-            <Text style={[styles.label, { color: selected ? colors.textOnPrimary : colors.textPrimary }]}>
+            {fontScale < 1.4 ? <Ionicons name={option.icon} size={16} color={selected ? colors.textPrimary : colors.textSecondary} /> : null}
+            <Text style={[styles.label, { color: selected ? colors.textPrimary : colors.textSecondary }]}>
               {option.label}
             </Text>
           </Pressable>
@@ -86,7 +90,7 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: "row",
     borderRadius: radii.pill,
-    borderWidth: 1,
+    borderWidth: 0,
     overflow: "hidden",
     position: "relative",
     minHeight: 48,
@@ -97,6 +101,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     borderRadius: radii.pill,
+    borderBottomWidth: 0,
   },
   tab: {
     flex: 1,

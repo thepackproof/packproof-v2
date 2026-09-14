@@ -1,0 +1,286 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Dormant PackProof intake mail ingress; no DNS edits or receipt-rule-set activation.
+Metadata:
+  PackProof:
+    Activation: Receipt rule is disabled; rule set is never activated by this stack.
+    RawRetention: No expiry lifecycle; linked source objects must follow Proof retention.
+    Encryption: SSE-S3 raw MIME; SNS SSE-KMS metadata; SSE-SQS queues. No SES client-side encryption.
+    References:
+      - https://docs.aws.amazon.com/ses/latest/dg/receiving-email-permissions.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-ses-receiptrule-s3action.html
+Parameters:
+  IntakeSubdomain:
+    Type: String
+    Description: Dedicated, SES-verified intake subdomain; never the root or existing mailbox domain.
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*\.[a-z0-9.-]+\.[a-z]{2,}$'
+    MaxLength: 253
+  RawPrefix:
+    Type: String
+    Default: received/
+    AllowedPattern: '^[A-Za-z0-9_-]+/$'
+    MaxLength: 64
+    Description: Must exactly match PACKPROOF_INTAKE_RAW_PREFIX.
+Resources:
+  RawMailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+  ReceiptRuleSet:
+    Type: AWS::SES::ReceiptRuleSet
+    Properties:
+      RuleSetName: !Sub '${AWS::StackName}-intake'
+  RawMailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref RawMailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt RawMailBucket.Arn
+              - !Sub '${RawMailBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+          - Sid: ExactReceiptRuleMayRetainRawSource
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${RawMailBucket.Arn}/${RawPrefix}*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:receipt-rule-set/${ReceiptRuleSet}:receipt-rule/retain-order-source'
+  NotificationKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Encrypt SES intake notification metadata in SNS; does not encrypt MIME client-side.
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AccountAdminDelegation
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: ExactReceiptRuleCanEncryptNotification
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action:
+              - kms:GenerateDataKey
+              - kms:Decrypt
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:receipt-rule-set/${ReceiptRuleSet}:receipt-rule/retain-order-source'
+  ReceiptTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      KmsMasterKeyId: !GetAtt NotificationKey.Arn
+  ReceiptTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref ReceiptTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: OnlyExactSesReceiptMayPublish
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref ReceiptTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:receipt-rule-set/${ReceiptRuleSet}:receipt-rule/retain-order-source'
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600
+      RedriveAllowPolicy:
+        redrivePermission: byQueue
+        sourceQueueArns:
+          - !Sub 'arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-receipts'
+  ReceiptQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-receipts'
+      SqsManagedSseEnabled: true
+      ReceiveMessageWaitTimeSeconds: 20
+      VisibilityTimeout: 120
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 5
+  ReceiptQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ReceiptQueue
+        - !Ref DeadLetterQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureQueueTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 'sqs:*'
+            Resource:
+              - !GetAtt ReceiptQueue.Arn
+              - !GetAtt DeadLetterQueue.Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+          - Sid: ExactTopicMayDeliverOrDeadLetter
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource:
+              - !GetAtt ReceiptQueue.Arn
+              - !GetAtt DeadLetterQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref ReceiptTopic
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+  ReceiptSubscription:
+    Type: AWS::SNS::Subscription
+    DependsOn: ReceiptQueuePolicy
+    Properties:
+      TopicArn: !Ref ReceiptTopic
+      Protocol: sqs
+      Endpoint: !GetAtt ReceiptQueue.Arn
+      RawMessageDelivery: false
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+  DisabledReceiptRule:
+    Type: AWS::SES::ReceiptRule
+    DependsOn:
+      - RawMailBucketPolicy
+      - ReceiptTopicPolicy
+      - ReceiptSubscription
+    Properties:
+      RuleSetName: !Ref ReceiptRuleSet
+      Rule:
+        Name: retain-order-source
+        Enabled: false
+        ScanEnabled: true
+        TlsPolicy: Require
+        Recipients:
+          - !Ref IntakeSubdomain
+        Actions:
+          - S3Action:
+              BucketName: !Ref RawMailBucket
+              ObjectKeyPrefix: !Ref RawPrefix
+              TopicArn: !Ref ReceiptTopic
+          - StopAction:
+              Scope: RuleSet
+  IntakeWorkerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Intake-only read/consume permissions; attach to the existing reviewed worker role at activation.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ReadOnlyRetainedSource
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Resource: !Sub '${RawMailBucket.Arn}/${RawPrefix}*'
+          - Sid: ConsumeOnlyDedicatedReceiptQueue
+            Effect: Allow
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:ChangeMessageVisibility
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt ReceiptQueue.Arn
+  IntakeWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Optional intake worker task role; supplies no database, signing, provider or deployment authority.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      ManagedPolicyArns:
+        - !Ref IntakeWorkerPolicy
+Outputs:
+  IntakeDomain:
+    Description: Configure and verify this dedicated subdomain only; no DNS was changed by this stack.
+    Value: !Ref IntakeSubdomain
+  MxInstruction:
+    Description: After SES identity verification, add this MX record only on the dedicated intake subdomain.
+    Value: !Sub '${IntakeSubdomain} MX 10 inbound-smtp.${AWS::Region}.amazonaws.com'
+  ReceiptRuleSetName:
+    Description: Inactive rule set; review coexistence with existing receiving rules before any manual activation.
+    Value: !Ref ReceiptRuleSet
+  ReceiptRuleName:
+    Description: Disabled receipt rule; requires explicit controlled activation after validation.
+    Value: !Ref DisabledReceiptRule
+  RawBucket:
+    Description: PACKPROOF_INTAKE_RAW_BUCKET; separate from evidence and upload buckets.
+    Value: !Ref RawMailBucket
+  RawKeyPrefix:
+    Description: PACKPROOF_INTAKE_RAW_PREFIX; no expiry lifecycle is applied.
+    Value: !Ref RawPrefix
+  TopicArn:
+    Description: PACKPROOF_INTAKE_TOPIC_ARN; validate this exact SNS envelope topic in the worker.
+    Value: !Ref ReceiptTopic
+  QueueUrl:
+    Description: PACKPROOF_INTAKE_QUEUE_URL; messages contain SNS envelopes, not raw MIME bodies.
+    Value: !Ref ReceiptQueue
+  DeadLetterQueueUrl:
+    Description: Retained failed deliveries; operator-controlled investigation/redrive only.
+    Value: !Ref DeadLetterQueue
+  WorkerPolicyArn:
+    Description: Attach this intake-only policy to the existing reviewed worker role when enabling the worker.
+    Value: !Ref IntakeWorkerPolicy
+  WorkerRoleArn:
+    Description: Optional dedicated role; no task is launched and existing runtime roles are unchanged.
+    Value: !GetAtt IntakeWorkerRole.Arn

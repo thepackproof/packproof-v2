@@ -12,7 +12,7 @@ export function presentProof(proof: CanonicalProof, userId: string) {
 }
 export function withRecording(presentation: ProofPresentation, recording?: LocalRecordingSummary) {
   return withLocalProofWork(presentation, !recording || recording.finalized || recording.submitted ? null : {
-    state: !recording.accepted ? "CAPTURE_UNFINISHED" : recording.errorMessage || recording.retryStopped ? "UPLOAD_INTERRUPTED" : recording.preserved ? "CONFIRMATION_NEEDED" : "UPLOADING",
+    state: !recording.accepted ? "CAPTURE_UNFINISHED" : recording.committed || recording.preserved ? "CONFIRMATION_NEEDED" : recording.active ? "UPLOADING" : "UPLOAD_INTERRUPTED",
     canResumeCapture: false,
   });
 }

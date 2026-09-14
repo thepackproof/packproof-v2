@@ -33,7 +33,7 @@ export type AppRouteName =
   | "event";
 
 export type WorkspaceOrigin = "home" | "orders" | "station";
-export type AccountSection = "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
+export type AccountSection = "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
 export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
   name: AppRouteName;
@@ -49,7 +49,7 @@ export interface ProofsLibraryState {
 }
 
 export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
-  view: "all",
+  view: "attention",
   query: "",
   sort: "newest",
   role: "all",

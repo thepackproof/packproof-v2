@@ -56,3 +56,6 @@ export const ORDER_REVISION_QUERY = `query PackProofOrderRevision($id: ID!) {
 export const UNINSTALL_MUTATION = `mutation PackProofUninstall {
   appUninstall { app { id } userErrors { field message } }
 }`;
+
+/** Optional product fields only when this connection already has read_products/write_products. */
+export const identifierOrderQuery = (query:string,enabled=false):string => enabled ? query.replace(/requiresShipping/g, "requiresShipping variant { id barcode product { id } }") : query;

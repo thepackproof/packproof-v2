@@ -1,7 +1,9 @@
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
+import { motion } from "../theme/motion";
 import { formatBytes, formatDuration } from "../capture";
 
 export function EvidenceCard(props: {
@@ -34,16 +36,33 @@ export function EvidenceCard(props: {
   );
 }
 
-export function ProgressState(props: { label: string; percent?: number | null; detail?: string }) {
-  const { colors } = useTheme();
-  const width = Math.max(0, Math.min(100, props.percent ?? 0));
+export function ProgressState(props: { label: string; percent?: number | null; detail?: string; showLabel?: boolean }) {
+  const { colors, reducedMotion } = useTheme();
+  const known = typeof props.percent === "number" && Number.isFinite(props.percent);
+  const percent = known ? Math.max(0, Math.min(100, props.percent!)) : 0;
+  const progress = useRef(new Animated.Value(percent / 100)).current;
+  useEffect(() => {
+    if (reducedMotion || !known) { progress.setValue(percent / 100); return; }
+    // Interpolate only observed bytes. No timer advances or manufactures progress.
+    const animation = Animated.timing(progress, {
+      toValue: percent / 100, duration: motion.duration.normal, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [known, percent, progress, reducedMotion]);
   return (
-    <View style={styles.progress} accessibilityRole="progressbar" accessibilityLabel={props.label} accessibilityValue={{ now: width, min: 0, max: 100 }}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>{props.label}</Text>
-      {props.detail ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{props.detail}</Text> : null}
-      <View style={[styles.track, { backgroundColor: colors.border }]}>
-        <View style={[styles.fill, { width: `${width}%`, backgroundColor: colors.accent }]} />
+    <View style={styles.progress} accessibilityRole="progressbar" accessibilityLabel={props.label}
+      accessibilityValue={known ? { now: percent, min: 0, max: 100 } : { text: "In progress" }}>
+      <View style={styles.progressHeading}>
+        {props.showLabel !== false ? <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>{props.label}</Text> : null}
+        {known ? <Text style={[styles.percent, { color: colors.textSecondary }]}>{Math.round(percent)}%</Text>
+          : reducedMotion ? <Ionicons name="hourglass-outline" size={18} color={colors.accent} />
+            : <ActivityIndicator size="small" color={colors.accent} />}
       </View>
+      {props.detail ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{props.detail}</Text> : null}
+      {known ? <View style={[styles.track, { backgroundColor: colors.surfaceElevated }]}>
+        <Animated.View style={[styles.fill, { backgroundColor: colors.accent, transform: [{ scaleX: progress }] }]} />
+      </View> : null}
     </View>
   );
 }
@@ -69,5 +88,8 @@ const styles = StyleSheet.create({
   hash: { ...typography.caption },
   progress: { gap: spacing.sm },
   track: { height: 8, borderRadius: 4, overflow: "hidden" },
-  fill: { height: 8 },
+  fill: { height: 8, width: "100%", borderRadius: 4, transformOrigin: "left center" },
+  progressHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  progressLabel: { ...typography.cardTitle, flex: 1 },
+  percent: { ...typography.caption, marginLeft: "auto", fontVariant: ["tabular-nums"] },
 });

@@ -1,3 +1,4 @@
+import { normalizeShippingBarcode } from '../../../backend/src/capture/shipping-barcode';
 export interface ShippingScan {
   rawValue: string;
   format: string;
@@ -78,9 +79,9 @@ export function createShippingScanQueue(input: {
   return {
     async detect(scan: ShippingScan): Promise<ShippingScanResult> {
       // Drop product symbologies and rich payloads before they reach storage/API.
-      if (/EAN|UPC/i.test(scan.format) || !/^[a-z0-9 \t\r\n-]{10,64}$/i.test(scan.rawValue)) return {status:'UNRECOGNIZED'};
-      const identity = scan.rawValue.replace(/[ \t\r\n-]/g,'').toUpperCase();
-      let entry = input.journal.entries.find(e=>e.scan.rawValue.replace(/[ \t\r\n-]/g,'').toUpperCase()===identity);
+      const identity = normalizeShippingBarcode(scan.rawValue);
+      if (/EAN|UPC/i.test(scan.format) || !identity) return {status:'UNRECOGNIZED'};
+      let entry = input.journal.entries.find(e=>normalizeShippingBarcode(e.scan.rawValue)===identity);
       if (entry) return pending.get(entry.scan.idempotencyKey) ?? entry.result;
       if (input.journal.entries.length>=8) return {status:'UNRECOGNIZED'};
       entry = {scan, result:{status:'QUEUED'}};

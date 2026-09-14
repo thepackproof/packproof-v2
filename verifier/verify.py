@@ -20,7 +20,7 @@ import sys
 import tempfile
 import zipfile
 
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 MAX_BYTES = 220 * 1024 * 1024
 MAX_JSON = 8 * 1024 * 1024
 MAX_ENTRIES = 4096
@@ -335,8 +335,117 @@ def verify_supplement_snapshot(package, metadata, name_set, hashes, read_json, c
             'snapshotTimeIndependentlyAttested': False,
             'limitation': 'This is the received signed chain only. An older valid prefix cannot prove that no later supplements exist.'}
 
+def verify_lifecycle_snapshot(package, metadata, name_set, hashes, read_json, stages,
+                              supplements, core_sha, proof_id, keys, trust, now, registry_mode,
+                              expected_snapshot=None, expected_tenant=None):
+    """Authenticate a frozen received-head inventory; never infer currentness or tenant binding."""
+    descriptor = package.get('sources', {}).get('lifecycleSnapshot')
+    if descriptor is None:
+        if 'lifecycle/snapshot.json' in name_set:
+            fail('INVALID_PACKAGE', 'A lifecycle snapshot needs an explicit signed-snapshot descriptor')
+        if expected_snapshot:
+            fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Expected signed lifecycle snapshot is absent')
+        if expected_tenant:
+            fail('TENANT_BINDING_NOT_ESTABLISHED', 'This package contains no authenticated tenant context')
+        return {'status': 'NOT_INCLUDED_LEGACY_OR_UNDECLARED', 'signatureVerified': False,
+                'tenantBinding': 'NOT_ESTABLISHED', 'freshness': 'UNKNOWN_OFFLINE'}
+    if (not isinstance(descriptor, dict) or set(descriptor) != {'path', 'sha256', 'snapshotId'}
+            or descriptor['path'] != 'lifecycle/snapshot.json'
+            or not isinstance(descriptor['sha256'], str) or not re.fullmatch('[a-f0-9]{64}', descriptor['sha256'])
+            or not isinstance(descriptor['snapshotId'], str) or not descriptor['snapshotId']):
+        fail('INVALID_PACKAGE', 'Invalid lifecycle snapshot descriptor')
+    if metadata is not None and metadata.get('sources', {}).get('lifecycleSnapshot') != descriptor:
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Archive and package lifecycle descriptors disagree')
+    if descriptor['path'] not in name_set:
+        fail('MISSING_FILES', 'Declared lifecycle snapshot is missing')
+    if descriptor['path'] not in hashes:
+        fail('INVALID_PACKAGE', 'Lifecycle snapshot is absent from the archive inventory')
+    envelope = read_json(descriptor['path'])
+    if (not isinstance(envelope, dict) or not isinstance(envelope.get('canonicalJson'), str)
+            or not isinstance(envelope.get('signature'), dict)):
+        fail('INVALID_PACKAGE', 'Malformed signed lifecycle envelope')
+    raw = envelope['canonicalJson'].encode('utf-8')
+    actual = digest(raw)
+    if actual != envelope.get('sha256') or actual != descriptor['sha256'] or (expected_snapshot and actual != expected_snapshot.lower()):
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Lifecycle snapshot digest disagrees with its declared or expected identity')
+    facts = json_bytes(raw)
+    if (not isinstance(facts, dict) or type(facts.get('version')) is not int or facts.get('version') != 1
+            or facts.get('domain') != 'PACKPROOF_LIFECYCLE_SNAPSHOT'
+            or facts.get('scope') != 'SEALED_COMMERCE_LIFECYCLE'):
+        fail('UNSUPPORTED_VERSION', 'Unsupported lifecycle snapshot profile')
+    if set(facts) != {'version', 'domain', 'snapshotId', 'proofId', 'transactionId', 'tenantId', 'actorUserId',
+                     'purpose', 'createdAt', 'cutoffAt', 'scope', 'root', 'supplements', 'stages', 'watermark', 'limitations'}:
+        fail('UNSUPPORTED_VERSION', 'Unrecognized lifecycle snapshot fields require a supported schema version')
+    if (not isinstance(facts.get('actorUserId'), str) or not facts['actorUserId']
+            or not isinstance(facts.get('supplements'), list) or len(facts['supplements']) > 256
+            or not isinstance(facts.get('stages'), list) or len(facts['stages']) > 3
+            or facts.get('limitations') != {'completeness': 'RECEIVED_SNAPSHOT_ONLY', 'freshness': 'UNKNOWN_OFFLINE',
+                'currentRevocationKnowledge': 'UNAVAILABLE_OFFLINE', 'excluded': ['UNSEALED_STAGES', 'UNSEALED_OBSERVATIONS', 'EVIDENCE_BYTES']}):
+        fail('UNSUPPORTED_VERSION', 'Unsupported lifecycle limits or assurance profile')
+    if (facts.get('snapshotId') != descriptor['snapshotId'] or facts.get('proofId') != proof_id
+            or facts.get('root') != {'manifestId': package.get('manifestId'), 'sha256': core_sha}
+            or ('snapshotId' in envelope and envelope['snapshotId'] != facts['snapshotId'])
+            or ('proofId' in envelope and envelope['proofId'] != proof_id)):
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Signed lifecycle snapshot has a different root, Proof, or snapshot identity')
+    tenant = facts.get('tenantId')
+    if 'tenantId' not in facts or (tenant is not None and (not isinstance(tenant, str) or not tenant)):
+        fail('INVALID_PACKAGE', 'Lifecycle tenant identity must be an explicit string or null')
+    if facts.get('transactionId') != package['canonicalManifest'].get('transactionId'):
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Lifecycle transaction identity differs from the frozen root')
+    if facts.get('purpose') not in ('REVIEW', 'CLAIM', 'ARCHIVE'):
+        fail('UNSUPPORTED_VERSION', 'Unsupported lifecycle snapshot purpose')
+    if expected_tenant and tenant is None:
+        fail('TENANT_BINDING_NOT_ESTABLISHED', 'The signed lifecycle profile does not record tenant identity')
+    if expected_tenant and tenant != expected_tenant:
+        fail('TENANT_CONTEXT_MISMATCH', 'Lifecycle snapshot differs from independently supplied tenant identity')
+    created = date(facts.get('createdAt'), 'INVALID_PACKAGE')
+    cutoff = date(facts.get('cutoffAt'), 'INVALID_PACKAGE')
+    if cutoff > created or created > now:
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Lifecycle snapshot has inconsistent or future dates')
+    if supplements.get('status') == 'NOT_INCLUDED_LEGACY_OR_UNDECLARED':
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Signed lifecycle snapshot requires its declared received supplement chain')
+    received = read_json('proof-supplements.json')['supplements']
+    expected_refs = [{field: row[field] for field in ('supplementId', 'sequence', 'sha256', 'previousSha256')} for row in received]
+    if (facts.get('supplements') != expected_refs or facts.get('watermark') != {
+            'supplementSequence': len(received), 'supplementSha256': supplements['headSha256']}):
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Received supplement inventory does not reach the signed snapshot head')
+    if any(date(row['createdAt'], 'INVALID_PACKAGE') > cutoff for row in received):
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Received supplement exceeds the signed cutoff')
+    stage_refs = facts.get('stages')
+    if not isinstance(stage_refs, list) or len(stage_refs) != len(stages):
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Received lifecycle stages differ from signed snapshot inventory')
+    for ref, stage in zip(stage_refs, stages):
+        if (not isinstance(ref, dict) or set(ref) != {'stageId', 'type', 'sha256', 'finalizedAt'}
+                or ref['stageId'] != stage['stageId'] or ref['sha256'] != stage['sha256']):
+            fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Lifecycle stage identity, order, or digest differs from signed snapshot')
+        stage_facts = read_json(stage['manifestPath'])
+        if (stage_facts.get('schema') != 'packproof.commerce-stage.v1'
+                or ref['type'] != stage_facts.get('type') or ref['finalizedAt'] != stage_facts.get('finalizedAt')):
+            fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Lifecycle stage type or finalization date disagrees')
+        if date(ref['finalizedAt'], 'INVALID_PACKAGE') > cutoff:
+            fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Lifecycle stage exceeds signed cutoff')
+    signature = envelope['signature']
+    if set(signature) != {'algorithm', 'keyId', 'signatureBase64', 'signedAt'}:
+        fail('INVALID_PACKAGE', 'Lifecycle signature has incomplete signing context')
+    if date(signature['signedAt'], 'INVALID_PACKAGE') > now:
+        fail('LIFECYCLE_SNAPSHOT_MISMATCH', 'Lifecycle signing time is in the future')
+    checked = (check_registry_signature(raw, signature, keys, now) if registry_mode
+               else check_signature(raw, signature, keys))
+    status = checked['status']
+    if status == 'VERIFIED' and trust['status'] != 'FRESH':
+        status = 'TRUST_STALE' if trust['status'] == 'STALE' else 'TRUST_NOT_YET_VALID'
+    return {'status': 'VERIFIED_RECEIVED_SNAPSHOT' if status == 'VERIFIED' else status,
+            'snapshotId': facts['snapshotId'], 'sha256': actual, 'signatureVerified': checked['verified'],
+            'signature': checked, 'receivedInventoryMatched': True, 'cutoffAt': facts['cutoffAt'],
+            'tenantId': tenant, 'tenantBinding': 'NOT_ESTABLISHED' if tenant is None else 'RECORDED_IN_SIGNED_SNAPSHOT',
+            'expectedTenantMatched': bool(expected_tenant), 'freshness': 'UNKNOWN_OFFLINE',
+            'expectedSnapshotMatched': bool(expected_snapshot), 'snapshotTimeIndependentlyAttested': False,
+            'currentRevocationKnowledge': 'UNAVAILABLE_OFFLINE', 'completeness': 'RECEIVED_SNAPSHOT_ONLY',
+            'limitation': 'An authenticated historical snapshot cannot establish that newer records or revocations do not exist.'}
+
 def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
-           authority_key_path=None, authority_key_id=None):
+           authority_key_path=None, authority_key_id=None, expected_snapshot=None,
+           expected_proof=None, expected_tenant=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     if trust_path and registry_path:
         fail('INVALID_TRUST_REGISTRY', 'Choose a legacy trust list or a signed registry, not both')
@@ -385,6 +494,8 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
         if metadata is not None and (metadata.get('schema') != 'packproof.proof-archive.v1'
                 or metadata.get('canonicalization') != 'packproof.sorted-json.v1'):
             fail('UNSUPPORTED_VERSION', 'Unsupported archive or canonicalization version')
+        if metadata is not None and metadata.get('derivatives', []) != []:
+            fail('UNSUPPORTED_DERIVATION_PROFILE', 'This profile supports original media only; derivative lineage cannot be authenticated')
         hashes = read_json('integrity/hashes.json')
         if not isinstance(hashes, dict) or len(hashes) > MAX_ENTRIES:
             fail('INVALID_PACKAGE', 'Invalid archive hash inventory')
@@ -397,6 +508,8 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
         if name_set - set(hashes) - {'integrity/hashes.json', 'README.txt'}:
             fail('UNINDEXED_FILES', 'Archive contains files outside the hash inventory')
         if package['schema'] == 'packproof.disclosure-package.v1':
+            if expected_snapshot or expected_tenant or expected_proof:
+                fail('DISCLOSURE_CONTEXT_UNVERIFIED', 'A disclosure-only projection cannot satisfy required authenticated root, tenant or snapshot context')
             if not {'package.json', 'view.json'}.issubset(hashes):
                 fail('INVALID_PACKAGE', 'Disclosure view is absent from the hash inventory')
             if 'manifest.json' in name_set or package.get('signature') is not None:
@@ -451,6 +564,8 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
             fail('MODIFIED_FILES', 'Frozen manifest representations or identity disagree')
         if expected and actual != expected.lower():
             fail('MODIFIED_FILES', 'Manifest differs from independently supplied digest')
+        if expected_proof and manifest.get('proofId') != expected_proof:
+            fail('PROOF_CONTEXT_MISMATCH', 'Manifest differs from independently supplied Proof identity')
         if metadata is not None and metadata.get('snapshot') != {
                 'proofId': manifest['proofId'], 'manifestId': package.get('manifestId'), 'manifestSha256': actual}:
             fail('MODIFIED_FILES', 'Archive snapshot differs from frozen manifest')
@@ -514,6 +629,8 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
             if signatures.get('manifestSignature') != package.get('signature'):
                 fail('INVALID_PACKAGE', 'Signature inventories disagree')
         supplements = verify_supplement_snapshot(package, metadata, name_set, hashes, read_json, actual, manifest['proofId'], keys, trust, now, bool(registry_path))
+        lifecycle_snapshot = verify_lifecycle_snapshot(package, metadata, name_set, hashes, read_json, stages,
+            supplements, actual, manifest['proofId'], keys, trust, now, bool(registry_path), expected_snapshot, expected_tenant)
         status = signature['status']
         if status == 'UNSIGNED' and expected:
             status = 'VERIFIED_INDEPENDENT_DIGEST'
@@ -521,6 +638,8 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
             status = 'TRUST_STALE' if trust['status'] == 'STALE' else 'TRUST_NOT_YET_VALID'
         if status in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') and supplements['status'] not in ('VERIFIED_RECEIVED_SNAPSHOT', 'EMPTY_RECEIVED_SNAPSHOT', 'NOT_INCLUDED_LEGACY_OR_UNDECLARED'):
             status = 'SUPPLEMENT_' + supplements['status']
+        if status in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') and lifecycle_snapshot['status'] not in ('VERIFIED_RECEIVED_SNAPSHOT', 'NOT_INCLUDED_LEGACY_OR_UNDECLARED'):
+            status = 'LIFECYCLE_' + lifecycle_snapshot['status']
         if omissions and status in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST', 'UNSIGNED'):
             status = 'OMITTED_FILES'
         return {'verifierVersion': VERSION, 'status': status,
@@ -532,6 +651,10 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
                 'omissions': omissions, 'completeMedia': not omissions,
                 'scope': metadata.get('disclosure') if metadata else {'kind': 'LEGACY_PARTICIPANT_EXPORT'},
                 'supplements': supplements,
+                'lifecycleSnapshot': lifecycle_snapshot,
+                'sourceAuthentication': 'NOT_INDEPENDENTLY_CHECKED', 'attestationVerification': 'NOT_INDEPENDENTLY_CHECKED',
+                'policyCoverage': 'NOT_EVALUATED', 'unresolvedConflicts': 'NOT_EVALUATED',
+                'derivations': {'status': 'NONE_INCLUDED', 'verified': False},
                 'otherSupplementalFiles': {'status': 'SELF_CONSISTENCY_ONLY', 'coveredByRootSignature': False},
                 'limitations': ['Integrity does not establish physical truth, authenticity, or liability.',
                                'The root signature does not cover later supplements. Each declared signed entry is checked separately; other export files remain inventory self-consistency only.',
@@ -597,6 +720,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('package', nargs='?')
     parser.add_argument('--expected-manifest-sha256')
+    parser.add_argument('--expected-lifecycle-snapshot-sha256', help='Independently obtained required lifecycle digest; rejects older or absent snapshots')
+    parser.add_argument('--expected-proof-id', help='Independently known Proof identity')
+    parser.add_argument('--expected-tenant-id', help='Required authenticated tenant identity; unsupported human-only profiles fail closed')
     parser.add_argument('--trust-list', help='Separately obtained authenticated trust-list JSON; never use a package-included key')
     parser.add_argument('--trust-registry', help='Signed, dated registry JSON authenticated with an independently pinned authority')
     parser.add_argument('--trust-authority-key', help='Independently pinned registry-authority public PEM file, outside the archive')
@@ -608,11 +734,14 @@ def main(argv=None):
         parser.error('package path is required')
     if args.expected_manifest_sha256 and not re.fullmatch('[a-fA-F0-9]{64}', args.expected_manifest_sha256):
         parser.error('expected manifest SHA-256 must contain exactly 64 hexadecimal characters')
+    if args.expected_lifecycle_snapshot_sha256 and not re.fullmatch('[a-fA-F0-9]{64}', args.expected_lifecycle_snapshot_sha256):
+        parser.error('expected lifecycle SHA-256 must contain exactly 64 hexadecimal characters')
     exit_code = 1
     try:
         result = verify(args.package, args.expected_manifest_sha256, args.trust_list,
                         registry_path=args.trust_registry, authority_key_path=args.trust_authority_key,
-                        authority_key_id=args.trust_authority_key_id)
+                        authority_key_id=args.trust_authority_key_id, expected_snapshot=args.expected_lifecycle_snapshot_sha256,
+                        expected_proof=args.expected_proof_id, expected_tenant=args.expected_tenant_id)
         exit_code = 0 if result['status'] in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') else 2
     except VerificationError as error:
         result = {'verifierVersion': VERSION, 'status': error.status, 'message': str(error)}

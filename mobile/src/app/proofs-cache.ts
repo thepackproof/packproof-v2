@@ -8,7 +8,7 @@ export async function loadProofsCache(api:string,user:string):Promise<ProofsCach
   try {
     const parsed = JSON.parse((await AsyncStorage.getItem(proofsCacheKey(api,user))) || 'null');
     if (!parsed) return emptyProofsCache();
-    return { library:{...DEFAULT_PROOFS_LIBRARY,...parsed.library,view:['all','attention','completed'].includes(parsed.library?.view) ? parsed.library.view : 'all'},offsetY:Number.isFinite(parsed.offsetY)?Math.max(0,parsed.offsetY):0,rows:Array.isArray(parsed.rows)?parsed.rows:[],records:parsed.records && typeof parsed.records==='object'?parsed.records:{}};
+    return { library:{...DEFAULT_PROOFS_LIBRARY,...parsed.library,view:['all','attention','completed'].includes(parsed.library?.view) ? parsed.library.view : DEFAULT_PROOFS_LIBRARY.view},offsetY:Number.isFinite(parsed.offsetY)?Math.max(0,parsed.offsetY):0,rows:Array.isArray(parsed.rows)?parsed.rows:[],records:parsed.records && typeof parsed.records==='object'?parsed.records:{}};
   } catch {return emptyProofsCache();}
 }
 export async function saveProofsCache(api:string,user:string,value:ProofsCache) { await AsyncStorage.setItem(proofsCacheKey(api,user),JSON.stringify(value)); }

@@ -1,3 +1,4 @@
+import { isRecordHighlight } from './evidence-record';
 import type { EvidenceAnchor } from "../signature";
 import type { ChronologyEntry, ProofView } from "../v2-api";
 import type { NextAction } from "./next-action";
@@ -33,7 +34,7 @@ export function recordNextStepCopy(local: NextAction, server: { title: string; h
   const hints: Partial<Record<NextAction["key"], string>> = {
     start_capture: "Keep the item and package in view. Show the shipping label while recording.",
     review_recording: "Review your recording, then confirm what you are shipping.",
-    uploading: "Keep PackProof open while your recording uploads.",
+    uploading: "You can start another Proof while this recording uploads.",
     securing: "Saving your recording to this Proof…",
     finalize: "Your recording is uploaded. Finish saving to lock the Proof.",
     add_participant: "Invite the buyer to continue.",
@@ -48,7 +49,7 @@ const DETAIL_ONLY_EVENTS = new Set([
 
 /** This only filters the presentation; the complete audit history remains available. */
 export function recordActivityEvents(entries: ChronologyEntry[], detailed = false): ChronologyEntry[] {
-  return orderedRecordEvents(detailed ? entries : entries.filter(entry => !DETAIL_ONLY_EVENTS.has(entry.eventType.toUpperCase())));
+  return orderedRecordEvents(detailed ? entries : entries.filter(entry => isRecordHighlight(entry) && !DETAIL_ONLY_EVENTS.has(entry.eventType.toUpperCase())));
 }
 
 export type RecordEvidence = ProofView["evidence"][number] & { stageId?: string | null; stageType?: string };
@@ -146,7 +147,7 @@ export function recordActivityGroups(entries: ChronologyEntry[], audit: ProofVie
   const byKey = new Map<string, RecordActivityGroup>();
   for (const entry of orderedRecordEvents(entries)) {
     const access = ACCESS_EVENTS.has(entry.eventType.toUpperCase());
-    if (!access && DETAIL_ONLY_EVENTS.has(entry.eventType.toUpperCase())) continue;
+    if (!isRecordHighlight(entry) || (!access && DETAIL_ONLY_EVENTS.has(entry.eventType.toUpperCase()))) continue;
     const source = raw.get(entry.id) ?? raw.get(entry.relatedEntityId ?? "");
     const actor = source?.actorUserId || "";
     const linkValue = source?.data.accessLinkId ?? source?.data.linkId;

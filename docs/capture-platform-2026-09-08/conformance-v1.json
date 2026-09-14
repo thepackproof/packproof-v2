@@ -1,0 +1,17 @@
+{
+  "schema": "packproof.capture-conformance/1",
+  "coreVersion": "1.0.0",
+  "sourceUtf8": "abc",
+  "canonicalSegment": "{\"byteSize\":3,\"endMs\":1000,\"offsetBytes\":0,\"previous\":null,\"sequence\":0,\"sha256\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\",\"startMs\":0,\"timing\":\"WHOLE_RECORDING\"}",
+  "segment": {
+    "sequence": 0,
+    "offsetBytes": 0,
+    "byteSize": 3,
+    "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    "previous": null,
+    "startMs": 0,
+    "endMs": 1000,
+    "timing": "WHOLE_RECORDING",
+    "commitment": "4a9b4a88ca79dd9b3e3a75e553c523c45fb52835ef2c6457c326e06e9bd3b3a0"
+  }
+}

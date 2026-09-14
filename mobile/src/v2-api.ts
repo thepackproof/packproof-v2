@@ -1,8 +1,10 @@
 import type { ProofRecovery } from "./capture/recovery-model";
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
+import type { IdentifierObservation, IdentifierPolicy, IdentifierReview } from "../../backend/src/identifiers/types";
 import { withRequestTimeout } from "./request-timeout";
 
 export interface ApiCapabilities {
+  identifiers?: { schemaVersions: number[]; productionQualified: boolean; [key: string]: unknown };
   schemaVersion: number;
   capture: { protocolVersions: number[]; maxBytes: number; maxDurationSeconds: number; maxActiveUploads: number };
   shippingReview?: { requiredForObservedConflicts: boolean; noLabelAllowed: boolean };
@@ -209,6 +211,7 @@ export interface ShipmentIntegrityView {
 import type { ProofPresentation } from "../../backend/src/domain/proof-presentation";
 
 export interface ProofView {
+  identifiers?: { schemaVersion: 1; coverage: string; reviewRequired: boolean; observations: IdentifierReview["observations"] };
   presentation?: ProofPresentation;
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
@@ -321,7 +324,7 @@ export interface ProofView {
     manifestSha256: string | null;
   };
   captureShipping?: {
-    source: "PACKPROOF_CAPTURE";
+    source: "PACKPROOF_CAPTURE" | "SHIPMENT_ASSOCIATION";
     observations: Array<{ observationId: string; sessionId: string; evidenceId: string | null; trackingNumber: string; carrierHint: string | null; detectedAtMs: number; participantConfirmed: boolean }>;
     registration: {state: string; carrier: string | null; mode: string | null; errorCode: string | null; registeredAt: string | null};
   } | null;
@@ -388,6 +391,7 @@ export interface ProofView {
 }
 
 export interface AccessLinkView {
+  itemIdentifiersReviewed?: boolean;
   accessLinkId: string;
   proofId: string;
   scope: string;
@@ -457,6 +461,7 @@ export interface InvitationInboxView {
 }
 
 export interface ProofCollectionItem {
+  thumbnailDerivativeId?: string | null;
   accessKind?: "PARTICIPANT" | "INVITATION" | "RECEIVER";
   presentation?: ProofPresentation;
   invitationId?: string | null;
@@ -641,11 +646,22 @@ export class PackProofV2Client {
       baseUrl: string;
       getToken: () => string | null;
       getIdToken?: () => string | null;
+      getActiveAccount?: () => { userId: string; apiBaseUrl: string } | null;
     },
   ) {}
 
   get apiBaseUrl(): string { return this.options.baseUrl.replace(/\/+$/, ""); }
 
+  assertCaptureAccount(userId: string, apiScope: string): void {
+    const current = this.options.getActiveAccount?.();
+    if (apiScope.replace(/\/+$/, "") !== this.apiBaseUrl || !this.options.getToken() ||
+        (this.options.getActiveAccount && (!current || current.userId !== userId || current.apiBaseUrl.replace(/\/+$/, "") !== this.apiBaseUrl)))
+      throw new ApiError("ACCOUNT_CHANGED", "Open this recording in its original server and account.", 401);
+  }
+
+  async intakeRequest<T>(path: string, method = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
+    return this.request(`/me/intake${path}`, { method, body, headers });
+  }
   async studyRequest<T>(path:string,method="GET",body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
   async getCapabilities(): Promise<ApiCapabilities> {
     return this.request("/capabilities", { auth: false });
@@ -734,7 +750,7 @@ export class PackProofV2Client {
 
   async startConnectedAccountConnect(
     provider: string,
-    input: { shop?: string } = {},
+    input: { shop?: string; surface?: "android" | "web" } = {},
   ): Promise<{
     authorizationUrl: string;
     expiresAt: string;
@@ -742,18 +758,18 @@ export class PackProofV2Client {
   }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(provider)}/connect`, {
       method: "POST",
-      body: input.shop ? { shop: input.shop } : {},
+      body: { ...(input.shop ? { shop: input.shop } : {}), ...(input.surface ? { surface: input.surface } : {}) },
     });
   }
 
-  async reauthorizeConnectedAccount(accountId: string): Promise<{
+  async reauthorizeConnectedAccount(accountId: string, surface?: "android" | "web"): Promise<{
     authorizationUrl: string;
     expiresAt: string;
     provider: string;
   }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(accountId)}/reauthorize`, {
       method: "POST",
-      body: {},
+      body: surface ? { surface } : {},
     });
   }
 
@@ -780,6 +796,12 @@ export class PackProofV2Client {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/discard`, {
       method: "POST",
       body: { idempotencyKey },
+    });
+  }
+
+  async discardIncompleteEvidence(proofId: string, evidenceId: string): Promise<void> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/discard`, {
+      method: "POST", body: { evidenceId },
     });
   }
 
@@ -904,6 +926,13 @@ export class PackProofV2Client {
     });
   }
 
+  async attachTracking(proofId:string,value:string,carrier:string):Promise<unknown>{
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/tracking`,{method:'POST',body:{value,carrier}});
+  }
+  async proofNotificationMute<T>(proofId:string,method='GET',body?:unknown):Promise<T>{return this.request(`/proofs/${encodeURIComponent(proofId)}/notification-mute`,{method,body});}
+  async notificationRequest<T>(path:string,method='GET',body?:unknown):Promise<T>{
+    return this.request(`/me/${path}`,{method,body});
+  }
   async syncShipment(transactionId: string): Promise<ShipmentSyncView> {
     return this.request(`/transactions/${encodeURIComponent(transactionId)}/shipment-sync`, {
       method: "POST",
@@ -1049,7 +1078,12 @@ export class PackProofV2Client {
     });
   }
 
-  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string }> {
+  async captureEngineRequest<T>(path:string,method="GET",body?:unknown):Promise<T> {
+    if(!/^\/(capture-intents|capture-sessions)(\/|$)/.test(path)) throw new Error('Invalid capture route');
+    return this.request(path,{method,body});
+  }
+
+  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string; identifierPolicy?: IdentifierPolicy }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, {
       method: "POST", body: { idempotencyKey, client: "NATIVE_CAMERA", ...(stageId ? { stageId } : {}) },
     });
@@ -1065,6 +1099,22 @@ export class PackProofV2Client {
 
   getCaptureShippingReview(proofId: string, sessionId: string): Promise<import("./capture/shipping-scan-queue").CaptureShippingReview> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-observations`);
+  }
+
+  recordCaptureIdentifiers(proofId: string, sessionId: string, events: IdentifierObservation[]): Promise<IdentifierReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/identifier-observations`, { method: "POST", body: { events }, timeoutMs: 5_000 });
+  }
+
+  getCaptureIdentifiers(proofId: string, sessionId: string): Promise<IdentifierReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/identifier-observations`, { timeoutMs: 5_000 });
+  }
+
+  decideCaptureIdentifier(proofId: string, sessionId: string, body: { clientEventId: string; observationId: string; revision: number; decision: "NOT_THIS_SHIPMENT" | "ACKNOWLEDGE_MISMATCH"; reason: string }): Promise<IdentifierReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/identifier-decisions`, { method: "POST", body, timeoutMs: 5_000 });
+  }
+
+  checkpointCaptureIdentifiers(proofId: string, sessionId: string, body: { clientEventId: string; revision: number; lastSequence: number; coverage: "COMPLETE" | "PARTIAL" | "UNAVAILABLE"; omittedEvents: number }): Promise<IdentifierReview> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/identifier-checkpoint`, { method: "POST", body, timeoutMs: 5_000 });
   }
 
   resolveCaptureShippingObservation(proofId: string, sessionId: string, observationId: string, reason: string): Promise<import("./capture/shipping-scan-queue").CaptureShippingReview> {
@@ -1212,9 +1262,11 @@ export class PackProofV2Client {
       body?: unknown;
       headers?: Record<string, string>;
       auth?: boolean;
+      timeoutMs?: number;
     } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {
+      "X-PackProof-Intake-Version": "1",
       Accept: "application/json",
       ...(init.headers ?? {}),
     };
@@ -1238,7 +1290,7 @@ export class PackProofV2Client {
       if (!response.ok) throw await errorFromResponse(response);
       if (response.status === 204) return undefined as T;
       return (await response.json()) as T;
-    });
+    }, init.timeoutMs);
   }
 }
 

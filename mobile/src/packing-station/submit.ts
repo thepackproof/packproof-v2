@@ -109,6 +109,7 @@ export async function submitStationSession(input: {
     });
     // Save the exact evidence identity before bytes can be committed, so a lost
     // response or app restart can resume attestation/finalization safely.
+    if (input.evidenceId && initialized.evidenceId !== input.evidenceId) throw Object.assign(new Error("Recovery returned another recording identity. The original was kept."), {code:"CAPTURE_ORIGINAL_CONFLICT",status:409});
     await input.onEvidenceInitialized?.(initialized.evidenceId);
     if (input.deps.uploadEvidence)
       await input.deps.uploadEvidence(proofId, initialized.evidenceId, input.capture, (percent) =>

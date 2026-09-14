@@ -221,6 +221,7 @@ export function ProofScreen(props: {
         loadEvidence={props.onLoadEvidence}
         onOpenEvent={props.onOpenEvent}
         onOpenReceipt={props.onOpenReceipt}
+        onOpenStation={props.onOpenStation}
         onReviewSharing={props.api && presentation?.share.available ? reviewSharing : undefined}
         nextAction={<>
       {actionEnabled ? (

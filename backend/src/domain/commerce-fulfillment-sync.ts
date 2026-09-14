@@ -1,3 +1,5 @@
+import { isEbaySubjectSuppressed, lockEbayPrivacy } from "./ebay-deletion-cases.js";
+import { indexIdentifierItems } from '../identifiers/catalog.js';
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import type { IntegrationAdapterRegistry } from "../integrations/registry.js";
@@ -90,6 +92,10 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
                     throw new DomainError("INTEGRATION_TRUST_BOUNDARY", "Order belongs to another provider or store", 403);
                 const eligibility = eligibilityOf(order), fingerprint = fulfillmentOrderFingerprint(order);
                 const counts = await db.transaction(async (tx) => {
+                    if (order.provider === "ebay") {
+                        await lockEbayPrivacy(tx);
+                        if (await isEbaySubjectSuppressed(tx, order.providerEnvironment === "production" ? "production" : "sandbox", order.buyer?.externalId, order.buyer?.displayName)) return {};
+                    }
                     await requireLease(tx, clock, connectionId, leaseToken, options.background === true);
                     const record = await upsertCommerceOrderRecord(tx, clock, { connectionId, commerceTenantKey: tenantKeyForImport(order.provider, order.provenance.source, commerceIdentityAccount(order)),
                         externalOrderId: order.externalOrderId, externalReference: order.externalReference, orderedAt: order.orderedAt, paymentState: order.paymentState,
@@ -124,6 +130,7 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) ON CONFLICT(order_record_id,fingerprint) DO NOTHING`, [newId("rev"), record.id, connectionId, fingerprint, order.providerUpdatedAt, clock.now().toISOString(), "packproof.commerce-normalization.v2", stale ? "STALE" : proof?.status === "FINALIZED" ? "SUPPLEMENT" : "APPLIED", JSON.stringify(order)]);
                     if (stale)
                         return { stale: 1 };
+                    if(adapter.kind==='trusted')await indexIdentifierItems(tx,{ownerUserId:actorUserId,tenantKey:record.commerce_tenant_key,connectionId,sourceId:`commerce:${record.id}:${fingerprint}`,sourceRevision:fingerprint,orderRecordId:record.id,transactionId:record.transaction_id,observedAt:clock.now().toISOString(),items:order.items});
                     if (proof?.status === "FINALIZED")
                         return { supplement: 1, existing: 1 };
                     // Cancellation/fulfillment changes update operational eligibility even when no Proof is created.
@@ -131,6 +138,7 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
                         return {};
                     const imported = await importNormalizedTransaction(tx, clock, actorUserId, fulfillmentOrderToImportedTransaction(order, clock.now().toISOString()), { adapterKey: adapter.adapterKey, createProof: true, participationPolicy: "COUNTERPARTY_OPTIONAL" });
                     await bindCommerceOrderTransaction(tx, record.id, imported.transaction.transactionId);
+                    await tx.query("UPDATE identifier_aliases SET transaction_id=$2 WHERE order_record_id=$1 AND transaction_id IS NULL",[record.id,imported.transaction.transactionId]);
                     return { createdTransaction: imported.created ? 1 : 0, createdProof: imported.proofCreated ? 1 : 0, existing: imported.proof && !imported.proofCreated ? 1 : 0 };
                 });
                 result.discoveredCount++;

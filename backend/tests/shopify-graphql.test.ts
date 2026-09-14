@@ -31,6 +31,17 @@ function transport(override?: (operation: string, variables: Variables) => unkno
 }
 
 describe("Shopify Admin GraphQL transport", () => {
+  it("loads barcode and product identity only with already granted product access", async () => {
+    const fetcher=transport((op)=>op==='PackProofOrder'?{data:{order:{...detail(),lineItems:conn([{...line(987),variant:{id:'gid://shopify/ProductVariant/22',barcode:'036000291452',product:{id:'gid://shopify/Product/2'}}}])}}}:undefined);
+    const client=createHttpShopifyClient(fetcher);
+    await client.listOrdersPage!({...input});
+    expect(fetcher.mock.calls.map(([,r])=>String(r?.body)).join(' ')).not.toContain('variant { id barcode');
+    fetcher.mockClear();
+    const result=await client.listOrdersPage!({...input,includeProductIdentifiers:true});
+    expect(fetcher.mock.calls.map(([,r])=>String(r?.body)).join(' ')).toContain('variant { id barcode');
+    expect(result.orders[0].lineItems[0]).toMatchObject({barcode:'036000291452',variantId:'gid://shopify/ProductVariant/22',productId:'gid://shopify/Product/2'});
+  });
+
   it("keeps exact legacy identities, physical quantities and fulfillment links without customer PII", async () => {
     const fetcher = transport(), progress = vi.fn(async () => {});
     const page = await createHttpShopifyClient(fetcher).listOrdersPage!({ ...input, onProgress: progress });

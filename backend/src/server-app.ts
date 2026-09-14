@@ -96,6 +96,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
           deps.clock,
           payload,
           credentialStore,
+          runtime.environment,
         );
         res.status(200).json(result);
       } catch (error) {
@@ -383,9 +384,6 @@ function requireDeletionVerificationRuntime(runtime: EbayRuntime): EbayRuntime &
   clientId: string;
   appCredentialReference: string;
 } {
-  if (!runtime.enabled) {
-    throw new DomainError("EBAY_INTEGRATION_DISABLED", "eBay integration is not enabled", 403);
-  }
   if (!runtime.clientId || !runtime.appCredentialReference) {
     throw new DomainError(
       "WEBHOOK_VERIFICATION_UNAVAILABLE",

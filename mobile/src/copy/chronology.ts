@@ -58,8 +58,16 @@ export function humanChronologyTitle(eventType: string, fallbackTitle: string): 
   switch (eventType.toUpperCase()) {
     case "EVIDENCE_COMMITTED":
       return "Packing video recorded";
+    case "TRACKING_ASSOCIATED":
+      return "Tracking number added";
+    case "ATTESTATION_COMMITTED":
+      return "Attestation recorded";
+    case "LIFECYCLE_EVIDENCE_COMMITTED":
+      return "Receipt or return recording added";
+    case "LIFECYCLE_STAGE_FINALIZED":
+      return "Receipt or return record sealed";
     case "PROOF_FINALIZED":
-      return "Proof finalized";
+      return "Packing record sealed";
     case "PARTICIPANT_JOINED":
       return "Buyer joined";
     case "PARTICIPANT_INVITED":

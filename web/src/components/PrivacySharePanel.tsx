@@ -12,17 +12,18 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
   function cachedGrant(): AccessLinkView | null {
     try {
       const saved = JSON.parse(sessionStorage.getItem(cacheKey) || "null") as AccessLinkView | null;
-      return saved?.token && saved.url && !saved.revokedAt && (!saved.expiresAt || Date.parse(saved.expiresAt) > Date.now()) ? saved : null;
+      return saved?.token && saved.url && !saved.itemIdentifiersReviewed && !saved.revokedAt && (!saved.expiresAt || Date.parse(saved.expiresAt) > Date.now()) ? saved : null;
     } catch { return null; }
   }
   function rememberGrant(value: AccessLinkView | null) {
-    try { if (value) sessionStorage.setItem(cacheKey, JSON.stringify(value)); else sessionStorage.removeItem(cacheKey); } catch { /* In-memory link still works. */ }
+    try { if (value && !value.itemIdentifiersReviewed) sessionStorage.setItem(cacheKey, JSON.stringify(value)); else sessionStorage.removeItem(cacheKey); } catch { /* In-memory link still works. */ }
     setGrant(value);
   }
   const [preview, setPreview] = useState<Preview | null>(null);
   const [grant, setGrant] = useState<AccessLinkView | null>(cachedGrant);
   const [links, setLinks] = useState<AccessLinkView[]>([]);
   const [days, setDays] = useState(7);
+  const [includeIdentifiers,setIncludeIdentifiers]=useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -47,6 +48,10 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
     if (!grant || navigator.onLine === false) return;
     try {
       const checked = await api.featureRequest<AccessLinkView>(proof.proofId, "disclosure/reuse", "POST", { token: grant.token });
+      if (!includeIdentifiers && checked.itemIdentifiersReviewed) {
+        rememberGrant(null);
+        throw new Error("Preview this Proof again to choose whether to share item identifiers.");
+      }
       rememberGrant(checked);
     } catch (caught) {
       if (caught instanceof ApiError && [401, 403, 404, 410].includes(caught.status)) rememberGrant(null);
@@ -55,7 +60,7 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
   }
   async function prepare() {
     if (navigator.onLine === false) throw new Error("Connect to create a share link. Your Proof and saved recordings stay unchanged.");
-    const result = await api.featureRequest<Preview>(proof.proofId, "disclosure/preview", "POST", { purpose: "SHARED_PROOF" });
+    const result = await api.featureRequest<Preview>(proof.proofId, "disclosure/preview", "POST", { purpose: "SHARED_PROOF", ...(includeIdentifiers?{itemIdentifiersReviewed:true}:{}) });
     if (active.current) { setPreview(result); }
   }
   async function loadMedia(id: string) {
@@ -67,11 +72,14 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
   }
   return <section className="section stack share-proof-panel" aria-label="Share Proof">
     <h2>Share Proof</h2>
+    <p className="note">Anyone with the link can view the shared record. Review recordings for private information before sharing.</p>
+    <details><summary>What recipients can see</summary><p className="note">The preview shows the shared fields and recordings. Saved updates may appear in the same record. Set an expiry below; you can revoke the link in Manage shared links.</p></details>
     {error && <p className="banner banner-error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <div className="share-proof-identity"><strong>{proof.transaction.itemTitle || "This Proof"}</strong><span>{recordProofStatus(proof.status)}</span></div>
     <button className="share-proof-preview-link" disabled={busy} onClick={() => void run(prepare)}>Preview Proof <span aria-hidden="true">›</span></button>
     <label className="share-proof-expiry"><span>Link expires</span><select aria-label="Link expires" value={days} disabled={busy || Boolean(grant)} onChange={event => setDays(Number(event.target.value))}><option value={1}>1 day</option><option value={7}>7 days</option><option value={30}>30 days</option></select></label>
+    {!!proof.identifiers?.observations.length&&<label className="declaration"><input type="checkbox" checked={includeIdentifiers} disabled={busy||Boolean(grant)} onChange={event=>{setIncludeIdentifiers(event.target.checked);setPreview(null);}}/><span>Include item identifiers, such as SKU, GTIN, and serial numbers</span></label>}
     <details onToggle={event => { if (event.currentTarget.open) void run(refreshLinks); }}>
       <summary>Manage shared links</summary>
       <div className="stack">{links.filter(item => !item.revokedAt).map(item => <div key={item.accessLinkId} className="share-link-row"><span>{item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleDateString()}` : "No expiry"}</span><button className="text-link" disabled={busy} onClick={() => void run(async () => { await api.featureRequest(proof.proofId, `access-links/${item.accessLinkId}`, "DELETE"); if (grant?.accessLinkId === item.accessLinkId) rememberGrant(null); await refreshLinks(); })}>Revoke link</button></div>)}{!busy && !links.some(item => !item.revokedAt) && <p className="note">No active links.</p>}</div>
@@ -80,7 +88,7 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
       <SharedProofRecord proof={preview} loadMedia={loadMedia} />
       <p>{preview.disclosure.sharingNotice || "Anyone with this link can view this Proof, its original recordings, and future updates. Review the recordings before sharing."}</p>
       <button className="btn" disabled={busy} onClick={() => void run(async () => {
-        const result = await api.featureRequest<AccessLinkView>(proof.proofId, "disclosure/grants", "POST", { purpose: "SHARED_PROOF", originalsReviewed: true, previewHash: preview.disclosure.viewHash, expiresAt: new Date(Date.now() + days * 86400000).toISOString() });
+        const result = await api.featureRequest<AccessLinkView>(proof.proofId, "disclosure/grants", "POST", { purpose: "SHARED_PROOF", originalsReviewed: true, ...(includeIdentifiers?{itemIdentifiersReviewed:true}:{}), previewHash: preview.disclosure.viewHash, expiresAt: new Date(Date.now() + days * 86400000).toISOString() });
         if (currentUserId && result.accessLinkId) void recordStudyInteraction(api, currentUserId, 'share_created');
         if (active.current) { rememberGrant(result); setNotice("Share link created."); }
       })}>{busy ? "Creating link…" : "Create share link"}</button>

@@ -4,8 +4,8 @@ import type { PackProofV2Client, SellerAttestationAuthorization } from "../v2-ap
 import { getAttestationAvailability, prepareAttestationKey, signAttestationPayload } from "./native";
 import { recordedSellerAuthorization, recoverableSellerEvidence, validateSellerChallenge } from "./authorization";
 
-export async function authorizeSellerCapture({ client, capture, proofId, userId }: {
-  client: PackProofV2Client; capture: LocalCapture; proofId: string; userId: string;
+export async function authorizeSellerCapture({ client, capture, proofId, userId, capturePrepared = false }: {
+  client: PackProofV2Client; capture: LocalCapture; proofId: string; userId: string; capturePrepared?: boolean;
 }): Promise<SellerAttestationAuthorization> {
   if (capture.captureProofId !== proofId || capture.captureUserId !== userId || capture.captureStageId)
     throw new Error("Open the original seller account and Proof to submit this recording.");
@@ -20,7 +20,7 @@ export async function authorizeSellerCapture({ client, capture, proofId, userId 
     return { challengeId: held.challengeId, signature: held.signature };
   const available = await getAttestationAvailability();
   if (!available.available) throw Object.assign(new Error(available.message ?? "Set up biometrics in Android settings to attest. Your recording is saved."), { code: available.code });
-  await bindRecordedCapture(client, capture, proofId, userId);
+  if (!capturePrepared) await bindRecordedCapture(client, capture, proofId, userId);
   if (!capture.captureSessionId || !capture.captureSha256) throw new Error("The recording could not be prepared for attestation. Your video is saved.");
   const { publicKey } = await prepareAttestationKey(userId);
   const challenge = await client.createAttestationChallenge(proofId, {
@@ -28,7 +28,7 @@ export async function authorizeSellerCapture({ client, capture, proofId, userId 
     sha256: capture.captureSha256,
     publicKey,
   });
-  validateSellerChallenge(challenge, { proofId, userId, captureSessionId: capture.captureSessionId, sha256: capture.captureSha256, publicKey });
+  validateSellerChallenge(challenge, { proofId, userId, captureSessionId: capture.captureSessionId, sha256: capture.captureSha256, publicKey, captureManifestSha256:capture.captureManifestSha256 });
   const study=await nativeStudyForCapture(client,userId,capture.studyTimingRef);
   let signature:string;
   try {

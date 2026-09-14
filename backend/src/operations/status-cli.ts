@@ -4,6 +4,7 @@ loadEnvFile();
 const opened=await openDatabase(loadConfig());
 try{
   const probes={
+    ebayDeletion:"SELECT state,COUNT(*)::int AS count,MIN(received_at) AS oldest_received_at,SUM(attempt_count)::int AS attempts FROM ebay_deletion_cases GROUP BY state",
     workers:'SELECT worker_name,COUNT(*)::int AS instances,MAX(heartbeat_at) AS latest_heartbeat,MAX(last_success_at) AS latest_success FROM operational_worker_heartbeats GROUP BY worker_name ORDER BY worker_name',
     preservation:"SELECT d.state,COUNT(*)::int AS count,MIN(e.created_at) AS oldest_created_at FROM recovery_delivery d JOIN recovery_events e USING(operation_id) WHERE d.state<>'DURABLE' GROUP BY d.state",
     exports:"SELECT state,COUNT(*)::int AS count,MIN(created_at) AS oldest_created_at FROM recipient_export_jobs WHERE state<>'READY' GROUP BY state",

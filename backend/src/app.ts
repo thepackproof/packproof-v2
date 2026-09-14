@@ -1,6 +1,12 @@
+import { notificationPreferences, updateNotificationPreferences, listProofUpdates, registerPushDevice, muteProof } from './domain/notification-center.js';
+import { attachTracking, trackingAssociation } from './domain/tracking-associations.js';
+import { captureEngineRouter } from "./capture/router.js";
+import { futurePlatformRouter } from "./http/future-platform-router.js";
+import type { FuturePlatformConfig } from "./platform/future-config.js";
 import { getAccountDeletionRequest, requestAccountDeletion } from "./domain/account-deletion.js";
 import { supportAccessRouter } from "./support/router.js";
 import { createReadiness, liveness, type DependencyProbe } from "./operations/readiness.js";
+import { integrationReadiness } from './operations/integration-readiness.js';
 import { getAccountUsageSummary, ingestVerifiedBillingEvent } from "./billing/usage-ledger.js";
 import type { StripeBillingAdapter } from "./billing/stripe-adapter.js";
 import {createObservationRouter,type ProgramObservationConfig} from "./analytics/observation-router.js";
@@ -168,6 +174,8 @@ import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
+import { intakeRouter } from "./http/intake-router.js";
+import type { IntakeRuntimeConfig } from "./intake/runtime-config.js";
 import { exportEvidencePackageStream, getEvidenceReview } from "./domain/evidence-review.js";
 import {
   listUploadParts,
@@ -205,12 +213,15 @@ import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proo
 import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 
 export interface AppDependencies {
+  futurePlatform?: FuturePlatformConfig;
+  intake?: IntakeRuntimeConfig;
   db: Database;
   objectStore: ObjectStore;
   clock: Clock;
   auth: AuthenticationAdapter;
   publicBaseUrl: string;
   devAuth: boolean;
+  testFixtures?: boolean;
   corsOrigins?: string[];
   integrations?: IntegrationAdapterRegistry;
   credentialStore?: IntegrationCredentialStore & {
@@ -321,6 +332,10 @@ export function createApp(deps: AppDependencies): Express {
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+  app.get('/ready/integrations',(_req,res)=>{
+    const report=integrationReadiness();
+    res.status(report.status==='BLOCKED'?503:200).json({status:report.status,liveValidation:report.liveValidation,providers:report.checks.map(({provider,status})=>({provider,status}))});
   });
 
   app.get("/capabilities", (_req, res) => {
@@ -490,8 +505,44 @@ export function createApp(deps: AppDependencies): Express {
   }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
+  app.use(captureEngineRouter(deps));
+  app.use(futurePlatformRouter(deps));
+  app.get('/me/notifications',asyncRoute(async(req,res)=>{res.setHeader('Cache-Control','private, no-store');res.json({notifications:await listProofUpdates(deps.db,bearerUser(req))});}));
+  app.get('/me/notification-preferences',asyncRoute(async(req,res)=>{res.setHeader('Cache-Control','private, no-store');res.json(await notificationPreferences(deps.db,bearerUser(req)));}));
+  app.get('/me/notification-mutes',asyncRoute(async(req,res)=>{const user=bearerUser(req);await notificationPreferences(deps.db,user);res.setHeader('Cache-Control','private, no-store');res.json({proofIds:(await deps.db.query<{proof_id:string}>('SELECT proof_id FROM proof_notification_mutes WHERE user_id=$1',[user])).rows.map(r=>r.proof_id)});}));
+  app.patch('/me/notification-preferences',asyncRoute(async(req,res)=>{res.json(await updateNotificationPreferences(deps.db,bearerUser(req),req.body??{}));}));
+  app.post('/me/push-devices',asyncRoute(async(req,res)=>{await registerPushDevice(deps.db,deps.clock,bearerUser(req),req.body?.token,req.body?.active);res.json({registered:req.body?.active!==false});}));
+  app.post('/me/notifications/:notificationId/read',asyncRoute(async(req,res)=>{await deps.db.query('UPDATE proof_update_notifications SET read_at=COALESCE(read_at,$3) WHERE id=$1 AND user_id=$2',[req.params.notificationId,bearerUser(req),deps.clock.now().toISOString()]);res.json({ok:true});}));
+  app.get('/proofs/:id/notification-mute',asyncRoute(async(req,res)=>{await getProofForUser(deps.db,bearerUser(req),req.params.id);res.setHeader('Cache-Control','private, no-store');res.json({muted:Boolean((await deps.db.query('SELECT 1 FROM proof_notification_mutes WHERE user_id=$1 AND proof_id=$2',[bearerUser(req),req.params.id])).rows.length)});}));
+  app.post('/proofs/:id/notification-mute',asyncRoute(async(req,res)=>{res.json(await muteProof(deps.db,bearerUser(req),req.params.id,req.body?.muted));}));
+  app.post('/proofs/:id/tracking', asyncRoute(async(req,res)=>{
+    res.setHeader('Cache-Control','private, no-store');
+    res.json(await attachTracking(deps.db,deps.clock,bearerUser(req),req.params.id,req.body??{}));
+  }));
+  app.get('/proofs/:id/tracking', asyncRoute(async(req,res)=>{
+    const proof=await getProofForUser(deps.db,bearerUser(req),req.params.id);
+    res.setHeader('Cache-Control','private, no-store');
+    const a=await trackingAssociation(deps.db,proof.transactionId);
+    res.json({association:a?{trackingNumber:a.tracking_number,carrier:a.carrier,source:a.source,createdAt:a.created_at}:null});
+  }));
   app.use("/proofs/:id/capture-sessions", captureSessionRouter(deps));
   app.use("/me/packing-relay", packingRelayRouter(deps));
+  app.use((req,res,next)=>{
+    const isProofAdmission=req.path==='/proofs'||/^\/transactions\/[^/]+\/proof$/.test(req.path);
+    // A transaction alone has no workflow policy; negotiate only when a new merchant Proof is requested.
+    const isAdmission=req.method==='POST'&&(isProofAdmission||(req.path==='/integrations/transactions/import'&&req.body?.createProof===true));
+    const preservedWorkflow=isProofAdmission&&(req.body?.workflowType==='GRADING_SUBMISSION'||req.body?.participationPolicy==='COUNTERPARTY_REQUIRED');
+    if(!isAdmission||preservedWorkflow||req.header('x-packproof-intake-version')==='1')return next();
+    void (async()=>{
+      const user=bearerUser(req);
+      const enrolled=(await deps.db.query('SELECT owner_user_id FROM intake_contract_cohorts WHERE owner_user_id=$1 AND enabled=true',[user])).rows[0];
+      if(!enrolled)return next();
+      const match=req.path.match(/^\/transactions\/([^/]+)\/proof$/);
+      if(match && (await deps.db.query('SELECT id FROM proofs WHERE transaction_id=$1',[match[1]])).rows[0])return next();
+      throw new DomainError('INTAKE_CLIENT_UPDATE_REQUIRED','Update PackProof before preparing a new order. Your existing recordings can still be recovered.',409);
+    })().catch(next);
+  });
+  app.use("/me/intake", distributedRateLimit(deps.db,{scope:"order-intake",limit:90,windowMs:60_000,subject:bearerUser}), intakeRouter(deps));
   app.use("/proofs/:id/signature", signatureRouter(deps));
   app.use("/proofs/:id/disclosure", disclosureRouter(deps));
   app.use("/packing-requests", packingRequestsRouter(deps));
@@ -611,6 +662,7 @@ export function createApp(deps: AppDependencies): Express {
           bearerUser(req),
           req.params.id,
           req.body?.idempotencyKey,
+          req.body?.evidenceId,
         ),
       );
     }),
@@ -746,7 +798,7 @@ export function createApp(deps: AppDependencies): Express {
           throw new DomainError("INVALID_WEBHOOK", "eBay deletion notification is invalid", 400);
         }
       }
-      const result = await handleEbayAccountDeletion(deps.db, deps.clock, payload, credentialStore);
+      const result = await handleEbayAccountDeletion(deps.db, deps.clock, payload, credentialStore, ebay.environment);
       res.status(200).json(result);
     }),
   );
@@ -862,7 +914,7 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
-  if (deps.devAuth) {
+  if (deps.devAuth && deps.testFixtures && releaseIdentity.environment !== "staging" && releaseIdentity.environment !== "production") {
     app.post(
       "/dev/integrations/trusted-demo/connect",
       asyncRoute(async (req, res) => {
@@ -1417,6 +1469,7 @@ export function createApp(deps: AppDependencies): Express {
         bearerUser(req),
         req.params.id,
         connectedAccounts,
+        { surface: req.body?.surface },
       );
       res.status(201).json(result);
     }),

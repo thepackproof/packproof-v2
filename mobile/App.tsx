@@ -1,3 +1,4 @@
+import { NotificationBridge } from "./src/notifications/NotificationBridge";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PackProofProvider } from "./src/app/PackProofProvider";
 import { Root } from "./src/app/Root";
@@ -9,7 +10,7 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         {process.env.EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE === "true" ? <CameraSpikeScreen /> : <PackProofProvider>
-          <Root />
+          <NotificationBridge/><Root />
         </PackProofProvider>}
       </ThemeProvider>
     </SafeAreaProvider>

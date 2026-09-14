@@ -29,7 +29,7 @@ export interface ProofPresentationInput {
   pendingStage?: { type: string; hasEvidence: boolean } | null;
 }
 export interface LocalProofWork {
-  state: 'UPLOADING' | 'UPLOAD_INTERRUPTED' | 'CAPTURE_UNFINISHED' | 'CONFIRMATION_NEEDED';
+  state: 'UPLOAD_PENDING' | 'SAVING' | 'UPLOADING' | 'UPLOAD_INTERRUPTED' | 'CAPTURE_UNFINISHED' | 'CONFIRMATION_NEEDED';
   canResumeCapture?: boolean;
   progress?: number;
 }
@@ -71,6 +71,7 @@ export function classifyProofPresentation(input: ProofPresentationInput): ProofP
 /** Local recovery changes presentation only; it never commits or finalizes a Proof. */
 export function withLocalProofWork(presentation: ProofPresentation, work?: LocalProofWork | null): ProofPresentation {
   if (!work || presentation.nextAction.type === 'ACCEPT_INVITATION' || !presentation.canContribute || presentation.diagnostic) return presentation;
+  if (work.state === 'UPLOAD_PENDING' || work.state === 'SAVING') return {...presentation, displayStatus:work.state === 'SAVING' ? 'Saving Proof' : 'Waiting to upload', needsAttention:false, nextAction:{type:'VIEW_PROOF',label:'View Proof'}};
   if (work.state === 'UPLOADING') {
     const progress = typeof work.progress === 'number' && Number.isFinite(work.progress)
       ? Math.round(Math.max(0, Math.min(100, work.progress)))
@@ -82,6 +83,7 @@ export function withLocalProofWork(presentation: ProofPresentation, work?: Local
       nextAction: { type: 'VIEW_PROOF', label: 'View Proof' },
     };
   }
+
   if (work.state === 'UPLOAD_INTERRUPTED') return {...presentation,displayStatus:'Upload interrupted',needsAttention:true,nextAction:{type:'RESUME_UPLOAD',label:'Resume upload'}};
   if (work.state === 'CAPTURE_UNFINISHED') return {...presentation,displayStatus:'Recording unfinished',needsAttention:true,nextAction:{type:work.canResumeCapture?'CONTINUE_RECORDING':'RECOVER_RECORDING',label:work.canResumeCapture?'Continue recording':'Review interrupted recording'}};
   return {...presentation,displayStatus:'Confirmation needed',needsAttention:true,nextAction:{type:'REVIEW_CONFIRM',label:'Review and confirm'}};

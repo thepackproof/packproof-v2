@@ -1,3 +1,6 @@
+import { ensureIdentifierBarrier, sealedIdentifiers } from '../identifiers/service.js';
+import { engineRow } from "../capture/service.js";
+import { assertIntakeFinalizeContext } from "../intake/context.js";
 import { assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
 import { assertShippingReviewComplete } from "./capture-label-review.js";
 import { readCaptureClientContext } from "./capture-sessions.js";
@@ -135,6 +138,8 @@ export async function finalizeProof(
     }
 
     assertNotFinalized(proof);
+    // Durable admission contract, independent of current rollout flags.
+    const intakeOrderContext = await assertIntakeFinalizeContext(tx, proofId);
     const participationPolicy = requireParticipationPolicy(
       proof.participation_policy,
       DEFAULT_PARTICIPATION_POLICY,
@@ -166,6 +171,8 @@ export async function finalizeProof(
          AND e.capture_session_id=c.id AND c.expected_sha256=e.sha256
          AND c.expected_byte_size=e.byte_size`, [proofId]
     )).rows;
+    const captureManifests = (await Promise.all(eligibleSessions.map(s=>engineRow(tx,s.id)))).filter(r=>r!==null);
+    if (captureManifests.some(r=>!r.manifest_sha256)) throw new DomainError("CAPTURE_SEAL_REQUIRED", "A capture journal is not sealed", 409);
     const captureContexts=new Map(await Promise.all(eligibleSessions.map(async session=>[session.id,await readCaptureClientContext(tx,session.id)] as const)));
     const eligibleSessionIds = new Set(eligibleSessions.map(row=>row.id));
     if (evidence.rows.some(row => row.capture_session_id && !eligibleSessionIds.has(row.capture_session_id)))
@@ -174,7 +181,7 @@ export async function finalizeProof(
       `SELECT * FROM attestations WHERE proof_id = $1 ORDER BY created_at ASC, id ASC`,
       [proofId],
     );
-    for (const session of eligibleSessions) await assertShippingReviewComplete(tx, proofId, session.id);
+    for (const session of eligibleSessions) { await assertShippingReviewComplete(tx, proofId, session.id); await ensureIdentifierBarrier(tx,clock,proofId,session.id); }
     for (const row of attestations.rows) {
       // Preserve historically committed version-1 authorizations and manifests.
       if (row.authorization_json && readAttestationContext(row.authorization_json.payload).contextVersion === 1) {
@@ -254,8 +261,12 @@ export async function finalizeProof(
     const auditEventIds = await listAuditIds(tx, proofId);
     const manifestId = newId("man");
     const storedItems = await listTransactionItems(tx, proof.transaction_id);
+    const identifiers=await sealedIdentifiers(tx,proofId);
     const payload: Record<string, unknown> = {
+      ...(identifiers ? {identifiers} : {}),
       manifestVersion: 1,
+      ...(captureManifests.length ? {captureManifests:captureManifests.map(r=>({captureId:r.session_id,sha256:r.manifest_sha256,manifest:r.manifest_json}))} : {}),
+      ...(intakeOrderContext ? {orderContext: intakeOrderContext} : {}),
       proofId,
       transactionId: proof.transaction_id,
       transaction: {

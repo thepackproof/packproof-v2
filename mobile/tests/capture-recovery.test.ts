@@ -180,3 +180,21 @@ test("changed order context keeps the original and requires fresh consent withou
   assert.equal(f.calls.filter(call => call === "attest").length, 1);
   assert.equal(f.capture.recovery.phase, "FINALIZED");
 });
+
+test("renewed upload cannot replace the saved evidence identity", async () => {
+  const f=fixture(); f.capture.uploadEvidenceId="original";
+  f.deps.initialize=async()=>({evidenceId:"different",received:false});
+  await assert.rejects(recoverCaptureCompletion(f.capture,f.deps),{code:"CAPTURE_ORIGINAL_CONFLICT"});
+  assert.equal(f.capture.uploadEvidenceId,"original"); assert.equal(f.calls.includes("upload"),false);
+});
+test("persisted discard intent prevents upload after restart",async()=>{
+  const f=fixture(); f.capture.recovery.discardRequested=true;
+  await assert.rejects(recoverCaptureCompletion(f.capture,f.deps),{code:"CAPTURE_DISCARD_PENDING"});
+  assert.equal(f.calls.includes("initialize"),false);assert.equal(f.calls.includes("upload"),false);
+});
+test("missing original stops automatic retries while preserving identity",async()=>{
+  const f=fixture(); f.deps.upload=async()=>{throw Object.assign(new Error("Original unavailable"),{code:"CAPTURE_LOCAL_FILE_MISSING",status:422});};
+  await assert.rejects(recoverCaptureCompletion(f.capture,f.deps));
+  assert.equal(f.capture.uploadEvidenceId,"video");assert.equal(f.capture.recovery.evidenceIdempotencyKey,"stable-key");
+  assert.equal(f.capture.recovery.phase,"NEEDS_ATTENTION");assert.equal(f.capture.recovery.lastError?.retryable,false);
+});

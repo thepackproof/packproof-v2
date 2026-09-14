@@ -9,7 +9,6 @@ import { useTheme } from "../theme/ThemeProvider";
 import { AppHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { InfoCard } from "../ui/ProofCard";
-import { SourceBadge } from "../ui/SourceBadge";
 import { Button } from "../ui/Button";
 
 export function EventDetailScreen() {
@@ -30,14 +29,10 @@ export function EventDetailScreen() {
     <AppScreen extraBottom={24}>
       <AppHeader title={humanChronologyTitle(event.eventType, event.title)} onBack={app.goBack} />
       <InfoCard>
-        <Text style={[styles.body, { color: colors.textPrimary }]}>
-          {event.description || chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)}
-        </Text>
+        {event.description && event.description !== chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType) ? <Text style={[styles.body, { color: colors.textPrimary }]}>{event.description}</Text> : null}
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{formatDateTime(event.occurredAt)}</Text>
-        <SourceBadge
-          category={event.category}
-          label={chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)}
-        />
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>Source: {chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)}</Text>
+        {raw?.actorUserId === app.session?.userId ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Performed by you</Text> : null}
       </InfoCard>
       <Button label={detailsOpen ? "Hide exact event details" : "Exact event details"} variant="tertiary" onPress={() => setDetailsOpen(value => !value)} />
       {detailsOpen ? <InfoCard>
@@ -50,7 +45,7 @@ export function EventDetailScreen() {
         <Row label="Recorded actor" value={raw?.actorUserId ?? "Not identified"} />
         {raw ? <Row label="Original audit data" value={JSON.stringify(raw.data, null, 2)} /> : null}
       </InfoCard> : null}
-      <Text style={[styles.note, { color: colors.textSecondary }]}>{SOURCE_DISCLOSURE}</Text>
+      {detailsOpen ? <Text style={[styles.note, { color: colors.textSecondary }]}>{SOURCE_DISCLOSURE}</Text> : null}
     </AppScreen>
   );
 }
@@ -73,7 +68,7 @@ function Row(props: { label: string; value: string }) {
 const styles = StyleSheet.create({
   body: { ...typography.body },
   meta: { ...typography.secondary },
-  note: { ...typography.caption },
+  note: { ...typography.finePrint },
   label: { ...typography.caption },
   value: { ...typography.secondary },
 });

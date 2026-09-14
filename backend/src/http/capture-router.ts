@@ -1,3 +1,4 @@
+import { appendIdentifierObservations, getIdentifierReview, decideIdentifier, checkpointIdentifiers } from '../identifiers/service.js';
 import { getCaptureLabelReview, resolveCaptureLabel } from "../domain/capture-label-review.js";
 import { bindCaptureShipping } from '../domain/capture-shipping.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
@@ -12,6 +13,10 @@ export function captureSessionRouter(deps:AppDependencies) {
   router.use((_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
   router.post('/',route(async(req,res)=>{res.status(201).json(await createCaptureSession(deps.db,deps.clock,user(req),req.params.id,{idempotencyKey:String(req.header('idempotency-key')??req.body?.idempotencyKey??''),client:String(req.body?.client??''),stageId:req.body?.stageId==null?undefined:String(req.body.stageId)}));}));
   router.get('/:sessionId',route(async(req,res)=>{res.json(await recoverCaptureSession(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId));}));
+  router.get('/:sessionId/identifier-observations',route(async(req,res)=>{res.json(await getIdentifierReview(deps.db,user(req),req.params.id,req.params.sessionId));}));
+  router.post('/:sessionId/identifier-observations',route(async(req,res)=>{res.json(await appendIdentifierObservations(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.body,deps.manifestSigning?.signer));}));
+  router.post('/:sessionId/identifier-decisions',route(async(req,res)=>{res.json(await decideIdentifier(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.body));}));
+  router.post('/:sessionId/identifier-checkpoint',route(async(req,res)=>{res.json(await checkpointIdentifiers(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.body));}));
   router.get('/:sessionId/shipping-observations',route(async(req,res)=>{res.json(await getCaptureLabelReview(deps.db,user(req),req.params.id,req.params.sessionId));}));
   router.post('/:sessionId/shipping-observations/:observationId/resolve',route(async(req,res)=>{res.json(await resolveCaptureLabel(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.params.observationId,req.body));}));
   router.post('/:sessionId/shipping-label' ,route(async(req,res)=>{res.json(await bindCaptureShipping(deps.db,deps.clock,user(req),req.params.id,req.params.sessionId,req.body));}));

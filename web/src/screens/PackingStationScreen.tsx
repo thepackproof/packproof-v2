@@ -1,4 +1,12 @@
+import { beginBrowserEngine, BrowserCaptureJournal, captureEngineEnabled, type EngineSession } from "../capture/engine";
+import type { IdentifierJournal } from '../../../backend/src/identifiers/journal';
+import type { IdentifierPolicy, IdentifierReview } from '../../../backend/src/identifiers/types';
+import { normalizeSymbology } from '../../../backend/src/identifiers/core';
+import { BrowserIdentifierDecoder } from '../capture/identifier-decoder';
+import { browserIdentifierJournal } from '../capture/identifiers';
+import { IdentifierDetails } from '../components/IdentifierDetails';
 import { randomId } from "../random-id";
+import type { IntakeSnapshot } from '../intake-types';
 import {startStationStudy,resumeStationStudy,type StationStudyTimer} from '../analytics/study-capture';
 import { RelayStationPanel } from "../components/RelayStationPanel";
 import { capturePreflight } from "../capture-preflight";
@@ -19,12 +27,15 @@ import { recoverStationCapture, saveStationCapture, updateStationCaptureScans, s
 
 
 export function PackingStationScreen(props: {
+  authorizedEngineSession?:EngineSession|null;
   api: PackProofApi;
   userId: string;
   queue: FulfillmentQueueItem[];
   error: string | null;
   initialReference?: string;
   initialProofId?: string;
+  acceptedIntakeSnapshot?: IntakeSnapshot | null;
+  onIntakeIntentConsumed?: () => void;
   onAuthExpired: () => void;
   onLeave?: () => void;
   onCompleted?: (proofId: string) => void;
@@ -41,6 +52,8 @@ export function PackingStationScreen(props: {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const engineRef = useRef<EngineSession|null>(null);
+  const engineJournalRef = useRef<BrowserCaptureJournal|null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -85,11 +98,28 @@ export function PackingStationScreen(props: {
   stateRef.current = state;
   heldBlobRef.current = heldBlob;
   const [cameraReady, setCameraReady] = useState(false);
+  const intakeStarted=useRef(false);
+  const intakeSnapshot=useRef(props.acceptedIntakeSnapshot);
+  const intakeRetryKey=useRef(randomId());
+  // This intent exists only after the user presses Record on the ready-order card.
+  useEffect(()=>{
+    if(props.acceptedIntakeSnapshot && !intakeStarted.current && cameraReady && !busy && state.phase==='READY_TO_RECORD' && state.order?.proofId===props.acceptedIntakeSnapshot.proofId){
+      intakeStarted.current=true;
+      props.onIntakeIntentConsumed?.();
+      void startPacking();
+    }
+  },[cameraReady,busy,state.phase,state.order?.proofId,props.acceptedIntakeSnapshot]);
   const preparingCamera = useRef(false);
   const [elapsed, setElapsed] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
   const [labelNotice, setLabelNotice] = useState("");
+  const identifierPolicyRef = useRef<IdentifierPolicy|undefined>(undefined);
+  const identifierJournalRef = useRef<IdentifierJournal|null>(null);
+  const stopIdentifierAnalysisRef=useRef<()=>void>(()=>{});
+  const [identifierReview,setIdentifierReview]=useState<IdentifierReview|null>(null);
+  const [identifierDecisionBusy,setIdentifierDecisionBusy]=useState(false);
+  const [identifierReason,setIdentifierReason]=useState('');
   const acceptedCodes = useRef(new Set<string>());
   const candidateCodes = useRef(new Map<string, { count:number; time:number }>());
   const scanRequests = useRef<Promise<unknown>>(Promise.resolve());
@@ -98,6 +128,94 @@ export function PackingStationScreen(props: {
   const scanResultsRef = useRef<NonNullable<PendingStationCapture["shippingScans"]>>([]);
   const [scanResults, setScanResults] = useState<Array<{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;status:string;trackingNumber?:string}>>([]);
 
+  async function prepareIdentifierJournal(proofId:string,sessionId:string,policy:IdentifierPolicy) {
+    const scope=studyScope.current;
+    const assertScope=()=>{if(studyScope.current!==scope)throw Object.assign(new Error('Open the original account to continue this recording.'),{code:'ACCOUNT_CHANGED'});};
+    try { identifierJournalRef.current=await browserIdentifierJournal(props.api,props.userId,proofId,sessionId,policy,assertScope); }
+    catch { identifierJournalRef.current=null;setLabelNotice('Item recognition is unavailable. Your recording can continue.'); }
+  }
+  async function bindIdentifierShipping(review:IdentifierReview,proofId:string,sessionId:string) {
+    for(const row of review.observations) {
+      if(row.route!=='SHIPPING'||row.supplemental)continue;
+      const idempotencyKey=`identifier:${row.clientEventId}`;
+      if(scanResultsRef.current.some(scan=>scan.idempotencyKey===idempotencyKey))continue;
+      const scan={rawValue:row.observation.rawText,format:row.observation.symbology,detectedAtMs:row.observation.mediaTimeMs,idempotencyKey};
+      updateScans(rows=>[...rows,{...scan,status:'QUEUED'}]);
+      await journalRef.current;
+      scanRequests.current=scanRequests.current.then(async()=>{
+        try {
+          const result=await props.api.bindCaptureShipping(proofId,sessionId,scan);
+          if(mountedRef.current&&captureSessionRef.current===sessionId) {
+            updateScans(rows=>rows.map(existing=>existing.idempotencyKey===idempotencyKey?{...scan,...result}:existing));
+            if(result.status==='BOUND')setLabelNotice('Shipping label linked');
+            if(heldBlobRef.current)void loadShippingReview();
+          } else await updateStationCaptureScans(props.userId,sessionId,[{...scan,...result}]);
+        } catch { /* Original identifier event remains durable for scoped recovery. */ }
+      });
+    }
+  }
+  async function loadIdentifierReview(proofId:string,sessionId:string) {
+    try {
+      await identifierJournalRef.current?.flush();
+      const review=await props.api.getCaptureIdentifiers(proofId,sessionId);
+      if(!mountedRef.current||captureSessionRef.current!==sessionId)return;
+      void identifierJournalRef.current?.updateReview(review).catch(()=>{});
+      setIdentifierReview(review);
+      await bindIdentifierShipping(review,proofId,sessionId);
+    } catch { if(mountedRef.current)setLabelNotice('Some item details are unavailable. Your recording is kept.'); }
+  }
+  function beginIdentifierAnalysis():()=>void {
+    const journal=identifierJournalRef.current,proofId=orderRef.current?.proofId,sessionId=captureSessionRef.current;
+    if(!journal||!proofId||!sessionId)return ()=>{};
+    let decoder:BrowserIdentifierDecoder;
+    try {decoder=new BrowserIdentifierDecoder();}
+    catch {journal.markUnavailable();setLabelNotice('Item recognition is unavailable in this browser. Your recording continues.');return ()=>{};}
+    let active=true,analyzing=false,resolving=false,errors=0,nextResolutionAt=0,intervalMs=333;
+    let timer:ReturnType<typeof setTimeout>;
+    const read=async()=>{
+      if(!active)return;
+      if(analyzing||document.hidden||!videoRef.current?.videoWidth){timer=setTimeout(read,intervalMs);return;}
+      analyzing=true;const analysisStarted=performance.now();
+      try {
+        const frame=await decoder.detect(videoRef.current);
+        if(!active||!frame)return;
+        const mediaTimeMs=Math.max(0,Math.round(analysisStarted-startedAt.current));
+        for(const code of frame.codes) {
+          if(!active)break;
+          const capabilityProfile=`web-identifiers/1;decoder=${frame.profile.decoderVersion};multi=${Number(frame.profile.multiCodeAnalysis)};bytes=${Number(frame.profile.rawBytesAvailable)};gs1=${Number(frame.profile.GS1SignalAvailable)}`;
+          await journal.observe({...code,symbology:normalizeSymbology(code.symbology),source:'LIVE_CAMERA_ANALYSIS',mediaTimeMs,timestampOrigin:'MONOTONIC_APPROXIMATE',timestampUncertaintyMs:null,recordingRef:sessionId,adapterVersion:'packproof-web-identifiers/1',decoderVersion:frame.profile.decoderVersion,capabilityProfile,frameWidth:frame.frameWidth,frameHeight:frame.frameHeight,coordinateSpace:'ANALYSIS_FRAME_PIXELS'});
+        }
+        if(frame.codes.length&&!resolving&&performance.now()>=nextResolutionAt) {
+          resolving=true;nextResolutionAt=performance.now()+750;
+          void journal.flush().then(async review=>{
+            if(!active||!review)return;
+            setIdentifierReview(review);
+            setLabelNotice(review.reviewRequired?'An item code needs review after recording':review.observations.some(row=>row.state==='MATCH')?'Item code matches this order':review.observations.some(row=>row.product)?'Item details found':'Code read; item details unavailable');
+            await bindIdentifierShipping(review,proofId,sessionId);
+          }).catch(()=>{if(active)setLabelNotice('Item details will be checked when your connection returns.');}).finally(()=>{resolving=false;});
+        }
+        errors=0;
+      } catch {if(active){errors++;journal.markUnavailable();setLabelNotice('Item recognition paused. Your recording continues.');}}
+      finally {
+        analyzing=false;
+        if(performance.now()-analysisStarted>333)intervalMs=1000;
+        if(active&&errors<3)timer=setTimeout(read,intervalMs);
+        else if(errors>=3)decoder.close();
+      }
+    };
+    timer=setTimeout(read,333);
+    return ()=>{active=false;clearTimeout(timer);decoder.close();};
+  }
+  async function decideIdentifier(observationId:string,decision:'NOT_THIS_SHIPMENT'|'ACKNOWLEDGE_MISMATCH') {
+    const proofId=orderRef.current?.proofId,sessionId=captureSessionRef.current;
+    if(!proofId||!sessionId||!identifierReview||!identifierReason.trim())return;
+    setIdentifierDecisionBusy(true);
+    try {
+      const review=await props.api.decideCaptureIdentifier(proofId,sessionId,{clientEventId:randomId(),observationId,revision:identifierReview.revision,decision,reason:identifierReason.trim()});
+      void identifierJournalRef.current?.updateReview(review).catch(()=>{});setIdentifierReview(review);setIdentifierReason('');
+    } catch {setLocalError('The item review could not be saved. Check the latest details and try again.');await loadIdentifierReview(proofId,sessionId);}
+    finally {setIdentifierDecisionBusy(false);}
+  }
 
   function updateScans(updater: (rows: NonNullable<PendingStationCapture["shippingScans"]>) => NonNullable<PendingStationCapture["shippingScans"]>) {
     const next = updater(scanResultsRef.current).map(scan => {
@@ -109,6 +227,7 @@ export function PackingStationScreen(props: {
     reviewRevision.current += 1;
     setShippingReview(null);
     const sessionId = captureSessionRef.current;
+    engineJournalRef.current?.recordScans(next);
     if (sessionId) journalRef.current = journalRef.current.then(() => updateStationCaptureScans(props.userId, sessionId, next)).catch(() => {
       if (mountedRef.current) setLocalError("Label details could not be saved locally. Keep this page open and retry before leaving.");
     });
@@ -125,9 +244,10 @@ export function PackingStationScreen(props: {
   useEffect(() => {
     let cancelled = false;
     setBusy(true);
-    void recoverStationCapture(props.userId).then(async (pending) => {
+    void recoverStationCapture(props.userId,props.api.recoveryScope).then(async (pending) => {
       if (cancelled) return;
       if (pending) {
+        if(pending.captureContext)engineRef.current={id:pending.captureSessionId!,state:"RECORDED",context:pending.captureContext};
         if (pending.apiScope && pending.apiScope !== props.api.recoveryScope) throw new Error("A recording is saved for the original server. Return there to finish it before starting another shipment.");
         if (props.initialProofId && pending.order.proofId !== props.initialProofId && props.onRecoverProof) { props.onRecoverProof(pending.order.proofId); return; }
         studyTimer.current = await resumeStationStudy(props.api, props.userId, pending.studyTaskRef);
@@ -138,6 +258,11 @@ export function PackingStationScreen(props: {
         const url = URL.createObjectURL(pending.file);
         pendingRef.current = pending;
         captureSessionRef.current = pending.captureSessionId;
+        identifierPolicyRef.current=pending.identifierPolicy;
+        if(pending.identifierPolicy?.captureEnabled&&pending.captureSessionId) {
+          await prepareIdentifierJournal(pending.order.proofId,pending.captureSessionId,pending.identifierPolicy);
+          void loadIdentifierReview(pending.order.proofId,pending.captureSessionId);
+        }
         interruptedRef.current=!!pending.interrupted;
         scanResultsRef.current = pending.shippingScans ?? [];
         setScanResults(scanResultsRef.current);
@@ -287,6 +412,10 @@ export function PackingStationScreen(props: {
   },[state.phase]);
   useEffect(() => {
     if (state.phase !== "RECORDING") return;
+    if(identifierPolicyRef.current?.captureEnabled) {
+      const stop=beginIdentifierAnalysis();stopIdentifierAnalysisRef.current=stop;
+      return ()=>{stop();if(stopIdentifierAnalysisRef.current===stop)stopIdentifierAnalysisRef.current=()=>{};};
+    }
     type Detected = { rawValue:string; format:string };
     const Detector = (globalThis as unknown as {BarcodeDetector?:new(input:{formats:string[]})=>{detect:(video:HTMLVideoElement)=>Promise<Detected[]>}}).BarcodeDetector;
     if (!Detector) { setLabelNotice("This browser cannot read labels automatically. Your video still records the label you show."); return; }
@@ -354,10 +483,28 @@ export function PackingStationScreen(props: {
       const stream = streamRef.current ?? await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       if (!stillReady()) { stream.getTracks().forEach(track => track.stop()); return; }
       streamRef.current = stream;
-      const session = await props.api.createCaptureSession(order.proofId, newIdempotencyKey());
+      const snapshot=intakeSnapshot.current;
+      const usesIntakeSnapshot=!!snapshot && snapshot.proofId===order.proofId;
+      const authorizeIntakeCapture=async()=> (await props.api.intakeRequest<{session:{id:string;state:string;identifierPolicy?:IdentifierPolicy}}>('/orders/'+encodeURIComponent(snapshot!.id)+'/capture','POST',{idempotencyKey:intakeRetryKey.current,client:'WEB_CAMERA'})).session;
+      engineRef.current = props.authorizedEngineSession ?? (captureEngineEnabled() ? await beginBrowserEngine(props.api,order.proofId) : null);
+      if(engineRef.current&&engineRef.current.context.proofId!==order.proofId)throw new Error("Open the original order for this capture link.");
+      let session = engineRef.current ?? (usesIntakeSnapshot
+        ? await authorizeIntakeCapture()
+        : await props.api.createCaptureSession(order.proofId, newIdempotencyKey()));
+      if(usesIntakeSnapshot && session.state==='CANCELLED') {
+        // A cancellation may have succeeded even when its response was lost.
+        // The authoritative replay confirms cancellation; this explicit Record
+        // action may now issue a fresh key, once, for the same accepted snapshot.
+        intakeRetryKey.current=randomId();
+        session=await authorizeIntakeCapture();
+      }
+      if(session.state!=='ISSUED')throw new Error('This order already has a recording. Recover it before recording again.');
       issuedSessionId = session.id;
       if (!stillReady()) { stopLiveTracks(); return; }
       captureSessionRef.current = session.id;
+      identifierPolicyRef.current=session.identifierPolicy;
+      identifierJournalRef.current=null;setIdentifierReview(null);
+      if(session.identifierPolicy?.captureEnabled) await prepareIdentifierJournal(order.proofId,session.id,session.identifierPolicy);
       onSessionIssued?.(session.id);
       interruptedRef.current=false;
       chunksRef.current = []; setBookmarks([]); durationRef.current = 0; pendingRef.current = null;
@@ -365,12 +512,23 @@ export function PackingStationScreen(props: {
       if (!stillReady()) { stopLiveTracks(); return; }
       const mime = ["video/webm;codecs=vp8", "video/mp4", "video/webm"].find(type => MediaRecorder.isTypeSupported(type));
       const recorder = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 2_000_000 });
+      engineJournalRef.current = engineRef.current ? new BrowserCaptureJournal(props.api.recoveryScope,props.userId,engineRef.current.context,{
+        key:stationCaptureKey(props.userId),order,userId:props.userId,apiScope:props.api.recoveryScope,uploadKey:newIdempotencyKey(),captureSessionId:session.id,finishConfirmed:false,identifierPolicy:session.identifierPolicy,
+      }) : null;
+      await engineJournalRef.current?.start();
       recorder.ondataavailable = event => {
         if (!event.data.size) return;
         chunksRef.current.push(event.data);
         const partial = new Blob(chunksRef.current, {type: recorder.mimeType || "video/webm"});
         durationRef.current = Math.max(1, Math.round(performance.now()-startedAt.current));
-        journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
+        if(engineJournalRef.current) {
+          engineJournalRef.current.append(event.data,durationRef.current);
+          journalRef.current=engineJournalRef.current.flush().catch(()=>{
+            interruptedRef.current=true;
+            setLocalError("Browser storage is full. Keep this page open and save the original recording.");
+            if(recorder.state==='recording'&&!finishingRef.current)void finishPacking('MANUAL',false);
+          });
+        } else journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
         if (partial.size > capabilities.capture.maxBytes * 0.92 || durationRef.current >= capabilities.capture.maxDurationSeconds * 1000) {
           setLocalError("Recording reached this device’s safe limit. Saving the recorded segment now.");
           if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); }
@@ -382,13 +540,17 @@ export function PackingStationScreen(props: {
       dispatch({type:"START_RECORDING",trigger:"MANUAL"}); recorder.start(2000); recordingStarted = true; dispatch({type:"RECORDING_STARTED"});
       return session.id;
     } catch (error) {
+      if((error as {code?:string})?.code==='CAPTURE_JOURNAL_EXISTS')issuedSessionId=null;
       studyTimer.current?.problem('capability');
       stopLiveTracks();
       setLocalError(error instanceof DOMException && error.name === "NotAllowedError" ? "Allow camera access in your browser’s site settings, then retry. No recording has been uploaded." : error instanceof Error ? error.message : "Camera unavailable. Check that another app is not using it, then retry camera.");
     } finally {
       if (issuedSessionId && !recordingStarted) {
         // Only abandon an unused session. Recorded originals always remain recoverable.
-        void props.api.featureRequest(order.proofId, `capture-sessions/${encodeURIComponent(issuedSessionId)}/cancel`, "POST", {}).catch(() => {});
+        try {
+          const cancellation=await props.api.featureRequest<{cancelled:boolean}>(order.proofId, `capture-sessions/${encodeURIComponent(issuedSessionId)}/cancel`, "POST", {});
+          if(cancellation?.cancelled===true)intakeRetryKey.current=randomId();
+        } catch { /* Keep the same retry identity until cancellation is confirmed. */ }
       }
       startingRef.current=false;
       if (mountedRef.current) setBusy(false);
@@ -398,6 +560,7 @@ export function PackingStationScreen(props: {
   function finishPacking(trigger: "MANUAL" | "RESCAN" = "MANUAL", finishConfirmed = true): Promise<void> {
     if (finishJob.current) return finishJob.current;
     finishingRef.current = true;
+    stopIdentifierAnalysisRef.current();
     setBusy(true);
     const job = (async () => {
       const recorder = recorderRef.current;
@@ -408,10 +571,15 @@ export function PackingStationScreen(props: {
         recorder.onstop = () => { studyTimer.current?.event('recording_stopped'); resolve(assembled()); };
         recorder.stop();
       });
-      await journalRef.current;
+      heldBlobRef.current=blob;setHeldBlob(blob);setPreviewUrl(URL.createObjectURL(blob));
       stopLiveTracks();
+      await journalRef.current;
+      await engineJournalRef.current?.finish();
       // Preserve the final original immediately. Carrier-network work never blocks review.
       await acceptLiveVideo(blob, blob.type || "video/webm", trigger, finishConfirmed);
+      try {await identifierJournalRef.current?.drain();}catch {identifierJournalRef.current?.markUnavailable();}
+      if(identifierPolicyRef.current?.captureEnabled&&orderRef.current&&captureSessionRef.current)
+        void loadIdentifierReview(orderRef.current.proofId,captureSessionRef.current);
     })().catch(error => {
       if (mountedRef.current) setLocalError(error instanceof Error ? error.message : "The recording could not finish saving. Keep this page open and download the local original.");
     }).finally(() => {
@@ -431,7 +599,9 @@ export function PackingStationScreen(props: {
       uploadKey: previous?.order.proofId === order.proofId ? previous.uploadKey : newIdempotencyKey(),
       evidenceId: previous?.order.proofId === order.proofId ? previous.evidenceId : undefined,
       shippingScans:scanResultsRef.current,
+      identifierPolicy:identifierPolicyRef.current,
       studyTaskRef: previous?.studyTaskRef ?? studyTimer.current?.localRef,
+      captureContext: engineRef.current?.context,
       finishConfirmed, captureSessionId: captureSessionRef.current, bookmarks: bookmarksRef.current, durationMs: durationRef.current, interrupted,
     };
     await saveStationCapture(pending);
@@ -468,7 +638,7 @@ export function PackingStationScreen(props: {
 
   async function processVideo(blob: Blob, _contentType: string, _handle: string) {
     const order = orderRef.current;
-    if (!order || submittingRef.current || !confirmed || !shippingReview || shippingReview.reviewRequired || reviewLoading || scanResultsRef.current.some(scan=>scan.status === "QUEUED")) return;
+    if (!order || submittingRef.current || !confirmed || !shippingReview || shippingReview.reviewRequired || identifierReview?.reviewRequired || identifierDecisionBusy || reviewLoading || scanResultsRef.current.some(scan=>scan.status === "QUEUED")) return;
     submittingRef.current=true;
     setLocalError(null);
     dispatch({ type: "PROCESSING_STARTED", submitStep: "upload" });
@@ -549,8 +719,16 @@ export function PackingStationScreen(props: {
       {scanResults.map(scan => <div className="stack" key={scan.idempotencyKey}><p>{scan.status === "BOUND" ? "Tracking number read" : "Review tracking"} · {scan.trackingNumber || scan.rawValue}</p>{scan.status === "NEEDS_CONFIRMATION" || scan.status === "QUEUED" ? <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => {setBusy(true); void props.api.bindCaptureShipping(state.order!.proofId,captureSessionRef.current!,{...scan,confirmed:true,idempotencyKey:scan.idempotencyKey+":confirmed"}).then(result=>{updateScans(rows=>rows.map(row=>row.idempotencyKey===scan.idempotencyKey?{...scan,...result}:row));void loadShippingReview();}).catch(()=>setLocalError("This label differs from the order, or could not be saved. Keep the recording and review this order before submitting.")).finally(()=>setBusy(false));}}>Use this tracking number</button> : null}</div>)}
       {shippingReview?.observations.filter(observation=>!observation.associated && !observation.resolution).map(observation=><div className="banner" key={observation.observationId}><p>This label differs from the order’s tracking or still needs a decision: {observation.trackingNumber}</p><button className="btn btn-secondary" type="button" disabled={busy} onClick={()=>{if(!window.confirm("Confirm this is another label visible in the video, not the package you are shipping. The observation will remain in your Proof."))return;setBusy(true);void props.api.resolveCaptureShippingObservation(state.order!.proofId,captureSessionRef.current!,observation.observationId).then(()=>loadShippingReview()).catch(()=>setLocalError("The label decision could not be saved. Try again.")).finally(()=>setBusy(false));}}>This is another label in view</button></div>)}
       {!shippingReview ? <button type="button" className="btn btn-secondary" disabled={reviewLoading} onClick={()=>void loadShippingReview()}>Retry label review</button> : null}
+      {identifierPolicyRef.current?.captureEnabled&&<>
+        <IdentifierDetails value={identifierReview} />
+        {identifierReview?.observations.filter(row=>row.reviewRequired&&!row.decision).map(row=><div className="banner" key={row.observationId}>
+          <p>This code does not match the selected order. The recording and order remain together.</p>
+          <label>Explain what appeared in the recording<textarea value={identifierReason} maxLength={500} onChange={event=>setIdentifierReason(event.target.value)} disabled={identifierDecisionBusy}/></label>
+          <div className="row"><button className="btn btn-secondary" disabled={identifierDecisionBusy||!identifierReason.trim()} onClick={()=>void decideIdentifier(row.observationId,'NOT_THIS_SHIPMENT')}>Not part of this shipment</button><button className="btn btn-secondary" disabled={identifierDecisionBusy||!identifierReason.trim()} onClick={()=>void decideIdentifier(row.observationId,'ACKNOWLEDGE_MISMATCH')}>Keep mismatch in this Proof</button></div>
+        </div>)}
+      </>}
       <label className="declaration"><input type="checkbox" checked={confirmed} onChange={e => { setConfirmed(e.target.checked); studyTimer.current?.phase('confirmation'); if (!e.target.checked) studyTimer.current?.event('consent_cancelled'); }} disabled={busy} /><span>The item shown and attached in this Proof is the item I am shipping.</span></label>
-      <button className="btn" type="button" disabled={busy || !confirmed || reviewLoading || !shippingReview || shippingReview.reviewRequired || scanResults.some(scan=>scan.status==="QUEUED")} onClick={() => void retry()}>{busy ? "Finishing your Proof…" : "Confirm and submit"}</button>
+      <button className="btn" type="button" disabled={busy || !confirmed || reviewLoading || !shippingReview || shippingReview.reviewRequired || identifierReview?.reviewRequired || identifierDecisionBusy || scanResults.some(scan=>scan.status==="QUEUED")} onClick={() => void retry()}>{busy ? "Finishing your Proof…" : "Confirm and submit"}</button>
       <a href={previewUrl} download="packproof-recording.webm">Download local recording</a>
     </div> : null}
     {state.phase === "PROCESSING" ? <p role="status">Finishing your Proof…{state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}</p> : null}

@@ -9,6 +9,7 @@ import { AppHeader } from "../ui/AppHeader";
 import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { InfoCard } from "../ui/ProofCard";
+import { CasePacketPreview } from "../ui/CasePacketPreview";
 import { PairedReturnPlayer } from "../ui/PairedReturnPlayer";
 import { SignaturePlayer } from "../ui/SignaturePlayer";
 import { RestoringScrollView } from "../ui/RestoringScrollView";
@@ -76,7 +77,6 @@ export function SignatureProofScreen() {
     ),
     [inboundAnchor, setInboundAnchor] = useState<EvidenceAnchor | null>(null),
     [correcting, setCorrecting] = useState<string | null>(null);
-  const [showPacketData, setShowPacketData] = useState(false);
   const [comparisonNotes, setComparisonNotes] = useState(""),
     [comparisonState, setComparisonState] = useState("NOT_COMPARABLE");
   const live = useRef(true),
@@ -442,57 +442,10 @@ export function SignatureProofScreen() {
                 }
               />
             ))}
+          </InfoCard>
             {packet ? (
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: colors.textPrimary, fontWeight: "600" }}>
-                  {packet.preview.title}
-                </Text>
-                <Text style={{ color: colors.textPrimary }}>
-                  {packet.preview.summary}
-                </Text>
-                {(packet.preview.gaps ?? []).map((gap, index) => (
-                  <Text key={index} style={{ color: colors.textSecondary }}>
-                    Gap: {gap}
-                  </Text>
-                ))}
-                <Text style={{ color: colors.textSecondary }}>
-                  Exact recipient-facing packet
-                </Text>
-                {Object.entries(packet.preview)
-                  .filter(([key]) => !["title", "summary", "gaps"].includes(key))
-                  .map(([key, value]) => (
-                    <View key={key} style={{ gap: 4 }}>
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontWeight: "600",
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {key}
-                      </Text>
-                      <Text selectable style={{ color: colors.textSecondary }}>
-                        {readablePreview(value)}
-                      </Text>
-                    </View>
-                  ))}
-                <Button
-                  label={
-                    showPacketData
-                      ? "Hide packet technical data"
-                      : "Inspect exact packet data"
-                  }
-                  variant="tertiary"
-                  onPress={() => setShowPacketData(!showPacketData)}
-                />
-                {showPacketData ? (
-                  <Text
-                    selectable
-                    style={{ color: colors.textSecondary, fontSize: 12 }}
-                  >
-                    {JSON.stringify(packet.preview, null, 2)}
-                  </Text>
-                ) : null}
+              <View style={{ gap: 16 }}>
+                <CasePacketPreview key={packet.caseId} packet={packet} />
                 <Button
                   label={
                     packet.approved
@@ -542,7 +495,6 @@ export function SignatureProofScreen() {
                 />
               </View>
             ) : null}
-          </InfoCard>
           </> : null}
           {tool === "compare" ? <>
           <InfoCard>
@@ -745,25 +697,4 @@ export function SignatureProofScreen() {
       </FadeSlideIn>
     </AppScreen>
   );
-}
-
-function readablePreview(value: unknown): string {
-  if (value === null || value === undefined) return "Not included";
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  )
-    return String(value);
-  if (Array.isArray(value))
-    return value.length
-      ? value.map(readablePreview).join("\n\n")
-      : "None included";
-  return Object.entries(value as Record<string, unknown>)
-    .filter(([, item]) => item !== null)
-    .map(
-      ([key, item]) =>
-        `${key.replace(/([A-Z])/g, " $1")}: ${readablePreview(item)}`,
-    )
-    .join("\n");
 }

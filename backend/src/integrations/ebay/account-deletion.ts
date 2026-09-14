@@ -87,11 +87,12 @@ export function parseEbayDeletionNotification(body: unknown): {
   if (!notificationId) {
     throw new DomainError("INVALID_WEBHOOK", "eBay deletion notification is missing an id", 400);
   }
-  return {
-    notificationId,
-    username: asString(data.username),
-    userId: asString(data.userId),
-  };
+  const topic = asString(asRecord(record.metadata).topic);
+  if (topic && topic !== "MARKETPLACE_ACCOUNT_DELETION") throw new DomainError("INVALID_WEBHOOK", "Unexpected eBay notification topic", 400);
+  const username = asString(data.username);
+  const userId = asString(data.userId);
+  if (!username && !userId) throw new DomainError("INVALID_WEBHOOK", "eBay deletion notification is missing a subject", 400);
+  return { notificationId, username, userId };
 }
 
 function decodeSignatureHeader(value: string): { kid: string; signature: string } {
@@ -132,6 +133,7 @@ async function resolvePublicKey(input: {
     `${ebayApiBaseUrl(input.environment)}/commerce/notification/v1/public_key/${encodeURIComponent(input.keyId)}`,
     {
       method: "GET",
+      signal: AbortSignal.timeout(10_000),
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${applicationToken}`,
@@ -163,6 +165,7 @@ async function getApplicationToken(input: {
 }): Promise<string> {
   const response = await input.fetchImpl(ebayTokenUrl(input.environment), {
     method: "POST",
+    signal: AbortSignal.timeout(10_000),
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       Authorization: basicAuthHeader(input.clientId, input.clientSecret),

@@ -1,3 +1,4 @@
+import { NotificationCenter } from "../components/NotificationCenter";
 import { UsagePanel } from "../components/UsagePanel";
 import { BillingPanel } from "../components/BillingPanel";
 import { StudyConsentPanel } from "../components/StudyConsentPanel";
@@ -77,6 +78,7 @@ export function AccountScreen(props: {
       <SettingsDisclosure title="Recordings on this device">
         {props.api && props.userId && props.onOpenProof ? <RecordingsSettingsPanel api={props.api} userId={props.userId} onOpenProof={props.onOpenProof} /> : <p className="note">Open Orders to find recordings that need attention. Keep this browser's data until your recordings have finished saving.</p>}
       </SettingsDisclosure>
+      {props.api && props.onOpenProof && <SettingsDisclosure title="Notifications"><NotificationCenter api={props.api} onOpen={props.onOpenProof}/></SettingsDisclosure>}
       <SettingsDisclosure title="Appearance">
         <fieldset className="appearance-list" style={{border:0,padding:0,margin:0}}><legend className="meta">Choose how PackProof looks</legend>{APPEARANCE_OPTIONS.map(option => <label key={option.id} className={`appearance-row${theme.preference === option.id ? " appearance-row-selected" : ""}`}>
           <span><strong>{option.label}</strong><span className="meta" style={{display:"block"}}>{option.hint}</span></span>

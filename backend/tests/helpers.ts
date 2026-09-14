@@ -16,7 +16,7 @@ import type { ObjectStore } from "../src/s3/object-store.js";
 import { insertUser } from "../src/domain/users.js";
 import type { MutableCredentialStore } from "../src/integrations/credentials.js";
 import { MemoryCredentialStore } from "../src/integrations/memory-credential-store.js";
-import type { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
+import { createDefaultIntegrationRegistry, type IntegrationAdapterRegistry } from "../src/integrations/registry.js";
 import { commitAttestation } from "../src/domain/attestations.js";
 import { commitEvidence, initializeEvidenceUpload } from "../src/domain/evidence.js";
 import { createCaptureSession, completeCaptureSession } from "../src/domain/capture-sessions.js";
@@ -70,10 +70,11 @@ export async function createHarness(
     auth: new BearerUserAdapter(opened.db),
     publicBaseUrl,
     devAuth: true,
+    testFixtures: true,
     corsOrigins: options.corsOrigins,
     manifestSigning: options.manifestSigning,
     credentialStore,
-    integrations: options.integrations,
+    integrations: options.integrations ?? createDefaultIntegrationRegistry(resolvedClock, {testFixtures: true}),
     ebay: options.ebay,
     shopify: options.shopify,
     etsy: options.etsy,

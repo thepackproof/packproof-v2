@@ -1,6 +1,6 @@
 import { recordNativeStudyInteraction } from "../analytics/native-study";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Share, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Share, StyleSheet, Switch, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,7 +30,8 @@ export function SharingScreen() {
   const proofId = app.proof?.proofId;
   const userId = app.session?.userId;
   const apiBaseUrl = app.client.apiBaseUrl;
-  const scopeKey = `${apiBaseUrl}|${userId ?? ""}|${proofId ?? ""}`;
+  const [includeItemIdentifiers, setIncludeItemIdentifiers] = useState(false);
+  const scopeKey = `${apiBaseUrl}|${userId ?? ""}|${proofId ?? ""}|identifiers:${includeItemIdentifiers}`;
   const scopeRef = useRef(scopeKey);
   scopeRef.current = scopeKey;
   const mounted = useRef(true);
@@ -41,6 +42,7 @@ export function SharingScreen() {
   const currentLink = useRef<AccessLinkView | null>(null);
   const [links, setLinks] = useState<AccessLinkView[]>([]);
   const [showLinks, setShowLinks] = useState(false);
+  const [shareDetails,setShareDetails]=useState(false);
   const [busy, setBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [offlineMode, setOfflineMode] = useState(app.offline);
@@ -54,6 +56,7 @@ export function SharingScreen() {
     return () => { mounted.current = false; };
   }, []);
   useEffect(() => { setOfflineMode(app.offline); }, [app.offline]);
+  useEffect(() => { setIncludeItemIdentifiers(false); }, [apiBaseUrl, userId, proofId]);
 
   function isCurrent() { return mounted.current && scopeRef.current === scopeKey; }
   function assertCurrent() {
@@ -72,6 +75,8 @@ export function SharingScreen() {
   async function persistLink(next: AccessLinkView) {
     assertCurrent();
     rememberLink(next);
+    // Broader grants never replace the default saved link used when this screen reopens.
+    if (includeItemIdentifiers) return;
     try {
       await saveSharedLink(AsyncStorage, apiBaseUrl, userId!, proofId!, next);
     } catch {
@@ -120,7 +125,7 @@ export function SharingScreen() {
   async function loadScope() {
     await app.ensureAuth();
     assertCurrent();
-    const next = await request<ShareScope>("/preview", "POST", SHARED_PROOF);
+    const next = await request<ShareScope>("/preview", "POST", { ...SHARED_PROOF, ...(includeItemIdentifiers ? { itemIdentifiersReviewed: true } : {}) });
     assertCurrent();
     if (next.proofId !== proofId) throw new Error("Please reopen this Proof to share it.");
     setScope(next);
@@ -140,7 +145,7 @@ export function SharingScreen() {
     setInitializing(true);
     void (async () => {
       if (!proofId || !userId) return;
-      const saved = await loadSharedLink(AsyncStorage, apiBaseUrl, userId, proofId).catch(() => null);
+      const saved = includeItemIdentifiers ? null : await loadSharedLink(AsyncStorage, apiBaseUrl, userId, proofId).catch(() => null);
       if (cancelled || !isCurrent()) return;
       rememberLink(saved);
       setReadyScopeKey(scopeKey);
@@ -181,8 +186,11 @@ export function SharingScreen() {
         const verified = await request<AccessLinkView>("/reuse", "POST", { token: saved.token });
         assertCurrent();
         if (!reusableSharedLink(verified, proofId!)) throw new Error("This link is unavailable. Open Manage links to review access.");
-        await persistLink(verified);
-        return { link: verified, cached: false };
+        if ((verified.itemIdentifiersReviewed === true) === includeItemIdentifiers) {
+          await persistLink(verified);
+          return { link: verified, cached: false };
+        }
+        await forgetLink(); saved = null;
       }
       if (!scope || scope.proofId !== proofId) {
         await loadScope();
@@ -193,6 +201,7 @@ export function SharingScreen() {
       try {
         created = await request<AccessLinkView>("/grants", "POST", {
           ...SHARED_PROOF,
+          ...(includeItemIdentifiers ? { itemIdentifiersReviewed: true } : {}),
           originalsReviewed: true,
           previewHash: scope.disclosure.viewHash,
           expiresAt: new Date(Date.now() + days * 86400000).toISOString(),
@@ -207,6 +216,7 @@ export function SharingScreen() {
       }
       assertCurrent();
       if (!reusableSharedLink(created, proofId!)) throw new Error("The link is unavailable. Please reopen sharing and try again.");
+      if ((created.itemIdentifiersReviewed === true) !== includeItemIdentifiers) throw new Error("The link did not include the reviewed item-code settings. Refresh the sharing preview and try again.");
       await persistLink(created);
       setLinks(previous => [created, ...previous.filter(item => item.accessLinkId !== created.accessLinkId)]);
       void recordNativeStudyInteraction(app.client, userId!, "share_created").catch(() => undefined);
@@ -273,10 +283,18 @@ export function SharingScreen() {
       {initializing ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading sharing details" /> : null}
       <View style={[styles.section, { borderBottomColor: colors.divider }]}>
         <Text style={[styles.heading, { color: colors.textPrimary }]}>What the link includes</Text>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Shipment details, saved original recordings, tracking, and confirmations. Anyone with the link can view the shared record until it expires or you revoke it.</Text>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Review recordings in the Proof for private information before sharing. New recordings and updates added later will appear through this same link.</Text>
+        <Text style={[styles.body, { color: colors.textSecondary }]}>Anyone with the link can view the shared record. Review recordings for private information before sharing.</Text>
+        <Button label={shareDetails?"Less about sharing":"What recipients can see"} variant="tertiary" onPress={()=>setShareDetails(!shareDetails)}/>
+        {shareDetails?<Text style={[typography.finePrint, { color: colors.textSecondary }]}>Shipment details, saved original recordings, tracking and confirmations. Future saved updates use this same link until it expires or is revoked.</Text>:null}
         {pendingLocal ? <Text style={[styles.body, { color: colors.textSecondary }]}>A recording is still waiting to finish saving. Only recordings already saved to the Proof are available to the recipient.</Text> : scope?.evidence.length === 0 ? <Text style={[styles.body, { color: colors.textSecondary }]}>Recording has not been added yet. The recipient will see that this Proof is incomplete.</Text> : null}
         <Button label="Review Proof" variant="tertiary" onPress={app.goBack} />
+        {Boolean(app.proof?.identifiers?.observations.length) ? <View style={{ gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+            <Text style={[styles.body, { color: colors.textPrimary }]}>Include item identifiers</Text>
+            <Switch accessibilityLabel="Include item identifiers in this shared Proof" value={includeItemIdentifiers} disabled={busy || initializing || offlineMode} onValueChange={setIncludeItemIdentifiers} />
+          </View>
+          {includeItemIdentifiers ? <Text style={[styles.body, { color: colors.textSecondary }]}>Observed product codes, serials and their review decisions will be visible to anyone with this link.</Text> : null}
+        </View> : null}
       </View>
       {availableLink ? (
         <View style={styles.expiry}>

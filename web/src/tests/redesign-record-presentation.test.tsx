@@ -31,7 +31,7 @@ it("shows the current carrier status while viewing a historical scan and retains
   const event = { id: "old", eventType: "IN_TRANSIT", occurredAt: "2026-09-08T10:00:00Z", location: "Cincinnati", provider: "UPS", source: "CARRIER_API", eventData: {} };
   render(<ShipmentTracking events={[event, { ...event, id: "new", eventType: "DELIVERED", occurredAt: "2026-09-08T12:00:00Z", location: "Columbus" }]} trackingNumber="TRACK" refreshError="timeout" />);
   await userEvent.click(screen.getByRole("button", { name: /In transit Cincinnati/ }));
-  expect(document.querySelector(".tracking-status")).toHaveTextContent("Delivered");
+  expect(document.querySelector(".shipment-tracking .panel-heading .status-badge")).toHaveTextContent("Delivered");
   expect(screen.getByRole("status")).toHaveTextContent("temporarily unavailable");
   expect(screen.getByText("Selected observation")).toBeInTheDocument();
 });

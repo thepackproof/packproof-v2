@@ -83,6 +83,14 @@ describe("public partner platform", () => {
       scopes: ["proofs:read"],
     });
     expect((await create(readonly.token)).status).toBe(403);
+    const launch=(key:string)=>request(app).post(`/v1/proofs/${id}/capture-intents`).set(auth(key)).set('Idempotency-Key','capture-intent-one').send({allowedSurfaces:['WEB']});
+    expect((await launch(b.key)).status).toBe(404);
+    expect((await launch(readonly.token)).status).toBe(403);
+    const intent=await launch(a.key);expect(intent.status,JSON.stringify(intent.body)).toBe(201);
+    const replay=await launch(a.key);expect(replay.body).toEqual(intent.body);expect(replay.headers['idempotency-replayed']).toBe('true');
+    expect(intent.body.launchPath).not.toContain(id);
+    const cached=await h.db.query('SELECT response FROM api_idempotency WHERE tenant_id=$1 AND key_hash=$2',[a.id,sha256Hex('capture-intent-one')]);
+    expect(cached.rows[0].response).toHaveProperty('encrypted');expect(JSON.stringify(cached.rows)).not.toContain(intent.body.launchToken);
     const leak = await h.db.query("SELECT * FROM api_keys WHERE id=$1", [a.keyId]);
     expect(JSON.stringify(leak.rows)).not.toContain(a.key);
   });

@@ -1,0 +1,83 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import request from 'supertest';
+import { auth, commitFulfillmentAndAttest, createHarness, login, type TestHarness } from './helpers.js';
+import { createTransaction } from '../src/domain/transactions.js';
+import { createOrGetProof } from '../src/domain/create-proof.js';
+import { acceptInvitation, createInvitation } from '../src/domain/invitations.js';
+import { finalizeProof } from '../src/domain/finalize.js';
+import { attachTracking, parseTrackingInput } from '../src/domain/tracking-associations.js';
+import { recordShipmentEvent } from '../src/domain/shipment-events.js';
+import { getShipmentIntegrity } from '../src/domain/shipment-integrity.js';
+import { appendAudit } from '../src/domain/audit.js';
+import { dispatchProofPush, listProofUpdates, muteProof, reconcileProofUpdates, registerPushDevice, updateNotificationPreferences } from '../src/domain/notification-center.js';
+
+let h:TestHarness|undefined;
+afterEach(async()=>{await h?.close();h=undefined;});
+describe('evidence record updates',()=>{
+  it('appends tracking after sealing without changing the manifest, and rejects replacement or unauthorized association',async()=>{
+    h=await createHarness();
+    const seller=await login(h.app,'record-seller'),buyer=await login(h.app,'record-buyer'),outsider=await login(h.app,'record-outsider');
+    const transaction=await createTransaction(h.db,h.clock,seller,{itemTitle:'Documented camera'});
+    const {proofId}=await createOrGetProof(h.db,h.clock,seller,transaction.transactionId);
+    const invitation=await createInvitation(h.db,h.clock,seller,proofId,{inviteeIdentifier:'buyer@example.com'});
+    await acceptInvitation(h.db,h.clock,buyer,invitation.invitation.token);
+    await commitFulfillmentAndAttest(h,seller,proofId);
+    const before=await finalizeProof(h.db,h.clock,seller,proofId);
+    const input={value:'https://www.ups.com/track?tracknum=1Z999AA10123456784'};
+    const saved=await request(h.app).post(`/proofs/${proofId}/tracking`).set(auth(seller)).send(input);
+    expect(saved.status,saved.text).toBe(200);
+    await attachTracking(h.db,h.clock,seller,proofId,input);
+    expect((await h.db.query('SELECT id FROM proof_tracking_associations WHERE proof_id=$1',[proofId])).rows).toHaveLength(1);
+    expect((await h.db.query('SELECT id FROM transaction_shipping WHERE transaction_id=$1',[transaction.transactionId])).rows).toHaveLength(0);
+    const after=await finalizeProof(h.db,h.clock,seller,proofId);
+    expect(after.manifest.canonicalJson).toBe(before.manifest.canonicalJson);
+    expect(after.manifest.sha256).toBe(before.manifest.sha256);
+    await recordShipmentEvent(h.db,h.clock,seller,{transactionId:transaction.transactionId,eventType:'IN_TRANSIT',occurredAt:h.clock.now().toISOString(),carrier:'UPS',source:'SHIPPING_PROVIDER_API',provider:'test-carrier',sourceEventId:'record-carrier-1',authority:'INTEGRATION'});
+    const integrity=await getShipmentIntegrity(h.db,proofId);
+    expect(integrity.verification.valid).toBe(true);
+    expect(integrity.eventCount).toBe(1);
+    await expect(attachTracking(h.db,h.clock,seller,proofId,{value:'1Z999AA10123456785',carrier:'ups'})).rejects.toMatchObject({code:'TRACKING_CONFLICT'});
+    await expect(attachTracking(h.db,h.clock,seller,proofId,{value:'1Z999AA10123456784',carrier:'fedex'})).rejects.toMatchObject({code:'TRACKING_CONFLICT'});
+    const denied=await request(h.app).post(`/proofs/${proofId}/tracking`).set(auth(outsider)).send(input);
+    expect(denied.status).toBe(403);
+    const provenance=(await h.db.query<{event_data:Record<string,unknown>}>("SELECT event_data FROM audit_events WHERE proof_id=$1 AND event_type='TRACKING_ASSOCIATED'",[proofId])).rows;
+    expect(provenance).toHaveLength(1);
+    expect(provenance[0].event_data).toMatchObject({source:'CARRIER_LINK',packingRecordUnchanged:true,observedInRecording:false});
+  });
+
+  it('keeps muted history, ignores technical events and sends each confirmed update once to its authorized device',async()=>{
+    let timestamp=Date.parse('2026-09-11T12:00:00Z');
+    h=await createHarness({now:()=>new Date(timestamp)});
+    const seller=await login(h.app,'notification-seller');
+    const transaction=await createTransaction(h.db,h.clock,seller,{itemTitle:'Notification record'});
+    const {proofId}=await createOrGetProof(h.db,h.clock,seller,transaction.transactionId);
+    await registerPushDevice(h.db,h.clock,seller,'ExpoPushToken[test_device_123456]');
+    timestamp+=1000;
+    await appendAudit(h.db,{proofId,actorUserId:seller,eventType:'CAPTURE_CLIENT_CONTEXT_REPORTED',eventData:{},at:h.clock.now()});
+    await attachTracking(h.db,h.clock,seller,proofId,{value:'1Z999AA10123456784',carrier:'ups'});
+    await muteProof(h.db,seller,proofId,true);
+    let calls=0;let payload:Record<string,unknown>|undefined;
+    const send=(async(_url:unknown,init:RequestInit)=>{calls++;payload=JSON.parse(init.body as string);return new Response(JSON.stringify({data:{status:'ok',id:'receipt-1'}}),{status:200});}) as typeof fetch;
+    await dispatchProofPush(h.db,h.clock,send);
+    expect(calls).toBe(0);
+    await reconcileProofUpdates(h.db,h.clock);
+    const mutedHistory=await listProofUpdates(h.db,seller);
+    expect(mutedHistory.map(n=>n.title).sort()).toEqual(['Participant joined','Tracking number added to the Proof']);
+    await updateNotificationPreferences(h.db,seller,{enabled:false});
+    expect(await listProofUpdates(h.db,seller)).toEqual(mutedHistory);
+    await updateNotificationPreferences(h.db,seller,{enabled:true});
+    await muteProof(h.db,seller,proofId,false);
+    timestamp+=1000;
+    await appendAudit(h.db,{proofId,actorUserId:seller,eventType:'LIFECYCLE_EVIDENCE_COMMITTED',eventData:{},at:h.clock.now()});
+    await dispatchProofPush(h.db,h.clock,send);
+    await dispatchProofPush(h.db,h.clock,send);
+    expect(calls).toBe(1);
+    expect(payload?.data).toMatchObject({proofId,userId:seller});
+    expect(await listProofUpdates(h.db,seller)).toHaveLength(mutedHistory.length+1);
+  });
+
+  it('accepts supported carrier links without retrieving them and rejects arbitrary URLs',()=>{
+    expect(parseTrackingInput('https://tools.usps.com/go/TrackConfirmAction?tLabels=9400100000000000000000',null)).toMatchObject({carrier:'usps',trackingNumber:'9400100000000000000000',source:'CARRIER_LINK'});
+    expect(()=>parseTrackingInput('https://ups.com.attacker.test/?tracknum=1Z999AA10123456784',null)).toThrow();
+  });
+});

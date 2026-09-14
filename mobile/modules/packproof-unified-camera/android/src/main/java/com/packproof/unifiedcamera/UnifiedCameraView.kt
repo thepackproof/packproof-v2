@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Size
+import android.util.Base64
 import android.view.Surface
 import androidx.annotation.OptIn
 import androidx.camera.core.Camera
@@ -66,6 +67,8 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       Barcode.FORMAT_PDF417, Barcode.FORMAT_AZTEC, Barcode.FORMAT_DATA_MATRIX,
     ).build(),
   )
+  private var identifierScanner: com.google.mlkit.vision.barcode.BarcodeScanner? = null
+  @Volatile private var identifiersEnabled = false
   private val previewView = PreviewView(context).apply {
     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
     scaleType = PreviewView.ScaleType.FILL_CENTER
@@ -95,6 +98,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   private val candidateReads = LinkedHashMap<String, Pair<Long, Int>>()
 
   private class CaptureSession(val file: File, val promise: Promise) {
+    val journal = if (File(file.parentFile, "capture-context.json").exists()) CaptureJournal(file.parentFile!!) else null
     var interrupted = false
     var stopping = false
     var started = false
@@ -143,6 +147,20 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     applyTorch()
   }
 
+  fun setIdentifierCaptureEnabled(enabled: Boolean) {
+    // Session policy is pinned before acquisition; enrichment never rebinds the camera.
+    if (session != null || identifiersEnabled == enabled) return
+    identifiersEnabled = enabled
+    if (enabled && identifierScanner == null) identifierScanner = BarcodeScanning.getClient(
+      BarcodeScannerOptions.Builder().setBarcodeFormats(
+        Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E, Barcode.FORMAT_EAN_8, Barcode.FORMAT_EAN_13,
+        Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_CODE_93,
+        Barcode.FORMAT_CODABAR, Barcode.FORMAT_ITF, Barcode.FORMAT_QR_CODE,
+        Barcode.FORMAT_PDF417, Barcode.FORMAT_AZTEC, Barcode.FORMAT_DATA_MATRIX,
+      ).build(),
+    )
+  }
+
   private fun hasPermission(permission: String) =
     ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
@@ -182,7 +200,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
           it.setSurfaceProvider(previewView.surfaceProvider)
         }
         val recorder = Recorder.Builder().setQualitySelector(
-          QualitySelector.from(Quality.HD, FallbackStrategy.lowerQualityOrHigherThan(Quality.HD)),
+          QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)),
         ).build()
         val capture = VideoCapture.withOutput(recorder).also { it.targetRotation = rotation }
         val analyzer = ImageAnalysis.Builder()
@@ -254,6 +272,10 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       val directory = File(root, sessionId)
       // The JS report may already exist here. Reserve only the video path atomically.
       if (!directory.exists() && !directory.mkdir()) throw IllegalStateException("Session directory unavailable")
+      if (android.os.StatFs(directory.absolutePath).availableBytes < 64L*1024*1024) {
+        promise.reject("CAPTURE_STORAGE_LOW", "Free some device storage before recording. Existing recordings are kept.", null)
+        return
+      }
       val output = File(directory, "video.mp4")
       if (!output.createNewFile()) {
         promise.reject("CAPTURE_SESSION_EXISTS", "Start a new capture session to record another video.", null)
@@ -293,6 +315,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     when (event) {
       is VideoRecordEvent.Start -> {
         current.started = true
+        current.journal?.start()
         val started = RecordingEpoch(generation, SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis())
         if (!current.stopping && canUseCamera()) {
           epoch = started
@@ -302,6 +325,11 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       }
       is VideoRecordEvent.Status -> {
         encodedDurationMs = event.recordingStats.recordedDurationNanos / 1_000_000L
+        if (!current.stopping && android.os.StatFs(current.file.parent!!).availableBytes < 16L*1024*1024) {
+          current.interrupted=true
+          current.journal?.append("INTERRUPTION",encodedDurationMs,"STORAGE_PRESSURE")
+          stopRecording()
+        }
       }
       is VideoRecordEvent.Finalize -> {
         epoch = null
@@ -309,28 +337,31 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
         recording = null
         val durationMs = event.recordingStats.recordedDurationNanos / 1_000_000L
         val byteSize = current.file.length()
+        if(event.error != VideoRecordEvent.Finalize.ERROR_NONE) current.journal?.append("INTERRUPTION",durationMs,"ENCODER_ERROR")
         val recoverable = event.error == VideoRecordEvent.Finalize.ERROR_NONE ||
           event.error == VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE ||
           event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED ||
           event.error == VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED
         if (recoverable && byteSize > 0 && durationMs > 0) {
-          // A JS bridge response can be lost on process death. Persist only native media facts first.
-          val marker = org.json.JSONObject().put("complete", true).put("durationMs", durationMs)
-            .put("byteSize", byteSize).put("interrupted", current.interrupted || event.error != VideoRecordEvent.Finalize.ERROR_NONE)
-          try {
-            val temporary = File(current.file.path + ".finalized.json.tmp")
-            temporary.writeText(marker.toString())
-            if (!temporary.renameTo(File(current.file.path + ".finalized.json"))) throw IllegalStateException("Recovery metadata unavailable")
-          } catch (_: Exception) {
-            current.promise.reject("RECORDING_RECOVERY_FAILED", "The recording was retained, but recovery metadata could not be saved. Free local space and try again.", null)
-            return
+          // Finish the fsynced native journal before publishing a durable completion marker.
+          // A force-stop while the MP4 encoder is active may leave an unfinished tail;
+          // the capability snapshot explicitly reports incrementalMedia=false.
+          val complete = {
+            val marker = org.json.JSONObject().put("complete", true).put("durationMs", durationMs)
+              .put("byteSize", byteSize).put("interrupted", current.interrupted || event.error != VideoRecordEvent.Finalize.ERROR_NONE)
+            try {
+              val temporary = File(current.file.path + ".finalized.json.tmp")
+              java.io.FileOutputStream(temporary).use { out -> out.write(marker.toString().toByteArray());out.fd.sync() }
+              if (!temporary.renameTo(File(current.file.path + ".finalized.json"))) throw IllegalStateException("Recovery metadata unavailable")
+              current.promise.resolve(mapOf("uri" to Uri.fromFile(current.file).toString(), "durationMs" to durationMs.toDouble(),
+                "byteSize" to byteSize.toDouble(), "interrupted" to (current.interrupted || event.error != VideoRecordEvent.Finalize.ERROR_NONE)))
+            } catch (_: Exception) {
+              current.promise.reject("RECORDING_RECOVERY_FAILED", "The original is kept. Free local space to preserve its recovery journal.", null)
+            }
           }
-          current.promise.resolve(mapOf(
-            "uri" to Uri.fromFile(current.file).toString(),
-            "durationMs" to durationMs.toDouble(),
-            "byteSize" to byteSize.toDouble(),
-            "interrupted" to (current.interrupted || event.error != VideoRecordEvent.Finalize.ERROR_NONE),
-          ))
+          val failed = { current.promise.reject("RECORDING_RECOVERY_FAILED", "The original is kept, but its capture journal could not be saved.", null) }
+          if (current.journal != null) current.journal.finish(durationMs, complete, failed) else complete()
+
         } else {
           // Keep any bytes at the unique path for inspection; never claim failed bytes are evidence.
           current.promise.reject("RECORDING_FINALIZE_FAILED", "This recording did not produce a completed video. Any local bytes were retained.", null)
@@ -358,7 +389,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     val sampledNanos = SystemClock.elapsedRealtimeNanos()
     val sampledEncodedMs = encodedDurationMs
     if (destroyed || observedEpoch == null || observedEpoch.generation != expectedGeneration ||
-      expectedGeneration != generation || sampledNanos - lastAnalysisNanos < 200_000_000L) {
+      expectedGeneration != generation || sampledNanos - lastAnalysisNanos < analysisCadenceNanos()) {
       image.close()
       return
     }
@@ -371,14 +402,14 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     analysisInFlight.incrementAndGet()
     try {
       val input = InputImage.fromMediaImage(mediaImage, image.imageInfo.rotationDegrees)
-      scanner.process(input)
+      (if (identifiersEnabled) identifierScanner ?: scanner else scanner).process(input)
         .addOnSuccessListener(mainExecutor) { codes ->
           // A stale ML task must not leak into another session, after Stop, or after backgrounding.
           if (destroyed || epoch !== observedEpoch || generation != expectedGeneration) return@addOnSuccessListener
           val now = SystemClock.elapsedRealtimeNanos()
           for (code in codes) {
             val raw = code.rawValue ?: continue
-            if (raw.isEmpty() || raw.length > 512) continue
+            if (raw.isEmpty() || raw.toByteArray(Charsets.UTF_8).size > (if (identifiersEnabled) 4096 else 512)) continue
             val format = barcodeFormat(code.format)
             val key = "$format:$raw"
             if (recentCodes.containsKey(key)) continue
@@ -388,14 +419,17 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
             candidateReads[key] = Pair(now, reads)
             // Two distinct analyzed frames must agree; a single noisy frame is not accepted.
             if (reads < 2) continue
-            if (recentCodes.size >= 128) recentCodes.remove(recentCodes.keys.first())
+            if (recentCodes.size >= (if (identifiersEnabled) 512 else 128)) recentCodes.remove(recentCodes.keys.first())
             recentCodes[key] = now
             // Use the last encoder progress, not analysis wall time: the observation cannot
             // run beyond the saved media when the encoder lags behind preview analysis.
             // This remains an approximate seek point and is checked against decoded media.
             val offsetMs = sampledEncodedMs.coerceAtLeast(0L)
-            val observation = mutableMapOf<String, Any>(
+            val observation = mutableMapOf<String, Any?>(
               "rawValue" to raw,
+              "rawBytes" to if (identifiersEnabled) code.rawBytes?.takeIf { it.size <= 4096 }?.let { Base64.encodeToString(it, Base64.NO_WRAP) } else null,
+              "decoderEncoding" to null,
+              "symbologyIdentifier" to null,
               "format" to format,
               "detectedAtMs" to offsetMs.toDouble(),
               "detectedAtUnixMs" to (observedEpoch.startedUnixMs + (sampledNanos - observedEpoch.startedNanos).coerceAtLeast(0L) / 1_000_000L).toDouble(),
@@ -403,13 +437,18 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
               "source" to "LIVE_CAMERA_ANALYSIS",
               "coordinateSpace" to "ROTATED_ANALYSIS_PIXELS",
               "decoderVersion" to "mlkit-barcode-17.2.0",
+              "timestampUncertaintyMs" to null,
               "frameWidth" to if (image.imageInfo.rotationDegrees % 180 == 0) image.width else image.height,
               "frameHeight" to if (image.imageInfo.rotationDegrees % 180 == 0) image.height else image.width,
             )
             code.boundingBox?.let {
               observation["bounds"] = mapOf("left" to it.left, "top" to it.top, "right" to it.right, "bottom" to it.bottom)
             }
-            onBarcodeDetected(observation)
+            val minimized = raw.replace(Regex("[\\s-]"), "").uppercase()
+            // Enabled sessions add only server-resolved shipping observations when sealing.
+            if (!identifiersEnabled && minimized.matches(Regex("[A-Z0-9]{10,64}"))) session?.journal?.append("LABEL", offsetMs, minimized)
+            // Expo's event bridge accepts non-null values; unavailable metadata stays absent.
+            onBarcodeDetected(observation.mapNotNull { (key, value) -> value?.let { key to it } }.toMap())
           }
         }
         .addOnFailureListener(mainExecutor) {
@@ -436,12 +475,21 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     }
   }
 
+  private fun analysisCadenceNanos():Long {
+    if (android.os.Build.VERSION.SDK_INT >= 29) {
+      val power=context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+      if(power.currentThermalStatus >= android.os.PowerManager.THERMAL_STATUS_SEVERE) return 500_000_000L
+    }
+    return 125_000_000L
+  }
+
   private fun interruptAndRelease() {
     ready = false
     epoch = null
     generation += 1
     if (session != null) {
       session?.interrupted = true
+      session?.journal?.append("INTERRUPTION",encodedDurationMs,"BACKGROUND")
       releaseAfterFinalize = true
       analysis?.clearAnalyzer()
       try { camera?.cameraControl?.enableTorch(false) } catch (_: Exception) { /* Best effort. */ }
@@ -483,6 +531,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     if (destroyed && analysisInFlight.get() == 0 && !scannerClosed) {
       scannerClosed = true
       scanner.close()
+      identifierScanner?.close()
     }
   }
 

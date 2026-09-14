@@ -1,6 +1,11 @@
 import { nativeStudyForCapture } from "../analytics/native-study";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import type { IdentifierReview } from '../../../backend/src/identifiers/types';
+import { captureIdentifiers, identifierFailureBlocks, readIdentifierReview } from '../capture/identifier-storage';
+import { identifierCaptureEnabled } from '../capture/identifier-observation';
+import { newIdempotencyKey } from '../v2-api';
+import { IdentifierDetails } from '../ui/IdentifierDetails';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePackProof } from "../app/PackProofProvider";
 import { OFFLINE_CAPTURE_MESSAGE } from "../copy/errors";
@@ -29,6 +34,10 @@ export function CaptureScreen() {
   const [checkingLabel, setCheckingLabel] = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
   const [reviewVersion, setReviewVersion] = useState(0);
+  const [identifiers, setIdentifiers] = useState<IdentifierReview | null>(null);
+  const [identifierError, setIdentifierError] = useState<string | null>(null);
+  const [identifierBlocked, setIdentifierBlocked] = useState(false);
+  const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const openedPreview = useRef<string | null>(null);
   const capture = app.localCapture;
   const belongs = app.session?.captureProofId === app.proof?.proofId;
@@ -64,6 +73,24 @@ export function CaptureScreen() {
   }, [capture?.captureSessionId, belongs, ordinaryCapture, app.client, reviewVersion]);
 
   useEffect(() => {
+    setIdentifiers(null); setIdentifierError(null); setIdentifierBlocked(false); setReviewReasons({});
+    if (!capture || !belongs || !identifierCaptureEnabled(capture.identifierPolicy)) return;
+    let disposed = false;
+    void (async () => {
+      // Share the already-running local inspection; no second video pass.
+      await inspectCaptureShipping(app.client, capture).catch(() => null);
+      const result = await readIdentifierReview(app.client, capture);
+      if (!disposed) setIdentifiers(result);
+    })().catch(error => {
+      if (disposed) return;
+      const blocked = identifierFailureBlocks(error);
+      setIdentifierBlocked(blocked);
+      setIdentifierError(blocked ? 'Reconnect in this recording’s original account to check its saved code review.' : 'Code details are unavailable. Your recording can still be submitted.');
+    });
+    return () => { disposed = true; };
+  }, [capture?.captureSessionId, belongs, app.client, reviewVersion]);
+
+  useEffect(() => {
     if (!capture || !belongs || !ordinaryCapture || !capture.captureUserId) return;
     let active=true;
     void nativeStudyForCapture(app.client,capture.captureUserId,capture.studyTimingRef).then(study=>{if(active)study?.event('review_opened');});
@@ -80,8 +107,27 @@ export function CaptureScreen() {
     });
   }
 
+  async function decideIdentifier(observationId: string, decision: 'NOT_THIS_SHIPMENT' | 'ACKNOWLEDGE_MISMATCH') {
+    if (!capture?.captureSessionId || !capture.captureProofId || !identifiers) return;
+    const reason = reviewReasons[observationId]?.trim() || (decision === 'NOT_THIS_SHIPMENT' ? 'Seller identified a code belonging to an item outside this shipment.' : '');
+    if (reason.length < 5) return;
+    await app.run(async () => {
+      const handle = await captureIdentifiers(app.client, capture);
+      handle?.assertScope();
+      const review = await app.client.decideCaptureIdentifier(capture.captureProofId!, capture.captureSessionId!, {
+        clientEventId: newIdempotencyKey(), observationId, revision: identifiers.revision, decision, reason,
+      });
+      handle?.assertScope();
+      await handle?.journal.updateReview(review);
+      if (capture.recovery) capture.recovery.authorization = undefined;
+      capture.identifierCheckpoint = undefined; capture.identifierCheckpointRequest = undefined;
+      await persistCaptureMetadata(capture);
+      setIdentifiers(review); setIdentifierBlocked(false);
+    });
+  }
+
   const unresolved = labels?.observations.filter(labelNeedsReview) ?? [];
-  const labelBlocked = ordinaryCapture && (checkingLabel || Boolean(labelError) || !labels || labels.reviewRequired || inspection?.playable === false);
+  const labelBlocked = (ordinaryCapture && (checkingLabel || Boolean(labelError) || !labels || labels.reviewRequired || inspection?.playable === false)) || identifierBlocked || identifiers?.reviewRequired === true;
   const progressLabel = app.captureStatus === "uploading"
     ? app.uploadPercent != null && app.uploadPercent >= 100
       ? "Upload complete · sealing Proof…"
@@ -93,6 +139,7 @@ export function CaptureScreen() {
         : capture?.recovery
           ? captureRecoveryLabel(capture.recovery.phase)
           : "Finishing your Proof…";
+
 
   return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={[
     styles.root, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 20) },
@@ -145,6 +192,22 @@ export function CaptureScreen() {
             <Text style={[styles.note, { color: colors.textSecondary }]}>Video frame · near {Math.round(frame.requestedOffsetMs / 1000)}s</Text>
           </View>)}
         </ScrollView> : null}
+      </View> : null}
+      {identifierCaptureEnabled(capture.identifierPolicy) ? <View style={styles.labelReview}>
+        {identifierError ? <Text style={[styles.note, { color: colors.textSecondary }]}>{identifierError}</Text> : null}
+        {identifierError ? <Button label="Check codes again" variant="tertiary" onPress={() => setReviewVersion(version => version + 1)} /> : null}
+        {(identifiers?.observations ?? []).filter(row => row.reviewRequired && !row.decision).map(row => <View key={row.observationId} style={[styles.observation, { borderColor: colors.border }]}>
+          <Text style={[styles.item, { color: colors.textPrimary }]}>Check this item code</Text>
+          <Text style={[styles.note, { color: colors.textSecondary }]}>This code does not match the selected order. Check the video and package before confirming.</Text>
+          <Text selectable style={[styles.note, { color: colors.textPrimary }]}>{row.product?.title ?? row.identifiers.map(item => `${item.type} ${item.normalizedValue ?? item.value}`).join(' · ')}</Text>
+          {row.expected.length ? <Text style={[styles.note, { color: colors.textSecondary }]}>Expected: {row.expected.map(item => item.title).join('; ')}</Text> : null}
+          <TextInput accessibilityLabel="Reason for acknowledging the code mismatch" placeholder="Explain this mismatch if the item is being shipped" placeholderTextColor={colors.textSecondary} value={reviewReasons[row.observationId] ?? ''}
+            onChangeText={reason => setReviewReasons(previous => ({ ...previous, [row.observationId]: reason }))} maxLength={500} multiline
+            style={{ color: colors.textPrimary, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60 }} />
+          <Button label="Acknowledge this mismatch" variant="secondary" disabled={app.busy || (reviewReasons[row.observationId]?.trim().length ?? 0) < 5} onPress={() => void decideIdentifier(row.observationId, 'ACKNOWLEDGE_MISMATCH')} />
+          <Button label="This code is not part of this shipment" variant="tertiary" disabled={app.busy} onPress={() => void decideIdentifier(row.observationId, 'NOT_THIS_SHIPMENT')} />
+        </View>)}
+        <IdentifierDetails value={identifiers} />
       </View> : null}
       {sellerAttestation ? <SellerAttestation onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} />
         : <Button label={app.captureStatus === "retry" ? "Try again" : "Use recording"} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} haptic="medium" />}

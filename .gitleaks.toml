@@ -71,3 +71,13 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''^docs/ui\-ux\-redesign\-2026\-09\-08/release\-evidence\.template\.json$''']
 regexes = ['''^594ea0e0414228c4d149527b4f138a8095765b02$''']
+
+# Reviewed CI run 34262188685 / job 102182632999: release evidence names
+# the exact source commit already returned by public /meta; it cannot authenticate.
+[[allowlists]]
+description = "Exact public source commit in the completed proof navigation release evidence."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/proof\-navigation\-2026\-09\-08/release\-evidence\.json$''']
+regexes = ['''^cc8209d50774d124646fa9c373eac537bc168e9b$''']

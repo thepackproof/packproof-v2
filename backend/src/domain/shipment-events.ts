@@ -1,3 +1,4 @@
+import { liveShippingIdentity, trackingAssociation } from './tracking-associations.js';
 import type { Clock } from "../clock.js";
 import type { ManifestSigner } from "./manifest-signing.js";
 import { appendProofSupplementInTransaction } from "./proof-supplements.js";
@@ -424,7 +425,7 @@ export async function getShipmentObservationsForProof(
     [transactionId],
   );
   const events = await listShipmentEventsForProof(db, proofId);
-  const row = shipping.rows[0] ?? null;
+  const row = await liveShippingIdentity(db,transactionId,shipping.rows[0] ?? null);
   return {
     shippingId: row?.id ?? null,
     identity: row
@@ -674,9 +675,8 @@ async function ensureShippingIdentity(
   carrier: string | null,
   nowIso: string,
 ): Promise<ShippingRow> {
-  if (bundle.shipping) {
-    return bundle.shipping;
-  }
+  const live = await liveShippingIdentity(db,bundle.txn.id,bundle.shipping);
+  if (live) return live;
   if (bundle.proofStatus === "FINALIZED") {
     throw new DomainError(
       "SHIPMENT_IDENTITY_REQUIRED",

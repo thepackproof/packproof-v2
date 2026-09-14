@@ -1,3 +1,4 @@
+import { dispatchEbayDeletionCases } from "../src/domain/ebay-deletion-cases.js";
 import { afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { loadConfig } from "../src/config.js";
@@ -285,6 +286,72 @@ describe("eBay seller OAuth and order import", () => {
       .set(auth(userId));
     expect(connect.status).toBe(403);
     expect(connect.body.error.code).toBe("EBAY_INTEGRATION_DISABLED");
+  });
+
+  it("returns Android consent and denial to the fixed app destination after consuming state", async () => {
+    harness = await createHarness(undefined, { ebay: ebayRuntime(new FakeEbayClient()) });
+    const userId = await connectEbay(harness);
+    for (const denied of [false, true]) {
+      const started = await request(harness.app).post("/me/connected-accounts/ebay/connect").set(auth(userId)).send({surface:"android",returnUrl:"https://untrusted.invalid"});
+      const state = new URL(started.body.authorizationUrl).searchParams.get("state");
+      const result = await request(harness.app).get("/oauth/ebay/callback").query({state,...(denied?{error:"access_denied"}:{code:"valid-ebay-code"})});
+      expect(result.headers.location).toMatch(/^packproof-v2:\/\/connections\/ebay\?/);
+      expect(result.headers.location).toContain(denied ? "CONNECTED_ACCOUNT_AUTH_DENIED" : "ebay=connected");
+      const replay = await request(harness.app).get("/oauth/ebay/callback").query({state,code:"valid-ebay-code"});
+      expect(replay.headers.location).toContain("OAUTH_STATE_REUSED");
+    }
+  });
+
+  it("rejects another seller on reconnect before replacing the saved credentials", async () => {
+    const client = new FakeEbayClient();
+    harness = await createHarness(undefined, { ebay: ebayRuntime(client) });
+    const userId = await connectEbay(harness);
+    const account = (await request(harness.app).get("/me/connected-accounts").set(auth(userId))).body.accounts[0];
+    const before = await harness.credentialStore.getCredentials({adapterKey:"ebay",credentialReference:(await harness.db.query<{credential_reference:string}>("SELECT credential_reference FROM integration_connections WHERE id=$1",[account.id])).rows[0].credential_reference});
+    client.codes.set("other-seller",{userId:"seller-other",username:"different",accountType:"INDIVIDUAL"});
+    const started = await request(harness.app).post(`/me/connected-accounts/${account.id}/reauthorize`).set(auth(userId)).send({surface:"android"});
+    const result = await request(harness.app).get("/oauth/ebay/callback").query({state:new URL(started.body.authorizationUrl).searchParams.get("state"),code:"other-seller"});
+    expect(result.headers.location).toContain("CONNECTED_ACCOUNT_IDENTITY_MISMATCH");
+    expect(await harness.credentialStore.getCredentials({adapterKey:"ebay",credentialReference:before!.credentialReference})).toEqual(before);
+  });
+
+  it("reconnects a renamed seller without creating another account", async () => {
+    const client = new FakeEbayClient();
+    harness = await createHarness(undefined, { ebay: ebayRuntime(client) });
+    const userId = await connectEbay(harness);
+    const id = (await request(harness.app).get("/me/connected-accounts").set(auth(userId))).body.accounts[0].id;
+    client.getUser = async()=>({userId:"ebay-user-001",username:"renamed-seller",accountType:"INDIVIDUAL"});
+    const start = await request(harness.app).post(`/me/connected-accounts/${id}/reauthorize`).set(auth(userId));
+    const result = await request(harness.app).get("/oauth/ebay/callback").query({state:new URL(start.body.authorizationUrl).searchParams.get("state"),code:"valid-ebay-code"});
+    expect(result.headers.location).toContain("ebay=connected");
+    const accounts = (await request(harness.app).get("/me/connected-accounts").set(auth(userId))).body.accounts;
+    expect(accounts).toHaveLength(1); expect(accounts[0]).toMatchObject({id,externalAccountName:"renamed-seller"});
+  });
+
+  it("retries credential erasure after a deletion event without falsely claiming record erasure", async () => {
+    harness = await createHarness(undefined, { ebay: ebayRuntime(new FakeEbayClient()) });
+    await connectEbay(harness);
+    const remove = harness.credentialStore.deleteCredentials.bind(harness.credentialStore);
+    harness.credentialStore.deleteCredentials = async()=>{throw new Error("unavailable");};
+    const payload = {metadata:{topic:"MARKETPLACE_ACCOUNT_DELETION"},notification:{notificationId:"retry-case",data:{userId:"ebay-user-001",username:"renamed"}}};
+    const result = await request(harness.app).post("/integrations/webhooks/ebay/account-deletion").send(payload);
+    expect(result.status).toBe(200); expect(result.body.recordsErased).toBe(false); expect(result.body.connectionsDisabled).toBe(1);
+    expect((await harness.db.query("SELECT state FROM ebay_deletion_cases")).rows[0].state).toBe("CREDENTIAL_REMOVAL_PENDING");
+    harness.credentialStore.deleteCredentials = remove;
+    await harness.db.query("UPDATE ebay_deletion_cases SET next_attempt_at=NULL");
+    await dispatchEbayDeletionCases(harness.db,harness.clock,harness.credentialStore);
+    expect((await harness.db.query("SELECT state FROM ebay_deletion_cases")).rows[0].state).toBe("REVIEW_REQUIRED");
+    await request(harness.app).post("/integrations/webhooks/ebay/account-deletion").send(payload).expect(200);
+    expect((await harness.db.query("SELECT * FROM ebay_deletion_cases")).rows).toHaveLength(1);
+  });
+
+  it("records buyer deletion and prevents reacquisition through manual order import", async () => {
+    harness = await createHarness(undefined, { ebay: ebayRuntime(new FakeEbayClient()) });
+    const userId = await connectEbay(harness);
+    const result = await request(harness.app).post("/integrations/webhooks/ebay/account-deletion").send({notification:{notificationId:"buyer-case",data:{username:"filmshooter",userId:"buyer-user"}}});
+    expect(result.status).toBe(200); expect(result.body.connectionsDisabled).toBe(0); expect(result.body.recordsErased).toBe(false);
+    const imported = await request(harness.app).post(`/me/marketplaces/ebay/orders/${EBAY_FIXTURE_ORDER_ID}/import`).set(auth(userId)).send({createProof:true});
+    expect(imported.status).toBe(409); expect(imported.body.error.code).toBe("EBAY_ACCOUNT_DELETION_PENDING");
   });
 
   it("answers the marketplace deletion challenge and disables the connection without deleting Proofs", async () => {

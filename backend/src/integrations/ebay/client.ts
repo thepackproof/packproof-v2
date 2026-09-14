@@ -219,6 +219,7 @@ export function parseOrder(payload: unknown): EbayOrder | null {
     }),
     cancelState: asString(cancel.cancelState),
     buyerUsername: asString(buyer.username),
+    buyerUserId: asString(buyer.userId),
     total: parseMoney(pricing.total) ?? parseMoney(record.total),
     lineItems,
     shippingCarrier: shipping.carrier,

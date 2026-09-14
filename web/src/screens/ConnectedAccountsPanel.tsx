@@ -56,7 +56,7 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
           <p className="meta">{connectedAccountStatusLabel(account.status)}</p>
           {!account.capabilities.transactions && <p className="note">This account connection does not supply orders to PackProof.</p>}
           <div className="btn-row">
-            {available && ["NEEDS_REAUTH", "ERROR"].includes(account.status) && <button className="btn btn-secondary" type="button" disabled={props.busy} onClick={() => props.onReauthorize(account.id)}>Reconnect</button>}
+            {available && (["NEEDS_REAUTH", "ERROR"].includes(account.status) || connections.some(connection => connection.connectionId === account.id && connection.status === "NEEDS_REAUTH")) && <button className="btn btn-secondary" type="button" disabled={props.busy} onClick={() => props.onReauthorize(account.id)}>Reconnect</button>}
             {account.status !== "DISCONNECTED" && <button className="btn btn-tertiary" type="button" disabled={props.busy} onClick={() => props.onDisconnect(account.id)}>Disconnect</button>}
           </div>
         </div>)}

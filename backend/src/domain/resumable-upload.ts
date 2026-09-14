@@ -17,19 +17,24 @@ export async function discardPendingUpload(
   clock: Clock,
   userId: string,
   proofId: string,
-  idempotencyKey: string,
+  idempotencyKey?: string,
+  evidenceId?: string,
 ) {
-  if (typeof idempotencyKey !== "string" || !idempotencyKey || idempotencyKey.length > 200)
-    throw new DomainError("INVALID_REQUEST", "Upload key is required", 400);
+  const identity = evidenceId ?? idempotencyKey;
+  if (typeof identity !== "string" || !identity || identity.length > 200 || (evidenceId !== undefined && idempotencyKey !== undefined))
+    throw new DomainError("INVALID_REQUEST", "One upload identity is required", 400);
   return db.transaction(async (tx) => {
     await loadProof(tx, proofId, true);
     await requireParticipant(tx, proofId, userId);
     const result = await tx.query<EvidenceRow>(
-      "SELECT * FROM evidence WHERE proof_id=$1 AND idempotency_key=$2 FOR UPDATE",
-      [proofId, idempotencyKey],
+      evidenceId !== undefined ? "SELECT * FROM evidence WHERE proof_id=$1 AND id=$2 FOR UPDATE" : "SELECT * FROM evidence WHERE proof_id=$1 AND idempotency_key=$2 FOR UPDATE",
+      [proofId, identity],
     );
     const row = result.rows[0];
-    if (!row) return { discarded: true };
+    if (!row) {
+      if (evidenceId !== undefined) throw new DomainError("EVIDENCE_NOT_FOUND", "Incomplete evidence was not found in this Proof", 404);
+      return { discarded: true };
+    }
     if (row.submitted_by !== userId)
       throw new DomainError(
         "PARTICIPANT_NOT_AUTHORIZED",
@@ -45,6 +50,7 @@ export async function discardPendingUpload(
     if (row.validation_status !== "REJECTED") {
       await tx.query("UPDATE evidence SET validation_status='REJECTED' WHERE id=$1", [row.id]);
       await tx.query("UPDATE evidence_upload_admissions SET state='DISCARDED' WHERE evidence_id=$1",[row.id]);
+      await tx.query("UPDATE capture_sessions SET state='CANCELLED' WHERE evidence_id=$1 AND state<>'COMMITTED'",[row.id]);
       await appendAudit(tx, {
         proofId,
         actorUserId: userId,

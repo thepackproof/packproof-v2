@@ -1,3 +1,4 @@
+import { isEbaySubjectSuppressed } from "../../domain/ebay-deletion-cases.js";
 import { ebayIdentityAccount, ebayPilotCaptureExclusion } from "./normalize.js";
 import type { Clock } from "../../clock.js";
 import type { Database } from "../../db/database.js";
@@ -21,7 +22,11 @@ export function createEbayCommerceAdapter(db: Database, clock: Clock, runtime: E
                 environment: runtime.environment, marketplaceId: runtime.marketplaceId, accessToken, offset, limit: 50,
                 updatedSince: input.updatedSince, updatedUntil: input.updatedUntil,
             }));
-            return { orders: page.orders.map(order => ({...normalizeEbayFulfillmentOrder(order, input.connection.external_account_reference!, runtime.environment),identityAccountReference:ebayIdentityAccount(runtime.environment,userId)})),
+            const allowed = [];
+            for (const order of page.orders) {
+                if (!await isEbaySubjectSuppressed(db,runtime.environment,order.buyerUserId,order.buyerUsername)) allowed.push(order);
+            }
+            return { orders: allowed.map(order => ({...normalizeEbayFulfillmentOrder(order, input.connection.external_account_reference!, runtime.environment),identityAccountReference:ebayIdentityAccount(runtime.environment,userId)})),
                 cursor: page.total !== null ? offset + page.orders.length < page.total && page.orders.length > 0 ? String(offset + page.limit) : null : page.orders.length === page.limit ? String(offset + page.limit) : null };
         },
     };
@@ -39,7 +44,7 @@ export function normalizeEbayFulfillmentOrder(order: EbayOrder, account: string,
             remainingQuantity: item.fulfillmentStatus === "FULFILLED" ? 0 : item.fulfillmentStatus === "NOT_STARTED" ? item.quantity : null,
             unitValue: item.quantity && amount(item.lineItemCost?.value) !== null ? amount(item.lineItemCost?.value)! / item.quantity : amount(item.lineItemCost?.value), currency: item.lineItemCost?.currency ?? order.total?.currency ?? null })),
         transactionValue: amount(order.total?.value), currency: order.total?.currency ?? null,
-        buyer: order.buyerUsername ? { externalId: order.buyerUsername, displayName: order.buyerUsername } : null,
+        buyer: order.buyerUserId || order.buyerUsername ? { externalId: order.buyerUserId || order.buyerUsername!, displayName: order.buyerUsername } : null,
         shipping: order.trackingNumber || order.shippingCarrier || order.shippingService ? { carrier: order.shippingCarrier, service: order.shippingService, trackingNumber: order.trackingNumber, shipmentDate: null } : null,
         provenance: { source: "MARKETPLACE_API", sourceRecordId: order.orderId } };
 }

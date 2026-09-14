@@ -1,4 +1,4 @@
-import { chronologyCategoryLabel } from "@packproof/copy/chronology";
+import { chronologyCategoryLabel, humanChronologyTitle } from "@packproof/copy/chronology";
 import { SOURCE_DISCLOSURE } from "@packproof/copy/errors";
 import { formatDateTime } from "@packproof/copy/format";
 import type { ChronologyEntry } from "../api/types";
@@ -19,25 +19,22 @@ export function EventDetailScreen(props: {
   const event = props.event;
   return (
     <main className="page stack">
-      <PageHeader title={event.title} onBack={props.onBack} />
+      <PageHeader title={humanChronologyTitle(event.eventType, event.title)} onBack={props.onBack} />
       <article className="info-card">
-        <p>
-          {event.description ||
-            chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)}
-        </p>
+        {event.description && event.description !== chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType) && <p>{event.description}</p>}
         <p className="meta">{formatDateTime(event.occurredAt)}</p>
         <p className="meta">
-          {chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)}
+          Source: {chronologyCategoryLabel(event.category, event.source, event.provider, event.eventType)}
         </p>
       </article>
-      <article className="info-card">
+      <details className="event-details"><summary>Exact event details</summary><article className="info-card">
         <Row label="Source" value={event.source} />
         <Row label="Provider" value={event.provider ?? ""} />
         <Row label="Event identifier" value={event.id} />
         <Row label="Associated object" value={event.relatedEntityId ?? ""} />
         <Row label="Exact timestamp" value={event.occurredAt} />
       </article>
-      <p className="note">{SOURCE_DISCLOSURE}</p>
+      <p className="note">{SOURCE_DISCLOSURE}</p></details>
     </main>
   );
 }

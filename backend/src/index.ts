@@ -1,4 +1,9 @@
+import { dispatchEbayDeletionCases } from "./domain/ebay-deletion-cases.js";
+import { dispatchProofPush } from './domain/notification-center.js';
 import { assertPolicyAccessSafe } from "./domain/policy-recovery.js";
+import { intakeConfigFromEnv,enrollConfiguredIntakeCohort } from './intake/runtime-config.js';
+import { createIntakeMailJobs } from './intake/mail-runtime.js';
+import { dispatchShippoIntake } from './intake/shippo-runtime.js';
 import { StripeBillingAdapter, stripeBillingConfigFromEnv } from "./billing/stripe-adapter.js";
 import {processStripeBillingReconciliation} from "./billing/daily-reconciliation.js";
 import {DomainError} from "./domain/errors.js";
@@ -6,6 +11,7 @@ import {observationConfigFromEnv} from "./analytics/observation-router.js";
 import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
+import { assertRealDataRuntime } from './operations/integration-readiness.js';
 import { dispatchCaptureShipments } from './workers/capture-shipment-worker.js';
 import { startOperationsWorkers } from './operations/runtime-jobs.js';
 import { assertSchemaCurrent } from './db/migrate.js';
@@ -17,6 +23,7 @@ import { systemClock } from "./clock.js";
 import { loadConfig, loadEnvFile } from "./config.js";
 import { migrate } from "./db/migrate.js";
 import { createServerApp } from "./server-app.js";
+import { futurePlatformFromEnv } from "./platform/future-config.js";
 import { openDatabase } from "./db/open.js";
 import { createObjectStore } from "./s3/create-object-store.js";
 import { createDefaultIntegrationRegistry } from "./integrations/registry.js";
@@ -38,6 +45,7 @@ import {
 } from "./integrations/connected-accounts/from-config.js";
 
 loadEnvFile(path.resolve(process.cwd()));
+assertRealDataRuntime();
 
 const config = loadConfig();
 // Validate signing configuration before opening the database or starting workers.
@@ -45,6 +53,8 @@ const manifestSigning = await initializeManifestSigningRuntime(systemClock);
 const opened = await openDatabase(config);
 if(config.migrateOnStart) await migrate(opened.db);
 else await assertSchemaCurrent(opened.db);
+const intakeConfig=intakeConfigFromEnv();
+await enrollConfiguredIntakeCohort(opened.db,intakeConfig);
 
 const credentialStore = createCredentialStore(config);
 const billingConfig=stripeBillingConfigFromEnv(process.env);
@@ -94,6 +104,7 @@ const readinessProbes=[
   }},
 ];
 const app = config.processRole==='worker'?express():createServerApp({
+  intake: intakeConfig,
   db: opened.db,
   objectStore,
   clock: systemClock,
@@ -107,6 +118,7 @@ const app = config.processRole==='worker'?express():createServerApp({
   observationConfig:observationConfigFromEnv(process.env),
   webhookConfig,
   manifestSigning,
+  futurePlatform: futurePlatformFromEnv(process.env),
   releaseIdentity: config.release,
   requireDurableReceipts: config.requireDurableReceipts,
   readinessProbes,
@@ -126,7 +138,8 @@ const server = app.listen(config.port, "0.0.0.0", () => {
     `PackProof V2 API listening on ${config.port} engine=${opened.engine} objectStore=${config.objectStore} authMode=${config.authMode}`,
   );
 });
-const jobs:ScheduledJob[]=[];
+const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+jobs.push({name:'order-shippo',intervalMs:15000,run:()=>dispatchShippoIntake(opened.db,systemClock,{credentialStore,config:()=>intakeConfigFromEnv()})});
 if(billing&&billingReconciliationStartAt){
   const initialStartAt=billingReconciliationStartAt;
   jobs.push({name:'billing-reconciliation',intervalMs:30000,run:async()=>{
@@ -145,6 +158,8 @@ if(webhookConfig.encryptionKey&&webhookConfig.allowedHosts.length&&process.env.P
   jobs.push({name:'webhooks',intervalMs:15000,run:()=>dispatchWebhooks(opened.db,systemClock,webhookConfig,undefined,5)});
 if(process.env.PACKPROOF_COMMERCE_WORKER!=="false")jobs.push({name:'commerce',intervalMs:15000,run:()=>dispatchCommerceSyncs(opened.db,systemClock,{integrations,credentials:credentialStore})});
 if(process.env.PACKPROOF_CAPTURE_SHIPMENT_WORKER!=="false")jobs.push({name:'capture-shipments',intervalMs:15000,run:()=>dispatchCaptureShipments(opened.db,systemClock,{integrations,credentials:credentialStore,defaultShippoCredentialReference:process.env.PACKPROOF_CAPTURE_SHIPPO_CREDENTIAL_REFERENCE,defaultEasyPostCredentialReference:process.env.PACKPROOF_CAPTURE_EASYPOST_CREDENTIAL_REFERENCE,manifestSigning})});
+jobs.push({name:'ebay-deletion',intervalMs:30000,run:()=>dispatchEbayDeletionCases(opened.db,systemClock,credentialStore)});
+jobs.push({name:'proof-update-notifications',intervalMs:15000,run:()=>dispatchProofPush(opened.db,systemClock)});
 const stopWorkers=config.processRole==='api'?async()=>{}:startOperationsWorkers(opened.db,systemClock,objectStore,config,recoveryPublisher,process.env,jobs);
 
 let shuttingDown=false;

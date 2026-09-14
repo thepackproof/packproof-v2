@@ -15,7 +15,7 @@ import {DomainError} from './errors.js';
 const exec=promisify(execFile);
 const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=60','--fsize=2097152','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C'}});
 const VERSION='committed-source-thumbnail/v1';
-interface ThumbnailTransform {anchorId:string;sourceVersion:string;startMs:number;endMs:number;elapsedMs:number;removeAudio:true;stripMetadata:true;withheldIntervals:never[]}
+interface ThumbnailTransform {anchorId:string|null;sourceVersion:string;startMs:number;endMs:number;elapsedMs:number;removeAudio:true;stripMetadata:true;withheldIntervals:never[]}
 interface ThumbnailRow {id:string;proof_id:string;evidence_id:string;source_sha256:string;transform:ThumbnailTransform;status:string;sha256:string|null;object_key:string|null;content_type:string|null;byte_size:number|null;created_by_user_id:string;attempt_count:number;failure_code:string|null}
 function view(r:ThumbnailRow){return {derivativeId:r.id,evidenceId:r.evidence_id,sourceSha256:r.source_sha256,transformVersion:VERSION,transform:r.transform,status:r.status,sha256:r.sha256,contentType:r.content_type,byteSize:r.byte_size,attemptCount:r.attempt_count,failureCode:r.failure_code};}
 export async function queueThumbnail(db:Database,clock:Clock,userId:string,proofId:string,anchorId:string) {
@@ -47,6 +47,14 @@ export async function readThumbnail(db:Database,store:ObjectStore,userId:string,
 export async function processPendingThumbnails(db:Database,clock:Clock,store:ObjectStore) {
   if(process.env.PACKPROOF_REPLAY_THUMBNAILS==='false') return {processed:0,failed:0};
   const now=clock.now();
+  await db.query(`INSERT INTO proof_media_derivatives(id,proof_id,evidence_id,source_sha256,transform_version,transform,status,created_by_user_id,created_at)
+    SELECT 'pmd_card_'||e.id,e.proof_id,e.id,e.sha256,$1,
+      jsonb_build_object('anchorId',NULL,'sourceVersion','sha256:'||e.sha256,'startMs',0,'endMs',1,'elapsedMs',0,'removeAudio',true,'stripMetadata',true,'withheldIntervals','[]'::jsonb),
+      'PENDING',pp.user_id,$2
+    FROM evidence e JOIN proof_participants pp ON pp.proof_id=e.proof_id AND pp.role='SELLER'
+    WHERE e.validation_status='COMMITTED' AND e.content_type LIKE 'video/%'
+      AND NOT EXISTS(SELECT 1 FROM proof_media_derivatives d WHERE d.evidence_id=e.id AND d.source_sha256=e.sha256)
+    ORDER BY e.created_at DESC LIMIT 1 ON CONFLICT DO NOTHING`,[VERSION,now.toISOString()]);
   await db.query("UPDATE proof_media_derivatives SET status='FAILED',failure_code='THUMBNAIL_ATTEMPTS_EXHAUSTED' WHERE transform_version=$1 AND status='PENDING' AND attempt_count>=3 AND lease_until<=$2",[VERSION,now.toISOString()]);
   const pending=(await db.query<ThumbnailRow>(`SELECT * FROM proof_media_derivatives WHERE transform_version=$1 AND (status='PENDING' OR (status='FAILED' AND attempt_count<3)) AND (lease_until IS NULL OR lease_until<=$2) ORDER BY created_at LIMIT 1`,[VERSION,now.toISOString()])).rows[0];
   if(!pending)return {processed:0,failed:0};
@@ -63,7 +71,7 @@ export async function processPendingThumbnails(db:Database,clock:Clock,store:Obj
     const durationMs=Number(JSON.parse(probe.stdout).format?.duration)*1000;
     if(!Number.isFinite(durationMs)||pending.transform.elapsedMs>=durationMs||pending.transform.endMs>durationMs+100) throw new Error('Range unavailable');
     await boundedExec('ffmpeg',['-nostdin','-v','error','-threads','1','-filter_threads','1','-y','-protocol_whitelist','file,pipe','-i',input,'-ss',String(pending.transform.elapsedMs/1000),'-map','0:v:0','-threads','1','-frames:v','1','-vf','scale=320:-2','-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',output],{timeout:60000,maxBuffer:1024*1024});
-    const body=await readFile(output),hash=sha256Hex(body),key=`derivatives/${pending.proof_id}/${pending.id}/${hash}`;
+    const body=await readFile(output),hash=sha256Hex(body),key=`proofs/${pending.proof_id}/derivatives/${pending.id}/${hash}`;
     if(!body.length||body.length>1024*1024)throw new Error('Output limit');
     await store.put(key,body,'image/png');
     await db.query('UPDATE proof_media_derivatives SET status=\'READY\',sha256=$2,object_key=$3,content_type=\'image/png\',byte_size=$4,failure_code=NULL WHERE id=$1 AND status=\'PENDING\' AND lease_until=$5',[pending.id,hash,key,body.length,lease]);

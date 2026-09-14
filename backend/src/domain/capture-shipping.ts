@@ -8,20 +8,11 @@ import { loadCaptureSession } from './capture-sessions.js';
 import { DomainError } from './errors.js';
 import { assertNotFinalized, loadProof, requireParticipant } from './proof-access.js';
 import { insertShipping, lockTransactionContext } from './transactions.js';
+import { recognizeShippingBarcode } from '../capture/shipping-barcode.js';
 
 /** Conservative identity recognition; a pattern is never a carrier verification. */
 export function shippingBarcode(raw: unknown) {
-  if (typeof raw !== 'string' || raw.length > 128) return null;
-  let value = raw.replace(/[ \t\r\n-]/g, '').toUpperCase();
-  if (/^420\d{5}9[2345]\d{20}$/.test(value)) value = value.slice(8);
-  else if (/^420\d{9}9[2345]\d{20}$/.test(value)) value = value.slice(12);
-  if (/^1Z[A-Z0-9]{16}$/.test(value)) return { trackingNumber: value, carrierHint: 'UPS', distinctive: true };
-  if (/^9[2345]\d{20}$/.test(value)) return { trackingNumber: value, carrierHint: 'USPS', distinctive: true };
-  // Other carrier numbers overlap product/order identifiers. Require a tap or an
-  // exact match to the transaction's already-associated tracking number.
-  if (/^[A-Z0-9]{10,26}$/.test(value) && /\d/.test(value))
-    return { trackingNumber: value, carrierHint: null, distinctive: false };
-  return null;
+  return recognizeShippingBarcode(raw);
 }
 
 export interface ShippingScanInput {
@@ -106,10 +97,11 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
 export async function getCaptureShipping(db: Database, proofId: string) {
   const observations = (await db.query<{id:string;session_id:string;tracking_number:string;carrier_hint:string|null;detected_at_ms:number;participant_confirmed:boolean;evidence_id:string|null}>(
     `SELECT l.id,l.session_id,l.tracking_number,l.carrier_hint,l.detected_at_ms,l.participant_confirmed,s.evidence_id FROM capture_shipping_labels l JOIN capture_sessions s ON s.id=l.session_id WHERE l.proof_id=$1 ORDER BY l.created_at,l.id`,[proofId])).rows;
-  if (!observations.length) return null;
+
   const job = (await db.query<{state:string;carrier:string|null;provider_mode:string|null;last_error_code:string|null;registered_at:string|Date|null}>(
     'SELECT j.state,j.carrier,j.provider_mode,j.last_error_code,j.registered_at FROM capture_shipment_jobs j JOIN proofs p ON p.transaction_id=j.transaction_id WHERE p.id=$1',[proofId])).rows[0];
-  return { source:'PACKPROOF_CAPTURE' as const, assurance:'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED' as const,
+  if (!observations.length && !job) return null;
+  return { source:observations.length ? 'PACKPROOF_CAPTURE' as const : 'SHIPMENT_ASSOCIATION' as const, assurance:'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED' as const,
     observations:observations.map(o=>({observationId:o.id,sessionId:o.session_id,evidenceId:o.evidence_id,trackingNumber:o.tracking_number,carrierHint:o.carrier_hint,detectedAtMs:o.detected_at_ms,participantConfirmed:o.participant_confirmed})),
     registration:{state:job?.state??'QUEUED',carrier:job?.carrier??null,mode:job?.provider_mode??null,errorCode:job?.last_error_code??null,registeredAt:job?.registered_at ? new Date(job.registered_at).toISOString():null} };
 }

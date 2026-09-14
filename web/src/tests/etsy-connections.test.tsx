@@ -24,7 +24,7 @@ function accountProps(accounts: ConnectedAccountView[] = []) {
 }
 function storeProps(row = connection) {
   return { connections: [row], lastSync: null, loading: false, error: null,
-    busy: false, development: false, ebay: null, onConnectDemo: vi.fn(),
+    busy: false, development: false, ebay: null,
     onConnectEbay: vi.fn(), onDisconnectEbay: vi.fn(), onImportSales: vi.fn(),
     onAutomation: vi.fn(), onSync: vi.fn() };
 }

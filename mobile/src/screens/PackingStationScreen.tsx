@@ -1,3 +1,6 @@
+import { lightColors, type ThemeColors } from "../theme/tokens";
+import { useTheme } from "../theme/ThemeProvider";
+import { Button } from "../ui/Button";
 import { completeSavedCapture } from "../capture/completion";
 import { captureRecoveryLabel } from "../capture/recovery-model";
 import { PressableScale } from "../ui/motion";
@@ -57,6 +60,7 @@ export function PackingStationScreen(props: {
   onAuthExpired: () => void;
   onLeave: () => void;
 }) {
+  const { colors } = useTheme();
   const [state, dispatch] = useReducer(reduceStation, undefined, () =>
     initialStationForRestore(props),
   );
@@ -434,7 +438,7 @@ export function PackingStationScreen(props: {
     await processCapture(captured, key);
   }
 
-  const tone = toneForPhase(state.phase);
+  const tone = toneForPhase(state.phase, colors);
   const leaveBlocked = Boolean(state.capture) && state.phase !== "PROOF_CREATED";
   const awaitingAttestation = Boolean(state.capture) && (
     state.phase === "RECORDING" || state.phase === "RECOVERY" ||
@@ -471,7 +475,7 @@ export function PackingStationScreen(props: {
           </Text>
         )}
 
-        {state.error ? <Text style={styles.error}>{state.error.message}</Text> : null}
+        {state.error ? <Text style={[styles.error, { color: colors.error, backgroundColor: colors.errorSoft }]}>{state.error.message}</Text> : null}
         {state.phase === "PROOF_CREATED" && completionNotice ? <Text style={[styles.hint, { color: tone.muted }]}>{completionNotice}</Text> : null}
         {localBusy && state.phase !== "RECORDING" && state.phase !== "PROCESSING" ? (
           <Text style={[styles.hint, { color: tone.muted }]}>Working…</Text>
@@ -521,11 +525,11 @@ export function PackingStationScreen(props: {
               onPress={() => dispatch({ type: "SCAN_STARTED" })}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
               value={state.referenceInput}
               onChangeText={(value) => dispatch({ type: "SET_REFERENCE", reference: value })}
               placeholder="Enter reference"
-              placeholderTextColor="#777"
+              placeholderTextColor={colors.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
               onSubmitEditing={() => {
@@ -703,17 +707,17 @@ function initialStationForRestore(props: {
   });
 }
 
-function toneForPhase(phase: StationState["phase"]): {
+function toneForPhase(phase: StationState["phase"], colors: ThemeColors): {
   background: string;
   ink: string;
   muted: string;
 } {
   switch (phase) {
     case "RECORDING": case "FINISH_SCANNING": case "VERIFYING_FINISH_SCAN":
-      return { background: "#F5F7FA", ink: "#102A43", muted: "#243746" };
-    case "PROOF_CREATED": return { background: "#F0FDF4", ink: "#166534", muted: "#243746" };
-    case "RECOVERY": return { background: "#FFFBEB", ink: "#78350F", muted: "#243746" };
-    default: return { background: "#FFFFFF", ink: "#102A43", muted: "#243746" };
+      return { background: colors.background, ink: colors.textPrimary, muted: colors.textSecondary };
+    case "PROOF_CREATED": return { background: colors.successSoft, ink: colors.successText, muted: colors.textSecondary };
+    case "RECOVERY": return { background: colors.warningSoft, ink: colors.warningText, muted: colors.textSecondary };
+    default: return { background: colors.background, ink: colors.textPrimary, muted: colors.textSecondary };
   }
 }
 
@@ -723,24 +727,7 @@ function StationButton(props: {
   onPress: () => void;
   secondary?: boolean;
 }) {
-  return (
-    <PressableScale
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      accessibilityState={{ disabled: props.disabled }}
-      onPress={props.onPress}
-      disabled={props.disabled}
-      style={[
-        styles.button,
-        props.secondary ? styles.buttonSecondary : null,
-        props.disabled ? styles.buttonDisabled : null,
-      ]}
-    >
-      <Text style={[styles.buttonText, props.secondary ? styles.buttonSecondaryText : null]}>
-        {props.label}
-      </Text>
-    </PressableScale>
-  );
+  return <Button label={props.label} onPress={props.onPress} disabled={props.disabled} variant={props.secondary ? "secondary" : "primary"} />;
 }
 
 const styles = StyleSheet.create({
@@ -760,35 +747,16 @@ const styles = StyleSheet.create({
   order: { fontSize: 28, fontWeight: "700" },
   item: { fontSize: 22, fontWeight: "600" },
   hint: { fontSize: 18, lineHeight: 26 },
-  error: { color: "#9F1239", fontSize: 16 },
+  error: { color: lightColors.error, fontSize: 16 },
   block: { gap: 12 },
   fallback: { gap: 8, marginTop: 8 },
   fallbackLabel: { fontSize: 14, fontWeight: "700", letterSpacing: 0.6 },
   input: {
     borderWidth: 2,
-    borderColor: "#D8E0E8",
-    backgroundColor: "#F5F7FA",
-    color: "#102A43",
+    borderColor: lightColors.border,
+    backgroundColor: lightColors.surface,
+    color: lightColors.textPrimary,
     padding: 16,
     fontSize: 20,
   },
-  button: {
-    backgroundColor: "#1769E0",
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  buttonSecondary: {
-    backgroundColor: "transparent",
-    borderWidth: 2,
-    borderColor: "#D8E0E8",
-  },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: {
-    color: "#FFFFFF",
-    textAlign: "center",
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  buttonSecondaryText: { color: "#102A43" },
 });

@@ -11,6 +11,9 @@ export type UnifiedCameraResult = {
 
 export type UnifiedBarcodeDetection = {
   rawValue: string;
+  rawBytes?: string | null;
+  decoderEncoding?: string | null;
+  symbologyIdentifier?: string | null;
   format: string;
   /** Approximate video seek point from CameraX encoder progress; not an exact frame PTS. */
   detectedAtMs: number;
@@ -19,6 +22,7 @@ export type UnifiedBarcodeDetection = {
   source?: "LIVE_CAMERA_ANALYSIS" | "ENCODED_VIDEO_FRAME";
   coordinateSpace?: "ROTATED_ANALYSIS_PIXELS" | "DECODED_VIDEO_PIXELS";
   decoderVersion?: string;
+  timestampUncertaintyMs?: number | null;
   frameWidth?: number;
   frameHeight?: number;
   bounds?: { left: number; top: number; right: number; bottom: number } | null;
@@ -36,6 +40,7 @@ type NativeEvent<T> = { nativeEvent: T };
 export type UnifiedCameraViewProps = ViewProps & {
   active: boolean;
   torchEnabled: boolean;
+  identifierCaptureEnabled?: boolean;
   onReady?: (event: NativeEvent<Record<string, never>>) => void;
   onBarcodeDetected?: (event: NativeEvent<UnifiedBarcodeDetection>) => void;
   onRecordingStarted?: (event: NativeEvent<{ startedAtUnixMs: number }>) => void;
@@ -51,7 +56,7 @@ export interface EncodedVideoInspection {
   timestampPrecision: "NEAR_REQUESTED_TIME";
 }
 
-const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
+const nativeModule = Platform.OS === 'android' ? requireOptionalNativeModule<{ identifierScannerVersion?(): number; bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection>; inspectIdentifierVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
 const nativeAvailable = nativeModule != null;
 export function newStudyOperationNonce():string {
   if(!nativeModule?.newOperationNonce)throw new Error('This build cannot enable study collection. Install the current native build.');
@@ -63,9 +68,12 @@ export async function systemHapticsEnabled(): Promise<boolean> {
 }
 
 /** Reads only this session's finalized original; older installed bundles truthfully return unavailable. */
-export async function inspectRecordedVideo(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection | null> {
+export async function inspectRecordedVideo(sessionId: string, offsetsMs: number[], identifiersEnabled = false): Promise<EncodedVideoInspection | null> {
+  if (identifiersEnabled && nativeModule?.inspectIdentifierVideo) return nativeModule.inspectIdentifierVideo(sessionId, offsetsMs.slice(0, 8));
   return nativeModule?.inspectRecordedVideo ? nativeModule.inspectRecordedVideo(sessionId, offsetsMs.slice(0, 8)) : null;
 }
+
+export function isIdentifierScannerAvailable(): boolean { return nativeModule?.identifierScannerVersion?.() === 1; }
 
 export function isUnifiedCameraAvailable(): boolean {
   return nativeAvailable;
@@ -82,3 +90,14 @@ export const UnifiedCameraView = React.forwardRef<UnifiedCameraViewRef, UnifiedC
     return <NativeView {...props} ref={ref} />;
   },
 );
+
+export async function bindNativeCaptureContext(sessionId:string,proofId:string,contextJson:string):Promise<void> {
+  if(!nativeModule?.bindCaptureContext) throw new Error('Install the current capture build before opening this recording.');
+  await nativeModule.bindCaptureContext(sessionId,proofId,contextJson);
+}
+export async function readNativeCaptureJournal(sessionId:string):Promise<string> {
+  if(!nativeModule?.readCaptureJournal) throw new Error('This build cannot recover the native capture journal.');
+  return nativeModule.readCaptureJournal(sessionId);
+}
+
+export function isNativeCaptureEngineAvailable():boolean {return !!nativeModule?.bindCaptureContext && !!nativeModule?.readCaptureJournal;}

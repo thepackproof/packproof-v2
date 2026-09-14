@@ -1,10 +1,16 @@
+import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
 import { haptic } from "../theme/haptics";
-import { UnifiedCameraView, isUnifiedCameraAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
+import { cinematicForScheme } from "../theme/cinematic";
+import { UnifiedCameraView, isUnifiedCameraAvailable, isIdentifierScannerAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
+import { identifierCaptureEnabled, identifierStatus, shippingReadFeedback } from '../capture/identifier-observation';
+import { normalizeShippingBarcode } from '../../../backend/src/capture/shipping-barcode';
+import { Ionicons } from '@expo/vector-icons';
 import { newIdempotencyKey } from "../v2-api";
 import { shortenedTracking, type ShippingScanResult } from "../capture/shipping-scan-queue";
 import { useEffect, useRef, useState } from "react";
 import {
   AppState,
+  Animated,
   Alert,
   Image,
   Modal,
@@ -125,17 +131,67 @@ function CameraSession({
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
   const useUnified = isUnifiedCameraAvailable() && Boolean(request.captureSessionId);
+  const identifiersEnabled = identifierCaptureEnabled(request.identifierPolicy);
+  const [codeStatus, setCodeStatus] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+  const engineObservations=useRef<Observation[]>([]);
+  const [enginePrompt,setEnginePrompt]=useState<string|null>(null);
+  const [matchConfirmation,setMatchConfirmation]=useState(false);
+  useEffect(()=>{if(!matchConfirmation)return;const timer=setTimeout(()=>setMatchConfirmation(false),1800);return()=>clearTimeout(timer);},[matchConfirmation]);
   const [shipping, setShipping] = useState<ShippingScanResult|null>(null);
   const [detectingShipping,setDetectingShipping] = useState(false);
   const [shippingError,setShippingError] = useState<string|null>(null);
   const notified = useRef(new Set<string>());
   const observed = useRef(new Set<string>());
+  const [scanFeedback, setScanFeedback] = useState<{label:string;conflict:boolean}|null>(null);
+  const scanPulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!scanFeedback) return;
+    const animation = Animated.sequence([
+      Animated.timing(scanPulse, { toValue: 1, duration: reducedMotion ? 0 : 180, useNativeDriver: true }),
+      Animated.delay(1800),
+      Animated.timing(scanPulse, { toValue: 0, duration: reducedMotion ? 0 : 260, useNativeDriver: true }),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [scanFeedback]);
+  function signalShippingRead(key:string, label:string, conflict=false) {
+    if (!mounted.current || !recordingRef.current || notified.current.has(`${key}:${conflict}`)) return;
+    notified.current.add(`${key}:${conflict}`);
+    setScanFeedback({label,conflict});
+    void haptic(conflict ? 'error' : 'selection');
+  }
   async function detected(event: UnifiedBarcodeDetection) {
-    if (!recordingRef.current || !request.onShippingBarcode) return;
-    if (/EAN|UPC/i.test(event.format) || !/^[a-z0-9 \t\r\n-]{10,64}$/i.test(event.rawValue)) return;
-    const key=event.rawValue.replace(/[ \t\r\n-]/g,'').toUpperCase();
+    if (!recordingRef.current) return;
+    // Route broad reads before the deliberately restrictive legacy shipping filter.
+    if (identifiersEnabled) {
+      const read = shippingReadFeedback(null, event);
+      if (read) signalShippingRead(read.key, read.label);
+      try {
+        const review = await request.onIdentifierBarcode?.(event) ?? null;
+        if (mounted.current && recordingRef.current) {
+          const feedback = shippingReadFeedback(review, event);
+          setCodeStatus(feedback?.label ?? identifierStatus(review, !review));
+          if (feedback) signalShippingRead(feedback.key, feedback.label, feedback.conflict);
+        }
+      } catch {
+        request.onIdentifierUnavailable?.();
+        if (mounted.current) setCodeStatus('Code details are unavailable. Your recording is continuing.');
+      }
+      return;
+    }
+    if (!request.onShippingBarcode) return;
+    const key = normalizeShippingBarcode(event.rawValue);
+    if (/EAN|UPC/i.test(event.format) || !key) return;
     if(observed.current.has(key) || observed.current.size>=8) return;
     observed.current.add(key);
+    if(request.captureContext){
+      const time=Math.max(0,Math.floor(event.detectedAtMs));
+      engineObservations.current.push({id:`label:${key}`,captureId:request.captureContext.captureId,type:'LABEL',startMs:time,endMs:time,source:'LIVE_ANALYSIS',model:{id:'mlkit-barcode',version:'17.2.0',configuration:'tracking-2-frame-consensus',calibration:'NOT_CALIBRATED'},confidence:null,value:key,timePrecision:'APPROXIMATE'});
+      const requirements=evaluate(request.captureContext,engineObservations.current);setEnginePrompt(guidance(requirements));
+      setMatchConfirmation(requirements[0].state==='SATISFIED');
+    }
     setDetectingShipping(true);
     try {
       const result = await request.onShippingBarcode({rawValue:event.rawValue,format:event.format,detectedAtMs:Math.floor(event.detectedAtMs),idempotencyKey:newIdempotencyKey(),
@@ -143,10 +199,7 @@ function CameraSession({
         frameWidth:event.frameWidth,frameHeight:event.frameHeight,bounds:event.bounds});
       if (result.status==='UNRECOGNIZED') return;
       setShipping(result);
-      if (!notified.current.has(key)) {
-        notified.current.add(key);
-        void haptic("selection");
-      }
+      signalShippingRead(key, result.status === 'CONFLICT' ? 'Shipping label needs review' : 'Shipping barcode read', result.status === 'CONFLICT');
     } catch {
       setShippingError('Keep recording. We’ll check the label at review.');
     } finally {setDetectingShipping(false);}
@@ -155,7 +208,8 @@ function CameraSession({
     request.stageType && request.stageType !== "RETURN_PACKING"
       ? receivingRecipe
       : packingRecipe;
-  const { colors, reducedMotion } = useTheme();
+  const { colors, scheme, reducedMotion } = useTheme();
+  const accents = cinematicForScheme(scheme);
   const insets = useSafeAreaInsets();
   const [ready, setReady] = useState(false),
     [recording, setRecording] = useState(false),
@@ -236,6 +290,14 @@ function CameraSession({
       setSaving(false);
     }
   }
+  const acceptedStart = useRef(false);
+  useEffect(() => {
+    // Only an explicit intake Record action sets autoStart. Handoff polling never does.
+    if (request.autoStart && ready && !acceptedStart.current && !recordingRef.current && AppState.currentState === "active") {
+      acceptedStart.current = true;
+      void start();
+    }
+  }, [ready, request.autoStart]);
   const stop = () => {
     if (recordingRef.current) {
       setSaving(true);
@@ -288,11 +350,15 @@ function CameraSession({
             style={StyleSheet.absoluteFill}
             active
             torchEnabled={false}
+            identifierCaptureEnabled={identifiersEnabled && isIdentifierScannerAvailable()}
             onReady={()=>setReady(true)}
             onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;request.onRecordingStarted?.(); void haptic("medium");}}
             onBarcodeDetected={({nativeEvent})=>{void detected(nativeEvent);}}
             onCaptureError={({nativeEvent})=>{
-              if (recordingRef.current) setShippingError('Label scanning is unavailable. Your recording is continuing.');
+              if (recordingRef.current) {
+                if (identifiersEnabled) { request.onIdentifierUnavailable?.(); setCodeStatus('Code reading is unavailable. Your recording is continuing.'); }
+                else setShippingError('Label scanning is unavailable. Your recording is continuing.');
+              }
               else {setReady(false);setError(nativeEvent.message);}
             }}
           /> : <CameraView
@@ -320,11 +386,17 @@ function CameraSession({
             </View>
           ) : null}
           {coach ? <View pointerEvents="none" style={styles.frame} /> : null}
+          {scanFeedback ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, {opacity:scanPulse, borderWidth:3, borderRadius:16, borderColor:scanFeedback.conflict ? accents.amber : accents.teal, alignItems:'center', justifyContent:'flex-end', paddingBottom:18}]}>
+            <View accessibilityLiveRegion="polite" style={{flexDirection:'row',alignItems:'center',gap:8,borderRadius:24,paddingHorizontal:16,paddingVertical:10,backgroundColor:colors.surface}}>
+              <Ionicons name={scanFeedback.conflict ? 'alert-circle-outline' : 'checkmark-circle'} size={22} color={scanFeedback.conflict ? accents.amber : accents.teal} />
+              <Text style={{color:colors.textPrimary,fontWeight:'600'}}>{scanFeedback.label}</Text>
+            </View>
+          </Animated.View> : null}
         </View>
         <ScrollView contentContainerStyle={styles.controls}>
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
-            <Text style={{color:shipping?.status==='BOUND'?colors.success:colors.textSecondary}}>
-              {detectingShipping ? 'Reading tracking number…'
+            <Text style={{color:shipping?.status==='BOUND'?colors.accentText:colors.textSecondary}}>
+              {identifiersEnabled ? (codeStatus ?? 'Pack normally. Item and shipping codes are read during recording.') : request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'
                 : shipping?.status==='BOUND' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')}`
                 : shipping?.status==='QUEUED' ? 'Tracking number read · saved on this device'
                 : shipping?.status==='UNAVAILABLE' ? 'Keep recording. We’ll check the label at review.'
@@ -381,7 +453,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   heading: { padding: 16, gap: 6 },
   title: { fontSize: 19, fontWeight: "600" },
-  camera: { flex: 1, minHeight: 200, backgroundColor: "#101b2b" },
+  camera: { flex: 1, minHeight: 200, backgroundColor: "#23262D", overflow: "hidden" },
   frame: {
     position: "absolute",
     top: "12%",
@@ -389,7 +461,7 @@ const styles = StyleSheet.create({
     width: "76%",
     height: "76%",
     borderWidth: 2,
-    borderColor: "#7DE4ED",
+    borderColor: "#2583E9",
     borderRadius: 16,
   },
   controls: { padding: 16, gap: 12 },

@@ -1,3 +1,4 @@
+import { liveShippingIdentity } from './tracking-associations.js';
 import type { ManifestSigningRuntime } from '../integrity/signing-runtime.js';
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
@@ -81,7 +82,8 @@ export async function executeTrustedShipmentSync(
     });
     throw integrationCredentialsUnavailable();
   }
-  const trackingNumber = bundle.shipping?.tracking_number?.trim() ?? "";
+  const liveShipping = await liveShippingIdentity(db,transactionId,bundle.shipping);
+  const trackingNumber = liveShipping?.tracking_number?.trim() ?? "";
   if (!trackingNumber) {
     throw trackingNotFound();
   }
@@ -93,7 +95,7 @@ export async function executeTrustedShipmentSync(
       trackingNumber,
       transactionId,
       externalTransactionId: bundle.txn.external_reference,
-      carrier: bundle.shipping?.carrier ?? null,
+      carrier: liveShipping?.carrier ?? null,
       providerCursor,
       credentials,
     });
@@ -105,7 +107,7 @@ export async function executeTrustedShipmentSync(
       transactionId,
       proofId: bundle.proofId ?? undefined,
       outcome: errorCode(error),
-      carrier: bundle.shipping?.carrier ?? undefined,
+      carrier: liveShipping?.carrier ?? undefined,
       durationMs: Date.now() - started,
     });
     throw error;
