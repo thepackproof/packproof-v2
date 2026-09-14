@@ -11,11 +11,12 @@ blue, and green palette, typography, account flows, and navigation.
 | `/contact` | Contact details and an explicitly labeled email-draft form |
 | `/sample` | Interactive illustrative Proof; no customer data or fake media controls |
 | `/privacy`, `/terms` | Existing legal drafts in the website layout |
+| `/delete-account` | Public account-deletion entry point; redirects to the authenticated deletion request flow |
 | `/login`, `/signup` | Existing Cognito authentication, verification, and password recovery |
 | `/app` | Authenticated Proof library and account-derived totals |
 | Existing application routes | Proofs, receipt, activity, stores, packing, fulfillment, and developer tools |
 
-`/new/privacy` and `/new/terms` remain supported. Protected Proof and invitation
+`/new/privacy` and `/new/terms` remain supported. `/delete-account` remains public and routes to `/new/delete-account`, where signed-out visitors can sign in and signed-in users can submit or inspect an account-deletion request. Protected Proof and invitation
 deep links survive sign-in. A missing route gets a useful not-found page.
 
 ## Builds
