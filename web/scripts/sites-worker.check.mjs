@@ -10,6 +10,12 @@ test("serves app deep links through the HTML entry point and keeps asset 404s", 
   assert.deepEqual(seen, ["/index.html", "/missing.png"]);
 });
 
+test("redirects the public account deletion URL to the existing deletion flow", async () => {
+  const response = await worker.fetch(new Request("https://thepackproof.com/delete-account?source=google-play"), {});
+  assert.equal(response.status, 308);
+  assert.equal(response.headers.get("location"), "https://thepackproof.com/new/delete-account?source=google-play");
+});
+
 test("proxies only to the fixed API and never forwards the private Site cookie", async () => {
   const original = globalThis.fetch;
   let call;
