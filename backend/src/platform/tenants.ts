@@ -5,6 +5,7 @@ import { DomainError } from "../domain/errors.js";
 import { newId } from "../ids.js";
 import { sha256Hex } from "../hash.js";
 import { assertPolicyAccessSafe } from "../domain/policy-recovery.js";
+import { requireDeveloperAccess } from "../auth/developer-access.js";
 
 export const API_SCOPES = [
   "proofs:read",
@@ -44,6 +45,7 @@ export function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 export async function requireTenantOwner(db: Database, userId: string, tenantId: string) {
+  await requireDeveloperAccess(db, userId);
   const found = await db.query<{ id: string; environment: "sandbox" | "live" }>(
     "SELECT id, environment FROM api_tenants WHERE id = $1 AND owner_user_id = $2",
     [tenantId, userId],
@@ -52,6 +54,7 @@ export async function requireTenantOwner(db: Database, userId: string, tenantId:
   return found.rows[0];
 }
 export async function createTenant(db: Database, clock: Clock, userId: string, input: unknown) {
+  await requireDeveloperAccess(db, userId);
   const body = record(input);
   const name = textField(body.name, "name", 80);
   const environment = body.environment ?? "sandbox";
@@ -158,6 +161,8 @@ export async function authenticateApiKey(
     [sha256Hex(token)],
   );
   if (!found.rows[0]) throw new DomainError("UNAUTHENTICATED", "Invalid or revoked API key", 401);
+  // Previously issued keys lose access as soon as their owner is no longer eligible.
+  await requireDeveloperAccess(db, found.rows[0].userId);
   return found.rows[0];
 }
 export function requireScope(principal: ApiPrincipal, scope: ApiScope) {

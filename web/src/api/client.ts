@@ -332,7 +332,16 @@ export class PackProofApi {
   }
 
   async developerRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-    return this.request(`/me/tenants${path}`, { method, body });
+    await this.options.getToken();
+    const token = this.options.getIdentityToken?.();
+    return this.request(`/me/tenants${path}`, { method, body,
+      ...(token ? { auth: false, headers: { Authorization: `Bearer ${token}` } } : {}) });
+  }
+
+  async getDeveloperAccess(): Promise<{ allowed: boolean }> {
+    await this.options.getToken();
+    const token = this.options.getIdentityToken?.();
+    return this.request("/me/developer-access", token ? { auth: false, headers: { Authorization: `Bearer ${token}` } } : {});
   }
 
   async reviewProof(proofId: string): Promise<{

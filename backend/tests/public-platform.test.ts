@@ -1,3 +1,4 @@
+import { createDeveloper } from "./developer-fixtures.js";
 import { previewDisclosure, createDisclosureGrant } from "../src/domain/disclosure.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
@@ -38,7 +39,7 @@ describe("public partner platform", () => {
   });
   afterAll(async () => h.close());
   async function tenant(user?: string) {
-    const owner = user ?? (await createUser(h));
+    const owner = user ?? (await createDeveloper(h));
     const t = (await createTenant(h.db, clock, owner, {
       name: `tenant-${Math.random()}`,
       environment: "sandbox",
@@ -349,7 +350,7 @@ describe("public partner platform", () => {
   });
   it("rotates keys atomically and hides keys from non-owners", async () => {
     const t = await tenant(),
-      stranger = await createUser(h);
+      stranger = await createDeveloper(h);
     const path = `/me/tenants/${t.id}/keys/${t.keyId}/rotate`;
     expect((await request(app).post(path).set(auth(stranger)).send({})).status).toBe(404);
     const rotated = await request(app).post(path).set(auth(t.owner)).send({});

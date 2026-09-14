@@ -1269,7 +1269,13 @@ export class PackProofV2Client {
 
   async getUsage<T>(): Promise<T> { return this.request("/me/usage"); }
   async developerRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-    return this.request(`/me/tenants${path}`, { method, body });
+    const token = this.options.getIdToken?.();
+    return this.request(`/me/tenants${path}`, { method, body,
+      ...(token ? { auth: false, headers: { Authorization: `Bearer ${token}` } } : {}) });
+  }
+  async getDeveloperAccess(): Promise<{ allowed: boolean }> {
+    const token = this.options.getIdToken?.();
+    return this.request("/me/developer-access", token ? { auth: false, headers: { Authorization: `Bearer ${token}` } } : {});
   }
   async billingRequest<T>(path: string, body?: unknown): Promise<T> {
     return this.request(`/me/billing/${path}`, { method: body === undefined ? "GET" : "POST", body });

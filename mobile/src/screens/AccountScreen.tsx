@@ -1,5 +1,6 @@
 import { BillingPanel } from "../billing/BillingPanel";
 import { DeveloperAccessPanel } from "../developer/DeveloperAccessPanel";
+import { useDeveloperAccess } from "../developer/useDeveloperAccess";
 import { openRelayStation } from "../relay/RelayStationHost";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { IntakeSettings } from "../intake/IntakeSettings";
@@ -48,6 +49,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   const theme = useTheme();
   const { colors } = theme;
   const session = app.session;
+  const developerAllowed = useDeveloperAccess(app.client, session?.userId ?? "", app.ensureAuth);
   const [section, setSection] = useState<AccountSection | null>(initialSection ?? null);
   const accountRef = useRef(session?.userId);
   accountRef.current = session?.userId;
@@ -127,7 +129,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <AccountRow title="Notifications" detail="Proof updates, delivery preferences and history" icon="notifications-outline" onPress={() => openSection("notifications")} />
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
           <AccountRow title="Help & support" detail="Recording, recovery, and invitations" icon="help-circle-outline" onPress={() => openSection("help")} />
-          <AccountRow title="Developer access" detail="API workspaces, keys, and permissions" icon="code-slash-outline" onPress={() => openSection("developer")} />
+          {developerAllowed ? <AccountRow title="Developer access" detail="API workspaces, keys, and permissions" icon="code-slash-outline" onPress={() => openSection("developer")} /> : null}
           <AccountRow title="Remote packing station" detail="Pair a camera and control packing from another device" icon="videocam-outline" onPress={openRelayStation} />
           <AccountRow title="Privacy & account" detail="Privacy, terms, and account deletion" icon="shield-checkmark-outline" onPress={() => openSection("privacy")} last />
         </View>
@@ -136,7 +138,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       </> : null}
 
       {section === "billing" ? <BillingPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
-      {section === "developer" ? <DeveloperAccessPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
+      {section === "developer" ? developerAllowed ? <DeveloperAccessPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : <Text style={[styles.body, { color: colors.textSecondary }]}>Developer access is unavailable for this account or could not be confirmed.</Text> : null}
       {section === "notifications" ? <NotificationCenter key={session.userId}/> : null}
       {section === "profile" ? <>
         {session.username ? <Text style={[styles.body, { color: colors.textSecondary }]}>@{session.username}</Text> : <FormField label="Username" value={app.usernameInput} onChangeText={app.setUsernameInput} />}
@@ -195,7 +197,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
         <SectionHeader title="About PackProof" />
         <Text style={[styles.body, { color: colors.textSecondary }]}>PackProof records what was submitted, when, and by whom. It preserves evidence; it does not decide who is right or prove an item is authentic.</Text>
         <StudyConsentCard key={`${app.apiBaseUrl}:${session.userId}`} />
-        {__DEV__ ? <Button label="Developer tools" variant="tertiary" onPress={() => app.go("dev")} /> : null}
+        {__DEV__ && developerAllowed ? <Button label="Developer tools" variant="tertiary" onPress={() => app.go("dev")} /> : null}
       </> : null}
 
       {section === "privacy" ? <>

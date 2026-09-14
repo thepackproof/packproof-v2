@@ -1,3 +1,4 @@
+import { createDeveloper } from "./developer-fixtures.js";
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createHarness, createUser, auth, commitFulfillmentAndAttest, type TestHarness } from './helpers.js';
@@ -16,7 +17,7 @@ describe('pre-production claims and truthful data boundaries',()=>{
   let h:TestHarness,owner:string,tenantId:string,key:string,keyId:string;
   let now=new Date('2026-09-09T17:00:00Z');const clock={now:()=>new Date(now)};
   beforeAll(async()=>{
-    h=await createHarness(clock);owner=await createUser(h);
+    h=await createHarness(clock);owner=await createDeveloper(h);
     tenantId=String((await createTenant(h.db,clock,owner,{name:'Claims test',environment:'sandbox'})).id);
     const issued=await issueApiKey(h.db,clock,owner,tenantId,{name:'Zendesk',scopes:['claims:read']});key=issued.token;keyId=issued.id;
   });

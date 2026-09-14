@@ -35,6 +35,25 @@ test('developer commands preserve authenticated workspace/key routes and deliber
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });
 
+test('developer capability and key management use the verified identity token', async () => {
+  const requests: Array<{ path: string; authorization?: string }> = [];
+  const server = createServer((req, res) => {
+    requests.push({ path: req.url!, authorization: req.headers.authorization });
+    res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"allowed":false}');
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const client = new PackProofV2Client({ baseUrl: `http://127.0.0.1:${address.port}`, getToken: () => 'access-token', getIdToken: () => 'verified-id-token' });
+  try {
+    assert.deepEqual(await client.getDeveloperAccess(), { allowed: false });
+    await client.developerRequest('');
+    assert.deepEqual(requests, [
+      { path: '/me/developer-access', authorization: 'Bearer verified-id-token' },
+      { path: '/me/tenants', authorization: 'Bearer verified-id-token' },
+    ]);
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
 function scopeFixture() {
   let currentUser = 'owner', calls = 0, deliver: ((value: unknown) => void) | undefined;
   const client = {

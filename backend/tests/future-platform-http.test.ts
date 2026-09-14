@@ -1,3 +1,4 @@
+import { createDeveloper } from "./developer-fixtures.js";
 import { generateKeyPairSync, sign } from 'node:crypto';
 import request from 'supertest';
 import { beforeAll, afterAll, expect, it } from 'vitest';
@@ -18,7 +19,7 @@ const signer: ManifestSigner = { signManifest: async input => ({ algorithm: 'ECD
 const path = () => `/proofs/${proofId}/lifecycle-snapshots`;
 
 beforeAll(async () => {
-  h = await createHarness(); seller = await createUser(h);
+  h = await createHarness(); seller = await createDeveloper(h);
   const t = await createTenant(h.db, h.clock, seller, { name: 'future-pilot', environment: 'sandbox' }) as { id: string };
   tenantId = t.id;
   key = (await issueApiKey(h.db, h.clock, seller, t.id, { name: 'writer', scopes: ['proofs:read', 'proofs:write'] })).token;

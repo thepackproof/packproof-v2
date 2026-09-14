@@ -2,6 +2,7 @@ import { issueIntent, asDomainError } from "../capture/service.js";
 import { createLifecycleSnapshot, getLifecycleSnapshot } from "../domain/lifecycle-snapshots.js";
 import { issueCaptureCompletionReceipt, readCaptureCompletionReceipt } from "../capture/completion-receipt.js";
 import { requireFuturePlatform } from "./future-config.js";
+import { requireDeveloperAccess } from "../auth/developer-access.js";
 import { loadCaptureSession } from "../domain/capture-sessions.js";
 import { authorizeProofAccess } from "../domain/proof-access.js";
 import { authorizeClaimsProof, revokeClaimsAuthorization, lookupClaims, openClaimsProof } from './claims.js';
@@ -715,9 +716,9 @@ async function auditRequest(
 }
 export function createTenantManagementRouter(deps: AppDependencies) {
   const router = express.Router();
-  router.use((_req, res, next) => {
+  router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
-    next();
+    void requireDeveloperAccess(deps.db, req.packproofUserId ?? "").then(() => next()).catch(next);
   });
   const user = (req: Request) => {
     if (!req.packproofUserId)

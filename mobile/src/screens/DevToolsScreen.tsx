@@ -7,10 +7,13 @@ import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { ErrorBanner } from "../ui/EmptyState";
+import { useDeveloperAccess } from "../developer/useDeveloperAccess";
 
 export function DevToolsScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
+  const allowed = useDeveloperAccess(app.client, app.session?.userId ?? "", app.ensureAuth);
+  if (!__DEV__ || !allowed) return <AppScreen><AppHeader title="Account" onBack={app.goBack} /><Text style={{ color: colors.textSecondary }}>Developer tools are unavailable.</Text></AppScreen>;
   const proof = app.proof;
   return (
     <AppScreen extraBottom={24}>

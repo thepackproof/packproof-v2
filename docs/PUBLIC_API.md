@@ -15,7 +15,11 @@ cd backend
 npm start
 ```
 
-In a second terminal, run `npm run dev --prefix web`. Open `http://127.0.0.1:5173`, use a synthetic development identity, complete the profile, and open **Account → Developer access**. Create a sandbox tenant and issue only the scopes the integration needs. The raw key appears once; store it in your server's secret manager. Key rotation immediately revokes the old key. Browser apps and mobile bundles must never contain partner keys.
+Developer access is restricted to active accounts whose Cognito-verified email is exactly `nericollin@gmail.com`, `nericollin@thepackproof.com`, or `admin@thepackproof.com` (case-insensitive). Synthetic development identities, other domain members, and email aliases do not receive developer access. Configure Cognito for interactive developer work; API tests use explicit privileged fixtures in isolated test databases.
+
+Sign in with an approved verified account and open **Account → Developer access**. Create a sandbox tenant and issue only the scopes the integration needs. The raw key appears once; store it in your server's secret manager. Key rotation immediately revokes the old key. Browser apps and mobile bundles must never contain partner keys.
+
+`GET /me/developer-access` returns the authenticated account's current `{ allowed: boolean }` capability with `Cache-Control: private, no-store`. The apps refresh verified identity claims before requesting it and never persist the capability. All workspace/key management routes, existing API keys, and outbound developer webhooks independently enforce the same server-side allowlist. Losing eligibility blocks access without deleting workspaces, keys, or historical Proofs.
 
 Sandbox/live keys have separate tenant bindings, external-ID namespaces, rate budgets, and key prefixes. Both use the same domain validators. An environment label is not a separate database or a simulated carrier; use a separate staging deployment and synthetic data for integration experiments. Do not connect sandbox tests to live provider side effects.
 

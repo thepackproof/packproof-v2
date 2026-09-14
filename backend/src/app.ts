@@ -63,6 +63,7 @@ import { createAttestationChallenge } from "./domain/attestation-authorization.j
 import { listMyProofs, queryMyProofs, parseProofListQuery } from "./domain/proof-collection.js";
 import { listLinkedIdentities, unlinkIdentity } from "./domain/external-identities.js";
 import { getProfile, searchUsers, updateProfile } from "./domain/profiles.js";
+import { hasDeveloperAccess } from "./auth/developer-access.js";
 import { authorizeProofAccess, getProofForUser } from "./domain/proofs.js";
 import {
   createTransaction,
@@ -504,6 +505,10 @@ export function createApp(deps: AppDependencies): Express {
     res.json(await deps.billing.createOwnCancellationPortal(deps.db,bearerUser(req),{customerReference,subscriptionReference,operationId}));
   }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
+  app.get("/me/developer-access", asyncRoute(async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ allowed: await hasDeveloperAccess(deps.db, bearerUser(req)) });
+  }));
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
   app.use(captureEngineRouter(deps));
   app.use(futurePlatformRouter(deps));

@@ -11,6 +11,7 @@ import { ProofsScreen } from "./screens/ProofsScreen";
 import { canonicalWorkspacePath, readProofListState, rememberProofListState } from "./proof-list-state";
 import { ReceiptScreen } from "./screens/ReceiptScreen";
 import { DeveloperScreen } from "./screens/DeveloperScreen";
+import { useDeveloperAccess } from "./auth/useDeveloperAccess";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReadyIntakeOrders } from './components/ReadyIntakeOrders';
 import { IntakeSettingsPanel } from './components/IntakeSettingsPanel';
@@ -338,6 +339,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     [session?.apiBaseUrl, session?.userId, getSessionToken],
   );
   const loadPublicProof = useCallback((token: string) => api.getPublicProof(token), [api]);
+  const developerAllowed = useDeveloperAccess(api, session?.userId ?? "", route.name === "account" || route.name === "developer");
 
   const loadProofEvidence = useCallback(
     async (evidenceId: string) => {
@@ -703,7 +705,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         />
       ) : null}
       {route.name === "developer" ? (
-        <DeveloperScreen api={api} onBack={() => goBack("/account")} />
+        developerAllowed ? <DeveloperScreen key={`${session.apiBaseUrl}:${session.userId}`} api={api} onBack={() => goBack("/account")} />
+          : <div className="card"><p>Developer access is unavailable for this account or could not be confirmed.</p><button className="btn btn-secondary" onClick={() => goBack("/account")}>Back to account</button></div>
       ) : null}
 
       {route.name === "account" ? (
@@ -743,7 +746,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
-          onOpenDeveloper={() => go("/developer")}
+          onOpenDeveloper={developerAllowed ? () => go("/developer") : undefined}
           onOpenStation={() => go("/station")}
           onOpenStores={() => go("/stores")}
           onOpenFulfillment={() => go("/fulfillment")}
