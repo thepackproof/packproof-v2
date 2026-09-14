@@ -16,9 +16,14 @@ if (!root) {
   throw new Error("root element missing");
 }
 
+const canonicalPath = window.location.pathname.replace(/\/$/, "") || "/";
+if (canonicalPath === "/delete-account") {
+  const deletion = new URL(window.location.href);
+  deletion.pathname = "/new/delete-account";
+  window.location.replace(deletion.href);
 // Some hosting gateways rewrite the request hostname before the Worker sees it.
 // Keep the browser on the canonical origin before initializing account state.
-if (window.location.hostname === "www.thepackproof.com") {
+} else if (window.location.hostname === "www.thepackproof.com") {
   const canonical = new URL(window.location.href);
   canonical.hostname = "thepackproof.com";
   canonical.protocol = "https:";
