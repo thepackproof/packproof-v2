@@ -8,6 +8,10 @@ export default {
       url.protocol = "https:";
       return Response.redirect(url.toString(), 308);
     }
+    if (url.pathname === "/delete-account") {
+      url.pathname = "/new/delete-account";
+      return Response.redirect(url.toString(), 308);
+    }
     if (url.pathname.startsWith("/api/")) {
       // The destination is fixed. Never forward the private Site access cookie.
       const target = new URL(API_ORIGIN);
