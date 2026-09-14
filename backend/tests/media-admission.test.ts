@@ -3,11 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Readable } from 'node:stream';
 import type { S3Client } from '@aws-sdk/client-s3';
 import { HeadObjectCommand, GetObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
-import { createHarness, createUser, type TestHarness } from './helpers.js';
+import { auth, createHarness, createUser, type TestHarness } from './helpers.js';
 import { createTransaction } from '../src/domain/transactions.js';
 import { createOrGetProof } from '../src/domain/create-proof.js';
 import { commitEvidence, initializeEvidenceUpload, parseEvidenceByteRange, streamPreservedObject } from '../src/domain/evidence.js';
-import { MEDIA_MAX_BYTES, reserveMediaIngress, finishMediaIngress, sweepExpiredMediaAdmissions } from '../src/domain/media-admission.js';
+import { MEDIA_MAX_BYTES, MEDIA_RESERVATION_EXPIRY_MS, reserveMediaIngress, finishMediaIngress, sweepExpiredMediaAdmissions } from '../src/domain/media-admission.js';
 import { AwsS3ObjectStore } from '../src/s3/aws-s3-object-store.js';
 import { sha256Hex } from '../src/hash.js';
 let h:TestHarness;
@@ -15,6 +15,34 @@ afterEach(async()=>{const current=h;h=undefined as unknown as TestHarness;await 
 async function setup(clock?:{now:()=>Date}){h=await createHarness(clock);const actor=await createUser(h),tx=await createTransaction(h.db,h.clock,actor,{itemTitle:'Admission fixture'}),proof=await createOrGetProof(h.db,h.clock,actor,tx.transactionId);return {actor,proofId:proof.proofId};}
 async function reserve(actor:string,proofId:string,key:string,size=8){return initializeEvidenceUpload(h.db,h.clock,h.objectStore,actor,proofId,{contentType:'video/mp4',idempotencyKey:key,byteSize:size});}
 describe('media admission guarantees',()=>{
+ it('completes resumable uploads on the reservation clock and rejects them at expiry', async () => {
+  const startedAt = new Date('2000-01-01T00:00:00Z').getTime();
+  let now = startedAt;
+  const { actor, proofId } = await setup({ now: () => new Date(now) });
+  const bytes = Buffer.from([0, 0, 0, 24, 102, 116, 121, 112]);
+  const valid = await reserve(actor, proofId, 'valid-completion', bytes.length);
+  const expired = await reserve(actor, proofId, 'expired-completion', bytes.length);
+  for (const upload of [valid, expired]) {
+   await request(h.app).put(`/proofs/${proofId}/evidence/${upload.evidenceId}/parts/1`)
+    .set(auth(actor)).set('Content-Type', 'application/octet-stream').send(bytes).expect(200);
+  }
+  now = startedAt + MEDIA_RESERVATION_EXPIRY_MS - 1;
+  const completed = await request(h.app)
+   .post(`/proofs/${proofId}/evidence/${valid.evidenceId}/parts/complete`)
+   .set(auth(actor)).send({ totalBytes: bytes.length });
+  expect(completed.status, JSON.stringify(completed.body)).toBe(200);
+  expect(completed.body.sha256).toBe(sha256Hex(bytes));
+  now += 1;
+  const rejected = await request(h.app)
+   .post(`/proofs/${proofId}/evidence/${expired.evidenceId}/parts/complete`)
+   .set(auth(actor)).send({ totalBytes: bytes.length });
+  expect(rejected.status, JSON.stringify(rejected.body)).toBe(409);
+  expect(rejected.body.error.code).toBe('UPLOAD_CONTRACT_EXPIRED');
+  expect(await h.objectStore.get(expired.objectKey)).toBeNull();
+  expect((await h.db.query<{ state: string }>(
+   'SELECT state FROM evidence_upload_admissions WHERE evidence_id=$1', [expired.evidenceId],
+  )).rows[0].state).toBe('OPEN');
+ });
  it('refuses an oversized declaration and duplicate account concurrency before issuing contracts',async()=>{
   const {actor,proofId}=await setup();await expect(reserve(actor,proofId,'too-large',MEDIA_MAX_BYTES+1)).rejects.toMatchObject({code:'UPLOAD_TOO_LARGE'});
   const first=await reserve(actor,proofId,'first');await reserve(actor,proofId,'second');await expect(reserve(actor,proofId,'third')).rejects.toMatchObject({code:'UPLOAD_CONCURRENCY_LIMIT'});

@@ -163,13 +163,10 @@ describe("public partner platform", () => {
           .send(bytes)
       ).body.replayed,
     ).toBe(true);
-    expect(
-      (
-        await mutate(`evidence/${init.body.evidenceId}/parts/complete`, "complete", {
-          totalBytes: bytes.length,
-        })
-      ).status,
-    ).toBe(200);
+    const completedParts = await mutate(`evidence/${init.body.evidenceId}/parts/complete`, "complete", {
+      totalBytes: bytes.length,
+    });
+    expect(completedParts.status, JSON.stringify(completedParts.body)).toBe(200);
     expect(
       (
         await mutate(`evidence/${init.body.evidenceId}/commit`, "wrong-hash", {

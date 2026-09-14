@@ -163,6 +163,7 @@ export async function storeUploadPart(
 }
 export async function completeUploadParts(
   db: Database,
+  clock: Clock,
   store: ObjectStore,
   userId: string,
   proofId: string,
@@ -203,7 +204,7 @@ export async function completeUploadParts(
       );
     const admission=(await tx.query<{declared_bytes:number|string|null;reserved_bytes:number|string;state:string;expires_at:Date|string}>("SELECT * FROM evidence_upload_admissions WHERE evidence_id=$1 FOR UPDATE",[evidenceId])).rows[0];
     if(admission && (totalBytes>Number(admission.reserved_bytes) || admission.declared_bytes!==null && totalBytes!==Number(admission.declared_bytes))) throw new DomainError("UPLOAD_SIZE_MISMATCH","Recording size differs from its reservation",409);
-    if(admission && (['DISCARDED','EXPIRED','COMMITTED'].includes(admission.state)||new Date(admission.expires_at).getTime()<=Date.now()))throw new DomainError("UPLOAD_CONTRACT_EXPIRED","This upload reservation is closed",409);
+    if(admission && (['DISCARDED','EXPIRED','COMMITTED'].includes(admission.state)||new Date(admission.expires_at).getTime()<=clock.now().getTime()))throw new DomainError("UPLOAD_CONTRACT_EXPIRED","This upload reservation is closed",409);
     const hash=createHash('sha256');
     async function* verifiedParts() {
       for(const part of rows) {

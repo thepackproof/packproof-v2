@@ -391,6 +391,7 @@ export function createPlatformRouter(deps: AppDependencies) {
     (db, p, req) =>
       completeUploadParts(
         db,
+        deps.clock,
         deps.objectStore,
         p.userId,
         req.params.id,

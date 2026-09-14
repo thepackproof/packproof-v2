@@ -673,6 +673,7 @@ export function createApp(deps: AppDependencies): Express {
       res.json(
         await completeUploadParts(
           deps.db,
+          deps.clock,
           deps.objectStore,
           bearerUser(req),
           req.params.id,
