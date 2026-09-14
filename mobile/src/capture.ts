@@ -56,7 +56,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED" | "SCANNER_TRIGGERED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -107,13 +107,13 @@ export async function captureGradingPhoto(): Promise<{
 }
 
 export async function recordPackingEvidence(input: {
-  client: PackProofV2Client; authorizedSession?: CaptureSessionGrant; autoStart?: boolean; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
+  client: PackProofV2Client; relay?: { onSessionIssued: (id: string) => Promise<void>; onRecordingStarted: () => void }; authorizedSession?: CaptureSessionGrant; autoStart?: boolean; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
 }): Promise<LocalCapture | null> {
   // Starts are journaled before preflight only after explicit native study opt-in.
   const study=input.stageId?null:await startNativeStudy(input.client,input.userId);
   try{return await recordPackingEvidenceInner(input,study);}catch(error){study?.end('failed','capability');throw error;}
 }
-async function recordPackingEvidenceInner(input:{client:PackProofV2Client;authorizedSession?:CaptureSessionGrant;autoStart?:boolean;proofId:string;userId:string;orderLabel:string;stageId?:string;stageType?:string;guide?:{uri:string;headers:Record<string,string>}},study:NativeStudyTimer|null):Promise<LocalCapture|null>{
+async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?:{onSessionIssued:(id:string)=>Promise<void>;onRecordingStarted:()=>void};authorizedSession?:CaptureSessionGrant;autoStart?:boolean;proofId:string;userId:string;orderLabel:string;stageId?:string;stageType?:string;guide?:{uri:string;headers:Record<string,string>}},study:NativeStudyTimer|null):Promise<LocalCapture|null>{
   await capturePreflight(input.client, input.userId, !input.stageId);
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
@@ -143,7 +143,8 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;author
   // Write the account binding before native acquisition. A process restart can discover finalized native media.
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
     identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
-  const captured = await nativeRecorder({ identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+  if (input.relay) await input.relay.onSessionIssued(session.id);
+  const captured = await nativeRecorder({ remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
     ...(identifierCaptureEnabled(identifierPolicy) ? {
       onIdentifierBarcode: async (event: UnifiedBarcodeDetection) => {
         if (!identifiers) return null;
@@ -152,7 +153,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;author
       },
       onIdentifierUnavailable: () => { identifierCoverage = 'UNAVAILABLE'; try { identifiers?.markUnavailable(); } catch { /* Original-account journal remains locked. */ } },
     } : {}),
-    onRecordingStarted:()=>{study?.phase('recording');study?.event('recording_started');},
+    onRecordingStarted:()=>{study?.phase('recording');study?.event('recording_started');input.relay?.onRecordingStarted();},
     onRecordingStopped:()=>{study?.event('recording_stopped');study?.phase('confirmation');},
     ...(!input.stageId ? {onShippingBarcode:async (scan:ShippingScan)=>{
       const result=await queue.detect(scan);

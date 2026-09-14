@@ -1,5 +1,6 @@
 import { BillingPanel } from "../billing/BillingPanel";
 import { DeveloperAccessPanel } from "../developer/DeveloperAccessPanel";
+import { openRelayStation } from "../relay/RelayStationHost";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { IntakeSettings } from "../intake/IntakeSettings";
 import * as Sharing from "expo-sharing";
@@ -127,6 +128,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
           <AccountRow title="Help & support" detail="Recording, recovery, and invitations" icon="help-circle-outline" onPress={() => openSection("help")} />
           <AccountRow title="Developer access" detail="API workspaces, keys, and permissions" icon="code-slash-outline" onPress={() => openSection("developer")} />
+          <AccountRow title="Remote packing station" detail="Pair a camera and control packing from another device" icon="videocam-outline" onPress={openRelayStation} />
           <AccountRow title="Privacy & account" detail="Privacy, terms, and account deletion" icon="shield-checkmark-outline" onPress={() => openSection("privacy")} last />
         </View>
         {unfinished.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Signing out pauses unfinished work. Sign in to this account to resume it.</Text> : null}

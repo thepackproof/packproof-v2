@@ -38,6 +38,26 @@ function addExtensionTarget(project, config) {
   // silently does nothing unless both exist, leaving an embedded extension unbuilt.
   objects.PBXTargetDependency ??= {};
   objects.PBXContainerItemProxy ??= {};
+  // React Native's privacy aggregator otherwise attaches the first manifest it
+  // finds (including an extension's) to an app that has no manifest reference.
+  const application = project.getFirstTarget();
+  const applicationResources = project.pbxResourcesBuildPhaseObj(application.uuid);
+  applicationResources.files = applicationResources.files.filter(item => {
+    const reference = objects.PBXFileReference[objects.PBXBuildFile[item.value]?.fileRef];
+    return String(reference?.path || '').replace(/"/g, '') !== `${TARGET}/PrivacyInfo.xcprivacy`;
+  });
+  const appHasPrivacy = applicationResources.files.some(item => {
+    const reference = objects.PBXFileReference[objects.PBXBuildFile[item.value]?.fileRef];
+    return String(reference?.path || '').replace(/"/g, '').endsWith('PrivacyInfo.xcprivacy');
+  });
+  if (!appHasPrivacy) {
+    const applicationName = String(application.firstTarget.name).replace(/"/g, '');
+    const appPrivacy = project.addFile(`${applicationName}/PrivacyInfo.xcprivacy`, project.getFirstProject().firstProject.mainGroup);
+    if (appPrivacy) {
+      appPrivacy.uuid = project.generateUuid(); appPrivacy.target = application.uuid;
+      project.addToPbxBuildFileSection(appPrivacy); project.addToPbxResourcesBuildPhase(appPrivacy);
+    }
+  }
   const existing = Object.entries(project.pbxNativeTargetSection()).find(([key, target]) =>
     !key.endsWith('_comment') && String(target.name).replace(/"/g, '') === TARGET);
   // xcode's addTarget embeds app_extension products and adds the containing target dependency.
@@ -126,7 +146,16 @@ function withIOSOrderShare(config) {
     fs.writeFileSync(path.join(destination, `${TARGET}.entitlements`), plist.build({ [GROUP_KEY]: [identity.appGroup] }));
     return mod;
   }]);
-  return withXcodeProject(config, mod => { addExtensionTarget(mod.modResults, mod); return mod; });
+  return withXcodeProject(config, mod => {
+    addExtensionTarget(mod.modResults, mod);
+    const applicationName = String(mod.modResults.getFirstTarget().firstTarget.name).replace(/"/g, '');
+    const manifest = path.join(mod.modRequest.platformProjectRoot, applicationName, 'PrivacyInfo.xcprivacy');
+    if (!fs.existsSync(manifest)) {
+      fs.mkdirSync(path.dirname(manifest), { recursive: true });
+      fs.writeFileSync(manifest, plist.build({ NSPrivacyTracking: false, NSPrivacyTrackingDomains: [], NSPrivacyCollectedDataTypes: [], NSPrivacyAccessedAPITypes: [] }));
+    }
+    return mod;
+  });
 }
 
 module.exports = withIOSOrderShare;

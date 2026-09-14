@@ -10,6 +10,15 @@ export function proofIdFromLink(value:string):string|null {
   } catch { return null; }
 }
 
+export function historyShareFromLink(value: string): { proofId: string; shareId: string } | null {
+  const proofId = proofIdFromLink(value);
+  if (!proofId) return null;
+  try {
+    const url = new URL(value), ids = url.searchParams.getAll('historyShare');
+    return ids.length === 1 && /^[A-Za-z0-9_-]{1,200}$/.test(ids[0]) ? { proofId, shareId: ids[0] } : null;
+  } catch { return null; }
+}
+
 /** A commerce callback is only a refresh hint; server records decide connection status. */
 export function connectionReturnFromLink(value: string): { provider: string; failed: boolean; code: string | null } | null {
   try {

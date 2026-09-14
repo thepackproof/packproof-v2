@@ -1,7 +1,8 @@
 import { SharedTrackingScreen, looksLikeSharedTracking } from "../screens/SharedTrackingScreen";
-import { proofIdFromLink } from "./deep-links";
+import { proofIdFromLink, historyShareFromLink } from "./deep-links";
 import { SharingScreen } from "../screens/SharingScreen";
 import { SignatureProofScreen } from "../screens/SignatureProofScreen";
+import { SupportingToolsScreen } from "../screens/SupportingToolsScreen";
 import { NativeCaptureHost } from "../ui/NativeCaptureHost";
 import { OrderIntakeScreen } from "../screens/OrderIntakeScreen";
 import { CommerceReceiptScreen } from "../screens/CommerceReceiptScreen";
@@ -34,13 +35,23 @@ import { DevToolsScreen } from "../screens/DevToolsScreen";
 import { PackingStationScreen } from "../screens/PackingStationScreen";
 import { CinematicCompletion } from "../ui/CinematicCompletion";
 import { RouteReveal } from "../ui/motion";
+import { RelayStationHost } from "../relay/RelayStationHost";
 
 export function Root() {
+  const app = usePackProof();
+  return <>
+    <RootContent />
+    {app.hydrated && app.session && app.route.name !== 'auth' ? <RelayStationHost key={JSON.stringify([app.apiBaseUrl, app.session.userId])} /> : null}
+  </>;
+}
+
+function RootContent() {
   const app = usePackProof();
   const theme = useTheme();
   const immersive = isImmersiveRoute(app.route) && app.route.name !== "capture" && app.route.name !== "station";
   const [captureIntent,setCaptureIntent]=useState<string|null>(null);
   const [linkedProofId, setLinkedProofId] = useState<string | null>(null);
+  const [linkedHistoryShareId, setLinkedHistoryShareId] = useState<string | null>(null);
   const [sharedText, setSharedText] = useState<string | null>(null);
   const [sharedAsOrder,setSharedAsOrder]=useState(false);
   const [completionVisible, setCompletionVisible] = useState(false);
@@ -112,7 +123,7 @@ export function Root() {
         if(hostAllowed&&captureRoute&&token&&/^intent_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(token)){setCaptureIntent(token);return;}
       } catch { /* Other supported link handlers retain their validation. */ }
       const proofId = proofIdFromLink(url);
-      if (proofId) { setLinkedProofId(proofId); return; }
+      if (proofId) { setLinkedHistoryShareId(historyShareFromLink(url)?.shareId ?? null); setLinkedProofId(proofId); return; }
       const text = sharedOrderText(url);
       if (text) {nativeShare.defer();setSharedAsOrder(false);setSharedText(text);}
     };
@@ -129,8 +140,16 @@ export function Root() {
   }, [ready, app.session?.userId, sharedText]);
 
   useEffect(() => {
-    if (ready && app.session && linkedProofId) { const id = linkedProofId; setLinkedProofId(null); app.go("home"); void app.run(() => app.openProof(id)); }
-  }, [ready, app.session?.userId, linkedProofId]);
+    if (ready && app.session && linkedProofId) {
+      const id = linkedProofId, historyShareId = linkedHistoryShareId, userId = app.session.userId, api = app.apiBaseUrl;
+      setLinkedProofId(null); setLinkedHistoryShareId(null); app.go("home");
+      void app.run(async () => {
+        await app.openProof(id);
+        app.client.assertCaptureAccount(userId, api);
+        if (historyShareId) app.go("signature", { historyShareId });
+      });
+    }
+  }, [ready, app.session?.userId, linkedProofId, linkedHistoryShareId]);
 
   useEffect(()=>{
     if(!ready||!app.session||!captureIntent||app.busy)return;
@@ -193,6 +212,7 @@ export function Root() {
   else if (app.route.name === "account") body = <AccountScreen key={app.route.accountSection ?? "account"} initialSection={app.route.accountSection} />;
   else if (app.route.name === "sharing") body = <SharingScreen key={app.proof?.proofId} />;
   else if (app.route.name === "signature") body = <SignatureProofScreen key={app.proof?.proofId} />;
+  else if (app.route.name === "supporting") body = <SupportingToolsScreen key={`${app.apiBaseUrl}:${app.session.userId}:${app.proof?.proofId}`} />;
   else if (app.route.name === "proof" || app.route.name === "event") {
     body = <View style={{ flex: 1 }}>
       <View key={app.proof?.proofId} style={{ flex: 1, display: app.route.name === "event" ? "none" : "flex" }} accessibilityElementsHidden={app.route.name === "event"} importantForAccessibility={app.route.name === "event" ? "no-hide-descendants" : "auto"}>

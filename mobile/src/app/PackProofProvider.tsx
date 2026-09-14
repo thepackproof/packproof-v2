@@ -229,7 +229,7 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  go: (name: AppRouteName, options?: { accountSection?: AccountSection }) => void;
+  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => void;
   goBack: () => void;
   setProofsView: (view: ProofsLibraryView) => void;
   setProofsQuery: (query: string) => void;
@@ -434,7 +434,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     [apiBaseUrl],
   );
 
-  const go = useCallback((name: AppRouteName, options?: { accountSection?: AccountSection }) => {
+  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => {
     if (name === "scan") name = "create";
     if (name === "complete") name = "proof";
     if (name === "orders" || (name === "station" && !sessionRef.current?.stationActive)) name = "home";
@@ -457,7 +457,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     }
     const current = sessionRef.current;
     if (current) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
-    setRoute({ name, ...(name === "account" ? options : {}) });
+    setRoute({ name,
+      ...(name === "account" ? { accountSection: options?.accountSection } : {}),
+      ...(name === "supporting" ? { supportingSection: options?.supportingSection } : {}),
+      ...(name === "signature" ? { historyShareId: options?.historyShareId } : {}),
+    });
   }, []);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { AppState, RefreshControl, ScrollView, Text, View } from "react-native";
 import { PressableScale, FadeSlideIn } from "../ui/motion";
 import * as FileSystem from "expo-file-system";
 import { usePackProof } from "../app/PackProofProvider";
@@ -14,6 +14,10 @@ import { PairedReturnPlayer } from "../ui/PairedReturnPlayer";
 import { SignaturePlayer } from "../ui/SignaturePlayer";
 import { RestoringScrollView } from "../ui/RestoringScrollView";
 import { newIdempotencyKey } from "../v2-api";
+import { ItemHistoryPanel } from "../signature/ItemHistoryPanel";
+import { RecipientExportPanel } from "../signature/RecipientExportPanel";
+import { SelectionRow } from "../signature/SelectionRow";
+import { assertCurrent, CASE_FIELDS, caseScope, digestValue, scoped, type CaseField } from "../signature/workflows";
 import {
   elapsedLabel,
   mediaUri,
@@ -34,6 +38,7 @@ const proofTools = [
   { key: "ask", label: "Questions" },
   { key: "case", label: "Case packet" },
   { key: "compare", label: "Compare" },
+  { key: "history", label: "Item history" },
 ] as const;
 type ProofTool = typeof proofTools[number]["key"];
 
@@ -44,12 +49,18 @@ const prompts = [
   "What recordings are available?",
 ];
 export function SignatureProofScreen() {
+  const app = usePackProof();
+  const scope = JSON.stringify([app.client.apiBaseUrl, app.session?.userId, app.proof?.proofId]);
+  const currentScope = useRef(scope); currentScope.current = scope;
+  return <ScopedSignatureProofScreen key={scope} scope={scope} currentScope={() => currentScope.current} />;
+}
+function ScopedSignatureProofScreen({ scope, currentScope }: { scope: string; currentScope: () => string }) {
   const app = usePackProof(),
     { colors } = useTheme(),
     proofId = app.proof?.proofId;
   const [tool, setTool] = useState<ProofTool>("replay");
   const [returnToAnswer, setReturnToAnswer] = useState(false);
-  const toolOffsets = useRef<Record<ProofTool, number>>({ replay: 0, ask: 0, case: 0, compare: 0 });
+  const toolOffsets = useRef<Record<ProofTool, number>>({ replay: 0, ask: 0, case: 0, compare: 0, history: 0 });
   function selectTool(next: ProofTool) {
     setReturnToAnswer(false);
     setTool(next);
@@ -70,6 +81,8 @@ export function SignatureProofScreen() {
     [label, setLabel] = useState("");
   const [packet, setPacket] = useState<CasePreview | null>(null),
     [notes, setNotes] = useState("");
+  const [fields, setFields] = useState<CaseField[]>([...CASE_FIELDS]);
+  const [mediaIds, setMediaIds] = useState<string[] | null>(null);
   const [left, setLeft] = useState<SignatureEvidence | null>(null),
     [right, setRight] = useState<SignatureEvidence | null>(null);
   const [outboundAnchor, setOutboundAnchor] = useState<EvidenceAnchor | null>(
@@ -82,18 +95,23 @@ export function SignatureProofScreen() {
   const live = useRef(true),
     busyRef = useRef(false);
   const [sourceDetail, setSourceDetail] = useState<string | null>(null);
+  const isCurrent = () => {
+    if (!live.current || currentScope() !== scope || !app.session) return false;
+    try { app.client.assertCaptureAccount(app.session.userId, app.client.apiBaseUrl); return true; } catch { return false; }
+  };
+  const isActive = () => isCurrent() && AppState.currentState === 'active';
   const request = <T,>(path = "", method = "GET", body?: unknown) =>
-    app.client.signatureRequest<T>(proofId!, path, method, body);
+    scoped(isActive, () => app.client.signatureRequest<T>(proofId!, path, method, body));
   async function run(fn: () => Promise<void>) {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
-      await app.ensureAuth();
+      await scoped(isActive, app.ensureAuth);
       await fn();
     } catch (e) {
-      if (live.current)
+      if (isCurrent())
         setError(
           e instanceof Error
             ? e.message
@@ -101,13 +119,15 @@ export function SignatureProofScreen() {
         );
     } finally {
       busyRef.current = false;
-      if (live.current) setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
   async function reload() {
     const next = await request<SignatureView>();
-    if (live.current) {
+    if (isCurrent()) {
       setRecord(next);
+      setPacket(null);
+      setMediaIds(ids => ids === null ? next.snapshot.data.evidence.map(item => item.evidenceId) : ids.filter(id => next.snapshot.data.evidence.some(item => item.evidenceId === id)));
       setSource(
         (current) =>
           next.snapshot.data.evidence.find(
@@ -118,16 +138,16 @@ export function SignatureProofScreen() {
           ) ??
           null,
       );
-      const media = await app.client
+      const media = await scoped(isActive, () => app.client
         .disclosureRequest<{
           derivatives: Array<{
             derivativeId: string;
             status: string;
             transform: { anchorId: string };
           }>;
-        }>(proofId!, "/thumbnails")
+        }>(proofId!, "/thumbnails"))
         .catch(() => ({ derivatives: [] }));
-      if (live.current)
+      if (isCurrent())
         setThumbnails(
           Object.fromEntries(
             media.derivatives
@@ -148,6 +168,7 @@ export function SignatureProofScreen() {
       live.current = false;
     };
   }, [proofId]);
+  useEffect(() => { if (app.route.historyShareId) setTool('history'); }, [app.route.historyShareId]);
   if (!proofId || !app.session)
     return (
       <AppScreen>
@@ -417,12 +438,16 @@ export function SignatureProofScreen() {
             <FormField
               label="Your factual notes (optional)"
               value={notes}
+              editable={!busy}
               onChangeText={(value) => {
-                setNotes(value);
+                setNotes(value.slice(0, 4000));
                 setPacket(null);
               }}
               multiline
             />
+            <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>Fields to include</Text>
+            {CASE_FIELDS.map(field => <SelectionRow key={field} label={field === 'status' ? 'Proof status' : field === 'order' ? 'Order details' : field === 'shipping' ? 'Shipping events' : field === 'evidence' ? 'Evidence and source moments' : 'Participant statements'} selected={fields.includes(field)} disabled={busy} onPress={() => { setPacket(null); setFields(values => values.includes(field) ? values.filter(value => value !== field) : [...values, field]); }} />)}
+            {fields.includes('evidence') ? record.snapshot.data.evidence.map((evidence, index) => <SelectionRow key={evidence.evidenceId} label={`Include source ${index + 1} · ${evidence.stageId ? 'Receipt / return' : 'Outbound'} · ${evidence.contentType}`} selected={(mediaIds ?? []).includes(evidence.evidenceId)} disabled={busy} onPress={() => { setPacket(null); setMediaIds(values => (values ?? []).includes(evidence.evidenceId) ? (values ?? []).filter(id => id !== evidence.evidenceId) : [...(values ?? []), evidence.evidenceId]); }} />) : null}
             {templates.map(([template, title]) => (
               <Button
                 key={template}
@@ -436,6 +461,7 @@ export function SignatureProofScreen() {
                         snapshotId: record.snapshot.snapshotId,
                         template,
                         ...(notes.trim() ? { notes: notes.trim() } : {}),
+                        scope: caseScope(fields, mediaIds ?? [], record.snapshot.data.evidence.map(item => item.evidenceId)),
                       }),
                     ),
                   )
@@ -456,20 +482,24 @@ export function SignatureProofScreen() {
                   onPress={() =>
                     void run(async () => {
                       if (!packet.approved) {
-                        await request(
+                        if (digestValue(packet.preview) !== packet.sha256) throw new Error('The case preview no longer matches its saved hash. Build the packet again.');
+                        const approved = await request<CasePreview>(
                           `/cases/${encodeURIComponent(packet.caseId)}/approve`,
                           "POST",
                           { previewSha256: packet.sha256 },
                         );
-                        setPacket({ ...packet, approved: true });
+                        if (approved.caseId !== packet.caseId || approved.sha256 !== packet.sha256 || !approved.approved) throw new Error('Approval was not confirmed for this exact packet.');
+                        setPacket(approved);
                         return;
                       }
                       const uri = `${FileSystem.cacheDirectory}PackProof-case-${packet.caseId.replace(/[^a-zA-Z0-9_-]/g, "")}.html`;
+                      assertCurrent(isActive);
                       const downloaded = await FileSystem.downloadAsync(
                         app.client.caseExportUrl(proofId, packet.caseId),
                         uri,
                         { headers: app.client.authorizedDownloadHeaders() },
                       );
+                      if (!isActive()) { await FileSystem.deleteAsync(uri, { idempotent: true }); assertCurrent(isActive); }
                       if (downloaded.status !== 200) {
                         await FileSystem.deleteAsync(uri, { idempotent: true });
                         throw new Error(
@@ -485,6 +515,7 @@ export function SignatureProofScreen() {
                         throw new Error(
                           "File sharing is unavailable on this device. Open the web workspace to download this approved packet.",
                         );
+                      assertCurrent(isActive);
                       await Sharing.shareAsync(uri, {
                         mimeType: "text/html",
                         dialogTitle:
@@ -493,9 +524,11 @@ export function SignatureProofScreen() {
                     })
                   }
                 />
+                <RecipientExportPanel key={packet.caseId} api={app.client} userId={app.session.userId} proofId={proofId} caseId={packet.caseId} sources={Array.isArray(packet.preview.evidence) ? packet.preview.evidence.filter((value): value is { evidenceId: string; contentType: string } => !!value && typeof value === 'object' && typeof value.evidenceId === 'string' && typeof value.contentType === 'string') : []} isCurrent={isCurrent} ensureAuth={app.ensureAuth} />
               </View>
             ) : null}
           </> : null}
+          {tool === 'history' && app.proof ? <ItemHistoryPanel api={app.client} proof={app.proof} userId={app.session.userId} history={record.history} enabled={record.capabilities?.history !== false} reload={reload} openProof={app.openProof} ensureAuth={app.ensureAuth} isCurrent={isCurrent} incomingShareId={app.route.historyShareId} /> : null}
           {tool === "compare" ? <>
           <InfoCard>
             <Text

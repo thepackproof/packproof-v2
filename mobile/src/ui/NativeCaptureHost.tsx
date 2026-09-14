@@ -1,3 +1,4 @@
+import { registerRemoteCaptureStop } from "../capture/remote-control";
 import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
 import { haptic } from "../theme/haptics";
 import { cinematicForScheme } from "../theme/cinematic";
@@ -305,6 +306,10 @@ function CameraSession({
       else camera.current?.stopRecording();
     }
   };
+  useEffect(() => {
+    if (!request.remoteControl || !request.captureSessionId) return;
+    return registerRemoteCaptureStop(request.captureSessionId, stop);
+  }, [request.remoteControl, request.captureSessionId]);
   return (
     <Modal
       visible

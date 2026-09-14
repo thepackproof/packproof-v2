@@ -15,6 +15,7 @@ export type AppRouteName =
   | "account"
   | "sharing"
   | "signature"
+  | "supporting"
   | "proof"
   | "capture"
   | "scan"
@@ -38,6 +39,8 @@ export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
   name: AppRouteName;
   accountSection?: AccountSection;
+  supportingSection?: "responses" | "retention" | "privacy";
+  historyShareId?: string;
 }
 
 export interface ProofsLibraryState {
@@ -69,6 +72,7 @@ export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrig
     case "dev": return "account";
     case "sharing":
     case "signature":
+    case "supporting":
     case "receipt":
     case "finalize":
     case "invite":

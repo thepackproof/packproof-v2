@@ -69,6 +69,10 @@ test('generated Xcode extension is embedded, depends on its Swift sources, and r
   assert.deepEqual(resourcePaths(), ['PackProofOrderShare/PrivacyInfo.xcprivacy']);
   assert.equal(fs.readFileSync(path.resolve(__dirname, '../ios/PackProofOrderShare/PrivacyInfo.xcprivacy'), 'utf8'), fs.readFileSync(path.resolve(__dirname, '../plugins/order-share-ios/PrivacyInfo.xcprivacy'), 'utf8'));
   const mainTarget = project.getFirstTarget().firstTarget;
+  const mainResources = mainTarget.buildPhases.map(item => objects.PBXResourcesBuildPhase[item.value]).find(Boolean);
+  const mainPrivacyPaths = () => mainResources.files.map(file => objects.PBXFileReference[objects.PBXBuildFile[file.value]?.fileRef]?.path?.replaceAll('"', '')).filter(value => value?.endsWith('PrivacyInfo.xcprivacy'));
+  assert.deepEqual(mainPrivacyPaths(), ['PackProof/PrivacyInfo.xcprivacy']);
+  assert.notEqual(mainPrivacyPaths()[0], resourcePaths()[0]);
   assert.ok(mainTarget.dependencies.some(item => objects.PBXTargetDependency[item.value].target === id));
   const embeds = mainTarget.buildPhases.map(item => objects.PBXCopyFilesBuildPhase[item.value]).filter(Boolean);
   assert.ok(embeds.some(phase => String(phase.dstSubfolderSpec) === '13' && phase.files.some(file => objects.PBXBuildFile[file.value].fileRef === target.productReference)));
@@ -79,10 +83,13 @@ test('generated Xcode extension is embedded, depends on its Swift sources, and r
     assert.equal(String(build.CURRENT_PROJECT_VERSION).replaceAll('"', ''), appInfo.CFBundleVersion);
   }
   const before = JSON.parse(JSON.stringify(target.buildPhases));
+  // Repair the previous aggregator's accidental app membership on a rerun.
+  mainResources.files.push({ ...resourcePhase.files[0] });
   withShare.addExtensionTarget(project, { version: '2.7.13', ios: { bundleIdentifier: 'com.packproof.mobile', buildNumber: '42' } });
   assert.equal(targets().length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(target.buildPhases)), before);
   assert.deepEqual(resourcePaths(), ['PackProofOrderShare/PrivacyInfo.xcprivacy']);
+  assert.deepEqual(mainPrivacyPaths(), ['PackProof/PrivacyInfo.xcprivacy']);
   const configList = objects.XCConfigurationList[target.buildConfigurationList];
   const extensionInfo = plist.parse(fs.readFileSync(path.resolve(__dirname, '../ios/PackProofOrderShare/PackProofOrderShare-Info.plist'), 'utf8'));
   for (const { value } of configList.buildConfigurations) {

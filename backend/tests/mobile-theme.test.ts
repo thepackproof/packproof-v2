@@ -40,14 +40,14 @@ describe("mobile appearance and theme tokens", () => {
     expect(resolveColorScheme("dark", "light")).toBe("dark");
   });
 
-  it("uses the approved paper surfaces, charcoal actions and distinct slate and forest accents", () => {
+  it("uses the approved cool surfaces with distinct blue actions and green success", () => {
     const colors = colorsForScheme("light");
-    expect(colors.background).toBe("#F5F2E9");
-    expect(colors.surface).toBe("#FFFEFA");
-    expect(colors.textPrimary).toBe("#26302D");
-    expect(colors.primary).toBe("#26302D");
-    expect(colors.accent).toBe("#56727B");
-    expect(colors.success).toBe("#365F4C");
+    expect(colors.background).toBe("#E9EEF4");
+    expect(colors.surface).toBe("#F7F9FC");
+    expect(colors.textPrimary).toBe("#23262D");
+    expect(colors.primary).toBe("#1769D2");
+    expect(colors.accent).toBe("#1769D2");
+    expect(colors.success).toBe("#14805E");
     expect(colors.primary).not.toBe(colors.success);
     expect(colors.accentText).not.toBe(colors.successText);
     expect(colors).toEqual(lightColors);
@@ -55,12 +55,12 @@ describe("mobile appearance and theme tokens", () => {
 
   it("offers a neutral charcoal dark palette", () => {
     const colors = colorsForScheme("dark");
-    expect(colors.background).toBe("#1C2421");
-    expect(colors.surface).toBe("#26302D");
-    expect(colors.textPrimary).toBe("#F6F3E9");
-    expect(colors.primary).toBe("#BFD0D4");
-    expect(colors.accent).toBe("#9CBAC6");
-    expect(colors.success).toBe("#A2C4A8");
+    expect(colors.background).toBe("#14181C");
+    expect(colors.surface).toBe("#1E2429");
+    expect(colors.textPrimary).toBe("#F7F9FC");
+    expect(colors.primary).toBe("#1769D2");
+    expect(colors.accent).toBe("#1769D2");
+    expect(colors.success).toBe("#14805E");
     expect(colors.primary).not.toBe(colors.success);
     expect(colors.accentText).not.toBe(colors.successText);
     expect(colors).toEqual(darkColors);
@@ -87,9 +87,9 @@ describe("mobile appearance and theme tokens", () => {
   });
 
   it("uses matching system-bar colors and inverted icons for each scheme", () => {
-    expect(systemBarBackground(lightColors, false)).toBe("#F5F2E9");
+    expect(systemBarBackground(lightColors, false)).toBe("#E9EEF4");
     expect(systemBarContent("light", false)).toBe("dark");
-    expect(systemBarBackground(darkColors, false)).toBe("#1C2421");
+    expect(systemBarBackground(darkColors, false)).toBe("#14181C");
     expect(systemBarContent("dark", false)).toBe("light");
     expect(systemBarBackground(lightColors, true)).toBe(lightColors.scanBackground);
     expect(systemBarContent("light", true)).toBe("light");

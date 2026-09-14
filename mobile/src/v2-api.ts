@@ -1045,7 +1045,7 @@ export class PackProofV2Client {
   async emailProof(
     proofId: string,
     input: { email: string; preference: "IMPORTANT" | "ALL" | "FINAL_ONLY"; scope: "SUMMARY" },
-  ): Promise<{ subscription?: { email?: string }; emailDeliveryConfigured?: boolean }> {
+  ): Promise<{ subscription?: { email?: string; viewUrl?: string }; delivery?: { sent?: number }; emailDeliveryConfigured?: boolean }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/email-subscriptions`, {
       method: "POST",
       body: input,
@@ -1147,6 +1147,18 @@ export class PackProofV2Client {
 
   async disclosureRequest<T>(proofId: string, path: string, method = "GET", body?: unknown): Promise<T> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/disclosure${path}`, { method, body });
+  }
+  async featureRequest<T>(proofId: string, path: string, method = "GET", body?: unknown): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/${path}`, { method, body });
+  }
+  featureDownloadUrl(proofId: string, path: string): string {
+    return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/${path}`);
+  }
+  async retentionRequest<T>(proofId: string, path = "", method = "GET", body?: unknown): Promise<T> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/retention${path}`, { method, body });
+  }
+  async relayRequest<T>(path = "", method = "GET", body?: unknown, token?: string): Promise<T> {
+    return this.request(`/me/packing-relay${path}`, { method, body, headers: token ? { "X-PackProof-Station-Token": token } : undefined });
   }
   thumbnailUrl(proofId: string, derivativeId: string): string {
     return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/disclosure/thumbnails/${encodeURIComponent(derivativeId)}/media`);
