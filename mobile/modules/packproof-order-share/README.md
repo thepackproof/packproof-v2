@@ -11,6 +11,8 @@ For the production bundle identifier `com.packproof.mobile`:
 
 Both device provisioning profiles must include that App Group. EAS config plugin metadata declares the extension under `extra.eas.build.experimental.ios.appExtensions`. An Apple Developer team is needed for device/TestFlight signing. A fresh prebuild is required after changing the app identifier. The extension uses the application's version/build values.
 
+The extension includes its own `PrivacyInfo.xcprivacy` in its resource build phase, and the app-side pod packages a separate `PackProofOrderShare_privacy.bundle`. Both declare file metadata reason `C617.1` for App Group inbox validation and expiration. The extension additionally declares `3B52.1` for metadata of the files the person explicitly shares. These reasons match [Apple’s required-reason API definitions](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype). Neither component tracks users or sends file timestamps off-device.
+
 ## Flow and safeguards
 
 1. In another app, share text, an HTTP(S) link, JPEG, PNG, HEIC, WebP, or PDF to PackProof, then tap **Save order**.

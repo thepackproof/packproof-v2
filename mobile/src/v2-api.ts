@@ -1256,6 +1256,9 @@ export class PackProofV2Client {
   }
 
   async getUsage<T>(): Promise<T> { return this.request("/me/usage"); }
+  async developerRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+    return this.request(`/me/tenants${path}`, { method, body });
+  }
   async billingRequest<T>(path: string, body?: unknown): Promise<T> {
     return this.request(`/me/billing/${path}`, { method: body === undefined ? "GET" : "POST", body });
   }

@@ -26,7 +26,7 @@
     "build:ios:testflight": "npx --yes eas-cli build --platform ios --profile ios-testflight",
     "submit:ios:testflight": "npx --yes eas-cli submit --platform ios --profile ios-testflight",
     "test:ios-config": "node --test tests/ios-release-config.test.cjs",
-    "test:ios": "node --test tests/ios-release-config.test.cjs tests/order-share-plugin.test.cjs && node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/ios-parity.test.ts tests/ios-billing.test.ts tests/handoff-sender.test.ts"
+    "test:ios": "node --test tests/ios-release-config.test.cjs tests/order-share-plugin.test.cjs && node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/ios-parity.test.ts tests/ios-billing.test.ts tests/handoff-sender.test.ts tests/developer-access.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",

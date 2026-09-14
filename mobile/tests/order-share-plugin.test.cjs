@@ -42,6 +42,16 @@ test('Android text shares keep cold-start and warm-start normalization', () => {
   assert.equal(transformMainActivity(result), result);
 });
 
+test('share privacy manifests cover only local container metadata and explicitly shared files', () => {
+  const extension = plist.parse(fs.readFileSync(path.resolve(__dirname, '../plugins/order-share-ios/PrivacyInfo.xcprivacy'), 'utf8'));
+  const pod = plist.parse(fs.readFileSync(path.resolve(__dirname, '../modules/packproof-order-share/ios/PrivacyInfo.xcprivacy'), 'utf8'));
+  assert.deepEqual(extension.NSPrivacyAccessedAPITypes, [{ NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp', NSPrivacyAccessedAPITypeReasons: ['C617.1', '3B52.1'] }]);
+  assert.deepEqual(pod.NSPrivacyAccessedAPITypes, [{ NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp', NSPrivacyAccessedAPITypeReasons: ['C617.1'] }]);
+  assert.equal(extension.NSPrivacyTracking, false);
+  assert.equal(pod.NSPrivacyTracking, false);
+  assert.match(fs.readFileSync(path.resolve(__dirname, '../modules/packproof-order-share/ios/PackProofOrderShare.podspec'), 'utf8'), /s\.resource_bundles\s*=\s*\{\s*'PackProofOrderShare_privacy'\s*=>\s*\['PrivacyInfo\.xcprivacy'\]/);
+});
+
 const projectFile = path.resolve(__dirname, '../ios/PackProof.xcodeproj/project.pbxproj');
 test('generated Xcode extension is embedded, depends on its Swift sources, and remains idempotent', {
   skip: !fs.existsSync(projectFile) && 'Run expo prebuild --platform ios --no-install for the native project integration check',
@@ -54,18 +64,31 @@ test('generated Xcode extension is embedded, depends on its Swift sources, and r
   const sourcePhase = target.buildPhases.map(item => objects.PBXSourcesBuildPhase[item.value]).find(Boolean);
   const sourceNames = sourcePhase.files.map(file => objects.PBXBuildFile[file.value].fileRef_comment);
   assert.deepEqual(sourceNames.sort(), ['OrderShareStore.swift', 'ShareViewController.swift']);
+  const resourcePhase = target.buildPhases.map(item => objects.PBXResourcesBuildPhase[item.value]).find(Boolean);
+  const resourcePaths = () => resourcePhase.files.map(file => objects.PBXFileReference[objects.PBXBuildFile[file.value].fileRef].path.replaceAll('"', ''));
+  assert.deepEqual(resourcePaths(), ['PackProofOrderShare/PrivacyInfo.xcprivacy']);
+  assert.equal(fs.readFileSync(path.resolve(__dirname, '../ios/PackProofOrderShare/PrivacyInfo.xcprivacy'), 'utf8'), fs.readFileSync(path.resolve(__dirname, '../plugins/order-share-ios/PrivacyInfo.xcprivacy'), 'utf8'));
   const mainTarget = project.getFirstTarget().firstTarget;
   assert.ok(mainTarget.dependencies.some(item => objects.PBXTargetDependency[item.value].target === id));
   const embeds = mainTarget.buildPhases.map(item => objects.PBXCopyFilesBuildPhase[item.value]).filter(Boolean);
   assert.ok(embeds.some(phase => String(phase.dstSubfolderSpec) === '13' && phase.files.some(file => objects.PBXBuildFile[file.value].fileRef === target.productReference)));
+  const appInfo = plist.parse(fs.readFileSync(path.resolve(__dirname, '../ios/PackProof/Info.plist'), 'utf8'));
+  for (const { value } of objects.XCConfigurationList[target.buildConfigurationList].buildConfigurations) {
+    const build = objects.XCBuildConfiguration[value].buildSettings;
+    assert.equal(String(build.MARKETING_VERSION).replaceAll('"', ''), appInfo.CFBundleShortVersionString);
+    assert.equal(String(build.CURRENT_PROJECT_VERSION).replaceAll('"', ''), appInfo.CFBundleVersion);
+  }
   const before = JSON.parse(JSON.stringify(target.buildPhases));
-  withShare.addExtensionTarget(project, { version: '1.2.3', ios: { bundleIdentifier: 'com.packproof.mobile' } });
+  withShare.addExtensionTarget(project, { version: '2.7.13', ios: { bundleIdentifier: 'com.packproof.mobile', buildNumber: '42' } });
   assert.equal(targets().length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(target.buildPhases)), before);
+  assert.deepEqual(resourcePaths(), ['PackProofOrderShare/PrivacyInfo.xcprivacy']);
   const configList = objects.XCConfigurationList[target.buildConfigurationList];
   const extensionInfo = plist.parse(fs.readFileSync(path.resolve(__dirname, '../ios/PackProofOrderShare/PackProofOrderShare-Info.plist'), 'utf8'));
   for (const { value } of configList.buildConfigurations) {
     const build = objects.XCBuildConfiguration[value].buildSettings;
+    assert.equal(build.MARKETING_VERSION, '2.7.13');
+    assert.equal(build.CURRENT_PROJECT_VERSION, '42');
     assert.equal(build.PRODUCT_MODULE_NAME, 'PackProofOrderShareExtension');
     assert.notEqual(build.PRODUCT_MODULE_NAME, 'PackProofOrderShare'); // app-side Expo pod
     assert.equal(extensionInfo.NSExtension.NSExtensionPrincipalClass.replace('$(PRODUCT_MODULE_NAME)', build.PRODUCT_MODULE_NAME), 'PackProofOrderShareExtension.ShareViewController');

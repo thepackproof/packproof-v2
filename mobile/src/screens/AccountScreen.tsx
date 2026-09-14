@@ -1,4 +1,5 @@
 import { BillingPanel } from "../billing/BillingPanel";
+import { DeveloperAccessPanel } from "../developer/DeveloperAccessPanel";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { IntakeSettings } from "../intake/IntakeSettings";
 import * as Sharing from "expo-sharing";
@@ -28,6 +29,7 @@ import { StudyConsentCard } from "../ui/StudyConsentCard";
 import type { AccountSection } from "../app/navigation";
 type DeletionRequest = { requestId: string; state: string; requestedAt: string; updatedAt: string };
 const SECTION_TITLES: Record<AccountSection, string> = {
+  developer: "Developer access",
   billing: "Plan and billing", notifications: "Notifications", profile: "Profile", channels: "Connections", recordings: "Recordings on this device",
   appearance: "Appearance", help: "Help & support", privacy: "Privacy & account",
 };
@@ -124,6 +126,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <AccountRow title="Notifications" detail="Proof updates, delivery preferences and history" icon="notifications-outline" onPress={() => openSection("notifications")} />
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
           <AccountRow title="Help & support" detail="Recording, recovery, and invitations" icon="help-circle-outline" onPress={() => openSection("help")} />
+          <AccountRow title="Developer access" detail="API workspaces, keys, and permissions" icon="code-slash-outline" onPress={() => openSection("developer")} />
           <AccountRow title="Privacy & account" detail="Privacy, terms, and account deletion" icon="shield-checkmark-outline" onPress={() => openSection("privacy")} last />
         </View>
         {unfinished.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Signing out pauses unfinished work. Sign in to this account to resume it.</Text> : null}
@@ -131,6 +134,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       </> : null}
 
       {section === "billing" ? <BillingPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
+      {section === "developer" ? <DeveloperAccessPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
       {section === "notifications" ? <NotificationCenter key={session.userId}/> : null}
       {section === "profile" ? <>
         {session.username ? <Text style={[styles.body, { color: colors.textSecondary }]}>@{session.username}</Text> : <FormField label="Username" value={app.usernameInput} onChangeText={app.setUsernameInput} />}

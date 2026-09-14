@@ -13,4 +13,5 @@ Pod::Spec.new do |s|
   s.frameworks = 'Vision', 'PDFKit', 'ImageIO', 'UniformTypeIdentifiers'
   s.swift_version = '5.0'
   s.source_files = '**/*.swift'
+  s.resource_bundles = { 'PackProofOrderShare_privacy' => ['PrivacyInfo.xcprivacy'] }
 end

@@ -25,6 +25,7 @@ The implementation is a native iOS port, with Swift modules for camera capture, 
 | Push notifications and preferences | Expo/APNs delivery; account-scoped local fallback for upload completion |
 | Themes, fonts, calendar, animations and navigation | Shared Android 49 components, with iOS platform gates corrected |
 | Plan, usage, invoices and checkout | Native account panel; external purchase/cancellation actions require the actual Apple storefront to be USA |
+| Developer workspaces and API keys | Account → Developer access: sandbox creation, workspace selection, scoped key issue/list/rotate/revoke and API documentation; one-time tokens remain in memory and clear on leave, background or account/workspace changes |
 | Desktop-to-phone order handoff | iOS can approve/pair devices, choose a default, send exact prepared orders, receive, claim and record; sender operations keep the same idempotency key across uncertain responses |
 
 Individual barcode formats depend on the Apple runtime; unavailable formats are not claimed. Codabar live detection needs iOS 15.4+. The browser companion remains a browser feature, and public token-based Proof viewing retains the canonical browser access policy. Both packproof-v2 and packproof URL schemes are registered for OAuth and notification navigation. External checkout is hidden for unknown/non-US Apple storefronts; this release does not add StoreKit purchases for those storefronts.
@@ -38,7 +39,7 @@ From `mobile/`:
 ```sh
 npm ci
 npm run typecheck
-npm run test:ios-config
+npm run test:ios
 npm run build:ios:simulator
 npm run build:ios:device
 npm run build:ios:testflight
@@ -57,9 +58,13 @@ An active Apple Developer team and App Store Connect application are needed for 
 
 The `.github/workflows/ios.yml` workflow compiles the app, all native modules and the Share Extension on macOS with Xcode 26+. Its optional signed build uses existing remote credentials and an `EXPO_TOKEN` secret. It does not submit to the App Store automatically.
 
+The extension uses a distinct Swift module name, includes its own file-access privacy manifest, and takes its marketing version and build number from the resolved app configuration. Its version must remain identical to the containing app when incrementing a release.
+
 ## Backend rollout
 
 Deploy the additive API support and migration `066_ios_capture_surfaces.sql` before testing iOS capture. It permits explicitly bound IOS identifier policies without rewriting historical policies. Where item enrichment is enabled, add `IOS` to the existing `IDENTIFIER_SURFACES` rollout. Keep prior surfaces, provider credentials, runtime flags and canonical evidence state intact. See [identifier deployment notes](identifiers-server.md).
+
+The API used by the Android and iOS release profiles completed its staging rollout on 2026-09-14 at 11:37:40 UTC. Migration 066 was applied and checksum-verified, with 67 migrations current. Task definition `packproof-v2-staging-cluster-packproof-v2-staging-api:28` serves source `19fa9af8a8f07e2cd8d0d64152f3bfb62cd98797`, image `sha256:53d98a2c90519f8c16c59291e55abe8e1e20691341d9d9f7132f1be631486d86`. Its backend tree is `94ca7d14c5ffe381c1ec73db35a74c8ec6f1cdd9`, unchanged by subsequent mobile and web corrections. Health, readiness, exact release identity, Android/iOS attestation capabilities, authentication rejection and existing web CORS checks passed. ECS reached steady state with no rollback alarms. Existing integrations, runtime settings and disabled identifier rollout flags were preserved; startup migrations remain disabled.
 
 ## Verification and physical-device acceptance
 
@@ -76,6 +81,8 @@ Before calling the app release-ready, record the exact build/commit and test on 
 7. Confirm APNs permission/denial, muted settings, upload completion, Proof updates and notification routing.
 8. Export/share an evidence packet, view receipt/return stages and check the embedded tracking map.
 9. Verify billing in a sandbox account with a known Apple storefront and no charges authorized by the tester accidentally.
+10. Pair and approve another device, send a prepared order, accept it on iPhone and recover an interrupted handoff without duplicating it.
+11. Create a sandbox developer workspace and read-only API key, verify a request, rotate/revoke the key, and verify that leaving, backgrounding or changing accounts hides the one-time secret.
 
 iOS may suspend JavaScript while a background upload is running. Upload bytes can continue through the OS, but commit/finalization may wait until the app runs again. Force-quitting does not guarantee upload completion. Interrupted, unfinished MP4s are preserved where possible but are never represented as valid committed evidence or as repaired media.
 

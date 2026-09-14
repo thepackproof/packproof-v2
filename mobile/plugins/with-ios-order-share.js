@@ -54,6 +54,16 @@ function addExtensionTarget(project, config) {
       project.addSourceFile(name, { target: target.uuid }, group.uuid);
     }
   }
+  // The extension is a separate executable: its own resource phase must copy
+  // the manifest even when the containing app includes the pod privacy bundle.
+  const privacyResource = project.addFile(`${TARGET}/PrivacyInfo.xcprivacy`, project.getFirstProject().firstProject.mainGroup);
+  if (privacyResource) {
+    // addResourceFile assumes a Resources group that Expo's template omits.
+    privacyResource.uuid = project.generateUuid();
+    privacyResource.target = target.uuid;
+    project.addToPbxBuildFileSection(privacyResource);
+    project.addToPbxResourcesBuildPhase(privacyResource);
+  }
   const containingTarget = project.getFirstTarget();
   if (!containingTarget.firstTarget.dependencies.some(item => objects.PBXTargetDependency[item.value]?.target === target.uuid)) {
     project.addTargetDependency(containingTarget.uuid, [target.uuid]);
@@ -71,8 +81,8 @@ function addExtensionTarget(project, config) {
       SWIFT_VERSION: '5.0', CLANG_ENABLE_MODULES: 'YES',
       IPHONEOS_DEPLOYMENT_TARGET: mainSettings.IPHONEOS_DEPLOYMENT_TARGET || '15.1',
       TARGETED_DEVICE_FAMILY: '"1,2"', APPLICATION_EXTENSION_API_ONLY: 'YES',
-      MARKETING_VERSION: mainSettings.MARKETING_VERSION || config.version || '1.0.0',
-      CURRENT_PROJECT_VERSION: mainSettings.CURRENT_PROJECT_VERSION || config.ios?.buildNumber || '1',
+      MARKETING_VERSION: config.version || mainSettings.MARKETING_VERSION || '1.0.0',
+      CURRENT_PROJECT_VERSION: config.ios?.buildNumber || mainSettings.CURRENT_PROJECT_VERSION || '1',
       CODE_SIGN_STYLE: 'Automatic', SKIP_INSTALL: 'YES',
       ...(config.ios?.appleTeamId ? { DEVELOPMENT_TEAM: config.ios.appleTeamId } :
         mainSettings.DEVELOPMENT_TEAM ? { DEVELOPMENT_TEAM: mainSettings.DEVELOPMENT_TEAM } : {}),
@@ -110,6 +120,7 @@ function withIOSOrderShare(config) {
     const destination = path.join(mod.modRequest.platformProjectRoot, TARGET);
     fs.mkdirSync(destination, { recursive: true });
     fs.copyFileSync(path.join(__dirname, 'order-share-ios', 'ShareViewController.swift'), path.join(destination, 'ShareViewController.swift'));
+    fs.copyFileSync(path.join(__dirname, 'order-share-ios', 'PrivacyInfo.xcprivacy'), path.join(destination, 'PrivacyInfo.xcprivacy'));
     fs.copyFileSync(path.join(__dirname, '..', 'modules', 'packproof-order-share', 'ios', 'OrderShareStore.swift'), path.join(destination, 'OrderShareStore.swift'));
     fs.writeFileSync(path.join(destination, `${TARGET}-Info.plist`), plist.build(extensionInfo(mod, identity)));
     fs.writeFileSync(path.join(destination, `${TARGET}.entitlements`), plist.build({ [GROUP_KEY]: [identity.appGroup] }));
