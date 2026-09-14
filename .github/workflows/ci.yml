@@ -121,6 +121,7 @@ jobs:
           ffprobe -version
       - run: npm run typecheck
       - run: npm run test:build-security
+      - run: npm run test:ios
       - run: npm run test:proof-record
       - run: npm run test:study-timing
       - run: npm run test:intake

@@ -10,6 +10,7 @@ import { ApiError } from '../v2-api';
 import { IntakeApi, type IntakeAlias } from './api';
 import type { IntakeCapabilities, IntakeDeviceCredentials } from './model';
 import { forgetIntakeDevice, readIntakeDevice, saveIntakeDevice } from './storage';
+import { RecordingDeviceSettings } from './RecordingDeviceSettings';
 
 const labels: Record<IntakeAlias['state'], string> = { AWAITING_VERIFICATION: 'Awaiting forwarding verification', AWAITING_VALID_SAMPLE: 'Awaiting a valid sales message', READY: 'Ready', REVOKED: 'Disconnected' };
 export function IntakeSettings() {
@@ -22,6 +23,7 @@ export function IntakeSettings() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [manageDevices, setManageDevices] = useState(false);
   const active = useRef(true);
   const userId = app.session?.userId;
   const owner = useRef(userId); owner.current = userId;
@@ -50,13 +52,18 @@ export function IntakeSettings() {
   return <View style={styles.section}>
     {flags.handoffEnabled || device ? <InfoCard>
       <Text style={[styles.title, { color: colors.textPrimary }]}>Recording phone</Text>
-      <Text style={[styles.copy, { color: colors.textSecondary }]}>Send the order selected on your computer to this phone. Keep PackProof open on the Proofs screen to receive it.</Text>
+      <Text style={[styles.copy, { color: colors.textSecondary }]}>Send an order selected on your computer or another device to this phone. Keep PackProof open on the Proofs screen to receive it.</Text>
       {device ? <>
-        <Text style={[styles.copy, { color: colors.textPrimary }]}>{['APPROVED', 'ACTIVE'].includes(deviceState) ? 'This phone is paired.' : deviceState === 'UNAVAILABLE' ? 'Could not check pairing. Refresh when connected.' : 'Approve this phone in the web app’s Connections settings.'}</Text>
+        <Text style={[styles.copy, { color: colors.textPrimary }]}>{['APPROVED', 'ACTIVE'].includes(deviceState) ? 'This phone is paired.' : deviceState === 'UNAVAILABLE' ? 'Could not check pairing. Refresh when connected.' : 'Approve this phone in Connections on another device or the web app.'}</Text>
         {device.pairingCode && !['APPROVED', 'ACTIVE'].includes(deviceState) ? <><Text selectable style={[styles.code, { color: colors.textPrimary }]}>{device.pairingCode}</Text><Button label="Copy pairing code" variant="tertiary" onPress={() => void copy(device.pairingCode!, 'Pairing code copied')} /></> : null}
         <Button label="Check pairing" variant="secondary" loading={busy} onPress={() => void perform(refresh)} />
         <Button label="Disconnect this phone" variant="tertiary" disabled={busy} onPress={() => void perform(async () => { await api.revoke(device.deviceId); await forgetIntakeDevice(app.client, userId!); setDevice(null); setDeviceState(''); })} />
       </> : <Button label="Pair this recording phone" disabled={!flags.handoffEnabled} loading={busy} onPress={() => void perform(async () => { const created = await api.register(Platform.OS === 'ios' ? 'iPhone recording device' : 'Android recording phone'); const saved = { deviceId: created.device.id, deviceToken: created.deviceToken, pairingCode: created.pairingCode }; await saveIntakeDevice(app.client, userId!, saved); setDevice(saved); setDeviceState(created.device.state); })} />}
+    </InfoCard> : null}
+    {flags.handoffEnabled ? <InfoCard>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>Other recording devices</Text>
+      <Button label={manageDevices ? 'Hide recording devices' : 'Manage recording devices'} variant="secondary" onPress={() => setManageDevices(!manageDevices)} />
+      {manageDevices ? <RecordingDeviceSettings key={`${app.apiBaseUrl}:${userId}`} localDeviceId={device?.deviceId} /> : null}
     </InfoCard> : null}
     {flags.emailEnabled || aliases.length ? <InfoCard>
       <Text style={[styles.title, { color: colors.textPrimary }]}>Automatic order inbox</Text>

@@ -68,7 +68,7 @@ jobs:
       - run: npm ci
         working-directory: backend
       - run: npm run typecheck
-      - run: npm run test:ios-config
+      - run: npm run test:ios
       - run: npm run test:proof-record
       - run: npm run test:recovery
       - name: Generate iOS native project and resolve Pods

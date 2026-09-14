@@ -18,7 +18,7 @@ for (const profile of ['ios-simulator', 'ios-device', 'ios-testflight']) {
     assert.equal(result.status, 0, result.stderr);
     const app = JSON.parse(result.stdout);
     assert.equal(app.ios.bundleIdentifier, 'com.packproof.mobile');
-    assert.equal(app.scheme, 'packproof-v2');
+    assert.deepEqual(app.scheme, ['packproof-v2', 'packproof']);
     assert.match(app.extra.packproofApiBaseUrl, /^https:\/\//);
     assert.ok(app.ios.infoPlist.NSFaceIDUsageDescription);
     assert.ok(app.ios.infoPlist.NSCameraUsageDescription);

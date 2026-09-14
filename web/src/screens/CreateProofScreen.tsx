@@ -34,6 +34,7 @@ export function CreateProofScreen(props: {
   const [tracking, setTracking] = useState("");
   const [paste, setPaste] = useState(false);
   const [intake, setIntake] = useState<IntakePreview | null>(null);
+  const [gradingCount, setGradingCount] = useState("1");
   const quantityNumber = Math.max(1, Number.parseInt(quantity,10) || 1);
   return <main className="page narrow-page"><PageHeader title="Record shipment" onBack={props.onCancel} />
     {props.readyOrders}
@@ -55,5 +56,9 @@ export function CreateProofScreen(props: {
       </div></details>
       <button className="btn" disabled={props.busy || !title.trim()} type="submit">{props.busy ? "Opening…" : "Open camera"}</button>
     </form>
+    <details><summary>Document a grading submission</summary>
+      <label className="field"><span>Number of items</span><input value={gradingCount} onChange={e => setGradingCount(e.target.value)} type="number" min={1} max={50} step={1} /></label>
+      <button className="btn btn-secondary" type="button" disabled={props.busy || !Number.isSafeInteger(Number(gradingCount)) || Number(gradingCount) < 1 || Number(gradingCount) > 50} onClick={() => props.onCreateGrading({ itemCount: Number(gradingCount), itemTitle: title.trim() || "Grading submission" })}>Start grading submission</button>
+    </details>
   </main>;
 }

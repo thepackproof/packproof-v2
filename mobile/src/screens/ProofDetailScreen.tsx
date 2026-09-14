@@ -1,4 +1,5 @@
 import { ProofNotificationMute } from "../notifications/NotificationCenter";
+import { SelectedOrderHandoff } from "../intake/SelectedOrderHandoff";
 import { localProofWork, presentationForProof } from "../copy/proof-list";
 import { useState, type ComponentProps } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
@@ -336,6 +337,7 @@ export function ProofDetailScreen() {
 
       <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
         <ProofNotificationMute key={proof.proofId}/>
+        {menuOpen && app.role === "SELLER" && proof.status === "READY_FOR_EVIDENCE" && proof.workflowType === "COMMERCE_SALE" && proof.participationPolicy === "COUNTERPARTY_OPTIONAL" && !captureBelongs ? <SelectedOrderHandoff key={proof.proofId} proofId={proof.proofId} transactionId={proof.transaction.transactionId} onManageDevices={() => { setMenuOpen(false); app.go("account", { accountSection: "channels" }); }} /> : null}
         <MoreAction label="Evidence and claim tools" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
         {!grading && proof.status === "FINALIZED" ? <MoreAction label="Receipt and returns" variant="secondary" onPress={() => { setMenuOpen(false); app.openReceipt(proof.proofId); }} /> : null}
         {app.role === "SELLER" && !buyer && proof.status !== "FINALIZED" ? (

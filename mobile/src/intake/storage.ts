@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { newIdempotencyKey, type PackProofV2Client } from '../v2-api';
 import { IntakeApi } from './api';
 import type { IntakeDeviceCredentials } from './model';
+import { handoffPreferenceKey, parseHandoffTarget } from './handoff-sender';
 
 function scope(client: PackProofV2Client, userId: string) { return `packproof.intake:${encodeURIComponent(client.apiBaseUrl)}:${encodeURIComponent(userId)}`; }
 export async function readIntakeDevice(client: PackProofV2Client, userId: string): Promise<IntakeDeviceCredentials | null> {
@@ -26,3 +27,16 @@ export async function intakeRequestKey(client: PackProofV2Client, userId: string
   return created;
 }
 export async function clearIntakeRequestKey(client: PackProofV2Client, userId: string, sourceId: string): Promise<void> { await AsyncStorage.removeItem(`${scope(client, userId)}:claim:${encodeURIComponent(sourceId)}`); }
+export async function readHandoffTarget(client: PackProofV2Client, userId: string): Promise<string | null> {
+  client.assertCaptureAccount(userId, client.apiBaseUrl);
+  const target = await AsyncStorage.getItem(handoffPreferenceKey(client.apiBaseUrl, userId));
+  client.assertCaptureAccount(userId, client.apiBaseUrl);
+  return parseHandoffTarget(target);
+}
+export async function saveHandoffTarget(client: PackProofV2Client, userId: string, deviceId: string | null): Promise<void> {
+  client.assertCaptureAccount(userId, client.apiBaseUrl);
+  const key = handoffPreferenceKey(client.apiBaseUrl, userId);
+  if (deviceId === null) { await AsyncStorage.removeItem(key); return; }
+  if (!parseHandoffTarget(deviceId)) throw new Error('Choose a recording device from this account.');
+  await AsyncStorage.setItem(key, deviceId);
+}

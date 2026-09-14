@@ -40,13 +40,23 @@ describe("reported shipment locations", () => {
     await userEvent.click(screen.getByRole("button", { name: "Expand map" }));
     expect(screen.getByRole("button", { name: "Reduce map" })).toHaveAttribute("aria-pressed", "true");
   });
-  it("keeps text-only and polar observations honest without inventing a map pin", () => {
+  it("labels a text-only map as an approximate area and keeps unmappable polar coordinates in text", () => {
     const { rerender } = render(<ShipmentTracking events={[{ ...sampleTracking[0], eventData: {} }]} />);
+    const embed = new URL(screen.getByTitle(/Map of reported location: Columbus/).getAttribute("src")!);
+    expect(embed.origin).toBe("https://maps.google.com");
+    expect(embed.searchParams.get("q")).toBe(sampleTracking[0].location);
+    expect(embed.searchParams.get("output")).toBe("embed");
+    expect(embed.searchParams.has("marker")).toBe(false);
+    expect(screen.getByText("Mapped from the carrier-reported place text for context. This is not a carrier GPS coordinate.")).toBeInTheDocument();
+    expect(screen.getByText(/^Carrier-reported area/)).toBeInTheDocument();
+    const external = new URL(screen.getByRole("link", { name: "Open map ↗" }).getAttribute("href")!);
+    expect(external.origin).toBe("https://www.google.com");
+    expect(external.searchParams.get("query")).toBe(sampleTracking[0].location);
+    rerender(<ShipmentTracking events={[{ ...sampleTracking[0], location: null, eventData: { latitude: 89, longitude: 0 } }]} />);
     expect(screen.queryByTitle(/Map of reported location/)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Find reported location on map" })).toHaveAttribute("href", expect.stringContaining("query=Columbus"));
-    rerender(<ShipmentTracking events={[{ ...sampleTracking[0], eventData: { latitude: 89, longitude: 0 } }]} />);
-    expect(screen.queryByTitle(/Map of reported location/)).not.toBeInTheDocument();
-    expect(screen.getByText("Reported observations · not live GPS")).toBeInTheDocument();
+    expect(screen.getByText("89.0000, 0.0000")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open map ↗" })).not.toBeInTheDocument();
+    expect(screen.getByText("Carrier-reported observations · not live GPS")).toBeInTheDocument();
   });
 });
 

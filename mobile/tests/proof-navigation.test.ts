@@ -30,6 +30,9 @@ test('invitation merges by canonical ID and cannot become participant work befor
 test('participant deep links return to Proofs and never absorb public share or arbitrary external URLs', () => {
   assert.equal(DEFAULT_PROOFS_LIBRARY.view,'attention');assert.equal(normalizeRouteName('orders'),'home');assert.equal(resolveBackRoute('proof','orders'),'home');assert.equal(resolveBackRoute('capture','station'),'proof');
   assert.equal(proofIdFromLink('packproof://proof/abc-123'),'abc-123');assert.equal(proofIdFromLink('https://thepackproof.com/app/proofs/abc'),'abc');
+  assert.equal(proofIdFromLink('packproof-v2://proof/abc-123'),'abc-123');
+  assert.equal(proofIdFromLink('packproof-v2://connections/ebay'),null);
+  assert.equal(proofIdFromLink('https://user:pass@thepackproof.com/app/proofs/abc'),null);
   assert.equal(proofIdFromLink('https://evil.example/app/proofs/abc'),null);assert.equal(proofIdFromLink('https://thepackproof.com/share/token'),null);
 });
 test('mobile collection traverses all pages and deduplicates overlapping pages before search', async () => {

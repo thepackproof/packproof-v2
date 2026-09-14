@@ -57,7 +57,7 @@ module.exports = {
       barStyle: "dark-content",
     },
     icon: "./assets/icon.png",
-    scheme: isCameraSpike ? "packproof-camera-test" : "packproof-v2",
+    scheme: isCameraSpike ? "packproof-camera-test" : ["packproof-v2", "packproof"],
     ios: {
       bundleIdentifier: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
       buildNumber: iosBuildNumber,

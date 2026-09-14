@@ -3,6 +3,13 @@
 *.keystore
 *.aab
 *.apk
+*.ipa
+*.p12
+*.p8
+*.mobileprovision
 node_modules/
 .expo/
 dist/
+# Regenerate these from config plugins; keep modules/*/ios and modules/*/android.
+/ios/
+/android/

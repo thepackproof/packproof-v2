@@ -226,7 +226,7 @@ export function ProofScreen(props: {
         nextAction={<>
       {actionEnabled ? (
         <section className="proof-next-action">
-
+          {grading && nextActionNeedsCapture(serverAction?.type) ? <h2>{actionTitle}</h2> : null}
           {actionHint ? <p>{actionHint}</p> : null}
           {grading && actionEnabled && nextActionNeedsCapture(serverAction?.type) ? (
             <GradingCapturePanel

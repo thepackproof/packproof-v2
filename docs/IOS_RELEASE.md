@@ -25,9 +25,9 @@ The implementation is a native iOS port, with Swift modules for camera capture, 
 | Push notifications and preferences | Expo/APNs delivery; account-scoped local fallback for upload completion |
 | Themes, fonts, calendar, animations and navigation | Shared Android 49 components, with iOS platform gates corrected |
 | Plan, usage, invoices and checkout | Native account panel; external purchase/cancellation actions require the actual Apple storefront to be USA |
-| Desktop-to-phone order handoff | iOS can pair, receive, claim and record prepared orders; desktop approval/default-device/sender controls remain in the web workspace |
+| Desktop-to-phone order handoff | iOS can approve/pair devices, choose a default, send exact prepared orders, receive, claim and record; sender operations keep the same idempotency key across uncertain responses |
 
-Individual barcode formats depend on the Apple runtime; unavailable formats are not claimed. Codabar live detection needs iOS 15.4+. The browser companion remains a browser feature, and public token-based Proof viewing retains the canonical browser access policy. External checkout is hidden for unknown/non-US Apple storefronts; this release does not add StoreKit purchases for those storefronts.
+Individual barcode formats depend on the Apple runtime; unavailable formats are not claimed. Codabar live detection needs iOS 15.4+. The browser companion remains a browser feature, and public token-based Proof viewing retains the canonical browser access policy. Both packproof-v2 and packproof URL schemes are registered for OAuth and notification navigation. External checkout is hidden for unknown/non-US Apple storefronts; this release does not add StoreKit purchases for those storefronts.
 
 ## Build and signing
 
