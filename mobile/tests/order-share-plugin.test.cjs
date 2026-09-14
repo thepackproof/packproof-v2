@@ -63,8 +63,12 @@ test('generated Xcode extension is embedded, depends on its Swift sources, and r
   assert.equal(targets().length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(target.buildPhases)), before);
   const configList = objects.XCConfigurationList[target.buildConfigurationList];
+  const extensionInfo = plist.parse(fs.readFileSync(path.resolve(__dirname, '../ios/PackProofOrderShare/PackProofOrderShare-Info.plist'), 'utf8'));
   for (const { value } of configList.buildConfigurations) {
     const build = objects.XCBuildConfiguration[value].buildSettings;
+    assert.equal(build.PRODUCT_MODULE_NAME, 'PackProofOrderShareExtension');
+    assert.notEqual(build.PRODUCT_MODULE_NAME, 'PackProofOrderShare'); // app-side Expo pod
+    assert.equal(extensionInfo.NSExtension.NSExtensionPrincipalClass.replace('$(PRODUCT_MODULE_NAME)', build.PRODUCT_MODULE_NAME), 'PackProofOrderShareExtension.ShareViewController');
     assert.equal(build.APPLICATION_EXTENSION_API_ONLY, 'YES');
     assert.equal(build.CODE_SIGN_ENTITLEMENTS.replaceAll('"', ''), 'PackProofOrderShare/PackProofOrderShare.entitlements');
   }

@@ -4,6 +4,9 @@ const plist = require('@expo/plist').default;
 const { withDangerousMod, withXcodeProject, withEntitlementsPlist, withInfoPlist } = require('expo/config-plugins');
 
 const TARGET = 'PackProofOrderShare';
+// The app imports the PackProofOrderShare Expo pod. A same-named extension
+// Swift module shadows that pod during dependency scanning in the app target.
+const EXTENSION_MODULE_NAME = 'PackProofOrderShareExtension';
 const GROUP_KEY = 'com.apple.security.application-groups';
 
 function shareIdentity(config) {
@@ -64,7 +67,7 @@ function addExtensionTarget(project, config) {
       INFOPLIST_FILE: `"${TARGET}/${TARGET}-Info.plist"`,
       CODE_SIGN_ENTITLEMENTS: `"${TARGET}/${TARGET}.entitlements"`,
       PRODUCT_BUNDLE_IDENTIFIER: `"${identity.bundleIdentifier}"`,
-      PRODUCT_NAME: `"${TARGET}"`, PRODUCT_MODULE_NAME: TARGET,
+      PRODUCT_NAME: `"${TARGET}"`, PRODUCT_MODULE_NAME: EXTENSION_MODULE_NAME,
       SWIFT_VERSION: '5.0', CLANG_ENABLE_MODULES: 'YES',
       IPHONEOS_DEPLOYMENT_TARGET: mainSettings.IPHONEOS_DEPLOYMENT_TARGET || '15.1',
       TARGETED_DEVICE_FAMILY: '"1,2"', APPLICATION_EXTENSION_API_ONLY: 'YES',
