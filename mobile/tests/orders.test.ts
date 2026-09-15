@@ -73,11 +73,15 @@ test("retired batch and account destinations return to Proofs without a queue re
   }
 });
 
-test("Proof disclosure and legacy routes keep their prior destinations", () => {
+test("Proof disclosure and legacy routes preserve destinations while saved intake returns to its queue", () => {
   assert.equal(resolveBackRoute("capture", "home"), "proof");
   assert.equal(resolveBackRoute("event", "orders"), "proof");
   assert.equal(resolveBackRoute("sharing", "station"), "proof");
   assert.equal(resolveBackRoute("scan", "orders"), "create");
-  assert.equal(resolveBackRoute("intake", "station"), "create");
+  // Intake is now a durable queue workflow. Leaving it must not open a second
+  // manual-create flow while its original submission is still being resolved.
+  for (const origin of ["home", "orders", "station"] as const) {
+    assert.equal(resolveBackRoute("intake", origin), "home");
+  }
   assert.equal(normalizeRouteName("tabs"), "home");
 });

@@ -7,11 +7,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "npm run test:links && vitest run",
     "typecheck": "tsc --noEmit",
     "links:generate": "node scripts/app-associations.mjs",
     "links:verify": "node scripts/verify-app-associations.mjs",
-    "test:links": "node --test scripts/app-associations.test.mjs scripts/sites-worker.check.mjs"
+    "test:links": "node --test scripts/app-associations.check.mjs scripts/sites-worker.check.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

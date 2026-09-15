@@ -44,7 +44,9 @@ it.each([0,4200])('restores list position, query, filter and selected row focus 
  }));
  const user=userEvent.setup();
  render(<Website/>);
- const row=await screen.findByRole('button',{name:/Shipment 4\. Recording needed/});
+ // The production wrapper lazy-loads the app; a cold test transform can exceed
+ // Testing Library's one-second default before the mocked list request starts.
+ const row=await screen.findByRole('button',{name:/Shipment 4\. Recording needed/},{timeout:6500});
  scrollPosition=217;fireEvent.scroll(window);
  const originalTop=row.getBoundingClientRect().top;
  await user.click(row);

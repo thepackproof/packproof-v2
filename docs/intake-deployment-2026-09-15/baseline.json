@@ -1,0 +1,86 @@
+{
+  "observedAt": "2026-09-15",
+  "account": "784514617543",
+  "region": "us-east-1",
+  "serviceArn": "arn:aws:ecs:us-east-1:784514617543:service/packproof-v2-staging-cluster/packproof-v2-staging-api",
+  "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:30",
+  "sourceSha": "dca1568d403335d5ca3fb585b2db8e82a0227824",
+  "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:4ae84a49b47e944072e7a8300d2d5202fd922ad85dd394be9bc88900f0c482c9",
+  "cpu": "512",
+  "memory": "2048",
+  "taskRole": "arn:aws:iam::784514617543:role/packproof-v2-staging-task",
+  "executionRole": "arn:aws:iam::784514617543:role/packproof-v2-staging-execution",
+  "secretReferences": [
+    {
+      "name": "PACKPROOF_DB_USER",
+      "valueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96:username::"
+    },
+    {
+      "name": "PACKPROOF_DB_PASSWORD",
+      "valueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96:password::"
+    },
+    {
+      "name": "PACKPROOF_TRACKER_LINK_SECRET",
+      "valueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/staging/notifications/runtime-hbxTI4:trackerLinkSecret::"
+    },
+    {
+      "name": "PACKPROOF_SMTP_USERNAME",
+      "valueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/staging/notifications/runtime-hbxTI4:smtpUsername::"
+    },
+    {
+      "name": "PACKPROOF_SMTP_PASSWORD",
+      "valueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/staging/notifications/runtime-hbxTI4:smtpPassword::"
+    },
+    {
+      "name": "PACKPROOF_EBAY_DELETION_VERIFICATION_TOKEN",
+      "valueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/staging/integrations/ebay/production/app-Yo42fa:deletionVerificationToken::"
+    }
+  ],
+  "network": {
+    "securityGroups": [
+      "sg-0fbfe8871eef85488"
+    ],
+    "subnets": [
+      "subnet-0d7611419ad695536",
+      "subnet-002790f4a22ef84ee"
+    ]
+  },
+  "flags": {
+    "PACKPROOF_EBAY_INTEGRATION_ENABLED": "false",
+    "IDENTIFIER_CAPTURE_ENABLED": "false",
+    "IDENTIFIER_REVIEW_ENABLED": "false",
+    "PACKPROOF_REQUIRE_DURABLE_RECEIPTS": "false",
+    "PACKPROOF_CAPTURE_SHIPMENT_WORKER": "true",
+    "PACKPROOF_MIGRATE_ON_START": "false",
+    "PACKPROOF_ENVIRONMENT": "staging",
+    "IDENTIFIER_AUTOFILL_ENABLED": "false"
+  },
+  "candidateSourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+  "candidateSourceArchive": {
+    "bucket": "packproof-v2-staging-build-784514617543",
+    "key": "intake/272351488a6efcdd1c95a8e3f8ca007d57fe9fbc/backend-src.zip",
+    "sha256": "c554f17066667b155e04c098a34db9c5369829c3272df54b9114331b1ef55a1e",
+    "bytes": 1215048
+  },
+  "candidateImageBuild": "packproof-v2-staging-api:43bf9db0-aa2c-4c43-ab16-399fafb128ae",
+  "databaseRecovery": [
+    {
+      "backupRetentionPeriod": 1,
+      "databaseName": "packproof_v2",
+      "endpoint": {
+        "Address": "packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+        "HostedZoneId": "Z2R2ITUGPM61AM",
+        "Port": 5432
+      },
+      "identifier": "packproof-v2-staging-db",
+      "latestRestorableTime": "2026-09-15T06:17:23+00:00",
+      "masterSecretReference": {
+        "KmsKeyId": "arn:aws:kms:us-east-1:784514617543:key/eea45321-ef8a-4cb4-a3a2-0688bb41186f",
+        "SecretArn": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96",
+        "SecretStatus": "active"
+      },
+      "masterUsername": "packproof",
+      "status": "available"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "observedAt": "2026-09-15",
+  "engine": "PostgreSQL 16.15 RDS",
+  "mode": "disposable NOLOGIN role fixture in transaction, always rolled back",
+  "probeSha256": "3f7d9ae9e2a44a439e16c7f978620c2454622805f8f64c86a064afa69a5123ec",
+  "reviewedMigrationRunnerSha256": "d746c664c66f6a7737e8040894d1511032718139accc0361cd94bcbc1b261793",
+  "task": {
+    "containers": [
+      {
+        "exitCode": 0,
+        "name": "Main",
+        "status": "STOPPED"
+      }
+    ],
+    "status": "STOPPED",
+    "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/59b215574aa941b3aa9cc3131e97101f"
+  },
+  "result": {
+    "event": "mobile_intake_role_authority_probe",
+    "supported": true,
+    "reverseMembershipCreated": false,
+    "dropVerified": true,
+    "rollbackVerified": true
+  },
+  "migrationExecuted": false,
+  "temporaryLoginCreated": false
+}
