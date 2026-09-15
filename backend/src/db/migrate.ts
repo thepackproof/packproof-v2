@@ -5,6 +5,14 @@ import { fileURLToPath } from 'node:url';
 import type { Database } from './database.js';
 import { splitSqlStatements } from './sql.js';
 const migrationsDir=path.join(path.dirname(fileURLToPath(import.meta.url)),'../../migrations');
+// Transitional schema-066 bridge: these reviewed additive migrations create new
+// tables only. Keep their exact committed bytes eligible for rolling deployment
+// and rollback, without making this image execute or use the intake migrations.
+// No environment variable, ordinal range, wildcard or unknown checksum is allowed.
+const compatibleAdditiveMigrations:Readonly<Record<string,string>>=Object.freeze({
+  '067_mobile_intake_submissions':'3f1333e6f4670e9506ab0ad0970fa83373f2c243175fef247fe99dd0616b923c',
+  '068_commerce_sync_checkpoints':'1a9c3cacf5f146f87dd1fe5ae125aceb9ee5c36ee971cb0e4fad6c9053133a51',
+});
 export async function migrationInventory(sourceDir=migrationsDir){
   const files=(await readdir(sourceDir)).filter(name=>name.endsWith('.sql')).sort();
   return Promise.all(files.map(async file=>{const sql=await readFile(path.join(sourceDir,file),'utf8');return {id:file.replace(/\.sql$/i,''),checksum:createHash('sha256').update(sql).digest('hex'),sql};}));
@@ -13,7 +21,8 @@ export async function assertSchemaCurrent(db:Database,sourceDir=migrationsDir):P
   const inventory=await migrationInventory(sourceDir);
   const applied=(await db.query<{id:string;checksum:string|null}>('SELECT id,checksum FROM schema_migrations')).rows;
   const expectedIds=new Set(inventory.map(item=>item.id));
-  if(applied.some(row=>!expectedIds.has(row.id)))throw new Error('Database contains migrations outside this release compatibility envelope');
+  const permitsBridge=path.resolve(sourceDir)===path.resolve(migrationsDir);
+  if(applied.some(row=>!expectedIds.has(row.id)&&(!permitsBridge||!Object.hasOwn(compatibleAdditiveMigrations,row.id)||row.checksum!==compatibleAdditiveMigrations[row.id])))throw new Error('Database contains migrations outside this release compatibility envelope');
   for(const item of inventory){const row=applied.find(entry=>entry.id===item.id);if(!row||row.checksum!==item.checksum)throw new Error(`Migration required or checksum mismatch: ${item.id}`);}
 }
 export async function migrate(db:Database,sourceDir=migrationsDir,options:{adoptLegacyChecksums?:boolean;expectedRole?:string}={}):Promise<void>{
