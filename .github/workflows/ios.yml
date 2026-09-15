@@ -90,7 +90,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             "$RUNNER_TEMP/packproof-ios/Build/Products/Release-iphonesimulator/PackProof.app" \
             dist/PackProof-iOS-Simulator.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: packproof-ios-simulator-${{ github.sha }}
@@ -136,7 +136,7 @@ jobs:
           curl --fail --location "$(cat dist/ipa-url.txt)" --output dist/PackProof.ipa
           test -s dist/PackProof.ipa
           sha256sum dist/PackProof.ipa > dist/SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packproof-ios-archive-${{ github.sha }}
           path: |
