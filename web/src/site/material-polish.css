@@ -1,0 +1,132 @@
+/* PackProof: neutral surfaces, clear actions, and the green packing seal. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+:root {
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --display: var(--sans);
+  --radius: 12px;
+  --radius-lg: 16px;
+  --control-border: #7C8794;
+}
+:root[data-theme='dark'] { --control-border: #64707B; }
+.public-site, .auth-experience { --control-border: #7C8794; }
+body { font-family: var(--sans); }
+:where(h1,h2,h3,h4) { font-family: var(--sans); font-weight: 600; }
+.workspace-shell .page h1, .workspace-shell .page-title { letter-spacing: -.025em; }
+.pp-brand .pp-brand-lettering {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  mask: none;
+  -webkit-mask: none;
+  background: transparent;
+  font: 700 24px/1.25 var(--sans);
+  letter-spacing: -.04em;
+}
+.pp-brand-lettering > span { color: var(--logo-green); }
+.pp-brand img, .workspace-nav .pp-brand img { width: 32px; height: 32px; }
+.workspace-shell > .library-page { padding-top: 24px; }
+.workspace-heading { align-items: center; margin-bottom: 16px; gap: 12px; }
+.workspace-heading .page-title { margin: 0; font-size: 1.75rem; }
+.workspace-heading > .btn { gap: 8px; }
+.workspace-shell .segmented, .workspace-shell .segmented-tabs {
+  border: 0;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface);
+  gap: 4px;
+}
+.workspace-shell :is(.segmented-tab,.segmented-tabs button) {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: .875rem;
+  transition: background 180ms ease, color 180ms ease;
+}
+.workspace-shell :is(.segmented-tab,.segmented-tabs button)[aria-selected=true],
+.workspace-shell :is(.segmented-tab,.segmented-tabs button)[aria-pressed=true] {
+  background: var(--surface-elevated);
+  color: var(--text);
+  border: 0;
+  font-weight: 600;
+}
+.workspace-links a[aria-current=page] { background: var(--surface-elevated); color: var(--text); }
+.workspace-links a[aria-current=page]::before { display: none; }
+.record-tabs {
+  border: 0;
+  border-radius: 12px;
+  margin: 8px 16px 0;
+  padding: 4px;
+  gap: 4px;
+  background: var(--surface-elevated);
+}
+.record-tabs button { border: 0; border-radius: 9px; padding: 10px 16px; }
+.record-tabs button[aria-selected=true] { border: 0; background: var(--surface); color: var(--text); font-weight: 600; }
+.record-tabs button:hover { color: var(--text); background: var(--surface-pressed); }
+.btn-secondary { background: var(--surface-elevated); color: var(--text); border-color: transparent; }
+.btn-secondary:hover { background: var(--surface-pressed); color: var(--text); border-color: transparent; }
+.btn-tertiary { color: var(--text); }
+.search-row { margin-block: 16px; }
+.workspace-shell .search-field { border-color: var(--control-border); border-radius: 12px; }
+.workspace-shell .proof-list { gap: 12px; border: 0; }
+.workspace-shell .proof-list .proof-row {
+  border: 0;
+  border-radius: 16px;
+  padding: 16px;
+  gap: 16px;
+  align-items: center;
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace-shell .proof-list .proof-row:hover { background: var(--surface-elevated); box-shadow: none; transform: translateY(-1px); }
+.workspace-shell .proof-list .proof-row:active { transform: scale(.995); }
+.proof-list .proof-card-title { font-family: var(--sans); font-size: 1.125rem; font-weight: 600; line-height: 1.4; letter-spacing: -.015em; }
+.proof-card-copy { gap: 6px; }
+.proof-row-reference { font-size: .875rem; letter-spacing: 0; text-transform: none; }
+.proof-row-action { color: var(--text-secondary); flex: 0 0 auto; width: auto; padding: 0; }
+.record-thumbnail { flex: 0 0 76px; width: 76px; height: 84px; background: var(--surface-elevated); color: var(--text-secondary); }
+.record-seal { border: 0; border-radius: 7px; padding: 4px 8px; background: var(--surface-elevated); color: var(--text-secondary); font-weight: 600; }
+.record-seal.is-sealed { background: var(--success-soft); color: var(--success-text); border: 0; }
+.record-shipment { color: var(--text-secondary); }
+.record-tracking-form { border: 0; border-radius: 16px; padding: 16px; }
+.tracking-connection { margin: 0; }
+.carrier-fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+.carrier-fieldset legend { padding: 0; margin-bottom: 8px; font-size: .875rem; font-weight: 600; }
+.carrier-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.record-tracking-form .carrier-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  cursor: pointer;
+}
+.carrier-option input[type=radio] { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }
+.carrier-option:has(input:checked) { background: var(--success-soft); }
+.carrier-option:has(input:focus-visible) { outline: 3px solid var(--accent-text); outline-offset: 3px; }
+.carrier-check { display: grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid var(--text-secondary); border-radius: 50%; color: var(--logo-green); flex-shrink: 0; }
+.carrier-option:has(input:checked) .carrier-check { border-color: var(--logo-green); }
+.record-tracking-form .carrier-automatic { display: flex; align-items: center; gap: 8px; min-height: 48px; color: var(--text-secondary); font-size: .875rem; font-weight: 400; }
+.carrier-automatic input[type=radio] { width: 20px; height: 20px; min-height: 0; margin: 0; accent-color: var(--logo-green); }
+.event-details summary { display: flex; align-items: center; min-height: 48px; cursor: pointer; font-size: .875rem; font-weight: 600; }
+.event-details .note, .record-tracking-form .note { font-size: .75rem; line-height: 1.5; }
+@media (max-width: 700px) {
+  .workspace-shell > .library-page { padding-top: 16px; }
+  .workspace-shell .proof-list .proof-row { flex-wrap: nowrap; gap: 12px; }
+  .proof-card-copy { flex: 1; min-width: 0; }
+  .proof-row-action { width: auto; }
+  .pp-brand .pp-brand-lettering { font-size: 22px; }
+  .record-tabs button { padding-inline: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell .proof-list .proof-row:hover, .workspace-shell .proof-list .proof-row:active { transform: none; }
+}

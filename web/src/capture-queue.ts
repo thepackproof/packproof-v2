@@ -1,3 +1,5 @@
+import type { CaptureContext } from "../../backend/src/capture/core";
+import { sealBrowserEngine, recoverBrowserEngine, forgetBrowserEngine } from "./capture/engine";
 import { randomId } from "./random-id";
 import { resumeStationStudy } from "./analytics/study-capture";
 import { requiresDurableReceipts } from "./capture-preflight";
@@ -7,6 +9,7 @@ import type { PackProofApi } from "./api/client";
 import type { StationOrderContext } from "../../mobile/src/packing-station/types";
 
 export type PendingCapture = {
+  discardRequested?: boolean;
   kind?: "generic" | "archived";
   apiScope?: string;
   stageId?: string;
@@ -47,7 +50,7 @@ async function queue<T>(
     return await new Promise((resolve, reject) => {
       const tx = db.transaction("uploads", mode),
         request = fn(tx.objectStore("uploads"));
-      tx.oncomplete = () => resolve(request.result);
+      tx.oncomplete = () => { resolve(request.result); if (mode === "readwrite") notifyUploadChange(); };
       tx.onerror = () =>
         reject(new Error("Unable to save the recording. Free browser storage space and retry."));
       tx.onabort = () => reject(new Error("Recording storage was interrupted."));
@@ -73,6 +76,9 @@ export async function recoverCapture(key: string): Promise<File | null> {
 }
 
 export type PendingStationCapture = {
+  discardRequested?: boolean;
+  identifierPolicy?: import('../../backend/src/identifiers/types').IdentifierPolicy;
+  captureContext?: CaptureContext;
   /** Opaque local timing journal reference; never sent with capture/evidence data. */
   studyTaskRef?: string;
   shippingScans?: Array<{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;status:string;trackingNumber?:string}>;
@@ -98,20 +104,21 @@ export type PendingStationCapture = {
   interrupted?: boolean;
 };
 export const stationCaptureKey = (userId: string) => `${userId}:station`;
-export async function recoverStationCapture(userId: string): Promise<PendingStationCapture | null> {
+export async function recoverStationCapture(userId: string, apiScope?:string): Promise<PendingStationCapture | null> {
   return (await queue<PendingStationCapture | undefined>("readonly", (store) =>
     store.get(stationCaptureKey(userId)),
-  )) ?? null;
+  )) ?? (apiScope ? await recoverBrowserEngine(userId,apiScope) : null);
 }
 export async function saveStationCapture(capture: PendingStationCapture): Promise<void> {
   return serializeJournalWrite(capture.key, async () => {
-  if (!capture.file.size || capture.file.size > 250_000_000)
+  if (!capture.committed && (!capture.file?.size || capture.file.size > 250_000_000))
     throw new Error("Choose a recording between 1 byte and 250 MB.");
   const previous = await recoverStationCapture(capture.userId ?? capture.key.slice(0, -":station".length));
   // Once finishing is accepted, a stale UI cannot replace its bytes or erase a known upload identity.
   if (previous && (previous.uploadKey !== capture.uploadKey || (previous.apiScope && capture.apiScope && previous.apiScope !== capture.apiScope)))
     throw new Error("A recording is already saved for the original order and account. Finish it before recording another shipment.");
-  if (previous?.uploadKey === capture.uploadKey && previous.finishConfirmed) {
+  if (previous?.discardRequested && !capture.discardRequested) throw discardPending();
+  if (previous?.uploadKey === capture.uploadKey && previous.finishConfirmed && capture.file?.size) {
     const existingDigest = previous.digest ?? await fileDigest(previous.file);
     const incomingDigest = await fileDigest(capture.file);
     if (existingDigest !== incomingDigest) throw new Error("Finish the accepted original before replacing this recording.");
@@ -157,7 +164,7 @@ export function preserveCapture(
   const key = `${api.recoveryScope || ""}:${captureQueueKey(userId, proofId, slot)}`;
   if (!activeCaptures.has(key) && activeJobCount() >= 2) return Promise.reject(uploadBusy());
   const previous = activeCaptures.get(key) ?? Promise.resolve("");
-  const current = previous.catch(() => "").then(() => preserveCaptureUnlocked(api,userId,proofId,slot,file,evidenceType,progress));
+  const current = previous.catch(() => "").then(() => withBrowserLock(key, () => preserveCaptureUnlocked(api,userId,proofId,slot,file,evidenceType,progress)));
   activeCaptures.set(key,current);
   void current.finally(() => { if(activeCaptures.get(key)===current) activeCaptures.delete(key); }).catch(()=>{});
   return current;
@@ -171,14 +178,13 @@ async function preserveCaptureUnlocked(
   evidenceType: string,
   progress: (value: number) => void,
 ) {
-  if (!file.size || file.size > 250_000_000)
+  if (file?.size > 250_000_000)
     throw new Error("Choose a recording between 1 byte and 250 MB.");
   const key = captureQueueKey(userId, proofId, slot);
-  const digest = Array.from(
-    new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())),
-    (b) => b.toString(16).padStart(2, "0"),
-  ).join("");
   let pending = await queue<PendingCapture | undefined>("readonly", (store) => store.get(key));
+  if (pending?.discardRequested) throw discardPending();
+  const digest = file?.size ? await fileDigest(file) : pending?.digest;
+  if (!digest) throw missingRecording();
   if (pending?.apiScope && !scopeMatches(pending.apiScope,api)) throw new Error("Open the original account and server to resume this recording.");
   if (pending && pending.digest !== digest) {
     throw new Error("A different recording is already saved for this step. Recover that recording before replacing it.");
@@ -188,6 +194,7 @@ async function preserveCaptureUnlocked(
     await queue("readwrite", (store) => store.put(pending!));
   }
   const resuming = !!pending.evidenceId;
+  if (!pending.evidenceId && !file?.size) throw missingRecording();
   if (!pending.evidenceId) {
     const initialized = await api.initializeEvidenceUpload(proofId, {
       contentType: file.type,
@@ -204,13 +211,14 @@ async function preserveCaptureUnlocked(
   if (
     !current.evidence.some((e) => e.evidenceId === evidenceId && e.validationStatus === "COMMITTED")
   ) {
+    if (!pending.file?.size) throw missingRecording();
     if (resuming) {
       const renewed = await api.initializeEvidenceUpload(proofId,{contentType:file.type,evidenceType,idempotencyKey:pending.uploadKey,byteSize:file.size});
       if (renewed.evidenceId !== evidenceId) throw new Error("Upload recovery returned another recording identity. Your local original was kept.");
       pending.uploadReceived = (renewed.upload as typeof renewed.upload & {received?:boolean})?.received === true;
       await queue("readwrite",store=>store.put(pending!));
     }
-    if (!pending.uploadReceived) await api.uploadResumable(proofId, evidenceId, pending.file, progress);
+    if (!pending.uploadReceived) await trackTransfer(api, key, () => api.uploadResumable(proofId, evidenceId, pending.file, progress));
     await api.commitEvidence(proofId, evidenceId);
   }
   pending.committed = true;
@@ -232,19 +240,25 @@ export async function archiveReceivedRecording(userId:string, proofId:string, ev
 }
 
 /** Restarts accepted upload intents when the signed-in app resumes, independent of its current screen. */
-export async function resumeLocalRecordings(api: PackProofApi, userId: string, active: () => boolean): Promise<void> {
+export async function resumeLocalRecordings(api: PackProofApi, userId: string, active: () => boolean, reconnect = false): Promise<void> {
+  // Optional late observations stay under their original scope and append as supplements.
+  void import('./capture/identifiers').then(module=>module.resumeBrowserIdentifierJournals(api,userId,()=>assertCurrent(active))).catch(()=>{});
+  for (const item of await listRecoverableRecordings(userId,api)) {
+    if (!active()) return;
+    if (item.discardRequested) try { await discardLocalRecording(api,userId,item.key); } catch { /* Durable discard intent remains queued. */ }
+  }
   const station = await recoverStationCapture(userId);
-  if (station?.finishConfirmed && scopeMatches(station.apiScope, api) && !station.retryStopped && (station.nextAttemptAt ?? 0) <= Date.now() && active()) {
+  if (!station?.discardRequested && station?.finishConfirmed && scopeMatches(station.apiScope, api) && !station.retryStopped && (reconnect || (station.nextAttemptAt ?? 0) <= Date.now()) && active()) {
     try { await resumeStationRecording(api, userId, active); } catch { /* Its originating journal contains the next retry or intervention. */ }
   }
   for (const stage of await listStageCaptures(userId)) {
     if (!active()) return;
-    if (stage.submitRequested && scopeMatches(stage.apiScope, api) && !stage.retryStopped && (stage.nextAttemptAt ?? 0) <= Date.now())
+    if (!stage.discardRequested && stage.submitRequested && scopeMatches(stage.apiScope, api) && !stage.retryStopped && (reconnect || (stage.nextAttemptAt ?? 0) <= Date.now()))
       try { await resumeStageRecording(api, userId, stage.key, active); } catch { /* Original remains in the stage journal. */ }
   }
   for (const item of await listLocalRecordings(userId)) {
     if (!active()) return;
-    if (!scopeMatches(item.apiScope, api) || (item.preserved && item.finalized) || item.retryStopped || (item.nextAttemptAt ?? 0) > Date.now()) continue;
+    if (item.discardRequested || !scopeMatches(item.apiScope, api) || (item.preserved && item.finalized) || item.retryStopped || (!reconnect && (item.nextAttemptAt ?? 0) > Date.now())) continue;
     try {
       if (!item.committed) {
         await preserveCapture(api, userId, item.proofId!, item.slot!, item.file, item.evidenceType!, () => {});
@@ -266,6 +280,7 @@ export async function resumeLocalRecordings(api: PackProofApi, userId: string, a
       if (!current) continue;
       const status = (error as {status?:number}).status;
       if (status === 401) return;
+      current.errorMessage = error instanceof Error ? error.message : "Upload interrupted. Your original was kept.";
       current.attempts = Math.min((current.attempts ?? 0) + 1, 12);
       current.retryStopped = status != null && status >= 400 && status < 500 && ![408,429].includes(status);
       current.nextAttemptAt = Date.now() + Math.min(300_000, 2000 * 2 ** current.attempts) * (0.8 + Math.random() * 0.4);
@@ -289,6 +304,7 @@ export async function removePreservedLocalRecording(userId: string, key: string,
 }
 
 export type PendingStageCapture = {
+  discardRequested?: boolean;
   key:string; stageId:string; captureSessionId:string; uploadKey:string; file:Blob; interrupted:boolean;
   userId?:string; proofId?:string; stageType?:string; apiScope?:string; evidenceId?:string; submitRequested?:boolean;
   digest?:string; attempts?:number; nextAttemptAt?:number; retryStopped?:boolean; errorMessage?:string;
@@ -298,9 +314,10 @@ export const stageCaptureKey=(userId:string,proofId:string,stageType:string)=>`$
 export async function recoverStageCapture(key:string):Promise<PendingStageCapture|null>{return (await queue<PendingStageCapture|undefined>("readonly",store=>store.get(key)))??null;}
 export async function saveStageCapture(capture:PendingStageCapture){
   return serializeJournalWrite(capture.key, async () => {
-  if(!capture.file.size||capture.file.size>250_000_000)throw new Error("Choose a recording between 1 byte and 250 MB.");
+  if(!capture.file?.size||capture.file.size>250_000_000)throw new Error("Choose a recording between 1 byte and 250 MB.");
   const previous=await recoverStageCapture(capture.key);
   if(previous&&(previous.uploadKey!==capture.uploadKey||(previous.apiScope&&capture.apiScope&&previous.apiScope!==capture.apiScope)))throw new Error("Recover the original saved stage before starting another recording.");
+  if(previous?.discardRequested && !capture.discardRequested) throw discardPending();
   if(previous?.submitRequested){
     const digest=previous.digest??await fileDigest(previous.file);
     if(digest!==await fileDigest(capture.file))throw new Error("An accepted stage original cannot be replaced during retry.");
@@ -327,8 +344,13 @@ function retryState(error: unknown, attempts = 0) {
 }
 function uploadBusy(): Error { return Object.assign(new Error("Two recordings are already resuming. This original remains queued."), {code:"UPLOAD_LIMIT",status:429}); }
 function activeJobCount(): number { return activeCaptures.size + stationJobs.size + stageJobs.size; }
+const browserLockFallback = new Map<string, Promise<unknown>>();
 async function withBrowserLock<T>(key:string, run:()=>Promise<T>):Promise<T> {
-  return typeof navigator !== "undefined" && navigator.locks ? await navigator.locks.request(`packproof:${key}`, {mode:"exclusive"}, run) : await run();
+  if (typeof navigator !== "undefined" && navigator.locks) return navigator.locks.request(`packproof:${key}`, {mode:"exclusive"}, run);
+  const previous = browserLockFallback.get(key) ?? Promise.resolve();
+  const current = previous.catch(()=>undefined).then(run);
+  browserLockFallback.set(key,current);
+  try { return await current; } finally { if (browserLockFallback.get(key)===current) browserLockFallback.delete(key); }
 }
 const stationJobs = new Map<string, Promise<StationSubmitResult>>();
 /** The station page and app-level worker join the same accepted operation. No new declaration prompt. */
@@ -339,6 +361,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
   const job = withBrowserLock(jobKey,async()=>{
     assertCurrent(active);
     const pending = await recoverStationCapture(userId);
+    if (pending?.discardRequested) throw discardPending();
     if (!pending || !pending.finishConfirmed) throw Object.assign(new Error("Review the saved recording and confirm finishing first."),{code:"CONFIRMATION_REQUIRED",status:409});
     if (pending.key !== stationCaptureKey(userId) || !scopeMatches(pending.apiScope,api)) throw Object.assign(new Error("Open the original account and server to resume."),{status:403});
     const study = await resumeStationStudy(api, userId, pending.studyTaskRef);
@@ -352,7 +375,20 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       if (pending.evidenceId && proof.evidence.some(item=>item.evidenceId===pending.evidenceId&&item.validationStatus==="COMMITTED")) {
         pending.committed = true; await saveStationCapture(pending); assertCurrent(active);
       }
+      if (!pending.committed && !pending.file?.size) throw missingRecording();
       if (!pending.captureSessionId) throw Object.assign(new Error("This older recording has no direct-capture session. Keep or export its original; record a new eligible session to finish."),{code:"CAPTURE_SESSION_REQUIRED",status:422});
+      if (proof.status !== 'FINALIZED' && pending.identifierPolicy?.captureEnabled) {
+        const {checkpointBrowserIdentifiers}=await import('./capture/identifiers');
+        await checkpointBrowserIdentifiers(api,userId,pending.order.proofId,pending.captureSessionId,pending.identifierPolicy,()=>assertCurrent(active),async scan=>{
+          if(pending.shippingScans?.some(row=>row.idempotencyKey===scan.idempotencyKey&&row.status!=='QUEUED')) return;
+          pending.shippingScans=mergeStationScans(pending.shippingScans,[{...scan,status:'QUEUED'}]);
+          await saveStationCapture(pending);assertCurrent(active);
+          const result=await api.bindCaptureShipping(pending.order.proofId,pending.captureSessionId!,scan);assertCurrent(active);
+          pending.shippingScans=mergeStationScans(pending.shippingScans,[{...scan,...result}]);
+          await saveStationCapture(pending);assertCurrent(active);
+        });
+        assertCurrent(active);
+      }
       if (proof.status !== "FINALIZED") {
         for (const scan of pending.shippingScans ?? []) {
           if (scan.status !== "QUEUED") continue;
@@ -367,10 +403,11 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       if (proof.status !== "FINALIZED" && !proof.evidence.some(item=>item.evidenceId===pending.evidenceId&&item.validationStatus==="COMMITTED")) {
         pending.digest ??= await fileDigest(pending.file); assertCurrent(active); await saveStationCapture(pending); assertCurrent(active);
         await api.completeCaptureSession(pending.order.proofId,pending.captureSessionId,{sha256:pending.digest,byteSize:pending.file.size,contentType:pending.file.type,interrupted:pending.interrupted,recordedDurationMs:pending.durationMs}); assertCurrent(active);
+        await sealBrowserEngine(api,pending); assertCurrent(active);
       }
       const result = await submitStationSession({
         proof, actorUserId:userId,
-        capture:{handle:`local:${pending.uploadKey}`,contentType:pending.file.type,byteSize:pending.file.size,durationMs:pending.durationMs??null,captureSessionId:pending.captureSessionId},
+        capture:{handle:`local:${pending.uploadKey}`,contentType:pending.file?.type || "video/mp4",byteSize:pending.file?.size ?? 0,durationMs:pending.durationMs??null,captureSessionId:pending.captureSessionId},
         idempotencyKey:pending.uploadKey,evidenceId:pending.evidenceId,
         onEvidenceInitialized:async evidenceId=>{assertCurrent(active);pending.evidenceId=evidenceId;await saveStationCapture(pending);assertCurrent(active);},
         deps:{
@@ -385,7 +422,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
           upload:async(target,_capture,progress)=>{
             assertCurrent(active); if ((target as typeof target & {received?:boolean}).received) {progress(100);return;}
             if(!pending.evidenceId)throw new Error("Upload identity is unavailable. Original retained.");
-            await api.uploadResumable(pending.order.proofId,pending.evidenceId,pending.file,value=>{assertCurrent(active);progress(value);});assertCurrent(active);
+            await trackTransfer(api,pending.key,()=>api.uploadResumable(pending.order.proofId,pending.evidenceId!,pending.file,value=>{assertCurrent(active);progress(value);}));assertCurrent(active);
           },
         },onProgress:progress=>{assertCurrent(active);studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);},
       });
@@ -399,7 +436,8 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       if(proof.status!=="FINALIZED" || (!durablyFinalized && (requiresDurability || !proof.evidence.some(item=>item.evidenceId===pending.evidenceId&&item.validationStatus==="COMMITTED"))))
         throw Object.assign(new Error("Recording received. Preservation in progress. Your local original remains saved."),{code:"PRESERVATION_PENDING",status:503});
       for(const mark of pending.bookmarks??[])try{assertCurrent(active);await api.featureRequest(pending.order.proofId,"signature/anchors","POST",{evidenceId:pending.evidenceId,startMs:mark.startMs,endMs:Math.min(mark.startMs+1000,pending.durationMs||mark.startMs+1000),label:mark.label,sourceType:mark.sourceType,recipeVersion:mark.recipeVersion,idempotencyKey:mark.id});}catch{assertCurrent(active);}
-      assertCurrent(active);await archiveReceivedRecording(userId,pending.order.proofId,pending.evidenceId!,pending.file,!!pending.preserved,{apiScope:api.recoveryScope,finalized:durablyFinalized,submitted:true});assertCurrent(active);
+      assertCurrent(active);if(pending.file?.size)await archiveReceivedRecording(userId,pending.order.proofId,pending.evidenceId!,pending.file,!!pending.preserved,{apiScope:api.recoveryScope,finalized:durablyFinalized,submitted:true});assertCurrent(active);
+      if(pending.captureContext) await forgetBrowserEngine(api.recoveryScope,userId,pending.captureSessionId!);
       await clearStationCapture(userId,pending.uploadKey);
       if (proof.status === "FINALIZED" && result.completion === "FINALIZED") {
         study?.phase('finalization'); study?.event('server_completed'); study?.end('succeeded');
@@ -411,7 +449,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       study?.problem(failure.status === 401 ? 'authentication' : failure.code === "PRESERVATION_PENDING" ? 'provider' : 'network');
       study?.suspend();
       const latest=await recoverStationCapture(userId);
-      if(latest?.uploadKey===pending.uploadKey)await saveStationCapture({...latest,...retryState(error,latest.attempts)});
+      if(latest?.uploadKey===pending.uploadKey)await queue("readwrite",store=>store.put({...latest,...retryState(error,latest.attempts)}));
       throw error;
     }
   }).finally(()=>{stationJobs.delete(jobKey);});
@@ -430,33 +468,88 @@ export function resumeStageRecording(api:PackProofApi,userId:string,key:string,a
   if(activeJobCount()>=2)return Promise.reject(uploadBusy());
   const job=withBrowserLock(jobKey,async()=>{
     assertCurrent(active);const pending=await recoverStageCapture(key);
+    if(pending?.discardRequested)throw discardPending();
     if(!pending||!pending.submitRequested||pending.userId!==userId||!pending.proofId||!scopeMatches(pending.apiScope,api))throw Object.assign(new Error("Review this stage recording before saving."),{code:"CONFIRMATION_REQUIRED",status:409});
     try{
       const proofId=pending.proofId;assertCurrent(active);
       const current=await api.lifecycleRequest<{stages:Array<{stageId:string;evidence:Array<{evidenceId:string;committedAt:string|null}>}>}>(proofId,"");assertCurrent(active);
       if(!pending.evidenceId||!current.stages.find(stage=>stage.stageId===pending.stageId)?.evidence.some(item=>item.evidenceId===pending.evidenceId&&item.committedAt)){
+        if(!pending.file?.size)throw missingRecording();
         pending.digest??=await fileDigest(pending.file);assertCurrent(active);await saveStageCapture(pending);assertCurrent(active);
         await api.completeCaptureSession(proofId,pending.captureSessionId,{sha256:pending.digest,byteSize:pending.file.size,contentType:pending.file.type,interrupted:pending.interrupted});assertCurrent(active);
         const initialized=await api.lifecycleRequest<{evidenceId:string;upload:Parameters<PackProofApi["uploadObject"]>[0]&{received?:boolean}}>(proofId,`/stages/${pending.stageId}/evidence`,"POST",{contentType:pending.file.type,byteSize:pending.file.size,idempotencyKey:pending.uploadKey,captureSessionId:pending.captureSessionId});assertCurrent(active);
+        if(pending.evidenceId && pending.evidenceId !== initialized.evidenceId)throw Object.assign(new Error("Upload identity changed. Your original was kept."),{status:409});
         pending.evidenceId=initialized.evidenceId;await saveStageCapture(pending);assertCurrent(active);
-        if(!initialized.upload.received){await api.uploadObject(initialized.upload,pending.file,pending.file.type);assertCurrent(active);}
+        if(!initialized.upload.received){await trackTransfer(api,pending.key,()=>api.uploadObject(initialized.upload,pending.file,pending.file.type));assertCurrent(active);}
         await api.lifecycleRequest(proofId,`/stages/${pending.stageId}/evidence/${pending.evidenceId}/commit`,"POST",{});assertCurrent(active);
       }
       for(const [index,mark]of pending.bookmarks.entries())try{assertCurrent(active);await api.featureRequest(proofId,"signature/anchors","POST",{evidenceId:pending.evidenceId,stageId:pending.stageId,startMs:mark.startMs,endMs:mark.startMs+1,label:mark.label,sourceType:mark.sourceType||"USER_MARKED",recipeVersion:mark.recipeVersion,idempotencyKey:`${pending.uploadKey}-chapter-${index}`});}catch{assertCurrent(active);}
-      await archiveReceivedRecording(userId,proofId,pending.evidenceId!,pending.file,false,{stageId:pending.stageId,apiScope:api.recoveryScope});assertCurrent(active);
+      if(pending.file?.size)await archiveReceivedRecording(userId,proofId,pending.evidenceId!,pending.file,false,{stageId:pending.stageId,apiScope:api.recoveryScope});assertCurrent(active);
       await clearStageCapture(key);return pending.evidenceId!;
-    }catch(error){const latest=await recoverStageCapture(key);if(latest?.uploadKey===pending.uploadKey)await saveStageCapture({...latest,...retryState(error,latest.attempts)});throw error;}
+    }catch(error){const latest=await recoverStageCapture(key);if(latest?.uploadKey===pending.uploadKey)await queue("readwrite",store=>store.put({...latest,...retryState(error,latest.attempts)}));throw error;}
   }).finally(()=>{stageJobs.delete(jobKey);});stageJobs.set(jobKey,job);return job;
 }
 
-export type LocalRecordingSummary={key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;submitted?:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
+export type LocalRecordingSummary={evidenceId?:string;available?:boolean;active?:boolean;discardRequested?:boolean;key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;submitted?:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
 export async function listRecoverableRecordings(userId:string,api?:PackProofApi):Promise<LocalRecordingSummary[]>{
   const ordinary=(await listLocalRecordings(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
   const station=await recoverStationCapture(userId);
   const stages=(await listStageCaptures(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
   return [
-    ...ordinary.map(item=>({key:item.key,kind:"ordinary" as const,file:item.file,proofId:item.proofId!,preserved:!!item.preserved,finalized:!!item.finalized,submitted:!!item.submitted,committed:!!item.committed,accepted:true,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
-    ...(station&&(!api||scopeMatches(station.apiScope,api))?[{key:station.key,kind:"station" as const,file:station.file,proofId:station.order.proofId,preserved:!!station.preserved,finalized:false,committed:!!station.committed,accepted:station.finishConfirmed,errorMessage:station.errorMessage,retryStopped:station.retryStopped}]:[]),
-    ...stages.map(item=>({key:item.key,kind:"stage" as const,file:item.file,proofId:item.proofId??item.key.slice(userId.length+1,item.key.lastIndexOf(":stage:")),preserved:false,finalized:false,committed:false,accepted:!!item.submitRequested,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
+    ...ordinary.map(item=>({...recordingRecoveryFields(item,api),key:item.key,kind:"ordinary" as const,file:item.file,proofId:item.proofId!,preserved:!!item.preserved,finalized:!!item.finalized,submitted:!!item.submitted,committed:!!item.committed,accepted:true,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
+    ...(station&&(!api||scopeMatches(station.apiScope,api))?[{...recordingRecoveryFields(station,api),key:station.key,kind:"station" as const,file:station.file,proofId:station.order.proofId,preserved:!!station.preserved,finalized:false,committed:!!station.committed,accepted:station.finishConfirmed,errorMessage:station.errorMessage,retryStopped:station.retryStopped}]:[]),
+    ...stages.map(item=>({...recordingRecoveryFields(item,api),key:item.key,kind:"stage" as const,file:item.file,proofId:item.proofId??item.key.slice(userId.length+1,item.key.lastIndexOf(":stage:")),preserved:false,finalized:false,committed:false,accepted:!!item.submitRequested,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
   ];
+}
+
+function notifyUploadChange() { if (typeof window !== "undefined") window.dispatchEvent(new Event("packproof:uploads-updated")); }
+const transfers = new Set<string>();
+async function trackTransfer<T>(api:PackProofApi,key:string,run:()=>Promise<T>):Promise<T> {
+  const identity = `${api.recoveryScope || ""}:${key}`;
+  transfers.add(identity); notifyUploadChange();
+  try { return await run(); } finally { transfers.delete(identity); notifyUploadChange(); }
+}
+function recordingRecoveryFields(item: {key:string;file?:Blob;evidenceId?:string;discardRequested?:boolean}, api?:PackProofApi) {
+  return {evidenceId:item.evidenceId,available:!!item.file?.size,active:transfers.has(`${api?.recoveryScope || ""}:${item.key}`),discardRequested:item.discardRequested};
+}
+function missingRecording():Error { return Object.assign(new Error("The original recording is no longer available on this device."),{code:"CAPTURE_LOCAL_FILE_MISSING",status:422}); }
+function discardPending():Error { return Object.assign(new Error("This incomplete recording is queued for discard."),{code:"CAPTURE_DISCARD_PENDING",status:409}); }
+
+/** The upload and discard use the same lock. Server refusal never removes local bytes. */
+export async function discardLocalRecording(api:PackProofApi,userId:string,key:string):Promise<void> {
+  return withBrowserLock(`${api.recoveryScope || ""}:${key}`,async()=>{
+    const item = await queue<PendingCapture | PendingStationCapture | PendingStageCapture | undefined>("readonly",store=>store.get(key));
+    if (!item) return;
+    if (item.userId !== userId || !scopeMatches(item.apiScope,api)) throw new Error("Open the original account and server to discard this recording.");
+    const proofId = "order" in item ? item.order.proofId : item.proofId;
+    if (!proofId) throw new Error("The original Proof is needed to safely discard this recording.");
+    item.discardRequested = true;
+    await queue("readwrite",store=>store.put(item));
+    try {
+      if (!("stageId" in item && item.stageId) && item.evidenceId) await api.discardIncompleteEvidence(proofId,item.evidenceId);
+      else if ("captureSessionId" in item && item.captureSessionId) {
+        await api.featureRequest(proofId,`capture-sessions/${encodeURIComponent(item.captureSessionId)}/cancel`,"POST",{});
+      } else await api.discardUpload(proofId,item.uploadKey);
+    } catch(error) {
+      if ((error as {code?:string}).code === "EVIDENCE_ALREADY_COMMITTED") {
+        item.discardRequested = false;
+        if ("committed" in item || !("stageId" in item)) (item as PendingCapture).committed = true;
+        await queue("readwrite",store=>store.put(item));
+      }
+      throw error;
+    }
+    if ("captureSessionId" in item && item.captureSessionId) await forgetBrowserEngine(api.recoveryScope,userId,item.captureSessionId);
+    await queue("readwrite",store=>store.delete(key));
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("packproof:records-updated"));
+  });
+}
+export async function resumeLocalRecording(api:PackProofApi,userId:string,item:LocalRecordingSummary):Promise<void> {
+  if (item.kind === "station") await resumeStationRecording(api,userId,()=>true);
+  else if (item.kind === "stage") await resumeStageRecording(api,userId,item.key,()=>true);
+  else {
+    const pending = await queue<PendingCapture|undefined>("readonly",store=>store.get(item.key));
+    if (!pending) return;
+    await preserveCapture(api,userId,pending.proofId!,pending.slot!,pending.file,pending.evidenceType!,()=>{});
+  }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("packproof:records-updated"));
 }

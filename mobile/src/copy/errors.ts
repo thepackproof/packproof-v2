@@ -19,7 +19,7 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
   },
   BIOMETRIC_NOT_ENROLLED: {
     title: "Set up device biometrics.",
-    message: "Add a fingerprint in Android Settings, then return to attest and submit. Your recording is kept.",
+    message: "Set up Face ID, Touch ID, or fingerprint authentication in your device Settings, then return to confirm and submit. Your recording is kept.",
     action: "retry",
   },
   ATTESTATION_CHALLENGE_EXPIRED: {
@@ -132,6 +132,22 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
     message: "Check the reference, import the purchase, or enter the details manually.",
     action: "manual",
   },
+  EBAY_ACCOUNT_DELETION_PENDING: {
+    title: "This eBay account is unavailable.",
+    message: "An eBay account deletion request needs to be resolved before these orders can be imported.",
+  },
+  EBAY_APPLICATION_NOT_CONFIGURED: {
+    title: "eBay connection setup needs attention.",
+    message: "PackProof's live eBay application is not ready to authorize connections yet. Your eBay password does not need to change.",
+  },
+  EBAY_SCOPE_NOT_AVAILABLE: {
+    title: "eBay order permissions are not available yet.",
+    message: "PackProof's eBay application needs approval for seller identity and order access before you can connect.",
+  },
+  EBAY_OAUTH_FAILED: {
+    title: "The eBay connection could not finish.",
+    message: "Return to Sales channels and try Connect again.",
+  },
   EBAY_INTEGRATION_DISABLED: {
     title: "eBay isn’t enabled yet.",
     message: "This PackProof environment has not turned on eBay connections.",
@@ -192,10 +208,6 @@ const CODE_MESSAGES: Record<string, { title: string; message: string; action?: U
   OAUTH_STATE_REUSED: {
     title: "The connection sign-in expired.",
     message: "Start Connect again from Account.",
-  },
-  EBAY_OAUTH_FAILED: {
-    title: "We couldn’t connect eBay.",
-    message: "Try Connect eBay again. PackProof did not save credentials from this attempt.",
   },
   INTEGRATION_NEEDS_REAUTH: {
     title: "Reconnect this account.",

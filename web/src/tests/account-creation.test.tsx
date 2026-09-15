@@ -378,7 +378,8 @@ describe("web account creation", () => {
     await user.type(screen.getByLabelText("Display name"), "Alex Proof");
     await user.click(screen.getByRole("button", { name: "Finish setup" }));
     await waitFor(() => {
-      expect(screen.getByText(/^No Proofs yet$/)).toBeInTheDocument();
+      expect(screen.getByText("Nothing needs your attention")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Needs attention" })).toHaveAttribute("aria-pressed", "true");
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/me/profile",

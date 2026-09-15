@@ -1,3 +1,5 @@
+import { ensureIdentifierBarrier } from '../identifiers/service.js';
+import { engineRow } from "../capture/service.js";
 import { attestationContext, assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
 import { assertShippingReviewComplete } from "./capture-label-review.js";
 import { createPublicKey, randomBytes, verify, type KeyObject } from "node:crypto";
@@ -12,7 +14,16 @@ import { assertNotFinalized, loadProof, requireParticipant } from "./proof-acces
 import { asRequiredIso, type AttestationAuthorization, type EvidenceRow } from "./types.js";
 
 export const SELLER_SHIPPING_STATEMENT = "The item shown and attached in this Proof is the item I am shipping";
+export const NATIVE_ATTESTATION_METHODS = ["ANDROID_BIOMETRIC_STRONG", "IOS_BIOMETRIC"] as const;
+type NativeAttestationMethod = typeof NATIVE_ATTESTATION_METHODS[number];
 const CHALLENGE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function attestationMethod(value: unknown): NativeAttestationMethod {
+  // Omitting the method preserves the deployed Android protocol byte for byte.
+  if (value === undefined) return "ANDROID_BIOMETRIC_STRONG";
+  if (value === "ANDROID_BIOMETRIC_STRONG" || value === "IOS_BIOMETRIC") return value;
+  throw new DomainError("INVALID_ATTESTATION", "A supported native biometric attestation method is required", 400);
+}
 
 interface ChallengeRow {
   id: string;
@@ -71,7 +82,8 @@ function challengeView(row: ChallengeRow) {
 }
 
 export async function createAttestationChallenge(db: Database, clock: Clock, actorUserId: string, proofId: string, value: unknown) {
-  const input = strictAttestationObject(value, ["captureSessionId", "sha256", "publicKey"]);
+  const input = strictAttestationObject(value, ["captureSessionId", "sha256", "publicKey", "method"]);
+  const method = attestationMethod(input.method);
   const captureSessionId = requiredString(input.captureSessionId, "captureSessionId");
   const sha256 = requiredString(input.sha256, "sha256", 64);
   if (!/^[a-f0-9]{64}$/.test(sha256)) throw new DomainError("INVALID_ATTESTATION", "sha256 must be a lowercase SHA-256 digest", 400);
@@ -91,7 +103,10 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
       throw new DomainError("ATTESTATION_CAPTURE_MISMATCH", "Attestation must match this seller's completed native packing recording", 409);
     }
     await assertShippingReviewComplete(tx, proofId, captureSessionId);
+    await ensureIdentifierBarrier(tx,clock,proofId,captureSessionId);
     const context = await attestationContext(tx, proof.transaction_id);
+    const engine = await engineRow(tx, captureSessionId);
+    if (engine && !engine.manifest_sha256) throw new DomainError("CAPTURE_SEAL_REQUIRED", "Seal this recording before confirming it", 409);
     const now = clock.now();
     if (session.state !== "COMMITTED" && now.getTime() >= new Date(session.recover_until).getTime()) {
       throw new DomainError("CAPTURE_RECOVERY_EXPIRED", "This recording is beyond its upload recovery window", 409);
@@ -99,10 +114,10 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
     const active = await tx.query<ChallengeRow>(
       `SELECT * FROM attestation_challenges WHERE proof_id=$1 AND actor_user_id=$2
         AND capture_session_id=$3 AND public_key_sha256=$4 AND consumed_at IS NULL
-        AND expires_at>$5 ORDER BY created_at DESC LIMIT 1`,
-      [proofId, actorUserId, captureSessionId, publicKey.sha256, now.toISOString()],
+        AND expires_at>$5 AND payload::jsonb->>'method'=$6 ORDER BY created_at DESC LIMIT 1`,
+      [proofId, actorUserId, captureSessionId, publicKey.sha256, now.toISOString(), method],
     );
-    if (active.rows[0] && readAttestationContext(active.rows[0].payload).contextSha256 === context.contextSha256) return challengeView(active.rows[0]);
+    if (active.rows[0] && JSON.parse(active.rows[0].payload).method === method && readAttestationContext(active.rows[0].payload).contextSha256 === context.contextSha256) return challengeView(active.rows[0]);
     const count = await tx.query<{ count: string }>(
       `SELECT COUNT(*) AS count FROM attestation_challenges WHERE proof_id=$1 AND actor_user_id=$2
         AND consumed_at IS NULL AND expires_at>$3`, [proofId, actorUserId, now.toISOString()],
@@ -111,9 +126,9 @@ export async function createAttestationChallenge(db: Database, clock: Clock, act
     const challengeId = newId("att_challenge");
     const expiresAt = new Date(now.getTime() + CHALLENGE_TTL_MS).toISOString();
     const payload = canonicalize({
-      version: 1, method: "ANDROID_BIOMETRIC_STRONG", challengeId,
+      version: 1, method, challengeId,
       nonce: randomBytes(32).toString("hex"), actorUserId, proofId, captureSessionId,
-      ...context, sha256, statement: SELLER_SHIPPING_STATEMENT, publicKeySha256: publicKey.sha256, expiresAt,
+      ...context, ...(engine ? {captureManifestSha256:engine.manifest_sha256,statementSha256:sha256Hex(SELLER_SHIPPING_STATEMENT)} : {}), sha256, statement: SELLER_SHIPPING_STATEMENT, publicKeySha256: publicKey.sha256, expiresAt,
     });
     await tx.query(
       `INSERT INTO attestation_challenges (id, proof_id, actor_user_id, capture_session_id,
@@ -151,12 +166,18 @@ export async function verifyAttestationAuthorization(
   if (!challenge.consumed_at) {
     const proof = await loadProof(db, proofId);
     await assertShippingReviewComplete(db, proofId, challenge.capture_session_id);
+    await ensureIdentifierBarrier(db,clock,proofId,challenge.capture_session_id);
     await assertAttestationContextCurrent(db, proof.transaction_id, challenge.payload);
   }
+  const engine = await engineRow(db, challenge.capture_session_id);
+  if (engine && JSON.parse(challenge.payload).captureManifestSha256 !== engine.manifest_sha256) throw new DomainError("ATTESTATION_CAPTURE_MISMATCH", "The attestation must cover this sealed capture manifest", 409);
   const publicKey = publicKeyFromInput(challenge.public_key_base64);
   let valid = false;
   try { valid = verify("sha256", Buffer.from(challenge.payload, "utf8"), { key: publicKey.key, dsaEncoding: "der" }, signature); } catch { /* Invalid DER signatures are rejected. */ }
   if (!valid) throw new DomainError("ATTESTATION_SIGNATURE_INVALID", "The attestation signature does not match this recording authorization", 400);
+  // The signature covers the method selected when the server issued the challenge.
+  // It verifies possession of the key, not the client's biometric or hardware claim.
+  const method = attestationMethod(JSON.parse(challenge.payload).method);
   // A completed exact challenge may be replayed after expiry to recover a lost commit response.
   if (!challenge.consumed_at && clock.now().getTime() >= new Date(challenge.expires_at).getTime()) {
     throw new DomainError("ATTESTATION_CHALLENGE_EXPIRED", "Confirm your shipping attestation again to continue submitting this video", 409);
@@ -164,7 +185,7 @@ export async function verifyAttestationAuthorization(
   return {
     attestationId: challenge.attestation_id,
     authorization: {
-      version: 1, method: "ANDROID_BIOMETRIC_STRONG",
+      version: 1, method,
       biometricMethodProvenance: "CLIENT_ASSERTED_NOT_INDEPENDENTLY_VERIFIED",
       signatureVerification: "SERVER_VERIFIED", algorithm: "ECDSA_SHA256", challengeId,
       payload: challenge.payload, signature: signature.toString("base64"),

@@ -34,17 +34,17 @@
 .visual-history-entries { margin-left:14px; }
 .visual-history-entry { position:relative; display:flex; gap:18px; padding-bottom:20px; }
 .visual-history-entry:not(:last-child)::before { content:""; position:absolute; left:4px; top:8px; bottom:-4px; width:1px; background:var(--visual-line); }
-.visual-history-node { position:relative; flex:0 0 9px; height:9px; margin-top:4px; border-radius:50%; background:var(--visual-blue); box-shadow:0 0 0 4px var(--brand-blue-soft); }
-.visual-history-entry:last-child .visual-history-node { background:var(--visual-green); box-shadow:0 0 0 4px var(--brand-forest-soft); }
+.visual-history-node { position:relative; flex:0 0 9px; height:9px; margin-top:4px; border-radius:50%; background:var(--visual-blue); box-shadow: none; }
+.visual-history-entry:last-child .visual-history-node { background:var(--visual-green); box-shadow: none; }
 .visual-history-entry strong { display:block; font-size:14px; font-weight:600; }
 .visual-history-entry small { display:block; margin-top:3px; color:var(--visual-muted); font-size:11px; }
 .visual-history-footer { display:flex; align-items:center; gap:10px; margin-left:14px; padding-top:13px; border-top:1px solid var(--visual-line); color:var(--visual-green); }
 .bento-wide>.workflow-visual { flex:0 0 220px; }
 .bento-wide>div:last-child { min-width:0; }
 .public-site .bento-wide h3 { color:var(--brand-sheet); }
-.visual-collection { width:100%; border:1px solid #526158; border-radius:12px; background:var(--brand-ink-raised); padding:18px; color:var(--brand-on-ink-muted); }
+.visual-collection { width:100%; border:1px solid var(--brand-rule); border-radius:12px; background:var(--brand-ink-raised); padding:18px; color:var(--brand-on-ink-muted); }
 .visual-collection-heading { display:flex; align-items:center; gap:12px; color:var(--brand-on-ink-blue); font-size:10px; letter-spacing:.09em; padding-bottom:18px; }
-.visual-collection-index { display:flex; align-items:center; justify-content:space-between; gap:8px; border-block:1px solid #526158; padding:12px 0; margin-bottom:3px; font-size:11px; color:var(--brand-on-ink-muted); }
+.visual-collection-index { display:flex; align-items:center; justify-content:space-between; gap:8px; border-block:1px solid var(--brand-rule); padding:12px 0; margin-bottom:3px; font-size:11px; color:var(--brand-on-ink-muted); }
 .visual-collection-row { display:flex; align-items:center; gap:10px; padding-top:16px; font-size:11px; }
 .visual-collection-row svg { color:var(--brand-on-ink-blue); }
 .visual-collection-mark { width:4px; height:4px; flex-shrink:0; background:var(--brand-on-ink-green); border-radius:50%; margin-left:auto; }

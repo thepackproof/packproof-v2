@@ -11,6 +11,7 @@ import { asIso, asRequiredIso, type ParticipantRole, type ProofStatus } from "./
 export const PROOF_COLLECTION_LIMIT = 100;
 
 export interface ProofCollectionItem {
+  thumbnailDerivativeId?: string | null;
   schema: typeof PROOF_SUMMARY_SCHEMA;
   proofId: string;
   transactionId: string;
@@ -122,6 +123,7 @@ export function parseProofListQuery(query: Record<string, unknown>): ProofListQu
   return {view:view as ProofListView,q,limit,offset};
 }
 interface NavigationRow extends CollectionRow {
+  thumbnail_derivative_id: string | null;
   invitation_id: string | null;
   access_kind: 'PARTICIPANT' | 'INVITATION' | 'RECEIVER';
   receiver_receipt_needed: boolean;
@@ -164,7 +166,8 @@ export async function queryMyProofs(db: Database, actorUserId: string, query: Pr
     )
     SELECT p.id AS proof_id,p.transaction_id,a.role,a.invitation_id,a.access_kind,p.status,p.workflow_type,p.participation_policy,
       p.created_at,p.updated_at,p.finalized_at,t.external_reference,t.item_title,t.transaction_date,
-      s.carrier,s.tracking_number,s.service,t.transaction_value,t.currency,
+      COALESCE(ta.carrier,s.carrier) AS carrier,COALESCE(ta.tracking_number,s.tracking_number) AS tracking_number,s.service,t.transaction_value,t.currency,
+      (SELECT md.id FROM proof_media_derivatives md WHERE md.proof_id=p.id AND md.status='READY' AND md.transform_version='committed-source-thumbnail/v1' ORDER BY md.created_at,md.id LIMIT 1) AS thumbnail_derivative_id,
       (SELECT COUNT(*) FROM evidence e WHERE e.proof_id=p.id AND e.validation_status='COMMITTED') AS committed_count,
       (SELECT COUNT(*) FROM evidence e WHERE e.proof_id=p.id AND e.validation_status='COMMITTED' AND e.evidence_type='FULFILLMENT_CAPTURE') AS fulfillment_count,
       EXISTS(SELECT 1 FROM attestations at WHERE at.proof_id=p.id AND at.statement='PACKED_DESCRIBED_ITEM') AS packing_attested,
@@ -176,6 +179,7 @@ export async function queryMyProofs(db: Database, actorUserId: string, query: Pr
       stage.stage_type,stage.has_evidence AS stage_has_evidence
     FROM accessible a JOIN proofs p ON p.id=a.proof_id JOIN transactions t ON t.id=p.transaction_id
     LEFT JOIN transaction_shipping s ON s.transaction_id=t.id
+    LEFT JOIN proof_tracking_associations ta ON ta.transaction_id=t.id
     LEFT JOIN LATERAL (SELECT cs.stage_type,EXISTS(SELECT 1 FROM commerce_stage_evidence ce WHERE ce.stage_id=cs.id AND ce.committed_at IS NOT NULL AND ce.discarded_at IS NULL) AS has_evidence
       FROM commerce_stages cs WHERE cs.proof_id=p.id AND cs.actor_user_id=$1 AND cs.finalized_at IS NULL ORDER BY cs.created_at,cs.id LIMIT 1) stage ON true
   `, [actorUserId, now.toISOString()]);
@@ -189,7 +193,7 @@ export async function queryMyProofs(db: Database, actorUserId: string, query: Pr
     },row.role,{committedEvidenceCount:Number(row.committed_count),fulfillmentCaptureCount:Number(row.fulfillment_count),packingAttested:row.packing_attested}) : null;
     rows.push({schema:PROOF_SUMMARY_SCHEMA,proofId:row.proof_id,transactionId:row.transaction_id,role:row.role,status:row.status,
       workflowType:row.workflow_type ?? 'COMMERCE_SALE',createdAt:asRequiredIso(row.created_at),updatedAt:asRequiredIso(row.updated_at),finalizedAt:asIso(row.finalized_at),
-      invitationId:row.invitation_id,accessKind:row.access_kind,source:restricted ? null : row.source,
+      invitationId:row.invitation_id,accessKind:row.access_kind,source:restricted ? null : row.source,thumbnailDerivativeId:restricted ? null : row.thumbnail_derivative_id,
       transaction:{externalReference:row.external_reference,itemTitle:row.item_title,transactionDate:restricted ? null : row.transaction_date,
         carrier:restricted ? null : row.carrier,trackingNumber:restricted ? null : row.tracking_number,service:restricted ? null : row.service,
         transactionValue:restricted ? null : asNullableNumber(row.transaction_value),currency:restricted ? null : row.currency},

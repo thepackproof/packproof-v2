@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["PackProofOrderShareModule"] },
+  "android": { "modules": ["com.packproof.ordershare.OrderShareModule"] }
+}

@@ -32,10 +32,12 @@ export function providerSetupMessage(provider: string): string {
 export function automaticIntakeStatus(connection: {
   status: string;
   autoSyncEnabled?: boolean;
+  automationAvailable?: boolean;
   sync?: { initialSyncCompletedAt?: string | null; runStatus?: string };
 }): string {
   if (connection.status === "NEEDS_REAUTH") return "Automatic intake paused. Reconnect your selling account above.";
   if (connection.status !== "ACTIVE") return "Automatic intake unavailable while this connection needs attention.";
+  if (connection.automationAvailable === false) return "Automatic orders are not available for this store yet. You can still check for orders.";
   if (!connection.autoSyncEnabled) return "Automatic intake off";
   if (connection.sync?.runStatus === "FAILED") return "Automatic intake needs attention. Check the connection error below.";
   if (connection.sync?.runStatus === "RETRYING") return "The last order check could not finish. Automatic intake will retry.";

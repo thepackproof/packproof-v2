@@ -17,6 +17,16 @@ function fixture(buildSha?:string){
 test('native default capture sends no study requests and persists no task',async()=>{
   const f=fixture();try{assert.equal(await f.runtime.startNativeStudy(f.api,'original-account'),null);assert.equal(f.requests.length,0);assert.equal(f.memory.size,0);}finally{f.runtime.dispose();}
 });
+test('consented iOS collection keeps its explicit device class during offline recovery',async()=>{
+  const f=fixture();try{
+    await f.runtime.rememberNativeStudyConsent(f.api,'original-account',consent,'ios');f.offline();
+    const timer=await f.runtime.startNativeStudy(f.api,'original-account');assert.ok(timer);timer.end('succeeded');await drain();
+    const entry=[...f.memory.entries()].find(([key])=>key.includes(':task:'));assert.ok(entry);
+    assert.equal(JSON.parse(entry[1]).start.deviceClass,'ios');
+    f.online();await f.runtime.flushNativeStudyTimings(f.api,'original-account');
+    assert.equal((f.requests.find(row=>row.path==='/timings/start')!.body as {deviceClass:string}).deviceClass,'ios');
+  }finally{f.runtime.dispose();}
+});
 test('consented native task starts fully offline, retains failure operations and replays after recovery without raw identifiers',async()=>{
   const f=fixture();try{
     await f.runtime.rememberNativeStudyConsent(f.api,'original-account',consent,'a16_5g');f.offline();

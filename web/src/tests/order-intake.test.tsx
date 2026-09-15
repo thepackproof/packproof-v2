@@ -47,7 +47,7 @@ it("requires review and preserves corrected intake provenance only for that orde
       onConfirmImport={() => {}}
     />,
   );
-  await user.click(screen.getByRole("button", { name: /Paste order details/ }));
+  await user.click(screen.getByRole("button", { name: "Paste order or receipt" }));
   await user.type(
     screen.getByLabelText("Order confirmation"),
     "Order: ORDER-101\nItem: Card\nPrice: $3000",
@@ -55,12 +55,12 @@ it("requires review and preserves corrected intake provenance only for that orde
   await user.click(screen.getByRole("button", { name: "Review order details" }));
   expect(await screen.findByText("Confirm the currency.")).toBeInTheDocument();
   expect(create).not.toHaveBeenCalled();
-  await user.type(screen.getByLabelText("Currency"), "USD");
+  await user.selectOptions(screen.getByRole("combobox", { name: "Currency" }), "CAD");
   await user.click(screen.getByRole("button", { name: "Open camera" }));
   await waitFor(() =>
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
-        currency: "USD",
+        currency: "CAD",
         metadata: {
           intake: expect.objectContaining({ confirmed: true, source: "paste" }),
         },

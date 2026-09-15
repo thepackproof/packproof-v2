@@ -1,27 +1,31 @@
-/* Colors sampled from the paper-and-ink PackProof identity. */
+/* Approved exact UI colors; logo accents are intentionally brighter. */
 :root {
-  --brand-paper: #f5f2e9;
-  --brand-sheet: #fffefa;
-  --brand-inset: #f0eee6;
-  --brand-ink: #26302d;
-  --brand-ink-raised: #34423e;
-  --brand-muted: #59635f;
-  --brand-quiet: #59635f;
-  --brand-rule: #d9d8cf;
-  --brand-blue: #56727b;
-  --brand-blue-text: #48616a;
-  --brand-blue-soft: #eaf0f0;
-  --brand-blue-line: #c3d2d5;
-  --brand-forest: #365f4c;
-  --brand-forest-soft: #eaf0e8;
-  --brand-forest-line: #c5d3c6;
-  --brand-on-ink: #f5f2e9;
-  --brand-on-ink-muted: #c5cec4;
-  --brand-on-ink-blue: #a4c2cc;
-  --brand-on-ink-green: #a2c4a8;
+  --logo-blue: #2583E9;
+  --logo-green: #20AA70;
+  --brand-blue-hover: #1255AD;
+  --brand-blue-pressed: #104790;
+  --brand-paper: #E9EEF4;
+  --brand-sheet: #F7F9FC;
+  --brand-inset: #E2E8F0;
+  --brand-ink: #23262D;
+  --brand-ink-raised: #344256;
+  --brand-muted: #526174;
+  --brand-quiet: #526174;
+  --brand-rule: #CBD5E1;
+  --brand-blue: #1769D2;
+  --brand-blue-text: #1769D2;
+  --brand-blue-soft: #E6F0FF;
+  --brand-blue-line: #CBD5E1;
+  --brand-forest: #14805E;
+  --brand-forest-soft: #E5F5ED;
+  --brand-forest-line: #CBD5E1;
+  --brand-on-ink: #E9EEF4;
+  --brand-on-ink-muted: #E2E8F0;
+  --brand-on-ink-blue: #91BEF5;
+  --brand-on-ink-green: #7AD4B5;
 }
 
-/* Public pages retain a paper appearance after visiting a dark workspace. */
+/* Public and shared pages use the approved light palette independently of workspace preference. */
 .public-site, .auth-experience {
   --ink: var(--brand-ink);
   --muted: var(--brand-muted);
@@ -29,36 +33,42 @@
   --bg: var(--brand-paper);
   --surface: var(--brand-sheet);
   --surface-elevated: var(--brand-inset);
-  --surface-pressed: #e9e8df;
+  --surface-pressed: #E2E8F0;
   --input-bg: var(--brand-sheet);
   --text: var(--brand-ink);
   --text-secondary: var(--brand-muted);
   --text-muted: var(--brand-quiet);
-  --text-on-primary: var(--brand-sheet);
+  --text-on-primary: #FFFFFF;
   --navy: var(--brand-ink);
   --slate: var(--brand-muted);
   --border: var(--brand-rule);
-  --divider: #e6e5dc;
+  --divider: #CBD5E1;
   --blue: var(--brand-blue);
   --blue-soft: var(--brand-blue-soft);
   --accent: var(--brand-blue);
-  --accent-pressed: var(--brand-blue-text);
+  --accent-pressed: var(--brand-blue-pressed);
   --accent-text: var(--brand-blue-text);
   --accent-soft: var(--brand-blue-soft);
   --accent-soft-border: var(--brand-blue-line);
-  --primary: var(--brand-ink);
-  --primary-pressed: var(--brand-ink-raised);
+  --primary: var(--brand-blue);
+  --primary-hover: var(--brand-blue-hover);
+  --primary-pressed: var(--brand-blue-pressed);
   --green: var(--brand-forest);
   --green-soft: var(--brand-forest-soft);
   --success: var(--brand-forest);
   --success-text: var(--brand-forest);
   --success-soft: var(--brand-forest-soft);
   --success-soft-border: var(--brand-forest-line);
-  --warning-soft: #f7f0df;
-  --warning-text: #78551e;
-  --warning-soft-border: #ddcfac;
-  --error: #a13930;
-  --error-soft: #f7eae5;
+  --warning-soft: #FFF1D6;
+  --warning-text: #895000;
+  --warning-soft-border: #CBD5E1;
+  --warning: #895000;
+  --danger: #B42318;
+  --danger-bg: #FEECEB;
+  --disabled-bg: #E2E8F0;
+  --disabled-text: #526174;
+  --error: #B42318;
+  --error-soft: #FEECEB;
   color-scheme: light;
 }
 
@@ -74,11 +84,11 @@
 .hero-copy > p, .hero-copy > p:not(.site-eyebrow),
 .dark-intro .hero-note, .dark-intro .site-eyebrow.light,
 .hero-bottom, .hero-bottom > span, .hero-bottom > a { color: var(--brand-muted); }
-.hero .sample-record { box-shadow: 0 20px 55px #26302d14; }
-.site-button.blue { background: var(--brand-blue); color: var(--brand-sheet); }
-.site-button.blue:hover { background: var(--brand-blue-text); }
-.site-button.navy { background: var(--brand-ink); color: var(--brand-sheet); }
-.site-button.navy:hover { background: var(--brand-ink-raised); }
+.hero .sample-record { box-shadow: none; }
+.site-button.blue { background: var(--brand-blue); color: #FFFFFF; }
+.site-button.blue:hover { background: var(--brand-blue-hover); }
+.site-button.navy { background: var(--brand-blue); color: #FFFFFF; }
+.site-button.navy:hover { background: var(--brand-blue-hover); }
 .brand-dot { color: var(--brand-forest); }
 .product-section { background: var(--brand-inset); }
 .bento-wide .micro-label { color: var(--brand-on-ink-blue); }
@@ -90,7 +100,7 @@
 .problem-scale .problem-intro, .problem-caveat { color: var(--brand-muted); }
 .problem-statistics article { border-color: var(--brand-rule); }
 .problem-statistics strong, .problem-statistics a { color: var(--brand-blue-text); }
-.sample-source-note { background: #f7f0df; color: #78551e; }
+.sample-source-note { background: var(--brand-inset); color: var(--brand-muted); }
 .created-bar { background: var(--accent); }
 .finalized-bar { background: var(--success); }
 .tracking-map-empty { background: var(--surface-elevated); }
@@ -100,9 +110,9 @@
   border-color: var(--success-soft-border);
   box-shadow: none;
 }
-.capture-coach { background: var(--brand-ink); color: var(--brand-on-ink); border-color: var(--brand-ink-raised); }
-.capture-coach button { background: var(--brand-ink-raised); border-color: #66776b; }
-.capture-coach button[aria-pressed="true"] { background: var(--brand-forest); border-color: var(--brand-on-ink-green); }
+.capture-coach { background: var(--surface); color: var(--text); border-color: var(--border); }
+.capture-coach button { background: var(--accent-soft); color: var(--accent-text); border-color: var(--border); }
+.capture-coach button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent); }
 button:focus-visible, a:focus-visible, summary:focus-visible,
 :where(input, select, textarea, [tabindex]):focus-visible {
   outline-color: var(--accent, var(--brand-blue-text));

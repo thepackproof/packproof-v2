@@ -1,3 +1,4 @@
+import { lockEbayPrivacy } from "./ebay-deletion-cases.js";
 import { resumeCommerceAutomation } from "./commerce-automation.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
@@ -18,6 +19,7 @@ import {
   type ConnectedAccountProviderId,
 } from "./identity-providers.js";
 import { consumeOAuthAttempt, createOAuthAttempt } from "./oauth-attempts.js";
+import { connectedAccountReturnUrl, connectSurface } from "./oauth-return.js";
 import {
   createIntegrationConnection,
   findOwnerConnection,
@@ -135,9 +137,10 @@ export async function reauthorizeConnectedAccount(
   userId: string,
   accountId: string,
   service: ConnectedAccountService,
+  input: { surface?: unknown } = {},
 ): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> {
   const record = await requireOwnedAccount(db, userId, accountId);
-  const extra: ConnectExtra = { ...record.providerMetadata, reauthorizeAccountId: record.id };
+  const extra: ConnectExtra = { ...record.providerMetadata, reauthorizeAccountId: record.id, surface: connectSurface(input.surface) };
   if (record.provider === "shopify") {
     extra.shop = record.externalAccountId;
   }
@@ -153,7 +156,7 @@ export async function completeConnectedAccountOAuth(
 ): Promise<{ redirectTo: string }> {
   const providerId = requireConnectedAccountProvider(providerRaw);
   const provider = service.registry.get(providerId);
-  const returnUrl = service.webReturnUrl || "/account";
+  let returnUrl = service.webReturnUrl || "/account";
   let actorUserId: string | null = null;
   try {
     if (!provider.isEnabled()) {
@@ -166,12 +169,13 @@ export async function completeConnectedAccountOAuth(
     await provider.verifyCallback?.(query);
     const attempt = await consumeOAuthAttempt(db, clock, query.state);
     actorUserId = attempt.userId;
-    if (attempt.provider !== providerId) {
+    if (attempt.provider !== providerId || attempt.purpose !== provider.oauthPurpose()) {
       throw new DomainError("OAUTH_STATE_INVALID", "OAuth state is invalid", 400);
     }
     if (!attempt.userId) {
       throw new DomainError("UNAUTHENTICATED", "An authenticated PackProof session is required", 401);
     }
+    returnUrl = connectedAccountReturnUrl(returnUrl, providerId, attempt.metadata.surface);
     if (typeof query.error === "string" && query.error.trim()) {
       throw new DomainError("CONNECTED_ACCOUNT_AUTH_DENIED", "Account authorization was declined", 400);
     }
@@ -287,10 +291,11 @@ export async function disconnectConnectedAccount(
   service: ConnectedAccountService,
 ): Promise<void> {
   const existing = await requireOwnedAccount(db, userId, accountId);
-  if (existing.provider !== "etsy") {
+  if (existing.provider !== "etsy" && existing.provider !== "ebay") {
     return disconnectConnectedAccountUnlocked(db, clock, userId, accountId, service);
   }
   await db.transaction(async (tx) => {
+    if (existing.provider === "ebay") await lockEbayPrivacy(tx);
     await tx.query("SELECT id FROM connected_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE", [accountId, userId]);
     await disconnectConnectedAccountUnlocked(tx, clock, userId, accountId, service);
   });
@@ -342,12 +347,13 @@ export async function refreshConnectedAccountCredentials(
   options: { preserveCommerceLease?: boolean; expectedAccessToken?: string } = {},
 ): Promise<ConnectedAccountView> {
   const existing = await requireOwnedAccount(db, userId, accountId);
-  if (existing.provider !== "etsy") {
+  if (existing.provider !== "etsy" && existing.provider !== "ebay") {
     return refreshConnectedAccountCredentialsUnlocked(db, clock, userId, accountId, service, options);
   }
   // The database lock coordinates API and worker processes as well as disconnect.
   // Read credentials only after locking: a preceding refresh may rotate them.
   const outcome = await db.transaction(async (tx) => {
+    if (existing.provider === "ebay") await lockEbayPrivacy(tx);
     await tx.query("SELECT id FROM connected_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE", [accountId, userId]);
     try {
       return { value: await refreshConnectedAccountCredentialsUnlocked(tx, clock, userId, accountId, service, options) };
@@ -579,11 +585,12 @@ function toView(record: ConnectedAccountRecord, provider: ConnectedAccountProvid
 }
 
 function connectMetadata(provider: ConnectedAccountProviderId, extra: ConnectExtra): ConnectExtra {
+  const metadata = { ...extra, surface: connectSurface(extra.surface) };
   if (provider === "shopify") {
     const shop = normalizeShopifyShop(extra.shop);
-    return { ...extra, shop };
+    return { ...metadata, shop };
   }
-  return { ...extra };
+  return metadata;
 }
 
 function callbackRedirect(
@@ -604,7 +611,7 @@ function callbackRedirect(
       url.searchParams.set("code", code);
     }
   }
-  if (base.startsWith("http://") || base.startsWith("https://")) {
+  if (base.startsWith("http://") || base.startsWith("https://") || base.startsWith("packproof-v2://")) {
     return url.toString();
   }
   return `${url.pathname}${url.search}`;

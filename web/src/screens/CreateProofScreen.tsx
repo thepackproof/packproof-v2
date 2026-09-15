@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { IntakePreview } from "@packproof/copy/order-intake";
 import { IntakePanel } from "../components/IntakePanel";
 import type { EbaySellerOrderView, TransactionImportView, TransactionWriteInput } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 export function CreateProofScreen(props: {
+  readyOrders?: ReactNode;
   busy: boolean;
   error: string | null;
   development: boolean;
@@ -13,6 +14,7 @@ export function CreateProofScreen(props: {
   onOpenAccount: () => void;
   onAcceptInvitation: (invitationId: string) => void;
   onPreviewIntake?: (text: string) => Promise<IntakePreview>;
+  renderIntakePanel?: (onReview: (preview: IntakePreview) => void) => ReactNode;
   onCreate: (input: TransactionWriteInput) => void;
   onCreateGrading: (input: { itemCount: number; itemTitle: string }) => void;
   onImportPurchase: () => Promise<TransactionImportView>;
@@ -33,10 +35,13 @@ export function CreateProofScreen(props: {
   const [tracking, setTracking] = useState("");
   const [paste, setPaste] = useState(false);
   const [intake, setIntake] = useState<IntakePreview | null>(null);
+  const [gradingCount, setGradingCount] = useState("1");
+  function reviewIntake(result: IntakePreview) { setIntake(result); setTitle(result.draft.itemTitle || ""); setReference(result.draft.externalReference || ""); setCurrency(result.draft.currency || "USD"); setQuantity(result.draft.quantity == null ? "1" : String(result.draft.quantity)); setAmount(result.draft.transactionValue == null ? "" : String(result.draft.transactionValue)); setCarrier(result.draft.shipping.carrier || ""); setTracking(result.draft.shipping.trackingNumber || ""); setPaste(false); }
   const quantityNumber = Math.max(1, Number.parseInt(quantity,10) || 1);
   return <main className="page narrow-page"><PageHeader title="Record shipment" onBack={props.onCancel} />
+    {props.readyOrders}
     {props.error ? <p role="alert" className="banner banner-error">{props.error}</p> : null}
-    {paste && props.onPreviewIntake ? <IntakePanel onPreview={props.onPreviewIntake} onReview={result => { setIntake(result); setTitle(result.draft.itemTitle || ""); setReference(result.draft.externalReference || ""); setCurrency(result.draft.currency || "USD"); setQuantity(result.draft.quantity == null ? "1" : String(result.draft.quantity)); setAmount(result.draft.transactionValue == null ? "" : String(result.draft.transactionValue)); setCarrier(result.draft.shipping.carrier || ""); setTracking(result.draft.shipping.trackingNumber || ""); setPaste(false); }} /> : null}
+    {paste && props.onPreviewIntake ? (props.renderIntakePanel ? props.renderIntakePanel(reviewIntake) : <IntakePanel onPreview={props.onPreviewIntake} onReview={reviewIntake} />) : null}
     <form className="stack" onSubmit={e => { e.preventDefault(); props.onCreate({itemTitle:title.trim(),externalReference:reference.trim() || null,itemDescription:description.trim() || null,currency:currency.trim() || null,quantity:quantity ? Number(quantity) : null,transactionValue:amount ? Number(amount) : null,shipping:{carrier:carrier.trim() || null,trackingNumber:tracking.trim() || null},...(intake ? {metadata:{intake:{...intake.draft.metadata.intake,confirmed:true}}} : {})}); }}>
       <label className="field"><span>What are you shipping?</span><input required maxLength={200} value={title} onChange={e => setTitle(e.target.value)} autoFocus /></label>
       <p>Show the shipping label during your packing video. PackProof will try to read it for you.</p>
@@ -53,5 +58,9 @@ export function CreateProofScreen(props: {
       </div></details>
       <button className="btn" disabled={props.busy || !title.trim()} type="submit">{props.busy ? "Opening…" : "Open camera"}</button>
     </form>
+    <details><summary>Document a grading submission</summary>
+      <label className="field"><span>Number of items</span><input value={gradingCount} onChange={e => setGradingCount(e.target.value)} type="number" min={1} max={50} step={1} /></label>
+      <button className="btn btn-secondary" type="button" disabled={props.busy || !Number.isSafeInteger(Number(gradingCount)) || Number(gradingCount) < 1 || Number(gradingCount) > 50} onClick={() => props.onCreateGrading({ itemCount: Number(gradingCount), itemTitle: title.trim() || "Grading submission" })}>Start grading submission</button>
+    </details>
   </main>;
 }

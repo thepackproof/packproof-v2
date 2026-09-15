@@ -81,7 +81,7 @@ function ScanMap({ point, zoom, onZoom, height, onOpenLink }: {
   return <View style={[styles.map, { height, backgroundColor: colors.surfacePressed }]} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
     {tiles.map((tile) => <CachedMapTile key={tile.key} tile={tile} onError={() => setFailed(true)} />)}
     {!failed && <View pointerEvents="none" style={styles.marker} accessibilityLabel={`Reported scan: ${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}`}>
-      <Ionicons name="location" size={48} color={colors.success} style={styles.markerShadow} />
+      <Ionicons name="location" size={48} color={colors.shipmentText} style={styles.markerShadow} />
     </View>}
     {failed && <View style={[styles.mapFailure, { backgroundColor: colors.surfaceElevated }]}>
       <Ionicons name="map-outline" size={32} color={colors.textSecondary} />
@@ -151,18 +151,34 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
     catch { setLinkError("The map link could not be opened. Your recorded shipment details remain available here."); }
   }
 
-  if (!selected) return <View style={styles.panel}>
-    <Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{state.title}</Text>
-    <Text style={[styles.note, { color: colors.textSecondary }]}>{state.detail}</Text>
-    {carrier || trackingNumber ? <View style={styles.emptyIdentity}>
-      {carrier ? <Text style={[styles.note, { color: colors.textSecondary }]}>{carrier}</Text> : null}
-      {trackingNumber ? <Text selectable style={[styles.note, { color: colors.textPrimary }]}>{trackingNumber}</Text> : null}
-    </View> : null}
-  </View>;
+  if (!selected) {
+    const missingLabel = state.kind === "missing_label";
+    const needsAttention = state.kind === "failed" || state.kind === "unavailable";
+    return <View style={styles.emptyState}>
+      <View style={[styles.emptyIcon, { backgroundColor: needsAttention ? colors.warningSoft : colors.shipmentSoft }]}>
+        <Ionicons name={needsAttention ? "alert-outline" : "arrow-up-outline"} size={34} color={needsAttention ? colors.warningText : colors.shipmentText} style={needsAttention ? undefined : styles.directionArrow} />
+      </View>
+      <View style={styles.emptyCopy}>
+        <Text accessibilityRole={state.kind === "failed" ? "alert" : "header"} style={[styles.emptyTitle, { color: colors.textPrimary }]}>{missingLabel ? "Tracking will appear here" : state.title}</Text>
+        <Text style={[styles.emptyDetail, { color: colors.textSecondary }]}>{missingLabel ? "Carrier updates appear here when a shipping label is identified and tracking is connected." : state.detail}</Text>
+      </View>
+      {missingLabel ? <View style={[styles.emptyNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.noticeIcon, { backgroundColor: colors.warningSoft }]}><Ionicons name="alert-outline" size={20} color={colors.warningText} /></View>
+        <View style={styles.noticeText}>
+          <Text style={[styles.link, { color: colors.textPrimary }]}>No tracking number identified yet</Text>
+          <Text style={[styles.finePrint, { color: colors.textSecondary }]}>The saved recording is unaffected.</Text>
+        </View>
+      </View> : null}
+      {carrier || trackingNumber ? <View style={[styles.emptyIdentity, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {carrier ? <Text style={[styles.note, { color: colors.textSecondary }]}>{carrier}</Text> : null}
+        {trackingNumber ? <Text selectable style={[styles.bodyStrong, { color: colors.textPrimary }]}>{trackingNumber}</Text> : null}
+      </View> : null}
+    </View>;
+  }
 
   return <View style={styles.panel}>
     <View style={styles.heading}>
-      <View style={[styles.status, { backgroundColor: colors.accentSoft, borderColor: colors.accentSoftBorder }]}><View style={[styles.statusDot, { backgroundColor: colors.accent }]} /><Text style={[styles.note, { color: colors.accentText }]}>{selected ? shipmentEventLabel(selected.eventType) : "Awaiting updates"}</Text></View>
+      <View style={[styles.status, { backgroundColor: colors.shipmentSoft, borderColor: colors.shipmentSoft }]}><View style={[styles.statusDot, { backgroundColor: colors.shipmentText }]} /><Text style={[styles.note, { color: colors.shipmentText }]}>{shipmentEventLabel(selected.eventType)}</Text></View>
     </View>
     {state.kind !== "reported" ? <Text accessibilityRole={state.kind === "failed" ? "alert" : undefined} style={[styles.notice, { backgroundColor: colors.warningSoft, color: colors.warningText }]}>{state.title}. {state.detail}</Text> : null}
     {latestReceived ? <Text style={[styles.note, { color: colors.textSecondary }]}>Latest report received {formatDateTime(latestReceived)}</Text> : null}
@@ -170,7 +186,7 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
     {stale && <Text style={[styles.note, { color: colors.textSecondary }]}>This selected report is more than 48 hours old. It is historical context, not a current location.</Text>}
     <View style={[styles.mapCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       <View style={styles.mapHeading}>
-        <View style={[styles.locationIcon, { backgroundColor: colors.accentSoft }]}><Ionicons name="location-outline" size={26} color={colors.accentText} /></View>
+        <View style={[styles.locationIcon, { backgroundColor: colors.shipmentSoft }]}><Ionicons name="location-outline" size={26} color={colors.shipmentText} /></View>
         <View style={styles.locationText}><Text style={[styles.note, { color: colors.textSecondary }]}>{selected?.id === ordered[0]?.id ? "Last reported location" : "Selected observation"}</Text><Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{selected ? location : "Your journey will appear here"}</Text></View>
         {canMap && <PressableScale accessibilityRole="button" accessibilityLabel="Expand shipment map" onPress={() => setExpanded(true)} style={[styles.expandButton, { borderColor: colors.border }]}><Ionicons name="expand-outline" size={22} color={colors.textPrimary} /></PressableScale>}
       </View>
@@ -189,8 +205,8 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
       {selected?.id !== ordered[0]?.id && ordered[0] && <PressableScale accessibilityRole="button" onPress={() => selectEvent(ordered[0].id)} style={styles.textButton}><Text style={[styles.link, { color: colors.accentText }]}>Show newest report</Text></PressableScale>}
       {ordered.length ? ordered.map((event) => {
         const active = selected?.id === event.id;
-        return <PressableScale key={event.id} accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => selectEvent(event.id)} style={[styles.scan, { borderColor: active ? colors.accentSoftBorder : colors.border, backgroundColor: active ? colors.accentSoft : colors.surface }]}>
-          <View style={[styles.scanDot, { backgroundColor: active ? colors.accent : colors.textMuted }]} /><View style={styles.scanText}><Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{shipmentEventLabel(event.eventType)}</Text><Text style={[styles.note, { color: colors.textSecondary }]}>{event.location || "Location not provided"}</Text><Text style={[styles.caption, { color: colors.textSecondary }]}>{formatDateTime(event.occurredAt) || "Time not provided"}</Text></View>
+        return <PressableScale key={event.id} accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => selectEvent(event.id)} style={[styles.scan, { borderColor: active ? colors.shipmentText : colors.border, backgroundColor: active ? colors.shipmentSoft : colors.surface }]}>
+          <View style={[styles.scanDot, { backgroundColor: active ? colors.shipmentText : colors.textMuted }]} /><View style={styles.scanText}><Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{shipmentEventLabel(event.eventType)}</Text><Text style={[styles.note, { color: colors.textSecondary }]}>{event.location || "Location not provided"}</Text><Text style={[styles.caption, { color: colors.textSecondary }]}>{formatDateTime(event.occurredAt) || "Time not provided"}</Text></View>
         </PressableScale>;
       }) : <Text style={[styles.note, { color: colors.textSecondary }]}>No shipment observations recorded yet.</Text>}
     </View>
@@ -210,7 +226,14 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: spacing.lg }, emptyIdentity: { gap: spacing.xs }, unmapped: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm }, heading: { gap: spacing.sm },
+  panel: { gap: spacing.lg },
+  emptyState: { alignItems: "center", paddingHorizontal: spacing.md, paddingTop: spacing.xxxl, paddingBottom: spacing.lg, gap: spacing.xxl },
+  emptyIcon: { width: 86, height: 86, borderRadius: 43, alignItems: "center", justifyContent: "center" },
+  directionArrow: { transform: [{ rotate: "45deg" }] },
+  emptyCopy: { alignSelf: "stretch", gap: spacing.sm }, emptyTitle: { ...typography.sectionTitle, fontSize: 20, lineHeight: 27 }, emptyDetail: { ...typography.secondary, fontSize: 15, lineHeight: 21 },
+  emptyNotice: { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderWidth: 1, borderRadius: 16 },
+  noticeIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" }, noticeText: { flex: 1, gap: spacing.xs }, finePrint: { ...typography.finePrint },
+  emptyIdentity: { alignSelf: "stretch", padding: spacing.lg, borderWidth: 1, borderRadius: 18, gap: spacing.xs }, unmapped: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm }, heading: { gap: spacing.sm },
   eyebrow: { flexDirection: "row", gap: spacing.sm, alignItems: "center" },
   eyebrowText: { ...typography.caption, letterSpacing: 1.3, fontWeight: "700" },
   title: { ...typography.sectionTitle, fontSize: 23, lineHeight: 30 },
@@ -218,7 +241,7 @@ const styles = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   bodyStrong: { ...typography.bodyStrong }, note: { ...typography.secondary }, caption: { ...typography.caption },
   notice: { ...typography.secondary, padding: spacing.md, borderRadius: radii.md },
-  mapCard: { borderWidth: 1, borderRadius: radii.lg, overflow: "hidden" },
+  mapCard: { borderWidth: 1, borderRadius: 18, overflow: "hidden" },
   mapHeading: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
   locationIcon: { width: 48, height: 48, borderRadius: radii.md, alignItems: "center", justifyContent: "center" },
   locationText: { flex: 1, gap: spacing.xs },

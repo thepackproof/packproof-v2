@@ -1,4 +1,4 @@
-import { generateKeyPairSync, sign, verify } from "node:crypto";
+import { createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { canonicalize } from "../src/canonical.js";
@@ -126,6 +126,60 @@ describe("seller shipping authorization", () => {
     }
     expect((await h.db.query("SELECT * FROM attestations")).rows).toHaveLength(0);
     expect((await h.db.query("SELECT consumed_at FROM attestation_challenges")).rows[0].consumed_at).toBeNull();
+  });
+
+  it("verifies the iOS P-256 wire format, preserves platform identity, and retries without claiming hardware verification", async () => {
+    const capture = await recording();
+    // Security.framework exports a 65-byte uncompressed X9.63 point. iOS wraps
+    // it in the P-256 SPKI algorithm identifier before sending it to this API.
+    const jwk = keys.publicKey.export({ format: "jwk" });
+    const point = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x!, "base64url"), Buffer.from(jwk.y!, "base64url")]);
+    const iosPublicKey = Buffer.concat([Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"), point]).toString("base64");
+    expect(iosPublicKey).toBe(publicKey);
+    const input = { ...capture.input, publicKey: iosPublicKey, method: "IOS_BIOMETRIC" };
+    const response = await request(h.app).post(`/proofs/${proofId}/attestation-challenges`).set(auth(seller)).send(input);
+    expect(response.status).toBe(201);
+    const ios = response.body;
+    expect(ios.challengeId).not.toBe(capture.challenge.challengeId);
+    expect(JSON.parse(ios.payload).method).toBe("IOS_BIOMETRIC");
+    // Choosing another native method cannot recover a challenge for this one.
+    expect(await createAttestationChallenge(h.db, clock, seller, proofId, capture.input)).toEqual(capture.challenge);
+    expect(await createAttestationChallenge(h.db, clock, seller, proofId, input)).toEqual(ios);
+    const evidence = await upload(capture);
+    const authorization = { challengeId: ios.challengeId, signature: signed(ios.payload) };
+    const result = await commitAttestation(h.db, clock, seller, proofId, submission(evidence.evidenceId, authorization));
+    expect(result.attestation.authorization).toMatchObject({
+      method: "IOS_BIOMETRIC", signatureVerification: "SERVER_VERIFIED",
+      biometricMethodProvenance: "CLIENT_ASSERTED_NOT_INDEPENDENTLY_VERIFIED", publicKey: iosPublicKey,
+    });
+    const finalized = await finalizeProof(h.db, clock, seller, proofId);
+    const frozen = (finalized.manifest.manifest as any).attestations[0].authorization;
+    expect(frozen).toEqual(result.attestation.authorization);
+    expect(verify("sha256", Buffer.from(frozen.payload), createPublicKey({ key: Buffer.from(iosPublicKey, "base64"), format: "der", type: "spki" }), Buffer.from(frozen.signature, "base64"))).toBe(true);
+    now = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    expect((await commitAttestation(h.db, clock, seller, proofId, submission(evidence.evidenceId, authorization))).attestation).toEqual(result.attestation);
+  });
+
+  it("requires a fresh challenge when an iOS biometric key is replaced and rejects unsupported method claims", async () => {
+    const capture = await recording();
+    for (const method of [null, "", "IOS_DEVICE_AUTH", "FACE_ID_HARDWARE_VERIFIED", "DEVICE_CREDENTIAL"]) {
+      await expect(createAttestationChallenge(h.db, clock, seller, proofId, { ...capture.input, method })).rejects.toMatchObject({ code: "INVALID_ATTESTATION" });
+    }
+    const original = await createAttestationChallenge(h.db, clock, seller, proofId, { ...capture.input, method: "IOS_BIOMETRIC" });
+    const replacement = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const newPublicKey = replacement.publicKey.export({ format: "der", type: "spki" }).toString("base64");
+    const evidence = await upload(capture);
+    const replacementSignature = (payload: string) => sign("sha256", Buffer.from(payload), replacement.privateKey).toString("base64");
+    await expect(commitAttestation(h.db, clock, seller, proofId, submission(evidence.evidenceId, {
+      challengeId: original.challengeId, signature: replacementSignature(original.payload),
+    }))).rejects.toMatchObject({ code: "ATTESTATION_SIGNATURE_INVALID" });
+    const fresh = await createAttestationChallenge(h.db, clock, seller, proofId, { ...capture.input, publicKey: newPublicKey, method: "IOS_BIOMETRIC" });
+    expect(fresh.challengeId).not.toBe(original.challengeId);
+    const result = await commitAttestation(h.db, clock, seller, proofId, submission(evidence.evidenceId, {
+      challengeId: fresh.challengeId, signature: replacementSignature(fresh.payload),
+    }));
+    expect(result.attestation.authorization).toMatchObject({ method: "IOS_BIOMETRIC", publicKey: newPublicKey });
+    expect((await h.db.query("SELECT consumed_at FROM attestation_challenges WHERE id=$1", [original.challengeId])).rows[0].consumed_at).toBeNull();
   });
 
   it("rejects unrelated actors, Proofs, evidence, and capture sessions even when video bytes are identical", async () => {

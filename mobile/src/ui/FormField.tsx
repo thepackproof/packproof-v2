@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from "react-native";
 import { radii, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -16,10 +17,13 @@ export function FormField(props: {
 }) {
   const { colors } = useTheme();
   const locked = props.editable === false;
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.wrap}>
       <Text style={[styles.label, { color: colors.textPrimary }]}>{props.label}</Text>
       <TextInput
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
@@ -36,7 +40,7 @@ export function FormField(props: {
         style={[
           styles.input,
           {
-            borderColor: colors.border,
+            borderColor: focused ? colors.accentText : colors.controlBorder,
             backgroundColor: locked ? colors.disabledBackground : colors.inputBackground,
             color: locked ? colors.disabledText : colors.textPrimary,
           },

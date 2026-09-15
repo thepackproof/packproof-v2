@@ -72,7 +72,7 @@ describe("Etsy canonical automatic fulfillment intake", () => {
     h = await createHarness(clock, { integrations, etsy: { enabled: true, clientId: "synthetic-etsy-key", appCredentialReference: "memory:etsy-app", redirectUri: "https://thepackproof.com/api/oauth/etsy/callback", client } });
     await h.credentialStore.put({ adapterKey: "etsy", credentialReference: "memory:etsy-app", material: { sharedSecret: "synthetic-etsy-secret" } });
     const user = await login(h.app, "etsy-http-seller"), stranger = await login(h.app, "etsy-http-stranger");
-    const start = await request(h.app).post("/me/connected-accounts/etsy/connect").set(auth(user)).send({});
+    const start = await request(h.app).post("/me/connected-accounts/etsy/connect").set(auth(user)).send({surface:'ios'});
     expect(start.status).toBe(201);
     const url = new URL(start.body.authorizationUrl);
     expect(url.origin).toBe("https://www.etsy.com");
@@ -81,6 +81,7 @@ describe("Etsy canonical automatic fulfillment intake", () => {
     const callback = await request(h.app).get("/oauth/etsy/callback").query({ code: "synthetic-code", state: url.searchParams.get("state") });
     expect(callback.status).toBe(302);
     expect(callback.headers.location).toContain("connected=etsy");
+    expect(callback.headers.location).toMatch(/^packproof-v2:\/\/connections\/etsy\?/);
     const accounts = await request(h.app).get("/me/connected-accounts").set(auth(user));
     const connectionId = accounts.body.accounts[0].id;
     expect(accounts.body.accounts[0]).toMatchObject({ provider: "etsy", externalAccountId: "501", status: "CONNECTED" });
@@ -115,8 +116,10 @@ describe("Etsy canonical automatic fulfillment intake", () => {
     expect((await x.h.db.query("SELECT id FROM evidence")).rows).toHaveLength(0);
     expect((await listFulfillmentQueue(x.h.db, x.user))[0]).toMatchObject({ providerDisplay: "Etsy", externalOrderId: "9001", workflowState: "READY_TO_PACK", evidenceCount: 0 });
     const state = (await x.h.db.query<{ next_run_at: Date }>("SELECT next_run_at FROM commerce_connection_sync_states")).rows[0];
-    expect(new Date(state.next_run_at).getTime() - instant).toBe(300_000);
-    instant += 300_000;
+    const pollDelay = new Date(state.next_run_at).getTime() - instant;
+    expect(pollDelay).toBeGreaterThanOrEqual(300_000);
+    expect(pollDelay).toBeLessThanOrEqual(330_000);
+    instant = new Date(state.next_run_at).getTime();
     await dispatchCommerceSyncs(x.h.db, clock, x.deps);
     expect(x.listReceipts.mock.calls).toHaveLength(3);
     expect(x.listReceipts.mock.calls[2][0].wasPaid).toBeUndefined();
@@ -259,7 +262,8 @@ describe("Etsy canonical automatic fulfillment intake", () => {
     });
     await setCommerceAutomation(x.h.db, clock, x.user, x.connectionId, true, x.integrations);
     paused = true;
-    expect(await dispatchCommerceSyncs(x.h.db, clock, x.deps)).toEqual({ completed: 0, failed: 1 });
+    // A seller pause fences the importer but is not a provider outage.
+    expect(await dispatchCommerceSyncs(x.h.db, clock, x.deps)).toEqual({ completed: 0, failed: 0 });
     expect((await x.h.db.query("SELECT id FROM proofs")).rows).toHaveLength(0);
     x.listReceipts.mockImplementation(async input => page([receipt("9001", { seller_user_id: "999" })], input));
     await expect(executeCommerceFulfillmentSync(x.h.db, clock, x.user, x.connectionId, x.deps)).rejects.toMatchObject({ code: "INTEGRATION_TRUST_BOUNDARY" });

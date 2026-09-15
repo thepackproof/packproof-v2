@@ -1,3 +1,5 @@
+import { ProofNotificationMute } from "../notifications/NotificationCenter";
+import { SelectedOrderHandoff } from "../intake/SelectedOrderHandoff";
 import { localProofWork, presentationForProof } from "../copy/proof-list";
 import { useState, type ComponentProps } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
@@ -320,8 +322,6 @@ export function ProofDetailScreen() {
             renderPrimaryButton()
           )}
         </View>
-      ) : !grading && isCompletedAction(localAction) && app.role === "SELLER" ? (
-        <Button label="Back to Proofs" variant="tertiary" onPress={() => app.go("home")} />
       ) : !grading && isCompletedAction(localAction) && app.role === "BUYER" ? (
         <Button label="Document receipt or return" onPress={() => app.openReceipt(proof.proofId)} />
       ) : null}
@@ -336,7 +336,12 @@ export function ProofDetailScreen() {
       />
 
       <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
+        <ProofNotificationMute key={proof.proofId}/>
+        {menuOpen && app.role === "SELLER" && proof.status === "READY_FOR_EVIDENCE" && proof.workflowType === "COMMERCE_SALE" && proof.participationPolicy === "COUNTERPARTY_OPTIONAL" && !captureBelongs ? <SelectedOrderHandoff key={proof.proofId} proofId={proof.proofId} transactionId={proof.transaction.transactionId} onManageDevices={() => { setMenuOpen(false); app.go("account", { accountSection: "channels" }); }} /> : null}
         <MoreAction label="Evidence and claim tools" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
+        <MoreAction label="Responses and corrections" variant="secondary" onPress={() => { setMenuOpen(false); app.go("supporting", { supportingSection: "responses" }); }} />
+        <MoreAction label="Retention and preservation" variant="secondary" onPress={() => { setMenuOpen(false); app.go("supporting", { supportingSection: "retention" }); }} />
+        {app.role === "SELLER" ? <MoreAction label="Private media copies" variant="secondary" onPress={() => { setMenuOpen(false); app.go("supporting", { supportingSection: "privacy" }); }} /> : null}
         {!grading && proof.status === "FINALIZED" ? <MoreAction label="Receipt and returns" variant="secondary" onPress={() => { setMenuOpen(false); app.openReceipt(proof.proofId); }} /> : null}
         {app.role === "SELLER" && !buyer && proof.status !== "FINALIZED" ? (
           <MoreAction

@@ -137,9 +137,10 @@ describe("mobile invitation discovery", () => {
     transaction: { transactionId: "txn-card", itemTitle: "Rare Card", externalReference: "ORDER-CARD" },
     inviter: { userId: "seller", displayName: "Collin", username: "seller" } }];
   const rows = mergeProofInvitations([], invitations).map(row => ({ ...row, presentation: presentationForProof(row) }));
-  it("shows a pending invitation once in the default All Proofs list", () => {
-    expect(DEFAULT_PROOFS_LIBRARY.view).toBe("all");
+  it("shows a pending invitation once in the default Needs Attention list and in All Proofs", () => {
+    expect(DEFAULT_PROOFS_LIBRARY.view).toBe("attention");
     expect(selectProofRows(rows, DEFAULT_PROOFS_LIBRARY)).toEqual(rows);
+    expect(selectProofRows(rows, { ...DEFAULT_PROOFS_LIBRARY, view: "all" })).toEqual(rows);
     expect(rows[0].presentation).toMatchObject({ needsAttention: true, completed: false, nextAction: { type: "ACCEPT_INVITATION" }, share: { available: false } });
   });
   it("matches the item and order reference while respecting explicit filters", () => {

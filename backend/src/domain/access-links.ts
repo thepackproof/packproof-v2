@@ -191,6 +191,11 @@ export async function resolveAccessToken(
     if (row.expires_at && new Date(row.expires_at).getTime() <= now.getTime()) {
       throw new DomainError("ACCESS_LINK_EXPIRED", "This viewing link has expired", 404);
     }
+    const claim=(await tx.query<{active:boolean}>(`SELECT (a.revoked_at IS NULL AND k.revoked_at IS NULL AND parent.revoked_at IS NULL AND parent.expires_at>$2) AS active
+      FROM claims_viewer_sessions c JOIN claims_authorizations a ON a.id=c.authorization_id
+      JOIN api_keys k ON k.id=c.key_id JOIN proof_access_links parent ON parent.id=a.access_link_id
+      WHERE c.access_link_id=$1`,[row.id,now.toISOString()])).rows[0];
+    if(claim && !claim.active)throw new DomainError('ACCESS_LINK_REVOKED','This claims viewing link is no longer available',404);
     const firstView = !row.last_accessed_at;
     await tx.query(
       `UPDATE proof_access_links

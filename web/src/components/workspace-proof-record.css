@@ -116,3 +116,34 @@
 .timeline-event-source p { margin: 4px 0; }
 .full-audit-history time { display: block; }
 .full-audit-history pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+
+.upload-recovery-card { padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 12px; }
+.upload-recovery-card h3, .upload-recovery-card p { margin: 0; }
+.upload-recovery-card .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+
+/* Modern evidence record: cool paper, editorial identity, independent shipment facts. */
+.record-seal{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;max-width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.875rem;font-weight:650;background:var(--surface)}
+.record-seal.is-sealed{color:#14805E;background:#E7F6EF;border-color:#B8D7C9}
+.record-shipment{display:flex;align-items:center;gap:7px;color:#0F767D;font-size:.875rem}
+.record-thumbnail{position:relative;display:flex;align-items:center;justify-content:center;flex:0 0 100px;width:100px;height:116px;border-radius:10px;overflow:hidden;background:#E2E8F0;color:#526174}
+.record-thumbnail img{width:100%;height:100%;object-fit:cover}
+.record-thumbnail-play{position:absolute;left:8px;bottom:8px;display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#23262D;color:#fff;font-size:10px}
+.proof-list .proof-row{border-left:3px solid #1769D2;border-radius:14px;padding:20px;gap:20px;align-items:center;transition:transform 180ms ease,box-shadow 180ms ease,border-color 180ms ease}
+.proof-list .proof-row:hover{transform:translateY(-2px);box-shadow:0 7px 20px #23262D12;border-left-color:#14805E}
+.proof-list .proof-card-title,.workspace-proof-record .record-top h2{font-family:'Inter',system-ui,sans-serif;font-weight:700;letter-spacing:-.025em}
+.proof-list .proof-card-title{font-size:1.25rem;line-height:1.4}
+.proof-card-copy{display:flex;flex-direction:column;gap:8px;min-width:0}
+.proof-row-reference{font-size:.8125rem;letter-spacing:.065em;text-transform:uppercase}
+.proof-row-action{margin-left:auto}
+.record-top{gap:16px}.record-top h2{margin-bottom:8px}
+.workspace-proof-record .record-source-note{font-size:.875rem}
+.record-tracking-form{display:grid;gap:12px;padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.record-tracking-form label{display:grid;gap:6px;font-size:.875rem}
+.record-tracking-form input,.record-tracking-form select{width:100%;min-height:44px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text)}
+.record-tracking-steps{display:flex;gap:10px;flex-wrap:wrap;font-size:.8125rem;color:var(--muted)}
+.record-tracking-steps .done{color:#14805E;font-weight:700}
+.record-declaration{border-left:3px solid #7C5CE7}.record-declaration .status-badge{background:#F0EBFF;color:#6341C6}
+@media(max-width:560px){.proof-list .proof-row{padding:16px;gap:12px;flex-wrap:wrap}.record-thumbnail{flex-basis:74px;width:74px;height:94px}.proof-card-copy{flex:1}.proof-row-action{display:none}.record-seal{font-size:.8125rem}.record-shipment{font-size:.8125rem}.record-top{flex-direction:column}}
+@media(prefers-reduced-motion:reduce){.proof-list .proof-row{transition:none}.proof-list .proof-row:hover{transform:none}}
+
+.notification-setting{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;font-size:1rem}.notification-setting input{width:22px;height:22px;accent-color:#1769D2}.notification-history{list-style:none;padding:0;display:grid;gap:12px}.notification-history li{display:grid;gap:5px;border-left:2px solid #1769D2;padding-left:12px}.notification-history time{font-size:.8125rem;color:var(--muted)}

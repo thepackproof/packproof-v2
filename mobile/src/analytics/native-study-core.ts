@@ -1,18 +1,19 @@
 import type {PackProofV2Client} from '../v2-api';
 import {createConsentedTimingBridge,type TimingCheckpoint,type TimingJournal,type TimingInteraction,type TimingStart} from './timing-bridge';
+export type NativeStudyDeviceClass='s24_ultra'|'a16_5g'|'other_android'|'ios';
 export type NativeStudyStatus={enabled?:boolean;datasetRef?:string;granted:boolean;statementVersion?:string;statement?:string};
 export interface NativeStudyTimer{localRef:string;event:(interaction:TimingInteraction)=>void;suspend:()=>void;phase:(value:Exclude<TimingCheckpoint['phase'],'ended'>)=>void;end:(value:'succeeded'|'failed'|'cancelled',error?:TimingCheckpoint['errorCode'])=>void;sampleContext:()=>void;problem:(error:TimingCheckpoint['errorCode'])=>void;}
 export interface NativeStudyStorage{getItem(key:string):Promise<string|null>;setItem(key:string,value:string):Promise<void>;removeItem(key:string):Promise<void>;getAllKeys():Promise<readonly string[]>;}
 export interface NativeStudyAppState{currentState:string|null;addEventListener(type:'change',listener:(state:string)=>void):{remove():void};}
-export function createNativeStudyRuntime({storage:AsyncStorage,appState:AppState,newNonce:newStudyOperationNonce,sourceBuildSha}:{storage:NativeStudyStorage;appState:NativeStudyAppState;newNonce:()=>string;sourceBuildSha?:()=>string|undefined}){
+export function createNativeStudyRuntime({storage:AsyncStorage,appState:AppState,newNonce:newStudyOperationNonce,sourceBuildSha,defaultDeviceClass='other_android'}:{storage:NativeStudyStorage;appState:NativeStudyAppState;newNonce:()=>string;sourceBuildSha?:()=>string|undefined;defaultDeviceClass?:NativeStudyDeviceClass}){
 type Account={userId:string;apiBaseUrl:string};
 let accountReader:()=>Account|null=()=>null,offline=false;
 function registerStudyAccountReader(read:()=>Account|null){accountReader=read;return()=>{if(accountReader===read)accountReader=()=>null;};}
 const scope=(api:PackProofV2Client,userId:string)=>`packproof-study:${api.apiBaseUrl}:${userId}:`;
 const current=(api:PackProofV2Client,userId:string)=>{const account=accountReader();return account?.userId===userId&&account.apiBaseUrl.replace(/\/+$/,'')===api.apiBaseUrl;};
-async function rememberNativeStudyConsent(api:PackProofV2Client,userId:string,status:NativeStudyStatus,deviceClass?:'s24_ultra'|'a16_5g'|'other_android'){
+async function rememberNativeStudyConsent(api:PackProofV2Client,userId:string,status:NativeStudyStatus,deviceClass?:NativeStudyDeviceClass){
   if(!current(api,userId))return;const key=scope(api,userId)+'consent';
-  if(status.enabled!==false&&status.granted&&status.datasetRef){let previous:Record<string,unknown>={};try{previous=JSON.parse(await AsyncStorage.getItem(key)??'{}');}catch{}const selected=deviceClass??previous.deviceClass;await AsyncStorage.setItem(key,JSON.stringify({datasetRef:status.datasetRef,statementVersion:status.statementVersion,granted:true,deviceClass:['s24_ultra','a16_5g','other_android'].includes(String(selected))?selected:'other_android'}));}
+  if(status.enabled!==false&&status.granted&&status.datasetRef){let previous:Record<string,unknown>={};try{previous=JSON.parse(await AsyncStorage.getItem(key)??'{}');}catch{}const selected=deviceClass??previous.deviceClass;await AsyncStorage.setItem(key,JSON.stringify({datasetRef:status.datasetRef,statementVersion:status.statementVersion,granted:true,deviceClass:['s24_ultra','a16_5g','other_android','ios'].includes(String(selected))?selected:defaultDeviceClass}));}
   else await AsyncStorage.removeItem(key);
 }
 const bridges=new Map<string,ReturnType<typeof createConsentedTimingBridge>>();
@@ -38,7 +39,7 @@ function timerFor(api:PackProofV2Client,userId:string,localRef:string,journal:Ti
 }
 async function startNativeStudy(api:PackProofV2Client,userId:string,taskKind:TimingStart['taskKind']='packproof'):Promise<NativeStudyTimer|null>{
   try{
-    if(!current(api,userId))return null;const cached=await AsyncStorage.getItem(scope(api,userId)+'consent');if(!cached)return null;const savedConsent=JSON.parse(cached);const declared=savedConsent.deviceClass;const deviceClass: 's24_ultra'|'a16_5g'|'other_android'=declared==='s24_ultra'||declared==='a16_5g'?declared:'other_android';
+    if(!current(api,userId))return null;const cached=await AsyncStorage.getItem(scope(api,userId)+'consent');if(!cached)return null;const savedConsent=JSON.parse(cached);const declared=savedConsent.deviceClass;const deviceClass: NativeStudyDeviceClass=['s24_ultra','a16_5g','other_android','ios'].includes(declared)?declared:defaultDeviceClass;
     let status:NativeStudyStatus={...savedConsent,enabled:true};
     if(!offline)try{status=await api.studyRequest<NativeStudyStatus>('/consent');}catch{/* Keep the started-failure denominator under the prior explicit grant. */}
     if(!current(api,userId)||status.enabled===false||!status.granted||!status.datasetRef||status.statementVersion!=='capture-timing-study-v1')return null;

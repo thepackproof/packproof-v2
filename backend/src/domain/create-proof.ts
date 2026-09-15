@@ -1,4 +1,5 @@
 import type { Clock } from "../clock.js";
+import { admitIntakeProofContract } from "../intake/context.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
 import { appendAudit } from "./audit.js";
@@ -153,6 +154,8 @@ export async function createOrGetProof(
         count: options.assetCount ?? 1,
       });
     }
+    if (workflowType === "COMMERCE_SALE" && participationPolicy === "COUNTERPARTY_OPTIONAL" && (await tx.query('SELECT owner_user_id FROM intake_contract_cohorts WHERE owner_user_id=$1 AND enabled=true',[actorUserId])).rows[0])
+      await admitIntakeProofContract(tx, clock, actorUserId, proofId);
     return getProofView(tx, proofId, actorUserId);
   });
 }

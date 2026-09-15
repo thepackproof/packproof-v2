@@ -7,12 +7,15 @@ export async function withRequestTimeout<T>(
 ): Promise<T> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout>;
+  let interrupted: (() => void) | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
+    interrupted = () => { reject(new ApiError("NETWORK_OFFLINE", "Waiting for connection. Your saved recording will retry when you reconnect.", 0)); controller.abort(); };
+    if (typeof window !== "undefined") window.addEventListener("offline", interrupted);
     timer = setTimeout(() => {
       reject(new ApiError("REQUEST_TIMEOUT", "The connection took too long. Check your connection and try again.", 408));
       controller.abort();
     }, timeoutMs);
   });
   try { return await Promise.race([operation(controller.signal), timeout]); }
-  finally { clearTimeout(timer!); }
+  finally { clearTimeout(timer!); if (interrupted && typeof window !== "undefined") window.removeEventListener("offline", interrupted); }
 }

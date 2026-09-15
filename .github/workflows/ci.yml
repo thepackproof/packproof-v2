@@ -121,12 +121,15 @@ jobs:
           ffprobe -version
       - run: npm run typecheck
       - run: npm run test:build-security
+      - run: npm run test:ios
       - run: npm run test:proof-record
       - run: npm run test:study-timing
+      - run: npm run test:intake
       - run: npm run test:redesign
       - name: Verify Proof navigation and share-link cache
         run: node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/proof-navigation.test.ts tests/share-cache.test.ts
       - run: npm run test:recovery
+      - run: npm run test:identifiers
       - run: npm run test:api
 
   native-attestation:
@@ -151,6 +154,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci
       - name: Install Android compile SDK
@@ -162,9 +168,9 @@ jobs:
           git diff --stat
           git diff --exit-code --quiet
           git diff --cached --exit-code --quiet
-      - name: Compile native attestation and unified camera against Android and Expo
+      - name: Compile native attestation, intake and unified camera against Android and Expo
         working-directory: mobile/android
-        run: ./gradlew :packproof-attestation:compileReleaseKotlin :packproof-unified-camera:compileReleaseKotlin --no-daemon --console=plain
+        run: ./gradlew :packproof-attestation:compileReleaseKotlin :packproof-order-share:compileReleaseKotlin :packproof-unified-camera:compileReleaseKotlin --no-daemon --console=plain
 
       - name: Build explicitly debug-signed Android APK
         working-directory: mobile/android
@@ -264,8 +270,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Verify browser companion capture guards
+        run: node --test browser-companion/tests/*.test.cjs
       - name: Verify BOM refusal and artifact identity behavior
         run: node --test scripts/release-bom.test.mjs scripts/publication-policy-gate.test.mjs
+      - name: Verify capture host handoff and signed receipts
+        run: node --test packages/capture-sdk/server.test.mjs
       - name: Verify portable signatures and received supplement snapshots
         run: |
           python3 --version

@@ -1,4 +1,6 @@
 import { withRequestTimeout } from "./timeout";
+import { uploadBlob } from "./upload-transport";
+import type { IdentifierObservation, IdentifierPolicy, IdentifierReview } from '../../../backend/src/identifiers/types';
 import type { CaptureCapabilities } from "../capture-preflight";
 import type { RecoveryView } from "../components/PreservationStatus";
 import {
@@ -58,6 +60,9 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  async intakeRequest<T>(path: string, method = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
+    return this.request(`/me/intake${path}`, {method, body, headers});
+  }
   constructor(
     private readonly options: {
       baseUrl: string;
@@ -96,7 +101,24 @@ export class PackProofApi {
   async bindCaptureShipping(proofId:string,sessionId:string,scan:{rawValue:string;format:string;detectedAtMs:number;idempotencyKey:string;confirmed?:boolean}):Promise<{status:string;trackingNumber?:string}> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/shipping-label`,{method:"POST",body:scan});
   }
-  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string}> {
+  async captureEngineRequest<T>(path:string,method="GET",body?:unknown):Promise<T> {
+    if(!/^\/(capture-intents|capture-sessions)(\/|$)/.test(path)) throw new Error('Invalid capture route');
+    return this.request(path,{method,body});
+  }
+
+  async getCaptureIdentifiers(proofId:string,sessionId:string):Promise<IdentifierReview> {
+    return this.featureRequest(proofId,`capture-sessions/${encodeURIComponent(sessionId)}/identifier-observations`);
+  }
+  async appendCaptureIdentifiers(proofId:string,sessionId:string,events:IdentifierObservation[]):Promise<IdentifierReview> {
+    return this.featureRequest(proofId,`capture-sessions/${encodeURIComponent(sessionId)}/identifier-observations`,'POST',{events});
+  }
+  async decideCaptureIdentifier(proofId:string,sessionId:string,input:{clientEventId:string;observationId:string;revision:number;decision:'NOT_THIS_SHIPMENT'|'ACKNOWLEDGE_MISMATCH';reason:string}):Promise<IdentifierReview> {
+    return this.featureRequest(proofId,`capture-sessions/${encodeURIComponent(sessionId)}/identifier-decisions`,'POST',input);
+  }
+  async checkpointCaptureIdentifiers(proofId:string,sessionId:string,input:{clientEventId:string;revision:number;lastSequence:number;coverage:'COMPLETE'|'PARTIAL'|'UNAVAILABLE';omittedEvents:number}):Promise<IdentifierReview> {
+    return this.featureRequest(proofId,`capture-sessions/${encodeURIComponent(sessionId)}/identifier-checkpoint`,'POST',input);
+  }
+  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string;identifierPolicy?:IdentifierPolicy}> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, { method: "POST", body: {client:"WEB_CAMERA",idempotencyKey,stageId} });
   }
   async completeCaptureSession(proofId: string, sessionId: string, body: {sha256:string;byteSize:number;contentType:string;interrupted?:boolean;recordedDurationMs?:number}) {
@@ -266,15 +288,6 @@ export class PackProofApi {
     });
   }
 
-  async connectDemoStorefront(
-    externalAccountReference?: string,
-  ): Promise<{ connection: CommerceConnectionView }> {
-    return this.request("/dev/integrations/demo-storefront/connect", {
-      method: "POST",
-      body: externalAccountReference ? { externalAccountReference } : {},
-    });
-  }
-
   async listInvitations(): Promise<{ invitations: InvitationInboxView[] }> {
     return this.request("/invitations");
   }
@@ -319,7 +332,16 @@ export class PackProofApi {
   }
 
   async developerRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-    return this.request(`/me/tenants${path}`, { method, body });
+    await this.options.getToken();
+    const token = this.options.getIdentityToken?.();
+    return this.request(`/me/tenants${path}`, { method, body,
+      ...(token ? { auth: false, headers: { Authorization: `Bearer ${token}` } } : {}) });
+  }
+
+  async getDeveloperAccess(): Promise<{ allowed: boolean }> {
+    await this.options.getToken();
+    const token = this.options.getIdentityToken?.();
+    return this.request("/me/developer-access", token ? { auth: false, headers: { Authorization: `Bearer ${token}` } } : {});
   }
 
   async reviewProof(proofId: string): Promise<{
@@ -375,6 +397,9 @@ export class PackProofApi {
     });
   }
 
+  async notificationRequest<T>(path:string,method='GET',body?:unknown):Promise<T>{
+    return this.request(`/me/${path}`,{method,body});
+  }
   async syncShipment(transactionId: string): Promise<ShipmentSyncView> {
     return this.request(`/transactions/${encodeURIComponent(transactionId)}/shipment-sync`, {
       method: "POST",
@@ -525,6 +550,7 @@ export class PackProofApi {
       body: {
         contentType: input.contentType,
         captureSessionId: input.captureSessionId,
+        byteSize: input.byteSize,
         evidenceType: input.evidenceType ?? "SELLER_EVIDENCE",
       },
     });
@@ -553,18 +579,7 @@ export class PackProofApi {
   async uploadObject(target: UploadTarget, body: Blob, contentType: string): Promise<void> {
     const url = resolveUploadUrl(this.options.baseUrl, target.url);
     await withRequestTimeout(async (signal) => {
-    const response = await fetch(url, {
-      method: target.method,
-      signal,
-      headers: {
-        ...target.headers,
-        "Content-Type": contentType,
-      },
-      body,
-    });
-    if (!response.ok) {
-      throw await errorFromResponse(response);
-    }
+    await uploadBlob(url,target.method,{...target.headers,"Content-Type":contentType},body,signal);
     }, 600_000);
   }
 
@@ -572,6 +587,11 @@ export class PackProofApi {
     await this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/discard`, {
       method: "POST",
       body: { idempotencyKey },
+    });
+  }
+  async discardIncompleteEvidence(proofId: string, evidenceId: string): Promise<void> {
+    await this.request(`/proofs/${encodeURIComponent(proofId)}/evidence/discard`, {
+      method: "POST", body: { evidenceId },
     });
   }
   async uploadResumable(
@@ -590,16 +610,9 @@ export class PackProofApi {
         const token = await this.options.getToken();
         if (!token) throw new ApiError("UNAUTHENTICATED", "Sign in to resume the recording", 401);
         await withRequestTimeout(async (signal) => {
-        const response = await fetch(joinUrl(this.options.baseUrl, `${path}/${part}`), {
-          method: "PUT",
-          signal,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/octet-stream",
-          },
-          body: file.slice(offset, offset + state.partSize),
-        });
-        if (!response.ok) throw await errorFromResponse(response);
+        const chunk = file.slice(offset, offset + state.partSize);
+        await uploadBlob(joinUrl(this.options.baseUrl, `${path}/${part}`),"PUT",{Authorization:`Bearer ${token}`,"Content-Type":"application/octet-stream"},chunk,signal,
+          sent=>progress(Math.round((Math.min(offset+sent,file.size)/file.size)*95)));
         }, 600_000);
       }
       progress(Math.round((Math.min(offset + state.partSize, file.size) / file.size) * 95));
@@ -662,6 +675,7 @@ export class PackProofApi {
     } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {
+      "X-PackProof-Intake-Version": "1",
       Accept: "application/json",
       ...(init.headers ?? {}),
     };

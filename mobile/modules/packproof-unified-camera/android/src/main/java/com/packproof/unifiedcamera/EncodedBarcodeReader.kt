@@ -6,6 +6,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import android.util.Base64
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
@@ -20,18 +21,20 @@ import java.util.concurrent.TimeUnit
  * Therefore all offsets are explicitly approximate, never claimed to be exact PTS.
  */
 internal object EncodedBarcodeReader {
-  fun inspect(context: Context, sessionId: String, requestedOffsets: List<Double>): Map<String, Any> {
+  fun inspect(context: Context, sessionId: String, requestedOffsets: List<Double>, identifiersEnabled: Boolean = false): Map<String, Any> {
     require(sessionId.matches(Regex("cap_[A-Za-z0-9_-]{1,91}")))
     val root = File(context.filesDir, "packproof-captures").canonicalFile
     val original = File(root, "$sessionId/video.mp4").canonicalFile
     require(original.parentFile?.parentFile == root && original.isFile && original.length() in 1..250_000_000L)
     require(File(original.path + ".finalized.json").isFile)
     val retriever = MediaMetadataRetriever()
-    val scanner = BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(
+    val formats = mutableListOf(
       Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_CODE_93,
       Barcode.FORMAT_CODABAR, Barcode.FORMAT_ITF, Barcode.FORMAT_QR_CODE,
       Barcode.FORMAT_PDF417, Barcode.FORMAT_AZTEC, Barcode.FORMAT_DATA_MATRIX,
-    ).build())
+    )
+    if (identifiersEnabled) formats.addAll(listOf(Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E, Barcode.FORMAT_EAN_8, Barcode.FORMAT_EAN_13))
+    val scanner = BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(formats.first(), *formats.drop(1).toIntArray()).build())
     val observations = arrayListOf<Map<String, Any?>>()
     val frames = arrayListOf<Map<String, Any>>()
     val seen = hashSetOf<String>()
@@ -53,7 +56,7 @@ internal object EncodedBarcodeReader {
       val began = SystemClock.elapsedRealtime()
       for (offset in offsets.take(12)) {
         if (SystemClock.elapsedRealtime() - began > 6_000) break
-        val ratio = minOf(1.0, 1280.0 / maxOf(width, height))
+        val ratio = minOf(1.0, 1920.0 / maxOf(width, height))
         val frame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
           retriever.getScaledFrameAtTime(offset * 1000, MediaMetadataRetriever.OPTION_CLOSEST,
             (width * ratio).toInt().coerceAtLeast(1), (height * ratio).toInt().coerceAtLeast(1))
@@ -67,29 +70,33 @@ internal object EncodedBarcodeReader {
             task.addOnCompleteListener { frame.recycle() }
             continue
           }
-          val shipping = codes.filter { code ->
+          val decoded = codes.filter { code ->
             val raw = code.rawValue ?: ""
-            raw.matches(Regex("[A-Za-z0-9 \\t\\r\\n-]{10,64}")) && raw.any { it.isDigit() }
+            if (identifiersEnabled) raw.isNotEmpty() && raw.toByteArray(Charsets.UTF_8).size <= 4096
+            else raw.matches(Regex("(?:\\]C[01])?[\\u001d]?[A-Za-z0-9 \\t\\r\\n\\u001d-]{10,64}")) && raw.any { it.isDigit() }
           }
-          for (code in shipping) {
+          for (code in decoded) {
             val raw = code.rawValue ?: continue
-            if (!seen.add(raw.replace(Regex("[ \\t\\r\\n-]"), "").uppercase()) || observations.size >= 8) continue
+            val identity = if (identifiersEnabled) "${code.format}:$raw" else raw.replace(Regex("[ \\t\\r\\n-]"), "").uppercase()
+            if (!seen.add(identity) || observations.size >= (if (identifiersEnabled) 128 else 8)) continue
             observations.add(mapOf(
               "rawValue" to raw, "format" to format(code.format),
+              "rawBytes" to if (identifiersEnabled) code.rawBytes?.takeIf { it.size <= 4096 }?.let { Base64.encodeToString(it, Base64.NO_WRAP) } else null,
+              "decoderEncoding" to null, "symbologyIdentifier" to null, "timestampUncertaintyMs" to null,
               "detectedAtMs" to offset.toDouble(), "detectedAtUnixMs" to 0.0, "latencyMs" to 0.0,
               "source" to "ENCODED_VIDEO_FRAME", "coordinateSpace" to "DECODED_VIDEO_PIXELS",
               "decoderVersion" to "mlkit-barcode-17.2.0", "frameWidth" to frame.width, "frameHeight" to frame.height,
               "bounds" to code.boundingBox?.let { mapOf("left" to it.left, "top" to it.top, "right" to it.right, "bottom" to it.bottom) },
             ))
           }
-          if (frames.size < 3 && (frames.isEmpty() || shipping.isNotEmpty())) {
+          if (frames.size < 3 && (frames.isEmpty() || decoded.isNotEmpty())) {
             val file = File(original.parentFile, "review-frame-${frames.size}.png")
             file.outputStream().use { check(frame.compress(Bitmap.CompressFormat.PNG, 100, it)) }
             val digest = MessageDigest.getInstance("SHA-256")
             file.inputStream().use { stream -> val buffer = ByteArray(65536); while (true) { val count = stream.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) } }
             frames.add(mapOf("uri" to Uri.fromFile(file).toString(), "sha256" to digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) },
               "requestedOffsetMs" to offset.toDouble(), "timestampPrecision" to "NEAR_REQUESTED_TIME",
-              "transform" to "Nearby original video frame; scaled to fit 1280 pixels; PNG; no overlays"))
+              "transform" to "Nearby original video frame; scaled to fit 1920 pixels; PNG; no overlays"))
           }
           frame.recycle()
         } catch (_: Exception) { frame.recycle() }
@@ -105,6 +112,9 @@ internal object EncodedBarcodeReader {
     Barcode.FORMAT_CODE_93 -> "code93"; Barcode.FORMAT_CODABAR -> "codabar"
     Barcode.FORMAT_ITF -> "itf"; Barcode.FORMAT_QR_CODE -> "qr"
     Barcode.FORMAT_PDF417 -> "pdf417"; Barcode.FORMAT_AZTEC -> "aztec"
-    Barcode.FORMAT_DATA_MATRIX -> "datamatrix"; else -> "unknown"
+    Barcode.FORMAT_DATA_MATRIX -> "datamatrix"
+    Barcode.FORMAT_UPC_A -> "upc_a"; Barcode.FORMAT_UPC_E -> "upc_e"
+    Barcode.FORMAT_EAN_8 -> "ean8"; Barcode.FORMAT_EAN_13 -> "ean13"
+    else -> "unknown"
   }
 }

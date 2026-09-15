@@ -1,0 +1,26 @@
+{
+  "app": {
+    "name": "PackProof Claims",
+    "short_description": "Find the preserved Proof from a ticket",
+    "long_description": "Locate a seller-approved PackProof and open its canonical secure viewer.",
+    "installation_instructions": "Provide a PackProof key with only claims:read and optional ticket custom-field IDs.",
+    "parameters": {
+      "claims_token": {
+        "label": "PackProof claims API key",
+        "helpText": "Use only claims:read. This secure value is inserted by the Zendesk proxy."
+      },
+      "proof_id_field": {
+        "label": "Proof ID custom-field ID"
+      },
+      "order_id_field": {
+        "label": "Order ID custom-field ID"
+      },
+      "tracking_field": {
+        "label": "Tracking number custom-field ID"
+      },
+      "reference_field": {
+        "label": "Ticket reference custom-field ID"
+      }
+    }
+  }
+}

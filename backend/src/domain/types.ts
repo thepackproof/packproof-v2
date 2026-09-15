@@ -109,7 +109,7 @@ export type AttestationStatement = "PACKED_DESCRIBED_ITEM" | "RECEIVED_PACKAGE";
 /** No biometric samples or templates: this is a signature and its public verification material. */
 export interface AttestationAuthorization {
   version: 1;
-  method: "ANDROID_BIOMETRIC_STRONG";
+  method: "ANDROID_BIOMETRIC_STRONG" | "IOS_BIOMETRIC";
   biometricMethodProvenance: "CLIENT_ASSERTED_NOT_INDEPENDENTLY_VERIFIED";
   signatureVerification: "SERVER_VERIFIED";
   algorithm: "ECDSA_SHA256";

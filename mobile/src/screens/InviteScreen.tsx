@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as Clipboard from "expo-clipboard";
+import { proofEmailDeliveryMessage, proofEmailTrackerLink } from "../copy/proof-email";
 import { Share, StyleSheet, Text, View } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { inviteParticipantHint, inviteParticipantTitle } from "../copy/custody";
@@ -21,23 +23,22 @@ export function InviteScreen() {
   const proof = app.proof;
   const [trackerEmail, setTrackerEmail] = useState("");
   const [preference, setPreference] = useState<NotificationPreference>("IMPORTANT");
-  const [emailResult, setEmailResult] = useState<string | null>(null);
+  const emailScope = `${app.client.apiBaseUrl}:${app.session?.userId}:${proof?.proofId}`;
+  const currentEmailScope = useRef(emailScope); currentEmailScope.current = emailScope;
+  const emailMounted = useRef(true);
+  const [emailResult, setEmailResult] = useState<{ scope: string; message: string; link: string | null } | null>(null);
+  useEffect(() => { emailMounted.current = true; setEmailResult(null); return () => { emailMounted.current = false; }; }, [emailScope]);
 
   const emailLiveProof = async () => {
     if (!proof || !app.session?.token || !trackerEmail.trim()) {
       return;
     }
+    const scope = emailScope, recipient = trackerEmail.trim(), userId = app.session.userId;
     await app.run(async () => {
-      const payload = await app.client.emailProof(proof.proofId, {
-        email: trackerEmail.trim(),
-        preference,
-        scope: "SUMMARY",
-      });
-      setEmailResult(
-        payload.emailDeliveryConfigured === false
-          ? `Tracker created for ${payload.subscription?.email ?? trackerEmail.trim()}. Email delivery is not configured on this environment yet.`
-          : `Live Proof emailed to ${payload.subscription?.email ?? trackerEmail.trim()}.`,
-      );
+      app.client.assertCaptureAccount(userId, app.client.apiBaseUrl);
+      const payload = await app.client.emailProof(proof.proofId, { email: recipient, preference, scope: "SUMMARY" });
+      app.client.assertCaptureAccount(userId, app.client.apiBaseUrl);
+      if (emailMounted.current && currentEmailScope.current === scope) setEmailResult({ scope, message: proofEmailDeliveryMessage(payload, recipient), link: proofEmailTrackerLink(payload.subscription?.viewUrl) });
     });
   };
 
@@ -89,6 +90,7 @@ export function InviteScreen() {
             setTrackerEmail(value);
             setEmailResult(null);
           }}
+          editable={!app.busy}
           keyboardType="email-address"
           autoCapitalize="none"
         />
@@ -116,7 +118,10 @@ export function InviteScreen() {
           disabled={app.busy || !proof || !trackerEmail.trim()}
           haptic="light"
         />
-        {emailResult ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{emailResult}</Text> : null}
+        {emailResult?.scope === emailScope ? <>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{emailResult.message}</Text>
+          {emailResult.link ? <Button label="Copy secure tracker link" variant="secondary" onPress={() => void Clipboard.setStringAsync(emailResult.link!)} /> : null}
+        </> : null}
       </View>
 
       <Button

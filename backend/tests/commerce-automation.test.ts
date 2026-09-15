@@ -2,12 +2,12 @@ import { finalizeProof } from "../src/domain/finalize.js";
 import { updateTransaction } from "../src/domain/transactions.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHarness, createUser, commitFulfillmentAndAttest, type TestHarness } from "./helpers.js";
-import { createIntegrationConnection } from "../src/domain/integration-connections.js";
-import { executeCommerceFulfillmentSync } from "../src/domain/commerce-fulfillment-sync.js";
+import { createIntegrationConnection, updateConnectionCredentials } from "../src/domain/integration-connections.js";
+import { executeCommerceFulfillmentSync, fetchAndImportCommerceOrder } from "../src/domain/commerce-fulfillment-sync.js";
 import { enqueueCommerceWebhook, setCommerceAutomation } from "../src/domain/commerce-automation.js";
 import { dispatchCommerceSyncs } from "../src/workers/commerce-worker.js";
 import { IntegrationAdapterRegistry } from "../src/integrations/registry.js";
-import { providerRateLimited } from "../src/domain/integration-errors.js";
+import { providerRateLimited, providerTemporarilyUnavailable } from "../src/domain/integration-errors.js";
 import type { CommerceFulfillmentAdapter } from "../src/integrations/commerce-fulfillment-adapter.js";
 import type { NormalizedFulfillmentOrder } from "../src/domain/normalized-fulfillment-order.js";
 import { createHttpEbayClient } from "../src/integrations/ebay/client.js";
@@ -29,7 +29,10 @@ describe("durable automatic commerce intake", () => {
         const list = vi.fn(async ({ cursor }: Parameters<CommerceFulfillmentAdapter["listFulfillmentOrders"]>[0]) => ({ orders: [order(cursor ? "two" : "one")], cursor: cursor ? null : "second" }));
         const { h, user, connection, deps } = await setup(list);
         expect(await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps)).toMatchObject({ complete: true, cursor: null, createdProofCount: 2, discoveredCount: 2 });
+        const before = (await h.db.query("SELECT id FROM audit_events")).rows.length;
+        now.value += 300001;
         await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps);
+        expect((await h.db.query("SELECT id FROM audit_events")).rows).toHaveLength(before);
         expect((await h.db.query("SELECT id FROM proofs")).rows).toHaveLength(2);
         expect((await h.db.query("SELECT provider_cursor FROM commerce_connection_sync_states")).rows[0].provider_cursor).toBeNull();
         expect(list.mock.calls.map(([i]) => i.cursor)).toEqual([null, "second", null, "second"]);
@@ -44,6 +47,77 @@ describe("durable automatic commerce intake", () => {
         fail = false;
         expect(await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps)).toMatchObject({ createdProofCount: 1, complete: true });
         expect(list.mock.calls.map(([i]) => i.cursor)).toEqual([null, "second", "second"]);
+    });
+    it("detects cursor cycles across distinct worker runs without reimporting the loop page", async () => {
+        const list = vi.fn(async ({cursor}: Parameters<CommerceFulfillmentAdapter["listFulfillmentOrders"]>[0]) => ({orders: [order(cursor ?? "first")], cursor: cursor === "one" ? "two" : "one"}));
+        const {h, user, connection, deps} = await setup(list);
+        await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps, {maxPages: 1});
+        await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps, {maxPages: 1});
+        await expect(executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps, {maxPages: 1})).rejects.toMatchObject({code: "PROVIDER_CURSOR_INVALID"});
+        expect((await h.db.query("SELECT run_status,provider_cursor FROM commerce_connection_sync_states")).rows[0]).toMatchObject({run_status:"FAILED",provider_cursor:"two"});
+        expect((await h.db.query("SELECT id FROM proofs")).rows).toHaveLength(2);
+    });
+    it("exhausts unavailable-provider retries and allows an explicit retry without losing the queue", async () => {
+        const list = vi.fn(async () => {throw providerTemporarilyUnavailable();});
+        const {h, user, connection, deps, integrations} = await setup(list);
+        await setCommerceAutomation(h.db, clock, user, connection.connectionId, true, integrations);
+        for (let attempt = 0; attempt < 8; attempt++) {
+            expect(await dispatchCommerceSyncs(h.db, clock, deps)).toEqual({completed:0,failed:1});
+            now.value += 1800000;
+        }
+        expect((await h.db.query("SELECT run_status,attempt_count FROM commerce_connection_sync_states")).rows[0]).toMatchObject({run_status:"FAILED",attempt_count:8});
+        expect(await dispatchCommerceSyncs(h.db, clock, deps)).toEqual({completed:0,failed:0});
+        expect(list).toHaveBeenCalledTimes(8);
+        await setCommerceAutomation(h.db, clock, user, connection.connectionId, true, integrations);
+        expect(await dispatchCommerceSyncs(h.db, clock, deps)).toEqual({completed:0,failed:1});
+    });
+    it("uses provider retry guidance without consuming outage attempts or polling early", async () => {
+        const {h, user, connection, deps, integrations} = await setup(async () => {throw Object.assign(providerRateLimited(),{retryAfterSeconds:3600});});
+        await setCommerceAutomation(h.db, clock, user, connection.connectionId, true, integrations);
+        await dispatchCommerceSyncs(h.db, clock, deps);
+        const state=(await h.db.query("SELECT next_run_at,attempt_count FROM commerce_connection_sync_states")).rows[0];
+        expect(new Date(String(state.next_run_at)).getTime()).toBe(now.value+3600000);
+        expect(state.attempt_count).toBe(0);
+        now.value += 300001;
+        expect(await dispatchCommerceSyncs(h.db, clock, deps)).toEqual({completed:0,failed:0});
+    });
+    it("converges exact authorized intake, repeated sync and reconnect while rejecting a foreign account", async () => {
+        const {h, user, connection, deps, integrations} = await setup(async input => ({orders:[order("same",input.connection.external_account_reference!)],cursor:null}));
+        const adapter=integrations.getCommerce("test-store");
+        Object.assign(adapter,{kind:"trusted",fetchFulfillmentOrder:async (input: any)=>order(input.externalOrderId,input.connection.external_account_reference)});
+        const exactDeps={...deps,credentials:{getCredentials:async()=>({adapterKey:"test-store",credentialReference:"reference:test",material:{accessToken:"fixture-only"}})}};
+        const first=await fetchAndImportCommerceOrder(h.db,clock,user,connection.connectionId,"same",exactDeps);
+        expect(first).toMatchObject({eligibility:"FULFILLMENT_ELIGIBLE",proofId:expect.any(String),transactionId:expect.any(String)});
+        const before=(await h.db.query("SELECT id FROM audit_events")).rows.length;
+        now.value+=300000;
+        expect(await executeCommerceFulfillmentSync(h.db,clock,user,connection.connectionId,exactDeps)).toMatchObject({createdProofCount:0,existingProofCount:1});
+        expect((await h.db.query("SELECT id FROM audit_events")).rows).toHaveLength(before);
+        await updateConnectionCredentials(h.db,clock,connection.connectionId,{credentialReference:"reference:new",status:"ACTIVE"});
+        expect(await fetchAndImportCommerceOrder(h.db,clock,user,connection.connectionId,"same",exactDeps)).toMatchObject({proofId:first.proofId,transactionId:first.transactionId});
+        const another=await createIntegrationConnection(h.db,clock,user,{adapterKey:"test-store",provider:"test-store",externalAccountReference:"store-two",credentialReference:"reference:two"});
+        expect((await fetchAndImportCommerceOrder(h.db,clock,user,another.connectionId,"same",exactDeps)).proofId).not.toBe(first.proofId);
+        const foreign=await createUser(h);
+        const foreignStore=await createIntegrationConnection(h.db,clock,foreign,{adapterKey:"test-store",provider:"test-store",externalAccountReference:"store-one",credentialReference:"reference:foreign"});
+        await expect(fetchAndImportCommerceOrder(h.db,clock,foreign,foreignStore.connectionId,"same",exactDeps)).rejects.toMatchObject({code:"INTEGRATION_IDENTITY_CONFLICT"});
+        await expect(fetchAndImportCommerceOrder(h.db,clock,foreign,connection.connectionId,"same",exactDeps)).rejects.toMatchObject({code:"PARTICIPANT_NOT_AUTHORIZED"});
+        expect((await h.db.query("SELECT id FROM proofs")).rows).toHaveLength(2);
+        adapter.fetchFulfillmentOrder=async()=>order("same","store-one",{cancelled:true,providerUpdatedAt:"2026-09-05T12:00:00Z"});
+        expect(await fetchAndImportCommerceOrder(h.db,clock,user,connection.connectionId,"same",exactDeps)).toMatchObject({eligibility:"INELIGIBLE"});
+        adapter.fetchFulfillmentOrder=async()=>order("same");
+        expect(await fetchAndImportCommerceOrder(h.db,clock,user,connection.connectionId,"same",exactDeps)).toMatchObject({eligibility:"INELIGIBLE"});
+        adapter.fetchFulfillmentOrder=async()=>order("different");
+        await expect(fetchAndImportCommerceOrder(h.db,clock,user,connection.connectionId,"same",exactDeps)).rejects.toMatchObject({code:"INTEGRATION_TRUST_BOUNDARY"});
+        expect((await h.db.query("SELECT id FROM proofs")).rows).toHaveLength(2);
+    });
+    it("gates provider automation independently and deduplicates webhooks within each stable store", async () => {
+        const {h,user,connection,deps,integrations}=await setup(async()=>({orders:[],cursor:null}));
+        await setCommerceAutomation(h.db,clock,user,connection.connectionId,true,integrations);
+        expect(await dispatchCommerceSyncs(h.db,clock,{...deps,automationProviders:[]})).toEqual({completed:0,failed:0});
+        const another=await createIntegrationConnection(h.db,clock,user,{adapterKey:"test-store",provider:"test-store",externalAccountReference:"store-two",credentialReference:"reference:two"});
+        await setCommerceAutomation(h.db,clock,user,another.connectionId,true,integrations);
+        for(const account of ["store-one","store-two","store-one"])
+            await enqueueCommerceWebhook(h.db,clock,{provider:"test-store",externalAccountReference:account,deliveryId:"same-delivery",topic:"orders/updated"});
+        expect((await h.db.query("SELECT id FROM commerce_webhook_inbox")).rows).toHaveLength(2);
     });
     it("keeps newer cancellations and append-only source history", async () => {
         let current = order("same");
@@ -128,6 +202,10 @@ describe("provider transport", () => {
     it("classifies an invalid eBay refresh grant as an authorization failure", async () => {
       const client=createHttpEbayClient(vi.fn(async()=>new Response(JSON.stringify({error:"invalid_grant"}),{status:400})));
       await expect(client.refreshUserToken({environment:"sandbox",clientId:"client",clientSecret:"secret",refreshToken:"revoked"})).rejects.toMatchObject({code:"PROVIDER_AUTH_FAILED"});
+    });
+    it("honors eBay rate-limit headers even when the provider returns an HTML error body", async () => {
+      const client=createHttpEbayClient(vi.fn(async()=>new Response("<html>Rate limited</html>",{status:429,headers:{"retry-after":"120"}})));
+      await expect(client.getOrder({environment:"production",marketplaceId:"EBAY_US",accessToken:"fixture-only",orderId:"10-12345-12345"})).rejects.toMatchObject({code:"PROVIDER_RATE_LIMITED",retryAfterSeconds:120});
     });
     it("preserves the eBay refresh token when only a new access token is returned", async () => {
         const client = createHttpEbayClient(vi.fn(async () => new Response(JSON.stringify({ access_token: "renewed", expires_in: 7200, token_type: "User Access Token" }))));

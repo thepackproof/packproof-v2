@@ -23,7 +23,7 @@ describe("consolidated sales channels", () => {
   it("places identity, order health and persisted automation in one provider card", async () => {
     const onAutomation = vi.fn();
     const panel = <ConnectedAccountsPanel accounts={[account]} providers={[provider]} notice={null} busy={false} onConnect={vi.fn()} onReauthorize={vi.fn()} onDisconnect={vi.fn()} />;
-    render(<ConnectedStoresScreen connectionPanel={panel} connections={[connection]} lastSync={null} loading={false} error={null} busy={false} development={false} ebay={null} onConnectDemo={vi.fn()} onConnectEbay={vi.fn()} onDisconnectEbay={vi.fn()} onImportSales={vi.fn()} onAutomation={onAutomation} onSync={vi.fn()} />);
+    render(<ConnectedStoresScreen connectionPanel={panel} connections={[connection]} lastSync={null} loading={false} error={null} busy={false} development={false} ebay={null} onConnectEbay={vi.fn()} onDisconnectEbay={vi.fn()} onImportSales={vi.fn()} onAutomation={onAutomation} onSync={vi.fn()} />);
     expect(screen.getAllByRole("article", { name: "Etsy" })).toHaveLength(1);
     const card = within(screen.getByRole("article", { name: "Etsy" }));
     expect(card.getByText("A real shop")).toBeInTheDocument();

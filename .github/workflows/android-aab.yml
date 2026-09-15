@@ -50,7 +50,11 @@ jobs:
 
       - name: Install EAS CLI
         if: steps.expo-auth.outputs.available == 'true'
-        run: npm install --global eas-cli@latest
+        run: npm install --global eas-cli@24.4.2
+
+      - name: Install shared contract test runner
+        working-directory: backend
+        run: npm ci
 
       - name: Validate mobile and resolve release identity
         id: release
@@ -58,6 +62,9 @@ jobs:
         run: |
           npm run typecheck
           npm run test:proof-record
+          npm run test:recovery
+          npm run test:intake
+          npm run test:build-security
           node <<'NODE'
           const fs = require('fs');
           const { expo } = require('./app.config.js');
@@ -86,12 +93,19 @@ jobs:
           NODE
           curl --fail --location "$(cat dist/aab-url.txt)" --output "dist/${{ steps.release.outputs.artifact }}.aab"
           test -s "dist/${{ steps.release.outputs.artifact }}.aab"
+          keytool -printcert -jarfile "dist/${{ steps.release.outputs.artifact }}.aab" > dist/upload-certificate.txt
+          grep -F '75:25:B4:FC:9A:9D:03:4A:E2:94:92:2A:D4:3D:B1:84:43:D0:E1:4D' dist/upload-certificate.txt
+          sha256sum "dist/${{ steps.release.outputs.artifact }}.aab" > dist/SHA256SUMS
 
       - name: Upload AAB artifact
         if: steps.expo-auth.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.release.outputs.artifact }}-aab
-          path: mobile/dist/${{ steps.release.outputs.artifact }}.aab
+          path: |
+            mobile/dist/${{ steps.release.outputs.artifact }}.aab
+            mobile/dist/SHA256SUMS
+            mobile/dist/upload-certificate.txt
+            mobile/dist/eas-build.json
           if-no-files-found: error
           retention-days: 30

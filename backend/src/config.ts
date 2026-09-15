@@ -162,6 +162,10 @@ export function parseEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfi
       : null;
   const enabled = parseBooleanFlag(env.PACKPROOF_EBAY_INTEGRATION_ENABLED ?? env.EBAY_INTEGRATION_ENABLED);
   const appCredentialReference = explicitReference ?? (secretName ? `env:${secretName}` : null);
+  const deletionToken = env.PACKPROOF_EBAY_DELETION_VERIFICATION_TOKEN?.trim() || env.EBAY_DELETION_VERIFICATION_TOKEN?.trim();
+  if (deletionToken && !/^[A-Za-z0-9_-]{32,80}$/.test(deletionToken)) {
+    throw new Error("eBay deletion verification token must contain 32–80 allowed characters");
+  }
   if (enabled) {
     assertEbayEnabledConfiguration({ environment, clientId, ruName, appCredentialReference });
   }

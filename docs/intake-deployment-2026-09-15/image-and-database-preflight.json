@@ -1,0 +1,442 @@
+{
+  "sourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+  "buildId": "packproof-v2-staging-api:43bf9db0-aa2c-4c43-ab16-399fafb128ae",
+  "buildNumber": 76,
+  "buildStatus": "SUCCEEDED",
+  "finishedAt": "2026-09-15T06:25:49.469Z",
+  "image": {
+    "artifactMediaType": "application/vnd.docker.container.image.v1+json",
+    "imageDigest": "sha256:3f6250adec57a5be4420effcc3cd06b87b2acba8263e748a88c89c91583d7f22",
+    "imageManifestMediaType": "application/vnd.docker.distribution.manifest.v2+json",
+    "imagePushedAt": "2026-09-15T06:25:48.888000+00:00",
+    "imageSizeInBytes": 123218385,
+    "imageStatus": "ACTIVE",
+    "imageTags": [
+      "intake-272351488a6e"
+    ],
+    "registryId": "784514617543",
+    "repositoryName": "packproof-v2-staging-api"
+  },
+  "databaseAuditTask": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/e5a7e651a8fa4ea090fd3caee3611f17",
+  "databaseAuditExitCode": 0,
+  "databaseAudit": {
+    "event": "intake_deployment_readonly_audit",
+    "identity": [
+      {
+        "role": "packproof",
+        "login": "packproof",
+        "database": "packproof_v2"
+      }
+    ],
+    "roles": [
+      {
+        "rolname": "packproof",
+        "rolcanlogin": true,
+        "rolinherit": true,
+        "rolcreaterole": true,
+        "rolcreatedb": true,
+        "rolsuper": false
+      }
+    ],
+    "ownership": [
+      {
+        "tableowner": "packproof",
+        "tables": 152
+      }
+    ],
+    "memberships": [
+      {
+        "member": "packproof",
+        "parent": "rds_superuser",
+        "admin_option": false
+      }
+    ],
+    "migrations": [
+      {
+        "id": "001_init",
+        "checksum": "3fcf08779f9ae67305fc6a16e700ae3de13a8e73031fc889e0a0f38334bac80d",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "002_transaction_shipping_context",
+        "checksum": "56c921f1c3258d19691e552c3ec0e6c82dae689dc3f92676e3fe4c2bb12a74b9",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "003_profiles",
+        "checksum": "6c596c4d944609b5c1a88f1e1dfa061101567225cb5d7bbc5575d14aa7513c62",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "004_invitation_invitee_user",
+        "checksum": "74b1fd9f43e53130c623b969c0db3eeba4ff0b24c428ecc20fbc788176bff0a7",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "005_proof_participants_user_idx",
+        "checksum": "a2729b73eaf22b63b3ea8ef51f84977d79b43f8bdf70bc39ec87ba067e883733",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "006_canonical_proof_contract",
+        "checksum": "7fc23bb83af2eaa3872e84db109fe813b1af938dcde81b2f61e4805c08ce3941",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "007_external_reference_identity",
+        "checksum": "d85e2af2e4df501d70bf926dbe2dcf087261477c6f51a9d6db9f5e951b236a53",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "008_transaction_integration_identities",
+        "checksum": "558a4cca0c8293ea204a75e66c6ad33e424be73983393292113a89859acc9c1c",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "009_shipment_events",
+        "checksum": "3d3bd4dcc25bf62a6c4afa3b120983affd41358d0a288f7d4a2e55bcacc8fad7",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "010_trusted_shipment_integrations",
+        "checksum": "d536640c2ce15954c637779c4f0693159353a92e1fa054e23d41a4fe547ae1d5",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "011_users_search_indexes",
+        "checksum": "1519e0d8f8aaaec5fc070a90f18464629395f49627bc3d6bac2eadc950ab5030",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "012_automatic_fulfillment",
+        "checksum": "7b16a638f275dda98c59a8d5cea2ea26a3550b7a7558d472f8d847e54d4ea157",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "013_fulfillment_capture",
+        "checksum": "99a0f4bcb7c22d8914d5fde5fb55496689775a7418c25b2af6e29dfe78ad8023",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "014_external_identities",
+        "checksum": "04e3a82f15cd670a95555bda6f03f0e6aeb2ac7a380dd4696cc07b74b290e454",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "015_optional_counterparty_default",
+        "checksum": "097eba9c5852fc3666da0c7722fc25fbb362993fffaf43223f58aac057ecb4b9",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "016_custody_workflow",
+        "checksum": "6532ea8e782fc7e8870ad039a9fb8e0334e94d9612930bc32506b8ce28475f59",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "017_connected_accounts",
+        "checksum": "1a82703bb2f42545a34b749023c50912a51a245f78234cf80a2399bbd048034c",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "018_committed_evidence_immutability",
+        "checksum": "ba4db4cda653f9347fb9697eb132168b2ed3de390168b37780df0c78578fbdcb",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "019_finalized_custody_guards",
+        "checksum": "90b060a7269511bcbd0ead09e645f99ef481c53701d36ce73adc72028a96986f",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "020_workflow_protocol_version",
+        "checksum": "6515200251a7ec9a41f90a18e62bd7c07c3e6e366352736e9bc6c543a4f030e7",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "021_manifest_signature_metadata",
+        "checksum": "c1aa21d0e16b60445e4716d720c0f7dd1cf6913e94a88fa6a2f507a671e5878e",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "022_proof_email_notifications",
+        "checksum": "90af0fa729224c8580839b0877742c1d22bceee459a48b96bf575d0074d7fc61",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "023_public_platform",
+        "checksum": "646f266b64f71245ce354f8af7fb1b01c80b918bf4002ada8a89f4418b566ce3",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "024_resumable_uploads",
+        "checksum": "e6f6cc06375daddbb82dd74ce2b6295be0fb19a79da19dba1929272b1c6d8861",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "025_commerce_lifecycle",
+        "checksum": "7530ebec1e3e0ebda7555a5630ae69f3301e9e43e80d1bc7e8254923af06c138",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "026_retention_controls",
+        "checksum": "6bd98ba90f3594fa49885d3017cb1808a2bc3b78e40c4384818b914783b8564e",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "027_automatic_commerce_intake",
+        "checksum": "f72e8a019fc4ebd57280d56e4471328bafeebac5ee468e057216aa10b5484273",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "027_notification_delivery_leases",
+        "checksum": "cf3ee6fcdd0b238038749f7f95b65601354f1c7347c5cfa878cacaeb70335576",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "028_capture_sessions_relay",
+        "checksum": "1ca8d283457a8b2a677dac2eed256c799eb77e41369ea6aa49183a8fe5bf5b54",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "029_signature_experiences",
+        "checksum": "dda0b548437aca2bba4dba972feb15d657dae44fb79563934800ced736f8c691",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "030_disclosure_receipts",
+        "checksum": "951ca785e6294f0762024eaf582a71957b81786a6b744bef6a683aefb5e53e5b",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "031_capture_client_context",
+        "checksum": "ea65034f4e1858ba38817ea684bf49996ec6c3677be6e0f8d914a85c5db21bda",
+        "checksum_provenance": "REVIEWED_LEGACY_BASELINE_NOT_EXECUTION_PROOF"
+      },
+      {
+        "id": "032_capture_shipping",
+        "checksum": "835dbdeaaeffd41d3fc1f600a3ce9dc7e53a99052a51959356173dd0e1c9f12e",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "033_shared_proof",
+        "checksum": "aa23dca9c0fba0213c3e5e255acff496d53e0cfa23d354a22ed500fbca57497d",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "034_seller_attestation_authorization",
+        "checksum": "8cb160767a8556f544591366ed08e94adb968279cd9908537f0c3fb6ecfa4b45",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "035_media_admission",
+        "checksum": "f2104bfc14ff1a8fab97a6503c3fcea864341321d927a4947fe8891e529dda43",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "036_durable_recovery",
+        "checksum": "f35e12d91f2852c986bbe57806fdaa825fd2cdfd56e0a022b533b0f88d294ba4",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "037_retention_policy",
+        "checksum": "e93e2ac2bfd9a757a1aab4acd6a07dfabac0737add42c96176dec82e9f688088",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "038_parcel_tracking",
+        "checksum": "0e7e0af54b27d4567fc261e5a033d35a7d0d402b77a0f4043cd2234447550b60",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "039_recipient_exports",
+        "checksum": "5534d1fdcf598c9622c3d5c77aefbc5cdc643ace361cfb9ef6ff291f1359d1c9",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "040_packing_requests",
+        "checksum": "9e6366a6048ceb325938f1ce82394937d77c70887a61a927d892ebd9610ed4d2",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "041_operations",
+        "checksum": "f0d79455388c0397c7d691b2a6d019ec4a77b4f9b70f18a2abecab1ead5e8f02",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "042_billing_usage",
+        "checksum": "2ba0e5a7c6bd3f31bbd52c8ea59a5c63912e4343e442e7b8b94850c0877876a0",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "043_policy_recovery",
+        "checksum": "4b6d5e67be77b36e41520a9daf0e3d946fc060d13b2640143af16253d516d910",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "044_support_access",
+        "checksum": "0877a7bafb8d37146dd4165804a4daf4d2f9f20e855c719021263bdaba5f465a",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "045_program_observations",
+        "checksum": "1c60b5f9201317a7f9f497f8319661a6c34e86f6b35a14f0197b3f3fdb01cd9f",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "046_billing_refund_reversals",
+        "checksum": "f325df3e4d6b7f9646f86b800b020f50a792c1217ab0d6caa9f3bd47f9f09eb9",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "047_policy_recovery_context",
+        "checksum": "23d4e1d54bcabe8881209093bb120f3f0aa86fd0162e441e554cd219e3bba5c0",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "048_billing_reconciliation",
+        "checksum": "be77bd44622a9aea2dc99838ce0351300dde070a404bd068231f58c613b80947",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "049_billing_enrollment",
+        "checksum": "2fcaf549ed3541f04887ae8d2391eb24e7689a3a55de13ad23c7c2391a0ee2b6",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "050_etsy_connected_accounts",
+        "checksum": "57cc78ad72d5ec6763691397255d33d1a823a89924b946e5ee8264aba2cd6b9f",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "051_etsy_request_budget",
+        "checksum": "53dbb16923efa6a84920fc9f5493247153d9813a2d4728157bb54fd04cd004f7",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "052_redesign_integrity",
+        "checksum": "2ebb5bb0c5769a878733d42c06c8eb5df4306184a17f0750dad4791b8a10b27e",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "053_study_ui_instrumentation",
+        "checksum": "deaae42b7bec506b9c196235924df0b9fbfdb33f43b461df2ba7d2cb7d107b30",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "054_intake_context",
+        "checksum": "96eb983a869c56cd312c6e89387e759fa7dd2fb8fc34e0f0d0674fd6a9b95c39",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "055_intake_handoffs",
+        "checksum": "614d83fa3fb9029fb1ff7f66d69c76232974e6cfd189d7ba3dc9fe51bd3ee8ce",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "056_intake_mail",
+        "checksum": "91a3a3c9747cee00878866c770ecc1ecb124061c68bf7bceffe614ce8dcc76c9",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "057_intake_shippo_sync",
+        "checksum": "2e6e3f95471f8dbfd4a7940741d6bc3f411409657d696f897cf1d67d4e7a62c7",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "058_capture_engine",
+        "checksum": "097f0e7e79b34d062078d0ccffc177940c5aabca9867fcee219c7806b2374da6",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "059_claims_access",
+        "checksum": "d4ffbcfc3935f7eafedee047be512573b6145b912cff6f0145ac41fdeb8865a1",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "060_identifier_enrichment",
+        "checksum": "cae7c9a02b56ce4c622026d3f21971a6236bd6b2291cda944b183e04d71806f4",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "061_lifecycle_snapshots",
+        "checksum": "0ca778b9f6b54aa09c2d51bed13b8d097f3cab72eef56692174de12b60c1c686",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "062_capture_completion_receipts",
+        "checksum": "c07359a05728e16c629ead70328089b81a7ea1e1b9a524568bc584b85a0707d6",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "063_record_tracking",
+        "checksum": "4b582ff6aadd03fa01c1ca144b96a647204db45bfc4a5759998da31d45410b21",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "064_notification_center",
+        "checksum": "4806adb33e9ebd35fbb224e6e98bc9af46ccedfc705ca5be0696c14fd1f2997e",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "065_ebay_deletion_cases",
+        "checksum": "e6363472ecd9273cea50a5ea2f6f523befbf5469628113adfa98da22f8ae691a",
+        "checksum_provenance": "EXECUTED_BYTES"
+      },
+      {
+        "id": "066_ios_capture_surfaces",
+        "checksum": "695f16cbdebf41e760ef0757253af32fa6f124fcc720cdc72c450669ce33ceb2",
+        "checksum_provenance": "EXECUTED_BYTES"
+      }
+    ],
+    "workers": [
+      {
+        "worker_name": "capture-shipments",
+        "heartbeat": "2026-09-15T06:25:56.713Z",
+        "last_success": "2026-09-15T06:25:56.713Z"
+      },
+      {
+        "worker_name": "commerce",
+        "heartbeat": "2026-09-15T06:25:56.635Z",
+        "last_success": "2026-09-15T06:25:56.635Z"
+      },
+      {
+        "worker_name": "ebay-deletion",
+        "heartbeat": "2026-09-15T06:25:55.925Z",
+        "last_success": "2026-09-15T06:25:55.925Z"
+      },
+      {
+        "worker_name": "operational-cleanup",
+        "heartbeat": "2026-09-15T06:10:50.839Z",
+        "last_success": "2026-09-15T06:10:50.839Z"
+      },
+      {
+        "worker_name": "order-shippo",
+        "heartbeat": "2026-09-15T06:25:56.633Z",
+        "last_success": "2026-09-15T06:25:56.633Z"
+      },
+      {
+        "worker_name": "proof-update-notifications",
+        "heartbeat": "2026-09-15T06:25:56.716Z",
+        "last_success": "2026-09-15T06:25:56.716Z"
+      },
+      {
+        "worker_name": "recipient-exports",
+        "heartbeat": "2026-09-15T06:26:03.524Z",
+        "last_success": "2026-09-15T06:26:03.524Z"
+      },
+      {
+        "worker_name": "thumbnails",
+        "heartbeat": "2026-09-15T06:26:03.524Z",
+        "last_success": "2026-09-15T06:26:03.524Z"
+      },
+      {
+        "worker_name": "usage-reconciliation",
+        "heartbeat": "2026-09-15T06:25:55.928Z",
+        "last_success": "2026-09-15T06:25:55.928Z"
+      }
+    ]
+  },
+  "applicationDeployment": "NOT_RUN",
+  "migrations": "NOT_RUN",
+  "intakeFlags": "OFF"
+}

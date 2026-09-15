@@ -1,3 +1,9 @@
+import { BillingPanel } from "../billing/BillingPanel";
+import { DeveloperAccessPanel } from "../developer/DeveloperAccessPanel";
+import { useDeveloperAccess } from "../developer/useDeveloperAccess";
+import { openRelayStation } from "../relay/RelayStationHost";
+import { NotificationCenter } from "../notifications/NotificationCenter";
+import { IntakeSettings } from "../intake/IntakeSettings";
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,7 +31,8 @@ import { StudyConsentCard } from "../ui/StudyConsentCard";
 import type { AccountSection } from "../app/navigation";
 type DeletionRequest = { requestId: string; state: string; requestedAt: string; updatedAt: string };
 const SECTION_TITLES: Record<AccountSection, string> = {
-  profile: "Profile", channels: "Connections", recordings: "Recordings on this device",
+  developer: "Developer access",
+  billing: "Plan and billing", notifications: "Notifications", profile: "Profile", channels: "Connections", recordings: "Recordings on this device",
   appearance: "Appearance", help: "Help & support", privacy: "Privacy & account",
 };
 const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
@@ -42,6 +49,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   const theme = useTheme();
   const { colors } = theme;
   const session = app.session;
+  const developerAllowed = useDeveloperAccess(app.client, session?.userId ?? "", app.ensureAuth);
   const [section, setSection] = useState<AccountSection | null>(initialSection ?? null);
   const accountRef = useRef(session?.userId);
   accountRef.current = session?.userId;
@@ -117,14 +125,21 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
           <AccountRow title="Connections" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
           <AccountRow title="Recordings on this device" detail={unfinished.length ? `${unfinished.length} ${unfinished.length === 1 ? "recording needs" : "recordings need"} attention` : retained.length ? `${retained.length} completed ${retained.length === 1 ? "copy" : "copies"} retained` : "No recordings stored here"} icon="videocam-outline" onPress={() => openSection("recordings")} />
+          <AccountRow title="Plan and billing" detail="Your plan, Proof allowance, and invoices" icon="card-outline" onPress={() => openSection("billing")} />
+          <AccountRow title="Notifications" detail="Proof updates, delivery preferences and history" icon="notifications-outline" onPress={() => openSection("notifications")} />
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
           <AccountRow title="Help & support" detail="Recording, recovery, and invitations" icon="help-circle-outline" onPress={() => openSection("help")} />
+          {developerAllowed ? <AccountRow title="Developer access" detail="API workspaces, keys, and permissions" icon="code-slash-outline" onPress={() => openSection("developer")} /> : null}
+          <AccountRow title="Remote packing station" detail="Pair a camera and control packing from another device" icon="videocam-outline" onPress={openRelayStation} />
           <AccountRow title="Privacy & account" detail="Privacy, terms, and account deletion" icon="shield-checkmark-outline" onPress={() => openSection("privacy")} last />
         </View>
         {unfinished.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Signing out pauses unfinished work. Sign in to this account to resume it.</Text> : null}
         <Button label="Sign out" variant="tertiary" loading={signingOut} disabled={app.busy || signingOut} onPress={() => { setSigningOut(true); void app.signOut().finally(() => setSigningOut(false)); }} />
       </> : null}
 
+      {section === "billing" ? <BillingPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
+      {section === "developer" ? developerAllowed ? <DeveloperAccessPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : <Text style={[styles.body, { color: colors.textSecondary }]}>Developer access is unavailable for this account or could not be confirmed.</Text> : null}
+      {section === "notifications" ? <NotificationCenter key={session.userId}/> : null}
       {section === "profile" ? <>
         {session.username ? <Text style={[styles.body, { color: colors.textSecondary }]}>@{session.username}</Text> : <FormField label="Username" value={app.usernameInput} onChangeText={app.setUsernameInput} />}
         <FormField label="Display name" value={app.displayNameInput} onChangeText={app.setDisplayNameInput} autoCapitalize="words" />
@@ -144,18 +159,19 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           </> : null}
           {!channel.catalog?.enabled && channel.accounts.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>New connections are temporarily unavailable. Existing connection and order status are shown above.</Text> : null}
         </InfoCard>)}
+        <IntakeSettings />
         <Text style={[styles.meta, { color: colors.textSecondary }]}>Marketplace authorization is separate from PackProof sign-in. Recording a Proof does not mark an order shipped.</Text>
         {channels.some(channel => channel.provider === "etsy") ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{ETSY_ATTRIBUTION}</Text> : null}
       </> : null}
 
       {section === "recordings" ? <>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>{waiting ? `${waiting} ${waiting === 1 ? "recording is" : "recordings are"} waiting to upload.` : "No recordings waiting to upload."} Local originals use {formatBytes(app.savedRecordings.reduce((sum, capture) => sum + (capture.byteSize ?? 0), 0))}.</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>Unfinished recordings stay tied to this account. Uninstalling PackProof or losing this device can remove local-only work.</Text>
+        <Text style={[styles.body, { color: colors.textSecondary }]}>{waiting ? `${waiting} ${waiting === 1 ? "recording is" : "recordings are"} waiting to upload.` : "No recordings waiting to upload."}</Text>
+        {app.savedRecordings.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Local originals use {formatBytes(app.savedRecordings.reduce((sum, capture) => sum + (capture.byteSize ?? 0), 0))}. Uninstalling PackProof or losing this device can remove local-only work.</Text> : null}
         {unfinished.length ? <SectionHeader title="Needs attention" /> : null}
         {unfinished.map(capture => <RecordingRow key={capture.recovery?.operationId ?? capture.uri} capture={capture} />)}
         {retained.length ? <SectionHeader title="Completed local copies" /> : null}
         {retained.map(capture => <RecordingRow key={capture.recovery?.operationId ?? capture.uri} capture={capture} />)}
-        {!app.savedRecordings.length ? <Text style={[styles.body, { color: colors.textSecondary }]}>There are no local recordings on this account. Saved Proofs are available in Proofs.</Text> : null}
+        {!app.savedRecordings.length ? <Text style={[styles.body, { color: colors.textSecondary }]}>Your saved Proofs are available in Proofs.</Text> : null}
       </> : null}
 
       {section === "appearance" ? <View style={styles.appearance} accessibilityRole="radiogroup" accessibilityLabel="Appearance">
@@ -181,7 +197,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
         <SectionHeader title="About PackProof" />
         <Text style={[styles.body, { color: colors.textSecondary }]}>PackProof records what was submitted, when, and by whom. It preserves evidence; it does not decide who is right or prove an item is authentic.</Text>
         <StudyConsentCard key={`${app.apiBaseUrl}:${session.userId}`} />
-        {__DEV__ ? <Button label="Developer tools" variant="tertiary" onPress={() => app.go("dev")} /> : null}
+        {__DEV__ && developerAllowed ? <Button label="Developer tools" variant="tertiary" onPress={() => app.go("dev")} /> : null}
       </> : null}
 
       {section === "privacy" ? <>
@@ -209,7 +225,7 @@ function ChannelAccount({ entry: { account, connection }, providerDisplay }: { e
     {connection ? <>
       <View style={styles.automationRow}>
         <Text style={[styles.automationLabel, { color: colors.textPrimary }]}>Automatically add orders</Text>
-        <Switch accessibilityLabel={`Automatically add orders from ${providerDisplay}${name ? `, ${name}` : ""}`} value={connection.autoSyncEnabled === true} disabled={app.busy || (connection.status !== "ACTIVE" && !connection.autoSyncEnabled)} onValueChange={enabled => void app.setCommerceAutomation(connection.connectionId, enabled)} trackColor={{ true: colors.primary }} />
+        <Switch accessibilityLabel={`Automatically add orders from ${providerDisplay}${name ? `, ${name}` : ""}`} value={connection.autoSyncEnabled === true} disabled={app.busy || ((connection.status !== "ACTIVE" || connection.automationAvailable === false) && !connection.autoSyncEnabled)} onValueChange={enabled => void app.setCommerceAutomation(connection.connectionId, enabled)} trackColor={{ true: colors.primary }} />
       </View>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>{automaticIntakeStatus(connection).replace("above", "here")}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>{connection.lastSyncAt ? `Last successful order check: ${formatDateTime(connection.lastSyncAt)}` : "No successful order check yet."}</Text>

@@ -46,6 +46,33 @@ function stationReadyProof(overrides: Record<string, unknown> = {}) {
 
 function stubStationCamera() {
   vi.stubGlobal("Blob", NodeBlob);
+  // The production transport reports upload progress through XHR. Route its HTTP
+  // boundary into this test's server mock instead of making real jsdom requests.
+  class FakeUploadRequest {
+    upload: { onprogress?: (event: { loaded: number }) => void } = {};
+    status = 0;
+    responseText = "";
+    onload?: () => void;
+    onerror?: () => void;
+    onabort?: () => void;
+    private method = "PUT";
+    private url = "";
+    private headers: Record<string, string> = {};
+    private controller = new AbortController();
+    open(method: string, url: string) { this.method = method; this.url = url; }
+    setRequestHeader(name: string, value: string) { this.headers[name] = value; }
+    send(body: Blob) {
+      void fetch(this.url, { method: this.method, headers: this.headers, body, signal: this.controller.signal })
+        .then(async response => {
+          this.status = response.status;
+          this.responseText = await response.text();
+          this.upload.onprogress?.({ loaded: body.size });
+          this.onload?.();
+        }).catch(() => { if (!this.controller.signal.aborted) this.onerror?.(); });
+    }
+    abort() { this.controller.abort(); this.onabort?.(); }
+  }
+  vi.stubGlobal("XMLHttpRequest", FakeUploadRequest);
   class FakeMediaRecorder {
     static isTypeSupported() {
       return true;
@@ -307,7 +334,7 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByRole("heading", { name: "Proofs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Vintage camera")).length).toBeGreaterThan(0);
     expect(screen.getByText("Recording needed")).toBeInTheDocument();
-    expect(screen.getByText("ORD-48392")).toBeInTheDocument();
+    expect(screen.getByText("Order ORD-48392")).toBeInTheDocument();
     expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
   });
 
@@ -417,6 +444,9 @@ describe("PackProof web reference client", () => {
       }),
     );
     render(<App />);
+    expect(await screen.findByText("Nothing needs your attention")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Needs attention" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "View all Proofs" }));
     expect(await screen.findByText(/^No Proofs yet$/)).toBeInTheDocument();
   });
 
@@ -480,7 +510,7 @@ describe("PackProof web reference client", () => {
     signInSession(); window.history.replaceState(null, "", "/new/scan"); render(<App />);
     expect(await screen.findByRole("heading", { name: "Record shipment" })).toBeInTheDocument();
     expect(screen.getByLabelText("What are you shipping?")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Paste order details" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Paste order or receipt" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Reference")).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/me/packing-station/resolve"))).toBe(false);
   });
@@ -587,7 +617,7 @@ describe("PackProof web reference client", () => {
     signInSession();
     window.history.replaceState(null, "", "/stores?ebay=error&code=EBAY_OAUTH_FAILED");
     render(<App />);
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn’t connect eBay/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent("The eBay connection could not finish. Return to Sales channels and try Connect again.");
   });
 
   it("renders server shipment integrity on a finalized Proof", async () => {
@@ -1248,7 +1278,8 @@ describe("PackProof web reference client", () => {
     );
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Proof" })).toBeInTheDocument();
-    expect(await screen.findByText("Confirmation pending")).toBeInTheDocument();
+    expect(await screen.findByText("Recording saved · seal pending")).toBeInTheDocument();
+    expect(screen.queryByText("Packing record sealed")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     expect(screen.getAllByText("Handed off").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Join PackProof" })).toBeInTheDocument();

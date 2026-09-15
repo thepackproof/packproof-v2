@@ -351,13 +351,15 @@ export async function dispatchWebhooks(
           delivery_id: string;
           webhook_id: string;
           tenant_id: string;
+          owner_user_id: string;
           url: string;
           secret_ciphertext: string;
           attempts: number;
         }
       >(
-        `SELECT o.*,d.id AS delivery_id,d.attempts,w.id AS webhook_id,w.tenant_id,w.url,w.secret_ciphertext FROM api_webhook_deliveries d
-         JOIN api_webhooks w ON w.id=d.webhook_id JOIN proof_outbox o ON o.id=d.event_id WHERE d.id=$1`,
+        `SELECT o.*,d.id AS delivery_id,d.attempts,w.id AS webhook_id,w.tenant_id,t.owner_user_id,w.url,w.secret_ciphertext FROM api_webhook_deliveries d
+         JOIN api_webhooks w ON w.id=d.webhook_id JOIN api_tenants t ON t.id=w.tenant_id
+         JOIN proof_outbox o ON o.id=d.event_id WHERE d.id=$1`,
         [found.rows[0].id],
       );
       return data.rows[0];
@@ -365,6 +367,7 @@ export async function dispatchWebhooks(
     if (!row) break;
     let status = 0;
     try {
+      await requireDeveloperAccess(db, row.owner_user_id);
       const url = validateWebhookUrl(row.url, config);
       const body = canonicalize(publicEvent(row, row.tenant_id));
       const timestamp = Math.floor(clock.now().getTime() / 1000);
@@ -403,3 +406,4 @@ export async function dispatchWebhooks(
   }
   return { delivered, failed };
 }
+import { requireDeveloperAccess } from "../auth/developer-access.js";

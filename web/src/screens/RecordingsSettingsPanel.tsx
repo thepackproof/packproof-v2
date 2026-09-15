@@ -19,13 +19,14 @@ export function RecordingsSettingsPanel({ api, userId, onOpenProof }: { api: Pac
   const finishing = items?.filter(item => (item.committed || item.submitted) && !item.finalized).length ?? 0;
   const retained = items?.filter(item => item.finalized).length ?? 0;
   return <div className="stack">
-    <p className="note">These are copies held in this browser for your account. Clearing browser data or losing this device can remove work that has not been preserved by PackProof.</p>
+    {Boolean(items?.length) && <p className="note">These are copies held in this browser for your account. Clearing browser data or losing this device can remove work that has not been preserved by PackProof.</p>}
     {error && <p role="alert" className="banner banner-error">{error}</p>}
     {items === null ? <p role="status">Checking local recordings…</p> : <>
       <p>{pendingUploads === 0 ? "No recordings waiting to upload" : `${pendingUploads} ${pendingUploads === 1 ? "recording" : "recordings"} waiting to upload`}</p>
       {awaitingReview > 0 && <p>{awaitingReview} {awaitingReview === 1 ? "recording needs" : "recordings need"} review before upload.</p>}
       {finishing > 0 && <p>{finishing} {finishing === 1 ? "recording needs" : "recordings need"} confirmation or final saving.</p>}
-      <p className="meta">{retained} completed local {retained === 1 ? "copy" : "copies"} retained · {(items.reduce((sum, item) => sum + item.file.size, 0) / 1_000_000).toFixed(1)} MB total</p>
+      {items.length > 0 && <p className="meta">{retained} completed local {retained === 1 ? "copy" : "copies"} retained · {(items.reduce((sum, item) => sum + item.file.size, 0) / 1_000_000).toFixed(1)} MB total</p>}
+      {!items.length && <p className="meta">Your saved Proofs are available in Proofs.</p>}
       <ul className="recording-settings-list">{items.map((item, index) => <li className="stack" key={item.key}>
         <strong>Recording {index + 1} · {(item.file.size / 1_000_000).toFixed(1)} MB</strong>
         <p className="meta">{item.finalized && item.preserved ? "Proof saved; completed local copy retained" : item.finalized ? "Proof finalized; preservation still needs confirmation" : item.submitted ? "Submitted; final saving needs confirmation" : item.committed ? "Recording received; finish saving this Proof" : item.accepted ? "Upload pending" : "Review and confirmation needed"}</p>

@@ -25,6 +25,7 @@ export interface NormalizedOrderItem {
   currency: string | null;
   remainingQuantity?: number | null;
   variant?: string | null;
+  barcode?: string | null; gtin?: string | null; productId?: string | null; variantId?: string | null; imageUrl?: string | null;
 }
 
 export interface NormalizedFulfillmentOrder {
@@ -305,6 +306,7 @@ function parseItems(value: unknown): NormalizedOrderItem[] {
       quantity: normalizePositiveInt(record.quantity, "items.quantity"),
       remainingQuantity: record.remainingQuantity == null ? null : normalizeNonnegativeInt(record.remainingQuantity,"items.remainingQuantity"),
       variant: normalizeOptionalText(record.variant,"items.variant",400),
+      ...Object.fromEntries(["barcode","gtin","productId","variantId","imageUrl"].filter(k=>k in record).map(k=>[k,normalizeOptionalText(record[k],`items.${k}`,k==="imageUrl"?2048:300)])),
       unitValue: normalizeMoney(record.unitValue, "items.unitValue"),
       currency: normalizeCurrency(record.currency),
     };

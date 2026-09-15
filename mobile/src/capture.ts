@@ -1,12 +1,20 @@
-import { inspectRecordedVideo, type EncodedVideoInspection } from "../modules/packproof-unified-camera";
+import { beginNativeEngine, captureEngineEnabled, sealNativeEngine } from "./capture/engine";
+import type { CaptureContext, CaptureManifest } from "../../backend/src/capture/core";
+import type { CaptureSessionGrant } from "./intake/model";
+import { inspectRecordedVideo, isIdentifierScannerAvailable, type EncodedVideoInspection, type UnifiedBarcodeDetection } from "../modules/packproof-unified-camera";
+import type { IdentifierPolicy, IdentifierReview } from '../../backend/src/identifiers/types';
+import { captureIdentifiers, identifierFailureBlocks, type IdentifierCapture } from './capture/identifier-storage';
+import { identifierCaptureEnabled, mayRetainIdentifier } from './capture/identifier-observation';
 import { capturePreflight } from "./capture/preflight";
 import {startNativeStudy,nativeStudyForCapture,type NativeStudyTimer} from './analytics/native-study';
 import type { CaptureRecoveryState } from "./capture/recovery-model";
+import { resolveSavedCaptureUri } from "./capture/upload-recovery";
 import { shippingQueue, readShippingJournal, releaseShippingQueue } from "./capture/shipping-scan-storage";
 import type { ShippingScan, ShippingScanResult, ShippingScanJournal } from "./capture/shipping-scan-queue";
 import { sha256 } from "@noble/hashes/sha256";
 import { toByteArray } from "base64-js";
 import * as FileSystem from "expo-file-system";
+import { Platform } from "react-native";
 import type { FileSystemUploadResult } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { withRequestTimeout } from "./request-timeout";
@@ -21,6 +29,14 @@ import {
 const LOCAL_CAPTURE_NAME = "packproof-seller-evidence.mp4";
 
 export interface LocalCapture {
+  localFileAvailable?: boolean;
+  identifierPolicy?: IdentifierPolicy;
+  identifierCoverage?: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE';
+  identifierCheckpoint?: NonNullable<IdentifierReview['checkpoint']>;
+  identifierCheckpointRequest?: { clientEventId: string; revision: number; lastSequence: number; coverage: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE'; omittedEvents: number };
+  captureContext?: CaptureContext;
+  captureManifest?: CaptureManifest;
+  captureManifestSha256?: string;
   studyTimingRef?: string;
   recovery?: CaptureRecoveryState;
   uri: string;
@@ -40,7 +56,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED" | "SCANNER_TRIGGERED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -55,7 +71,7 @@ export async function requestCapturePermissions(): Promise<void> {
   }
   if (!camera.canAskAgain) {
     throw new Error(
-      "Camera permission denied. Enable camera access in Android settings to record packing evidence.",
+      "Camera permission denied. Enable camera access in your device Settings to record packing evidence.",
     );
   }
   throw new Error("Camera permission is required to record packing evidence.");
@@ -91,29 +107,53 @@ export async function captureGradingPhoto(): Promise<{
 }
 
 export async function recordPackingEvidence(input: {
-  client: PackProofV2Client; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
+  client: PackProofV2Client; relay?: { onSessionIssued: (id: string) => Promise<void>; onRecordingStarted: () => void }; authorizedSession?: CaptureSessionGrant; autoStart?: boolean; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
 }): Promise<LocalCapture | null> {
   // Starts are journaled before preflight only after explicit native study opt-in.
   const study=input.stageId?null:await startNativeStudy(input.client,input.userId);
   try{return await recordPackingEvidenceInner(input,study);}catch(error){study?.end('failed','capability');throw error;}
 }
-async function recordPackingEvidenceInner(input:{client:PackProofV2Client;proofId:string;userId:string;orderLabel:string;stageId?:string;stageType?:string;guide?:{uri:string;headers:Record<string,string>}},study:NativeStudyTimer|null):Promise<LocalCapture|null>{
+async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?:{onSessionIssued:(id:string)=>Promise<void>;onRecordingStarted:()=>void};authorizedSession?:CaptureSessionGrant;autoStart?:boolean;proofId:string;userId:string;orderLabel:string;stageId?:string;stageType?:string;guide?:{uri:string;headers:Record<string,string>}},study:NativeStudyTimer|null):Promise<LocalCapture|null>{
   await capturePreflight(input.client, input.userId, !input.stageId);
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
   // Authorization exists before a frame is recorded. No gallery or camera-error file path.
-  const session = await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId);
+  const session = input.authorizedSession ?? (captureEngineEnabled() && !input.stageId ? await beginNativeEngine(input.client,input.proofId) : await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId, Platform.OS === "ios" ? "IOS" : "ANDROID"));
+  const captureContext = "captureContext" in session ? session.captureContext as CaptureContext : undefined;
+  if (session.proofId !== input.proofId || session.state !== "ISSUED" || Date.parse(session.expiresAt) <= Date.now())
+    throw new Error("This camera authorization is no longer ready. Open the original order to recover or restart its recording.");
   const journal: ShippingScanJournal = {proofId:input.proofId,sessionId:session.id,userId:input.userId,entries:[]};
   const queue = shippingQueue(input.client,journal);
   await queue.flush();
   const recovery: CaptureRecoveryState = { version: 1, operationId: session.id, apiBaseUrl: input.client.apiBaseUrl,
     userId: input.userId, proofId: input.proofId, stageId: input.stageId, phase: "RECORDING", evidenceIdempotencyKey: newIdempotencyKey(),
     submitRequested: false, needsSellerAttestation: !input.stageId, attempt: 0, nextRetryAt: null, updatedAt: new Date().toISOString() };
+  const identifierPolicy = session.identifierPolicy;
+  let identifiers: IdentifierCapture | null = null;
+  let identifierCoverage: LocalCapture['identifierCoverage'];
+  if (!input.stageId && identifierCaptureEnabled(identifierPolicy)) {
+    try {
+      identifiers = await captureIdentifiers(input.client, { identifierPolicy, recovery, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId }, true);
+      if (!isIdentifierScannerAvailable()) { identifiers?.markUnavailable(); identifierCoverage = 'UNAVAILABLE'; }
+    } catch (error) {
+      if (identifierFailureBlocks(error)) throw error;
+      identifierCoverage = 'UNAVAILABLE';
+    }
+  }
   // Write the account binding before native acquisition. A process restart can discover finalized native media.
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
-    recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
-  const captured = await nativeRecorder({ proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
-    onRecordingStarted:()=>{study?.phase('recording');study?.event('recording_started');},
+    identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  if (input.relay) await input.relay.onSessionIssued(session.id);
+  const captured = await nativeRecorder({ remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+    ...(identifierCaptureEnabled(identifierPolicy) ? {
+      onIdentifierBarcode: async (event: UnifiedBarcodeDetection) => {
+        if (!identifiers) return null;
+        await identifiers.observe(event);
+        return identifiers.flush();
+      },
+      onIdentifierUnavailable: () => { identifierCoverage = 'UNAVAILABLE'; try { identifiers?.markUnavailable(); } catch { /* Original-account journal remains locked. */ } },
+    } : {}),
+    onRecordingStarted:()=>{study?.phase('recording');study?.event('recording_started');input.relay?.onRecordingStarted();},
     onRecordingStopped:()=>{study?.event('recording_stopped');study?.phase('confirmation');},
     ...(!input.stageId ? {onShippingBarcode:async (scan:ShippingScan)=>{
       const result=await queue.detect(scan);
@@ -125,6 +165,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;proofI
   // Each detected scan already journals intent before transport. Capture metadata
   // must never wait for optional label bookkeeping after native finalization.
   void queue.flush().catch(()=>undefined);
+  void identifiers?.flush().catch(() => undefined);
   if (!captured) {
     study?.end('cancelled','cancelled');
     releaseShippingQueue(session.id);
@@ -138,7 +179,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;proofI
   }
   const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
   study?.phase('confirmation');
-  return persistLocalCapture({ ...captured,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  return persistLocalCapture({ ...captured,identifierPolicy,identifierCoverage,captureContext,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
 }
 
 const inspections = new Map<string, Promise<EncodedVideoInspection | null>>();
@@ -157,10 +198,25 @@ export function inspectCaptureShipping(client: PackProofV2Client, capture: Local
       throw new Error("Open this recording in its original account.");
     // A saved inspection may outlive a failed scan-journal write. Replay its observations
     // through the same idempotent queue before returning; never silently drop them.
-    const inspection = capture.encodedInspection ?? await inspectRecordedVideo(sessionId, journal?.entries.map(entry => entry.scan.detectedAtMs) ?? []);
+    const identifiersEnabled = identifierCaptureEnabled(capture.identifierPolicy);
+    const inspected = capture.encodedInspection ?? await inspectRecordedVideo(sessionId, journal?.entries.map(entry => entry.scan.detectedAtMs) ?? [], identifiersEnabled);
+    const inspection = inspected && identifiersEnabled ? { ...inspected, observations: inspected.observations.filter(mayRetainIdentifier) } : inspected;
     if (!inspection) return null;
     capture.encodedInspection = inspection;
     await persistCaptureMetadata(capture);
+    if (identifiersEnabled) {
+      try {
+        const identifiers = await captureIdentifiers(client, capture);
+        if (identifiers) {
+          for (const observation of inspection.observations) await identifiers.observe(observation);
+          await identifiers.flush();
+        }
+      } catch (error) {
+        if (identifierFailureBlocks(error)) throw error;
+        capture.identifierCoverage = 'UNAVAILABLE'; await persistCaptureMetadata(capture);
+      }
+      return inspection;
+    }
     if (journal) {
       const queue = shippingQueue(client, journal);
       const study=await nativeStudyForCapture(client,capture.captureUserId!,capture.studyTimingRef);
@@ -248,13 +304,15 @@ export async function bindRecordedCapture(client: PackProofV2Client, capture: Lo
   if (capture.encodedInspection) capture.encodedInspection.originalSha256 = digest;
   capture.byteSize = info.size;
   await persistCaptureMetadata(capture);
+  await sealNativeEngine(client,capture);
+  await persistCaptureMetadata(capture);
   releaseShippingQueue(capture.captureSessionId);
 }
 
 /** Bookmarks are an optional index. An index failure must never invalidate committed bytes. */
 export async function saveCaptureBookmarks(client: PackProofV2Client, proofId: string, evidenceId: string, capture: LocalCapture): Promise<void> {
   const scannerBookmarks: CaptureBookmark[] = (capture.encodedInspection?.observations ?? []).map(observation => ({
-    label: "Label read from video (approximate moment)", startMs: Math.floor(observation.detectedAtMs),
+    label: identifierCaptureEnabled(capture.identifierPolicy) ? "Code read from video (approximate moment)" : "Label read from video (approximate moment)", startMs: Math.floor(observation.detectedAtMs),
     endMs: Math.floor(observation.detectedAtMs) + 1000, sourceType: "SCANNER_TRIGGERED", recipeVersion: "encoded-label-review-v1",
   }));
   const bookmarks = [...(capture.bookmarks ?? []), ...scannerBookmarks];
@@ -303,7 +361,17 @@ export async function persistLocalCapture(capture: LocalCapture): Promise<LocalC
   return durable;
 }
 
+const captureJournalWrites = new Map<string, Promise<void>>();
 export async function persistCaptureMetadata(capture: LocalCapture): Promise<void> {
+  if (capture.recovery) capture.recovery.updatedAt = new Date().toISOString();
+  const key = capture.recovery?.operationId ?? capture.uri;
+  const previous = captureJournalWrites.get(key) ?? Promise.resolve();
+  const snapshot: LocalCapture = JSON.parse(JSON.stringify(capture));
+  const write = previous.catch(() => undefined).then(() => writeCaptureMetadata(snapshot));
+  captureJournalWrites.set(key, write);
+  try { await write; } finally { if (captureJournalWrites.get(key) === write) captureJournalWrites.delete(key); }
+}
+async function writeCaptureMetadata(capture: LocalCapture): Promise<void> {
   if (capture.recovery) {
     capture.recovery.updatedAt = new Date().toISOString();
     const path = captureJournalUri(capture.recovery.operationId);
@@ -331,7 +399,10 @@ export async function listAccountCaptures(apiBaseUrl: string, userId: string): P
     try { capture = JSON.parse(await FileSystem.readAsStringAsync(`${FileSystem.documentDirectory}${name}`)); } catch { continue; }
     const state = capture.recovery;
     if (!state || state.userId !== userId || state.apiBaseUrl.replace(/\/+$/, "") !== apiBaseUrl.replace(/\/+$/, "")) continue;
-    if (!capture.uri.startsWith(FileSystem.documentDirectory)) continue;
+    const uri = resolveSavedCaptureUri(capture.uri, FileSystem.documentDirectory);
+    if (!uri) continue;
+    capture.uri = uri;
+    capture.localFileAvailable = await localCaptureExists(uri);
     if (state.phase === "RECORDING") {
       try {
         const finalized = JSON.parse(await FileSystem.readAsStringAsync(`${capture.uri}.finalized.json`));
@@ -352,7 +423,7 @@ export async function localCaptureExists(uri: string | null | undefined): Promis
     return false;
   }
   const info = await FileSystem.getInfoAsync(uri);
-  return info.exists && !info.isDirectory;
+  return info.exists && !info.isDirectory && (!('size' in info) || info.size > 0);
 }
 
 export async function discardLocalCapture(uri: string | null | undefined, operationId?: string): Promise<void> {
@@ -414,15 +485,17 @@ export async function uploadCaptureFile(input: {
   if (input.target.received) { input.onProgress?.(100); return; }
   const exists = await localCaptureExists(input.fileUri);
   if (!exists) {
-    throw new Error("Captured video is no longer available. Record packing evidence again.");
+    throw new ApiError("CAPTURE_LOCAL_FILE_MISSING", "The original recording is no longer available on this device.", 422);
   }
   const url = resolveUploadUrl(input.baseUrl, input.target.url);
   input.onProgress?.(0);
+  let lastProgressAt = Date.now(), lastBytes = 0;
   const task = FileSystem.createUploadTask(
     url,
     input.fileUri,
     {
       httpMethod: input.target.method,
+      sessionType: FileSystem.FileSystemSessionType.BACKGROUND,
       uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
       headers: {
         ...input.target.headers,
@@ -430,6 +503,7 @@ export async function uploadCaptureFile(input: {
       },
     },
     (data) => {
+      if (data.totalBytesSent > lastBytes) { lastBytes = data.totalBytesSent; lastProgressAt = Date.now(); }
       if (data.totalBytesExpectedToSend > 0) {
         const percent = Math.min(
           99,
@@ -444,20 +518,26 @@ export async function uploadCaptureFile(input: {
     result = await withRequestTimeout(async (signal) => {
       const cancel = () => { void task.cancelAsync().catch(() => undefined); };
       signal.addEventListener("abort", cancel);
+      let watchdog: ReturnType<typeof setInterval> | undefined;
+      const stalled = new Promise<never>((_resolve, reject) => {
+        watchdog = setInterval(() => { if (Date.now() - lastProgressAt >= 90_000) { cancel(); reject(new ApiError("UPLOAD_INTERRUPTED", "Upload stopped making progress. Your original is saved for retry.", 408)); } }, 5000);
+      });
       try {
-        return await task.uploadAsync();
+        return await Promise.race([task.uploadAsync(), stalled]);
       } finally {
+        clearInterval(watchdog);
         signal.removeEventListener("abort", cancel);
       }
     }, 10 * 60_000);
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new Error(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
   }
   if (!result || result.status < 200 || result.status >= 300) {
     throw new ApiError(
-      "UPLOAD_FAILED",
+      result?.status === 403 && !url.startsWith(input.baseUrl) ? "UPLOAD_URL_EXPIRED" : "UPLOAD_FAILED",
       `Upload failed (HTTP ${result?.status ?? "unknown"})`,
-      result?.status ?? 0,
+      result?.status === 403 && !url.startsWith(input.baseUrl) ? 408 : result?.status ?? 0,
     );
   }
   input.onProgress?.(100);
@@ -500,7 +580,7 @@ export async function uploadCaptureResumable(input: {
 }): Promise<void> {
   const info = await FileSystem.getInfoAsync(input.fileUri);
   if (!info.exists || info.isDirectory || !("size" in info) || !info.size)
-    throw new Error("Recorded video is unavailable");
+    throw new ApiError("CAPTURE_LOCAL_FILE_MISSING", "Upload could not be completed. The original recording is not available on this device.", 422);
   const state = await input.client.listUploadParts(input.proofId, input.evidenceId);
   const count = Math.ceil(info.size / state.partSize);
   if (count > state.maxParts)

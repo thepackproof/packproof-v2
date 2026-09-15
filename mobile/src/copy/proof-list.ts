@@ -9,7 +9,11 @@ export function localProofWork(capture: Pick<LocalCapture, 'interrupted' | 'reco
   const phase = capture.recovery?.phase;
   if (phase === 'FINALIZED' || phase === 'SUBMITTED') return null;
   if (phase === 'NEEDS_ATTENTION' || phase === 'NEEDS_SIGN_IN' || captureStatus === 'retry') return { state: 'UPLOAD_INTERRUPTED' };
-  if (['UPLOAD_QUEUED','UPLOADING','BYTES_RECEIVED','PRESERVATION_PENDING','FINALIZATION_PENDING'].includes(phase ?? '') || ['preparing','uploading','uploaded'].includes(captureStatus ?? '')) return { state:'UPLOADING', progress: progress ?? undefined };
+  if (captureStatus === 'uploading') return { state:'UPLOADING', progress: progress ?? undefined };
+  if (phase === 'UPLOAD_QUEUED' && capture.recovery?.completionNotificationRequested && !capture.recovery.lastError) return { state:'UPLOAD_PENDING' };
+  if (['PRESERVATION_PENDING','FINALIZATION_PENDING'].includes(phase ?? '') && !capture.recovery?.lastError) return { state:'SAVING' };
+  if (['UPLOAD_QUEUED','UPLOADING','DISCARD_PENDING'].includes(phase ?? '')) return { state:'UPLOAD_INTERRUPTED' };
+  if (['BYTES_RECEIVED','PRESERVATION_PENDING','FINALIZATION_PENDING'].includes(phase ?? '')) return { state:'CONFIRMATION_NEEDED' };
   if (capture.interrupted || phase === 'RECORDING') return { state:'CAPTURE_UNFINISHED', canResumeCapture:false };
   return { state:'CONFIRMATION_NEEDED' };
 }

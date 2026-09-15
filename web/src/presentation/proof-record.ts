@@ -51,7 +51,7 @@ export function activityTitle(entry: ChronologyEntry): string {
     EVIDENCE_COMMITTED: "Recording saved",
     ATTESTATION_COMMITTED: "Declaration confirmed",
     SELLER_PACKING_ATTESTED: "Declaration confirmed",
-    PROOF_FINALIZED: "Proof locked",
+    PROOF_FINALIZED: "Packing record sealed",
     ACCESS_LINK_CREATED: "Share link created",
   };
   return labels[entry.eventType] || entry.title;

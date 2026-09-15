@@ -82,6 +82,7 @@ export interface TransactionWriteInput {
 }
 
 export interface CanonicalProof {
+  identifiers?: import('../components/IdentifierDetails').IdentifierProjection;
   presentation?: ProofPresentation;
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;
@@ -185,7 +186,7 @@ export interface CanonicalProof {
     manifestSha256: string | null;
   };
   captureShipping?: {
-    source: "PACKPROOF_CAPTURE";
+    source: "PACKPROOF_CAPTURE" | "SHIPMENT_ASSOCIATION";
     observations: Array<{ observationId: string; sessionId: string; evidenceId: string | null; trackingNumber: string; carrierHint: string | null; detectedAtMs: number; participantConfirmed: boolean }>;
     registration: {state: string; carrier: string | null; mode: string | null; errorCode: string | null; registeredAt: string | null};
   } | null;
@@ -252,6 +253,7 @@ export interface CanonicalProof {
 }
 
 export interface ProofCollectionItem {
+  thumbnailDerivativeId?: string | null;
   accessKind?: "PARTICIPANT" | "INVITATION" | "RECEIVER";
   presentation?: ProofPresentation;
   invitationId?: string;
@@ -465,6 +467,11 @@ export interface FulfillmentQueueItem {
 }
 
 export interface CommerceConnectionView {
+  automationAvailable?: boolean;
+  automationUnavailableReason?: "ADAPTER_UNAVAILABLE" | "ROLLOUT_DISABLED" | "RECONNECT_REQUIRED" | null;
+  orderReadVerified?: boolean;
+  lastOrderReadAt?: string | null;
+  pollIntervalSeconds?: number;
   reviewOrderCount?: number;
   reviewReasons?: Array<{ code: string; count: number }>;
   autoSyncEnabled?: boolean;
@@ -569,6 +576,7 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
+  integrity?: {result:string;scope:string};
   evidenceState?: { code: string; message: string };
   disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[];liveProof?:boolean;sharingNotice?:string};
   recordAsOf?: {supplementSequence:number;supplementSha256:string|null;scopeStatement:string};
@@ -611,6 +619,7 @@ export interface AccessLinkView {
   createdAt: string;
   expiresAt: string | null;
   revokedAt: string | null;
+  itemIdentifiersReviewed?: boolean;
 }
 
 export interface ProviderCapabilities {

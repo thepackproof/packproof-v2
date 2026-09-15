@@ -1,3 +1,4 @@
+import { isRecordHighlight } from "../../../mobile/src/copy/evidence-record";
 import { useState } from "react";
 import { useViewState } from "../navigation-context";
 import type { ChronologyEntry } from "../api/types";
@@ -19,7 +20,7 @@ export function ProofTimeline({ entries, finalizedAt, onSelect, audit = [] }: {
   const ordered = sortedChronology(entries);
   const categories = ["ALL", ...new Set(ordered.map(entry => entry.category))];
   const selected = categories.includes(filter) ? filter : "ALL";
-  const visible = ordered.filter(entry => selected === "ALL" || entry.category === selected);
+  const visible = ordered.filter(entry => isRecordHighlight(entry) && (selected === "ALL" || entry.category === selected));
   const groups = groupRecordActivity(visible, audit);
   const labels: Record<string, string> = { ALL: "All events", PROOF: "Proof", SHIPMENT: "Shipment", COMMERCE: "Order" };
   return <div className="proof-timeline">

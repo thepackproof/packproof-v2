@@ -43,6 +43,20 @@ test("lost declaration response recovers accepted signature even after local cha
   await recoverCaptureCompletion(f.capture, f.deps);
   assert.equal(f.calls.filter(c => c === "attest").length, 1); assert.equal(f.capture.recovery.phase, "FINALIZED");
 });
+test("an accepted iOS declaration survives a lost response without duplicate consent or another upload", async () => {
+  const f = fixture();
+  f.deps.attest = async id => {
+    f.calls.push('attest-ios');
+    f.proof.attestations!.push({ attestedBy: 'seller', relatedEvidenceId: id, authorization: { signatureVerification: 'SERVER_VERIFIED', method: 'IOS_BIOMETRIC' } });
+    throw new Error('response lost');
+  };
+  await assert.rejects(recoverCaptureCompletion(f.capture, f.deps));
+  f.capture.recovery.authorization!.expiresAt = '2020-01-01T00:00:00Z';
+  await recoverCaptureCompletion(f.capture, f.deps);
+  assert.equal(f.calls.filter(call => call === 'attest-ios').length, 1);
+  assert.equal(f.calls.filter(call => call === 'upload').length, 1);
+  assert.equal(f.capture.recovery.phase, 'FINALIZED');
+});
 test("pending durability keeps a truthful phase and local bytes; later retry finalizes", async () => {
   const f = fixture(); f.setDurability(false);
   await assert.rejects(recoverCaptureCompletion(f.capture, f.deps), { code: "PRESERVATION_PENDING" });
@@ -179,4 +193,22 @@ test("changed order context keeps the original and requires fresh consent withou
   assert.equal(f.calls.filter(call => call === "upload").length, 1);
   assert.equal(f.calls.filter(call => call === "attest").length, 1);
   assert.equal(f.capture.recovery.phase, "FINALIZED");
+});
+
+test("renewed upload cannot replace the saved evidence identity", async () => {
+  const f=fixture(); f.capture.uploadEvidenceId="original";
+  f.deps.initialize=async()=>({evidenceId:"different",received:false});
+  await assert.rejects(recoverCaptureCompletion(f.capture,f.deps),{code:"CAPTURE_ORIGINAL_CONFLICT"});
+  assert.equal(f.capture.uploadEvidenceId,"original"); assert.equal(f.calls.includes("upload"),false);
+});
+test("persisted discard intent prevents upload after restart",async()=>{
+  const f=fixture(); f.capture.recovery.discardRequested=true;
+  await assert.rejects(recoverCaptureCompletion(f.capture,f.deps),{code:"CAPTURE_DISCARD_PENDING"});
+  assert.equal(f.calls.includes("initialize"),false);assert.equal(f.calls.includes("upload"),false);
+});
+test("missing original stops automatic retries while preserving identity",async()=>{
+  const f=fixture(); f.deps.upload=async()=>{throw Object.assign(new Error("Original unavailable"),{code:"CAPTURE_LOCAL_FILE_MISSING",status:422});};
+  await assert.rejects(recoverCaptureCompletion(f.capture,f.deps));
+  assert.equal(f.capture.uploadEvidenceId,"video");assert.equal(f.capture.recovery.evidenceIdempotencyKey,"stable-key");
+  assert.equal(f.capture.recovery.phase,"NEEDS_ATTENTION");assert.equal(f.capture.recovery.lastError?.retryable,false);
 });

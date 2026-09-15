@@ -1,13 +1,15 @@
-import { providerAuthFailed, providerRateLimited, providerResponseInvalid, providerTemporarilyUnavailable } from "../../domain/integration-errors.js";
+import { DomainError } from "../../domain/errors.js";
+import { rateLimitDelay } from "../rate-limit-delay.js";
+import { providerAuthFailed, providerResponseInvalid, providerTemporarilyUnavailable } from "../../domain/integration-errors.js";
 import { asNumber, asRecord, asString, mapOAuthHttpError, oauthJson, readJson, type FetchLike } from "../connected-accounts/http.js";
 import { shopifyAdminApiUrl, shopifyTokenUrl } from "./constants.js";
-import { FULFILLMENT_LINES_QUERY, ORDER_LINES_QUERY, ORDER_QUERY, ORDER_REVISION_QUERY, ORDERS_QUERY, SHOP_IDENTITY_QUERY, UNINSTALL_MUTATION } from "./queries.js";
+import { identifierOrderQuery, FULFILLMENT_LINES_QUERY, ORDER_LINES_QUERY, ORDER_QUERY, ORDER_REVISION_QUERY, ORDERS_QUERY, SHOP_IDENTITY_QUERY, UNINSTALL_MUTATION } from "./queries.js";
 import { normalizeShopifyShop } from "./shop.js";
 import type { ShopifyClient, ShopifyOrder, ShopifyOrderPageInput } from "./types.js";
 
 const CURSOR_PREFIX = "shopify-graphql-v1:";
 const RECENT_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
-type RequestContext = { shop: string; accessToken: string; onProgress?: () => Promise<void> };
+type RequestContext = { shop: string; accessToken: string; onProgress?: () => Promise<void>; includeProductIdentifiers?: boolean };
 
 export function createHttpShopifyClient(fetchImpl: FetchLike = fetch): ShopifyClient {
   return {
@@ -29,6 +31,13 @@ export function createHttpShopifyClient(fetchImpl: FetchLike = fetch): ShopifyCl
     },
     async listOrders(input) { return (await listOrderPage(fetchImpl, input)).orders; },
     async listOrdersPage(input) { return listOrderPage(fetchImpl, input); },
+    async getOrder(input) {
+      if (!/^\d{1,30}$/.test(input.orderId)) throw new DomainError("INVALID_ORDER_ID", "Use the Shopify order ID, not its display number", 400);
+      const id = `gid://shopify/Order/${input.orderId}`;
+      const result = await graphql(fetchImpl, input, ORDER_REVISION_QUERY, {id});
+      if (result.order == null) throw new DomainError("COMMERCE_ORDER_NOT_FOUND", "This order is unavailable in the connected store", 404);
+      return hydrateOrder(fetchImpl, input, asRecord(result.order));
+    },
     async revoke(input) {
       const payload = asRecord((await graphql(fetchImpl, input, UNINSTALL_MUTATION)).appUninstall);
       if (!Array.isArray(payload.userErrors) || payload.userErrors.length) throw providerResponseInvalid();
@@ -53,14 +62,14 @@ async function listOrderPage(fetchImpl: FetchLike, input: ShopifyOrderPageInput)
 async function hydrateOrder(fetchImpl: FetchLike, input: RequestContext, summary: Record<string, unknown>): Promise<ShopifyOrder> {
   const id = requiredString(summary.id), revision = requiredDate(summary.updatedAt);
   numericGid(id, "Order");
-  const record = asRecord((await graphql(fetchImpl, input, ORDER_QUERY, { id })).order);
+  const record = asRecord((await graphql(fetchImpl, input, identifierOrderQuery(ORDER_QUERY,input.includeProductIdentifiers), { id })).order);
   requireRevision(record, id, revision);
   const itemPage = connection(record.lineItems), items = [...itemPage.nodes];
   let after = itemPage.cursor;
   const seen = new Set<string>();
   while (after) {
     requireNewCursor(seen, after);
-    const next = asRecord((await graphql(fetchImpl, input, ORDER_LINES_QUERY, { id, after })).order);
+    const next = asRecord((await graphql(fetchImpl, input, identifierOrderQuery(ORDER_LINES_QUERY,input.includeProductIdentifiers), { id, after })).order);
     requireRevision(next, id, revision);
     const page = connection(next.lineItems);
     items.push(...page.nodes); after = page.cursor;
@@ -123,7 +132,8 @@ function parseLineItem(value: unknown): ShopifyOrder["lineItems"][number] {
   return { id: numericGid(row.id, "LineItem"), title: asString(row.title), sku: asString(row.sku),
     quantity: nonnegativeInteger(row.quantity), currentQuantity: nonnegativeInteger(row.currentQuantity),
     remainingQuantity: nonnegativeInteger(row.unfulfilledQuantity), price: asString(money.amount), variantTitle: asString(row.variantTitle),
-    requiresShipping: row.requiresShipping };
+    requiresShipping: row.requiresShipping,
+    ...(row.variant ? {barcode:asString(asRecord(row.variant).barcode),variantId:asString(asRecord(row.variant).id),productId:asString(asRecord(asRecord(row.variant).product).id)} : {}) };
 }
 
 async function graphql(fetchImpl: FetchLike, input: RequestContext, query: string, variables: Record<string, unknown> = {}) {
@@ -136,12 +146,18 @@ async function graphql(fetchImpl: FetchLike, input: RequestContext, query: strin
       body: JSON.stringify({ query, variables }),
     });
   } catch { throw providerTemporarilyUnavailable(); }
+  if (response.status === 429) throw rateLimitDelay(response.headers.get("retry-after"));
   if (!response.ok) mapOAuthHttpError(response.status);
   const payload = asRecord(await readJson(response));
   if (Array.isArray(payload.errors) && payload.errors.length) {
     const codes = payload.errors.map(e => asString(asRecord(asRecord(e).extensions).code));
     if (codes.some(c => c === "ACCESS_DENIED" || c === "UNAUTHORIZED")) throw providerAuthFailed();
-    if (codes.includes("THROTTLED")) throw providerRateLimited();
+    if (codes.includes("THROTTLED")) {
+      const cost = asRecord(asRecord(payload.extensions).cost), throttle = asRecord(cost.throttleStatus);
+      const requested = asNumber(cost.requestedQueryCost), available = asNumber(throttle.currentlyAvailable), restore = asNumber(throttle.restoreRate);
+      const seconds = requested != null && available != null && restore != null && restore > 0 ? Math.max(1, Math.ceil((requested - available) / restore)) : null;
+      throw rateLimitDelay(response.headers.get("retry-after"), seconds);
+    }
     if (codes.includes("INTERNAL_SERVER_ERROR") || codes.includes("SERVICE_UNAVAILABLE")) throw providerTemporarilyUnavailable();
     throw providerResponseInvalid();
   }

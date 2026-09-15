@@ -44,6 +44,13 @@ async function ensureConnection(db: Database, clock: Clock, transactionId: strin
 
 /** Durable registration plus periodic refresh. A lease fences workers on multiple replicas. */
 export async function dispatchCaptureShipments(db: Database, clock: Clock, deps: CaptureShipmentDependencies, limit = 5) {
+  await db.query(`INSERT INTO capture_shipment_jobs(transaction_id,actor_user_id,state,next_run_at,updated_at)
+    SELECT p.transaction_id,pp.user_id,'QUEUED',$1,$1 FROM proofs p
+    JOIN proof_participants pp ON pp.proof_id=p.id AND pp.role='SELLER'
+    JOIN transaction_shipping s ON s.transaction_id=p.transaction_id
+    WHERE s.tracking_number IS NOT NULL AND s.tracking_number<>''
+      AND NOT EXISTS(SELECT 1 FROM capture_shipment_jobs j WHERE j.transaction_id=p.transaction_id)
+    ORDER BY p.created_at DESC LIMIT 5 ON CONFLICT DO NOTHING`,[clock.now().toISOString()]);
   let completed = 0, failed = 0;
   for (let index = 0; index < Math.min(Math.max(limit,1),25); index++) {
     const now = clock.now(), token = newId('shipment_lease');

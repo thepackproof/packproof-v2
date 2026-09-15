@@ -1,0 +1,145 @@
+name: iOS
+
+on:
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/ios.yml']
+  push:
+    branches: ['feature/ios-parity-*', 'feature/mobile-intake-*']
+    paths: ['mobile/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+    inputs:
+      signed_build:
+        description: Build a signed App Store archive with existing EAS Apple credentials
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  simulator:
+    name: Compile iOS app and Share Extension
+    runs-on: macos-15
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EAS_BUILD_PROFILE: ios-simulator
+      EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+      EXPO_PUBLIC_PACKPROOF_API_BASE_URL: https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws
+      EXPO_PUBLIC_PACKPROOF_AUTH_MODE: cognito
+      EXPO_PUBLIC_COGNITO_USER_POOL_ID: us-east-1_GdgTeYaOO
+      EXPO_PUBLIC_COGNITO_CLIENT_ID: 34pnucunllka2jcs8hsq762m5e
+      EXPO_PUBLIC_COGNITO_REGION: us-east-1
+      EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            backend/package-lock.json
+      - name: Select installed Xcode 26 or newer
+        run: |
+          set -euo pipefail
+          XCODE_APP=$(python3 - <<'PY'
+          import glob, re
+          candidates = []
+          for app in glob.glob('/Applications/Xcode_*.app'):
+            match = re.search(r'Xcode_(\d+)\.(\d+)', app)
+            if match and int(match[1]) >= 26 and 'beta' not in app.lower():
+              candidates.append(((int(match[1]), int(match[2])), app))
+          if not candidates: raise SystemExit('Xcode 26+ is required for the iOS release gate.')
+          print(max(candidates)[1])
+          PY
+          )
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+      - run: npm ci
+      - run: npm ci
+        working-directory: backend
+      - run: npm run typecheck
+      - run: npm run test:ios
+      - run: npm run test:proof-record
+      - run: npm run test:recovery
+      - name: Generate iOS native project and resolve Pods
+        run: |
+          npx expo prebuild --platform ios --no-install
+          cd ios
+          pod install
+      - name: Compile app, Swift modules, and Share Extension
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace ios/PackProof.xcworkspace -scheme PackProof \
+            -configuration Release -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/packproof-ios" \
+            CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/ios-build.log"
+      - name: Package simulator application
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/packproof-ios/Build/Products/Release-iphonesimulator/PackProof.app" \
+            dist/PackProof-iOS-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packproof-ios-simulator-${{ github.sha }}
+          path: |
+            mobile/dist/PackProof-iOS-Simulator.zip
+            ${{ runner.temp }}/ios-build.log
+
+  app-store:
+    name: Signed iOS archive
+    if: github.event_name == 'workflow_dispatch' && inputs.signed_build
+    needs: simulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+      PACKPROOF_IOS_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Check existing Expo authentication
+        run: |
+          test -n "$EXPO_TOKEN" || { echo '::error::EXPO_TOKEN is required for the signed iOS build.'; exit 1; }
+      - run: npm ci
+      - name: Build with existing remote Apple signing credentials
+        run: |
+          mkdir -p dist
+          npx --yes eas-cli@24.4.2 build --platform ios --profile ios-testflight --non-interactive --wait --json > dist/eas-ios-build.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const result = JSON.parse(fs.readFileSync('dist/eas-ios-build.json', 'utf8'));
+          const build = Array.isArray(result) ? result[0] : result;
+          if (build.status !== 'FINISHED' || !build.artifacts?.buildUrl) throw new Error('No completed signed iOS archive.');
+          fs.writeFileSync('dist/ipa-url.txt', build.artifacts.buildUrl);
+          NODE
+          curl --fail --location "$(cat dist/ipa-url.txt)" --output dist/PackProof.ipa
+          test -s dist/PackProof.ipa
+          sha256sum dist/PackProof.ipa > dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-ios-archive-${{ github.sha }}
+          path: |
+            mobile/dist/PackProof.ipa
+            mobile/dist/eas-ios-build.json
+            mobile/dist/SHA256SUMS

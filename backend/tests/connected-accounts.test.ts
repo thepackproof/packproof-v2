@@ -237,6 +237,35 @@ describe("connected accounts", () => {
     expect(started.body.error.code).toBe("CONNECTED_ACCOUNT_PROVIDER_DISABLED");
   });
 
+  it.each(['ios','android'])('returns %s connections to fixed app destinations for every provider', async (surface) => {
+    await boot();
+    const userId = await login(harness.app, `native-${surface}-seller`);
+    for (const provider of ['google','facebook','shopify','ebay']) {
+      const connected = await connectProvider(harness,userId,provider,`valid-${provider}-code`,{
+        surface,shop:'packproof-test',returnUrl:'https://untrusted.invalid',
+      });
+      expect(connected.location).toMatch(new RegExp(`^packproof-v2://connections/${provider}\\?`));
+      expect(connected.location).not.toContain('untrusted.invalid');
+    }
+  });
+
+  it('returns iOS reconnect and denial to the app only after consuming valid state', async () => {
+    await boot();
+    const userId = await login(harness.app,'ios-reconnect-seller');
+    const account = await connectProvider(harness,userId,'google','valid-google-code',{surface:'ios'});
+    const started = await request(harness.app).post(`/me/connected-accounts/${account.accountId}/reauthorize`).set(auth(userId)).send({surface:'ios'});
+    expect(started.status).toBe(201);
+    const state = new URL(started.body.authorizationUrl).searchParams.get('state');
+    const denied = await request(harness.app).get('/oauth/google/callback').query({state,error:'access_denied'});
+    expect(denied.headers.location).toMatch(/^packproof-v2:\/\/connections\/google\?/);
+    expect(denied.headers.location).toContain('CONNECTED_ACCOUNT_AUTH_DENIED');
+    const replay = await request(harness.app).get('/oauth/google/callback').query({state,code:'valid-google-code',surface:'ios'});
+    expect(replay.headers.location).toContain('OAUTH_STATE_REUSED');
+    expect(replay.headers.location).not.toContain('packproof-v2:');
+    const forged = await request(harness.app).get('/oauth/google/callback').query({state:'invalid',code:'valid-google-code',surface:'ios'});
+    expect(forged.headers.location).not.toContain('packproof-v2:');
+  });
+
   describe("eBay", () => {
     it("builds an official authorize URL with CSRF state and no client secret", async () => {
       await boot();

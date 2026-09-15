@@ -15,7 +15,7 @@ test('All remains complete; attention sort is stable; finalization and shipment 
   const waiting = fixture({proofId:'wait',role:'BUYER',updatedAt:'2026-09-09T00:00:00Z'});
   const completed = fixture({proofId:'complete',status:'FINALIZED',finalizedAt:'2026-09-08T00:00:00Z'});
   const rows = [waiting,completed,fixture({proofId:'proof-b'}),fixture()].map(row => ({...row,presentation:presentationForProof(row)}));
-  assert.deepEqual(selectProofRows(rows,DEFAULT_PROOFS_LIBRARY).map(row=>row.proofId),['proof-a','proof-b','wait','complete']);
+  assert.deepEqual(selectProofRows(rows,{...DEFAULT_PROOFS_LIBRARY,view:'all'}).map(row=>row.proofId),['proof-a','proof-b','wait','complete']);
   assert.equal(selectProofRows(rows,{...DEFAULT_PROOFS_LIBRARY,view:'attention'}).length,2);
   assert.deepEqual(selectProofRows(rows,{...DEFAULT_PROOFS_LIBRARY,view:'completed'}).map(row=>row.proofId),['complete']);
   assert.equal(presentationForProof(fixture({status:'CANCELLED'})).completed,false);
@@ -28,8 +28,11 @@ test('invitation merges by canonical ID and cannot become participant work befor
   assert.equal(view.nextAction.type,'ACCEPT_INVITATION');assert.equal(view.share.available,false);
 });
 test('participant deep links return to Proofs and never absorb public share or arbitrary external URLs', () => {
-  assert.equal(DEFAULT_PROOFS_LIBRARY.view,'all');assert.equal(normalizeRouteName('orders'),'home');assert.equal(resolveBackRoute('proof','orders'),'home');assert.equal(resolveBackRoute('capture','station'),'proof');
+  assert.equal(DEFAULT_PROOFS_LIBRARY.view,'attention');assert.equal(normalizeRouteName('orders'),'home');assert.equal(resolveBackRoute('proof','orders'),'home');assert.equal(resolveBackRoute('capture','station'),'proof');
   assert.equal(proofIdFromLink('packproof://proof/abc-123'),'abc-123');assert.equal(proofIdFromLink('https://thepackproof.com/app/proofs/abc'),'abc');
+  assert.equal(proofIdFromLink('packproof-v2://proof/abc-123'),'abc-123');
+  assert.equal(proofIdFromLink('packproof-v2://connections/ebay'),null);
+  assert.equal(proofIdFromLink('https://user:pass@thepackproof.com/app/proofs/abc'),null);
   assert.equal(proofIdFromLink('https://evil.example/app/proofs/abc'),null);assert.equal(proofIdFromLink('https://thepackproof.com/share/token'),null);
 });
 test('mobile collection traverses all pages and deduplicates overlapping pages before search', async () => {

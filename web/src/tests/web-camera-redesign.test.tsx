@@ -23,7 +23,7 @@ class Recorder {
 function api(){
   return {recoveryScope:"https://one.test",getProof:vi.fn(async()=>({...canonicalProof,status:"READY_FOR_EVIDENCE",evidence:[],attestations:[],participationPolicy:"COUNTERPARTY_OPTIONAL"})),
     getCapabilities:vi.fn(async()=>({schemaVersion:1,capture:{protocolVersions:[1],maxBytes:1000000,maxDurationSeconds:120,maxActiveUploads:2},preservation:{receiptVersions:[1],durableReceiptsRequired:true},shippingReview:{requiredForObservedConflicts:true,noLabelAllowed:true},correctionPolicy:{importedFactsReadOnly:true,captureBindingLocksManualDetails:true},sellerAttestation:{contextBindingVersion:1}})),
-    featureRequest:vi.fn(async()=>({cancelled:true})),createCaptureSession:vi.fn(async()=>({id:"capture-one"})),getCaptureShippingReview:vi.fn(async()=>({currentTrackingNumber:null,reviewRequired:false,observations:[]})),bindCaptureShipping:vi.fn(async()=>({status:"BOUND",trackingNumber:"9400111899223344556677"}))};
+    featureRequest:vi.fn(async()=>({cancelled:true})),createCaptureSession:vi.fn(async()=>({id:"capture-one",state:"ISSUED"})),getCaptureShippingReview:vi.fn(async()=>({currentTrackingNumber:null,reviewRequired:false,observations:[]})),bindCaptureShipping:vi.fn(async()=>({status:"BOUND",trackingNumber:"9400111899223344556677"}))};
 }
 beforeEach(()=>{
  Recorder.created=0;vi.clearAllMocks();vi.mocked(recoverStationCapture).mockResolvedValue(null);
@@ -76,11 +76,11 @@ it("preserves the specific preflight failure before requesting camera permission
 });
 
 it("never starts recording if navigation leaves while the capture session is being issued",async()=>{
- const client=api();let issue!:(value:{id:string})=>void;
+ const client=api();let issue!:(value:{id:string;state:string})=>void;
  client.createCaptureSession.mockImplementation(()=>new Promise(resolve=>{issue=resolve;}));
  const {start,unmount}=await open(client);fireEvent.click(start);
  await waitFor(()=>expect(client.createCaptureSession).toHaveBeenCalledTimes(1));unmount();
- issue({id:"late-unused-session"});
+ issue({id:"late-unused-session",state:"ISSUED"});
  await waitFor(()=>expect(client.featureRequest).toHaveBeenCalledWith(canonicalProof.proofId,"capture-sessions/late-unused-session/cancel","POST",{}));
  expect(Recorder.created).toBe(0);expect(saveStationCapture).not.toHaveBeenCalled();
 });

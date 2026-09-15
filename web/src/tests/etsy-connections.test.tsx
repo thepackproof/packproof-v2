@@ -24,12 +24,23 @@ function accountProps(accounts: ConnectedAccountView[] = []) {
 }
 function storeProps(row = connection) {
   return { connections: [row], lastSync: null, loading: false, error: null,
-    busy: false, development: false, ebay: null, onConnectDemo: vi.fn(),
+    busy: false, development: false, ebay: null,
     onConnectEbay: vi.fn(), onDisconnectEbay: vi.fn(), onImportSales: vi.fn(),
     onAutomation: vi.fn(), onSync: vi.fn() };
 }
 
 describe("Etsy selling account and automatic intake", () => {
+  it("shows provider automation rollout truthfully while allowing a saved opt-in to be disabled", async () => {
+    const props = storeProps({ ...connection, automationAvailable: false, automationUnavailableReason: "ROLLOUT_DISABLED" });
+    const { rerender } = render(<ConnectedStoresScreen {...props} />);
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+    expect(screen.getByText("Automatic orders are not available for this store yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check for orders now" })).toBeEnabled();
+    rerender(<ConnectedStoresScreen {...props} connections={[{ ...props.connections[0], autoSyncEnabled: true }]} />);
+    expect(screen.getByRole("checkbox")).toBeEnabled();
+    await userEvent.click(screen.getByRole("checkbox"));
+    expect(props.onAutomation).toHaveBeenCalledExactlyOnceWith("etsy_shop", false);
+  });
   it("connects the selling account without enabling automation implicitly", async () => {
     const props = accountProps();
     render(<ConnectedAccountsPanel {...props} />);

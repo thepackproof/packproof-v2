@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 13.2.0",
+    "version": "24.4.2",
     "appVersionSource": "local"
   },
   "build": {
@@ -24,6 +24,40 @@
       "env": {
         "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true"
       }
+    },
+    "ios-testflight": {
+      "distribution": "store",
+      "environment": "production",
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.2",
+        "credentialsSource": "remote",
+        "buildConfiguration": "Release",
+        "autoIncrement": false
+      },
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+        "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "cognito",
+        "EXPO_PUBLIC_COGNITO_USER_POOL_ID": "us-east-1_GdgTeYaOO",
+        "EXPO_PUBLIC_COGNITO_CLIENT_ID": "34pnucunllka2jcs8hsq762m5e",
+        "EXPO_PUBLIC_COGNITO_REGION": "us-east-1",
+        "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true"
+      },
+      "node": "22.14.0"
+    },
+    "ios-device": {
+      "extends": "ios-testflight",
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "ios-simulator": {
+      "extends": "ios-testflight",
+      "distribution": "internal",
+      "ios": {
+        "simulator": true,
+        "autoIncrement": false
+      }
     }
   },
   "submit": {
@@ -32,6 +66,9 @@
         "track": "internal",
         "releaseStatus": "completed"
       }
+    },
+    "ios-testflight": {
+      "ios": {}
     }
   }
 }

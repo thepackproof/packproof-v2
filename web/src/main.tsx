@@ -10,6 +10,7 @@ import "./site/proof-diagram.css";
 import "./site/workflow-visual.css";
 import "./site/brand-palette.css";
 import "./site/paper-system.css";
+import "./site/material-polish.css";
 
 const root = document.getElementById("root");
 if (!root) {

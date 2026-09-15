@@ -42,14 +42,15 @@ export function renderLegalHtml(document: LegalDocument, pageCss: string): strin
     <title>${escapeHtml(document.title)} — PackProof</title>
     <style>
 :root {
-  --navy: #142735;
-  --blue: #13a8e8;
-  --green: #0dce70;
-  --slate: #66737d;
-  --bg: #f4f6f8;
-  --border: #e2e7ea;
-  --white: #ffffff;
-  --text: #142735;
+  --warning-soft: #FFF1D6;
+  --navy: #23262D;
+  --blue: #1769D2;
+  --green: #14805E;
+  --slate: #526174;
+  --bg: #E9EEF4;
+  --border: #CBD5E1;
+  --white: #F7F9FC;
+  --text: #23262D;
   --radius-lg: 16px;
   --shadow: 0 2px 8px rgba(20, 39, 53, 0.06);
   --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -95,7 +96,7 @@ body {
   border-radius: 999px;
 }
 .topbar-nav a:hover { color: var(--navy); background: var(--bg); }
-.topbar-nav a[aria-current="page"] { color: var(--navy); background: #e8f6fc; }
+.topbar-nav a[aria-current="page"] { color: var(--navy); background: #E6F0FF; }
 .page {
   width: min(1080px, calc(100% - 2rem));
   margin: 0 auto;

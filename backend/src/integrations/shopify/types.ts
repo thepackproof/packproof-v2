@@ -34,6 +34,7 @@ export interface ShopifyOrder {
     currentQuantity?: number | null;
     price: string | null;
     variantTitle?: string | null;
+    barcode?: string | null; variantId?: string | null; productId?: string | null;
     remainingQuantity?: number | null;
     requiresShipping: boolean | null;
   }>;
@@ -49,6 +50,7 @@ export interface ShopifyOrderPageInput {
   updatedSince?: string;
   updatedUntil?: string;
   onProgress?: () => Promise<void>;
+  includeProductIdentifiers?: boolean;
 }
 
 export interface ShopifyClient {
@@ -59,7 +61,8 @@ export interface ShopifyClient {
     code: string;
   }): Promise<ShopifyTokenSet>;
   getShop(input: { shop: string; accessToken: string }): Promise<ShopifyShopIdentity>;
-  listOrders(input: { shop: string; accessToken: string; limit?: number }): Promise<ShopifyOrder[]>;
+  listOrders(input: { shop: string; accessToken: string; limit?: number; includeProductIdentifiers?: boolean }): Promise<ShopifyOrder[]>;
   listOrdersPage?(input: ShopifyOrderPageInput): Promise<{orders:ShopifyOrder[];cursor:string|null}>;
+  getOrder?(input: { shop: string; accessToken: string; orderId: string; includeProductIdentifiers?: boolean; onProgress?: () => Promise<void> }): Promise<ShopifyOrder>;
   revoke(input: { shop: string; accessToken: string }): Promise<void>;
 }

@@ -44,6 +44,7 @@ export interface EbayOrder {
   requiresPhysicalFulfillment?: boolean;
   cancelState: string | null;
   buyerUsername: string | null;
+  buyerUserId?: string | null;
   total: EbayMoney | null;
   lineItems: EbayOrderLineItem[];
   shippingCarrier: string | null;

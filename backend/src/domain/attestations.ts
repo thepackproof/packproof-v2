@@ -1,3 +1,4 @@
+import { ensureIdentifierBarrier } from '../identifiers/service.js';
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
 import { sha256Hex } from "../hash.js";
@@ -106,6 +107,7 @@ export async function commitAttestation(
       relatedEvidence = evidence.rows[0];
     }
 
+    if (statement === "PACKED_DESCRIBED_ITEM" && relatedEvidence?.capture_session_id) await ensureIdentifierBarrier(tx,clock,proofId,relatedEvidence.capture_session_id);
     let authorization: AttestationAuthorization | undefined;
     if (input.authorization !== undefined) {
       if (participant.role !== "SELLER" || statement !== "PACKED_DESCRIBED_ITEM"

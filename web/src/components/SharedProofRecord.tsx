@@ -1,13 +1,16 @@
 import { useRef } from "react";
+import { IdentifierDetails, type IdentifierProjection } from './IdentifierDetails';
 
 import type { ChronologyEntry, PublicProofView } from "../api/types";
 import { formatWhen } from "../format";
 import { useViewState } from "../navigation-context";
 import { PublicMedia } from "./PublicMedia";
 import { ProofTimeline } from "./ProofTimeline";
-import { StatusBadge } from "./StatusBadge";
+import { packingRecordLabel, proofReference } from "../../../mobile/src/copy/evidence-record";
+import { Glyph } from "../site/Brand";
 
 export type SharedProofView = PublicProofView & {
+  identifiers?: IdentifierProjection;
   // These optional projections contain only fields the server authorized for this link.
   chronology?: ChronologyEntry[];
   recordTracking?: {
@@ -54,11 +57,12 @@ export function SharedProofRecord({ proof, loadMedia }: {
   }
   return <article ref={record} className="workspace-proof-record" aria-label="Proof record">
     <header className="record-top">
-      <div><h2>{tracker?.itemTitle || "Shared Proof"}</h2>{tracker?.reference && <p>{tracker.reference}</p>}</div>
-      <StatusBadge label={proof.evidenceState?.code === "UPLOADING" ? "Evidence uploading" : proof.status === "FINALIZED" ? "Proof completed" : proof.status === "EVIDENCE_COMMITTED" ? "Confirmation pending" : proof.status === "READY_FOR_EVIDENCE" ? "Recording needed" : "Proof in progress"} />
+      <div><h2>{tracker?.itemTitle || "Shared Proof"}</h2><p>{tracker?.reference || proofReference(proof.proofId)}</p></div>
+      <span className={`record-seal ${proof.status==='FINALIZED'?'is-sealed':''}`}><Glyph name={proof.status==='FINALIZED'?'shield':'file'} size={18}/>{packingRecordLabel(proof.status)}</span>
     </header>
     <p className="record-source-note">Shipment: {shipments.at(-1)?.label || "No carrier update yet"}</p>
     {proof.recordAsOf && <p className="record-source-note">{proof.recordAsOf.scopeStatement}</p>}
+    {proof.integrity && <details className="record-source-note"><summary>{proof.integrity.result==='MANIFEST_HASH_MATCH'?'Preserved manifest integrity checked':proof.integrity.result==='MANIFEST_HASH_MISMATCH'?'Manifest integrity mismatch':'Integrity check available after finalization'}</summary><p>{proof.integrity.scope}</p></details>}
     <div className="record-tabs" role="tablist" aria-label="Proof record views">
       {tabs.map((name, index) => <button key={name} type="button" role="tab" ref={element => { buttons.current[index] = element; }}
         id={`shared-${proof.proofId}-${name}-tab`} aria-controls={`shared-${proof.proofId}-${name}-panel`}
@@ -78,6 +82,7 @@ export function SharedProofRecord({ proof, loadMedia }: {
           {statement.biometricPolicy && <details><summary>Confirmation details</summary><p>{statement.biometricPolicy} This does not verify legal identity, package contents or hardware origin.</p></details>}
         </section>)}
       </div>
+      <IdentifierDetails value={proof.identifiers} />
     </div>
     <div className="record-body" hidden={tab !== "Activity"} role="tabpanel" tabIndex={0} id={`shared-${proof.proofId}-Activity-panel`} aria-labelledby={`shared-${proof.proofId}-Activity-tab`}>
       {tab === "Activity" && (proof.chronology ? <ProofTimeline entries={proof.chronology} /> : activity.length ? <><ol className="shared-proof-activity">{activity.map((item, index) => <li key={`${item.code}.${item.occurredAt}.${index}`}><strong>{item.label}</strong><time dateTime={item.occurredAt!}>{formatWhen(item.occurredAt)}</time></li>)}</ol><p className="note">Recorded milestones included in this link. Exact source details appear when included by the server.</p></> : <p className="note">No activity is included in this view yet.</p>)}

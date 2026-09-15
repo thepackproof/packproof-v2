@@ -111,6 +111,9 @@ export function createEbayConnectedAccountProvider(input: {
     },
     async refreshCredentials(stored) {
       requireEbay(runtime);
+      if (stored.material.environment !== runtime.environment) {
+        throw new DomainError("INTEGRATION_NEEDS_REAUTH", "Reconnect eBay in the current environment", 409);
+      }
       const refreshToken = stored.material.refreshToken?.trim();
       if (!refreshToken) {
         throw new DomainError("INTEGRATION_NEEDS_REAUTH", "eBay refresh token is missing", 409);

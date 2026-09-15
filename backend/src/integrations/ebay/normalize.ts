@@ -80,8 +80,8 @@ export function ebayOrderToImportedTransaction(input: {
             shipmentDate: null,
           }
         : null,
-    buyer: order.buyerUsername
-      ? { externalId: order.buyerUsername, displayName: order.buyerUsername }
+    buyer: order.buyerUserId || order.buyerUsername
+      ? { externalId: order.buyerUserId || order.buyerUsername!, displayName: order.buyerUsername }
       : null,
     provenance: {
       source: "MARKETPLACE_API",

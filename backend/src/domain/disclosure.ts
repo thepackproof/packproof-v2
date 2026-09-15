@@ -1,3 +1,4 @@
+import { identifierProjection } from '../identifiers/service.js';
 import { disclosedRecord } from './disclosure-record.js';
 import type { Clock } from '../clock.js';
 import type { Database } from '../db/database.js';
@@ -17,7 +18,7 @@ import type { AttestationRow } from './types.js';
 import { assertPolicyAccessSafe } from './policy-recovery.js';
 
 export const DISCLOSURE_POLICY_VERSION = 'packproof.disclosure/v1';
-export const DISCLOSURE_FIELDS = ['status', 'order', 'shipping', 'evidence', 'statements'] as const;
+export const DISCLOSURE_FIELDS = ['status', 'order', 'shipping', 'evidence', 'statements', 'itemIdentifiers'] as const;
 export type DisclosureField = typeof DISCLOSURE_FIELDS[number];
 export type DisclosurePurpose = 'BUYER_RECEIPT' | 'CLAIMS_REVIEW' | 'PUBLIC_SAMPLE' | 'SHARED_PROOF';
 export const SHARED_PROOF_FIELDS: DisclosureField[] = ['status', 'order', 'shipping', 'evidence', 'statements'];
@@ -27,7 +28,7 @@ export interface DisclosureContext {
   purpose: DisclosurePurpose | 'PARTICIPANT'; fields: DisclosureField[]; media: DisclosureMedia[];
 }
 export interface DisclosureInput {
-  purpose?: unknown; fields?: unknown; media?: unknown; originalsReviewed?: unknown;
+  purpose?: unknown; fields?: unknown; media?: unknown; originalsReviewed?: unknown; itemIdentifiersReviewed?: unknown;
   expiresAt?: unknown; recipientHint?: unknown; previewHash?: unknown;
 }
 interface GrantRow { scope_version: number; policy_version: string; purpose: DisclosurePurpose; fields: DisclosureField[]; media: DisclosureMedia[] }
@@ -52,6 +53,10 @@ export async function disclosureContextForLink(db: Database, link: ProofAccessLi
   if (!creator.rows[0]) forbidden();
   const subscription=(await db.query<{recipient_grant_id:string|null}>('SELECT recipient_grant_id FROM proof_notification_subscriptions WHERE access_link_id=$1',[link.id])).rows[0];
   let effectiveLinkId=link.id;
+  const claim=(await db.query<{access_link_id:string}>(`SELECT a.access_link_id FROM claims_viewer_sessions c JOIN claims_authorizations a ON a.id=c.authorization_id
+    JOIN api_keys k ON k.id=c.key_id JOIN proof_access_links parent ON parent.id=a.access_link_id
+    WHERE c.access_link_id=$1 AND a.revoked_at IS NULL AND k.revoked_at IS NULL AND parent.revoked_at IS NULL AND parent.expires_at>$2`,[link.id,now.toISOString()])).rows[0];
+  if(claim)effectiveLinkId=claim.access_link_id;
   if(subscription?.recipient_grant_id) {
     const parent=(await db.query<ProofAccessLinkRow>('SELECT * FROM proof_access_links WHERE id=$1 AND proof_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>$3)',[subscription.recipient_grant_id,link.proof_id,now.toISOString()])).rows[0];
     if(!parent) throw new DomainError('ACCESS_LINK_REVOKED','This viewing link is no longer available',404);
@@ -64,7 +69,7 @@ export async function disclosureContextForLink(db: Database, link: ProofAccessLi
     return {
       proofId: link.proof_id, grantId: link.id, scopeIdentity: effectiveLinkId,
       policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: Number(latest.scope_version),
-      purpose: 'SHARED_PROOF', fields: latest.fields.filter(field => SHARED_PROOF_FIELDS.includes(field)),
+      purpose: 'SHARED_PROOF', fields: latest.fields.filter(field => SHARED_PROOF_FIELDS.includes(field) || field === 'itemIdentifiers'),
       media: (await listSharedProofSources(db, link.proof_id)).map(source => ({ evidenceId: source.id, representation: 'ORIGINAL' })),
     };
   }
@@ -85,14 +90,15 @@ export async function validateDisclosureInput(db: Database, actorUserId:string,p
       invalid('Shared Proof links include the same record and recordings. Individual fields and files cannot be selected.');
     return {
       proofId, grantId: 'preview', policyVersion: DISCLOSURE_POLICY_VERSION, scopeVersion: 1,
-      purpose, fields: [...SHARED_PROOF_FIELDS],
+      purpose, fields: [...SHARED_PROOF_FIELDS,...(input.itemIdentifiersReviewed===true ? ['itemIdentifiers' as const] : [])],
       media: (await listSharedProofSources(db, proofId)).map(source => ({ evidenceId: source.id, representation: 'ORIGINAL' })),
     };
   }
   if(typeof purpose!=='string'||!['BUYER_RECEIPT','CLAIMS_REVIEW','PUBLIC_SAMPLE'].includes(purpose)) invalid('Choose a recipient purpose');
   const fields=input.fields ?? ['status','order','shipping'];
-  if(!Array.isArray(fields)||fields.length>4||fields.some(x=>!['status','order','shipping','evidence'].includes(x))) invalid('Only status, item title, shipping status and selected media can be shared');
+  if(!Array.isArray(fields)||fields.length>5||fields.some(x=>!['status','order','shipping','evidence','itemIdentifiers'].includes(x))) invalid('Only status, item title, shipping status and selected media can be shared');
   if(!fields.includes('status')) invalid('Every receipt includes the Proof status');
+  if(fields.includes('itemIdentifiers')&&(!fields.includes('order')||!fields.includes('evidence'))) invalid('Sharing item identifiers requires the order and selected recording categories.');
   const media=input.media ?? [];
   if(!Array.isArray(media)||media.length>30) invalid('Select at most 30 media sources');
   const selected:DisclosureMedia[]=[];
@@ -117,6 +123,8 @@ export async function validateDisclosureInput(db: Database, actorUserId:string,p
 
 export async function getDisclosureProjection(db:Database,ctx:DisclosureContext) {
   const proof=await loadProof(db,ctx.proofId);
+  const manifest=(await db.query<{canonical_json:string;sha256:string}>('SELECT canonical_json,sha256 FROM final_manifests WHERE proof_id=$1',[ctx.proofId])).rows[0];
+  const integrity={result:!manifest?'NOT_FINALIZED':sha256Hex(manifest.canonical_json)===manifest.sha256?'MANIFEST_HASH_MATCH':'MANIFEST_HASH_MISMATCH',scope:'Stored manifest bytes. This check does not establish package contents or decide a claim.'};
   const source=await buildProofTracker(db,ctx.proofId);
   const committed=(await db.query<{evidence_type:string}>('SELECT evidence_type FROM evidence WHERE proof_id=$1 AND validation_status=\'COMMITTED\'',[ctx.proofId])).rows;
   const packingAttested=(await db.query('SELECT 1 FROM attestations WHERE proof_id=$1 AND statement=\'PACKED_DESCRIBED_ITEM\'',[ctx.proofId])).rows.length>0;
@@ -160,10 +168,13 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
   const pendingEvidence = ctx.purpose === 'SHARED_PROOF' && ctx.fields.includes('evidence') && (await db.query(`SELECT 1 FROM evidence WHERE proof_id=$1 AND validation_status='PENDING'
     UNION ALL SELECT 1 FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1 AND e.committed_at IS NULL AND e.discarded_at IS NULL LIMIT 1`,[ctx.proofId])).rows.length > 0;
   const evidenceState = !ctx.fields.includes('evidence') ? {code:'NOT_SHARED',message:'Recordings are not included in this link'}
-    : pendingEvidence ? {code:'UPLOADING',message:'Evidence is still uploading'}
+    : pendingEvidence ? {code:'UPLOADING',message:'A recording upload is incomplete'}
     : evidence.length === 0 ? ctx.purpose === 'SHARED_PROOF' ? {code:'NOT_RECORDED',message:'Recording has not been added yet'} : {code:'NOT_SHARED',message:'Recordings are not included in this link'}
     : {code:'AVAILABLE',message:proof.status === 'FINALIZED' ? 'Proof completed' : 'Recording added; confirmation is pending'};
-  const value={...record,evidenceState,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
+  const identifiers = ctx.fields.includes('itemIdentifiers') && ctx.fields.includes('order') && ctx.fields.includes('evidence') ? await identifierProjection(db,ctx.proofId) : undefined;
+  const allowedEvidence = new Set(ctx.media.map(m=>m.evidenceId));
+  if (identifiers) identifiers.observations=identifiers.observations.filter(o=>o.evidenceId && allowedEvidence.has(o.evidenceId));
+  const value={...record,...(identifiers ? {identifiers} : {}),integrity,evidenceState,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
     join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
     evidence:ctx.fields.includes('evidence')?evidence:[],
     statements,
@@ -198,7 +209,7 @@ export async function createDisclosureGrant(db:Database,clock:Clock,actorUserId:
     ctx.grantId=link.accessLinkId;
     await tx.query('INSERT INTO proof_disclosure_grants(access_link_id,scope_version,policy_version,purpose,fields,media,preview_hash,created_by_user_id,created_at) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9)',[ctx.grantId,ctx.scopeVersion,ctx.policyVersion,ctx.purpose,JSON.stringify(ctx.fields),JSON.stringify(ctx.media),preview.disclosure.viewHash,actorUserId,clock.now().toISOString()]);
     await appendAudit(tx,{proofId,actorUserId,eventType:'DISCLOSURE_SCOPE_REVIEWED',eventData:{accessLinkId:ctx.grantId,scopeVersion:ctx.scopeVersion,policyVersion:ctx.policyVersion,previewHash:preview.disclosure.viewHash},at:clock.now()});
-    return {...link,preview:await getDisclosureProjection(tx,ctx)};
+    return {...link,itemIdentifiersReviewed:ctx.fields.includes('itemIdentifiers'),preview:await getDisclosureProjection(tx,ctx)};
   });
 }
 /** Compatibility collector for small internal callers. HTTP archives and playback
@@ -226,7 +237,7 @@ export async function reuseSharedProofLink(db:Database,clock:Clock,actorUserId:s
     if(row.revoked_at) throw new DomainError('ACCESS_LINK_REVOKED','This viewing link has been revoked',404);
     if(row.expires_at && new Date(row.expires_at) <= clock.now()) throw new DomainError('ACCESS_LINK_EXPIRED','This viewing link has expired',404);
     const ctx=await disclosureContextForLink(tx,row,clock.now());
-    if(ctx.purpose!=='SHARED_PROOF' || ctx.fields.length!==SHARED_PROOF_FIELDS.length || SHARED_PROOF_FIELDS.some(field=>!ctx.fields.includes(field))) forbidden();
-    return {...toAccessLinkView(row),token,url:`${publicWebBaseUrl.replace(/\/$/,'')}/p/${token}`};
+    if(ctx.purpose!=='SHARED_PROOF' || ctx.fields.some(field=>!SHARED_PROOF_FIELDS.includes(field)&&field!=='itemIdentifiers') || SHARED_PROOF_FIELDS.some(field=>!ctx.fields.includes(field))) forbidden();
+    return {...toAccessLinkView(row),itemIdentifiersReviewed:ctx.fields.includes('itemIdentifiers'),token,url:`${publicWebBaseUrl.replace(/\/$/,'')}/p/${token}`};
   });
 }

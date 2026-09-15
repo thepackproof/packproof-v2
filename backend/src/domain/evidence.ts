@@ -1,3 +1,4 @@
+import { engineRow, inspectSegmentStream } from "../capture/service.js";
 import { eligibleCaptureSession, loadCaptureSession, assertCaptureRecoverable } from "./capture-sessions.js";
 import { validateCapturedMediaStream } from "./capture-media.js";
 import { MEDIA_MAX_BYTES, reserveMediaAdmission, validateAdmissionMetadata } from "./media-admission.js";
@@ -299,6 +300,9 @@ export async function commitEvidence(
     );
   }
 
+  const engine = prepared.captureSessionId ? await engineRow(db, prepared.captureSessionId) : null;
+  if (engine && !engine.manifest_json) throw new DomainError("CAPTURE_SEAL_REQUIRED", "Seal the capture journal before committing its source", 409);
+  const checkedStream = (source: AsyncIterable<Uint8Array>) => engine?.manifest_json ? Readable.from(inspectSegmentStream(engine.manifest_json, source)) : Readable.from(source);
   let capturedDurationMs: number | null = null;
   if (prepared.captureSessionId) {
     const session = await loadCaptureSession(db,actorUserId,proofId,prepared.captureSessionId);
@@ -308,13 +312,16 @@ export async function commitEvidence(
       // Compatibility for explicitly supplied in-memory test adapters only.
       const original=await objectStore.get(committedObject.key,{versionId:committedObject.versionId});
       if(!original) throw new DomainError("EVIDENCE_INTEGRITY_FAILURE","The stored original is unavailable",409);
-      capturedDurationMs=(await validateCapturedMediaStream(Readable.from([original.body]),prepared.contentType,{byteSize:committedObject.byteSize,sha256:committedObject.sha256,maxDurationMs:(session as typeof session & {max_duration_ms?:number|null}).max_duration_ms??1_800_000})).durationMs;
+      capturedDurationMs=(await validateCapturedMediaStream(checkedStream(Readable.from([original.body])),prepared.contentType,{byteSize:committedObject.byteSize,sha256:committedObject.sha256,maxDurationMs:(session as typeof session & {max_duration_ms?:number|null}).max_duration_ms??1_800_000})).durationMs;
     } else {
       const original=await objectStore.getStream(committedObject.key,{versionId:committedObject.versionId});
       if(!original) throw new DomainError("EVIDENCE_INTEGRITY_FAILURE","The stored original is unavailable",409);
-      capturedDurationMs=(await validateCapturedMediaStream(original.body,prepared.contentType,{byteSize:committedObject.byteSize,sha256:committedObject.sha256,maxDurationMs:(session as typeof session & {max_duration_ms?:number|null}).max_duration_ms??1_800_000})).durationMs;
+      capturedDurationMs=(await validateCapturedMediaStream(checkedStream(original.body),prepared.contentType,{byteSize:committedObject.byteSize,sha256:committedObject.sha256,maxDurationMs:(session as typeof session & {max_duration_ms?:number|null}).max_duration_ms??1_800_000})).durationMs;
     }
   }
+
+  if (engine?.manifest_json && capturedDurationMs !== null && engine.manifest_json.observations.some(o => o.endMs > capturedDurationMs! + 1000))
+    throw new DomainError("CAPTURE_TIME_INVALID", "An observation falls outside the independently inspected recording", 422);
 
   return db.transaction(async (tx) => {
     const current = await loadEvidenceForCommit(tx, clock, actorUserId, proofId, evidenceId);

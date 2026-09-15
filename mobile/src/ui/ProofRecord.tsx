@@ -1,3 +1,7 @@
+import { isNativeAttestationMethod } from "../attestation/authorization";
+import { TrackingIntake } from "./TrackingIntake";
+import { proofReference, shipmentRecordLabel } from "../copy/evidence-record";
+import { RecordSeal } from "./RecordSeal";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,6 +16,8 @@ import { type EvidenceAnchor, type SignatureView } from "../signature";
 import { recordCorrectionState } from "../copy/record-context";
 import { StatusBadge, statusTone } from "./StatusBadge";
 import { Button } from "./Button";
+import { IdentifierDetails } from './IdentifierDetails';
+import { UploadRecoveryCards } from './UploadRecoveryCards';
 import { PressableScale } from "./motion";
 import { ProofEvidencePreview } from "./ProofEvidencePreview";
 import { ProofRecordTimeline } from "./ProofRecordTimeline";
@@ -41,7 +47,10 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   const [reload, setReload] = useState(0);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const scroll = useRef<Partial<Record<ProofRecordTab, RestoringScrollViewHandle | null>>>({});
-  const tabScroll = useRef<ScrollView>(null), tabPositions = useRef<Record<string, number>>({});
+  const tabScroll = useRef<ScrollView>(null), tabPositions = useRef<Record<string, { x: number; width: number }>>({});
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const indicatorScale = useRef(new Animated.Value(1)).current;
+  const indicatorVisible = useRef(new Animated.Value(0)).current;
   const fade = useRef(new Animated.Value(1)).current;
   const committed = committedRecordEvidence(proof);
   const selectedEvidence = committed.find(item => item.evidenceId === selectedEvidenceId && (item.stageId ?? null) === selectedEvidenceStageId) ?? committed.find(item => item.contentType?.startsWith("video/")) ?? committed[0];
@@ -50,7 +59,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   const client = app.client;
   const sellerAttestation = selectedEvidence && !selectedEvidence.stageId ? proof.attestations?.find(row =>
     row.statement === "PACKED_DESCRIBED_ITEM" && row.relatedEvidenceId === selectedEvidence.evidenceId &&
-    row.authorization?.signatureVerification === "SERVER_VERIFIED" && row.authorization.method === "ANDROID_BIOMETRIC_STRONG" &&
+    row.authorization?.signatureVerification === "SERVER_VERIFIED" && isNativeAttestationMethod(row.authorization.method) &&
     proof.participants.some(person => person.role === "SELLER" && person.userId === row.attestedBy)) : undefined;
 
   useEffect(() => {
@@ -71,12 +80,30 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     saved.current = { ...saved.current, offsets: { ...saved.current.offsets, [panelTab]: Math.max(0, offset) } };
     app.saveProofRecordView(proof.proofId, saved.current);
   }
+  function positionIndicator(next: ProofRecordTab, animated: boolean) {
+    const position = tabPositions.current[next];
+    if (!position) return;
+    indicatorX.stopAnimation(); indicatorScale.stopAnimation();
+    // A fixed-width underline uses native transforms, including when font scaling changes tab widths.
+    const x = position.x + (position.width - 100) / 2;
+    const scale = position.width / 100;
+    if (!animated || reducedMotion) {
+      indicatorX.setValue(x); indicatorScale.setValue(scale);
+    } else {
+      Animated.parallel([
+        Animated.timing(indicatorX, { toValue: x, duration: 200, useNativeDriver: true }),
+        Animated.timing(indicatorScale, { toValue: scale, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+    indicatorVisible.setValue(1);
+  }
   function selectTab(next: ProofRecordTab) {
     if (next === tab) return;
     saved.current = { ...saved.current, tab: next };
     app.saveProofRecordView(proof.proofId, saved.current);
     setTab(next);
-    tabScroll.current?.scrollTo({ x: Math.max(0, (tabPositions.current[next] ?? 0) - 12), animated: !reducedMotion });
+    positionIndicator(next, true);
+    tabScroll.current?.scrollTo({ x: Math.max(0, (tabPositions.current[next]?.x ?? 0) - 12), animated: !reducedMotion });
     fade.stopAnimation(); fade.setValue(reducedMotion ? 1 : 0.5);
     Animated.timing(fade, { toValue: 1, duration: reducedMotion ? 0 : motion.duration.fast, useNativeDriver: true }).start();
   }
@@ -126,12 +153,13 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     if (next) scroll.current[tab]?.scrollTo({ y: 0, animated: !reducedMotion });
   }
 
-  return <View style={[styles.record,{backgroundColor:colors.surface}]}>
-    <View style={[styles.tabBorder, { borderBottomColor: colors.divider }]}>
+  return <View style={[styles.record,{backgroundColor:colors.background}]}>
+    <View style={[styles.tabBorder, { backgroundColor: colors.surface }]}>
       <ScrollView ref={tabScroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Proof record views">
-        {tabs.map(({ key, label }) => <View key={key} style={styles.tabSlot} onLayout={event => { tabPositions.current[key] = event.nativeEvent.layout.x; if (tab === key) tabScroll.current?.scrollTo({ x: Math.max(0, event.nativeEvent.layout.x - 12), animated: false }); }}><PressableScale accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === key }} onPress={() => selectTab(key)} style={[styles.tab, { borderBottomColor: tab === key ? colors.accent : "transparent" }]}>
-          <Text style={[styles.tabLabel, { color: tab === key ? colors.accentText : colors.textSecondary }]}>{label}</Text>
+        {tabs.map(({ key, label }) => <View key={key} style={styles.tabSlot} onLayout={event => { tabPositions.current[key] = { x: event.nativeEvent.layout.x, width: event.nativeEvent.layout.width }; if (tab === key) { positionIndicator(key, false); tabScroll.current?.scrollTo({ x: Math.max(0, event.nativeEvent.layout.x - 12), animated: false }); } }}><PressableScale accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === key }} onPress={() => selectTab(key)} style={[styles.tab, { backgroundColor: 'transparent' }]}>
+          <Text style={[styles.tabLabel, { color: tab === key ? colors.textPrimary : colors.textSecondary }]}>{label}</Text>
         </PressableScale></View>)}
+        <Animated.View pointerEvents="none" accessible={false} style={[styles.tabIndicator, { backgroundColor: colors.surfaceElevated, opacity: indicatorVisible, transform: [{ translateX: indicatorX }, { scaleX: indicatorScale }] }]} />
       </ScrollView>
     </View>
     <Animated.View style={[styles.panel, { opacity: fade }]}>
@@ -140,10 +168,10 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
       <RestoringScrollView ref={value => { scroll.current[panelTab] = value; }} contentContainerStyle={styles.body} initialOffsetY={saved.current.offsets[panelTab]} restorationReady={panelTab === tab && (panelTab !== "Evidence" || !hasVideo || !bookmarksLoading)} onScrollOffset={offset => { if (panelTab === tab) saveOffset(panelTab, offset); }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={app.busy} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />}>
     <View style={[styles.top, { borderBottomColor: colors.divider }]}>
       <Text style={[styles.title, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
-      <Text selectable style={[styles.note,{color:colors.textSecondary}]}>{txn.externalReference ? `Order ${txn.externalReference}` : `Proof ${proof.proofId.slice(0,8)}`}</Text>
-      <Text style={[styles.note,{color:colors.textSecondary}]}>Shipment: {presentation.shipmentStatus || "No carrier update yet"}</Text>
+      <Text selectable style={[styles.note,{color:colors.textSecondary}]}>{proofReference(proof.proofId, txn.externalReference)}</Text>
+      <Text style={[styles.note,{color:colors.textSecondary}]}>Shipment: {shipmentRecordLabel(shipping?.trackingNumber, presentation.shipmentStatus)}</Text>
       <View style={styles.headerMeta}>
-        <StatusBadge label={statusLabel} tone={presentation.completed ? "success" : "neutral"} />
+        <RecordSeal status={proof.status} />
         <PressableScale accessibilityRole="button" accessibilityLabel="Order details" accessibilityState={{ expanded: detailsExpanded }} onPress={toggleDetails} style={styles.detailsToggle}>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Details</Text><Ionicons name={detailsExpanded ? "chevron-up" : "chevron-down"} size={15} color={colors.textSecondary} />
         </PressableScale>
@@ -160,28 +188,30 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
           {corrections.canCorrectOrder ? <Button label="Correct order details" variant="tertiary" onPress={() => app.go("editPurchase")} /> : null}
         </View> : null}
         {panelTab === "Evidence" ? <>
+          <UploadRecoveryCards />
           {action}
-          {!committed.length ? <View style={styles.empty}>
-            <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}><Ionicons name="videocam-outline" size={30} color={colors.accentText} /></View>
-            <Text style={[styles.heading, { color: colors.textPrimary }]}>{pendingUpload ? "Evidence is still uploading" : "Recording has not been added yet"}</Text>
+          {!committed.length ? <View style={[styles.empty, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceElevated }]}><Ionicons name="videocam-outline" size={30} color={colors.textSecondary} /></View>
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>{pendingUpload ? "Recording upload is incomplete" : "Recording has not been added yet"}</Text>
           </View> : <>
             {committed.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectors} accessibilityLabel="Choose original evidence">{committed.map((item, index) => <PressableScale key={recordEvidenceKey(item)} onPress={() => selectEvidence(item)} accessibilityRole="button" accessibilityState={{ selected: selectedEvidence === item }} style={[styles.selector, { backgroundColor: selectedEvidence === item ? colors.accentSoft : colors.surface, borderColor: selectedEvidence === item ? colors.accentSoftBorder : colors.border }]}><Text style={[styles.subtitle, { color: colors.textPrimary }]}>{recordEvidenceLabel(item)} {index + 1}</Text></PressableScale>)}</ScrollView> : null}
             {selectedEvidence ? <ProofEvidencePreview key={recordEvidenceKey(selectedEvidence)} evidence={selectedEvidence} active={tab === "Evidence"} title={recordEvidenceLabel(selectedEvidence)} bookmarks={originalBookmarks(selectedEvidence, anchors)} initialTime={saved.current.playbackTimes?.[recordEvidenceKey(selectedEvidence)] ?? 0} onTime={seconds => savePlayback(recordEvidenceKey(selectedEvidence), seconds)} labelOffsetMs={selectedEvidence.stageId ? undefined : proof.captureShipping?.observations.find(item => item.evidenceId === selectedEvidence.evidenceId)?.detectedAtMs} /> : null}
-            {sellerAttestation ? <View style={[styles.info, { borderColor: colors.accentSoftBorder }]}>
-              <Text style={[styles.heading, { color: colors.accentText }]}>Seller attestation</Text>
-              <Text style={[styles.text, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
-              <Text style={[styles.note, { color: colors.textSecondary }]}>Recorded {formatDateTime(sellerAttestation.createdAt)} · Signature verified</Text>
+            {sellerAttestation ? <View style={styles.info}>
+              <StatusBadge label="Attestation recorded" tone="success" semantic="integrity" />
+              <Text style={[styles.attestationStatement, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
+              <Text style={[styles.finePrint, { color: colors.textSecondary }]}>Recorded {formatDateTime(sellerAttestation.createdAt)} · Biometric signature verified</Text>
             </View> : null}
             {bookmarkError ? <Text style={[styles.note, { color: colors.textSecondary }]}>Saved bookmarks could not be loaded. Pull down to refresh; the original recording remains available.</Text> : null}
           </>}
+          <IdentifierDetails value={proof.identifiers} />
           <View style={[styles.details,{borderBottomColor:colors.divider}]}>
             <Text style={[styles.heading,{color:colors.textPrimary}]}>Participants</Text>
             {proof.participants.map(person => <Text key={person.participantId} style={[styles.note,{color:colors.textSecondary}]}>{person.userId === app.session?.userId ? "You · " : ""}{person.role === "SELLER" ? "Seller" : person.role === "BUYER" ? "Buyer" : person.role} · Joined {formatDateTime(person.joinedAt)}</Text>)}
           </View>
-          {proof.evidence.some(item => item.validationStatus === "PENDING") ? <Text style={[styles.note, { color: colors.textSecondary }]}>A recording is still uploading.</Text> : null}
         </> : null}
         {panelTab === "Timeline" ? <ProofRecordTimeline entries={proof.chronology ?? []} auditEvents={proof.events} finalizedAt={proof.finalizedAt} filter={filter} onFilter={selectFilter} onSelect={entry => { app.setSelectedEvent(entry); app.go("event"); }} /> : null}
         {panelTab === "Tracking" ? <>
+          <TrackingIntake/>
           <ProofTrackingPanel events={reports} carrier={shipping?.carrier} trackingNumber={shipping?.trackingNumber} selectedId={selectedShipmentId} onSelect={selectShipment} sync={proof.shipmentSync} registration={proof.captureShipping?.registration} refreshError={trackingError} />
           {detailsExpanded && proof.captureShipping?.observations.length ? <Text style={[styles.note, { color: colors.textSecondary }]}>A shipping code was read during recording. Its observation time and source are retained with the Proof.</Text> : null}
           {proof.shipmentSync?.available ? <Button label="Update tracking" variant="secondary" loading={app.busy} onPress={refreshTracking} /> : null}
@@ -195,15 +225,17 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
 }
 
 const styles = StyleSheet.create({
-  record: { flex: 1, minHeight: 0, padding:12, borderRadius:6 },
-  top: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 8, gap: 4, borderBottomWidth: 1 }, title: { ...typography.pageTitle, fontSize: 24, lineHeight: 32 },
-  subtitle: { ...typography.secondary }, tabBorder: { borderBottomWidth: 1 }, tabs: { paddingHorizontal: 12, gap: 8, flexGrow: 1 }, tabSlot: { flex: 1 },
-  tab: { minWidth: 74, minHeight: 48, paddingHorizontal: 7, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 3, alignItems: "center", justifyContent: "center" }, tabLabel: { ...typography.secondary },
-  panel: { flex: 1, minHeight: 0 }, body: { paddingVertical: 16, paddingBottom: 24, gap: 16 },
+  record: { flex: 1, minHeight: 0, padding: 12, borderRadius: 18 },
+  top: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 12, gap: 6, borderBottomWidth: 1 }, title: { ...typography.pageTitle, fontSize: 25, lineHeight: 34 },
+  subtitle: { ...typography.secondary }, tabBorder: { borderRadius: 18, overflow: "hidden" }, tabs: { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 4, gap: 4, flexGrow: 1 }, tabSlot: { flex: 1, zIndex: 1 },
+  tab: { minWidth: 74, minHeight: 48, paddingHorizontal: 8, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" }, tabLabel: { ...typography.secondary, fontSize: 15 },
+  tabIndicator: { position: "absolute", left: 0, top: 4, bottom: 4, width: 100, borderRadius: 10 },
+  panel: { flex: 1, minHeight: 0 }, body: { paddingVertical: 20, paddingBottom: 24, gap: 20 },
   text: { ...typography.body }, note: { ...typography.secondary }, heading: { ...typography.sectionTitle },
-  empty: { gap: 12, paddingVertical: 12 }, emptyIcon: { width: 58, height: 58, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  selectors: { gap: 8 }, selector: { minHeight: 48, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10 },
-  info: { padding: 16, borderWidth: 1, borderRadius: 6, gap: 10 }, eyebrow: { ...typography.caption, letterSpacing: 1.3, fontWeight: "700" },
+  empty: { gap: 12, padding: 16, borderRadius: 18 }, emptyIcon: { width: 58, height: 58, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  selectors: { gap: 8 }, selector: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  info: { gap: 12, paddingVertical: 4 }, eyebrow: { ...typography.caption, letterSpacing: 1.3, fontWeight: "700" },
+  attestationStatement: { ...typography.bodyStrong, fontSize: 18, lineHeight: 26 }, finePrint: { ...typography.finePrint },
   headerMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
   detailsToggle: { minHeight: 48, flexDirection: "row", gap: 6, alignItems: "center", paddingHorizontal: 4 },
   details: { gap: 8, paddingBottom: 16, borderBottomWidth: 1 },

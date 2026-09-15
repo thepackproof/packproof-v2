@@ -21,6 +21,7 @@ export interface ConnectedAccountsPanelProps {
 function intakeStatus(connection: CommerceConnectionView): string {
   if (connection.status === "NEEDS_REAUTH") return "Automatic orders are paused. Reconnect your selling account.";
   if (connection.status !== "ACTIVE") return "Automatic orders are unavailable while this connection needs attention.";
+  if (connection.automationAvailable === false) return "Automatic orders are not available for this store yet.";
   if (!connection.autoSyncEnabled) return "Automatic orders are off.";
   if (connection.sync?.runStatus === "FAILED") return "The latest order check failed. Try checking again.";
   if (connection.sync?.runStatus === "RETRYING") return "The last order check was delayed. PackProof will retry.";
@@ -56,7 +57,7 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
           <p className="meta">{connectedAccountStatusLabel(account.status)}</p>
           {!account.capabilities.transactions && <p className="note">This account connection does not supply orders to PackProof.</p>}
           <div className="btn-row">
-            {available && ["NEEDS_REAUTH", "ERROR"].includes(account.status) && <button className="btn btn-secondary" type="button" disabled={props.busy} onClick={() => props.onReauthorize(account.id)}>Reconnect</button>}
+            {available && (["NEEDS_REAUTH", "ERROR"].includes(account.status) || connections.some(connection => connection.connectionId === account.id && connection.status === "NEEDS_REAUTH")) && <button className="btn btn-secondary" type="button" disabled={props.busy} onClick={() => props.onReauthorize(account.id)}>Reconnect</button>}
             {account.status !== "DISCONNECTED" && <button className="btn btn-tertiary" type="button" disabled={props.busy} onClick={() => props.onDisconnect(account.id)}>Disconnect</button>}
           </div>
         </div>)}
@@ -68,7 +69,7 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
           const canRead = available && connection.status === "ACTIVE" && permissionHealthy && identity?.capabilities.transactions !== false;
           return <div className="stack channel-orders" key={connection.connectionId}>
             {(connections.length > 1 || accounts.length === 0) && <p className="card-title">{connection.externalAccountReference || "Connected store"}</p>}
-            <label className="channel-toggle"><input type="checkbox" checked={connection.autoSyncEnabled === true} disabled={props.busy || !props.onAutomation || (!canRead && !connection.autoSyncEnabled)} onChange={event => props.onAutomation?.(connection.connectionId, event.target.checked)} /> <span>Automatically add orders</span></label>
+            <label className="channel-toggle"><input type="checkbox" checked={connection.autoSyncEnabled === true} disabled={props.busy || !props.onAutomation || ((!canRead || connection.automationAvailable === false) && !connection.autoSyncEnabled)} onChange={event => props.onAutomation?.(connection.connectionId, event.target.checked)} /> <span>Automatically add orders</span></label>
             <p className="meta">{intakeStatus(connection)}</p>
             {!permissionHealthy && connection.status === "ACTIVE" && <p className="note">Order checks are paused until this selling account is reconnected.</p>}
             {connection.lastErrorCode && <p className="note" role="status">The latest order check could not finish. {connection.status === "NEEDS_REAUTH" ? "Reconnect your selling account to continue." : "Try checking again. Your saved Proofs are still available."}</p>}

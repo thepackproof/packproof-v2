@@ -1,3 +1,4 @@
+import { identifierAttestationContext } from '../identifiers/service.js';
 import { canonicalize } from "../canonical.js";
 import type { Database } from "../db/database.js";
 import { sha256Hex } from "../hash.js";
@@ -8,7 +9,9 @@ import { loadTransactionView } from "./transactions.js";
 export async function attestationContext(db: Database, transactionId: string) {
   const t = await loadTransactionView(db, transactionId);
   const { importedAt: _importedAt, ...provenance } = t.provenance ?? {};
+  const identifierCheckpoints=await identifierAttestationContext(db,transactionId);
   const snapshot = {
+    ...(identifierCheckpoints ? {identifierCheckpoints} : {}),
     transactionId, externalReference: t.externalReference, transactionDate: t.transactionDate,
     itemTitle: t.itemTitle, itemDescription: t.itemDescription, quantity: t.quantity,
     transactionValue: t.transactionValue, currency: t.currency,

@@ -77,6 +77,7 @@ describe("receipt lifecycle and resumable capture", () => {
     await expect(
       completeUploadParts(
         h.db,
+        h.clock,
         h.objectStore,
         seller,
         proof.proofId,
@@ -128,6 +129,7 @@ describe("receipt lifecycle and resumable capture", () => {
     );
     const complete = await completeUploadParts(
       h.db,
+      h.clock,
       h.objectStore,
       seller,
       proof.proofId,

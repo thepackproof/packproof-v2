@@ -167,6 +167,8 @@ export function syncStateView(row: CommerceSyncStateRow | null): {
   initialSyncCompletedAt: string | null;
   discoveredCount: number;
   eligibleCount: number;
+  exhausted: boolean;
+  reconnectRequired: boolean;
 } {
   return {
     lastAttemptedAt: row?.last_attempted_at ? asRequiredIso(row.last_attempted_at) : null,
@@ -179,5 +181,7 @@ export function syncStateView(row: CommerceSyncStateRow | null): {
     initialSyncCompletedAt: row?.initial_sync_completed_at ? asIso(row.initial_sync_completed_at) : null,
     discoveredCount: row?.discovered_count ?? 0,
     eligibleCount: row?.eligible_count ?? 0,
+    exhausted: row?.run_status === "FAILED" && (row?.attempt_count ?? 0) >= 8,
+    reconnectRequired: ["INTEGRATION_NEEDS_REAUTH", "CONNECTED_ACCOUNT_REAUTH_REQUIRED", "PROVIDER_AUTH_FAILED"].includes(row?.last_error_code ?? ""),
   };
 }

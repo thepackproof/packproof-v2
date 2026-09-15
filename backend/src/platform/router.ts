@@ -1,3 +1,11 @@
+import { issueIntent, asDomainError } from "../capture/service.js";
+import { createLifecycleSnapshot, getLifecycleSnapshot } from "../domain/lifecycle-snapshots.js";
+import { issueCaptureCompletionReceipt, readCaptureCompletionReceipt } from "../capture/completion-receipt.js";
+import { requireFuturePlatform } from "./future-config.js";
+import { requireDeveloperAccess } from "../auth/developer-access.js";
+import { loadCaptureSession } from "../domain/capture-sessions.js";
+import { authorizeProofAccess } from "../domain/proof-access.js";
+import { authorizeClaimsProof, revokeClaimsAuthorization, lookupClaims, openClaimsProof } from './claims.js';
 import { getProofRecoveryStatus } from "../domain/recovery-journal.js";
 import { pipeline } from "node:stream/promises";
 import {guardAuthorizedStream} from "../domain/authorized-stream.js";
@@ -93,8 +101,8 @@ export function createPlatformRouter(deps: AppDependencies) {
   const config = deps.webhookConfig ?? webhookConfigFromEnv();
   // API keys never authenticate first-party routes; user tokens never authenticate /v1.
   router.use((req: ApiRequest, res, next) => {
-    req.apiRequestId = newId("req");
-    res.setHeader("X-Request-Id", req.apiRequestId);
+    req.apiRequestId = res.locals.operationId ?? newId("req");
+    res.setHeader("X-Request-Id", req.apiRequestId!);
     res.setHeader("PackProof-API-Version", "v1");
     res.setHeader("Cache-Control", "no-store");
     void (async () => {
@@ -119,10 +127,18 @@ export function createPlatformRouter(deps: AppDependencies) {
         const principal = req.apiPrincipal!;
         requireScope(principal, scope);
         if (req.params.id) await requireTenantProof(deps.db, principal, req.params.id);
+        // Revocation/account checks must also precede cached responses. A prior
+        // successful write never grants permanent access to its signed result.
+        if (path.includes('/lifecycle-snapshots')) {
+          await requireCommerceAccess(deps.db, req.params.id, principal.userId);
+          await authorizeProofAccess(deps.db, req.params.id, principal.userId);
+        }
+        if (path.endsWith('/completion-receipt'))
+          await loadCaptureSession(deps.db, principal.userId, req.params.id, req.params.sessionId);
         let value: unknown;
         if (method === "get") value = await fn(deps.db, principal, req);
         else {
-          const createsAccessLink = path.endsWith("/access-links") && method === "post";
+          const createsAccessLink = (path.endsWith("/access-links") || path.endsWith("/capture-intents")) && method === "post";
           if (createsAccessLink && Buffer.from(config.encryptionKey, "base64").length !== 32) {
             throw new DomainError(
               "ACCESS_LINKS_UNAVAILABLE",
@@ -134,7 +150,7 @@ export function createPlatformRouter(deps: AppDependencies) {
             deps.db,
             deps.clock,
             principal.tenantId,
-            `${method.toUpperCase()} ${req.path}`,
+            `${method.toUpperCase()} ${req.path}${path.includes('/lifecycle-snapshots') || path.endsWith('/completion-receipt') ? ` credential:${principal.keyId}` : ''}`,
             req.header("Idempotency-Key"),
             req.body,
             (tx) => fn(tx, principal, req),
@@ -154,6 +170,20 @@ export function createPlatformRouter(deps: AppDependencies) {
       }),
     );
   }
+  router.post('/claims/lookup',route(async(raw,res)=>{
+    const req=raw as ApiRequest,p=req.apiPrincipal!;
+    requireScope(p,'claims:read');
+    const value=await lookupClaims(deps.db,deps.clock,p,req.body,req.apiRequestId!);
+    await auditRequest(deps.db,deps,req,'POST /claims/lookup',200);
+    res.json(value);
+  }));
+  router.post('/claims/proofs/:id/open',route(async(raw,res)=>{
+    const req=raw as ApiRequest,p=req.apiPrincipal!;
+    requireScope(p,'claims:read');
+    const value=await openClaimsProof(deps.db,deps.clock,p,req.params.id,req.body,req.apiRequestId!,webBase);
+    await auditRequest(deps.db,deps,req,'POST /claims/proofs/:id/open',201);
+    res.status(201).json(value);
+  }));
   function envelope(proof: ProofView, externalId: string) {
     return {
       apiVersion: "v1",
@@ -273,8 +303,52 @@ export function createPlatformRouter(deps: AppDependencies) {
       }),
     201,
   );
+  endpoint("post", "/proofs/:id/capture-intents", "evidence:write", async(db,p,req)=>{
+    try { return await issueIntent(db,deps.clock,p.userId,req.params.id,req.body?.allowedSurfaces); } catch(e) {throw asDomainError(e);}
+  },201);
+  // Opt-in extension. Tenant and credential boundaries are checked before every
+  // idempotency replay by endpoint(), and again before each streamed chunk.
+  router.use('/proofs/:id/lifecycle-snapshots', (raw, _res, next) => {
+    try { const req = raw as ApiRequest; requireFuturePlatform(deps.futurePlatform,
+      { tenantId: req.apiPrincipal!.tenantId }, req.method !== 'GET'); next(); } catch (e) { next(e); }
+  });
+  endpoint('post', '/proofs/:id/lifecycle-snapshots', 'proofs:write', (db, p, req) => {
+    if (Object.keys(req.body ?? {}).some(k => k !== 'purpose'))
+      throw new DomainError('INVALID_REQUEST', 'Only the snapshot purpose may be supplied', 400);
+    return createLifecycleSnapshot(db, deps.clock, deps.manifestSigning?.signer, p.userId, req.params.id,
+      { operationId: sha256Hex(`${p.keyId}:${req.header('Idempotency-Key')}`), purpose: req.body?.purpose });
+  }, 201);
+  endpoint('get', '/proofs/:id/lifecycle-snapshots/:snapshotId', 'proofs:read', (db, p, req) =>
+    getLifecycleSnapshot(db, p.userId, req.params.id, req.params.snapshotId));
+  router.get('/proofs/:id/lifecycle-snapshots/:snapshotId/download', route(async (raw, res) => {
+    const req = raw as ApiRequest, p = req.apiPrincipal!;
+    requireScope(p, 'proofs:read'); await requireTenantProof(deps.db, p, req.params.id);
+    const archive = await exportEvidencePackageStream(deps.db, deps.clock, deps.objectStore, p.userId, req.params.id,
+      { lifecycleSnapshotId: req.params.snapshotId });
+    await auditRequest(deps.db, deps, req, 'GET /proofs/:id/lifecycle-snapshots/:snapshotId/download', 200);
+    res.setHeader('Content-Disposition', 'attachment; filename="packproof-lifecycle.pkpr"');
+    res.type('application/zip');
+    await pipeline(guardAuthorizedStream(archive, async () => {
+      const current = await authenticateApiKey(deps.db, req.header('authorization'));
+      requireScope(current, 'proofs:read'); await requireTenantProof(deps.db, current, req.params.id);
+      requireFuturePlatform(deps.futurePlatform, { tenantId: current.tenantId });
+    }), res);
+  }));
+  router.use('/proofs/:id/capture-sessions/:sessionId/completion-receipt', (raw, _res, next) => {
+    try { const req = raw as ApiRequest; requireFuturePlatform(deps.futurePlatform,
+      { tenantId: req.apiPrincipal!.tenantId }, req.method !== 'GET'); next(); } catch (e) { next(e); }
+  });
+  endpoint('post', '/proofs/:id/capture-sessions/:sessionId/completion-receipt', 'evidence:write', async (db, p, req) => {
+    if (Object.keys(req.body ?? {}).length) throw new DomainError('INVALID_REQUEST', 'Completion is determined from the committed recording', 400);
+    await loadCaptureSession(db, p.userId, req.params.id, req.params.sessionId);
+    return issueCaptureCompletionReceipt(db, deps.clock, p.userId, req.params.sessionId, deps.manifestSigning?.signer);
+  }, 201);
+  endpoint('get', '/proofs/:id/capture-sessions/:sessionId/completion-receipt', 'proofs:read', async (db, p, req) => {
+    await loadCaptureSession(db, p.userId, req.params.id, req.params.sessionId);
+    return readCaptureCompletionReceipt(db, p.userId, req.params.sessionId);
+  });
   endpoint("post", "/proofs/:id/capture-sessions", "evidence:write", (db,p,req)=>
-    createCaptureSession(db,deps.clock,p.userId,req.params.id,{client:String(req.body?.client??""),stageId:req.body?.stageId==null?undefined:String(req.body.stageId),idempotencyKey:sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`)}),201);
+    createCaptureSession(db,deps.clock,p.userId,req.params.id,{client:String(req.body?.client??""),surface:req.body?.surface,stageId:req.body?.stageId==null?undefined:String(req.body.stageId),idempotencyKey:sha256Hex(`${p.tenantId}:${req.header("Idempotency-Key")}`)}),201);
   endpoint("post", "/proofs/:id/capture-sessions/:sessionId/complete", "evidence:write", (db,p,req)=>
     completeCaptureSession(db,deps.clock,p.userId,req.params.id,req.params.sessionId,{sha256:req.body?.sha256,byteSize:req.body?.byteSize,contentType:req.body?.contentType,interrupted:req.body?.interrupted,recordedDurationMs:req.body?.recordedDurationMs}));
   endpoint("get", "/proofs/:id/capture-sessions/:sessionId", "evidence:write", (db,p,req)=>
@@ -318,6 +392,7 @@ export function createPlatformRouter(deps: AppDependencies) {
     (db, p, req) =>
       completeUploadParts(
         db,
+        deps.clock,
         deps.objectStore,
         p.userId,
         req.params.id,
@@ -641,15 +716,22 @@ async function auditRequest(
 }
 export function createTenantManagementRouter(deps: AppDependencies) {
   const router = express.Router();
-  router.use((_req, res, next) => {
+  router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
-    next();
+    void requireDeveloperAccess(deps.db, req.packproofUserId ?? "").then(() => next()).catch(next);
   });
   const user = (req: Request) => {
     if (!req.packproofUserId)
       throw new DomainError("UNAUTHENTICATED", "Sign in to manage API access", 401);
     return req.packproofUserId;
   };
+  router.post('/:tenantId/claims-proofs/:proofId',route(async(req,res)=>{
+    res.status(201).json(await authorizeClaimsProof(deps.db,deps.clock,user(req),req.params.tenantId,req.params.proofId,req.body));
+  }));
+  router.delete('/:tenantId/claims-authorizations/:authorizationId',route(async(req,res)=>{
+    await revokeClaimsAuthorization(deps.db,deps.clock,user(req),req.params.tenantId,req.params.authorizationId);
+    res.status(204).end();
+  }));
   router.get(
     "/",
     route(async (req, res) => {

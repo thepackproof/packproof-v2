@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/errors.js";
 import type {
   CommerceOrderPage,
   NormalizedFulfillmentOrder,
@@ -18,6 +19,15 @@ export function createShopifyCommerceAdapter(client: ShopifyClient): CommerceFul
     kind: "trusted",
     provider: SHOPIFY_PROVIDER,
     displayName: "Shopify",
+    preferredPollIntervalMs: 300000,
+    reconciliationIntervalMs: 86400000,
+    async fetchFulfillmentOrder(input) {
+      if (!client.getOrder) throw new DomainError("COMMERCE_EXACT_READ_UNAVAILABLE", "Choose this order from your connected packing queue", 409);
+      const shop = shopFromConnection(input.connection, input.credentials);
+      const accessToken = input.credentials?.material.accessToken?.trim() ?? "";
+      const includeProductIdentifiers = (input.credentials?.material.scope ?? "").split(/[ ,]+/).some(scope => scope === "read_products" || scope === "write_products");
+      return toNormalized(await client.getOrder({shop, accessToken, orderId: input.externalOrderId, includeProductIdentifiers}), shop);
+    },
     async listFulfillmentOrders(input: {
       connection: IntegrationConnectionRow;
       credentials?: IntegrationCredentials | null;
@@ -28,9 +38,10 @@ export function createShopifyCommerceAdapter(client: ShopifyClient): CommerceFul
     }): Promise<CommerceOrderPage> {
       const shop = shopFromConnection(input.connection, input.credentials);
       const accessToken = input.credentials?.material.accessToken?.trim() ?? "";
+      const includeProductIdentifiers=(input.credentials?.material.scope??'').split(/[ ,]+/).some(scope=>scope==='read_products'||scope==='write_products');
       const page = client.listOrdersPage
-        ? await client.listOrdersPage({shop,accessToken,limit:10,cursor:input.cursor,updatedSince:input.updatedSince,updatedUntil:input.updatedUntil,onProgress:input.onProgress})
-        : {orders:await client.listOrders({shop,accessToken,limit:50}),cursor:null};
+        ? await client.listOrdersPage({shop,accessToken,includeProductIdentifiers,limit:10,cursor:input.cursor,updatedSince:input.updatedSince,updatedUntil:input.updatedUntil,onProgress:input.onProgress})
+        : {orders:await client.listOrders({shop,accessToken,includeProductIdentifiers,limit:50}),cursor:null};
       const orders=page.orders;
       return {
         orders: orders.filter((order) => Boolean(order.createdAt)).map((order) => toNormalized(order, shop)),
@@ -60,6 +71,7 @@ function toNormalized(order: ShopifyOrder, shop: string): NormalizedFulfillmentO
     remainingQuantity: item.remainingQuantity ?? null,
     variant: item.variantTitle ?? null,
     sku: item.sku,
+    ...(item.barcode !== undefined ? {barcode:item.barcode,variantId:item.variantId,productId:item.productId} : {}),
     quantity: item.currentQuantity ?? item.quantity,
     unitValue: parseMoney(item.price),
     currency: order.currency,

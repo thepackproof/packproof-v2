@@ -1,3 +1,7 @@
+import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchScreen";
+import { SubmissionIntakePanel } from "./components/SubmissionIntakePanel";
+import { IntakeLinkFallback, IntakeSignInContext } from "./screens/IntakeLinkFallback";
+import type {EngineSession} from "./capture/engine";
 import { applyLocalWork } from "./proof-presentation";
 import { listRecoverableRecordings } from "./capture-queue";
 import { randomId } from "./random-id";
@@ -9,7 +13,13 @@ import { ProofsScreen } from "./screens/ProofsScreen";
 import { canonicalWorkspacePath, readProofListState, rememberProofListState } from "./proof-list-state";
 import { ReceiptScreen } from "./screens/ReceiptScreen";
 import { DeveloperScreen } from "./screens/DeveloperScreen";
+import { useDeveloperAccess } from "./auth/useDeveloperAccess";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReadyIntakeOrders } from './components/ReadyIntakeOrders';
+import { IntakeSettingsPanel } from './components/IntakeSettingsPanel';
+import { CompanionBridge } from './components/CompanionBridge';
+import { SelectedOrderHandoff } from './components/SelectedOrderHandoff';
+import type { IntakeSnapshot } from './intake-types';
 import { formatUserFacingError, toUserFacingError } from "@packproof/copy/errors";
 import { captureEvidenceType } from "@packproof/copy/custody";
 import { PackProofApi } from "./api/client";
@@ -58,6 +68,8 @@ import { AuthFrame } from "./site/PublicSite";
 
 type Route =
   | { name: "proofs"; view: "all" | "attention" | "completed"; query: string }
+  | { name: "capture-launch" }
+  | { name: "intake-handoff" }
   | { name: "create" }
   | { name: "scan" }
   | { name: "account" }
@@ -94,6 +106,8 @@ function parseHref(href: string): Route {
   if (pathname === "/proofs") {
     return { name: "proofs", ...readProofListState(url) };
   }
+  if (pathname === "/capture") return {name:"capture-launch"};
+  if (/^\/app\/capture\/[A-Za-z0-9_-]{1,160}$/.test(pathname)) return { name: "intake-handoff" };
   if (pathname === "/developer") return { name: "developer" };
   if (pathname === "/account") {
     return { name: "account" };
@@ -136,7 +150,7 @@ function parseHref(href: string): Route {
   if (proof?.[1]) {
     return { name: "proof", proofId: decodeURIComponent(proof[1]) };
   }
-  return { name: "proofs", view: "all", query: "" };
+  return { name: "proofs", view: "attention", query: "" };
 }
 
 function routeProofId(route: Route): string | null {
@@ -260,6 +274,7 @@ function needsProof(name: Route["name"]): boolean {
 }
 
 function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "create-account" }) {
+  const [enteredFromIntakeLink] = useState(() => window.location.pathname.startsWith("/app/"));
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -268,6 +283,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   const [proofs, setProofs] = useState<ProofCollectionItem[]>([]);
   const [invitations, setInvitations] = useState<InvitationInboxView[]>([]);
   const [proof, setProof] = useState<CanonicalProof | null>(null);
+  const [captureEngineSession,setCaptureEngineSession]=useState<EngineSession|null>(null);
+  const [acceptedIntakeSnapshot,setAcceptedIntakeSnapshot]=useState<IntakeSnapshot|null>(null);
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [loading, setLoading] = useState(() => Boolean(loadSession()));
   const [busy, setBusy] = useState(false);
@@ -327,6 +344,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     [session?.apiBaseUrl, session?.userId, getSessionToken],
   );
   const loadPublicProof = useCallback((token: string) => api.getPublicProof(token), [api]);
+  const developerAllowed = useDeveloperAccess(api, session?.userId ?? "", route.name === "account" || route.name === "developer");
 
   const loadProofEvidence = useCallback(
     async (evidenceId: string) => {
@@ -339,6 +357,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   );
 
   function signOut() {
+    setAcceptedIntakeSnapshot(null);
     sessionRef.current = null;
     tokenRef.current = null;
     clearSession();
@@ -356,7 +375,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     setConnectedNotice(null);
     setError(null);
     writePath("/");
-    setRoute({ name: "proofs", view: "all", query: "" });
+    setRoute({ name: "proofs", view: "attention", query: "" });
   }
 
   function go(path: string) {
@@ -608,6 +627,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   if (!session) {
     return (
       <AuthFrame>
+        {enteredFromIntakeLink ? <IntakeSignInContext /> : null}
         <SignInScreen
           initialView={authInitialView}
           onGo={go}
@@ -666,6 +686,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
   return (
     <div className="app-shell workspace-shell">
+        {(route.name==='proofs'||route.name==='create')&&<CompanionBridge api={api} userId={session.userId} connections={connections}/>}
+        {route.name==='proof'&&proof?.status==='READY_FOR_EVIDENCE'&&proof.workflowType==='COMMERCE_SALE'&&proof.participationPolicy==='COUNTERPARTY_OPTIONAL'&&<SelectedOrderHandoff key={proof.proofId} api={api} userId={session.userId} transactionId={proof.transaction.transactionId}/>}
         <AppNav
           session={session}
           invitationCount={invitations.length}
@@ -677,7 +699,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       <LocalRecordingRecovery visible={route.name === "account"} key={session.userId} api={api} userId={session.userId} onOpen={id => go(`/proofs/${encodeURIComponent(id)}`)} />
 
-      {route.name === "proofs" ? <ProofsScreen {...libraryProps} /> : null}
+      {route.name === "proofs" ? <ProofsScreen api={api} {...libraryProps} readyOrders={<ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />} /> : null}
 
       {route.name === "receipt" ? (
         <ReceiptScreen
@@ -689,7 +711,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         />
       ) : null}
       {route.name === "developer" ? (
-        <DeveloperScreen api={api} onBack={() => goBack("/account")} />
+        developerAllowed ? <DeveloperScreen key={`${session.apiBaseUrl}:${session.userId}`} api={api} onBack={() => goBack("/account")} />
+          : <div className="card"><p>Developer access is unavailable for this account or could not be confirmed.</p><button className="btn btn-secondary" onClick={() => goBack("/account")}>Back to account</button></div>
       ) : null}
 
       {route.name === "account" ? (
@@ -729,7 +752,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
-          onOpenDeveloper={() => go("/developer")}
+          onOpenDeveloper={developerAllowed ? () => go("/developer") : undefined}
           onOpenStation={() => go("/station")}
           onOpenStores={() => go("/stores")}
           onOpenFulfillment={() => go("/fulfillment")}
@@ -767,8 +790,10 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             setError(null);
             void api
               .disconnectConnectedAccount(accountId)
-              .then(() => api.listConnectedAccounts())
-              .then((listed) => {
+              .then(() => Promise.all([api.listConnectedAccounts(), api.listCommerceConnections(), api.listMarketplaces()]))
+              .then(([listed, commerce, marketplaces]) => {
+                setEbay(pickEbay(marketplaces));
+                setConnections(commerce.connections);
                 setConnectedAccounts(listed.accounts);
                 setConnectedProviders(listed.providers);
               })
@@ -782,7 +807,9 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "create" ? (
         <CreateProofScreen
+          readyOrders={<ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />}
           onPreviewIntake={(text) => api.previewOrderIntake(text)}
+          renderIntakePanel={onReview => <SubmissionIntakePanel key={`${session.apiBaseUrl}:${session.userId}`} api={api} userId={session.userId} onPreview={text => api.previewOrderIntake(text)} onReview={onReview} onOpenProof={id => go(`/proofs/${encodeURIComponent(id)}`)} />}
           busy={busy}
           error={error}
           development={import.meta.env.DEV}
@@ -909,8 +936,13 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         />
       ) : null}
 
+      {route.name === "capture-launch" ? <CaptureLaunchScreen api={api} onBound={bound=>{setCaptureEngineSession(bound);go(`/proofs/${encodeURIComponent(bound.context.proofId)}/capture`);}} /> : null}
+      {route.name === "intake-handoff" ? <IntakeLinkFallback onQueue={() => go("/proofs?filter=attention")} /> : null}
       {route.name === "station" ? (
         <PackingStationScreen
+          authorizedEngineSession={captureEngineSession?.context.proofId===route.proofId?captureEngineSession:null}
+          acceptedIntakeSnapshot={acceptedIntakeSnapshot?.proofId===route.proofId?acceptedIntakeSnapshot:null}
+          onIntakeIntentConsumed={()=>setAcceptedIntakeSnapshot(null)}
           key={`${session.apiBaseUrl}:${session.userId}:${route.proofId || "queue"}`}
           api={api}
           userId={session.userId}
@@ -931,10 +963,11 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "stores" ? (
         <ConnectedStoresScreen
+          intakeSettings={<IntakeSettingsPanel api={api} userId={session.userId} connections={connections} />}
           connectionPanel={<ConnectedAccountsPanel accounts={connectedAccounts} providers={connectedProviders} notice={connectedNotice} busy={busy}
             onConnect={(provider, extra) => { setBusy(true); void api.startConnectedAccountConnect(provider, extra).then(result => window.location.assign(result.authorizationUrl)).catch(caught => { setError(handleError(caught)); setBusy(false); }); }}
             onReauthorize={accountId => { setBusy(true); void api.reauthorizeConnectedAccount(accountId).then(result => window.location.assign(result.authorizationUrl)).catch(caught => { setError(handleError(caught)); setBusy(false); }); }}
-            onDisconnect={accountId => { setBusy(true); void api.disconnectConnectedAccount(accountId).then(() => api.listConnectedAccounts()).then(result => { setConnectedAccounts(result.accounts); setConnectedProviders(result.providers); }).catch(caught => setError(handleError(caught))).finally(() => setBusy(false)); }} />}
+            onDisconnect={accountId => { setBusy(true); void api.disconnectConnectedAccount(accountId).then(() => Promise.all([api.listConnectedAccounts(), api.listCommerceConnections(), api.listMarketplaces()])).then(([result, commerce, marketplaces]) => { setEbay(pickEbay(marketplaces)); setConnectedAccounts(result.accounts); setConnectedProviders(result.providers); setConnections(commerce.connections); }).catch(caught => setError(handleError(caught))).finally(() => setBusy(false)); }} />}
           connections={connections}
           lastSync={lastSync}
           loading={loading}
@@ -967,16 +1000,6 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
               .finally(() => setBusy(false));
           }}
           onImportSales={() => go("/new")}
-          onConnectDemo={() => {
-            setBusy(true);
-            setError(null);
-            void api
-              .connectDemoStorefront()
-              .then(() => api.listCommerceConnections())
-              .then((result) => setConnections(result.connections))
-              .catch((caught) => setError(handleError(caught)))
-              .finally(() => setBusy(false));
-          }}
           onAutomation={(connectionId,enabled)=>{setBusy(true);setError(null);void api.setCommerceAutomation(connectionId,enabled).then(()=>api.listCommerceConnections()).then(result=>setConnections(result.connections)).catch(e=>setError(handleError(e))).finally(()=>setBusy(false));}}
           onSync={(connectionId) => {
             setBusy(true);
@@ -1200,6 +1223,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 }
 
 export function App({ authInitialView }: { authInitialView?: "sign-in" | "create-account" } = {}) {
+  retainCaptureLaunch();
   return (
     <ThemeProvider>
       <PackProofApp authInitialView={authInitialView} />

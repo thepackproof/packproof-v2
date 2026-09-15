@@ -1,3 +1,5 @@
+import { receiveEbayDeletion, isEbaySubjectSuppressed, lockEbayPrivacy } from "./ebay-deletion-cases.js";
+import { findOwnedConnectedAccount, updateConnectedAccount } from "./connected-account-records.js";
 import { resumeCommerceAutomation } from "./commerce-automation.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
@@ -25,6 +27,7 @@ import {
   integrationNotFound,
 } from "./integration-errors.js";
 import { createOAuthAttempt, consumeOAuthAttempt } from "./oauth-attempts.js";
+import { connectedAccountReturnUrl } from "./oauth-return.js";
 import {
   markConnectedAccountDisconnected,
   upsertConnectedAccountFromMarketplace,
@@ -154,10 +157,7 @@ export async function completeEbayOAuth(
   credentials: EbayCredentialStore,
   query: { code?: unknown; state?: unknown; error?: unknown },
 ): Promise<{ redirectTo: string }> {
-  const returnUrl = runtime.webReturnUrl || "/";
-  if (typeof query.error === "string" && query.error.trim()) {
-    return { redirectTo: withQuery(returnUrl, { ebay: "error", code: query.error.trim() }) };
-  }
+  let returnUrl = runtime.webReturnUrl || "/";
   try {
     requireEnabled(runtime);
     const attempt = await consumeOAuthAttempt(db, clock, query.state);
@@ -166,6 +166,15 @@ export async function completeEbayOAuth(
     }
     if (!attempt.userId) {
       throw new DomainError("UNAUTHENTICATED", "An authenticated PackProof session is required", 401);
+    }
+    const attemptUserId = attempt.userId;
+    // Return destinations are fixed, and selected only from a consumed server-side attempt.
+    returnUrl = connectedAccountReturnUrl(returnUrl, EBAY_PROVIDER, attempt.metadata.surface);
+    if (typeof query.error === "string" && query.error.trim()) {
+      throw new DomainError("CONNECTED_ACCOUNT_AUTH_DENIED", "eBay authorization was declined", 400);
+    }
+    if (attempt.redirectUri !== runtime.ruName) {
+      throw new DomainError("OAUTH_STATE_INVALID", "Connection settings changed. Start Connect again.", 400);
     }
     if (typeof query.code !== "string" || !query.code.trim()) {
       throw new DomainError("OAUTH_STATE_INVALID", "OAuth authorization code is missing", 400);
@@ -187,17 +196,44 @@ export async function completeEbayOAuth(
       environment: runtime.environment,
       accessToken: tokens.accessToken,
     });
-    const accountRef = ebayAccountReference(identity.userId, identity.username);
-    const existingOther = await findConnectionByExternalAccount(db, EBAY_ADAPTER_KEY, accountRef);
-    if (existingOther && existingOther.owner_user_id !== attempt.userId) {
-      throw new DomainError(
-        "MARKETPLACE_ALREADY_CONNECTED",
-        "This eBay account is already connected to another PackProof user",
-        409,
-      );
+    return await db.transaction(async tx => {
+      await lockEbayPrivacy(tx);
+    if (await isEbaySubjectSuppressed(tx, runtime.environment, identity.userId, identity.username)) {
+      throw new DomainError("EBAY_ACCOUNT_DELETION_PENDING", "This eBay account has an unresolved deletion request", 409);
     }
-    const owned = await findEbayConnection(db, attempt.userId);
-    const connectionId = owned?.id ?? existingOther?.id ?? newId("icn");
+    let accountRef = ebayAccountReference(identity.userId, identity.username);
+    const matched = await tx.query<{ id: string; user_id: string }>(
+      `SELECT id, user_id FROM connected_accounts WHERE provider='ebay'
+       AND provider_metadata->>'ebayUserId'=$1 AND provider_metadata->>'environment'=$2
+       ORDER BY created_at LIMIT 1`, [identity.userId, runtime.environment],
+    );
+    if (matched.rows[0] && matched.rows[0].user_id !== attemptUserId) {
+      throw new DomainError("MARKETPLACE_ALREADY_CONNECTED", "This eBay account is already connected to another PackProof user", 409);
+    }
+    const reauthorizeId = typeof attempt.metadata.reauthorizeAccountId === "string" ? attempt.metadata.reauthorizeAccountId : null;
+    if (reauthorizeId) {
+      const target = await findOwnedConnectedAccount(tx, attemptUserId, reauthorizeId);
+      if (!target || target.provider !== "ebay" || target.providerMetadata.ebayUserId !== identity.userId ||
+          target.providerMetadata.environment !== runtime.environment) {
+        throw new DomainError("CONNECTED_ACCOUNT_IDENTITY_MISMATCH", "Reconnect the same eBay selling account in the same environment", 409);
+      }
+    }
+    const existingOther = await findConnectionByExternalAccount(tx, EBAY_ADAPTER_KEY, accountRef);
+    if (existingOther && existingOther.owner_user_id !== attemptUserId) {
+      throw new DomainError("MARKETPLACE_ALREADY_CONNECTED", "This eBay account is already connected to another PackProof user", 409);
+    }
+    // Never reuse an arbitrary seller's token slot. A legacy row must prove its identity first.
+    let reusableId = matched.rows[0]?.id ?? null;
+    if (!reusableId && existingOther) {
+      const legacy = await credentials.getCredentials({adapterKey: EBAY_ADAPTER_KEY, credentialReference: existingOther.credential_reference});
+      if (legacy?.material.ebayUserId === identity.userId && legacy.material.environment === runtime.environment) reusableId = existingOther.id;
+      else if (existingOther.status === "DISABLED") {
+        accountRef = ebayIdentityAccount(runtime.environment, identity.userId);
+      } else throw new DomainError("CONNECTED_ACCOUNT_IDENTITY_MISMATCH", "Disconnect the previous eBay environment before connecting this account", 409);
+    }
+    const owned = reusableId ? (await listOwnerConnections(tx, attemptUserId, [EBAY_ADAPTER_KEY])).find(row => row.id === reusableId) ?? null : null;
+    if (owned?.external_account_reference) accountRef = owned.external_account_reference;
+    const connectionId = owned?.id ?? newId("icn");
     const credentialReference = ebayUserCredentialReference({
       packproofEnvironment: runtime.packproofEnvironment,
       ebayEnvironment: runtime.environment,
@@ -221,13 +257,13 @@ export async function completeEbayOAuth(
       }),
     });
     if (owned) {
-      await updateConnectionCredentials(db, clock, owned.id, {
+      await updateConnectionCredentials(tx, clock, owned.id, {
         credentialReference,
         externalAccountReference: accountRef,
         status: "ACTIVE",
       });
     } else {
-      await createIntegrationConnection(db, clock, attempt.userId, {
+      await createIntegrationConnection(tx, clock, attemptUserId, {
         connectionId,
         adapterKey: EBAY_ADAPTER_KEY,
         provider: EBAY_PROVIDER,
@@ -236,11 +272,14 @@ export async function completeEbayOAuth(
         status: "ACTIVE",
       });
     }
-    await resumeCommerceAutomation(db,clock,connectionId);
+    await resumeCommerceAutomation(tx,clock,connectionId);
     const expiry = tokenExpiry(clock, tokens);
-    await upsertConnectedAccountFromMarketplace(db, clock, {
+    if (matched.rows[0]) {
+      await updateConnectedAccount(tx, clock, connectionId, { externalAccountId: accountRef, externalAccountName: identity.username });
+    }
+    await upsertConnectedAccountFromMarketplace(tx, clock, {
       id: connectionId,
-      userId: attempt.userId,
+      userId: attemptUserId,
       provider: "ebay",
       externalAccountId: accountRef,
       externalAccountName: identity.username,
@@ -254,6 +293,7 @@ export async function completeEbayOAuth(
       },
     });
     return { redirectTo: withQuery(returnUrl, { ebay: "connected" }) };
+    });
   } catch (error) {
     const code = error instanceof DomainError ? error.code : "EBAY_OAUTH_FAILED";
     return { redirectTo: withQuery(returnUrl, { ebay: "error", code }) };
@@ -282,6 +322,7 @@ export async function listEbaySellerOrders(
   const tenantKey=normalizeTenantKey(tenantKeyForImport("ebay","MARKETPLACE_API",accountIdentity));
   const views: EbaySellerOrderView[] = [];
   for (const order of orders.orders) {
+    if (await isEbaySubjectSuppressed(db, runtime.environment, order.buyerUserId, order.buyerUsername)) continue;
     await aliasLegacyEbayIdentity(db,clock,userId,runtime.environment,accountIdentity,order.orderId);
     const identity = await findTransactionIdentity(db, tenantKey, order.orderId);
     const proofId = identity ? (await db.query<{id:string}>("SELECT id FROM proofs WHERE transaction_id=$1",[identity.transaction_id])).rows[0]?.id : null;
@@ -318,6 +359,9 @@ export async function importEbaySellerOrder(
       orderId,
     }),
   );
+  if (await isEbaySubjectSuppressed(db, runtime.environment, order.buyerUserId, order.buyerUsername)) {
+    throw new DomainError("EBAY_ACCOUNT_DELETION_PENDING", "This order is unavailable following an eBay account deletion request", 409);
+  }
   const accountIdentity=await verifiedEbayIdentityAccount(credentials,connection,runtime.environment);
   await aliasLegacyEbayIdentity(db,clock,userId,runtime.environment,accountIdentity,order.orderId);
   return importNormalizedTransaction(
@@ -345,7 +389,9 @@ export async function disconnectEbay(
   userId: string,
   credentials?: EbayCredentialStore,
 ): Promise<void> {
-  const connection = await findEbayConnection(db, userId);
+  return db.transaction(async tx => {
+    await lockEbayPrivacy(tx);
+  const connection = await findEbayConnection(tx, userId);
   if (!connection) {
     throw integrationNotFound();
   }
@@ -355,8 +401,9 @@ export async function disconnectEbay(
       credentialReference: connection.credential_reference,
     });
   }
-  await updateConnectionStatus(db, clock, connection.id, "DISABLED");
-  await markConnectedAccountDisconnected(db, clock, connection.id, userId);
+  await updateConnectionStatus(tx, clock, connection.id, "DISABLED");
+  await markConnectedAccountDisconnected(tx, clock, connection.id, userId);
+  });
 }
 
 export function ebayChallengeResponse(
@@ -386,47 +433,9 @@ export function ebayChallengeResponse(
 }
 
 export async function handleEbayAccountDeletion(
-  db: Database,
-  clock: Clock,
-  body: unknown,
-  credentials?: EbayCredentialStore,
-): Promise<{ accepted: true; connectionsDisabled: number }> {
-  const parsed = parseEbayDeletionNotification(body);
-  const now = clock.now().toISOString();
-  try {
-    await db.query(
-      `INSERT INTO integration_webhook_receipts (
-         id, adapter_key, provider_event_id, signature_sha256, received_at
-       ) VALUES ($1, $2, $3, $4, $5)`,
-      [newId("whr"), EBAY_ADAPTER_KEY, parsed.notificationId, "account-deletion", now],
-    );
-  } catch {
-    return { accepted: true, connectionsDisabled: 0 };
-  }
-  const candidates = [parsed.userId, parsed.username]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => ebayAccountReference(value, parsed.username));
-  let connectionsDisabled = 0;
-  for (const account of new Set(candidates)) {
-    const connection = await findConnectionByExternalAccount(db, EBAY_ADAPTER_KEY, account);
-    if (!connection) {
-      continue;
-    }
-    if (typeof credentials?.deleteCredentials === "function") {
-      await credentials.deleteCredentials({
-        adapterKey: EBAY_ADAPTER_KEY,
-        credentialReference: connection.credential_reference,
-      });
-    }
-    await updateConnectionStatus(db, clock, connection.id, "DISABLED");
-    await updateConnectionCredentials(db, clock, connection.id, {
-      externalAccountReference: `deleted-${connection.id.slice(-8).toLowerCase()}`,
-      status: "DISABLED",
-    });
-    await markConnectedAccountDisconnected(db, clock, connection.id, connection.owner_user_id);
-    connectionsDisabled += 1;
-  }
-  return { accepted: true, connectionsDisabled };
+  db: Database, clock: Clock, body: unknown, credentials?: EbayCredentialStore, environment: EbayEnvironment = "sandbox",
+) {
+  return receiveEbayDeletion(db, clock, body, environment, credentials ?? {});
 }
 
 async function findEbayConnection(
@@ -462,16 +471,21 @@ export async function withEbayUserToken<T>(
   connection: IntegrationConnectionRow,
   fn: (accessToken: string) => Promise<T>,
 ): Promise<T> {
+  try {
+    return await db.transaction(async tx => {
+      await lockEbayPrivacy(tx);
+      const current = (await tx.query<{status:string}>('SELECT status FROM integration_connections WHERE id=$1',[connection.id])).rows[0];
+      if (!current || current.status === "DISABLED") throw integrationNotFound();
   requireEnabled(runtime);
-  const stored = parseEbayUserCredentials(
-    await credentials.getCredentials({
-      adapterKey: EBAY_ADAPTER_KEY,
-      credentialReference: connection.credential_reference,
-      connectionId: connection.id,
-    }),
-  );
-  if (stored.environment && stored.environment !== runtime.environment) {
-    await updateConnectionStatus(db, clock, connection.id, "NEEDS_REAUTH");
+  let stored: ReturnType<typeof parseEbayUserCredentials>;
+  try {
+    stored = parseEbayUserCredentials(await credentials.getCredentials({
+      adapterKey: EBAY_ADAPTER_KEY, credentialReference: connection.credential_reference, connectionId: connection.id,
+    }));
+    if (stored.environment !== runtime.environment) throw integrationNeedsReauth();
+  } catch (error) {
+    if (!isAuthFailure(error)) throw error;
+    await markEbayNeedsReauth(tx, clock, connection.id);
     throw integrationNeedsReauth();
   }
   const appSecret = parseEbayAppSecret(
@@ -498,9 +512,14 @@ export async function withEbayUserToken<T>(
       return await fn(refreshed.accessToken);
     } catch (refreshError) {
       if (!isAuthFailure(refreshError)) throw refreshError;
-      await updateConnectionStatus(db, clock, connection.id, "NEEDS_REAUTH");
+      await markEbayNeedsReauth(tx, clock, connection.id);
       throw integrationNeedsReauth();
     }
+  }
+    });
+  } catch (error) {
+    if (isAuthFailure(error) || error instanceof DomainError && error.code === "INTEGRATION_NEEDS_REAUTH") await markEbayNeedsReauth(db, clock, connection.id);
+    throw error;
   }
 }
 
@@ -591,7 +610,7 @@ function withQuery(base: string, query: Record<string, string>): string {
   for (const [key, value] of Object.entries(query)) {
     url.searchParams.set(key, value);
   }
-  if (base.startsWith("http://") || base.startsWith("https://")) {
+  if (base.startsWith("http://") || base.startsWith("https://") || base === "packproof-v2://connections/ebay") {
     return url.toString();
   }
   return `${url.pathname}${url.search}`;
@@ -611,4 +630,12 @@ async function verifiedEbayIdentityAccount(credentials:EbayCredentialStore,conne
   const userId=material?.material.ebayUserId;
   if(!userId) throw integrationNeedsReauth();
   return ebayIdentityAccount(environment,userId);
+}
+
+async function markEbayNeedsReauth(db: Database, clock: Clock, connectionId: string): Promise<void> {
+  await db.transaction(async tx => {
+    await lockEbayPrivacy(tx);
+    await tx.query("UPDATE integration_connections SET status='NEEDS_REAUTH',updated_at=$2 WHERE id=$1 AND status<>'DISABLED'",[connectionId,clock.now().toISOString()]);
+    await tx.query(`UPDATE connected_accounts SET status='NEEDS_REAUTH', updated_at=$2 WHERE id=$1 AND status<>'DISCONNECTED'`, [connectionId, clock.now().toISOString()]);
+  });
 }

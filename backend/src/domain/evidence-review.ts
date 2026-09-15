@@ -17,6 +17,7 @@ import { Readable } from "node:stream";
 import { collectSmallZip, streamZip, zipBytes, ZipStreamError, type ZipStreamEntry } from "../export/zip-stream.js";
 import { authorizeProofAccess } from "./proof-access.js";
 import { getProofSupplementSnapshot } from "./proof-supplements.js";
+import { getLifecycleSnapshot } from "./lifecycle-snapshots.js";
 
 export async function getEvidenceReview(
   db: Database,
@@ -65,8 +66,13 @@ interface PreservedRow { object_key: string; object_version_id: string | null; s
 
 /** Exact frozen manifests and sources, emitted with bounded memory and complete end-of-stream checks. */
 export async function exportEvidencePackageStream(db: Database, clock: Clock, store: ObjectStore, userId: string, proofId: string,
-  options: { maximumMediaBytes?: number } = {}): Promise<Readable> {
+  options: { maximumMediaBytes?: number; lifecycleSnapshotId?: string } = {}): Promise<Readable> {
   const proof = await getProofForUser(db, userId, proofId), manifest = await getManifest(db, userId, proofId);
+  const lifecycle = options.lifecycleSnapshotId
+    ? await getLifecycleSnapshot(db, userId, proofId, options.lifecycleSnapshotId) : null;
+  if (lifecycle && (lifecycle.root.sha256 !== manifest.sha256 || lifecycle.root.canonicalJson !== manifest.canonicalJson))
+    throw integrityFailure("Lifecycle snapshot does not match the original frozen manifest");
+  const lifecycleIndex = lifecycle ? JSON.parse(lifecycle.canonicalJson) : null;
   const maximumMediaBytes = options.maximumMediaBytes ?? 200 * 1024 * 1024;
   if (!Number.isSafeInteger(maximumMediaBytes) || maximumMediaBytes < 0 || maximumMediaBytes > 200 * 1024 * 1024) throw packageTooLarge();
   if (Buffer.byteLength(manifest.canonicalJson) > 8 * 1024 * 1024) throw packageTooLarge();
@@ -74,15 +80,32 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
   const signature = signatureRow?.signature_base64 ? { algorithm: requireManifestSignatureAlgorithm(signatureRow.signature_algorithm),
     keyId: signatureRow.signing_key_id!, signatureBase64: signatureRow.signature_base64, signedAt: new Date(signatureRow.signed_at!).toISOString() } : null;
   const supplementSnapshot = { schema: "packproof.signed-supplement-snapshot.v1", proofId,
-    ...await getProofSupplementSnapshot(db, proofId), snapshotAt: clock.now().toISOString() };
+    ...(lifecycle ? {
+      coreManifestSha256: manifest.sha256,
+      sequence: lifecycle.supplements.at(-1)?.sequence ?? 0,
+      sha256: lifecycle.supplements.at(-1)?.sha256 ?? manifest.sha256,
+      supplements: lifecycle.supplements,
+      snapshotLimit: "This signed historical snapshot cannot establish that no later records exist.",
+    } : await getProofSupplementSnapshot(db, proofId)),
+    snapshotAt: lifecycleIndex?.cutoffAt ?? clock.now().toISOString() };
   if (supplementSnapshot.coreManifestSha256 !== manifest.sha256) throw integrityFailure("Supplement snapshot is not bound to the frozen manifest");
   const supplementSource = { path: "proof-supplements.json", sequence: supplementSnapshot.sequence, sha256: supplementSnapshot.sha256, snapshotAt: supplementSnapshot.snapshotAt };
-  const pkg = { ...createProofPackage({ proofId, manifestId: manifest.manifestId, manifest: manifest.manifest, expectedSha256: manifest.sha256, signature }),
-    sources: { signedSupplements: supplementSource } };
+  const portableRoot = lifecycle ? {
+    schema: "packproof.proof-package.v1" as const, proofId, manifestId: manifest.manifestId,
+    canonicalManifest: manifest.manifest, canonicalJson: lifecycle.root.canonicalJson,
+    manifestSha256: lifecycle.root.sha256, signature,
+  } : createProofPackage({ proofId, manifestId: manifest.manifestId, manifest: manifest.manifest, expectedSha256: manifest.sha256, signature });
+  const pkg = { ...portableRoot,
+    sources: { signedSupplements: supplementSource, ...(lifecycle ? { lifecycleSnapshot: {
+      path: "lifecycle/snapshot.json", sha256: lifecycle.sha256, snapshotId: lifecycle.snapshotId,
+    } } : {}) } };
   const core = manifest.manifest as { transaction: unknown; participants: unknown; attestations?: unknown; shipping: unknown; evidence: FrozenMedia[] };
-  const stages = (await listCommerceStages(db, proofId)).filter(stage => stage.finalizedAt).map(stage => {
+  const stageSources = lifecycle
+    ? lifecycle.stages.map(stage => ({ ...stage, manifest: JSON.parse(stage.canonicalJson) }))
+    : (await listCommerceStages(db, proofId)).filter(stage => stage.finalizedAt).map(stage => ({ ...stage, canonicalJson: undefined as string | undefined }));
+  const stages = stageSources.map(stage => {
     const frozen = stage.manifest as { baseManifestSha256: string; evidence: FrozenMedia[] };
-    const encoded = canonicalize(frozen);
+    const encoded = stage.canonicalJson ?? canonicalize(frozen);
     if (frozen.baseManifestSha256 !== manifest.sha256 || sha256Hex(encoded) !== stage.sha256)
       throw integrityFailure("Lifecycle manifest failed verification");
     if (Buffer.byteLength(encoded) > 8 * 1024 * 1024) throw packageTooLarge();
@@ -95,7 +118,9 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
     if (!Number.isSafeInteger(item.byteSize) || item.byteSize < 0 || !/^[a-f0-9]{64}$/.test(item.sha256)) throw integrityFailure("Frozen media metadata is invalid");
     if ((total += item.byteSize) > maximumMediaBytes) throw packageTooLarge();
   }
-  const shipment = await getShipmentIntegrity(db, proofId);
+  // A historical export must never include observations from after its cutoff.
+  // Unsealed timeline projections are intentionally excluded from this profile.
+  const shipment = lifecycle ? null : await getShipmentIntegrity(db, proofId);
   async function openFrozen(evidence: FrozenMedia, stageId?: string): Promise<Readable | null> {
     await authorizeProofAccess(db, proofId, userId);
     const row = stageId
@@ -128,11 +153,16 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
     };
     const bytesEntry = (name: string, bytes: Buffer) => { hashes[name] = sha256Hex(bytes); return zipBytes(name, bytes); };
     yield json("package.json", pkg); yield bytesEntry("manifest.json", Buffer.from(manifest.canonicalJson));
+    if (lifecycle) yield json("lifecycle/snapshot.json", {
+      snapshotId: lifecycle.snapshotId, canonicalJson: lifecycle.canonicalJson,
+      sha256: lifecycle.sha256, signature: lifecycle.signature,
+    });
     yield json("proof-supplements.json", supplementSnapshot);
     yield json("transaction.json", core.transaction); yield json("participants.json", core.participants);
     yield json("attestations.json", core.attestations ?? []);
-    yield json("shipping.json", { frozen: core.shipping, supplement: shipment, observations: proof.shipmentObservations });
-    yield json("events.json", proof.events);
+    yield json("shipping.json", { frozen: core.shipping, supplement: shipment, observations: lifecycle ? [] : proof.shipmentObservations,
+      ...(lifecycle ? { limitation: "Unsealed shipping projections are excluded; see signed carrier supplements where present." } : {}) });
+    yield json("events.json", lifecycle ? [] : proof.events);
     const evidenceIndex: Array<Record<string, unknown>> = [];
     for (const evidence of core.evidence) {
       const source = await openFrozen(evidence);
@@ -170,10 +200,12 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
       schema: "packproof.proof-archive.v1", canonicalization: "packproof.sorted-json.v1",
       snapshot: { proofId, manifestId: manifest.manifestId, manifestSha256: manifest.sha256 }, exportedAt: clock.now().toISOString(),
       disclosure: { kind: "PARTICIPANT_FULL_RECORD", policyVersion: 1, exportedBy: userId }, omissions, derivatives: [],
-      sources: { canonicalRecord: "manifest.json", evidenceInventory: "integrity/evidence.json", lifecycleManifests: "lifecycle/stages.json", supplements: ["shipping.json", "events.json"], signedSupplements: supplementSource },
+      sources: { canonicalRecord: "manifest.json", evidenceInventory: "integrity/evidence.json", lifecycleManifests: "lifecycle/stages.json", supplements: ["shipping.json", "events.json"], signedSupplements: supplementSource,
+        ...(lifecycle ? { lifecycleSnapshot: { path: "lifecycle/snapshot.json", sha256: lifecycle.sha256, snapshotId: lifecycle.snapshotId } } : {}) },
       supplementIntegrity: { signedSupplements: "SEPARATELY_SIGNED_RECEIVED_CHAIN_REQUIRES_INDEPENDENT_TRUST",
         otherSupplementalFiles: "SELF_CONSISTENCY_ONLY_NOT_COVERED_BY_ROOT_SIGNATURE" },
-      limitations: ["Signing time is not filming time", "Integrity is not a physical truth verdict", "Offline trust cannot discover later revocations", "Unavailable media has not been verified"],
+      limitations: ["Signing time is not filming time", "Integrity is not a physical truth verdict", "Offline trust cannot discover later revocations", "Unavailable media has not been verified",
+        ...(lifecycle ? ["Only original and sealed records selected by the signed index are included; unsealed timeline projections are excluded."] : [])],
     });
     yield bytesEntry("README.txt", Buffer.from("PackProof portable evidence package v1\nmanifest.json is the frozen canonical record.\nproof-supplements.json contains the separately signed received supplement chain, bound to that core record.\nEach supplement requires independent signing-key trust; its dated head cannot establish that no later supplements exist.\nLegacy shipping.json and events.json remain self-consistency-only files outside the root signature.\nVerify manifest SHA-256 against a digest obtained separately from PackProof.\nFile self-consistency does not establish origin or the truth of recorded assertions.\nObtain the read-only verifier independently from the PackProof repository: verifier/verify.py.\nUse a separately obtained trust list or signed registry with an independently pinned authority; package contents cannot make their own key trusted.\nUnavailable files are explicit omissions and have not been verified.\n"));
     yield zipBytes("integrity/hashes.json", Buffer.from(canonicalize(hashes)));

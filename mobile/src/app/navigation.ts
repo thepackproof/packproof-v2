@@ -15,6 +15,7 @@ export type AppRouteName =
   | "account"
   | "sharing"
   | "signature"
+  | "supporting"
   | "proof"
   | "capture"
   | "scan"
@@ -33,11 +34,13 @@ export type AppRouteName =
   | "event";
 
 export type WorkspaceOrigin = "home" | "orders" | "station";
-export type AccountSection = "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
+export type AccountSection = "developer" | "billing" | "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
 export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
   name: AppRouteName;
   accountSection?: AccountSection;
+  supportingSection?: "responses" | "retention" | "privacy";
+  historyShareId?: string;
 }
 
 export interface ProofsLibraryState {
@@ -49,7 +52,7 @@ export interface ProofsLibraryState {
 }
 
 export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
-  view: "all",
+  view: "attention",
   query: "",
   sort: "newest",
   role: "all",
@@ -69,6 +72,7 @@ export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrig
     case "dev": return "account";
     case "sharing":
     case "signature":
+    case "supporting":
     case "receipt":
     case "finalize":
     case "invite":
@@ -85,9 +89,9 @@ export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrig
     case "account":
     case "create":
     case "manual":
+    case "intake":
       return "home";
     case "scan":
-    case "intake":
     case "review":
       return "create";
     default:

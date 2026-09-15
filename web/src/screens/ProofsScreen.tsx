@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import type { PackProofApi } from "../api/client";
+import { RecordThumbnail } from "../components/RecordThumbnail";
+import { proofReference, packingRecordLabel, shipmentRecordLabel } from "../../../mobile/src/copy/evidence-record";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ProofCollectionItem } from "../api/types";
 import type { ProofListView } from "../proof-list-state";
 import { IconSearch } from "../components/Icons";
@@ -8,7 +11,9 @@ import { formatWhen } from "../format";
 import { classifyProofPresentation } from "../../../backend/src/domain/proof-presentation";
 
 export function ProofsScreen(props: {
+  api?: PackProofApi;
   proofs: ProofCollectionItem[];
+  readyOrders?: ReactNode;
   view: ProofListView;
   query: string;
   loading: boolean;
@@ -28,8 +33,9 @@ export function ProofsScreen(props: {
   const rows = [...new Map(props.proofs.map(item => [item.proofId, item])).values()];
   const empty = !props.loading && !props.error && !rows.length;
   return <main className="page library-page" aria-busy={props.loading}>
-    <div className="workspace-heading"><div><h1 className="page-title">Proofs</h1><p>Your shipment records, from the first recording onward.</p></div><button className="btn" onClick={props.onCreate}><Glyph name="plus" size={16} />New Proof</button></div>
-    <div className="segmented proof-filters" role="group" aria-label="Proof filters">{([ ["all", "All"], ["attention", "Needs attention"], ["completed", "Completed"] ] as const).map(([view, label]) => <button key={view} className="segmented-tab" type="button" aria-pressed={props.view === view} onClick={() => props.onChange(view, props.query)}>{label}</button>)}</div>
+    <div className="workspace-heading"><div><h1 className="page-title">Proofs</h1></div><button className="btn" onClick={props.onCreate}><Glyph name="plus" size={16} />New Proof</button></div>
+    {props.readyOrders}
+    <div className="segmented proof-filters" role="group" aria-label="Proof filters">{([ ["attention", "Needs attention"], ["all", "All"], ["completed", "Completed"] ] as const).map(([view, label]) => <button key={view} className="segmented-tab" type="button" aria-pressed={props.view === view} onClick={() => props.onChange(view, props.query)}>{label}</button>)}</div>
     <form className="search-row" role="search" onSubmit={event => { event.preventDefault(); props.onChange(props.view, query.trim()); }}>
       <label className="search-field"><IconSearch /><span className="visually-hidden">Search proofs</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search item, order or tracking number" autoComplete="off" /></label>
       <button className="btn btn-secondary" type="submit">Search</button>
@@ -42,11 +48,11 @@ export function ProofsScreen(props: {
       {rows.map(item => {
         const presentation = item.presentation || classifyProofPresentation({ proofId: item.proofId, status: item.status, role: item.role, finalizedAt: item.finalizedAt });
         return <button type="button" className="proof-card proof-row" key={item.proofId} id={`proof-row-${item.proofId}`} data-context-anchor={`proof-${item.proofId}`} onClick={() => item.accessKind === "RECEIVER" ? props.onOpenReceiver(item.proofId) : item.invitationId ? props.onOpenInvitation(item.invitationId) : props.onOpenProof(item.proofId)} aria-label={`${item.transaction.itemTitle || "Untitled shipment"}. ${presentation.displayStatus}. ${presentation.nextAction.label}`}>
-          <span className="proof-card-copy"><strong className="proof-card-title">{item.transaction.itemTitle || "Untitled shipment"}</strong>
-            {item.transaction.externalReference && <span className="proof-row-reference">{item.transaction.externalReference}</span>}
-            <span className="proof-row-status">{presentation.displayStatus}</span>
+          <RecordThumbnail api={props.api} proofId={item.proofId} derivativeId={item.thumbnailDerivativeId}/><span className="proof-card-copy"><strong className="proof-card-title">{item.transaction.itemTitle || "Untitled shipment"}</strong>
+            <span className="proof-row-reference">{proofReference(item.proofId,item.transaction.externalReference)}</span>
+            <span className={`record-seal ${item.status === "FINALIZED" ? "is-sealed" : ""}`}><Glyph name={item.status === "FINALIZED" ? "shield" : "file"} size={16}/>{packingRecordLabel(item.status)}</span><span className="record-shipment"><Glyph name="truck" size={15}/>Shipment: {shipmentRecordLabel(item.transaction.trackingNumber,presentation.shipmentStatus)}</span>{presentation.needsAttention && <span className="proof-row-status">{presentation.displayStatus}</span>}
             <span className="proof-row-source">{item.source ? `${item.source} · ` : ""}Updated {formatWhen(item.updatedAt)}</span>
-          </span><span className="proof-row-action">{presentation.nextAction.label}<Glyph name="arrow" size={16} /></span>
+          </span><span className="proof-row-action"><Glyph name="arrow" size={18} /></span>
         </button>;
       })}
     </div>}

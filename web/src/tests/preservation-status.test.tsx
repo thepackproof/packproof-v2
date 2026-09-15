@@ -18,8 +18,19 @@ it("labels a compatibility submission without claiming durable preservation",()=
   expect(preservationMessage(view("COMMITTED_PENDING_DURABILITY"),false,false)).not.toContain("Proof submitted");
 });
 it("checks preservation inside the canonical record",async()=>{
-  const api={featureRequest:vi.fn().mockResolvedValue({snapshot:{data:{anchors:[]}}}),getRecoveryStatus:vi.fn().mockResolvedValue(view("COMMITTED_PENDING_DURABILITY"))};
-  render(<WorkspaceProofRecord api={api as unknown as PackProofApi} proof={{...canonicalProof, proofId:"proof", evidence:[]}} currentUserId="user_seller" />);
-  expect(await screen.findByText("Recording received. Preservation in progress.")).toBeInTheDocument();
-  expect(screen.queryByText("Your evidence record has been sealed.")).not.toBeInTheDocument();
+  const proof={...canonicalProof,proofId:"proof"};
+  const recovery={...view("COMMITTED_PENDING_DURABILITY"),evidence:[{evidenceId:proof.evidence[0].evidenceId,status:"COMMITTED_PENDING_DURABILITY",receipt:null}]};
+  const api={
+    featureRequest:vi.fn().mockResolvedValue({snapshot:{data:{anchors:[]}}}),
+    getRecoveryStatus:vi.fn().mockResolvedValue(recovery),
+    getProof:vi.fn().mockResolvedValue(proof),
+    getCapabilities:vi.fn().mockResolvedValue({schemaVersion:1,preservation:{receiptVersions:[1],durableReceiptsRequired:true}}),
+  };
+  render(<WorkspaceProofRecord api={api as unknown as PackProofApi} proof={proof} currentUserId="user_seller" />);
+  expect(await screen.findByRole("status")).toHaveTextContent("Recording received. Preservation in progress.");
+  expect(api.getRecoveryStatus).toHaveBeenCalledWith("proof");
+  expect(api.getProof).toHaveBeenCalledWith("proof");
+  expect(screen.getByText("Recording saved · seal pending")).toBeInTheDocument();
+  expect(screen.queryByText("Packing record sealed")).not.toBeInTheDocument();
+  expect(screen.queryByText("Proof finalized and available.")).not.toBeInTheDocument();
 });

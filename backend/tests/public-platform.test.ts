@@ -1,3 +1,4 @@
+import { createDeveloper } from "./developer-fixtures.js";
 import { previewDisclosure, createDisclosureGrant } from "../src/domain/disclosure.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
@@ -38,7 +39,7 @@ describe("public partner platform", () => {
   });
   afterAll(async () => h.close());
   async function tenant(user?: string) {
-    const owner = user ?? (await createUser(h));
+    const owner = user ?? (await createDeveloper(h));
     const t = (await createTenant(h.db, clock, owner, {
       name: `tenant-${Math.random()}`,
       environment: "sandbox",
@@ -83,6 +84,14 @@ describe("public partner platform", () => {
       scopes: ["proofs:read"],
     });
     expect((await create(readonly.token)).status).toBe(403);
+    const launch=(key:string)=>request(app).post(`/v1/proofs/${id}/capture-intents`).set(auth(key)).set('Idempotency-Key','capture-intent-one').send({allowedSurfaces:['WEB']});
+    expect((await launch(b.key)).status).toBe(404);
+    expect((await launch(readonly.token)).status).toBe(403);
+    const intent=await launch(a.key);expect(intent.status,JSON.stringify(intent.body)).toBe(201);
+    const replay=await launch(a.key);expect(replay.body).toEqual(intent.body);expect(replay.headers['idempotency-replayed']).toBe('true');
+    expect(intent.body.launchPath).not.toContain(id);
+    const cached=await h.db.query('SELECT response FROM api_idempotency WHERE tenant_id=$1 AND key_hash=$2',[a.id,sha256Hex('capture-intent-one')]);
+    expect(cached.rows[0].response).toHaveProperty('encrypted');expect(JSON.stringify(cached.rows)).not.toContain(intent.body.launchToken);
     const leak = await h.db.query("SELECT * FROM api_keys WHERE id=$1", [a.keyId]);
     expect(JSON.stringify(leak.rows)).not.toContain(a.key);
   });
@@ -155,13 +164,10 @@ describe("public partner platform", () => {
           .send(bytes)
       ).body.replayed,
     ).toBe(true);
-    expect(
-      (
-        await mutate(`evidence/${init.body.evidenceId}/parts/complete`, "complete", {
-          totalBytes: bytes.length,
-        })
-      ).status,
-    ).toBe(200);
+    const completedParts = await mutate(`evidence/${init.body.evidenceId}/parts/complete`, "complete", {
+      totalBytes: bytes.length,
+    });
+    expect(completedParts.status, JSON.stringify(completedParts.body)).toBe(200);
     expect(
       (
         await mutate(`evidence/${init.body.evidenceId}/commit`, "wrong-hash", {
@@ -344,7 +350,7 @@ describe("public partner platform", () => {
   });
   it("rotates keys atomically and hides keys from non-owners", async () => {
     const t = await tenant(),
-      stranger = await createUser(h);
+      stranger = await createDeveloper(h);
     const path = `/me/tenants/${t.id}/keys/${t.keyId}/rotate`;
     expect((await request(app).post(path).set(auth(stranger)).send({})).status).toBe(404);
     const rotated = await request(app).post(path).set(auth(t.owner)).send({});

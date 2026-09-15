@@ -7,13 +7,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test": "npm run test:links && vitest run",
+    "typecheck": "tsc --noEmit",
+    "links:generate": "node scripts/app-associations.mjs",
+    "links:verify": "node scripts/verify-app-associations.mjs",
+    "test:links": "node --test scripts/app-associations.check.mjs scripts/sites-worker.check.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "zxing-wasm": "3.1.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.8.0",

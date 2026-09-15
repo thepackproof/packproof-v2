@@ -1,3 +1,4 @@
+import { liveShippingIdentity } from './tracking-associations.js';
 import { canonicalize } from "../canonical.js";
 import type { Database } from "../db/database.js";
 import { sha256Hex } from "../hash.js";
@@ -110,7 +111,7 @@ export async function getShipmentIntegrity(
     `SELECT * FROM transaction_shipping WHERE transaction_id = $1`,
     [proof.transaction_id],
   );
-  const shippingRow = shipping.rows[0] ?? null;
+  const shippingRow = await liveShippingIdentity(db,proof.transaction_id,shipping.rows[0] ?? null);
   const eventsByProof = await listShipmentEventRowsAppendOrder(db, proofId);
   const eventsByShipping = shippingRow
     ? await listShipmentEventRowsForShippingAppendOrder(db, shippingRow.id)

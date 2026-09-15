@@ -1,3 +1,4 @@
+import { isNativeAttestationMethod } from "../attestation/authorization";
 import { hasDurableReceipt, recoveryRetry, type CaptureRecoveryState, type ProofRecovery } from "./recovery-model";
 import { requiresDurableCaptureReceipts } from "./capabilities";
 
@@ -34,6 +35,7 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
   async function read() { deps.assertAccount(); const proof = await deps.getProof(); deps.assertAccount(); return proof; }
   async function status() { deps.assertAccount(); const result = await deps.getRecovery(); deps.assertAccount(); state.lastServerResult = result; await deps.save(); return result; }
   try {
+    if (state.discardRequested) throw Object.assign(new Error("This incomplete upload is being discarded."), { code: "CAPTURE_DISCARD_PENDING" });
     if (!state.submitRequested) throw Object.assign(new Error("Review your recording and confirm submission first."), { code: "ATTESTATION_CONFIRMATION_NEEDED" });
     let proof = await read();
     // Read the exact operation before repeating any write. Never substitute another recording on this Proof.
@@ -50,7 +52,9 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
       if (state.needsSellerAttestation && !state.authorization) throw Object.assign(new Error("Confirm your shipment to continue. Your recording is saved on this device."), { code: "ATTESTATION_CONFIRMATION_NEEDED" });
       await phase("UPLOAD_QUEUED");
       const initialized = await deps.initialize(state.evidenceIdempotencyKey);
-      evidenceId = typeof initialized === "string" ? initialized : initialized.evidenceId;
+      const initializedId = typeof initialized === "string" ? initialized : initialized.evidenceId;
+      if (evidenceId && initializedId !== evidenceId) throw Object.assign(new Error("Recovery returned another recording identity. The original was kept."), {code:"CAPTURE_ORIGINAL_CONFLICT",status:409});
+      evidenceId = initializedId;
       deps.assertAccount(); capture.uploadEvidenceId = evidenceId; await deps.save();
       if (typeof initialized === "string" || !initialized.received) {
         await phase("UPLOADING"); await deps.upload(evidenceId); deps.assertAccount();
@@ -63,7 +67,7 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
     const preserved = server.evidence.find(item => item.evidenceId === evidenceId);
     if (hasDurableReceipt(preserved)) state.preservationReceipt = preserved.receipt;
     await phase(hasDurableReceipt(preserved) ? "CONFIRMATION_NEEDED" : "PRESERVATION_PENDING");
-    const accepted = proof.attestations?.find(item => item.attestedBy === state.userId && item.relatedEvidenceId === evidenceId && item.authorization?.signatureVerification === "SERVER_VERIFIED" && item.authorization.method === "ANDROID_BIOMETRIC_STRONG");
+    const accepted = proof.attestations?.find(item => item.attestedBy === state.userId && item.relatedEvidenceId === evidenceId && item.authorization?.signatureVerification === "SERVER_VERIFIED" && isNativeAttestationMethod(item.authorization.method));
     if (state.needsSellerAttestation && !accepted) {
       const authorization = state.authorization;
       if (!authorization || authorization.sha256 !== capture.captureSha256 || Date.parse(authorization.expiresAt) <= now()) {

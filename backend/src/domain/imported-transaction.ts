@@ -33,6 +33,7 @@ export interface ImportedTransaction {
     title?: string | null;
     description?: string | null;
     sku?: string | null;
+    barcode?: string | null; gtin?: string | null; variant?: string | null; productId?: string | null; variantId?: string | null; imageUrl?: string | null;
     quantity?: number | null;
     unitValue?: number | null;
     currency?: string | null;
@@ -248,7 +249,7 @@ function parseImportedItems(value: unknown): TransactionItemWrite[] {
             : (() => {
                 throw new DomainError("INVALID_IMPORTED_TRANSACTION", "items.currency is invalid", 400);
               })(),
-      metadata: {},
+      metadata: Object.fromEntries(['barcode','gtin','variant','productId','variantId','imageUrl'].filter(k=>typeof record[k]==='string'&&String(record[k]).length<=2048).map(k=>[k,record[k]])),
     };
   });
 }

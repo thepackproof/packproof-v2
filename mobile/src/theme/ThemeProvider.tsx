@@ -31,10 +31,9 @@ function schemeFromSystem(value: ColorSchemeName): ColorScheme {
 
 export function ThemeProvider(props: { children: ReactNode }) {
   const [fontsLoaded, fontError] = useFonts({
-    NotoSans: require("../../assets/fonts/NotoSans-Regular.ttf"),
-    "NotoSans-Bold": require("../../assets/fonts/NotoSans-Bold.ttf"),
-    NotoSerif: require("../../assets/fonts/NotoSerif-Regular.ttf"),
-    "NotoSerif-Bold": require("../../assets/fonts/NotoSerif-Bold.ttf"),
+    Inter: require("../../assets/fonts/Inter-Regular.ttf"),
+    "Inter-SemiBold": require("../../assets/fonts/Inter-SemiBold.ttf"),
+    "Inter-Bold": require("../../assets/fonts/Inter-Bold.ttf"),
   });
   const [preference, setPreferenceState] = useState<AppearancePreference>("light");
   const [systemScheme, setSystemScheme] = useState<ColorScheme>(() => schemeFromSystem(Appearance.getColorScheme()));

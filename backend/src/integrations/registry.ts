@@ -96,7 +96,7 @@ export class IntegrationAdapterRegistry {
 
 export function createDefaultIntegrationRegistry(
   clock: Clock,
-  options: { easypostClient?: EasyPostTrackerClient; shippoClient?: ShippoTrackingClient; shopifyClient?: ShopifyClient } = {},
+  options: { testFixtures?: boolean; easypostClient?: EasyPostTrackerClient; shippoClient?: ShippoTrackingClient; shopifyClient?: ShopifyClient } = {},
 ): IntegrationAdapterRegistry {
   const demo = createDemoMarketplaceAdapter(clock);
   const carrier = createDemoCarrierAdapter(clock);
@@ -106,15 +106,15 @@ export function createDefaultIntegrationRegistry(
   const storefront = createDemoStorefrontAdapter();
   const shopify = createShopifyCommerceAdapter(options.shopifyClient ?? createHttpShopifyClient());
   return new IntegrationAdapterRegistry(
-    new Map([[demo.adapterKey, demo]]),
-    new Map([[carrier.adapterKey, carrier]]),
+    new Map(options.testFixtures ? [[demo.adapterKey, demo]] : []),
+    new Map(options.testFixtures ? [[carrier.adapterKey, carrier]] : []),
     new Map([
-      [trusted.adapterKey, trusted],
+      ...(options.testFixtures ? [[trusted.adapterKey, trusted] as const] : []),
       [easypost.adapterKey, easypost],
       [shippo.adapterKey, shippo],
     ]),
     new Map([
-      [storefront.adapterKey, storefront],
+      ...(options.testFixtures ? [[storefront.adapterKey, storefront] as const] : []),
       [shopify.adapterKey, shopify],
     ]),
   );

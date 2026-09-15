@@ -1,9 +1,20 @@
+import { orderShare } from '../../modules/packproof-order-share';
+import { clearNativeIntakeSession, stopNativeIntakeSession } from '../intake/native-session';
+import { clearIntakeQueueCache } from '../intake/queue-cache';
+import { connectionReturnFromLink } from "./deep-links";
+import { unregisterProofPush } from "../notifications/client";
+import {beginNativeEngine} from "../capture/engine";
+import { IntakeApi } from "../intake/api";
+import { assertIntakeAcceptance } from "../intake/model";
+import { clearIntakeRequestKey, forgetIntakeDevice, intakeRequestKey, readIntakeDevice, revokeIntakeDevice } from "../intake/storage";
 import { loadProofsCache, saveProofsCache, clearProofsCache, emptyProofsCache } from "./proofs-cache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
 import { clearSharedLinkCache } from "../copy/share-cache";
-import { completeSavedCapture, captureCompletionActive } from "../capture/completion";
+import { completeSavedCapture, prepareSavedCapture, captureCompletionActive } from "../capture/completion";
 import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture,recordNativeStudyInteraction} from '../analytics/native-study';
 import { listAccountCaptures, persistCaptureMetadata } from "../capture";
+import { requestUploadNotifications, notifyUploadOutcome } from "../capture/upload-notifications";
 import { hasDurableReceipt, mayCleanUpCapture } from "../capture/recovery-model";
 import { orderDestination } from "../copy/orders";
 import type { IntakePreview } from "../copy/order-intake";
@@ -18,7 +29,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppState, Linking, Platform } from "react-native";
+import { Alert, AppState, Linking, Platform } from "react-native";
 import { authorizeSellerCapture, authorizeCommittedSellerEvidence, attestSellerCapture } from "../attestation/seller-attestation";
 import {
   PackProofV2Client,
@@ -175,10 +186,12 @@ export interface PackProofContextValue {
   manifest: ManifestView | null;
   shipmentIntegrity: ShipmentIntegrityView | null;
   captureStatus: LocalCaptureStatus;
+  uploadProgressByProof: Record<string, number | null>;
   savedRecordings: LocalCapture[];
   resumeSavedCapture: (capture: LocalCapture) => Promise<void>;
   cleanUpSavedCapture: (capture: LocalCapture) => Promise<void>;
   discardSavedCapture: (capture: LocalCapture) => Promise<void>;
+  discardIncompleteEvidence: (evidenceId: string) => Promise<void>;
   localCapture: LocalCapture | null;
   uploadPercent: number | null;
   createForm: ContextForm;
@@ -219,7 +232,7 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  go: (name: AppRouteName, options?: { accountSection?: AccountSection }) => void;
+  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => void;
   goBack: () => void;
   setProofsView: (view: ProofsLibraryView) => void;
   setProofsQuery: (query: string) => void;
@@ -279,7 +292,9 @@ export interface PackProofContextValue {
   continueFromScan: () => Promise<void>;
   savePurchaseDetails: () => Promise<void>;
   saveShippingDetails: () => Promise<void>;
+  startCaptureIntent: (token:string) => Promise<void>;
   startCapture: () => Promise<void>;
+  startIntakeCapture: (input: { snapshotId: string; handoffId?: string }) => Promise<void>;
   discardCapture: () => Promise<void>;
   submitCapture: () => Promise<void>;
   finalizeProof: () => Promise<void>;
@@ -376,8 +391,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [manifest, setManifest] = useState<ManifestView | null>(null);
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [savedRecordings, setSavedRecordings] = useState<LocalCapture[]>([]);
+  const recoveryConnection = useRef<boolean | null>(null);
+  const retryOnConnection = useRef(false);
   const recoveryTickRef = useRef<() => Promise<void>>(async () => {});
   const recoveryTickBusy = useRef(false);
+  const [uploadProgressByProof, setUploadProgressByProof] = useState<Record<string, number | null>>({});
   const [captureStatus, setCaptureStatus] = useState<LocalCaptureStatus>("idle");
   const [localCapture, setLocalCapture] = useState<LocalCapture | null>(null);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
@@ -403,6 +421,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   useEffect(()=>{updateNativeStudyConnectivity(offline);},[offline,session?.userId,session?.apiBaseUrl,session?.needsReauthentication]);
   const searchGeneration = useRef(0);
   const captureSubmitLock = useRef(false);
+  const intakeCaptureLock = useRef(false);
   const tokenRefresh = useRef<Promise<void> | null>(null);
   const client = useMemo(
     () =>
@@ -410,11 +429,15 @@ export function PackProofProvider(props: { children: ReactNode }) {
         baseUrl: apiBaseUrl.trim(),
         getToken: () => tokenRef.current,
         getIdToken: () => sessionRef.current?.idToken ?? null,
+        getActiveAccount: () => {
+          const account = sessionRef.current;
+          return account && !account.needsReauthentication ? { userId: account.userId, apiBaseUrl: account.apiBaseUrl } : null;
+        },
       }),
     [apiBaseUrl],
   );
 
-  const go = useCallback((name: AppRouteName, options?: { accountSection?: AccountSection }) => {
+  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => {
     if (name === "scan") name = "create";
     if (name === "complete") name = "proof";
     if (name === "orders" || (name === "station" && !sessionRef.current?.stationActive)) name = "home";
@@ -437,7 +460,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     }
     const current = sessionRef.current;
     if (current) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
-    setRoute({ name, ...(name === "account" ? options : {}) });
+    setRoute({ name,
+      ...(name === "account" ? { accountSection: options?.accountSection } : {}),
+      ...(name === "supporting" ? { supportingSection: options?.supportingSection } : {}),
+      ...(name === "signature" ? { historyShareId: options?.historyShareId } : {}),
+    });
   }, []);
 
   useEffect(() => {
@@ -517,8 +544,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setProofsLibrary({...DEFAULT_PROOFS_LIBRARY}); proofsScrollOffset.current = 0;
     setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
+      await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
+      await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
       await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
       await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+      await revokeIntakeDevice(client, sessionRef.current.userId).catch(() => forgetIntakeDevice(client, sessionRef.current!.userId));
     }
     cacheScope.current = key;
     const cached = await loadProofsCache(current.apiBaseUrl,current.userId);
@@ -541,6 +571,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     await restoreProofsContext(stored);
     tokenRef.current = stored.token || null;
     sessionRef.current = stored;
+    await (stored.needsReauthentication ? stopNativeIntakeSession() : orderShare?.setActiveAccount(stored.userId))?.catch(() => undefined);
     setSession(stored.needsReauthentication ? null : stored);
     await saveCachedState(stored);
     await saveCaptureRecovery(stored);
@@ -718,6 +749,44 @@ export function PackProofProvider(props: { children: ReactNode }) {
       captureByteSize: next?.byteSize ?? null,
       captureDurationMs: next?.durationMs ?? null,
     });
+  }
+
+  async function discardSavedRecording(capture: LocalCapture) {
+    const account = sessionRef.current;
+    const state = capture.recovery;
+    if (!account || !state || capture.captureUserId !== account.userId || state.apiBaseUrl.replace(/\/+$/, "") !== client.apiBaseUrl.replace(/\/+$/, ""))
+      throw new Error("Open the original account to discard this recording.");
+    if (captureSubmitLock.current || captureCompletionActive(state.operationId)) throw new Error("An upload is active. Wait for it to finish or become interrupted before discarding.");
+    captureSubmitLock.current = true;
+    const sameAccount = () => { if (sessionRef.current?.userId !== account.userId || sessionRef.current.apiBaseUrl !== account.apiBaseUrl) throw new ApiError("ACCOUNT_CHANGED", "Open the original account to continue.", 401); };
+    try {
+      state.discardRequested = true; state.phase = "DISCARD_PENDING";
+      await persistCaptureMetadata(capture);
+      setSavedRecordings(previous => [...previous.filter(item => item.recovery?.operationId !== state.operationId), {...capture}]);
+      if (capture.captureStageId) {
+        if (!capture.captureSessionId) throw new Error("The original capture session is needed to safely discard this stage recording.");
+        await client.cancelCaptureSession(state.proofId, capture.captureSessionId);
+      } else if (capture.uploadEvidenceId) await client.discardIncompleteEvidence(state.proofId, capture.uploadEvidenceId);
+      else {
+        await client.discardPendingUpload(state.proofId, state.evidenceIdempotencyKey);
+        sameAccount();
+        if (capture.captureSessionId) await client.cancelCaptureSession(state.proofId, capture.captureSessionId);
+      }
+      sameAccount();
+      // Server acknowledgement precedes removal of the original and its durable journal.
+      await discardLocalCapture(capture.uri, state.operationId);
+      if (sessionRef.current?.captureUri === capture.uri) await persistCapture(null, null);
+      setSavedRecordings(await listAccountCaptures(account.apiBaseUrl, account.userId));
+      if (sessionRef.current?.proofId === state.proofId) await refreshProof(state.proofId);
+      await refreshProofCollection();
+    } catch (error) {
+      if ((error as {code?:string})?.code === "EVIDENCE_ALREADY_COMMITTED") {
+        state.discardRequested = false; state.phase = "PRESERVATION_PENDING";
+        await persistCaptureMetadata(capture);
+        if (sessionRef.current?.userId === account.userId && sessionRef.current.proofId === state.proofId) await refreshProof(state.proofId);
+      }
+      throw error;
+    } finally { captureSubmitLock.current = false; }
   }
 
   async function retireSupersededUploads() {
@@ -953,29 +1022,25 @@ export function PackProofProvider(props: { children: ReactNode }) {
           setInvitationInput(next.invitationToken);
         }
         if (next.captureUri) {
-          const restored = await describeLocalCapture(next.captureUri, {
-            byteSize: next.captureByteSize,
-            durationMs: next.captureDurationMs,
-            contentType: next.evidenceContentType,
-          });
+          const journals = await listAccountCaptures(next.apiBaseUrl, next.userId);
+          let restored = journals.find(item => item.uri === next.captureUri || (next.uploadEvidenceId && item.uploadEvidenceId === next.uploadEvidenceId) || (next.evidenceIdempotencyKey && item.recovery?.evidenceIdempotencyKey === next.evidenceIdempotencyKey))
+            ?? await describeLocalCapture(next.captureUri, {byteSize:next.captureByteSize,durationMs:next.captureDurationMs,contentType:next.evidenceContentType});
+          if (!restored && next.captureProofId && next.evidenceIdempotencyKey) {
+            restored = {uri:next.captureUri,contentType:next.evidenceContentType || "video/mp4",byteSize:next.captureByteSize ?? null,durationMs:next.captureDurationMs ?? null,
+              captureUserId:next.userId,captureProofId:next.captureProofId,uploadEvidenceId:next.uploadEvidenceId ?? undefined,localFileAvailable:false,
+              recovery:{version:1,operationId:newIdempotencyKey(),apiBaseUrl:next.apiBaseUrl,userId:next.userId,proofId:next.captureProofId,phase:"NEEDS_ATTENTION",evidenceIdempotencyKey:next.evidenceIdempotencyKey,submitRequested:true,needsSellerAttestation:true,attempt:0,nextRetryAt:null,updatedAt:new Date().toISOString(),lastError:{code:"CAPTURE_LOCAL_FILE_MISSING",message:"Upload could not be completed. The original is not available on this device.",retryable:false}}};
+            await persistCaptureMetadata(restored);
+          }
           if (restored && restored.captureUserId === next.userId) {
-            setLocalCapture(restored);
-            setCaptureStatus(next.evidenceIdempotencyKey ? "retry" : "captured");
+            if (restored.recovery?.phase === "UPLOADING") { restored.recovery.phase = "UPLOAD_QUEUED"; await persistCaptureMetadata(restored); }
+            setLocalCapture(restored); setCaptureStatus("retry");
           } else {
-            await persist({
-              ...next,
-              captureUri: null,
-              captureProofId: null,
-              uploadEvidenceId: null,
-              evidenceIdempotencyKey: null,
-              evidenceContentType: null,
-              captureByteSize: null,
-              captureDurationMs: null,
-            });
-            setCaptureStatus("idle");
-            setError("Your recording was removed by the device. Record packing evidence again.");
+            // Keep the cached upload identity available for explicit server cleanup.
+            setCaptureStatus("retry");
+            setError("Upload could not be completed. Open the Proof to discard its incomplete evidence or resume on the recording device.");
           }
         }
+
         if (next.needsReauthentication) {
           tokenRef.current = null;
           go("auth");
@@ -1011,16 +1076,61 @@ export function PackProofProvider(props: { children: ReactNode }) {
     })();
   }, []);
 
+  const [connectionReturn, setConnectionReturn] = useState<string | null>(null);
+  useEffect(() => {
+    const receive = (url: string | null) => {
+      if (url && connectionReturnFromLink(url)) setConnectionReturn(url);
+    };
+    void Linking.getInitialURL().then(receive).catch(() => undefined);
+    const listener = Linking.addEventListener("url", event => receive(event.url));
+    return () => listener.remove();
+  }, []);
+  useEffect(() => {
+    if (!connectionReturn || !hydrated || !session?.userId || busy || route.name === "capture" || route.name === "station") return;
+    const connection = connectionReturnFromLink(connectionReturn);
+    setConnectionReturn(null);
+    void run(async () => {
+      await syncWorkspace();
+      go("account", { accountSection: "channels" });
+      if (connection?.failed) {
+        const issue = presentError(Object.assign(new Error("Store connection could not finish"), { code: connection.code || "OAUTH_FAILED" }));
+        Alert.alert(issue.title, issue.message);
+      }
+    });
+  }, [connectionReturn, hydrated, session?.userId, busy, route.name]);
+
+  const pendingNotificationProof = useRef<string | null>(null);
+  const [notificationTap, setNotificationTap] = useState(0);
+  useEffect(() => {
+    const receive = (url: string | null) => {
+      const match = url?.match(/^packproof:\/\/proof\/([A-Za-z0-9_-]{1,100})$/);
+      if (match) { pendingNotificationProof.current = match[1]; setNotificationTap(value => value + 1); }
+    };
+    void Linking.getInitialURL().then(receive).catch(() => undefined);
+    const listener = Linking.addEventListener('url', event => receive(event.url));
+    return () => listener.remove();
+  }, []);
+  useEffect(() => {
+    if (!hydrated || !session?.userId || busy || !['home','proof'].includes(route.name) || session.captureUri) return;
+    const proofId = pendingNotificationProof.current;
+    if (proofId) { pendingNotificationProof.current = null; void run(() => openProof(proofId)); }
+  }, [hydrated, session?.userId, session?.captureUri, busy, route.name, notificationTap]);
+
   // The retry owner lives above screens. Foreground wake and a bounded timer resume saved work
-  // wherever the user navigates; Android may suspend JS while the app is backgrounded.
+  // wherever the user navigates; The operating system may suspend JavaScript while the app is backgrounded.
   recoveryTickRef.current = async () => {
     const current = sessionRef.current;
     if (!hydrated || !current || !tokenRef.current || current.needsReauthentication || recoveryTickBusy.current) return;
     recoveryTickBusy.current = true;
+    let processingProofId: string | null = null;
     try {
       void flushNativeStudyTimings(client,current.userId).catch(()=>{});
       const captures = await listAccountCaptures(current.apiBaseUrl, current.userId);
       if (sessionRef.current?.userId !== current.userId) return;
+      if (retryOnConnection.current) {
+        retryOnConnection.current = false;
+        for (const capture of captures) if (capture.recovery?.lastError?.retryable) capture.recovery.nextRetryAt = null;
+      }
       for (const capture of captures.filter(item => route.name !== "receipt" && item.captureStageId && item.uploadEvidenceId && item.recovery?.phase !== "FINALIZED")) {
         const status = await client.getProofRecovery(capture.captureProofId!);
         if (sessionRef.current?.userId !== current.userId) return;
@@ -1034,20 +1144,36 @@ export function PackProofProvider(props: { children: ReactNode }) {
         } else capture.recovery!.phase = "PRESERVATION_PENDING";
         await persistCaptureMetadata(capture);
       }
+      // Recover a notification lost between server completion and app/process shutdown.
+      for (const capture of captures.filter(item => item.recovery?.completionNotificationRequested && !item.recovery.completionNotificationHandled && ['FINALIZED','SUBMITTED'].includes(item.recovery.phase))) {
+        const finalProof = await client.getProof(capture.captureProofId!);
+        if (sessionRef.current?.userId !== current.userId) return;
+        await notifyUploadOutcome({...capture, recovery:capture.recovery!}, finalProof).then(() => persistCaptureMetadata(capture)).catch(() => undefined);
+      }
       setSavedRecordings(captures);
+      if (recoveryConnection.current === false) return;
       if (captureSubmitLock.current || captureCompletionActive()) return;
-      const queued = captures.find(capture => !capture.captureStageId && capture.recovery?.submitRequested &&
-        !["RECORDING", "FINALIZED", "NEEDS_ATTENTION"].includes(capture.recovery.phase) &&
+      const discard = captures.find(capture => capture.recovery?.discardRequested);
+      if (discard) { await discardSavedRecording(discard); return; }
+      const queued = captures.slice().reverse().find(capture => !capture.captureStageId && capture.recovery?.submitRequested &&
+        !["RECORDING", "FINALIZED", "NEEDS_ATTENTION", "DISCARD_PENDING"].includes(capture.recovery.phase) &&
         (capture.recovery.nextRetryAt == null || capture.recovery.nextRetryAt <= Date.now()));
       if (!queued) return;
       await ensureFreshCognitoToken();
       const assertAccount = () => {
-        if (sessionRef.current?.userId !== current.userId || !tokenRef.current || sessionRef.current.needsReauthentication)
+        if (sessionRef.current?.userId !== current.userId || sessionRef.current.apiBaseUrl !== current.apiBaseUrl || !tokenRef.current || sessionRef.current.needsReauthentication)
           throw Object.assign(new Error("Sign in to the original account to resume."), { code: "ACCOUNT_CHANGED" });
       };
+      processingProofId = queued.captureProofId!;
+      setUploadProgressByProof(previous => ({...previous, [queued.captureProofId!]: null}));
       const result = await completeSavedCapture({ client, capture: queued, userId: current.userId, interactive: false,
         needsSellerAttestation: queued.recovery!.needsSellerAttestation, assertAccount,
+        onProgress: percent => { if (sessionRef.current?.userId === current.userId) {
+          setUploadProgressByProof(previous => ({...previous, [queued.captureProofId!]: percent}));
+          if (sessionRef.current.captureUri === queued.uri) setUploadPercent(percent);
+        } },
         onChange: capture => {
+          if (capture.recovery?.phase === "UPLOADING") setOffline(false);
           if (sessionRef.current?.userId === current.userId)
             setSavedRecordings(previous => [...previous.filter(item => item.uri !== capture.uri), { ...capture }]);
           if (sessionRef.current?.userId === current.userId && sessionRef.current.captureUri === capture.uri) {
@@ -1057,19 +1183,38 @@ export function PackProofProvider(props: { children: ReactNode }) {
       });
       assertAccount();
       if (sessionRef.current?.captureUri === queued.uri) await persistCapture(null, null);
-      if (sessionRef.current?.proofId === result.proofId) await refreshProof(result.proofId);
+      await saveCaptureBookmarks(client, result.proofId, queued.uploadEvidenceId!, queued).catch(() => undefined);
+      // Never let an earlier upload select its Proof over a newer recording.
+      if (sessionRef.current?.proofId === result.proofId) setProof(result);
       await refreshProofCollection();
     } catch (error) {
       if (isAuthenticationFailure(error)) await requireSignIn();
+      if (isNetworkFailure(error)) setOffline(true);
       // The journal contains the retry classification and next action; no repeated modal errors.
-    } finally { recoveryTickBusy.current = false; }
+    } finally {
+      recoveryTickBusy.current = false;
+      if (processingProofId) {
+        const finishedId = processingProofId;
+        setUploadProgressByProof(previous => { const next = {...previous}; delete next[finishedId]; return next; });
+        // Drain the next eligible recording promptly; failed jobs retain their backoff.
+        setTimeout(() => { void recoveryTickRef.current(); }, 0);
+      }
+    }
   };
   useEffect(() => {
+    setUploadProgressByProof({});
     if (!hydrated || !session?.userId) { setSavedRecordings([]); return; }
     void recoveryTickRef.current();
     const timer = setInterval(() => { void recoveryTickRef.current(); }, 8000);
+    const network = NetInfo.addEventListener(state => {
+      const connected = state.isConnected === false || state.isInternetReachable === false ? false : state.isConnected === true ? true : null;
+      const previous = recoveryConnection.current;
+      recoveryConnection.current = connected;
+      if (connected !== null) setOffline(!connected);
+      if (connected && previous !== true) { retryOnConnection.current = true; void recoveryTickRef.current(); }
+    });
     const wake = AppState.addEventListener("change", state => { if (state === "active") void recoveryTickRef.current(); });
-    return () => { clearInterval(timer); wake.remove(); };
+    return () => { clearInterval(timer); wake.remove(); network(); };
   }, [hydrated, session?.userId]);
 
   useEffect(() => {
@@ -1136,6 +1281,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     manifest,
     shipmentIntegrity,
     captureStatus,
+    uploadProgressByProof,
     savedRecordings,
     resumeSavedCapture: async capture => run(async () => {
       const current = sessionRef.current;
@@ -1150,17 +1296,29 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if (sessionRef.current?.userId !== current.userId) throw Object.assign(new Error("Sign in to the original account to resume."), { code: "ACCOUNT_CHANGED" });
       await persistCapture(capture, capture.recovery.evidenceIdempotencyKey);
       (await nativeStudyForCapture(client,current.userId,capture.studyTimingRef))?.event("recovery_started");
-      setCaptureStatus("retry"); go("capture");
+      setCaptureStatus("retry");
+      if (!capture.recovery.submitRequested) { go("capture"); return; }
+      if (capture.recovery.needsSellerAttestation && (!capture.recovery.authorization || Date.parse(capture.recovery.authorization.expiresAt) <= Date.now())) {
+        go("capture"); return;
+      }
+      capture.recovery.lastError = undefined;
+      capture.recovery.nextRetryAt = null;
+      capture.recovery.completionNotificationRequested = true;
+      if (!['PRESERVATION_PENDING','FINALIZATION_PENDING','SUBMITTED'].includes(capture.recovery.phase)) capture.recovery.phase = 'UPLOAD_QUEUED';
+      await persistCaptureMetadata(capture);
+      await persistCapture(null, null);
+      setCaptureStatus("idle"); setUploadPercent(null); go("home");
+      void recoveryTickRef.current();
     }),
-    discardSavedCapture: async capture => run(async () => {
-      const userId = sessionRef.current?.userId;
-      if (!userId || capture.captureUserId !== userId || capture.recovery?.apiBaseUrl !== client.apiBaseUrl)
-        throw new Error("Open the original account to remove this local recording.");
-      if (captureCompletionActive()) throw new Error("Wait for the current upload attempt to finish before discarding local work.");
-      (await nativeStudyForCapture(client,userId,capture.studyTimingRef))?.end('cancelled','cancelled');
-      await discardLocalCapture(capture.uri, capture.recovery?.operationId);
-      if (sessionRef.current?.captureUri === capture.uri) await persistCapture(null, null);
-      setSavedRecordings(await listAccountCaptures(client.apiBaseUrl, userId));
+    discardSavedCapture: async capture => run(() => discardSavedRecording(capture)),
+    discardIncompleteEvidence: async evidenceId => run(async () => {
+      const current = sessionRef.current;
+      if (!current?.proofId) return;
+      const local = savedRecordings.find(row => row.uploadEvidenceId === evidenceId && row.captureProofId === current.proofId);
+      if (local) { await discardSavedRecording(local); return; }
+      await client.discardIncompleteEvidence(current.proofId,evidenceId);
+      if (sessionRef.current?.userId !== current.userId) return;
+      await refreshProof(current.proofId); await refreshProofCollection();
     }),
     cleanUpSavedCapture: async capture => run(async () => {
       if (!sessionRef.current || capture.captureUserId !== sessionRef.current.userId || !capture.recovery || !mayCleanUpCapture(capture.recovery))
@@ -1323,6 +1481,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setErrorDetail(null);
       try {
         const current = sessionRef.current;
+        if (current) await clearNativeIntakeSession(client, current.userId).catch(() => undefined);
+        await unregisterProofPush(client).catch(()=>undefined);
+        if (current) await revokeIntakeDevice(client, current.userId).catch(() => forgetIntakeDevice(client, current.userId));
         if (current?.authMode === "cognito" && current.token && current.cognitoClientId) {
           await cognitoGlobalSignOut(
             {
@@ -1339,6 +1500,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       try {
         if (sessionRef.current) {
           await saveCaptureRecovery(sessionRef.current);
+          await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
           await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
           await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
         }
@@ -1632,6 +1794,67 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await refreshProof(proof.proofId);
         go("proof");
       }),
+    startCaptureIntent: async token => {
+      if(intakeCaptureLock.current)return;
+      intakeCaptureLock.current=true;
+      try { await run(async()=>{
+        const account=sessionRef.current;if(!account)return;
+        if(localCapture&&!["FINALIZED","SUBMITTED"].includes(localCapture.recovery?.phase??""))throw new Error("Finish the recording already open before accepting another order. It is kept on this phone.");
+
+        const accepted=await beginNativeEngine(client,undefined,token);
+        if(sessionRef.current?.userId!==account.userId)throw new Error("Open this link in the original account.");
+        const view=await client.getProof(accepted.proofId);setProof(view);
+        setCaptureStatus("capturing");
+        const captured=await recordPackingEvidence({client,proofId:accepted.proofId,userId:account.userId,orderLabel:view.transaction.itemTitle||"Packing this order",authorizedSession:accepted,autoStart:false});
+        if(!captured){setCaptureStatus("idle");return;}
+        await queueRetiredUpload(accepted.proofId);
+        await persistCapture(captured,captured.recovery?.evidenceIdempotencyKey??newIdempotencyKey());
+        setCaptureStatus("captured");go("capture");
+      }); } finally {intakeCaptureLock.current=false;}
+    },
+    startIntakeCapture: async input => {
+      if (intakeCaptureLock.current) return;
+      intakeCaptureLock.current = true;
+      try {
+        await run(async () => {
+          const account = sessionRef.current;
+          if (!account) return;
+          if (localCapture && !["FINALIZED", "SUBMITTED"].includes(localCapture.recovery?.phase ?? ""))
+            throw new Error("Finish the recording already open before accepting another order. It is saved on this phone.");
+          const api = new IntakeApi(client);
+          const sourceKey = input.handoffId ? `handoff:${input.handoffId}` : `snapshot:${input.snapshotId}`;
+          const key = await intakeRequestKey(client, account.userId, sourceKey);
+          const device = input.handoffId ? await readIntakeDevice(client, account.userId) : null;
+          if (input.handoffId && !device) throw new Error("Pair this phone in Account → Connections before accepting this order.");
+          const accepted = input.handoffId
+            ? await api.claim(input.handoffId, device!, key)
+            : await api.capture(input.snapshotId, key);
+          assertIntakeAcceptance(accepted);
+          if (accepted.orderSnapshot.id !== input.snapshotId) throw new Error("The order changed. Refresh its card before recording.");
+          if (sessionRef.current?.userId !== account.userId) throw new Error("Sign in to the original account to record this order.");
+          const unfinished = await listAccountCaptures(client.apiBaseUrl, account.userId);
+          if (unfinished.some(row => row.captureSessionId === accepted.session.id && row.recovery?.phase !== "FINALIZED")) {
+            setSavedRecordings(unfinished); go("account", { accountSection: "recordings" });
+            throw new Error("This order already has a recording on this phone. Open its saved recording to continue.");
+          }
+          await refreshProof(accepted.proofId);
+          setCaptureStatus("capturing");
+          const captured = await recordPackingEvidence({ client, proofId: accepted.proofId, userId: account.userId,
+            orderLabel: `${accepted.orderSnapshot.store} · Order ${accepted.orderSnapshot.orderReference}`,
+            authorizedSession: accepted.session, autoStart: true }).catch(error => { setCaptureStatus("idle"); throw error; });
+          if (!captured) {
+            if (device) await api.release(device, accepted.session.id).catch(() => undefined);
+            if (!input.handoffId) await clearIntakeRequestKey(client, account.userId, sourceKey);
+            setCaptureStatus("idle"); go("home"); return;
+          }
+          await queueRetiredUpload(accepted.proofId);
+          await persistCapture(captured, captured.recovery?.evidenceIdempotencyKey ?? newIdempotencyKey());
+          setCaptureStatus("captured");
+          go("capture");
+          setProof(await client.getProof(accepted.proofId));
+        });
+      } finally { intakeCaptureLock.current = false; }
+    },
     startCapture: async () =>
       run(async () => {
         if (!proof) {
@@ -1661,22 +1884,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);
       }),
-    discardCapture: async () =>
-      run(async () => {
-        if (!localCapture || !proof) {
-          return;
-        }
-        if (sessionRef.current?.captureProofId !== proof.proofId)
-          throw new Error("Open the original Proof to discard its saved recording.");
-        (await nativeStudyForCapture(client,sessionRef.current!.userId,localCapture.studyTimingRef))?.end('cancelled','cancelled');
-        await discardLocalCapture(localCapture.uri);
-        await queueRetiredUpload(proof.proofId);
-        await persistCapture(null, null);
-        await retireSupersededUploads();
-        setCaptureStatus("idle");
-        const fresh = await client.getProof(proof.proofId);
-        setProof(fresh);
-      }),
+    discardCapture: async () => run(async () => {
+      if (localCapture) await discardSavedRecording(localCapture);
+    }),
     submitCapture: async () => {
       if (captureSubmitLock.current) {
         return;
@@ -1693,36 +1903,35 @@ export function PackProofProvider(props: { children: ReactNode }) {
             );
           const available = await localCaptureExists(localCapture.uri);
           if (!available) {
-            await persistCapture(null, null);
-            setCaptureStatus("idle");
-            throw new Error(
-              "Captured video is no longer available. Record packing evidence again.",
-            );
+            localCapture.localFileAvailable = false;
+            if (localCapture.recovery) { localCapture.recovery.phase = "NEEDS_ATTENTION"; localCapture.recovery.lastError = {code:"CAPTURE_LOCAL_FILE_MISSING",message:"The original is not available on this device.",retryable:false}; }
+            await persistCaptureMetadata(localCapture);
+            setLocalCapture({...localCapture}); setCaptureStatus("retry");
+            throw new ApiError("CAPTURE_LOCAL_FILE_MISSING", "Upload could not be completed. Discard the incomplete evidence from its recording card to record again.", 422);
           }
           if (!isGradingWorkflow(proof.workflowType)) {
             const userId = sessionRef.current.userId;
             const uri = localCapture.uri;
             const assertAccount = () => {
-              if (sessionRef.current?.userId !== userId || !tokenRef.current || sessionRef.current.needsReauthentication)
+              if (sessionRef.current?.userId !== userId || sessionRef.current.apiBaseUrl !== client.apiBaseUrl || !tokenRef.current || sessionRef.current.needsReauthentication)
                 throw Object.assign(new Error("Your recording is saved. Sign in to the original account to continue."), { code: "ACCOUNT_CHANGED" });
             };
             localCapture.uploadEvidenceId ??= sessionRef.current.uploadEvidenceId ?? undefined;
             setCaptureStatus("preparing");
             try {
-              const result = await completeSavedCapture({ client, capture: localCapture, userId, interactive: true, idempotencyKey: sessionRef.current?.evidenceIdempotencyKey,
-                needsSellerAttestation: Platform.OS === "android" && proof.participants.some(item => item.role === "SELLER" && item.userId === userId),
-                assertAccount, onProgress: setUploadPercent,
+              await prepareSavedCapture({ client, capture: localCapture, userId, interactive: true, idempotencyKey: sessionRef.current?.evidenceIdempotencyKey,
+                needsSellerAttestation: (Platform.OS === "android" || Platform.OS === "ios") && proof.participants.some(item => item.role === "SELLER" && item.userId === userId),
+                assertAccount,
                 onChange: capture => { if (sessionRef.current?.userId === userId) {
-                  setLocalCapture({ ...capture }); setCaptureStatus(captureStatusForJournal(capture));
+                  if (sessionRef.current.captureUri === uri) setLocalCapture({ ...capture });
                   setSavedRecordings(previous => [...previous.filter(item => item.uri !== capture.uri), { ...capture }]);
                 } },
               });
               assertAccount();
-              await saveCaptureBookmarks(client, proof.proofId, localCapture.uploadEvidenceId!, localCapture).catch(() => undefined);
-              // Retain the original in the account journal. Account offers deliberate cleanup after receipt checks.
+              // The account journal owns the original now. Releasing the screen never deletes it.
               if (sessionRef.current?.captureUri === uri) await persistCapture(null, null);
-              setProof(result); await refreshProof(result.proofId); await refreshProofCollection();
-              setCaptureStatus("idle"); setUploadPercent(null); void haptic("success"); go("proof");
+              setCaptureStatus("idle"); setUploadPercent(null); go("home");
+              void requestUploadNotifications();
             } catch (error) { setCaptureStatus("retry"); throw error; }
             return;
           }
@@ -1744,7 +1953,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
               if (sessionRef.current?.userId !== submittingUserId || sessionRef.current?.captureProofId !== proof.proofId || sessionRef.current?.captureUri !== localCapture.uri)
                 throw new Error("Your account or recording changed. Open the original Proof and authenticate again.");
             };
-            const needsSellerAttestation = Platform.OS === "android" && evidenceType === "FULFILLMENT_CAPTURE" &&
+            const needsSellerAttestation = (Platform.OS === "android" || Platform.OS === "ios") && evidenceType === "FULFILLMENT_CAPTURE" &&
               proof.participants.some(item => item.role === "SELLER" && item.userId === submittingUserId);
             // No upload is initialized until the system has authorized the exact declaration.
             // Canceling or failing this step leaves the original recording available for retry.
@@ -1834,6 +2043,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         });
       } finally {
         captureSubmitLock.current = false;
+        void recoveryTickRef.current();
       }
     },
     confirmCommittedProof: async () => run(async () => {
@@ -1953,12 +2163,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }),
     connectConnectedAccount: async (provider, extra) =>
       run(async () => {
-        const started = await client.startConnectedAccountConnect(provider, extra);
+        const started = await client.startConnectedAccountConnect(provider, { ...extra, surface: Platform.OS === "ios" ? "ios" : "android" });
         await Linking.openURL(started.authorizationUrl);
       }),
     reauthorizeConnectedAccount: async (accountId) =>
       run(async () => {
-        const started = await client.reauthorizeConnectedAccount(accountId);
+        const started = await client.reauthorizeConnectedAccount(accountId, Platform.OS === "ios" ? "ios" : "android");
         await Linking.openURL(started.authorizationUrl);
       }),
     disconnectConnectedAccount: async (accountId) =>

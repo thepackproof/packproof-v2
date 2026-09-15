@@ -32,8 +32,8 @@ export function OfflineBanner(props: { visible: boolean; message?: string }) {
       style={[styles.banner, { backgroundColor: colors.warningSoft, borderColor: colors.warningSoftBorder }]}
       accessibilityRole="alert"
     >
-      <Ionicons name="cloud-offline-outline" size={16} color={colors.textPrimary} />
-      <Text style={[styles.bannerText, { color: colors.textPrimary }]}>{props.message ?? "Offline"}</Text>
+      <Ionicons name="cloud-offline-outline" size={16} color={colors.warningText} />
+      <Text style={[styles.bannerText, { color: colors.warningText }]}>{props.message ?? "Offline"}</Text>
     </View>
   );
 }

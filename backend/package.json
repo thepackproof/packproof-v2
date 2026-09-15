@@ -10,12 +10,16 @@
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:integrations": "tsx src/operations/check-integrations-cli.ts",
+    "migrate": "tsx src/db/migrate-cli.ts",
+    "migrate:prod": "node dist/db/migrate-cli.js"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "3.1120.0",
     "@aws-sdk/client-s3": "^3.864.0",
     "@aws-sdk/client-secrets-manager": "^3.864.0",
+    "@aws-sdk/client-sqs": "3.1120.0",
     "@aws-sdk/s3-request-presigner": "^3.864.0",
     "aws-jwt-verify": "^5.2.1",
     "express": "^4.21.2",
