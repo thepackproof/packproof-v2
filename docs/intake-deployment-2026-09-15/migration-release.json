@@ -1,0 +1,137 @@
+{
+  "apply": {
+    "events": [
+      {
+        "message": {
+          "appliedCount": 67,
+          "event": "mobile_intake_migration_preflight",
+          "identity": {
+            "login": "packproof",
+            "role": "packproof"
+          },
+          "missing": [
+            "067_mobile_intake_submissions",
+            "068_commerce_sync_checkpoints"
+          ],
+          "mode": "--apply",
+          "sourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc"
+        },
+        "timestamp": 1789477633604
+      },
+      {
+        "message": {
+          "event": "mobile_intake_migration_login_removed"
+        },
+        "timestamp": 1789477634441
+      },
+      {
+        "message": {
+          "applied": [
+            {
+              "checksum": "3f1333e6f4670e9506ab0ad0970fa83373f2c243175fef247fe99dd0616b923c",
+              "checksum_provenance": "EXECUTED_BYTES",
+              "id": "067_mobile_intake_submissions"
+            },
+            {
+              "checksum": "1a9c3cacf5f146f87dd1fe5ae125aceb9ee5c36ee971cb0e4fad6c9053133a51",
+              "checksum_provenance": "EXECUTED_BYTES",
+              "id": "068_commerce_sync_checkpoints"
+            }
+          ],
+          "event": "mobile_intake_migration_verified",
+          "migrationCount": 69,
+          "separateLogin": true,
+          "sourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+          "tables": [
+            {
+              "tablename": "commerce_sync_page_checkpoints",
+              "tableowner": "packproof"
+            },
+            {
+              "tablename": "intake_scoped_sessions",
+              "tableowner": "packproof"
+            },
+            {
+              "tablename": "intake_submissions",
+              "tableowner": "packproof"
+            }
+          ]
+        },
+        "timestamp": 1789477634464
+      }
+    ],
+    "exitCode": 0,
+    "status": "SUCCEEDED",
+    "stoppedAt": "2026-09-15T13:07:37.665000+00:00",
+    "task": "8a7c2d635fdb4487bda9b483604e40e3",
+    "taskDefinition": "packproof-v2-mobile-intake-migration:2",
+    "temporaryLoginRemoved": true
+  },
+  "candidateImage": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3f6250adec57a5be4420effcc3cd06b87b2acba8263e748a88c89c91583d7f22",
+  "candidateSourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+  "durabilityParityVerifiedByRunner": {
+    "actual": false,
+    "expected": false,
+    "matches": true
+  },
+  "initialInspection": {
+    "cause": "ERR_UNSUPPORTED_RESOLVE_REQUEST for absolute /app imports from data: module; occurred before any DB connection",
+    "exitCode": 1,
+    "resolution": "Same SHA-verified runner bytes written to a 0600 temporary file and imported by file URL, then file/directory removed",
+    "task": "05de11f656bc41f6936df3b78cc32d67",
+    "taskDefinition": "packproof-v2-mobile-intake-migration:1"
+  },
+  "inspection": {
+    "events": [
+      {
+        "message": {
+          "appliedCount": 67,
+          "event": "mobile_intake_migration_preflight",
+          "identity": {
+            "login": "packproof",
+            "role": "packproof"
+          },
+          "missing": [
+            "067_mobile_intake_submissions",
+            "068_commerce_sync_checkpoints"
+          ],
+          "mode": "--inspect",
+          "sourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc"
+        },
+        "timestamp": 1789477559990
+      }
+    ],
+    "exitCode": 0,
+    "task": "75b2f8807ffe43a0b06ef9708328fdd9",
+    "taskDefinition": "packproof-v2-mobile-intake-migration:2"
+  },
+  "launcherSha256": "c1d8408f776183feebf74836f656f0bb5f07abe4ffeadc71c1ca7def3f0df4f4",
+  "launcherSource": "migration-launch.mjs",
+  "mainMergeSha": "656d86ad1d892a54ceac5cb569b5e9f3f1b9603a",
+  "preMigrationRecovery": {
+    "BackupRetentionPeriod": 1,
+    "DBInstanceIdentifier": "packproof-v2-staging-db",
+    "DBInstanceStatus": "available",
+    "LatestRestorableTime": "2026-09-15T13:02:25+00:00",
+    "StorageEncrypted": true
+  },
+  "reviewedRunnerSourceSha": "9da8e87a42b89fae97d580e46835d427387296ff",
+  "runnerSha256": "d746c664c66f6a7737e8040894d1511032718139accc0361cd94bcbc1b261793",
+  "runtimeDmlPermissionsVerifiedByRunner": {
+    "allAllowed": true,
+    "privileges": [
+      "SELECT",
+      "INSERT",
+      "UPDATE",
+      "DELETE"
+    ],
+    "role": "packproof",
+    "tables": [
+      "commerce_sync_page_checkpoints",
+      "intake_scoped_sessions",
+      "intake_submissions"
+    ]
+  },
+  "independentPostflightReceipt": "candidate-release.json",
+  "independentPostflightCheckedAt": "2026-09-15T13:16:36.792Z"
+}

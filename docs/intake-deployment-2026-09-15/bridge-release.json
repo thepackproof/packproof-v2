@@ -1,0 +1,145 @@
+{
+  "sourceSha": "f386b4b381aba9a1489b32e967fa86d8b25c6e7e",
+  "sourceTree": "493bd899e7dfbbc52e1570165958a5f6b295f267",
+  "backendTree": "70255b9ecb4b75be67514a458910d0b968aa9c8d",
+  "sourceArchive": {
+    "bucket": "packproof-v2-staging-build-784514617543",
+    "key": "intake/f386b4b381aba9a1489b32e967fa86d8b25c6e7e/backend-bridge-src.zip",
+    "sha256": "b44b199a90b095cdff57f3b8087f15eeea5d2ee1a609df2f2917cdbc40691c49",
+    "bytes": 1192988
+  },
+  "codeBuild": {
+    "id": "packproof-v2-staging-api:996345cf-ad9e-476e-97e5-42f61c1e0144",
+    "number": 77,
+    "status": "SUCCEEDED",
+    "completedAt": "2026-09-15T12:51:42.428Z"
+  },
+  "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:ac014e4aa663ad31318ef2c5789ac56423647b9525701c33a15c05c54973383a",
+  "migrationInventoryCount": 67,
+  "permittedFutureMigrations": {
+    "067_mobile_intake_submissions": "3f1333e6f4670e9506ab0ad0970fa83373f2c243175fef247fe99dd0616b923c",
+    "068_commerce_sync_checkpoints": "1a9c3cacf5f146f87dd1fe5ae125aceb9ee5c36ee971cb0e4fad6c9053133a51"
+  },
+  "deployment": {
+    "startedAt": "2026-09-15T12:52:41.824Z",
+    "serviceRevision": "1033524300973125377",
+    "taskDefinition": "packproof-v2-staging-cluster-packproof-v2-staging-api:31",
+    "status": "SUCCESSFUL",
+    "completedAt": "2026-09-15T13:02:34.925Z",
+    "runningTaskCount": 1,
+    "oldRevisionRunningTaskCount": 0,
+    "productionTrafficPercent": 100,
+    "triggeredAlarms": []
+  },
+  "preservation": {
+    "secretBindings": true,
+    "network": true,
+    "roles": true,
+    "scaling": true,
+    "nativeCanary": true,
+    "changedEnvironmentNames": [
+      "PACKPROOF_RELEASE_IMAGE",
+      "PACKPROOF_RELEASE_SHA",
+      "PACKPROOF_RELEASE_VERSION"
+    ]
+  },
+  "publicChecksBeforeMigration": {
+    "checkedAt": "2026-09-15T12:59:53.341322+00:00",
+    "base": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+    "checks": [
+      {
+        "path": "/meta",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "service": "packproof-api",
+          "environment": "staging",
+          "commit": "f386b4b381aba9a1489b32e967fa86d8b25c6e7e",
+          "version": "2026-09-15-intake-schema-bridge",
+          "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:ac014e4aa663ad31318ef2c5789ac56423647b9525701c33a15c05c54973383a"
+        }
+      },
+      {
+        "path": "/ready",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "status": "ready",
+          "checkedAt": "2026-09-15T12:59:43.292Z"
+        }
+      },
+      {
+        "path": "/health",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "status": "ok"
+        }
+      },
+      {
+        "path": "/me/intake/capabilities",
+        "status": 401,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "error": {
+            "code": "UNAUTHENTICATED",
+            "message": "Missing bearer token",
+            "retryable": false,
+            "operationId": "184bb70c-cd0e-46d5-b18d-5c9c3c411da0",
+            "nextAction": "Sign in to continue."
+          }
+        }
+      }
+    ]
+  },
+  "rollbackEligibleAfterIntakeMigration": true,
+  "publicChecksAfterMigration": {
+    "checkedAt": "2026-09-15T13:08:08.628273+00:00",
+    "base": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+    "checks": [
+      {
+        "path": "/meta",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "service": "packproof-api",
+          "environment": "staging",
+          "commit": "f386b4b381aba9a1489b32e967fa86d8b25c6e7e",
+          "version": "2026-09-15-intake-schema-bridge",
+          "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:ac014e4aa663ad31318ef2c5789ac56423647b9525701c33a15c05c54973383a"
+        }
+      },
+      {
+        "path": "/ready",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "status": "ready",
+          "checkedAt": "2026-09-15T13:07:57.676Z"
+        }
+      },
+      {
+        "path": "/health",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "status": "ok"
+        }
+      },
+      {
+        "path": "/me/intake/capabilities",
+        "status": 401,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "error": {
+            "code": "UNAUTHENTICATED",
+            "message": "Missing bearer token",
+            "retryable": false,
+            "operationId": "0ac03e4b-113a-4545-a622-9ca8e0a1b0c0",
+            "nextAction": "Sign in to continue."
+          }
+        }
+      }
+    ]
+  }
+}

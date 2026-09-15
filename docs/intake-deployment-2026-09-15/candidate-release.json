@@ -1,0 +1,384 @@
+{
+  "build": {
+    "id": "packproof-v2-staging-api:43bf9db0-aa2c-4c43-ab16-399fafb128ae",
+    "number": 76,
+    "project": "packproof-v2-staging-api"
+  },
+  "databaseVerification": {
+    "during": "Final bake with candidate at 100% traffic",
+    "exitCode": 0,
+    "result": {
+      "checkedAt": "2026-09-15T13:16:36.792Z",
+      "commerceAutomationConnections": [
+        {
+          "auto_sync_enabled": false,
+          "connection_count": 1,
+          "environment": "sandbox",
+          "provider": "ebay",
+          "status": "DISABLED"
+        }
+      ],
+      "configuredAutoSyncConnectionsPausedByAllowlist": 0,
+      "durability": {
+        "actual": false,
+        "expected": false,
+        "matches": true
+      },
+      "event": "mobile_intake_deployment_verified",
+      "identity": {
+        "login": "packproof",
+        "role": "packproof"
+      },
+      "latestMigrations": [
+        {
+          "checksum": "3f1333e6f4670e9506ab0ad0970fa83373f2c243175fef247fe99dd0616b923c",
+          "checksum_provenance": "EXECUTED_BYTES",
+          "id": "067_mobile_intake_submissions"
+        },
+        {
+          "checksum": "1a9c3cacf5f146f87dd1fe5ae125aceb9ee5c36ee971cb0e4fad6c9053133a51",
+          "checksum_provenance": "EXECUTED_BYTES",
+          "id": "068_commerce_sync_checkpoints"
+        }
+      ],
+      "migrationCount": 69,
+      "permissions": [
+        {
+          "allowed": true,
+          "privilege": "DELETE",
+          "tablename": "commerce_sync_page_checkpoints"
+        },
+        {
+          "allowed": true,
+          "privilege": "INSERT",
+          "tablename": "commerce_sync_page_checkpoints"
+        },
+        {
+          "allowed": true,
+          "privilege": "SELECT",
+          "tablename": "commerce_sync_page_checkpoints"
+        },
+        {
+          "allowed": true,
+          "privilege": "UPDATE",
+          "tablename": "commerce_sync_page_checkpoints"
+        },
+        {
+          "allowed": true,
+          "privilege": "DELETE",
+          "tablename": "intake_scoped_sessions"
+        },
+        {
+          "allowed": true,
+          "privilege": "INSERT",
+          "tablename": "intake_scoped_sessions"
+        },
+        {
+          "allowed": true,
+          "privilege": "SELECT",
+          "tablename": "intake_scoped_sessions"
+        },
+        {
+          "allowed": true,
+          "privilege": "UPDATE",
+          "tablename": "intake_scoped_sessions"
+        },
+        {
+          "allowed": true,
+          "privilege": "DELETE",
+          "tablename": "intake_submissions"
+        },
+        {
+          "allowed": true,
+          "privilege": "INSERT",
+          "tablename": "intake_submissions"
+        },
+        {
+          "allowed": true,
+          "privilege": "SELECT",
+          "tablename": "intake_submissions"
+        },
+        {
+          "allowed": true,
+          "privilege": "UPDATE",
+          "tablename": "intake_submissions"
+        }
+      ],
+      "sourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+      "tables": [
+        {
+          "tablename": "commerce_sync_page_checkpoints",
+          "tableowner": "packproof"
+        },
+        {
+          "tablename": "intake_scoped_sessions",
+          "tableowner": "packproof"
+        },
+        {
+          "tablename": "intake_submissions",
+          "tableowner": "packproof"
+        }
+      ],
+      "temporaryLoginRemoved": true,
+      "temporaryRoles": [],
+      "workers": [
+        {
+          "heartbeat_at": "2026-09-15T13:16:33.950Z",
+          "last_success_at": "2026-09-15T13:16:33.950Z",
+          "state": "IDLE",
+          "worker_name": "capture-shipments"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:33.863Z",
+          "last_success_at": "2026-09-15T13:16:33.863Z",
+          "state": "IDLE",
+          "worker_name": "commerce"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:33.831Z",
+          "last_success_at": "2026-09-15T13:16:33.831Z",
+          "state": "IDLE",
+          "worker_name": "ebay-deletion"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:27.038Z",
+          "last_success_at": "2026-09-15T13:16:27.038Z",
+          "state": "IDLE",
+          "worker_name": "mobile-intake"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:09:57.354Z",
+          "last_success_at": "2026-09-15T13:09:57.354Z",
+          "state": "IDLE",
+          "worker_name": "operational-cleanup"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:33.863Z",
+          "last_success_at": "2026-09-15T13:16:33.863Z",
+          "state": "IDLE",
+          "worker_name": "order-shippo"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:33.948Z",
+          "last_success_at": "2026-09-15T13:16:33.948Z",
+          "state": "IDLE",
+          "worker_name": "proof-update-notifications"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:34.055Z",
+          "last_success_at": "2026-09-15T13:16:34.055Z",
+          "state": "IDLE",
+          "worker_name": "recipient-exports"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:34.055Z",
+          "last_success_at": "2026-09-15T13:16:34.055Z",
+          "state": "IDLE",
+          "worker_name": "thumbnails"
+        },
+        {
+          "heartbeat_at": "2026-09-15T13:16:33.834Z",
+          "last_success_at": "2026-09-15T13:16:33.834Z",
+          "state": "IDLE",
+          "worker_name": "usage-reconciliation"
+        }
+      ]
+    },
+    "source": "verify-database.mjs",
+    "sourceSha256": "a6c6f5dd1eefa1fe5e072319a4faceebc5d1d48aea586eb238226cdde2131901",
+    "stoppedAt": "2026-09-15T13:16:59.944000+00:00",
+    "task": "a87059a63d884b9a9d8dd719ea973ee3"
+  },
+  "deployment": {
+    "cpu": "512",
+    "createdAt": "2026-09-15T13:08:50.063000+00:00",
+    "executionRoleArn": "arn:aws:iam::784514617543:role/packproof-v2-staging-execution",
+    "memory": "2048",
+    "networkConfiguration": {
+      "securityGroups": [
+        "sg-0fbfe8871eef85488"
+      ],
+      "subnets": [
+        "subnet-0d7611419ad695536",
+        "subnet-002790f4a22ef84ee"
+      ]
+    },
+    "scalingTarget": {
+      "autoScalingMetric": "AVERAGE_CPU",
+      "autoScalingTargetValue": 60,
+      "maxTaskCount": 1,
+      "minTaskCount": 1
+    },
+    "serviceRevisionArn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/7438278713583910603",
+    "status": "SUCCESSFUL",
+    "taskRoleArn": "arn:aws:iam::784514617543:role/packproof-v2-staging-task",
+    "alarms": {
+      "alarmNames": [
+        "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm"
+      ],
+      "status": "MONITORING_COMPLETE",
+      "triggeredAlarmNames": []
+    },
+    "deploymentCircuitBreaker": {
+      "failureCount": 0,
+      "status": "MONITORING_COMPLETE",
+      "threshold": 3
+    },
+    "finishedAt": "2026-09-15T13:18:05.398000+00:00",
+    "serviceDeploymentArn": "arn:aws:ecs:us-east-1:784514617543:service-deployment/packproof-v2-staging-cluster/packproof-v2-staging-api/EZoUabHXLEzG-_XeUVy3z",
+    "sourceServiceRevisions": [
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/1033524300973125377",
+        "pendingTaskCount": 0,
+        "requestedProductionTrafficWeight": 0,
+        "requestedTaskCount": 0,
+        "requestedTestTrafficWeight": 0,
+        "runningTaskCount": 0
+      }
+    ],
+    "startedAt": "2026-09-15T13:08:55.455000+00:00",
+    "targetServiceRevision": {
+      "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/7438278713583910603",
+      "pendingTaskCount": 0,
+      "requestedProductionTrafficWeight": 100,
+      "requestedTaskCount": 1,
+      "requestedTestTrafficWeight": 100,
+      "runningTaskCount": 1
+    },
+    "runningCount": 1,
+    "pendingCount": 0,
+    "tasks": [
+      {
+        "containers": [
+          {
+            "imageDigest": "sha256:3f6250adec57a5be4420effcc3cd06b87b2acba8263e748a88c89c91583d7f22",
+            "lastStatus": "RUNNING",
+            "name": "Main"
+          }
+        ],
+        "lastStatus": "RUNNING",
+        "startedAt": "2026-09-15T13:10:13.527000+00:00",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/9d56cc683c6f45249375277e907ff26a",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:32"
+      }
+    ]
+  },
+  "effectiveIntakeActorIds": [],
+  "existingAutomaticSyncImpact": {
+    "configuredActiveOptedInConnectionsPaused": 0,
+    "note": "Only one disabled sandbox eBay connection exists; no Shopify/Etsy connections. Counts establish configured impact, not successful provider reads."
+  },
+  "flags": {
+    "PACKPROOF_COMMERCE_AUTOMATION_PROVIDERS": "",
+    "PACKPROOF_EBAY_INTEGRATION_ENABLED": "false",
+    "PACKPROOF_INTAKE_ACTOR_IDS": null,
+    "PACKPROOF_INTAKE_ENABLED": "false",
+    "PACKPROOF_MIGRATE_ON_START": "false",
+    "PACKPROOF_REQUIRE_DURABLE_RECEIPTS": "false"
+  },
+  "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3f6250adec57a5be4420effcc3cd06b87b2acba8263e748a88c89c91583d7f22",
+  "mainMergeSha": "656d86ad1d892a54ceac5cb569b5e9f3f1b9603a",
+  "preservation": {
+    "changedEnvironmentNames": [
+      "PACKPROOF_COMMERCE_AUTOMATION_PROVIDERS",
+      "PACKPROOF_INTAKE_ENABLED",
+      "PACKPROOF_RELEASE_IMAGE",
+      "PACKPROOF_RELEASE_SHA",
+      "PACKPROOF_RELEASE_VERSION"
+    ],
+    "existingEnvironment": true,
+    "finalComparisonWithBaselineTask30": {
+      "changedEnvironmentNames": [
+        "PACKPROOF_COMMERCE_AUTOMATION_PROVIDERS",
+        "PACKPROOF_INTAKE_ENABLED",
+        "PACKPROOF_RELEASE_IMAGE",
+        "PACKPROOF_RELEASE_SHA",
+        "PACKPROOF_RELEASE_VERSION"
+      ],
+      "cpuIdentical": true,
+      "executionRoleIdentical": true,
+      "memoryIdentical": true,
+      "network": {
+        "securityGroups": [
+          "sg-0fbfe8871eef85488"
+        ],
+        "subnets": [
+          "subnet-0d7611419ad695536",
+          "subnet-002790f4a22ef84ee"
+        ]
+      },
+      "onlyExpectedEnvironmentChanged": true,
+      "scaling": {
+        "autoScalingMetric": "AVERAGE_CPU",
+        "autoScalingTargetValue": 60,
+        "maxTaskCount": 1,
+        "minTaskCount": 1
+      },
+      "secretBindingsIdentical": true,
+      "taskRoleIdentical": true
+    },
+    "secretBindings": true,
+    "workerFailureLogs": []
+  },
+  "rollback": {
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:ac014e4aa663ad31318ef2c5789ac56423647b9525701c33a15c05c54973383a",
+    "keepAdditiveSchema": true,
+    "keepEvidence": true,
+    "sourceSha": "f386b4b381aba9a1489b32e967fa86d8b25c6e7e"
+  },
+  "sourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+  "sourceTag": "v0.3.21-intake.50",
+  "intakeCohortEnabled": false,
+  "publicVerification": {
+    "source": "verify-public-api.py",
+    "sourceSha256": "32cc2e8f6575c717861544badaa4950de936fdb027447949d7dd4f1d846f472e",
+    "checkedAt": "2026-09-15T13:19:07.106794+00:00",
+    "base": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+    "checks": [
+      {
+        "path": "/meta",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "service": "packproof-api",
+          "environment": "staging",
+          "commit": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+          "version": "2026-09-15-mobile-intake",
+          "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3f6250adec57a5be4420effcc3cd06b87b2acba8263e748a88c89c91583d7f22"
+        }
+      },
+      {
+        "path": "/ready",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "status": "ready",
+          "checkedAt": "2026-09-15T13:18:56.369Z"
+        }
+      },
+      {
+        "path": "/health",
+        "status": 200,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "status": "ok"
+        }
+      },
+      {
+        "path": "/me/intake/capabilities",
+        "status": 401,
+        "allowOrigin": "https://thepackproof.com",
+        "body": {
+          "error": {
+            "code": "UNAUTHENTICATED",
+            "message": "Missing bearer token",
+            "retryable": false,
+            "operationId": "d09ef811-b495-4098-bd7e-2c6bc6d51b2b",
+            "nextAction": "Sign in to continue."
+          }
+        }
+      }
+    ]
+  },
+  "qualification": "Backend deployed and verified; new intake/provider cohort admission remains OFF pending platform/device/provider gates"
+}

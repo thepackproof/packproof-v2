@@ -1,0 +1,112 @@
+{
+  "conclusion": "SUCCESS",
+  "jobs": [
+    {
+      "completedAt": "2026-09-15T13:06:44Z",
+      "conclusion": "success",
+      "id": 104390844052,
+      "name": "Android attestation Kotlin",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T12:59:42Z",
+      "conclusion": "success",
+      "id": 104390844104,
+      "name": "Dependency audit (backend)",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T12:59:46Z",
+      "conclusion": "success",
+      "id": 104390844195,
+      "name": "Source secrets and release tooling",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T13:15:23Z",
+      "conclusion": "success",
+      "id": 104390844203,
+      "name": "Backend",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T13:00:29Z",
+      "conclusion": "success",
+      "id": 104390844216,
+      "name": "Mobile",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T13:00:46Z",
+      "conclusion": "success",
+      "id": 104390844302,
+      "name": "Web",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T12:59:35Z",
+      "conclusion": "success",
+      "id": 104390844308,
+      "name": "Deployment scripts",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T12:59:47Z",
+      "conclusion": "success",
+      "id": 104390844346,
+      "name": "Dependency audit (mobile)",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T12:59:41Z",
+      "conclusion": "success",
+      "id": 104390844376,
+      "name": "Dependency audit (web)",
+      "status": "completed"
+    },
+    {
+      "completedAt": "2026-09-15T13:00:38Z",
+      "conclusion": "success",
+      "id": 104390844418,
+      "name": "PostgreSQL release invariants",
+      "status": "completed"
+    }
+  ],
+  "runId": 34972127900,
+  "sourceSha": "b6c39b2e88897822e4f68e2deea1fed70d7f3b69",
+  "status": "COMPLETED",
+  "mainMergeSha": "656d86ad1d892a54ceac5cb569b5e9f3f1b9603a",
+  "mergeAndHeadTree": "78a8b1c52177d0041c077d940a02b8051b56f3d2",
+  "coreSourceSha": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+  "otherGates": [
+    {
+      "name": "CodeQL",
+      "runId": 34972127983,
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Infrastructure",
+      "runId": 34972127858,
+      "conclusion": "SUCCESS"
+    },
+    {
+      "name": "Core iOS host and Share Extension",
+      "runId": 34936353806,
+      "conclusion": "SUCCESS",
+      "scope": "Unsigned simulator build; signed-device and TestFlight gates not passed"
+    }
+  ],
+  "affectedBoundaryReuse": "Core runtime application code is unchanged by operational tooling, test/setup corrections and the exact public execution UUID exception. Final evidence additions do not alter application build inputs.",
+  "mergedMainQualification": {
+    "runId": 34972377014,
+    "sourceSha": "656d86ad1d892a54ceac5cb569b5e9f3f1b9603a",
+    "conclusion": "SUCCESS",
+    "completedAt": "2026-09-15T13:16:42Z",
+    "backendJobId": 104391531075
+  },
+  "migrationRunnerReview": {
+    "runnerSha256": "d746c664c66f6a7737e8040894d1511032718139accc0361cd94bcbc1b261793",
+    "launcherSha256": "c1d8408f776183feebf74836f656f0bb5f07abe4ffeadc71c1ca7def3f0df4f4",
+    "independentReview": "PASS; launcher reconstructs byte-identical reviewed runner, uses exclusive 0600 file and file URL import, and cleans temporary file/directory; receipt predicates match runner"
+  }
+}

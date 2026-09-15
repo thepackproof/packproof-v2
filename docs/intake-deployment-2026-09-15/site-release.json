@@ -1,0 +1,84 @@
+{
+  "projectId": "appgprj_6a9c2365007c8191a0958c54e4a67b95",
+  "versionNumber": 26,
+  "versionId": "appgprj_6a9c2365007c8191a0958c54e4a67b95~appgver_8a9c80ffc5608191bfb5dc066d243fb6",
+  "sourceSha": "a3d94d50ada1ec98b9cdf4fed5c0525df8dd75ff",
+  "sourceTree": "3267e4be5ec4f0f20f109f95ff6bf4232fbbafbc",
+  "archive": {
+    "archive_format": "tar",
+    "content_hash": "sha256:a02d08fc34d749dfeece84abd3726a40ba9fef7d593b7a35bac948746f024c1f",
+    "file_count": 33,
+    "sediment_file_id": "file_00000000b8e081fdaf55715d0c162c1f",
+    "size_bytes": 11550720
+  },
+  "deployment": {
+    "env_set_revision": 0,
+    "failure_message": null,
+    "id": "appgdep_6aa945a9cfb481918b1bef879be32d8f",
+    "project_id": "appgprj_6a9c2365007c8191a0958c54e4a67b95",
+    "provider_deployment_id": "site---6a9c2365007c8191a0958c54e4a67b95",
+    "screenshot_asset_pointer": null,
+    "status": "succeeded",
+    "title": "PackProof",
+    "type": "publish",
+    "updated_at": "2026-09-15T13:18:42.962433+00:00",
+    "url": "https://packproof-experience.packproof.chatgpt.site",
+    "version_id": "appgprj_6a9c2365007c8191a0958c54e4a67b95~appgver_8a9c80ffc5608191bfb5dc066d243fb6"
+  },
+  "audience": "public; preserved",
+  "ownedDomains": [
+    "thepackproof.com",
+    "www.thepackproof.com"
+  ],
+  "associationVerification": {
+    "status": "PASS_FOR_ANDROID_ASSOCIATION_AND_HTTP_FALLBACK",
+    "android": {
+      "command": "node web/scripts/verify-app-associations.mjs --platform android",
+      "hosts": [
+        "thepackproof.com",
+        "www.thepackproof.com"
+      ],
+      "httpStatus": 200,
+      "contentType": "application/json",
+      "redirects": false,
+      "package": "com.packproof.mobile",
+      "playSigningSha256": [
+        "6C:E9:6F:2E:DA:2E:11:C0:6A:FC:D3:7A:AD:90:57:41:DA:AC:39:89:CA:53:FD:27:44:26:DC:78:5A:FF:E8:A1",
+        "C8:37:CC:28:31:56:3F:33:22:3B:51:2E:01:35:64:EE:19:35:70:B3:9D:05:10:C9:AA:BB:24:25:77:19:E4:E9",
+        "89:2B:5E:DA:13:2D:76:63:E9:09:A5:E3:05:CE:0C:4F:02:B5:78:E3:05:AF:B0:56:54:33:FD:0D:36:C2:83:01"
+      ],
+      "result": "release identity verified on both hosts"
+    },
+    "defaultNodeFetch": {
+      "checkedAt": "2026-09-15T13:20:08.253Z",
+      "headers": "default; no spoofed user agent or authentication",
+      "appleAssociation": {
+        "hosts": [
+          "thepackproof.com",
+          "www.thepackproof.com"
+        ],
+        "httpStatus": 404,
+        "redirects": false,
+        "reason": "No Apple application identifier available; no invented AASA published."
+      },
+      "appPacking": {
+        "url": "https://thepackproof.com/app/packing",
+        "httpStatus": 200,
+        "contentType": "text/html",
+        "redirects": false
+      }
+    },
+    "alternateClientObservation": {
+      "client": "Python urllib default headers",
+      "checkedAt": "2026-09-15T13:19:35.488876+00:00",
+      "paths": [
+        "/.well-known/apple-app-site-association",
+        "/app/packing"
+      ],
+      "httpStatus": 403,
+      "body": "error code: 1010",
+      "interpretation": "CDN client-dependent blocking observed for this automated client. Default Node fetch produced the expected responses. Real installed Android/iOS association and external-tap acceptance remain NOT_RUN."
+    },
+    "physicalInstalledAppJourneys": "NOT_RUN"
+  }
+}

@@ -1,6 +1,6 @@
 # Mobile intake deployment context
 
-WP0 reconciliation, observed 2026-09-15. This record separates source identity, prior deployment records, current console observations, and unfinished release checks. It is not a claim that this intake candidate is deployed.
+WP0 reconciliation, observed 2026-09-15 before the intake release. Source and console tables below preserve that baseline snapshot. Subsequent backend execution is recorded in `intake-deployment-2026-09-15/bridge-release.json`, `migration-release.json` and `candidate-release.json`; current mobile distribution and device gates are recorded in `INTAKE_HANDOFF.md`.
 
 ## Reconciled source
 
@@ -89,4 +89,6 @@ Build from the candidate using the existing pipeline, apply only the additive in
 
 Rollback disables new intake/provider automation first, preserving existing Proof reads, recording recovery, uploads and additive schema. Revert code/image/config only to the freshly recorded predecessor; do not roll back or delete evidence tables. Signed Android and iOS releases have independent gates. Internal Play availability, public production availability, signed IPA upload and TestFlight availability are distinct statuses.
 
-Remaining verification: current AWS control-plane identity; candidate flags and worker deployment; concrete migration/backup receipt; provider seller scopes and actual sync success; live association-file response; final signed Android package and physical-device journey; Apple credentials, signed archive/processing, and physical iPhone journey. See `INTAKE_SOURCE_SUPPORT.md` for source-app capability limits.
+Backend release completed on 2026-09-15 at 13:18:05.398Z: task `:32`, source `272351488a6efcdd1c95a8e3f8ca007d57fe9fbc`, image `sha256:3f6250adec57a5be4420effcc3cd06b87b2acba8263e748a88c89c91583d7f22`, one running task, 100% traffic and no old tasks or triggered rollback alarms. Migrations 067/068 were applied through the reviewed controlled runner after the main merge; its temporary login was removed. All three new tables retain the existing owner and runtime DML access; durability remains false. The new mobile-intake worker and all nine existing workers were healthy. Intake admission remains false, provider automation allowlist empty and no cohort was enabled. Aggregate verification found only one disabled sandbox eBay connection with auto-sync false, and no Shopify/Etsy connections, so zero configured active opted-in connections were paused. Exact service, migration, recovery, HTTP and worker evidence is in `intake-deployment-2026-09-15/candidate-release.json` and its companion receipts.
+
+Remaining release gates concern actual provider authorization/reads, signed distribution availability, live domain associations and physical-device acceptance. Consult `INTAKE_HANDOFF.md` for the latest platform and website status, and `INTAKE_SOURCE_SUPPORT.md` for source-app capability limits.
