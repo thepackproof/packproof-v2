@@ -513,7 +513,7 @@ export async function uploadCaptureFile(input: {
       }
     },
   );
-  let result: FileSystemUploadResult | undefined;
+  let result: FileSystemUploadResult | null | undefined;
   try {
     result = await withRequestTimeout(async (signal) => {
       const cancel = () => { void task.cancelAsync().catch(() => undefined); };

@@ -20,15 +20,17 @@ function isReleaseSafeApiUrl(url) {
 const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
 const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
+const isRegisteredApk = easProfile === "registered-apk";
+const isAndroidRelease = isPlayRelease || isRegisteredApk;
 const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
-const isRelease = isPlayRelease || isIosRelease;
+const isRelease = isAndroidRelease || isIosRelease;
 const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
 const iosBuildNumber = env("PACKPROOF_IOS_BUILD_NUMBER", "1");
 if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUMBER must be a positive integer");
-const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "50"));
-if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 50 || androidVersionCode > 2100000000)
-  throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 49");
+const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "51"));
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 51 || androidVersionCode > 2100000000)
+  throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 50");
 
 if (isRelease) {
   if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");
@@ -47,7 +49,9 @@ module.exports = {
     name: isCameraSpike ? "PackProof Camera Test" : "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
-    version: "0.3.21",
+    version: "0.3.22",
+    // Preserve the existing bridge while upgrading the runtime for 16 KB pages.
+    newArchEnabled: false,
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
@@ -79,10 +83,11 @@ module.exports = {
       },
     },
     android: {
-      package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
+      package: isCameraSpike ? "com.packproof.mobile.cameraspike" :
+        isRegisteredApk ? "com.packproof.app" : "com.packproof.mobile",
       versionCode: androidVersionCode,
       allowBackup: false,
-      usesCleartextTraffic: !isPlayRelease,
+      usesCleartextTraffic: !isAndroidRelease,
       ...(process.env.GOOGLE_SERVICES_JSON ? {googleServicesFile:process.env.GOOGLE_SERVICES_JSON} : {}),
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",

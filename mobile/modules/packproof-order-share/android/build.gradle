@@ -1,9 +1,6 @@
 apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
 group = 'com.packproof.ordershare'
 version = '0.1.0'
-apply from: new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
-applyKotlinExpoModulesCorePlugin()
-useCoreDependencies()
-useDefaultAndroidSdkVersions()
 android { namespace 'com.packproof.ordershare' }
 dependencies { implementation 'androidx.work:work-runtime-ktx:2.9.1' }

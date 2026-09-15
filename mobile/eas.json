@@ -25,6 +25,17 @@
         "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true"
       }
     },
+    "registered-apk": {
+      "extends": "shipping-integration",
+      "distribution": "internal",
+      "environment": "production",
+      "node": "22.14.0",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote",
+        "keystoreName": "PackProof Android Release"
+      }
+    },
     "ios-testflight": {
       "distribution": "store",
       "environment": "production",
