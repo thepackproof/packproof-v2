@@ -83,7 +83,7 @@ paths = ['''^docs/proof\-navigation\-2026\-09\-08/release\-evidence\.json$''']
 regexes = ['''^cc8209d50774d124646fa9c373eac537bc168e9b$''']
 
 # Reviewed CI run 34971238976 / Source secrets job 104387778623.
-# Both exact evidence fields identify successful CodeBuild execution 76; this
+# The exact evidence fields identify successful CodeBuild execution 76; this
 # public execution UUID cannot authenticate or grant AWS permissions.
 [[allowlists]]
 description = "Exact public CodeBuild execution UUID in the intake deployment evidence."
@@ -93,5 +93,16 @@ regexTarget = "secret"
 paths = [
   '''^docs/intake\-deployment\-2026\-09\-15/baseline\.json$''',
   '''^docs/intake\-deployment\-2026\-09\-15/image\-and\-database\-preflight\.json$''',
+  '''^docs/intake\-deployment\-2026\-09\-15/candidate\-release\.json$''',
 ]
 regexes = ['''^43bf9db0\-aa2c\-4c43\-ab16\-399fafb128ae$''']
+
+# Verified successful bridge CodeBuild execution 77. This exact public execution
+# UUID is an audit reference, has no credential value, and grants no permissions.
+[[allowlists]]
+description = "Exact public compatibility-bridge CodeBuild execution UUID."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/intake\-deployment\-2026\-09\-15/bridge\-release\.json$''']
+regexes = ['''^996345cf\-ad9e\-476e\-97e5\-42f61c1e0144$''']

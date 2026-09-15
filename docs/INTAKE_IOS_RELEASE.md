@@ -2,7 +2,7 @@
 
 ## Scope implemented
 
-This work reuses the existing Expo/React Native iOS host, camera/attestation/upload interfaces, native `PackProofOrderShare` Expo module, Share Extension target and config-plugin generation. It does not establish that every pre-existing iOS feature has been compiled or qualified on an iPhone.
+This work reuses the existing Expo/React Native iOS host, camera/attestation/upload interfaces, native `PackProofOrderShare` Expo module, Share Extension target and config-plugin generation. The host app, native Swift modules and Share Extension compiled successfully with Xcode 26 or newer for iOS Simulator on the core candidate recorded below. Physical-iPhone feature acceptance has not been run.
 
 The extension accepts bounded plain text and one web URL through Apple's standard Share sheet. It shows the selected PackProof destination account and **Add to PackProof**. After that explicit action it atomically saves an account-bound local envelope. When a valid host-created intake-only session exists, it attempts a foreground authenticated POST to the compiled PackProof API for up to three seconds. No shared website is fetched. No source-app private order queue is read.
 
@@ -12,11 +12,11 @@ Screenshot/PDF/image activation and on-device OCR have been removed from this co
 
 ## Signing and generated configuration
 
-For `com.packproof.mobile`, the host/extension share `group.com.packproof.mobile.orders` and the dedicated Keychain access group `$(AppIdentifierPrefix)com.packproof.mobile.order-share`. The extension bundle ID remains `com.packproof.mobile.OrderShare`, with Swift module `PackProofOrderShareExtension` to avoid shadowing the host Expo pod. Both provisioning profiles must authorize these groups; use the real existing Apple application prefix/team.
+For `com.packproof.mobile`, the host/extension share `group.com.packproof.mobile.orders` and the dedicated Keychain access group `$(AppIdentifierPrefix)com.packproof.mobile.order-share`. The extension bundle ID remains `com.packproof.mobile.OrderShare`, with Swift module `PackProofOrderShareExtension` to avoid shadowing the host Expo pod. Both provisioning profiles must authorize these groups. The actual Apple Team ID/application prefix and Apple signing credentials are unavailable in the current authorized configuration; no identifier, signing identity or provisioning profile has been fabricated.
 
 The plugin preserves other capabilities, gives the extension `APPLICATION_EXTENSION_API_ONLY = YES`, declares both targets to EAS, and includes matching version/build numbers. Its four source files are `ShareViewController.swift`, `ShareIntakeTransport.swift`, `OrderShareStore.swift` and `OrderShareSessionStore.swift`. `PackProofOrderShareAPIBaseURL` is pinned to the same configured HTTPS API in both Info.plists. Build variants with different bundle IDs receive isolated groups.
 
-Universal Links require the actual Apple application identifier in the served association file and real external-tap validation. A generated entitlement or successful custom-scheme open is not proof of Universal Link verification.
+Universal Links require the actual Apple application identifier in the served `apple-app-site-association` (AASA) file and real external-tap validation. Apple Team ID/application identity is unavailable, so a verified iOS AASA association and end-to-end Universal Link acceptance remain unavailable. The prepared entitlement and association tooling do not establish verification.
 
 ## Privacy and store declaration delta
 
@@ -47,8 +47,26 @@ Review can use ordinary text/URL shares to qualify receiver behavior. Availabili
 
 ## Evidence and remaining release gates
 
-Linux validation can generate the Xcode project and check source membership, embedding, credentials declarations, entitlement preservation and repeatability. It cannot compile UIKit/Security/CryptoKit against the Apple SDK, sign an IPA, exercise Keychain/App Group provisioning on a device, or verify physical camera/biometric behavior.
+The core implementation at commit `272351488a6efcdd1c95a8e3f8ca007d57fe9fbc` passed [GitHub Actions iOS run 34936353806](https://github.com/thepackproof/packproof-v2/actions/runs/34936353806), completed September 15, 2026 at 06:38:27 UTC. Its macOS job `104274997544` selected Xcode 26 or newer and successfully completed dependency installation, mobile typecheck, iOS tests, existing Proof-record/recovery checks, native project generation, CocoaPods resolution, actual Release iOS Simulator compilation of the host app/Swift modules/Share Extension, simulator packaging and artifact upload. The build used `CODE_SIGNING_ALLOWED=NO`.
 
-The final deployment context must separately record the candidate's real Xcode/EAS compilation/archive result, signing identity/profile, TestFlight build identifier, and physical iPhone checks for capture/attestation/upload recovery, offline/restart sharing, account switching and real Universal Links. Without those results, iOS source implementation is complete only within its verified limits; iOS deployment and feature parity are not claimed.
+| Verified artifact | Recorded value |
+| --- | --- |
+| Artifact ID | `10384037419` |
+| Name | `packproof-ios-simulator-272351488a6efcdd1c95a8e3f8ca007d57fe9fbc` |
+| Uploaded artifact size | 16,040,115 bytes |
+| Created | September 15, 2026, 06:38:15 UTC |
+| Contents | Packaged simulator application and Xcode build log |
+| Distribution status | Unsigned simulator artifact; not an installable physical-iPhone IPA or TestFlight build |
+
+Local generated-project checks also verified source membership, extension embedding, matching App Group/Keychain/API configuration and repeatability. The successful macOS run supplies the actual compiler evidence that Linux validation alone could not provide.
+
+Remaining release gates are explicit:
+
+- **Apple signing unavailable:** Apple Team ID/application identity and signing credentials are absent from the available authorized configuration. The signed-archive job was skipped in this push-triggered run; no signed IPA was produced.
+- **TestFlight unavailable:** No TestFlight submission or build identifier exists for this candidate in the completed work. Simulator artifact publication is not store distribution.
+- **Device acceptance not run:** Physical-iPhone sharing, account switching, Keychain/App Group provisioning, offline/restart recovery, camera capture, biometric attestation and upload/commit recovery still require acceptance on a signed device build.
+- **iOS AASA/Universal Links unverified:** The actual Apple application identifier is unavailable; no production iOS association or real external-tap result is claimed.
+
+The core iOS code is compiled successfully for the simulator. Signed iPhone distribution, TestFlight delivery and physical-device feature parity are not claimed.
 
 References: [Apple extension lifecycle/shared storage guidance](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionScenarios.html), [Apple shared Keychain access](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps), [Expo EAS app extensions](https://docs.expo.dev/build-reference/app-extensions/).

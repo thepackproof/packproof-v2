@@ -30,13 +30,15 @@ Shopify webhook HMAC verification stays in the existing HTTP route before enqueu
 
 | Setting / resource | Required value or evidence |
 | --- | --- |
-| API service | Existing image with `PACKPROOF_PROCESS_ROLE=api`; additive migrations applied with existing controlled migration command |
-| Worker service | Same release image with `PACKPROOF_PROCESS_ROLE=worker`; running task, database/credential access and fresh `commerce` heartbeat |
+| API service | Existing `packproof-v2-staging-api` service; its current unset `PACKPROOF_PROCESS_ROLE` runs API and jobs together. Additive migrations use the reviewed controlled runner |
+| Worker execution | Existing combined process, same pinned release image and credential references; require a fresh `commerce` heartbeat. No separate worker service was introduced. Explicit `api`/`worker` roles remain available for a separately planned split |
 | Worker switch | `PACKPROOF_COMMERCE_WORKER` must not be `false` for commerce jobs |
 | Provider rollout | `PACKPROOF_COMMERCE_AUTOMATION_PROVIDERS=ebay,shopify` only after each included provider is verified; comma-separated independent `ebay`, `shopify`, `etsy` allowlist; omitted/empty disables automatic providers |
 | Seller consent | Existing `integration_connections.auto_sync_enabled=true`, explicitly set by its owner; OAuth alone does not opt in |
 | Provider access | Existing app/user secret references and actual needed grants; never copy tokens into this record |
 | Health evidence | Fresh `commerce` heartbeat, connection `lastSucceededAt`, completed initial sync, canonical eligible order and recorded retry/lease recovery |
+
+The provider allowlist applies to all background polling, including connections that opted in before this release. An empty list pauses that polling while preserving stored preferences, cursors and existing records. The existing manual connection-sync endpoint remains outside this gate. A healthy scheduler heartbeat does not establish that a seller order was read successfully; final deployment evidence records the aggregate connection state and verified provider boundaries.
 
 The owned `/me/integration-connections` response adds safe capability metadata: automation availability/reason, stable account identity, environment, granted scopes, exact-read/pagination support, successful order-read timestamp, and poll interval. Registration/configuration is distinguished from a successful read. `webhookDeliveryVerified=false` remains explicit until a real provider delivery is independently qualified. Source native-app Share support is a separate device observation and cannot be inferred from these API capabilities.
 

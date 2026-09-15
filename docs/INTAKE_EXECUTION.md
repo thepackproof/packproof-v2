@@ -18,7 +18,7 @@ This change implements the core of the September 15 mobile intake plan on the re
 ## Deployment order
 
 1. Record the current API and worker images, configuration, migration set and recovery position. Preserve the current developer allowlist, authentication, signing, evidence storage and recovery settings.
-2. Build the API image from the exact candidate. Run the existing controlled migration entry point (`npm run migrate:prod`) with the configured migration role and credential reference. Do not reset data or adopt mismatched checksums.
+2. Merge and build the exact candidate. First deploy the verified baseline compatibility bridge `f386b4b381aba9a1489b32e967fa86d8b25c6e7e` and wait for its native canary/bake to finish: the original runtime rejects future migration entries. Then run the reviewed `infra/mobile-intake-migration.mjs` inspection and apply modes against the candidate image. It invokes the existing migration entry point using a bounded temporary migration identity and removes that identity afterward. Preserve the existing credential references; do not reset data or adopt mismatched checksums. See the deployment receipts for exact image, runner hash, authority verification and tasks.
 3. Deploy the same image to the API and existing worker. Keep new intake admission and provider automation off until the relevant release gates pass. Confirm the `mobile-intake` worker heartbeat and queue/lease behavior; a health response alone does not qualify the worker.
 4. Publish the matching web build and association files. Check association JSON directly on both owned hostnames without redirects or SPA fallback. Do not publish an invented Apple application identifier.
 5. Build Android using `shipping-integration` and EAS CLI 24.4.2, preserving `com.packproof.mobile` and its existing upload key. Candidate version 0.3.21/code 50 advances the verified Play code 49 baseline. Increase it if any higher version has since been uploaded.
@@ -29,7 +29,7 @@ This change implements the core of the September 15 mobile intake plan on the re
 
 Disable new admission with `PACKPROOF_INTAKE_ENABLED=false` and new automatic marketplace work with an empty `PACKPROOF_COMMERCE_AUTOMATION_PROVIDERS`. Retain the installed schema, Proof reads, committed evidence, and existing upload recovery. These flags must be applied consistently to API and worker.
 
-The existing runtime requires the exact migration inventory. After migrations 067/068, simply restarting a pre-intake image can fail its schema check. Use configuration rollback on this schema-compatible release, or a separately verified image that carries the same additive migration inventory. Never drop the new tables as a rollback shortcut.
+The original runtime requires the exact migration inventory. After migrations 067/068, do not restore original task definition `:30`. Use configuration rollback on the new release, or the verified compatibility bridge image `sha256:ac014e4aa663ad31318ef2c5789ac56423647b9525701c33a15c05c54973383a` (source `f386b4b381aba9a1489b32e967fa86d8b25c6e7e`). That bridge preserves the previous application behavior while accepting only the two exact approved migration checksums. Never drop tables or delete migration ledger entries as a rollback shortcut.
 
 ## Verification economy
 

@@ -1,0 +1,60 @@
+{
+  "recordedAt": "2026-09-15T13:05:00Z",
+  "coreSource": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+  "mainMerge": "656d86ad1d892a54ceac5cb569b5e9f3f1b9603a",
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/45",
+  "tag": {
+    "assets": 0,
+    "draft": false,
+    "id": 389150435,
+    "prerelease": true,
+    "published": "2026-09-15T13:03:57Z",
+    "tag": "v0.3.21-intake.50",
+    "target": "272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+    "url": "https://github.com/thepackproof/packproof-v2/releases/tag/v0.3.21-intake.50"
+  },
+  "android": {
+    "package": "com.packproof.mobile",
+    "version": "0.3.21",
+    "versionCode": 50,
+    "easBuildId": "07b4ca6d-a2f7-4e61-8727-8f2c123aa1c5",
+    "easStatus": "FINISHED",
+    "profile": "shipping-integration",
+    "fileName": "PackProof-0.3.21-50.aab",
+    "sizeBytes": 46275467,
+    "sha256": "d976a92e61b94990d9e1d59dfc1c3bb7bddd4aa51e7692e0fd0fa958887326f9",
+    "uploadCertificateSha256": "95:FE:CD:E5:A5:5A:47:36:43:C8:C7:C8:12:E6:94:7F:CB:2A:77:9E:12:28:FD:35:AC:18:C1:39:6F:06:11:5E",
+    "playTrack": "4699046103976889476",
+    "playRelease": "31",
+    "playStatus": "AVAILABLE_TO_INTERNAL_TESTERS",
+    "testerJoinUrl": "https://play.google.com/apps/internaltest/4699046103976889476",
+    "physicalDeviceAcceptance": "NOT_RUN",
+    "publicPromotion": "NOT_ATTEMPTED",
+    "postMergeAutomation": {
+      "runId": 34972376993,
+      "jobId": 104391531249,
+      "status": "FAILED",
+      "stage": "Check Expo automation token",
+      "reason": "EXPO_TOKEN is not configured in GitHub Actions; the separately completed EAS candidate is already distributed."
+    }
+  },
+  "ios": {
+    "runId": 34936353806,
+    "jobId": 104274997544,
+    "compileStatus": "PASS",
+    "artifactId": 10384037419,
+    "artifactName": "packproof-ios-simulator-272351488a6efcdd1c95a8e3f8ca007d57fe9fbc",
+    "sizeBytes": 16040115,
+    "signedArchive": "SKIPPED",
+    "ipa": "NOT_AVAILABLE",
+    "testFlight": "NOT_AVAILABLE",
+    "appleSigning": "CREDENTIALS_UNAVAILABLE",
+    "physicalDeviceAcceptance": "NOT_RUN"
+  },
+  "activation": {
+    "intakeEnabled": false,
+    "automaticProviders": [],
+    "signedDeviceGate": "NOT_PASSED",
+    "liveProviderGate": "NOT_RUN"
+  }
+}
