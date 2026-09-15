@@ -1,3 +1,6 @@
+import { orderShare } from '../../modules/packproof-order-share';
+import { clearNativeIntakeSession, stopNativeIntakeSession } from '../intake/native-session';
+import { clearIntakeQueueCache } from '../intake/queue-cache';
 import { connectionReturnFromLink } from "./deep-links";
 import { unregisterProofPush } from "../notifications/client";
 import {beginNativeEngine} from "../capture/engine";
@@ -541,6 +544,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setProofsLibrary({...DEFAULT_PROOFS_LIBRARY}); proofsScrollOffset.current = 0;
     setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
+      await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
+      await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
       await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
       await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
       await revokeIntakeDevice(client, sessionRef.current.userId).catch(() => forgetIntakeDevice(client, sessionRef.current!.userId));
@@ -566,6 +571,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     await restoreProofsContext(stored);
     tokenRef.current = stored.token || null;
     sessionRef.current = stored;
+    await (stored.needsReauthentication ? stopNativeIntakeSession() : orderShare?.setActiveAccount(stored.userId))?.catch(() => undefined);
     setSession(stored.needsReauthentication ? null : stored);
     await saveCachedState(stored);
     await saveCaptureRecovery(stored);
@@ -1475,6 +1481,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setErrorDetail(null);
       try {
         const current = sessionRef.current;
+        if (current) await clearNativeIntakeSession(client, current.userId).catch(() => undefined);
         await unregisterProofPush(client).catch(()=>undefined);
         if (current) await revokeIntakeDevice(client, current.userId).catch(() => forgetIntakeDevice(client, current.userId));
         if (current?.authMode === "cognito" && current.token && current.cognitoClientId) {
@@ -1493,6 +1500,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       try {
         if (sessionRef.current) {
           await saveCaptureRecovery(sessionRef.current);
+          await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
           await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
           await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
         }

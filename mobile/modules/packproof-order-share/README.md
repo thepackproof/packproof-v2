@@ -1,47 +1,55 @@
 # iOS shared order intake
 
-`with-order-share` preserves Android text sharing and composes `with-ios-order-share`. The latter creates the native Share Extension, declares it to EAS before credential preparation, and gives both targets an App Group. The app-side Expo module auto-links from `mobile/modules`.
+`with-order-share` composes `with-ios-order-share`. The existing native extension and host Expo module are reused. The repeatable config plugin supplies the extension target, source membership, embedding, entitlements and EAS credential declarations.
 
-For the production bundle identifier `com.packproof.mobile`:
+| Production identity | Value |
+| --- | --- |
+| Host | `com.packproof.mobile` |
+| Share target / bundle | `PackProofOrderShare` / `com.packproof.mobile.OrderShare` |
+| App Group | `group.com.packproof.mobile.orders` |
+| Dedicated shared Keychain access group | `$(AppIdentifierPrefix)com.packproof.mobile.order-share` |
 
-- App: `com.packproof.mobile`
-- Extension target: `PackProofOrderShare`
-- Extension bundle identifier: `com.packproof.mobile.OrderShare`
-- App Group: `group.com.packproof.mobile.orders`
+A different host bundle produces different App Group and Keychain identities. The compiled API URL comes from `extra.packproofApiBaseUrl`; the host and extension receive the same pinned URL. Both profiles must contain the App Group and Keychain access group. The real Apple application prefix/team must be provisioned; this plugin does not invent or register an Apple identity. Existing entitlements are preserved.
 
-Both device provisioning profiles must include that App Group. EAS config plugin metadata declares the extension under `extra.eas.build.experimental.ios.appExtensions`. An Apple Developer team is needed for device/TestFlight signing. A fresh prebuild is required after changing the app identifier. The extension uses the application's version/build values.
+## Supported flow
 
-The extension includes its own `PrivacyInfo.xcprivacy` in its resource build phase, and the app-side pod packages a separate `PackProofOrderShare_privacy.bundle`. Both declare file metadata reason `C617.1` for App Group inbox validation and expiration. The extension additionally declares `3B52.1` for metadata of the files the person explicitly shares. These reasons match [Apple’s required-reason API definitions](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype). Neither component tracks users or sends file timestamps off-device.
+1. Share plain text or one HTTP(S) web URL, including a text-only URL, from a source app that supplies it. The native extension prefers a URL representation, rejects other attachment types, bounds provider loading, and shows the destination account and a short preview. There is no OCR or source-site fetching.
+2. Tap **Add to PackProof**. A versioned envelope with stable `clientSubmissionId`, account binding, creation time and SHA-256 of its text is atomically persisted before network submission. Secrets never enter the outbox.
+3. A valid restricted `pp_intake_` session permits one foreground `POST /me/intake/submissions`, with a three-second budget. Redirects, cookies and credential caching are disabled. The response must match the client submission ID. A 200/201/202 is durable acceptance, not necessarily a resolved order.
+4. A server acknowledgment produces **Added to your packing queue** only for `READY`; other accepted states direct the person to finish preparing the order. Without server acknowledgment, the message is **Saved on this iPhone. Open PackProof within 7 days to finish adding it.** Local persistence failure is an error, never success. Tap **Done** to return to the source app.
+5. Normal host launch/foreground drains the same outbox through the shared mobile coordinator. No parent-app launch tricks, recording, OAuth flow or background transfer occurs in the extension.
 
-## Flow and safeguards
+## Persistence and account boundaries
 
-1. In another app, share text, an HTTP(S) link, JPEG, PNG, HEIC, WebP, or PDF to PackProof, then tap **Save order**.
-2. The extension streams temporary files into its own protected App Group folder, checks sizes and actual decodability, and atomically publishes a manifest only after all files arrive. Cancellation removes the partial folder. Each import has its own random UUID; names and paths supplied by a host are never used as destinations.
-3. Open PackProof. Once signed in and on the home screen, it reads the oldest pending import. Reading does not delete anything. Apple Vision reads images locally; PDF text is extracted with PDFKit, with bounded OCR rendering for scanned pages. Links are treated as text; this module never fetches a shared URL.
-4. Review/edit the resulting text before the existing authenticated order-preview API receives it. Original attachments do not become packing evidence. Back defers the import until the next foreground visit. Use or explicit discard acknowledges the manifest and removes the copied source files. Termination before acknowledgment leaves the native queue available for a retry.
+The existing POSIX lock coordinates both processes; atomic protected writes publish complete manifests. The App Group is excluded from backups and uses protection until first unlock. A request being scheduled or a preview being opened never removes pending input. After seven days, unresolved raw text and any legacy files expire on the next store access; the original ID, account binding and hash remain as an `INPUT_EXPIRED` tombstone with an explicit re-share/discard message. Server acknowledgment atomically replaces raw text with a lightweight receipt. Explicit `discard` is separate from acknowledgment. A process termination between server acceptance and local acknowledgment replays the same client submission ID.
 
-Limits: four items per share, 10 MiB per attachment, 20 MiB total attachments, 20,000 UTF-16 characters, 12 PDF pages, 50 megapixels per source image, and ten queued imports. Unsupported, encrypted, oversized, or incomplete files are rejected. On-device OCR is a best-effort draft, clearly labeled for review; absence of readable text remains editable. Source files are excluded from backups and protected until the device has been unlocked after boot. Pending imports expire after seven days, and abandoned unpublished copies after one hour; cleanup runs on the next inbox operation.
+The extension snapshots its displayed destination; an account change cannot silently rebind it. New signed-out shares remain unassigned. `assignAccount` requires explicit host UI confirmation, the active account, and an unassigned or matching existing binding. Switching accounts/clearing active identity clears the shared session. The host also revokes the session on the server at logout. Old account submissions remain attached to their original account.
 
-The Share Extension intentionally uses Apple's supported completion flow and tells the person to open PackProof. It does not use responder-chain/private-API tricks to launch its containing app.
+`OrderShareSessionStore` stores only the restricted intake session in a dedicated shared Keychain entry with `AfterFirstUnlockThisDeviceOnly` and synchronization disabled. The host supplies `{ token, sessionId, accountId, accountLabel, expiresAt, apiBaseURL }`; native validation requires an active matching actor, the pinned HTTPS API and a session lasting at most twelve hours. The extension never receives Cognito refresh tokens or marketplace credentials. It saves locally if credentials are missing, expired or inaccessible.
 
-## Verification
+Limits: 20,000 UTF-16 characters; 64 KiB encoded request and response; at most four text representations and one distinct web URL; fifty unacknowledged local submissions. Input is rejected, never silently truncated for submission. The visible preview is separately shortened. Legacy v1 text imports migrate without account assignment. Legacy attachment imports remain quarantined for explicit re-share/discard; unsupported file data is not silently removed.
 
-On any build host with Node dependencies installed:
+## Native module contract
 
-```sh
-cd mobile
-npx expo prebuild --clean --platform ios --no-install
-npx expo-modules-autolinking resolve --platform apple
-node --test tests/order-share-plugin.test.cjs
-npx tsc --noEmit
-```
+- `listPending()` / `readOrder(id)` expose account-bound records and delivery receipts.
+- `enqueue(text, payloadKind, surface)` durably saves explicit paste input.
+- `setActiveAccount(accountId|null)` updates receiving identity; `assignAccount(id, accountId)` is only called after explicit assignment.
+- `acknowledge(id, serverSubmissionId)` retains an acceptance receipt and removes raw payload; `discard(id)` explicitly removes a local record.
+- `setIntakeSession(session)` / `clearIntakeSession()` manage the restricted shared credential.
 
-The generated-project integration test verifies actual Xcode source build phases, embedding, target dependency, matching entitlements, and plugin idempotence. A Linux prebuild is not a Swift compilation or device test. Compile with Xcode/EAS before release and run these iPhone checks:
+The common TypeScript bridge is `index.ts`. Canonical transaction creation, authorization, resolution, queue state and camera/upload handling stay in their existing backend and application layers.
 
-- Share an order email as text, a Safari URL, a screenshot, a digital PDF, and a scanned PDF; review the extracted draft and create the expected order.
-- Share while signed out and while a recording is active. Sign in/finish the recording and return home; import must wait until then.
-- Save an import, force-close PackProof before review, and reopen. Back out of review, foreground the app again, then use or discard. Originals should remain until use/discard.
-- Cancel during copying; try a 10 MiB-plus file, an encrypted PDF, a 13-page PDF, and an unsupported file. No incomplete order should appear.
-- Queue multiple orders and confirm each appears once after acknowledgment. Fill the inbox and confirm the user-facing capacity message.
+## Validation and release boundary
 
-References: [Apple shared-container and activation guidance](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionScenarios.html), [Apple Share Extensions](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/Share.html), [Expo EAS app extensions](https://docs.expo.dev/build-reference/app-extensions/).
+Node plugin tests exercise extension credentials, constrained activation, privacy manifests and generated Xcode source membership/embedding/idempotence. Generate the native project with `npx expo prebuild --clean --platform ios --no-install`, then run `node --test tests/order-share-plugin.test.cjs`. The generated extension must include both `OrderShareSessionStore.swift` and `ShareIntakeTransport.swift` and remain extension-safe.
+
+A Linux prebuild is not a Swift compile, signed archive, TestFlight delivery or physical-iPhone check. Before iOS release, compile this final candidate with the supported Xcode/EAS image and verify these distinct device boundaries:
+
+- URL/text sharing, delayed providers and unsupported/oversized content; no local success on storage failure.
+- Signed-out save, explicit account assignment, account switching and logout/session revocation.
+- Offline save/reopen, expired restricted session, and interruption after server acceptance; one canonical submission on replay.
+- Extension returns to source; later queue/capture uses normal host navigation and preserves any active recording/upload recovery.
+
+The real Apple team/signing identity, archive compile, physical-device capture/attestation/recovery and TestFlight delivery remain release gates wherever no verified result is recorded in the deployment handoff.
+
+References: [Apple shared containers and POSIX coordination](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionScenarios.html), [Apple shared Keychain access](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps), [Expo EAS app extensions](https://docs.expo.dev/build-reference/app-extensions/).

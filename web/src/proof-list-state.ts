@@ -12,6 +12,23 @@ export function rememberProofListState(scope: string, state: ProofListState) {
 export function canonicalWorkspacePath(href: string, scope?: string): string {
   const url = new URL(href, "https://packproof.local");
   const path = url.pathname.replace(/\/$/, "") || "/";
+  // Owned HTTPS app links are locators only. Drop all query/fragment input before
+  // routing; public /p links deliberately remain a separate sharing surface.
+  if (path === "/app/packing" || path === "/app/proofs") {
+    url.pathname = "/proofs";
+    url.search = "?filter=attention";
+    url.hash = "";
+  } else if (/^\/app\/proofs\/[A-Za-z0-9_-]{1,160}$/.test(path)) {
+    url.pathname = path.slice(4);
+    url.search = "";
+    url.hash = "";
+  } else if (path.startsWith("/app/")) {
+    // A capture handoff remains on its read-only fallback until an explicit
+    // action. Malformed owned links recover to the authorized queue.
+    url.pathname = /^\/app\/capture\/[A-Za-z0-9_-]{1,160}$/.test(path) ? path : "/proofs";
+    url.search = "";
+    url.hash = "";
+  }
   const legacyRecord = path.match(/^\/(?:fulfillment|orders)\/([^/]+)$/);
   const completed = path.match(/^\/proofs\/([^/]+)\/complete$/);
   if (legacyRecord || completed) url.pathname = `/proofs/${(legacyRecord || completed)![1]}`;

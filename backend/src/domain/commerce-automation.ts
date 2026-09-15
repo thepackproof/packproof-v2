@@ -1,7 +1,10 @@
+import { sha256Hex } from "../hash.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
 import { DomainError } from "./errors.js";
+import type { IntegrationConnectionRow } from "./integration-connections.js";
+import { asIso } from "./types.js";
 import { loadConnection } from "./integration-connections.js";
 import { loadCommerceSyncState, syncStateView } from "./commerce-order-records.js";
 import type { IntegrationAdapterRegistry } from "../integrations/registry.js";
@@ -29,13 +32,15 @@ export async function getCommerceReviewSummary(db: Database, connectionId: strin
     const reviewReasons = reasons.map(row => ({ code: row.code, count: Number(row.count) }));
     return { reviewOrderCount: reviewReasons.reduce((sum, row) => sum + row.count, 0), reviewReasons };
 }
-export async function setCommerceAutomation(db: Database, clock: Clock, userId: string, connectionId: string, enabled: unknown, integrations: IntegrationAdapterRegistry) {
+export async function setCommerceAutomation(db: Database, clock: Clock, userId: string, connectionId: string, enabled: unknown, integrations: IntegrationAdapterRegistry, automationProviders?: readonly string[]) {
     if (typeof enabled !== "boolean")
         throw new DomainError("INVALID_AUTOMATION_SETTING", "Choose whether to sync orders automatically", 400);
     const connection = await loadConnection(db, connectionId);
     if (connection.owner_user_id !== userId)
         throw new DomainError("PARTICIPANT_NOT_AUTHORIZED", "This connection belongs to another account", 403);
     integrations.getCommerce(connection.adapter_key);
+    if (enabled && automationProviders && !automationProviders.includes(connection.provider))
+        throw new DomainError("COMMERCE_AUTOMATION_UNAVAILABLE", "Automatic orders are not available for this store yet. You can still add an order explicitly.", 409);
     if (enabled && connection.status !== "ACTIVE")
         throw new DomainError("INTEGRATION_NEEDS_REAUTH", "Reconnect the store before enabling automatic orders", 409);
     await db.transaction(async (tx) => {
@@ -67,8 +72,10 @@ export async function enqueueCommerceWebhook(db: Database, clock: Clock, input: 
     if (!connection)
         return { accepted: true, queued: false };
     await db.transaction(async (tx) => {
+        // Keep the existing unique constraint compatible with old binaries while scoping new delivery identities.
+        const deliveryIdentity = "account-v1:" + sha256Hex(`${input.provider}\n${input.externalAccountReference}\n${input.deliveryId}`);
         const inserted = await tx.query(`INSERT INTO commerce_webhook_inbox(id,connection_id,provider,delivery_id,topic,received_at)
-      VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(provider,delivery_id) DO NOTHING RETURNING id`, [newId("cwh"), connection.id, input.provider, input.deliveryId, input.topic, clock.now().toISOString()]);
+      VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(provider,delivery_id) DO NOTHING RETURNING id`, [newId("cwh"), connection.id, input.provider, deliveryIdentity, input.topic, clock.now().toISOString()]);
         if (inserted.rows[0])
             await tx.query(`INSERT INTO commerce_connection_sync_states(connection_id,updated_at,next_run_at) VALUES($1,$2,$2)
       ON CONFLICT(connection_id) DO UPDATE SET next_run_at=$2`, [connection.id, clock.now().toISOString()]);
@@ -89,4 +96,40 @@ export async function getCommerceOrderContext(db: Database, userId: string, tran
     const latest=(await db.query<{normalized_order:unknown}>("SELECT normalized_order FROM commerce_order_revisions WHERE order_record_id=$1 AND fingerprint=$2",[record.id,record.normalized_fingerprint])).rows[0];
     return { order: { connectionId: record.connection_id, externalOrderId: record.external_order_id, eligibility: record.eligibility, paymentState: record.payment_state, fulfillmentState: record.fulfillment_state, cancelled: record.cancelled,
             latestSource: latest?.normalized_order ?? null }, revisions, orderPolicy: AUTOMATIC_ORDER_POLICY };
+}
+
+/** Independent rollout switch; absent config starts all new provider automation disabled. */
+export function commerceAutomationProvidersFromEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+    return [...new Set((env.PACKPROOF_COMMERCE_AUTOMATION_PROVIDERS ?? "").split(",").map(value => value.trim().toLowerCase()).filter(value => ["ebay", "shopify", "etsy"].includes(value)))];
+}
+
+/** Safe capability evidence from existing account/sync metadata. Never reads credential material. */
+export async function commerceConnectionCapabilities(db: Database, connection: IntegrationConnectionRow,
+    integrations: IntegrationAdapterRegistry, automationProviders?: readonly string[]) {
+    const adapter = integrations.hasCommerce(connection.adapter_key) ? integrations.getCommerce(connection.adapter_key) : null;
+    const account = (await db.query<{scopes: unknown; provider_metadata: Record<string, unknown>}>(`
+      SELECT scopes,provider_metadata FROM connected_accounts WHERE user_id=$1 AND provider=$2
+        AND (id=$3 OR credential_reference=$4) ORDER BY updated_at DESC LIMIT 1`,
+      [connection.owner_user_id, connection.provider, connection.id, connection.credential_reference])).rows[0];
+    const state = await loadCommerceSyncState(db, connection.id);
+    const latestRead = (await db.query<{last_read_at: Date | string | null}>("SELECT MAX(last_seen_at) AS last_read_at FROM commerce_order_records WHERE connection_id=$1", [connection.id])).rows[0]?.last_read_at;
+    const lastOrderReadAt = [state?.last_succeeded_at, latestRead].filter((value): value is string | Date => value != null)
+        .sort((a,b) => new Date(b).getTime() - new Date(a).getTime())[0];
+    const enabled = !automationProviders || automationProviders.includes(connection.provider);
+    const metadata = account?.provider_metadata ?? {};
+    const safeText = (value: unknown) => typeof value === "string" && value.length <= 200 ? value : null;
+    const grantedScopes = Array.isArray(account?.scopes) ? account.scopes.filter((value): value is string => typeof value === "string" && value.length <= 250).slice(0,50) : [];
+    const webhookTopics = connection.provider === "shopify" ? ["orders/create", "orders/updated", "orders/cancelled", "orders/paid", "fulfillments/create", "fulfillments/update"] : [];
+    return {
+        automationAvailable: Boolean(adapter && enabled && connection.status === "ACTIVE"),
+        automationUnavailableReason: !adapter ? "ADAPTER_UNAVAILABLE" : !enabled ? "ROLLOUT_DISABLED" : connection.status !== "ACTIVE" ? "RECONNECT_REQUIRED" : null,
+        stableAccountId: safeText(metadata.ebayUserId) ?? safeText(metadata.shopId) ?? connection.external_account_reference,
+        environment: connection.provider === "shopify" ? "production" : safeText(metadata.environment),
+        grantedScopes, exactOrderReadSupported: Boolean(adapter?.fetchFulfillmentOrder),
+        incrementalListSupported: Boolean(adapter), paginationSupported: Boolean(adapter),
+        lastOrderReadAt: lastOrderReadAt ? asIso(lastOrderReadAt) : null,
+        orderReadVerified: Boolean(lastOrderReadAt),
+        webhookTopics, webhookDeliveryVerified: false,
+        pollIntervalSeconds: adapter ? (adapter.preferredPollIntervalMs ?? 300000) / 1000 : null,
+    };
 }

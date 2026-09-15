@@ -1,15 +1,16 @@
-import { SharedTrackingScreen, looksLikeSharedTracking } from "../screens/SharedTrackingScreen";
-import { proofIdFromLink, historyShareFromLink } from "./deep-links";
+import { SharedOrderScreen } from "../intake/SharedOrderScreen";
+import { canNavigateForIntake } from "../intake/submissions";
+import { orderShare } from "../../modules/packproof-order-share";
+import { proofIdFromLink, historyShareFromLink, packingQueueFromLink } from "./deep-links";
 import { SharingScreen } from "../screens/SharingScreen";
 import { SignatureProofScreen } from "../screens/SignatureProofScreen";
 import { SupportingToolsScreen } from "../screens/SupportingToolsScreen";
 import { NativeCaptureHost } from "../ui/NativeCaptureHost";
-import { OrderIntakeScreen } from "../screens/OrderIntakeScreen";
 import { CommerceReceiptScreen } from "../screens/CommerceReceiptScreen";
 import { sharedOrderText } from "../copy/share-intake";
 import { useSharedOrder } from "../intake/use-shared-order";
 import { useEffect, useRef, useState } from "react";
-import { BackHandler, StyleSheet, Text, View, Linking, Keyboard } from "react-native";
+import { Alert, BackHandler, StyleSheet, Text, View, Linking, Keyboard } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
 import { isImmersiveRoute } from "./navigation";
@@ -52,29 +53,20 @@ function RootContent() {
   const [captureIntent,setCaptureIntent]=useState<string|null>(null);
   const [linkedProofId, setLinkedProofId] = useState<string | null>(null);
   const [linkedHistoryShareId, setLinkedHistoryShareId] = useState<string | null>(null);
-  const [sharedText, setSharedText] = useState<string | null>(null);
-  const [sharedAsOrder,setSharedAsOrder]=useState(false);
+  const [linkedQueue, setLinkedQueue] = useState(false);
   const [completionVisible, setCompletionVisible] = useState(false);
   const previousRoute = useRef(app.route.name);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
-  const nativeShare = useSharedOrder(ready && !!app.session && app.route.name === "home" && sharedText === null && !app.busy);
-
+  const nativeShare = useSharedOrder(ready);
+  const intakeNavigationReady = canNavigateForIntake({ ready, accountId: app.session?.userId ?? null, route: app.route.name, busy: app.busy, captureStatus: app.captureStatus });
+  const notifiedShare = useRef<string | null>(null);
+  useEffect(() => { if (app.route.name === "intake") nativeShare.resume(); }, [app.route.name]);
   useEffect(() => {
-    if (!nativeShare.sharedOrder) return;
-    setSharedAsOrder(nativeShare.sharedOrder.attachmentCount > 0);
-    setSharedText(nativeShare.sharedOrder.text);
+    if (!nativeShare.sharedOrder || !intakeNavigationReady || app.route.name === "intake") return;
+    if (notifiedShare.current === nativeShare.sharedOrder.id) return;
+    notifiedShare.current = nativeShare.sharedOrder.id;
     app.go("intake");
-  }, [nativeShare.sharedOrder?.id]);
-
-  async function consumeSharedOrder() {
-    await nativeShare.acknowledge();
-    setSharedText(null);
-  }
-
-  function deferSharedOrder() {
-    nativeShare.defer();
-    setSharedText(null);
-  }
+  }, [nativeShare.sharedOrder?.id, intakeNavigationReady, app.route.name]);
 
   useEffect(() => {
     const previous = previousRoute.current;
@@ -98,7 +90,10 @@ function RootContent() {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       if (Keyboard.isVisible()) { Keyboard.dismiss(); return true; }
       if (app.route.name === "home") return false;
-      if (!app.busy) { if(app.route.name === "station") app.go("home"); else app.goBack(); }
+      if (!app.busy) {
+        if (app.route.name === "intake") { void nativeShare.defer().then(() => app.go("home")).catch(() => app.setError("Could not save your place. Try again.")); }
+        else if (app.route.name === "station") app.go("home"); else app.goBack();
+      }
       return true;
     });
     return () => subscription.remove();
@@ -124,8 +119,19 @@ function RootContent() {
       } catch { /* Other supported link handlers retain their validation. */ }
       const proofId = proofIdFromLink(url);
       if (proofId) { setLinkedHistoryShareId(historyShareFromLink(url)?.shareId ?? null); setLinkedProofId(proofId); return; }
+      if (packingQueueFromLink(url)) { setLinkedQueue(true); return; }
       const text = sharedOrderText(url);
-      if (text) {nativeShare.defer();setSharedAsOrder(false);setSharedText(text);}
+      if (text && orderShare) {
+        // Compatibility-only input. New receiver links carry localId and never raw text.
+        void orderShare.enqueue(text, 'TEXT', 'ANDROID_SHARE').then(nativeShare.refresh)
+          .catch(() => app.setError('The shared order could not be saved on this device. Share it again.'));
+      }
+      try {
+        const link = new URL(url);
+        if (link.protocol === 'packproof-v2:' && link.hostname === 'intake' && link.searchParams.get('error') === 'LOCAL_SAVE_FAILED')
+          app.setError('The shared order could not be saved on this device. Share it again, or paste the order details.');
+      } catch { /* Ignore unsupported navigation. */ }
+
     };
     void Linking.getInitialURL()
       .then((url) => {
@@ -136,11 +142,13 @@ function RootContent() {
     return () => listener.remove();
   }, []);
   useEffect(() => {
-    if (ready && app.session && sharedText) app.go("intake");
-  }, [ready, app.session?.userId, sharedText]);
+    if (!linkedQueue || !intakeNavigationReady || !app.session) return;
+    setLinkedQueue(false); app.go('home');
+    void app.run(app.syncWorkspace);
+  }, [linkedQueue, intakeNavigationReady]);
 
   useEffect(() => {
-    if (ready && app.session && linkedProofId) {
+    if (intakeNavigationReady && app.session && linkedProofId) {
       const id = linkedProofId, historyShareId = linkedHistoryShareId, userId = app.session.userId, api = app.apiBaseUrl;
       setLinkedProofId(null); setLinkedHistoryShareId(null); app.go("home");
       void app.run(async () => {
@@ -149,12 +157,21 @@ function RootContent() {
         if (historyShareId) app.go("signature", { historyShareId });
       });
     }
-  }, [ready, app.session?.userId, linkedProofId, linkedHistoryShareId]);
+  }, [intakeNavigationReady, app.session?.userId, linkedProofId, linkedHistoryShareId]);
 
-  useEffect(()=>{
-    if(!ready||!app.session||!captureIntent||app.busy)return;
-    const token=captureIntent;setCaptureIntent(null);void app.startCaptureIntent(token);
-  },[ready,app.session?.userId,captureIntent,app.busy]);
+  useEffect(() => {
+    if (!intakeNavigationReady || !app.session || !captureIntent) return;
+    const token = captureIntent, account = app.session.userId, api = app.apiBaseUrl;
+    setCaptureIntent(null);
+    Alert.alert('Open the packing order?', 'PackProof will check this order before opening the camera.', [
+      { text: 'Later', style: 'cancel' },
+      { text: 'Record packing', onPress: () => {
+        try { app.client.assertCaptureAccount(account, api); void app.startCaptureIntent(token); }
+        catch { app.setError('Sign in to the original account to open this order.'); }
+      } },
+    ]);
+  }, [intakeNavigationReady, app.session?.userId, captureIntent]);
+
 
   const statusStyle = immersive || theme.scheme === "dark" || !ready ? "light" : "dark";
 
@@ -224,7 +241,7 @@ function RootContent() {
   else if (app.route.name === "capture") body = <CaptureScreen />;
   else if (app.route.name === "scan") body = <ScanScreen />;
   else if (app.route.name === "review") body = <PurchaseReviewScreen />;
-  else if (app.route.name === "intake") body = sharedText&&!sharedAsOrder&&looksLikeSharedTracking(sharedText) ? <SharedTrackingScreen text={sharedText} onConsumed={()=>{void consumeSharedOrder().catch(()=>app.setError("Could not remove the shared order from this device. Try again."));}} onOrder={()=>setSharedAsOrder(true)}/> : <OrderIntakeScreen key={nativeShare.sharedOrder?.id ?? sharedText ?? "paste"} sharedText={sharedText} sharedWarnings={nativeShare.sharedOrder?.warnings} sharedAttachmentCount={nativeShare.sharedOrder?.attachmentCount} onConsumed={consumeSharedOrder} onDeferred={nativeShare.sharedOrder ? deferSharedOrder : undefined} />;
+  else if (app.route.name === "intake") body = <SharedOrderScreen coordinator={nativeShare} />;
   else if (app.route.name === "manual") body = <ManualCreateScreen />;
   else if (app.route.name === "finalize") body = <FinalizeScreen />;
   else if (app.route.name === "invite") body = <InviteScreen />;

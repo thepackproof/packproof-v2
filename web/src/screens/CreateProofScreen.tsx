@@ -14,6 +14,7 @@ export function CreateProofScreen(props: {
   onOpenAccount: () => void;
   onAcceptInvitation: (invitationId: string) => void;
   onPreviewIntake?: (text: string) => Promise<IntakePreview>;
+  renderIntakePanel?: (onReview: (preview: IntakePreview) => void) => ReactNode;
   onCreate: (input: TransactionWriteInput) => void;
   onCreateGrading: (input: { itemCount: number; itemTitle: string }) => void;
   onImportPurchase: () => Promise<TransactionImportView>;
@@ -35,11 +36,12 @@ export function CreateProofScreen(props: {
   const [paste, setPaste] = useState(false);
   const [intake, setIntake] = useState<IntakePreview | null>(null);
   const [gradingCount, setGradingCount] = useState("1");
+  function reviewIntake(result: IntakePreview) { setIntake(result); setTitle(result.draft.itemTitle || ""); setReference(result.draft.externalReference || ""); setCurrency(result.draft.currency || "USD"); setQuantity(result.draft.quantity == null ? "1" : String(result.draft.quantity)); setAmount(result.draft.transactionValue == null ? "" : String(result.draft.transactionValue)); setCarrier(result.draft.shipping.carrier || ""); setTracking(result.draft.shipping.trackingNumber || ""); setPaste(false); }
   const quantityNumber = Math.max(1, Number.parseInt(quantity,10) || 1);
   return <main className="page narrow-page"><PageHeader title="Record shipment" onBack={props.onCancel} />
     {props.readyOrders}
     {props.error ? <p role="alert" className="banner banner-error">{props.error}</p> : null}
-    {paste && props.onPreviewIntake ? <IntakePanel onPreview={props.onPreviewIntake} onReview={result => { setIntake(result); setTitle(result.draft.itemTitle || ""); setReference(result.draft.externalReference || ""); setCurrency(result.draft.currency || "USD"); setQuantity(result.draft.quantity == null ? "1" : String(result.draft.quantity)); setAmount(result.draft.transactionValue == null ? "" : String(result.draft.transactionValue)); setCarrier(result.draft.shipping.carrier || ""); setTracking(result.draft.shipping.trackingNumber || ""); setPaste(false); }} /> : null}
+    {paste && props.onPreviewIntake ? (props.renderIntakePanel ? props.renderIntakePanel(reviewIntake) : <IntakePanel onPreview={props.onPreviewIntake} onReview={reviewIntake} />) : null}
     <form className="stack" onSubmit={e => { e.preventDefault(); props.onCreate({itemTitle:title.trim(),externalReference:reference.trim() || null,itemDescription:description.trim() || null,currency:currency.trim() || null,quantity:quantity ? Number(quantity) : null,transactionValue:amount ? Number(amount) : null,shipping:{carrier:carrier.trim() || null,trackingNumber:tracking.trim() || null},...(intake ? {metadata:{intake:{...intake.draft.metadata.intake,confirmed:true}}} : {})}); }}>
       <label className="field"><span>What are you shipping?</span><input required maxLength={200} value={title} onChange={e => setTitle(e.target.value)} autoFocus /></label>
       <p>Show the shipping label during your packing video. PackProof will try to read it for you.</p>

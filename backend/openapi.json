@@ -2613,6 +2613,411 @@
           }
         }
       }
+    },
+    "/me/intake/submissions": {
+      "post": {
+        "operationId": "submitIntake",
+        "summary": "Durably save bounded untrusted text/link intake",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSubmission"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "201": {
+            "description": "Durably accepted and resolved or awaiting user action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSubmission"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Durably accepted with pending resolution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSubmission"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeSubmissionEnvelope"
+              }
+            }
+          }
+        },
+        "description": "Maximum UTF-8 JSON request body: 65536 bytes. Actor/clientSubmissionId exact request-hash replay returns 200; changed payload returns 409 IDEMPOTENCY_CONFLICT. 202 only means durable acceptance. A scoped session can only replay its own submissions. Input cannot assign owner, tenant, provenance or Proof status. Only application/json request bodies are accepted (415 otherwise). Scoped-session receipts omit candidate order summaries; the signed-in host retrieves candidates with its normal account token."
+      },
+      "get": {
+        "operationId": "listIntakeSubmissions",
+        "summary": "List up to 50 unresolved account submissions",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "submissions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IntakeSubmission"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/me/intake/submissions/{id}": {
+      "get": {
+        "operationId": "getIntakeSubmission",
+        "summary": "Read an authorized intake receipt",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSubmission"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/me/intake/submissions/{id}/resolve": {
+      "post": {
+        "operationId": "resolveIntakeSubmission",
+        "summary": "Select a server-issued candidate, confirm manual details, or retry with {}",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSubmission"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeResolution"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/me/intake/submissions/{id}/dismiss": {
+      "post": {
+        "operationId": "dismissIntakeSubmission",
+        "summary": "Dismiss unresolved intake without deleting canonical evidence",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSubmission"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/me/intake/sessions": {
+      "post": {
+        "operationId": "createIntakeSession",
+        "summary": "Create a revocable 12-hour session limited to own intake create/read receipts",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "actorId": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Returned once; store only in the dedicated shared Keychain access group."
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/intake/sessions/{id}": {
+      "delete": {
+        "operationId": "revokeIntakeSession",
+        "summary": "Revoke an owned extension session",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/me/intake/sessions/{id}/revoke": {
+      "post": {
+        "operationId": "revokeIntakeSessionPost",
+        "summary": "Revoke an owned extension session",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "An account token may revoke any owned session. An intake-only session may revoke only itself; this supports immediate cleanup when the host account changes during session minting."
+      }
     }
   },
   "components": {
@@ -2621,6 +3026,11 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "pp_sandbox_\u2026 or pp_live_\u2026"
+      },
+      "AccountBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "PackProof account access token. Intake scoped sessions may only create submissions and read receipts issued to that session."
       }
     },
     "parameters": {
@@ -2911,6 +3321,252 @@
             "$ref": "#/components/schemas/FutureSignature"
           }
         }
+      },
+      "IntakeSubmissionEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "clientSubmissionId",
+          "surface",
+          "requestedAction",
+          "payload"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "clientSubmissionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "surface": {
+            "enum": [
+              "ANDROID_SHARE",
+              "IOS_SHARE",
+              "EXPLICIT_PASTE"
+            ]
+          },
+          "requestedAction": {
+            "const": "QUEUE"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "TEXT",
+                  "URL"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            }
+          },
+          "hints": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "provider": {
+                "enum": [
+                  "ebay",
+                  "shopify",
+                  "etsy"
+                ]
+              },
+              "connectionId": {
+                "type": "string",
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      },
+      "IntakeSubmission": {
+        "type": "object",
+        "required": [
+          "submissionId",
+          "clientSubmissionId",
+          "state",
+          "transactionId",
+          "proofId",
+          "nextAction",
+          "retryable",
+          "errorCode",
+          "updatedAt",
+          "candidates",
+          "message"
+        ],
+        "properties": {
+          "submissionId": {
+            "type": "string"
+          },
+          "clientSubmissionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "enum": [
+              "RECEIVED",
+              "RESOLVING",
+              "READY",
+              "NEEDS_CONNECTION",
+              "NEEDS_SELECTION",
+              "INVALID",
+              "RETRYABLE_FAILED",
+              "DISMISSED"
+            ]
+          },
+          "transactionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "proofId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextAction": {
+            "enum": [
+              "OPEN_PROOF",
+              "RECORD_PACKING",
+              "CONNECT_ACCOUNT",
+              "SELECT_ORDER",
+              "REVIEW_DETAILS",
+              "RETRY",
+              "NONE"
+            ]
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "properties": {
+                "candidateId": {
+                  "type": "string"
+                },
+                "transactionId": {
+                  "type": "string"
+                },
+                "orderReference": {
+                  "type": "string"
+                },
+                "itemSummary": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "IntakeResolution": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "candidateId"
+            ],
+            "properties": {
+              "candidateId": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "confirmed",
+              "details"
+            ],
+            "properties": {
+              "confirmed": {
+                "const": true
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "itemTitle"
+                ],
+                "properties": {
+                  "itemTitle": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  "externalReference": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "transactionValue": {
+                    "type": "number"
+                  },
+                  "physicalFulfillment": {
+                    "type": "boolean"
+                  },
+                  "paid": {
+                    "type": "boolean"
+                  },
+                  "fulfillmentScope": {
+                    "enum": [
+                      "FULL_ORDER",
+                      "PARTIAL",
+                      "MULTI_PARCEL",
+                      "UNKNOWN"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "maxProperties": 0
+          }
+        ]
       }
     }
   }

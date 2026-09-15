@@ -225,7 +225,7 @@ function ChannelAccount({ entry: { account, connection }, providerDisplay }: { e
     {connection ? <>
       <View style={styles.automationRow}>
         <Text style={[styles.automationLabel, { color: colors.textPrimary }]}>Automatically add orders</Text>
-        <Switch accessibilityLabel={`Automatically add orders from ${providerDisplay}${name ? `, ${name}` : ""}`} value={connection.autoSyncEnabled === true} disabled={app.busy || (connection.status !== "ACTIVE" && !connection.autoSyncEnabled)} onValueChange={enabled => void app.setCommerceAutomation(connection.connectionId, enabled)} trackColor={{ true: colors.primary }} />
+        <Switch accessibilityLabel={`Automatically add orders from ${providerDisplay}${name ? `, ${name}` : ""}`} value={connection.autoSyncEnabled === true} disabled={app.busy || ((connection.status !== "ACTIVE" || connection.automationAvailable === false) && !connection.autoSyncEnabled)} onValueChange={enabled => void app.setCommerceAutomation(connection.connectionId, enabled)} trackColor={{ true: colors.primary }} />
       </View>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>{automaticIntakeStatus(connection).replace("above", "here")}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>{connection.lastSyncAt ? `Last successful order check: ${formatDateTime(connection.lastSyncAt)}` : "No successful order check yet."}</Text>

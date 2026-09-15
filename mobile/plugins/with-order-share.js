@@ -1,8 +1,17 @@
 const { withAndroidManifest, withMainActivity, AndroidConfig } = require("expo/config-plugins");
 
-/** Convert Android's explicit text share into a bounded app link for RN Linking. */
+/** Persist Android's explicit text share before routing an opaque local locator. */
 function transformMainActivity(source) {
-  if (source.includes("packproofOrderShare")) return source;
+  if (source.includes("packproofOrderShare")) {
+    if (source.includes("OrderShareStore.receive(this, incoming)") && !source.includes('appendQueryParameter("text"')) return source;
+    // Upgrade the previously generated raw-query handler once, preserving its single
+    // onCreate/onNewIntent integration instead of adding a competing receiver.
+    const legacy = /  private fun packproofOrderShare\(incoming: android\.content\.Intent\): android\.content\.Intent \{[\s\S]*?\n  \}\n\n  override fun onNewIntent/;
+    if (source.includes('appendQueryParameter("text"') && legacy.test(source)) {
+      return source.replace(legacy, '  private fun packproofOrderShare(incoming: android.content.Intent): android.content.Intent {\n    return com.packproof.ordershare.OrderShareStore.receive(this, incoming)\n  }\n\n  override fun onNewIntent');
+    }
+    throw new Error("PackProof share plugin: unsupported existing share handler; inspect MainActivity before prebuild");
+  }
   if (!source.includes("super.onCreate(null)"))
     throw new Error(
       "PackProof share plugin: unsupported MainActivity; inspect the generated Kotlin activity",
@@ -13,17 +22,7 @@ function transformMainActivity(source) {
   );
   const addition = `
   private fun packproofOrderShare(incoming: android.content.Intent): android.content.Intent {
-    if (incoming.action == android.content.Intent.ACTION_SEND && (incoming.type == "text/plain" || incoming.type == "text/html")) {
-      val text = incoming.getCharSequenceExtra(android.content.Intent.EXTRA_TEXT)?.toString()
-      if (text != null && text.isNotBlank() && text.length <= 20000) {
-        return android.content.Intent(incoming).apply {
-          action = android.content.Intent.ACTION_VIEW
-          data = android.net.Uri.Builder().scheme("packproof-v2").authority("intake").appendQueryParameter("text", text).build()
-          removeExtra(android.content.Intent.EXTRA_TEXT)
-        }
-      }
-    }
-    return incoming
+    return com.packproof.ordershare.OrderShareStore.receive(this, incoming)
   }
 
   override fun onNewIntent(intent: android.content.Intent) {

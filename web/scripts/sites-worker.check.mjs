@@ -10,6 +10,37 @@ test("serves app deep links through the HTML entry point and keeps asset 404s", 
   assert.deepEqual(seen, ["/index.html", "/missing.png"]);
 });
 
+test("serves association JSON directly on apex and www, including extensionless AASA", async () => {
+  for (const hostname of ["thepackproof.com", "www.thepackproof.com"]) {
+    for (const pathname of ["/.well-known/assetlinks.json", "/.well-known/apple-app-site-association", "/apple-app-site-association"]) {
+      const body = pathname.endsWith("assetlinks.json") ? [] : { applinks: { details: [] } };
+      const seen = [];
+      const env = { ASSETS: { fetch: async request => { seen.push(new URL(request.url).pathname); return Response.json(body); } } };
+      const response = await worker.fetch(new Request(`https://${hostname}${pathname}`), env);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "application/json");
+      assert.equal(response.headers.get("location"), null);
+      assert.deepEqual(await response.json(), body);
+      assert.deepEqual(seen, [pathname === "/apple-app-site-association" ? "/.well-known/apple-app-site-association" : pathname]);
+    }
+  }
+});
+
+test("does not publish SPA HTML or redirects as association documents", async () => {
+  for (const response of [new Response("<!doctype html>"), Response.redirect("https://elsewhere.example", 302), new Response("missing", { status: 404 })]) {
+    const result = await worker.fetch(new Request("https://www.thepackproof.com/.well-known/apple-app-site-association"), { ASSETS: { fetch: async () => response } });
+    assert.equal(result.status, 404);
+    assert.equal(result.headers.get("location"), null);
+  }
+});
+
+test("handoff link previews only fetch static HTML and send no identifying referrer", async () => {
+  const seen = [];
+  const result = await worker.fetch(new Request("https://thepackproof.com/app/capture/handoff_safe", { method: "GET" }), { ASSETS: { fetch: async request => { seen.push(new URL(request.url).pathname); return new Response("HTML"); } } });
+  assert.deepEqual(seen, ["/index.html"]);
+  assert.equal(result.headers.get("referrer-policy"), "no-referrer");
+});
+
 test("redirects the public account deletion URL to the existing deletion flow", async () => {
   const response = await worker.fetch(new Request("https://thepackproof.com/delete-account?source=google-play"), {});
   assert.equal(response.status, 308);

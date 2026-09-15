@@ -1,4 +1,6 @@
-import { providerAuthFailed, providerRateLimited, providerResponseInvalid, providerTemporarilyUnavailable } from "../../domain/integration-errors.js";
+import { DomainError } from "../../domain/errors.js";
+import { rateLimitDelay } from "../rate-limit-delay.js";
+import { providerAuthFailed, providerResponseInvalid, providerTemporarilyUnavailable } from "../../domain/integration-errors.js";
 import { asNumber, asRecord, asString, mapOAuthHttpError, oauthJson, readJson, type FetchLike } from "../connected-accounts/http.js";
 import { shopifyAdminApiUrl, shopifyTokenUrl } from "./constants.js";
 import { identifierOrderQuery, FULFILLMENT_LINES_QUERY, ORDER_LINES_QUERY, ORDER_QUERY, ORDER_REVISION_QUERY, ORDERS_QUERY, SHOP_IDENTITY_QUERY, UNINSTALL_MUTATION } from "./queries.js";
@@ -29,6 +31,13 @@ export function createHttpShopifyClient(fetchImpl: FetchLike = fetch): ShopifyCl
     },
     async listOrders(input) { return (await listOrderPage(fetchImpl, input)).orders; },
     async listOrdersPage(input) { return listOrderPage(fetchImpl, input); },
+    async getOrder(input) {
+      if (!/^\d{1,30}$/.test(input.orderId)) throw new DomainError("INVALID_ORDER_ID", "Use the Shopify order ID, not its display number", 400);
+      const id = `gid://shopify/Order/${input.orderId}`;
+      const result = await graphql(fetchImpl, input, ORDER_REVISION_QUERY, {id});
+      if (result.order == null) throw new DomainError("COMMERCE_ORDER_NOT_FOUND", "This order is unavailable in the connected store", 404);
+      return hydrateOrder(fetchImpl, input, asRecord(result.order));
+    },
     async revoke(input) {
       const payload = asRecord((await graphql(fetchImpl, input, UNINSTALL_MUTATION)).appUninstall);
       if (!Array.isArray(payload.userErrors) || payload.userErrors.length) throw providerResponseInvalid();
@@ -137,12 +146,18 @@ async function graphql(fetchImpl: FetchLike, input: RequestContext, query: strin
       body: JSON.stringify({ query, variables }),
     });
   } catch { throw providerTemporarilyUnavailable(); }
+  if (response.status === 429) throw rateLimitDelay(response.headers.get("retry-after"));
   if (!response.ok) mapOAuthHttpError(response.status);
   const payload = asRecord(await readJson(response));
   if (Array.isArray(payload.errors) && payload.errors.length) {
     const codes = payload.errors.map(e => asString(asRecord(asRecord(e).extensions).code));
     if (codes.some(c => c === "ACCESS_DENIED" || c === "UNAUTHORIZED")) throw providerAuthFailed();
-    if (codes.includes("THROTTLED")) throw providerRateLimited();
+    if (codes.includes("THROTTLED")) {
+      const cost = asRecord(asRecord(payload.extensions).cost), throttle = asRecord(cost.throttleStatus);
+      const requested = asNumber(cost.requestedQueryCost), available = asNumber(throttle.currentlyAvailable), restore = asNumber(throttle.restoreRate);
+      const seconds = requested != null && available != null && restore != null && restore > 0 ? Math.max(1, Math.ceil((requested - available) / restore)) : null;
+      throw rateLimitDelay(response.headers.get("retry-after"), seconds);
+    }
     if (codes.includes("INTERNAL_SERVER_ERROR") || codes.includes("SERVICE_UNAVAILABLE")) throw providerTemporarilyUnavailable();
     throw providerResponseInvalid();
   }

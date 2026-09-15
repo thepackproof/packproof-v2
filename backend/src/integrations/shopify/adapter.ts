@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/errors.js";
 import type {
   CommerceOrderPage,
   NormalizedFulfillmentOrder,
@@ -18,6 +19,15 @@ export function createShopifyCommerceAdapter(client: ShopifyClient): CommerceFul
     kind: "trusted",
     provider: SHOPIFY_PROVIDER,
     displayName: "Shopify",
+    preferredPollIntervalMs: 300000,
+    reconciliationIntervalMs: 86400000,
+    async fetchFulfillmentOrder(input) {
+      if (!client.getOrder) throw new DomainError("COMMERCE_EXACT_READ_UNAVAILABLE", "Choose this order from your connected packing queue", 409);
+      const shop = shopFromConnection(input.connection, input.credentials);
+      const accessToken = input.credentials?.material.accessToken?.trim() ?? "";
+      const includeProductIdentifiers = (input.credentials?.material.scope ?? "").split(/[ ,]+/).some(scope => scope === "read_products" || scope === "write_products");
+      return toNormalized(await client.getOrder({shop, accessToken, orderId: input.externalOrderId, includeProductIdentifiers}), shop);
+    },
     async listFulfillmentOrders(input: {
       connection: IntegrationConnectionRow;
       credentials?: IntegrationCredentials | null;

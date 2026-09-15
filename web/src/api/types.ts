@@ -467,6 +467,11 @@ export interface FulfillmentQueueItem {
 }
 
 export interface CommerceConnectionView {
+  automationAvailable?: boolean;
+  automationUnavailableReason?: "ADAPTER_UNAVAILABLE" | "ROLLOUT_DISABLED" | "RECONNECT_REQUIRED" | null;
+  orderReadVerified?: boolean;
+  lastOrderReadAt?: string | null;
+  pollIntervalSeconds?: number;
   reviewOrderCount?: number;
   reviewReasons?: Array<{ code: string; count: number }>;
   autoSyncEnabled?: boolean;

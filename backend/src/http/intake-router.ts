@@ -9,6 +9,9 @@ import {createMailAlias,listMailSetup,revokeMailAlias,acknowledgeMailVerificatio
 import {createCaptureSession,loadCaptureSession,captureSessionView} from '../domain/capture-sessions.js';
 import {captureSurface} from '../identifiers/policy.js';
 import {resolveIntakeIssue} from '../intake/context.js';
+import {submitIntakeSubmission,getIntakeSubmission,listIntakeSubmissions,resolveIntakeSubmission,dismissIntakeSubmission} from '../intake/submissions.js';
+import {createIntakeSession,revokeIntakeSession} from '../intake/sessions.js';
+import {strictRecord} from '../intake/submissions-contract.js';
 const route=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req,res).catch(next);};
 function actor(req:Request):string{if(!req.packproofUserId)throw new DomainError('UNAUTHENTICATED','Sign in to prepare an order.',401);return req.packproofUserId;}
 function token(req:Request):string{return req.header('x-intake-device-token')||'';}
@@ -27,8 +30,19 @@ export function intakeRouter(deps:AppDependencies){
   router.post('/identifier-candidates',route(async(req,res)=>{res.json(await identifierCandidates(deps.db,actor(req),req.body));}));
   router.get('/capabilities',route(async(req,res)=>{
     const enabled=intakeEnabled(deps.intake,actor(req));
-    res.json({enabled,handoffEnabled:enabled&&!!deps.intake?.handoffEnabled,browserEnabled:enabled&&!!deps.intake?.browserEnabled,emailEnabled:enabled&&!!deps.intake?.emailEnabled,shippoEnabled:enabled&&!!deps.intake?.shippoEnabled,mailDomainConfigured:!!deps.intake?.mailDomain});
+    res.json({enabled,submissionEnabled:enabled,supportedPayloadKinds:['TEXT','URL'],maxTextCharacters:20000,maxBodyBytes:65536,handoffEnabled:enabled&&!!deps.intake?.handoffEnabled,browserEnabled:enabled&&!!deps.intake?.browserEnabled,emailEnabled:enabled&&!!deps.intake?.emailEnabled,shippoEnabled:enabled&&!!deps.intake?.shippoEnabled,mailDomainConfigured:!!deps.intake?.mailDomain});
   }));
+  router.post('/submissions',route(async(req,res)=>{
+    const result=await submitIntakeSubmission(deps.db,deps.clock,actor(req),req.body,deps.intake,res.locals.intakeSessionId);
+    res.status(result.replayed?200:['RECEIVED','RESOLVING','RETRYABLE_FAILED'].includes(result.submission.state)?202:201).json(result.submission);
+  }));
+  router.get('/submissions',route(async(req,res)=>{res.json(await listIntakeSubmissions(deps.db,actor(req)));}));
+  router.get('/submissions/:id',route(async(req,res)=>{res.json(await getIntakeSubmission(deps.db,actor(req),req.params.id,res.locals.intakeSessionId));}));
+  router.post('/submissions/:id/resolve',route(async(req,res)=>{res.json(await resolveIntakeSubmission(deps.db,deps.clock,actor(req),req.params.id,req.body,deps.intake));}));
+  router.post('/submissions/:id/dismiss',route(async(req,res)=>{strictRecord(req.body??{},[]);res.json(await dismissIntakeSubmission(deps.db,deps.clock,actor(req),req.params.id));}));
+  router.post('/sessions',route(async(req,res)=>{strictRecord(req.body??{},[]);const user=actor(req);admit(deps,user);res.status(201).json(await createIntakeSession(deps.db,deps.clock,user));}));
+  router.delete('/sessions/:id',route(async(req,res)=>{res.json(await revokeIntakeSession(deps.db,deps.clock,actor(req),req.params.id));}));
+  router.post('/sessions/:id/revoke',route(async(req,res)=>{strictRecord(req.body??{},[]);res.json(await revokeIntakeSession(deps.db,deps.clock,actor(req),req.params.id));}));
   router.get('/orders',route(async(req,res)=>{res.json({orders:await listIntakeOrders(deps.db,actor(req))});}));
   router.get('/observations/:id',route(async(req,res)=>{
     const row=(await deps.db.query<{context:IntakeObservationInput;result:{reasons:string[]}}>('SELECT o.context,r.result FROM intake_source_observations o JOIN intake_delivery_receipts r ON r.observation_id=o.id WHERE o.id=$1 AND o.actor_user_id=$2',[req.params.id,actor(req)])).rows[0];

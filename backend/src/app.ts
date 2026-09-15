@@ -176,6 +176,7 @@ import { createPlatformRouter, createTenantManagementRouter } from "./platform/r
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
 import { intakeRouter } from "./http/intake-router.js";
+import {authenticateIntakeSession,INTAKE_SESSION_PREFIX} from './intake/sessions.js';
 import type { IntakeRuntimeConfig } from "./intake/runtime-config.js";
 import { exportEvidencePackageStream, getEvidenceReview } from "./domain/evidence-review.js";
 import {
@@ -189,7 +190,7 @@ import { captureSessionRouter, packingRelayRouter } from "./http/capture-router.
 import { signatureRouter } from "./http/signature-router.js";
 import { disclosureRouter, sendPrivateMedia } from "./http/disclosure-router.js";
 import { exportDisclosurePackageStream } from "./domain/disclosure-package.js";
-import { setCommerceAutomation, commerceOrderPolicy, getCommerceReviewSummary, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
+import { commerceAutomationProvidersFromEnv, commerceConnectionCapabilities, setCommerceAutomation, commerceOrderPolicy, getCommerceReviewSummary, enqueueCommerceWebhook, getCommerceOrderContext } from "./domain/commerce-automation.js";
 import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
 import { disabledEtsyRuntime, type EtsyRuntime } from "./integrations/etsy/runtime.js";
 import { createEtsyCommerceAdapter } from "./integrations/etsy/commerce-adapter.js";
@@ -321,7 +322,14 @@ export function createApp(deps: AppDependencies): Express {
       next();
       return;
     }
-    express.json({ limit: "2mb" })(req, res, next);
+    const submissionPath=/^\/me\/intake\/submissions(?:\/|$)/.test(req.path);
+    if(submissionPath&&(['POST','PUT','PATCH'].includes(req.method)||Number(req.header('content-length')??0)>0||!!req.header('transfer-encoding'))&&!req.is('application/json')){
+      next(new DomainError('UNSUPPORTED_INTAKE_CONTENT_TYPE','Order intake accepts JSON text or URL submissions only.',415));return;
+    }
+    express.json({limit:submissionPath?'64kb':'2mb'})(req,res,(error)=>{
+      if(submissionPath&&error?.type==='entity.too.large')return next(new DomainError('INPUT_TOO_LARGE','Share at most 20,000 characters and 64 KiB.',413));
+      next(error);
+    });
   });
   app.use((req,res,next) => {
     if (req.method === "PUT" && /^\/v1\/proofs\/[^/]+\/evidence\/[^/]+\/parts\/[^/]+$/.test(req.path)) { next(); return; }
@@ -434,7 +442,19 @@ export function createApp(deps: AppDependencies): Express {
 
   app.use("/v1", createPlatformRouter(deps));
 
-  app.use((req, _res, next) => {
+  app.use((req, res, next) => {
+    const scopedToken=req.header('authorization')?.replace(/^Bearer\s+/i,'')??'';
+    if(scopedToken.startsWith(INTAKE_SESSION_PREFIX)){
+      // Intake-only sessions are never elevated into the normal authentication adapter.
+      const selfRevoke=req.method==='POST'&&/^\/me\/intake\/sessions\/intake_session_[A-Za-z0-9]+\/revoke$/.test(req.path);
+      const allowed=req.method==='POST'&&req.path==='/me/intake/submissions'||req.method==='GET'&&/^\/me\/intake\/submissions\/intake_submission_[A-Za-z0-9]+$/.test(req.path)||selfRevoke;
+      if(!allowed){next(new DomainError('INTAKE_SESSION_SCOPE','Open PackProof to use this feature.',403));return;}
+      void authenticateIntakeSession(deps.db,deps.clock,scopedToken).then(session=>{
+        if(selfRevoke&&req.path!==`/me/intake/sessions/${session.sessionId}/revoke`)throw new DomainError('INTAKE_SESSION_SCOPE','This session can revoke only itself.',403);
+        req.packproofUserId=session.actorId;res.locals.intakeSessionId=session.sessionId;next();
+      }).catch(next);
+      return;
+    }
     if (
       req.path === "/health" ||
       req.path === "/meta" ||
@@ -547,7 +567,7 @@ export function createApp(deps: AppDependencies): Express {
       throw new DomainError('INTAKE_CLIENT_UPDATE_REQUIRED','Update PackProof before preparing a new order. Your existing recordings can still be recovered.',409);
     })().catch(next);
   });
-  app.use("/me/intake", distributedRateLimit(deps.db,{scope:"order-intake",limit:90,windowMs:60_000,subject:bearerUser}), intakeRouter(deps));
+  app.use("/me/intake", distributedRateLimit(deps.db,{scope:"order-intake",limit:90,windowMs:60_000,subject:bearerUser}), intakeRouter({...deps,integrations,credentialStore}));
   app.use("/proofs/:id/signature", signatureRouter(deps));
   app.use("/proofs/:id/disclosure", disclosureRouter(deps));
   app.use("/packing-requests", packingRequestsRouter(deps));
@@ -1613,6 +1633,7 @@ export function createApp(deps: AppDependencies): Express {
           readyOrderCount: await countReadyFulfillmentOrders(deps.db, row.id, actor),
           ...await getCommerceReviewSummary(deps.db, row.id),
           autoSyncEnabled: row.auto_sync_enabled,
+          ...await commerceConnectionCapabilities(deps.db, row, integrations, deps.devAuth ? undefined : commerceAutomationProvidersFromEnv()),
           orderPolicy: commerceOrderPolicy(row.adapter_key),
           sync,
         });
@@ -1622,7 +1643,7 @@ export function createApp(deps: AppDependencies): Express {
   );
 
   app.post("/me/commerce-connections/:connectionId/automation", asyncRoute(async (req, res) => {
-    res.json(await setCommerceAutomation(deps.db, deps.clock, bearerUser(req), req.params.connectionId, req.body?.enabled, integrations));
+    res.json(await setCommerceAutomation(deps.db, deps.clock, bearerUser(req), req.params.connectionId, req.body?.enabled, integrations, deps.devAuth ? undefined : commerceAutomationProvidersFromEnv()));
   }));
 
   app.post(

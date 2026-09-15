@@ -8,10 +8,13 @@ const TARGET = 'PackProofOrderShare';
 // Swift module shadows that pod during dependency scanning in the app target.
 const EXTENSION_MODULE_NAME = 'PackProofOrderShareExtension';
 const GROUP_KEY = 'com.apple.security.application-groups';
+const KEYCHAIN_KEY = 'keychain-access-groups';
+const EXTENSION_SOURCES = ['ShareViewController.swift', 'ShareIntakeTransport.swift', 'OrderShareStore.swift', 'OrderShareSessionStore.swift'];
 
 function shareIdentity(config) {
   const bundleIdentifier = config.ios?.bundleIdentifier || 'com.packproof.mobile';
-  return { bundleIdentifier: `${bundleIdentifier}.OrderShare`, appGroup: `group.${bundleIdentifier}.orders` };
+  return { bundleIdentifier: `${bundleIdentifier}.OrderShare`, appGroup: `group.${bundleIdentifier}.orders`,
+    keychainGroup: `$(AppIdentifierPrefix)${bundleIdentifier}.order-share` };
 }
 
 function extensionInfo(config, identity) {
@@ -20,12 +23,17 @@ function extensionInfo(config, identity) {
     CFBundleExecutable: '$(EXECUTABLE_NAME)', CFBundlePackageType: 'XPC!', CFBundleInfoDictionaryVersion: '6.0',
     CFBundleShortVersionString: '$(MARKETING_VERSION)', CFBundleVersion: '$(CURRENT_PROJECT_VERSION)',
     PackProofOrderShareAppGroup: identity.appGroup,
+    PackProofOrderShareKeychainGroup: identity.keychainGroup,
+    PackProofOrderShareAPIBaseURL: config.extra?.packproofApiBaseUrl || '',
     NSExtension: {
       NSExtensionPointIdentifier: 'com.apple.share-services',
       NSExtensionPrincipalClass: '$(PRODUCT_MODULE_NAME).ShareViewController',
       NSExtensionAttributes: {
         // Match only supported data. Do not advertise video, arbitrary files, or executable content.
-        NSExtensionActivationRule: 'extensionItems.@count > 0 AND SUBQUERY(extensionItems, $item, $item.attachments.@count <= 4 AND SUBQUERY($item.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.jpeg" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.png" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.heic" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "org.webmproject.webp" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf").@count == $item.attachments.@count).@count == extensionItems.@count',
+        NSExtensionActivationRule: {
+          NSExtensionActivationSupportsText: true,
+          NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+        },
       },
     },
   };
@@ -67,12 +75,20 @@ function addExtensionTarget(project, config) {
     project.addBuildPhase([], 'PBXSourcesBuildPhase', 'Sources', target.uuid);
     project.addBuildPhase([], 'PBXFrameworksBuildPhase', 'Frameworks', target.uuid);
     project.addBuildPhase([], 'PBXResourcesBuildPhase', 'Resources', target.uuid);
-    const group = project.addPbxGroup([], TARGET, TARGET);
-    const mainGroup = project.getFirstProject().firstProject.mainGroup;
-    project.addToPbxGroup(group.uuid, mainGroup);
-    for (const name of ['ShareViewController.swift', 'OrderShareStore.swift']) {
-      project.addSourceFile(name, { target: target.uuid }, group.uuid);
-    }
+  }
+  // Upgrade existing generated targets as well as creating new ones. A repeated
+  // prebuild must neither omit new Swift files nor duplicate source membership.
+  const existingGroup = Object.entries(objects.PBXGroup || {}).find(([key, group]) =>
+    !key.endsWith('_comment') && String(group.name || group.path).replace(/"/g, '') === TARGET);
+  const group = existingGroup ? { uuid: existingGroup[0] } : project.addPbxGroup([], TARGET, TARGET);
+  if (!existingGroup) project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
+  const sourcePhase = target.pbxNativeTarget.buildPhases.map(item => objects.PBXSourcesBuildPhase[item.value]).find(Boolean);
+  for (const name of EXTENSION_SOURCES) {
+    const included = sourcePhase.files.some(item => {
+      const file = objects.PBXFileReference[objects.PBXBuildFile[item.value]?.fileRef];
+      return String(file?.path || '').replace(/"/g, '').split('/').pop() === name;
+    });
+    if (!included) project.addSourceFile(name, { target: target.uuid }, group.uuid);
   }
   // The extension is a separate executable: its own resource phase must copy
   // the manifest even when the containing app includes the pod privacy bundle.
@@ -113,9 +129,11 @@ function addExtensionTarget(project, config) {
   const targetAttributes = attributes.TargetAttributes[target.uuid] ??= {};
   targetAttributes.SystemCapabilities ??= {};
   targetAttributes.SystemCapabilities['com.apple.ApplicationGroups.iOS'] = { enabled: 1 };
+  targetAttributes.SystemCapabilities['com.apple.Keychain'] = { enabled: 1 };
   const mainAttributes = attributes.TargetAttributes[project.getFirstTarget().uuid] ??= {};
   mainAttributes.SystemCapabilities ??= {};
   mainAttributes.SystemCapabilities['com.apple.ApplicationGroups.iOS'] = { enabled: 1 };
+  mainAttributes.SystemCapabilities['com.apple.Keychain'] = { enabled: 1 };
   return project;
 }
 
@@ -124,26 +142,36 @@ function withIOSOrderShare(config) {
   config.ios ??= {};
   config.ios.entitlements ??= {};
   config.ios.entitlements[GROUP_KEY] = [...new Set([...(config.ios.entitlements[GROUP_KEY] || []), identity.appGroup])];
+  config.ios.entitlements[KEYCHAIN_KEY] = [...new Set([...(config.ios.entitlements[KEYCHAIN_KEY] || []), identity.keychainGroup])];
   config.extra ??= {}; config.extra.eas ??= {}; config.extra.eas.build ??= {};
   config.extra.eas.build.experimental ??= {}; config.extra.eas.build.experimental.ios ??= {};
   const declarations = config.extra.eas.build.experimental.ios.appExtensions ??= [];
-  const declaration = { targetName: TARGET, bundleIdentifier: identity.bundleIdentifier, entitlements: { [GROUP_KEY]: [identity.appGroup] } };
+  const declaration = { targetName: TARGET, bundleIdentifier: identity.bundleIdentifier, entitlements: { [GROUP_KEY]: [identity.appGroup], [KEYCHAIN_KEY]: [identity.keychainGroup] } };
   const found = declarations.findIndex(item => item.targetName === TARGET);
   if (found < 0) declarations.push(declaration); else declarations[found] = declaration;
   config = withInfoPlist(config, mod => {
-    mod.modResults.PackProofOrderShareAppGroup = identity.appGroup; return mod;
+    mod.modResults.PackProofOrderShareAppGroup = identity.appGroup;
+    mod.modResults.PackProofOrderShareKeychainGroup = identity.keychainGroup;
+    mod.modResults.PackProofOrderShareAPIBaseURL = config.extra?.packproofApiBaseUrl || '';
+    return mod;
   });
   config = withEntitlementsPlist(config, mod => {
-    mod.modResults[GROUP_KEY] = [...new Set([...(mod.modResults[GROUP_KEY] || []), identity.appGroup])]; return mod;
+    mod.modResults[GROUP_KEY] = [...new Set([...(mod.modResults[GROUP_KEY] || []), identity.appGroup])];
+    mod.modResults[KEYCHAIN_KEY] = [...new Set([...(mod.modResults[KEYCHAIN_KEY] || []), identity.keychainGroup])];
+    return mod;
   });
   config = withDangerousMod(config, ['ios', async mod => {
     const destination = path.join(mod.modRequest.platformProjectRoot, TARGET);
     fs.mkdirSync(destination, { recursive: true });
-    fs.copyFileSync(path.join(__dirname, 'order-share-ios', 'ShareViewController.swift'), path.join(destination, 'ShareViewController.swift'));
+    for (const name of ['ShareViewController.swift', 'ShareIntakeTransport.swift']) {
+      fs.copyFileSync(path.join(__dirname, 'order-share-ios', name), path.join(destination, name));
+    }
     fs.copyFileSync(path.join(__dirname, 'order-share-ios', 'PrivacyInfo.xcprivacy'), path.join(destination, 'PrivacyInfo.xcprivacy'));
-    fs.copyFileSync(path.join(__dirname, '..', 'modules', 'packproof-order-share', 'ios', 'OrderShareStore.swift'), path.join(destination, 'OrderShareStore.swift'));
+    for (const name of ['OrderShareStore.swift', 'OrderShareSessionStore.swift']) {
+      fs.copyFileSync(path.join(__dirname, '..', 'modules', 'packproof-order-share', 'ios', name), path.join(destination, name));
+    }
     fs.writeFileSync(path.join(destination, `${TARGET}-Info.plist`), plist.build(extensionInfo(mod, identity)));
-    fs.writeFileSync(path.join(destination, `${TARGET}.entitlements`), plist.build({ [GROUP_KEY]: [identity.appGroup] }));
+    fs.writeFileSync(path.join(destination, `${TARGET}.entitlements`), plist.build({ [GROUP_KEY]: [identity.appGroup], [KEYCHAIN_KEY]: [identity.keychainGroup] }));
     return mod;
   }]);
   return withXcodeProject(config, mod => {

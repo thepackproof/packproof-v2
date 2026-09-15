@@ -16,10 +16,11 @@ test('declares extension credentials before EAS prebuild without losing unrelate
   const result = withShare(withShare(config));
   assert.equal(result.extra.eas.projectId, 'preserved');
   assert.equal(result.ios.entitlements['aps-environment'], 'development');
+  assert.deepEqual(result.ios.entitlements['keychain-access-groups'], ['$(AppIdentifierPrefix)com.packproof.test.order-share']);
   assert.deepEqual(result.ios.entitlements['com.apple.security.application-groups'], ['group.existing', 'group.com.packproof.test.orders']);
   assert.deepEqual(result.extra.eas.build.experimental.ios.appExtensions, [
     { targetName: 'OtherExtension' },
-    { targetName: 'PackProofOrderShare', bundleIdentifier: 'com.packproof.test.OrderShare', entitlements: { 'com.apple.security.application-groups': ['group.com.packproof.test.orders'] } },
+    { targetName: 'PackProofOrderShare', bundleIdentifier: 'com.packproof.test.OrderShare', entitlements: { 'com.apple.security.application-groups': ['group.com.packproof.test.orders'], 'keychain-access-groups': ['$(AppIdentifierPrefix)com.packproof.test.order-share'] } },
   ]);
 });
 
@@ -29,8 +30,10 @@ test('extension declares constrained Share Sheet activation and version settings
   assert.equal(info.NSExtension.NSExtensionPrincipalClass, '$(PRODUCT_MODULE_NAME).ShareViewController');
   assert.equal(info.CFBundleVersion, '$(CURRENT_PROJECT_VERSION)');
   assert.equal(info.CFBundleShortVersionString, '$(MARKETING_VERSION)');
-  assert.doesNotMatch(info.NSExtension.NSExtensionAttributes.NSExtensionActivationRule, /TRUEPREDICATE|public\.movie/);
-  assert.match(info.NSExtension.NSExtensionAttributes.NSExtensionActivationRule, /com\.adobe\.pdf/);
+  assert.deepEqual(info.NSExtension.NSExtensionAttributes.NSExtensionActivationRule, {
+    NSExtensionActivationSupportsText: true, NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+  });
+  assert.equal(info.PackProofOrderShareKeychainGroup, '$(AppIdentifierPrefix)com.packproof.mobile.order-share');
 });
 
 test('Android text shares keep cold-start and warm-start normalization', () => {
@@ -38,14 +41,32 @@ test('Android text shares keep cold-start and warm-start normalization', () => {
   const result = transformMainActivity(source);
   assert.match(result, /setIntent\(packproofOrderShare\(intent\)\)\s+super\.onCreate\(null\)/);
   assert.match(result, /override fun onNewIntent/);
-  assert.match(result, /text.length <= 20000/);
+  assert.match(result, /OrderShareStore.receive\(this, incoming\)/);
+  assert.doesNotMatch(result, /appendQueryParameter\("text"/);
   assert.equal(transformMainActivity(result), result);
 });
 
-test('share privacy manifests cover only local container metadata and explicitly shared files', () => {
+test('Android prebuild upgrades the legacy raw-query receiver and fails closed on incompatible handlers', () => {
+  const legacy = `class MainActivity {
+  private fun packproofOrderShare(incoming: android.content.Intent): android.content.Intent {
+    return incoming.apply { data = builder.appendQueryParameter("text", text).build() }
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(packproofOrderShare(intent)) }
+}`;
+  const result = transformMainActivity(legacy);
+  assert.match(result, /OrderShareStore.receive\(this, incoming\)/);
+  assert.doesNotMatch(result, /appendQueryParameter/);
+  assert.equal((result.match(/override fun onNewIntent/g) || []).length, 1);
+  assert.equal(transformMainActivity(result), result);
+  assert.throws(() => transformMainActivity('class MainActivity { fun packproofOrderShare() {} }'), /unsupported existing share handler/);
+  assert.throws(() => transformMainActivity('class MainActivity { fun onCreate() { super.onCreate(null) } override fun onNewIntent() {} }'), /merge existing onNewIntent/);
+});
+
+test('share privacy manifests cover only local container metadata', () => {
   const extension = plist.parse(fs.readFileSync(path.resolve(__dirname, '../plugins/order-share-ios/PrivacyInfo.xcprivacy'), 'utf8'));
   const pod = plist.parse(fs.readFileSync(path.resolve(__dirname, '../modules/packproof-order-share/ios/PrivacyInfo.xcprivacy'), 'utf8'));
-  assert.deepEqual(extension.NSPrivacyAccessedAPITypes, [{ NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp', NSPrivacyAccessedAPITypeReasons: ['C617.1', '3B52.1'] }]);
+  assert.deepEqual(extension.NSPrivacyAccessedAPITypes, [{ NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp', NSPrivacyAccessedAPITypeReasons: ['C617.1'] }]);
   assert.deepEqual(pod.NSPrivacyAccessedAPITypes, [{ NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp', NSPrivacyAccessedAPITypeReasons: ['C617.1'] }]);
   assert.equal(extension.NSPrivacyTracking, false);
   assert.equal(pod.NSPrivacyTracking, false);
@@ -63,7 +84,13 @@ test('generated Xcode extension is embedded, depends on its Swift sources, and r
   const objects = project.hash.project.objects;
   const sourcePhase = target.buildPhases.map(item => objects.PBXSourcesBuildPhase[item.value]).find(Boolean);
   const sourceNames = sourcePhase.files.map(file => objects.PBXBuildFile[file.value].fileRef_comment);
-  assert.deepEqual(sourceNames.sort(), ['OrderShareStore.swift', 'ShareViewController.swift']);
+  assert.deepEqual(sourceNames.sort(), ['OrderShareSessionStore.swift', 'OrderShareStore.swift', 'ShareIntakeTransport.swift', 'ShareViewController.swift']);
+  for (const name of sourceNames) {
+    const sourceFolder = ['OrderShareSessionStore.swift', 'OrderShareStore.swift'].includes(name)
+      ? '../modules/packproof-order-share/ios' : '../plugins/order-share-ios';
+    assert.equal(fs.readFileSync(path.resolve(__dirname, '../ios/PackProofOrderShare', name), 'utf8'),
+      fs.readFileSync(path.resolve(__dirname, sourceFolder, name), 'utf8'), `${name} must match the candidate source`);
+  }
   const resourcePhase = target.buildPhases.map(item => objects.PBXResourcesBuildPhase[item.value]).find(Boolean);
   const resourcePaths = () => resourcePhase.files.map(file => objects.PBXFileReference[objects.PBXBuildFile[file.value].fileRef].path.replaceAll('"', ''));
   assert.deepEqual(resourcePaths(), ['PackProofOrderShare/PrivacyInfo.xcprivacy']);
@@ -106,4 +133,8 @@ test('generated Xcode extension is embedded, depends on its Swift sources, and r
   const extensionEntitlements = plist.parse(fs.readFileSync(path.resolve(__dirname, '../ios/PackProofOrderShare/PackProofOrderShare.entitlements'), 'utf8'));
   assert.deepEqual(extensionEntitlements['com.apple.security.application-groups'], ['group.com.packproof.mobile.orders']);
   assert.ok(appEntitlements['com.apple.security.application-groups'].includes('group.com.packproof.mobile.orders'));
+  assert.deepEqual(extensionEntitlements['keychain-access-groups'], ['$(AppIdentifierPrefix)com.packproof.mobile.order-share']);
+  assert.ok(appEntitlements['keychain-access-groups'].includes('$(AppIdentifierPrefix)com.packproof.mobile.order-share'));
+  assert.equal(appInfo.PackProofOrderShareKeychainGroup, extensionInfo.PackProofOrderShareKeychainGroup);
+  assert.equal(appInfo.PackProofOrderShareAPIBaseURL, extensionInfo.PackProofOrderShareAPIBaseURL);
 });

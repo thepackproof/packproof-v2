@@ -2,8 +2,12 @@ import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { generateAssociations } from "./app-associations.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
+// Release builds that declare verified links must supply the actual platform
+// signing identity. Unrelated web-only releases keep existing documents intact.
+if (process.env.PACKPROOF_LINK_PLATFORMS) await generateAssociations({ platform: process.env.PACKPROOF_LINK_PLATFORMS });
 const result = spawnSync("npm", ["run", "build"], {
   cwd: path.join(root, "web"),
   stdio: "inherit",

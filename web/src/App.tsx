@@ -1,4 +1,6 @@
 import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchScreen";
+import { SubmissionIntakePanel } from "./components/SubmissionIntakePanel";
+import { IntakeLinkFallback, IntakeSignInContext } from "./screens/IntakeLinkFallback";
 import type {EngineSession} from "./capture/engine";
 import { applyLocalWork } from "./proof-presentation";
 import { listRecoverableRecordings } from "./capture-queue";
@@ -67,6 +69,7 @@ import { AuthFrame } from "./site/PublicSite";
 type Route =
   | { name: "proofs"; view: "all" | "attention" | "completed"; query: string }
   | { name: "capture-launch" }
+  | { name: "intake-handoff" }
   | { name: "create" }
   | { name: "scan" }
   | { name: "account" }
@@ -104,6 +107,7 @@ function parseHref(href: string): Route {
     return { name: "proofs", ...readProofListState(url) };
   }
   if (pathname === "/capture") return {name:"capture-launch"};
+  if (/^\/app\/capture\/[A-Za-z0-9_-]{1,160}$/.test(pathname)) return { name: "intake-handoff" };
   if (pathname === "/developer") return { name: "developer" };
   if (pathname === "/account") {
     return { name: "account" };
@@ -270,6 +274,7 @@ function needsProof(name: Route["name"]): boolean {
 }
 
 function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "create-account" }) {
+  const [enteredFromIntakeLink] = useState(() => window.location.pathname.startsWith("/app/"));
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -622,6 +627,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   if (!session) {
     return (
       <AuthFrame>
+        {enteredFromIntakeLink ? <IntakeSignInContext /> : null}
         <SignInScreen
           initialView={authInitialView}
           onGo={go}
@@ -803,6 +809,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         <CreateProofScreen
           readyOrders={<ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />}
           onPreviewIntake={(text) => api.previewOrderIntake(text)}
+          renderIntakePanel={onReview => <SubmissionIntakePanel key={`${session.apiBaseUrl}:${session.userId}`} api={api} userId={session.userId} onPreview={text => api.previewOrderIntake(text)} onReview={onReview} onOpenProof={id => go(`/proofs/${encodeURIComponent(id)}`)} />}
           busy={busy}
           error={error}
           development={import.meta.env.DEV}
@@ -930,6 +937,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       ) : null}
 
       {route.name === "capture-launch" ? <CaptureLaunchScreen api={api} onBound={bound=>{setCaptureEngineSession(bound);go(`/proofs/${encodeURIComponent(bound.context.proofId)}/capture`);}} /> : null}
+      {route.name === "intake-handoff" ? <IntakeLinkFallback onQueue={() => go("/proofs?filter=attention")} /> : null}
       {route.name === "station" ? (
         <PackingStationScreen
           authorizedEngineSession={captureEngineSession?.context.proofId===route.proofId?captureEngineSession:null}

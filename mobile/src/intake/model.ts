@@ -7,7 +7,7 @@ export interface IntakeDevice { id: string; name: string; state: string; expires
 export interface IntakeDeviceCredentials { deviceId: string; deviceToken: string; pairingCode?: string; }
 export interface IntakeHandoff { id: string; snapshotId: string; sequence: number; expiresAt: string; state: string; orderSnapshot: IntakeSnapshot; }
 export interface IntakePending { device: IntakeDevice; handoffs: IntakeHandoff[]; activeCapture?: (IntakeAcceptance & { handoff: IntakeHandoff }) | null; }
-export interface IntakeCapabilities { enabled: boolean; handoffEnabled: boolean; emailEnabled: boolean; browserEnabled: boolean; shippoEnabled: boolean; mailDomainConfigured: boolean; }
+export interface IntakeCapabilities { submissionEnabled?: boolean; supportedPayloadKinds?: string[]; maxTextCharacters?: number; maxBodyBytes?: number; enabled: boolean; handoffEnabled: boolean; emailEnabled: boolean; browserEnabled: boolean; shippoEnabled: boolean; mailDomainConfigured: boolean; }
 
 export function intakeItemLabel(item: IntakeItem): string {
   return [item.title || item.description || 'Item description missing', item.variant, item.quantity == null ? 'Quantity missing' : `Quantity ${item.quantity}`].filter(Boolean).join(' · ');

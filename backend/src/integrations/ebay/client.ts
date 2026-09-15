@@ -1,3 +1,4 @@
+import { rateLimitDelay } from "../rate-limit-delay.js";
 import {
   providerResponseInvalid,
   providerAuthFailed,
@@ -83,6 +84,7 @@ export function createHttpEbayClient(fetchImpl: typeof fetch = fetch): EbayClien
         body: new URLSearchParams({ token: input.token }).toString(),
       });
       if (!response.ok && response.status !== 400) {
+        if (response.status === 429) throw rateLimitDelay(response.headers.get("retry-after"));
         mapEbayHttpError(response.status);
       }
     },
@@ -109,6 +111,7 @@ async function tokenRequest(
     body: new URLSearchParams(body).toString(),
     signal: AbortSignal.timeout(20_000),
   });
+  if (response.status === 429) throw rateLimitDelay(response.headers.get("retry-after"));
   const payload = await parseJsonOrNull(response);
   if (!response.ok) {
     const oauthError = asRecord(payload).error;
@@ -153,7 +156,8 @@ async function ebayJson(
   if (input.marketplaceId) {
     headers["X-EBAY-C-MARKETPLACE-ID"] = input.marketplaceId;
   }
-  const response = await fetchImpl(input.url, { headers, signal: AbortSignal.timeout(20_000) });
+  const response = await fetchImpl(input.url, { headers, signal: AbortSignal.timeout(20_000), redirect: "error" });
+  if (response.status === 429) throw rateLimitDelay(response.headers.get("retry-after"));
   const payload = await parseJsonOrNull(response);
   if (!response.ok) {
     mapEbayHttpError(response.status);

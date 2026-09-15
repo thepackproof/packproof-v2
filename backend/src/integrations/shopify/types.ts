@@ -63,5 +63,6 @@ export interface ShopifyClient {
   getShop(input: { shop: string; accessToken: string }): Promise<ShopifyShopIdentity>;
   listOrders(input: { shop: string; accessToken: string; limit?: number; includeProductIdentifiers?: boolean }): Promise<ShopifyOrder[]>;
   listOrdersPage?(input: ShopifyOrderPageInput): Promise<{orders:ShopifyOrder[];cursor:string|null}>;
+  getOrder?(input: { shop: string; accessToken: string; orderId: string; includeProductIdentifiers?: boolean; onProgress?: () => Promise<void> }): Promise<ShopifyOrder>;
   revoke(input: { shop: string; accessToken: string }): Promise<void>;
 }

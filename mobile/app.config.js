@@ -26,6 +26,9 @@ const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
 const iosBuildNumber = env("PACKPROOF_IOS_BUILD_NUMBER", "1");
 if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUMBER must be a positive integer");
+const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "50"));
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 50 || androidVersionCode > 2100000000)
+  throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 49");
 
 if (isRelease) {
   if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");
@@ -44,7 +47,7 @@ module.exports = {
     name: isCameraSpike ? "PackProof Camera Test" : "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
-    version: "0.3.20",
+    version: "0.3.21",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
@@ -62,6 +65,7 @@ module.exports = {
       bundleIdentifier: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
       buildNumber: iosBuildNumber,
       supportsTablet: false,
+      associatedDomains: ["applinks:thepackproof.com", "applinks:www.thepackproof.com"],
       config: { usesNonExemptEncryption: false },
       infoPlist: {
         NSCameraUsageDescription:
@@ -76,7 +80,7 @@ module.exports = {
     },
     android: {
       package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
-      versionCode: 49,
+      versionCode: androidVersionCode,
       allowBackup: false,
       usesCleartextTraffic: !isPlayRelease,
       ...(process.env.GOOGLE_SERVICES_JSON ? {googleServicesFile:process.env.GOOGLE_SERVICES_JSON} : {}),
@@ -85,6 +89,11 @@ module.exports = {
         backgroundColor: "#E9EEF4",
       },
       permissions: isCameraSpike ? ["CAMERA", "RECORD_AUDIO"] : ["CAMERA"],
+      intentFilters: isCameraSpike ? [] : [{
+        action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"],
+        data: ["thepackproof.com", "www.thepackproof.com"].flatMap(host =>
+          ["/app/packing", "/app/proofs/", "/app/capture/"].map(pathPrefix => ({scheme:"https",host,pathPrefix}))),
+      }],
     },
     plugins: [
       ...(!isCameraSpike ? ["./plugins/with-order-share"] : []),

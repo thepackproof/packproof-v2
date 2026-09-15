@@ -52,6 +52,6 @@ test('Apple build number can advance without changing the Android release identi
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.ios.buildNumber, '12');
-  assert.equal(app.android.versionCode, 49);
+  assert.equal(app.android.versionCode, 50);
   assert.notEqual(config({ PACKPROOF_IOS_BUILD_NUMBER: 'invalid' }).status, 0);
 });

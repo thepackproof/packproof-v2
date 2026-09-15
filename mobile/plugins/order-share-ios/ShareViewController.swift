@@ -1,209 +1,198 @@
 import UIKit
 import UniformTypeIdentifiers
-import ImageIO
-import PDFKit
 
 final class ShareViewController: UIViewController {
+  private enum Phase { case loading, ready, saving, saved, failed, closed }
+  private var phase = Phase.loading
   private let status = UILabel()
-  private let saveButton = UIButton(type: .system)
-  private let cancellationLock = NSLock()
-  private var progressValue: Progress?
-  private var progress: Progress? {
-    get { cancellationLock.lock(); defer { cancellationLock.unlock() }; return progressValue }
-    set {
-      cancellationLock.lock()
-      progressValue = newValue
-      let shouldCancel = cancellationValue
-      cancellationLock.unlock()
-      // The provider may return its Progress after the user already cancelled.
-      if shouldCancel { newValue?.cancel() }
-    }
-  }
-  private var cancellationValue = false
-  private var cancelled: Bool {
-    get { cancellationLock.lock(); defer { cancellationLock.unlock() }; return cancellationValue }
-    set { cancellationLock.lock(); cancellationValue = newValue; cancellationLock.unlock() }
-  }
-  private var started = false
-  private var inbox: OrderShareStore?
-  private var shareID: String?
-  private var directory: URL?
+  private let account = UILabel()
+  private let summary = UILabel()
+  private let addButton = UIButton(type: .system)
+  private let cancelButton = UIButton(type: .system)
+  private let worker = DispatchQueue(label: "com.packproof.order-share.save", qos: .userInitiated)
+  private var timeout: DispatchWorkItem?
+  private var transport: ShareIntakeTransport?
+  private var accountId: String?
   private var textParts: [String] = []
-  private var files: [OrderShareAttachment] = []
-  private let worker = DispatchQueue(label: "com.packproof.order-share.import")
+  private var webURLs: [String] = []
+  private var payloadText = ""
+  private var payloadKind = "TEXT"
 
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
-    let title = UILabel(); title.text = "Save to PackProof"; title.font = .preferredFont(forTextStyle: .title2)
-    title.adjustsFontForContentSizeCategory = true
-    status.text = "Save an order confirmation, receipt, or shipping link. Open PackProof afterward to review the details. Shared orders expire after 7 days."
-    status.font = .preferredFont(forTextStyle: .body); status.numberOfLines = 0
-    status.adjustsFontForContentSizeCategory = true
-    saveButton.setTitle("Save order", for: .normal)
-    saveButton.addTarget(self, action: #selector(save), for: .touchUpInside)
-    let cancel = UIButton(type: .system); cancel.setTitle("Cancel", for: .normal)
-    cancel.addTarget(self, action: #selector(cancelShare), for: .touchUpInside)
-    let stack = UIStackView(arrangedSubviews: [title, status, saveButton, cancel])
-    stack.axis = .vertical; stack.spacing = 20; stack.translatesAutoresizingMaskIntoConstraints = false
-    view.addSubview(stack)
+    let title = UILabel(); title.text = "Add to PackProof"; title.font = .preferredFont(forTextStyle: .title2)
+    for label in [title, account, summary, status] {
+      label.numberOfLines = 0; label.adjustsFontForContentSizeCategory = true
+      if label !== title { label.font = .preferredFont(forTextStyle: .body) }
+    }
+    summary.textColor = .secondaryLabel; summary.lineBreakMode = .byTruncatingTail; summary.numberOfLines = 5
+    account.text = "Checking destination account…"; status.text = "Loading shared details…"
+    addButton.setTitle("Add to PackProof", for: .normal); addButton.isEnabled = false
+    addButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+    addButton.titleLabel?.adjustsFontForContentSizeCategory = true
+    addButton.addTarget(self, action: #selector(save), for: .touchUpInside)
+    cancelButton.setTitle("Cancel", for: .normal)
+    cancelButton.titleLabel?.font = .preferredFont(forTextStyle: .body)
+    cancelButton.titleLabel?.adjustsFontForContentSizeCategory = true
+    cancelButton.addTarget(self, action: #selector(closeShare), for: .touchUpInside)
+    let stack = UIStackView(arrangedSubviews: [title, account, summary, status, addButton, cancelButton])
+    stack.axis = .vertical; stack.spacing = 18; stack.translatesAutoresizingMaskIntoConstraints = false
+    let scroll = UIScrollView(); scroll.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(scroll); scroll.addSubview(stack)
     NSLayoutConstraint.activate([
-      stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
-      stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
-      stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
-      stack.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24)
+      scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+      scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 24),
+      stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
+      stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
+      stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -24),
+      stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48),
+      addButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+      cancelButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
     ])
+    loadInput()
+  }
+
+  private func loadInput() {
+    let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
+    let providers = items.flatMap { $0.attachments ?? [] }
+    guard providers.count <= 4, items.count <= 4 else {
+      fail("Share one order link or a small selection of plain text."); return
+    }
+    // Some hosts place the order number in attributedContentText alongside a URL provider.
+    textParts = items.compactMap { $0.attributedContentText?.string }
+    let loadingTimeout = DispatchWorkItem { [weak self] in
+      guard let self, self.phase == .loading else { return }
+      self.fail("The source app did not finish sharing. Cancel and try sharing its text or link again.")
+    }
+    timeout = loadingTimeout; DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: loadingTimeout)
+    worker.async { [weak self] in
+      do {
+        let store = try OrderShareStore(); let destination = try store.activeAccount()
+        let credential = try? OrderShareSessionStore().read()
+        DispatchQueue.main.async {
+          guard let self, self.phase == .loading else { return }
+          self.accountId = destination
+          if destination == nil { self.account.text = "No account selected. Open PackProof later to choose where to add this." }
+          else if let credential, credential.accountId == destination { self.account.text = "Destination: \(credential.accountLabel)" }
+          else { self.account.text = "Destination: your signed-in PackProof account" }
+          self.load(providers, at: 0)
+        }
+      } catch { DispatchQueue.main.async { self?.fail(error.localizedDescription) } }
+    }
+  }
+
+  private func load(_ providers: [NSItemProvider], at index: Int) {
+    guard phase == .loading else { return }
+    guard index < providers.count else { prepare(); return }
+    let provider = providers[index]
+    let isURL = provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+    let type = isURL ? UTType.url : UTType.plainText
+    guard provider.hasItemConformingToTypeIdentifier(type.identifier) else {
+      fail("This share contains an unsupported file. Share the order's text or web link."); return
+    }
+    // A URL representation takes priority over a second text representation of
+    // the same provider. No attachment copying or webpage fetch occurs here.
+    provider.loadItem(forTypeIdentifier: type.identifier, options: nil) { [weak self] value, error in
+      DispatchQueue.main.async {
+        guard let self, self.phase == .loading else { return }
+        var text: String?
+        if let url = value as? URL { text = url.absoluteString }
+        else if let string = value as? String { text = string }
+        else if let string = value as? NSAttributedString { text = string.string }
+        else if let data = value as? Data, data.count <= OrderShareStore.maxRequestBytes { text = String(data: data, encoding: .utf8) }
+        guard error == nil, let text, text.utf16.count <= OrderShareStore.maxTextLength else {
+          self.fail("The shared details could not be read. Share plain text or a link up to 20,000 characters."); return
+        }
+        if isURL {
+          do { try OrderShareStore.validateWebURL(text) } catch { self.fail(error.localizedDescription); return }
+          if !self.webURLs.contains(text) { self.webURLs.append(text) }
+        } else if !self.textParts.contains(text) { self.textParts.append(text) }
+        self.load(providers, at: index + 1)
+      }
+    }
+  }
+
+  private func prepare() {
+    timeout?.cancel(); timeout = nil
+    guard webURLs.count <= 1 else { fail("Share one order link at a time."); return }
+    let usefulText = textParts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty && !webURLs.contains($0) }
+    payloadText = (webURLs + usefulText).joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !payloadText.isEmpty, payloadText.utf16.count <= OrderShareStore.maxTextLength else {
+      fail("Share plain order text or a web link up to 20,000 characters."); return
+    }
+    if (try? OrderShareStore.validateWebURL(payloadText)) != nil { payloadKind = "URL" }
+    else { payloadKind = "TEXT" }
+    // Never display query values or URL fragments in the extension preview.
+    if payloadKind == "URL", let url = URL(string: payloadText) { summary.text = "Order link from \(url.host ?? "shared website")" }
+    else { summary.text = String(payloadText.prefix(320)) }
+    status.text = "Save these details to prepare an order for packing."
+    phase = .ready; addButton.isEnabled = true
   }
 
   @objc private func save() {
-    guard !started else { return }
-    started = true; saveButton.isEnabled = false; status.text = "Saving order…"
-    let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
-    let providers = items.flatMap { $0.attachments ?? [] }
-    // Text-only hosts may use attributedContentText rather than a provider.
-    if providers.isEmpty { textParts = items.compactMap { $0.attributedContentText?.string } }
-    guard providers.count <= OrderShareStore.maxAttachments else {
-      fail(OrderShareError.invalid("Share up to 4 items at a time, with a total size of 20 MB or less.")); return
-    }
-    worker.async { [self] in
+    guard phase == .ready else { return }
+    phase = .saving; addButton.isEnabled = false; cancelButton.isEnabled = false; status.text = "Saving…"
+    let text = payloadText, kind = payloadKind, destination = accountId
+    worker.async { [weak self] in
       do {
-        let store = try OrderShareStore(); let reservation = try store.reserve()
-        inbox = store; shareID = reservation.0; directory = reservation.1
-        load(providers, index: 0)
-      } catch { fail(error) }
-    }
-  }
-
-  private func load(_ providers: [NSItemProvider], index: Int) {
-    guard !cancelled else { cleanup(); return }
-    guard index < providers.count else { publish(); return }
-    let provider = providers[index]
-    // Prefer a concrete file to public.url, because file providers also advertise URLs.
-    let supported: [(UTType, String, String)] = [(.pdf, "pdf", "application/pdf"), (.jpeg, "jpg", "image/jpeg"),
-      (.png, "png", "image/png"), (.heic, "heic", "image/heic"), (.webP, "webp", "image/webp")]
-    if let match = supported.first(where: { provider.hasItemConformingToTypeIdentifier($0.0.identifier) }) {
-      progress = provider.loadFileRepresentation(forTypeIdentifier: match.0.identifier) { [self] url, error in
-        // The provider's temporary file is valid only inside this callback. Copy now.
-        guard !cancelled else { cleanup(); return }
-        do {
-          guard let url else { throw error ?? OrderShareError.invalid("The shared file could not be opened.") }
-          let copied = try copyFile(url, ext: match.1, contentType: match.2)
-          worker.async { [self] in
-            guard !cancelled else { cleanup(); return }
-            files.append(copied); load(providers, index: index + 1)
-          }
-        } catch { fail(error) }
-      }
-    } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-      provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [self] value, error in
-        worker.async { [self] in
-          guard !cancelled else { cleanup(); return }
-          guard let url = value as? URL, let scheme = url.scheme?.lowercased(),
-                ["https", "http"].contains(scheme), url.host != nil, url.user == nil, url.password == nil else {
-            fail(error ?? OrderShareError.invalid("Share a public web link, order text, image, or PDF.")); return
-          }
-          textParts.append(url.absoluteString); load(providers, index: index + 1)
+        let store = try OrderShareStore()
+        let saved = try store.save(text: text, kind: kind, surface: "IOS_SHARE", accountId: destination)
+        let credential = try? OrderShareSessionStore().read()
+        DispatchQueue.main.async {
+          guard let self, self.phase == .saving else { return }
+          if let credential, credential.isValid, credential.accountId == saved.accountId {
+            let transport = ShareIntakeTransport(); self.transport = transport
+            transport.submit(saved, credential: credential) { [weak self] receipt in self?.finish(saved, receipt: receipt) }
+          } else { self.finish(saved, receipt: nil) }
         }
-      }
-    } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-      provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { [self] value, error in
-        worker.async { [self] in
-          guard !cancelled else { cleanup(); return }
-          guard let text = value as? String, text.utf16.count <= OrderShareStore.maxTextLength else {
-            fail(error ?? OrderShareError.invalid("Shared text must be 20,000 characters or fewer.")); return
-          }
-          textParts.append(text); load(providers, index: index + 1)
+      } catch { DispatchQueue.main.async { self?.fail(error.localizedDescription) } }
+    }
+  }
+
+  private func finish(_ manifest: OrderShareManifest, receipt: ShareIntakeTransport.Receipt?) {
+    guard phase == .saving else { return }
+    transport = nil
+    guard let receipt else {
+      showSaved("Saved on this iPhone. Open PackProof within 7 days to finish adding it."); return
+    }
+    worker.async { [weak self] in
+      do {
+        try OrderShareStore().acknowledge(manifest.id, serverSubmissionId: receipt.submissionId)
+        DispatchQueue.main.async {
+          self?.showSaved(receipt.state == "READY" ? "Added to your packing queue."
+            : "Added to PackProof. Open PackProof to finish preparing this order.")
         }
+      } catch {
+        // Server accepted, but retain the local record if receipt persistence
+        // failed. Replaying its stable client ID reconciles the same submission.
+        DispatchQueue.main.async { self?.showSaved("Added to PackProof. Open PackProof to confirm its status.") }
       }
-    } else { fail(OrderShareError.invalid("This file type is not supported. Share a JPEG, PNG, HEIC, WebP, PDF, link, or plain text.")) }
-  }
-
-  private func copyFile(_ source: URL, ext: String, contentType: String) throws -> OrderShareAttachment {
-    guard source.isFileURL, let folder = directory else { throw OrderShareError.invalid("The shared file could not be opened.") }
-    let scoped = source.startAccessingSecurityScopedResource()
-    defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-    let values = try source.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
-    let size = values.fileSize ?? 0
-    guard values.isRegularFile == true, values.isSymbolicLink != true, size > 0, size <= OrderShareStore.maxFileBytes,
-          files.reduce(0, { $0 + $1.byteSize }) + size <= OrderShareStore.maxTotalBytes else {
-      throw OrderShareError.invalid("Each file must be 10 MB or less, with a total size of 20 MB or less.")
-    }
-    let name = "\(UUID().uuidString.lowercased()).\(ext)"
-    let destination = folder.appendingPathComponent(name)
-    // Bounded streaming avoids loading provider bytes into the extension's small memory budget.
-    guard let input = InputStream(url: source), let output = OutputStream(url: destination, append: false) else {
-      throw OrderShareError.invalid("The shared file could not be copied.")
-    }
-    input.open(); output.open()
-    defer { input.close(); output.close() }
-    var buffer = [UInt8](repeating: 0, count: 64 * 1024); var written = 0
-    while true {
-      guard !cancelled else { throw OrderShareError.invalid("Sharing cancelled.") }
-      let count = input.read(&buffer, maxLength: buffer.count)
-      guard count >= 0 else { throw input.streamError ?? OrderShareError.invalid("Could not read the shared file.") }
-      if count == 0 { break }
-      written += count
-      guard written <= size else { throw OrderShareError.invalid("The shared file changed while it was being copied.") }
-      var offset = 0
-      while offset < count {
-        let amount = buffer.withUnsafeBufferPointer { output.write($0.baseAddress! + offset, maxLength: count - offset) }
-        guard amount > 0 else { throw output.streamError ?? OrderShareError.invalid("Could not save the shared file.") }
-        offset += amount
-      }
-    }
-    guard written == size else { throw OrderShareError.invalid("The shared file was incomplete. Try sharing it again.") }
-    // Finish the destination stream before a decoder or manifest reader opens it.
-    input.close(); output.close()
-    try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: destination.path)
-    // Inspect actual bytes; the incoming filename/MIME declaration is not sufficient.
-    if contentType == "application/pdf" {
-      guard let pdf = CGPDFDocument(destination as CFURL), !pdf.isEncrypted,
-            pdf.numberOfPages > 0, pdf.numberOfPages <= 12 else {
-        throw OrderShareError.invalid("Share an unencrypted PDF containing 1–12 pages.")
-      }
-    } else {
-      guard let image = CGImageSourceCreateWithURL(destination as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
-            CGImageSourceGetCount(image) > 0,
-            let properties = CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any],
-            let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
-            let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
-            width.doubleValue > 0, height.doubleValue > 0, width.doubleValue * height.doubleValue <= 50_000_000 else {
-        throw OrderShareError.invalid("Share a supported image with a resolution of 50 megapixels or less.")
-      }
-    }
-    return OrderShareAttachment(filename: name, contentType: contentType, byteSize: written)
-  }
-
-  private func publish() {
-    guard !cancelled, let inbox, let shareID else { cleanup(); return }
-    do {
-      let text = textParts.joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
-      try inbox.publish(OrderShareManifest(version: 1, id: shareID, createdAt: Date().timeIntervalSince1970,
-                                           text: text, attachments: files))
-      DispatchQueue.main.async { [self] in
-        guard !cancelled else { cleanup(); return }
-        status.text = "Saved. Open PackProof to review this order."
-        // iOS Share Extensions cannot use UIApplication.shared to force-open the app.
-        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-      }
-    } catch { fail(error) }
-  }
-
-  private func cleanup() { if let shareID { try? inbox?.remove(shareID) } }
-
-  private func fail(_ error: Error) {
-    worker.async { [self] in cleanup() }
-    DispatchQueue.main.async { [self] in
-      guard !cancelled else { return }
-      status.text = error.localizedDescription
-      // An import can be retried by sharing again; partially loaded providers aren't reused.
-      saveButton.isHidden = true
     }
   }
 
-  @objc private func cancelShare() {
-    cancelled = true; progress?.cancel()
-    worker.async { [self] in cleanup() }
-    extensionContext?.cancelRequest(withError: NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError))
+  private func showSaved(_ message: String) {
+    guard phase == .saving else { return }
+    phase = .saved; payloadText = ""; textParts = []; webURLs = []; summary.text = nil
+    status.text = message; addButton.isHidden = true
+    cancelButton.setTitle("Done", for: .normal); cancelButton.isEnabled = true
+    UIAccessibility.post(notification: .announcement, argument: message)
+  }
+
+  private func fail(_ message: String) {
+    guard phase != .closed else { return }
+    timeout?.cancel(); timeout = nil; phase = .failed
+    status.text = message; addButton.isHidden = true; cancelButton.isEnabled = true
+  }
+
+  @objc private func closeShare() {
+    guard phase != .saving, phase != .closed else { return }
+    let saved = phase == .saved
+    phase = .closed; timeout?.cancel(); timeout = nil; transport?.cancel(); transport = nil
+    if saved { extensionContext?.completeRequest(returningItems: nil, completionHandler: nil) }
+    else { extensionContext?.cancelRequest(withError: NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError)) }
   }
 }

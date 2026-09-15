@@ -1,9 +1,11 @@
+import { commerceAutomationProvidersFromEnv } from "./domain/commerce-automation.js";
 import { dispatchEbayDeletionCases } from "./domain/ebay-deletion-cases.js";
 import { dispatchProofPush } from './domain/notification-center.js';
 import { assertPolicyAccessSafe } from "./domain/policy-recovery.js";
 import { intakeConfigFromEnv,enrollConfiguredIntakeCohort } from './intake/runtime-config.js';
 import { createIntakeMailJobs } from './intake/mail-runtime.js';
 import { dispatchShippoIntake } from './intake/shippo-runtime.js';
+import { reconcileIntakeSubmissions } from './intake/submissions.js';
 import { StripeBillingAdapter, stripeBillingConfigFromEnv } from "./billing/stripe-adapter.js";
 import {processStripeBillingReconciliation} from "./billing/daily-reconciliation.js";
 import {DomainError} from "./domain/errors.js";
@@ -139,6 +141,7 @@ const server = app.listen(config.port, "0.0.0.0", () => {
   );
 });
 const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+jobs.push({name:'mobile-intake',intervalMs:30000,run:()=>reconcileIntakeSubmissions(opened.db,systemClock,{integrations,credentials:credentialStore},intakeConfig)});
 jobs.push({name:'order-shippo',intervalMs:15000,run:()=>dispatchShippoIntake(opened.db,systemClock,{credentialStore,config:()=>intakeConfigFromEnv()})});
 if(billing&&billingReconciliationStartAt){
   const initialStartAt=billingReconciliationStartAt;
@@ -156,7 +159,7 @@ if(billing&&billingReconciliationStartAt){
 }
 if(webhookConfig.encryptionKey&&webhookConfig.allowedHosts.length&&process.env.PACKPROOF_WEBHOOK_WORKER!=="false")
   jobs.push({name:'webhooks',intervalMs:15000,run:()=>dispatchWebhooks(opened.db,systemClock,webhookConfig,undefined,5)});
-if(process.env.PACKPROOF_COMMERCE_WORKER!=="false")jobs.push({name:'commerce',intervalMs:15000,run:()=>dispatchCommerceSyncs(opened.db,systemClock,{integrations,credentials:credentialStore})});
+if(process.env.PACKPROOF_COMMERCE_WORKER!=="false")jobs.push({name:'commerce',intervalMs:15000,run:()=>dispatchCommerceSyncs(opened.db,systemClock,{integrations,credentials:credentialStore,automationProviders:commerceAutomationProvidersFromEnv()})});
 if(process.env.PACKPROOF_CAPTURE_SHIPMENT_WORKER!=="false")jobs.push({name:'capture-shipments',intervalMs:15000,run:()=>dispatchCaptureShipments(opened.db,systemClock,{integrations,credentials:credentialStore,defaultShippoCredentialReference:process.env.PACKPROOF_CAPTURE_SHIPPO_CREDENTIAL_REFERENCE,defaultEasyPostCredentialReference:process.env.PACKPROOF_CAPTURE_EASYPOST_CREDENTIAL_REFERENCE,manifestSigning})});
 jobs.push({name:'ebay-deletion',intervalMs:30000,run:()=>dispatchEbayDeletionCases(opened.db,systemClock,credentialStore)});
 jobs.push({name:'proof-update-notifications',intervalMs:15000,run:()=>dispatchProofPush(opened.db,systemClock)});

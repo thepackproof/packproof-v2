@@ -9,7 +9,19 @@ import { DomainError } from "../../domain/errors.js";
 import type { NormalizedFulfillmentOrder } from "../../domain/normalized-fulfillment-order.js";
 import type { EbayOrder } from "./types.js";
 export function createEbayCommerceAdapter(db: Database, clock: Clock, runtime: EbayRuntime, credentials: IntegrationCredentialStore & Partial<Pick<MutableCredentialStore, "put">>): CommerceFulfillmentAdapter {
-    return { adapterKey: "ebay", provider: "ebay", kind: "trusted", displayName: "eBay",
+    return { adapterKey: "ebay", provider: "ebay", kind: "trusted", displayName: "eBay", preferredPollIntervalMs: 300000, reconciliationIntervalMs: 86400000,
+        async fetchFulfillmentOrder(input) {
+            if (!runtime.enabled || !runtime.client) throw new DomainError("EBAY_INTEGRATION_DISABLED", "eBay is not enabled", 403);
+            if (!/^\d{2}-\d{5}-\d{5}$/.test(input.externalOrderId)) throw new DomainError("INVALID_ORDER_ID", "Use the eBay order ID, not a listing number", 400);
+            const userId = input.credentials?.material.ebayUserId;
+            if (!userId) throw new DomainError("INTEGRATION_NEEDS_REAUTH", "Reconnect eBay to verify the merchant identity", 409);
+            const order = await withEbayUserToken(db, clock, runtime, credentials, input.connection, accessToken => runtime.client!.getOrder({
+                environment: runtime.environment, marketplaceId: runtime.marketplaceId, accessToken, orderId: input.externalOrderId,
+            }));
+            if (await isEbaySubjectSuppressed(db, runtime.environment, order.buyerUserId, order.buyerUsername))
+                throw new DomainError("EBAY_ACCOUNT_DELETION_PENDING", "This eBay order is unavailable", 409);
+            return {...normalizeEbayFulfillmentOrder(order, input.connection.external_account_reference!, runtime.environment), identityAccountReference: ebayIdentityAccount(runtime.environment, userId)};
+        },
         async listFulfillmentOrders(input) {
             if (!runtime.enabled || !runtime.client)
                 throw new DomainError("EBAY_INTEGRATION_DISABLED", "eBay is not enabled", 403);

@@ -29,3 +29,15 @@ export function connectionReturnFromLink(value: string): { provider: string; fai
     return { provider: match[1], failed: url.searchParams.get(match[1]) === 'error', code: url.searchParams.get('code') };
   } catch { return null; }
 }
+
+/** Owned-domain queue/capture locators confer no authority and never activate the camera. */
+export function packingQueueFromLink(value: string): { handoffId: string | null } | null {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.port || url.hash || url.search) return null;
+    if (url.protocol !== 'https:' || !['thepackproof.com', 'www.thepackproof.com', 'app.thepackproof.com'].includes(url.hostname)) return null;
+    if (/^\/app\/(?:packing|proofs)\/?$/.test(url.pathname)) return { handoffId: null };
+    const capture = url.pathname.match(/^\/app\/capture\/([A-Za-z0-9_-]{1,200})\/?$/);
+    return capture ? { handoffId: capture[1] } : null;
+  } catch { return null; }
+}

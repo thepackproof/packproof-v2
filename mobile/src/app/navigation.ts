@@ -89,9 +89,9 @@ export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrig
     case "account":
     case "create":
     case "manual":
+    case "intake":
       return "home";
     case "scan":
-    case "intake":
     case "review":
       return "create";
     default:

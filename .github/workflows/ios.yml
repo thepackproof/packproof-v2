@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ['mobile/**', '.github/workflows/ios.yml']
   push:
-    branches: ['feature/ios-parity-*']
+    branches: ['feature/ios-parity-*', 'feature/mobile-intake-*']
     paths: ['mobile/**', '.github/workflows/ios.yml']
   workflow_dispatch:
     inputs:
@@ -125,7 +125,7 @@ jobs:
       - name: Build with existing remote Apple signing credentials
         run: |
           mkdir -p dist
-          npx --yes eas-cli build --platform ios --profile ios-testflight --non-interactive --wait --json > dist/eas-ios-build.json
+          npx --yes eas-cli@24.4.2 build --platform ios --profile ios-testflight --non-interactive --wait --json > dist/eas-ios-build.json
           node <<'NODE'
           const fs = require('node:fs');
           const result = JSON.parse(fs.readFileSync('dist/eas-ios-build.json', 'utf8'));
@@ -134,9 +134,12 @@ jobs:
           fs.writeFileSync('dist/ipa-url.txt', build.artifacts.buildUrl);
           NODE
           curl --fail --location "$(cat dist/ipa-url.txt)" --output dist/PackProof.ipa
+          test -s dist/PackProof.ipa
+          sha256sum dist/PackProof.ipa > dist/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: packproof-ios-archive-${{ github.sha }}
           path: |
             mobile/dist/PackProof.ipa
             mobile/dist/eas-ios-build.json
+            mobile/dist/SHA256SUMS

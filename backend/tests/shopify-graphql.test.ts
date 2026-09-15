@@ -31,6 +31,20 @@ function transport(override?: (operation: string, variables: Variables) => unkno
 }
 
 describe("Shopify Admin GraphQL transport", () => {
+  it("resolves an exact stable order ID without enumerating the store or accepting its display number", async () => {
+    const fetcher=transport(),client=createHttpShopifyClient(fetcher);
+    expect(await client.getOrder!({...input,orderId:id})).toMatchObject({id,name:"#123"});
+    expect(fetcher.mock.calls.every(([,r])=>!String(r?.body).includes("PackProofOrders("))).toBe(true);
+    await expect(client.getOrder!({...input,orderId:"#123"})).rejects.toMatchObject({code:"INVALID_ORDER_ID"});
+    const missing=createHttpShopifyClient(transport(op=>op==="PackProofOrderRevision"?{data:{order:null}}:undefined));
+    await expect(missing.getOrder!({...input,orderId:id})).rejects.toMatchObject({code:"COMMERCE_ORDER_NOT_FOUND"});
+  });
+  it("preserves HTTP and GraphQL quota recovery hints for durable scheduling", async () => {
+    const http=createHttpShopifyClient(vi.fn(async()=>new Response("",{status:429,headers:{"retry-after":"90"}})));
+    await expect(http.listOrdersPage!(input)).rejects.toMatchObject({code:"PROVIDER_RATE_LIMITED",retryAfterSeconds:90});
+    const graphql=createHttpShopifyClient(transport(()=>({errors:[{extensions:{code:"THROTTLED"}}],extensions:{cost:{requestedQueryCost:200,throttleStatus:{currentlyAvailable:10,restoreRate:10}}}})));
+    await expect(graphql.listOrdersPage!(input)).rejects.toMatchObject({code:"PROVIDER_RATE_LIMITED",retryAfterSeconds:19});
+  });
   it("loads barcode and product identity only with already granted product access", async () => {
     const fetcher=transport((op)=>op==='PackProofOrder'?{data:{order:{...detail(),lineItems:conn([{...line(987),variant:{id:'gid://shopify/ProductVariant/22',barcode:'036000291452',product:{id:'gid://shopify/Product/2'}}}])}}}:undefined);
     const client=createHttpShopifyClient(fetcher);

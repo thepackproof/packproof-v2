@@ -529,6 +529,11 @@ export interface IntegrationConnectionView {
   reviewOrderCount?: number;
   reviewReasons?: Array<{ code: string; count: number }>;
   autoSyncEnabled?: boolean;
+  automationAvailable?: boolean;
+  automationUnavailableReason?: "ADAPTER_UNAVAILABLE" | "ROLLOUT_DISABLED" | "RECONNECT_REQUIRED" | null;
+  orderReadVerified?: boolean;
+  lastOrderReadAt?: string | null;
+  pollIntervalSeconds?: number | null;
   sync?: { runStatus?: string; initialSyncCompletedAt?: string | null; nextRunAt?: string | null };
   orderPolicy?: string;
   connectionId: string;
