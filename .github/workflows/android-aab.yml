@@ -69,7 +69,7 @@ jobs:
           const fs = require('fs');
           const { expo } = require('./app.config.js');
           if (expo.android.package !== 'com.packproof.mobile') throw new Error('Unexpected Android package');
-          if (!/^\d+\.\d+\.\d+$/.test(expo.version) || !Number.isSafeInteger(expo.android.versionCode)) throw new Error('Invalid release identity');
+          if (!/^\d+\.\d+(?:\.\d+)?$/.test(expo.version) || !Number.isSafeInteger(expo.android.versionCode)) throw new Error('Invalid release identity');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact=packproof-${expo.version}-${expo.android.versionCode}\n`);
           NODE
 
