@@ -1,13 +1,8 @@
 apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
 
 group = 'com.packproof.attestation'
 version = '0.1.0'
-
-def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
-apply from: expoModulesCorePlugin
-applyKotlinExpoModulesCorePlugin()
-useCoreDependencies()
-useDefaultAndroidSdkVersions()
 
 android {
   namespace 'com.packproof.attestation'
