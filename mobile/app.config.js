@@ -26,9 +26,9 @@ const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
 const iosBuildNumber = env("PACKPROOF_IOS_BUILD_NUMBER", "1");
 if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUMBER must be a positive integer");
-const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "51"));
-if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 51 || androidVersionCode > 2100000000)
-  throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 50");
+const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "52"));
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 52 || androidVersionCode > 2100000000)
+  throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 51");
 
 if (isRelease) {
   if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");
@@ -47,7 +47,9 @@ module.exports = {
     name: isCameraSpike ? "PackProof Camera Test" : "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
-    version: "1.0",
+    version: "1.0.1",
+    // Keep the existing bridge while upgrading the native runtime for 16 KB pages.
+    newArchEnabled: false,
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
@@ -98,6 +100,7 @@ module.exports = {
     plugins: [
       ...(!isCameraSpike ? ["./plugins/with-order-share"] : []),
       "./plugins/with-android-back-compat",
+      "./plugins/with-android-release-optimization",
       "expo-video",
       "expo-notifications",
       [
@@ -126,6 +129,15 @@ module.exports = {
             compileSdkVersion: 36,
             targetSdkVersion: 36,
             buildToolsVersion: "36.0.0",
+            enableProguardInReleaseBuilds: true,
+            enableShrinkResourcesInReleaseBuilds: true,
+            useLegacyPackaging: false,
+            // WorkManager persists this class name and recreates it by reflection.
+            // Keep only the worker identity and constructor, including pending work
+            // from pre-R8 installations. Library consumer rules cover Expo/JNI.
+            extraProguardRules: `-keep,allowoptimization class com.packproof.ordershare.OrderShareWorker {
+  public <init>(android.content.Context, androidx.work.WorkerParameters);
+}`,
           },
         },
       ],

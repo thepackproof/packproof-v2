@@ -1,11 +1,12 @@
 {
   "cli": {
-    "version": "24.4.2",
+    "version": ">=24.4.2 <25.0.0",
     "appVersionSource": "local"
   },
   "build": {
     "internal-staging": {
       "distribution": "store",
+      "node": "22.14.0",
       "android": {
         "buildType": "app-bundle",
         "credentialsSource": "remote",

@@ -1,7 +1,7 @@
 /**
- * Expo 52 / React Native 0.76 dispatch system Back through the legacy bridge.
+ * PackProof retains legacy Back dispatch during the Expo 53 runtime upgrade.
  * API 36 otherwise bypasses onBackPressed/KEYCODE_BACK on Android 16.
- * Keep this explicit until the native runtime is upgraded and predictive Back
+ * Keep this explicit until predictive Back
  * is verified on both three-button and gesture navigation.
  * https://developer.android.com/about/versions/16/behavior-changes-16#predictive-back
  */

@@ -14,7 +14,7 @@ export function NotificationBridge(){
       const data=notification.request.content.data,id=String(data.notificationId??notification.request.identifier);
       const show=data.userId===userId&&!presented.has(id);
       if(show){presented.add(id);if(presented.size>200)presented.delete(presented.values().next().value!);}
-      return {shouldShowAlert:show,shouldPlaySound:show,shouldSetBadge:false};
+      return {shouldShowAlert:show,shouldShowBanner:show,shouldShowList:show,shouldPlaySound:show,shouldSetBadge:false};
     }});
     void registerProofPush(app.client).catch(()=>undefined);
     const open=(response:Notifications.NotificationResponse|null)=>{

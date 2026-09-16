@@ -1,4 +1,4 @@
-// Narrow, fail-closed compatibility/security patches for the pinned Expo 52 toolchain.
+// Narrow, fail-closed security patches for the pinned Expo 53 toolchain.
 // These modify build tools only. Never suppress dependency audit findings.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -16,12 +16,8 @@ function patch(relative, expectedSha256, before, after) {
   fs.writeFileSync(file, original.replace(before, after));
 }
 
-// tar 7 exposes named CJS exports with __esModule:true. Expo 52's default-import
-// helper otherwise resolves undefined; retain its two existing extraction APIs.
-const tarImport = 'const data = /*#__PURE__*/ _interopRequireDefault(require("tar"));';
-const tarCompat = 'const data = { default: require("tar") }; // PackProof: named tar 7 CommonJS exports';
-patch('@expo/cli/build/src/utils/tar.js', '2f673a6bbba4ee208e478024c6ef4d73f727e7d9243356336bb69d80d53df7bb', tarImport, tarCompat);
-patch('@expo/cli/build/src/utils/npm.js', '2883a0ca6fc57ad9234539cbbabe4418f571bc3a42d4b92b8f751dbe8c1edf29', tarImport, tarCompat);
+// Expo 53 now uses tar's named extract export directly. The tar 7.5.22 override
+// remains; the Expo 52 default-import compatibility patches are no longer needed.
 
 // The pinned community-maintained legacy fork fixes GHSA-w3rx-r6r6-pgpr and
 // GHSA-5p2g-fcmc-qvqq while preserving Metro's callable synchronous API. Refuse
