@@ -51,12 +51,12 @@
     "expo-status-bar": "~2.2.3",
     "expo-system-ui": "~5.0.11",
     "expo-video": "~2.2.2",
-    "react": "19.0.0",
+    "react": "19.3.0",
     "react-native": "0.79.6",
     "react-native-safe-area-context": "5.4.0"
   },
   "devDependencies": {
-    "@types/react": "~19.0.10",
+    "@types/react": "~19.3.0",
     "image-size": "npm:image-size-next@1.2.2",
     "typescript": "~5.8.3"
   },
