@@ -233,7 +233,7 @@ export function CommerceReceiptScreen() {
           {record.role === "SELLER" && guides.length ? <View style={{ gap: 8 }}>
             <Text style={{ color: colors.textPrimary }}>Optional guide for returned-item capture</Text>
             <Text style={{ color: colors.textSecondary }}>Choose an outbound frame to help match the angle. The translucent guide is never burned into your incoming evidence.</Text>
-            {guides.map((guide, index) => <View key={guide.derivativeId} style={{ gap: 8 }}><Image source={{ uri: app.client.thumbnailUrl(proofId, guide.derivativeId), headers: app.client.authorizedDownloadHeaders() }} style={{ width: "100%", height: 150 }} resizeMode="contain" accessibilityLabel={`Outbound guide frame ${index + 1}`} /><Button label={`${guideId === guide.derivativeId ? "Selected · " : ""}Outbound frame ${index + 1}`} variant="secondary" onPress={() => setGuideId(guideId === guide.derivativeId ? null : guide.derivativeId)} /></View>)}
+            {guides.map((guide, index) => <View key={guide.derivativeId} style={{ gap: 8 }}><Image resizeMethod="resize" source={{ uri: app.client.thumbnailUrl(proofId, guide.derivativeId), headers: app.client.authorizedDownloadHeaders() }} style={{ width: "100%", height: 150 }} resizeMode="contain" accessibilityLabel={`Outbound guide frame ${index + 1}`} /><Button label={`${guideId === guide.derivativeId ? "Selected · " : ""}Outbound frame ${index + 1}`} variant="secondary" onPress={() => setGuideId(guideId === guide.derivativeId ? null : guide.derivativeId)} /></View>)}
           </View> : null}
           {sequence.map((type, index) => {
             const stage = record.stages.find((s) => s.type === type),

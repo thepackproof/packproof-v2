@@ -1,5 +1,6 @@
+import { AppModal } from "../ui/AppModal";
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Image, Modal, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, Image, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
@@ -134,7 +135,7 @@ export function RecipientExportPanel({ api, userId, proofId, caseId, sources, is
   let canPrepare = false; try { draft(); canPrepare = true; } catch { /* Form provides the required fields below. */ }
   let canApprove = false; try { if (job) { recipientApprovalBody(job, previews, legible); canApprove = true; } } catch { /* Every file must be viewed first. */ }
   return <InfoCard>
-    <Modal visible={!!imagePreview} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setImagePreview(null)}>
+    <AppModal visible={!!imagePreview} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setImagePreview(null)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         <View style={{ padding: 16, gap: 8 }}><Text accessibilityRole="header" style={{ color: colors.textPrimary, fontWeight: '700' }}>{imagePreview?.name}</Text><Text style={text}>Pinch to zoom and inspect the exact prepared image.</Text><Button label="Close image preview" variant="secondary" onPress={() => setImagePreview(null)} /></View>
         <ScrollView maximumZoomScale={5} minimumZoomScale={1} centerContent contentContainerStyle={{ paddingHorizontal: 16 }}>
@@ -150,7 +151,7 @@ export function RecipientExportPanel({ api, userId, proofId, caseId, sources, is
           }} /> : null}
         </ScrollView>
       </SafeAreaView>
-    </Modal>
+    </AppModal>
     <Text accessibilityRole="header" style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>Prepare submission files</Text>
     <Text style={text}>Choose the instructions for your actual case, select relevant moments, and review the finished files.</Text>
     {error ? <Text accessibilityRole="alert" style={{ color: colors.error }}>{error}</Text> : null}

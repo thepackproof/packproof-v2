@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -84,6 +85,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   private var provider: ProcessCameraProvider? = null
   private var camera: Camera? = null
   private var videoCapture: VideoCapture<Recorder>? = null
+  private var preview: Preview? = null
   private var analysis: ImageAnalysis? = null
   private var boundUseCases = emptyList<UseCase>()
   private var lifecycleOwner: LifecycleOwner? = null
@@ -96,6 +98,25 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   private var lastScannerErrorNanos = 0L
   private val recentCodes = LinkedHashMap<String, Long>()
   private val candidateReads = LinkedHashMap<String, Pair<Long, Int>>()
+  private val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+  private val displayListener = object : DisplayManager.DisplayListener {
+    override fun onDisplayAdded(displayId: Int) = Unit
+    override fun onDisplayRemoved(displayId: Int) = Unit
+    override fun onDisplayChanged(displayId: Int) {
+      if (display?.displayId == displayId) updateTargetRotation()
+    }
+  }
+
+  private fun updateTargetRotation() {
+    val rotation = display?.rotation ?: return
+    // Keep encoded-video coordinates stable throughout one uninterrupted recording.
+    // PreviewView handles its own display transform; apply the next target rotation
+    // only between sessions, without unbinding CameraX or interrupting the encoder.
+    if (session != null) return
+    preview?.targetRotation = rotation
+    analysis?.targetRotation = rotation
+    videoCapture?.targetRotation = rotation
+  }
 
   private class CaptureSession(val file: File, val promise: Promise) {
     val journal = if (File(file.parentFile, "capture-context.json").exists()) CaptureJournal(file.parentFile!!) else null
@@ -123,10 +144,12 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    displayManager.registerDisplayListener(displayListener, mainHandler)
     ensureCamera()
   }
 
   override fun onDetachedFromWindow() {
+    displayManager.unregisterDisplayListener(displayListener)
     interruptAndRelease()
     super.onDetachedFromWindow()
   }
@@ -135,6 +158,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
     super.onLayout(changed, left, top, right, bottom)
     previewView.layout(0, 0, right - left, bottom - top)
+    updateTargetRotation()
   }
 
   fun setCaptureActive(active: Boolean) {
@@ -216,6 +240,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
         provider = cameraProvider
         boundUseCases = listOf(preview, capture, analyzer)
         analysis = analyzer
+        this.preview = preview
         videoCapture = capture
         camera = cameraProvider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture, analyzer)
         previewView.previewStreamState.observe(owner, streamObserver)
@@ -266,6 +291,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       return
     }
     try {
+      updateTargetRotation()
       val proofCapture = sessionId.startsWith("cap_")
       val root = File(context.filesDir, if (proofCapture) "packproof-captures" else "packproof-camera-spike")
       if (!root.exists() && !root.mkdirs()) throw IllegalStateException("Capture directory unavailable")
@@ -335,6 +361,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
         epoch = null
         session = null
         recording = null
+        updateTargetRotation()
         val durationMs = event.recordingStats.recordedDurationNanos / 1_000_000L
         val byteSize = current.file.length()
         if(event.error != VideoRecordEvent.Finalize.ERROR_NONE) current.journal?.append("INTERRUPTION",durationMs,"ENCODER_ERROR")
@@ -510,6 +537,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     val owned = boundUseCases.toTypedArray()
     boundUseCases = emptyList()
     analysis = null
+    preview = null
     videoCapture = null
     camera = null
     if (owned.isNotEmpty()) {
@@ -520,6 +548,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   fun destroy() {
     if (destroyed) return
     destroyed = true
+    displayManager.unregisterDisplayListener(displayListener)
     desiredActive = false
     lifecycleOwner?.lifecycle?.removeObserver(lifecycleObserver)
     interruptAndRelease()

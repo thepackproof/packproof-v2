@@ -1,6 +1,7 @@
+import { AppModal } from "../ui/AppModal";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Linking, Modal, Share, Text, View } from 'react-native';
+import { Alert, AppState, Linking, Share, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { usePackProof } from '../app/PackProofProvider';
 import { listAccountCaptures, recordPackingEvidence, requestCapturePermissions, type LocalCapture } from '../capture';
@@ -163,7 +164,7 @@ function AccountRelayStation() {
     </View>;
   return <>
     {device && !visible && !recording ? <View style={{ paddingHorizontal: 16, backgroundColor: colors.surface }}><Button label={`Remote camera · ${device.role === 'CAMERA' ? 'This phone' : 'Controller'}`} variant="tertiary" onPress={() => setVisible(true)} /></View> : null}
-    <Modal visible={visible} animationType="slide" onRequestClose={() => scanning ? setScanning(null) : setVisible(false)}>{scanning ? scanner : <AppScreen extraBottom={24}>
+    <AppModal visible={visible} animationType="slide" onRequestClose={() => scanning ? setScanning(null) : setVisible(false)}>{scanning ? scanner : <AppScreen extraBottom={24}>
       <AppHeader title="Remote camera controls" onBack={() => setVisible(false)} />
       <Text style={secondary}>Pair one controller with one phone camera, signed in to the same account. Pairing links expire in five minutes. Station access lasts eight hours.</Text>
       <ErrorBanner message={error} />
@@ -211,7 +212,7 @@ function AccountRelayStation() {
         <Button label="Renew station session" variant="secondary" disabled={locked} onPress={() => void action(async lease => { await lease.request(`/${device.id}/renew`, 'POST', {}, device.token); setNotice('Station access renewed.'); })} />
         <Button label={expired ? "Forget expired station" : "Leave paired mode"} variant="tertiary" disabled={locked || !canLeave} onPress={() => Alert.alert('Leave paired mode?', 'This device will forget station access. Saved recordings remain in their original Proofs.', [{ text: 'Keep paired', style: 'cancel' }, { text: 'Leave', onPress: () => void action(async lease => { await persist(null, lease.assert); stationRef.current = null; setStation(null); setExpired(false); selectedRef.current = null; setSelected(null); armedRef.current = false; setArmed(false); setError(null); }) }])} />
       </>}
-    </AppScreen>}</Modal>
+    </AppScreen>}</AppModal>
 
   </>;
 }

@@ -28,7 +28,7 @@ export function ProofCard(props: {
       ]}
     >
       {props.model.thumbnailUri ? (
-        <Image source={{ uri: props.model.thumbnailUri }} style={[styles.thumb, { backgroundColor: colors.background }]} />
+        <Image resizeMethod="resize" source={{ uri: props.model.thumbnailUri }} style={[styles.thumb, { backgroundColor: colors.background }]} />
       ) : (
         <View
           style={[styles.thumbFallback, { backgroundColor: colors.background }]}
