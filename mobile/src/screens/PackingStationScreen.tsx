@@ -447,13 +447,15 @@ export function PackingStationScreen(props: {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.root, { backgroundColor: tone.background }]}>
+    <View style={[styles.root, { backgroundColor: tone.background, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: Math.max(insets.top, 24),
-            paddingBottom: Math.max(insets.bottom, 24),
+            paddingTop: 24,
+            paddingBottom: 24,
           },
         ]}
         keyboardShouldPersistTaps="handled"

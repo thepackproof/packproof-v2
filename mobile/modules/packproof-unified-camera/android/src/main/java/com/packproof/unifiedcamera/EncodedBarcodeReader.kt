@@ -15,19 +15,39 @@ import com.google.mlkit.vision.common.InputImage
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Bounded optional inspection of the original; never edits, re-encodes or deletes it.
  * MediaMetadataRetriever selects a nearby frame, but does not return that frame's PTS.
  * Therefore all offsets are explicitly approximate, never claimed to be exact PTS.
  */
 internal object EncodedBarcodeReader {
+  private val inspectionRunning = AtomicBoolean(false)
+  private val completionExecutor = Executor { command -> command.run() }
+  private class InspectionLease {
+    private val owners = AtomicInteger(1)
+    fun retain() { owners.incrementAndGet() }
+    fun release() { if (owners.decrementAndGet() == 0) inspectionRunning.set(false) }
+  }
+
   fun inspect(context: Context, sessionId: String, requestedOffsets: List<Double>, identifiersEnabled: Boolean = false): Map<String, Any> {
     require(sessionId.matches(Regex("cap_[A-Za-z0-9_-]{1,91}")))
     val root = File(context.filesDir, "packproof-captures").canonicalFile
     val original = File(root, "$sessionId/video.mp4").canonicalFile
     require(original.parentFile?.parentFile == root && original.isFile && original.length() in 1..250_000_000L)
     require(File(original.path + ".finalized.json").isFile)
+    check(inspectionRunning.compareAndSet(false, true)) { "Video inspection is already running. Try again after it finishes." }
+    val lease = InspectionLease()
+    try {
+      return inspectOriginal(original, requestedOffsets, identifiersEnabled, lease)
+    } finally { lease.release() }
+  }
+
+  private fun inspectOriginal(original: File, requestedOffsets: List<Double>, identifiersEnabled: Boolean, lease: InspectionLease): Map<String, Any> {
     val retriever = MediaMetadataRetriever()
+    var cleanupDeferred = false
     val formats = mutableListOf(
       Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_CODE_93,
       Barcode.FORMAT_CODABAR, Barcode.FORMAT_ITF, Barcode.FORMAT_QR_CODE,
@@ -46,6 +66,11 @@ internal object EncodedBarcodeReader {
       val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
       val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
       require(width in 1..4096 && height in 1..4096)
+      // API 24–26 cannot downsample during extraction. Bound the allocation before
+      // decoding; optional analysis must never allocate an arbitrary full-size frame.
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
+        require(width.toLong() * height <= 1920L * 1080) { "This device cannot safely inspect this video size." }
+      }
       // Prioritize observed moments, then nearby frames, then evenly spaced fallbacks.
       val offsets = linkedSetOf<Long>()
       requestedOffsets.take(8).filter { it.isFinite() && it >= 0 && it < duration }.forEach { offsets.add(it.toLong()) }
@@ -65,10 +90,16 @@ internal object EncodedBarcodeReader {
         inspected += 1
         try {
           val task = scanner.process(InputImage.fromBitmap(frame, 0))
-          // Ownership remains with ML Kit if its asynchronous task outlives our budget.
+          // Stop this pass on a timeout. Continuing would queue multiple decoded
+          // bitmaps behind a slow ML Kit task and retain them all in native memory.
           val codes = try { Tasks.await(task, 750, TimeUnit.MILLISECONDS) } catch (_: Exception) {
-            task.addOnCompleteListener { frame.recycle() }
-            continue
+            cleanupDeferred = true
+            lease.retain()
+            task.addOnCompleteListener(completionExecutor) {
+              try { frame.recycle(); scanner.close() }
+              finally { lease.release() }
+            }
+            break
           }
           val decoded = codes.filter { code ->
             val raw = code.rawValue ?: ""
@@ -104,7 +135,14 @@ internal object EncodedBarcodeReader {
       return mapOf("playable" to (inspected > 0), "inspectedFrames" to inspected,
         "durationMs" to duration.toDouble(), "observations" to observations, "frames" to frames,
         "timestampPrecision" to "NEAR_REQUESTED_TIME")
-    } finally { scanner.close(); retriever.release() }
+    } finally {
+      try { retriever.release() }
+      finally {
+        if (!cleanupDeferred) {
+          scanner.close()
+        }
+      }
+    }
   }
 
   private fun format(value: Int): String = when (value) {

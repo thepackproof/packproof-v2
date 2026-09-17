@@ -14,13 +14,14 @@ import {
   Animated,
   Alert,
   Image,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { AppModal } from "./AppModal";
 import { CameraView } from "expo-camera";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -212,6 +213,8 @@ function CameraSession({
   const { colors, scheme, reducedMotion } = useTheme();
   const accents = cinematicForScheme(scheme);
   const insets = useSafeAreaInsets();
+  const dimensions = useWindowDimensions();
+  const wide = dimensions.width > dimensions.height;
   const [ready, setReady] = useState(false),
     [recording, setRecording] = useState(false),
     [saving, setSaving] = useState(false);
@@ -311,7 +314,7 @@ function CameraSession({
     return registerRemoteCaptureStop(request.captureSessionId, stop);
   }, [request.remoteControl, request.captureSessionId]);
   return (
-    <Modal
+    <AppModal
       visible
       animationType={reducedMotion ? "none" : "slide"}
       onRequestClose={() => recordingRef.current ? Alert.alert("Finish this recording?", "Keep recording or finish and review what you recorded.", [{text:"Keep recording",style:"cancel"},{text:"Finish recording",onPress:stop}]) : saving ? undefined : onFinish(null)}
@@ -323,6 +326,8 @@ function CameraSession({
             backgroundColor: colors.background,
             paddingTop: insets.top,
             paddingBottom: insets.bottom,
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
           },
         ]}
       >
@@ -334,7 +339,7 @@ function CameraSession({
                 : "Recording packing"
               : "Record packing"}
           </Text>
-          <Text style={{ color: colors.textSecondary }}>
+          <Text numberOfLines={1} style={{ color: colors.textSecondary }}>
             {request.orderLabel}
           </Text>
           {request.compatibilityWorkflow ? <Text style={{ color: colors.textSecondary }}>
@@ -349,6 +354,7 @@ function CameraSession({
               : "Camera recording · up to 5 minutes · audio is not required"}
           </Text>
         </View>
+        <View style={[styles.body, wide && styles.wideBody]}>
         <View style={styles.camera}>
           {useUnified ? <UnifiedCameraView
             ref={unifiedCamera}
@@ -382,7 +388,7 @@ function CameraSession({
           }
           {request.guide ? (
             <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <Image
+              <Image resizeMethod="resize"
                 source={request.guide}
                 style={[StyleSheet.absoluteFill, { opacity: 0.3 }]}
                 resizeMode="contain"
@@ -398,7 +404,7 @@ function CameraSession({
             </View>
           </Animated.View> : null}
         </View>
-        <ScrollView contentContainerStyle={styles.controls}>
+        <ScrollView style={wide ? styles.wideControls : styles.portraitControls} contentContainerStyle={styles.controls} keyboardShouldPersistTaps="handled">
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
             <Text style={{color:shipping?.status==='BOUND'?colors.accentText:colors.textSecondary}}>
               {identifiersEnabled ? (codeStatus ?? 'Pack normally. Item and shipping codes are read during recording.') : request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'
@@ -450,15 +456,20 @@ function CameraSession({
             />
           ) : null}
         </ScrollView>
+        </View>
       </View>
-    </Modal>
+    </AppModal>
   );
 }
 const styles = StyleSheet.create({
   root: { flex: 1 },
   heading: { padding: 16, gap: 6 },
   title: { fontSize: 19, fontWeight: "600" },
-  camera: { flex: 1, minHeight: 200, backgroundColor: "#23262D", overflow: "hidden" },
+  body: { flex: 1, minHeight: 0 },
+  wideBody: { flexDirection: "row" },
+  camera: { flex: 1, minHeight: 0, backgroundColor: "#23262D", overflow: "hidden" },
+  portraitControls: { flexGrow: 0, maxHeight: "50%" },
+  wideControls: { flexGrow: 0, width: "40%", maxWidth: 360 },
   frame: {
     position: "absolute",
     top: "12%",

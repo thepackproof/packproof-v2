@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Modal, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AppModal } from "./AppModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as FileSystem from "expo-file-system";
@@ -82,7 +84,7 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
       </View> : <View style={styles.canvas}><Text style={[styles.meta, { color: colors.textSecondary }]}>Save the original to open this file on your device.</Text><Button label="Save original" variant="secondary" loading={downloading} onPress={() => void download()} /></View>}
     </View>
     {downloadError ? <Text accessibilityRole="alert" style={[styles.meta, { color: colors.error }]}>{downloadError}</Text> : null}
-    <Modal visible={expanded} animationType="fade" onRequestClose={() => setExpanded(false)}><View style={[styles.expanded, { backgroundColor: colors.background }]}><Button label="Close image" variant="secondary" onPress={() => setExpanded(false)} /><Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={styles.fullImage} resizeMode="contain" accessibilityLabel={title} /></View></Modal>
+    <AppModal visible={expanded} animationType="fade" onRequestClose={() => setExpanded(false)}><SafeAreaView style={[styles.expanded, { backgroundColor: colors.background }]}><Button label="Close image" variant="secondary" onPress={() => setExpanded(false)} />{expanded && <Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={styles.fullImage} resizeMode="contain" accessibilityLabel={title} />}</SafeAreaView></AppModal>
   </View>;
 }
 
@@ -134,5 +136,5 @@ const styles = StyleSheet.create({
   canvas: { padding: 8, gap: 12 }, video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000", borderRadius: 10 },
   image: { width: "100%", borderRadius: 10 }, bookmarks: { gap: 8, flexDirection: "row", flexWrap: "wrap" },
   bookmark: { padding: 12, gap: 4, minHeight: 48, borderRadius: 10, borderWidth: 1 }, bookmarkLabel: { ...typography.body },
-  expanded: { flex: 1, padding: 24, paddingTop: 56, gap: 16 }, fullImage: { flex: 1, width: "100%" },
+  expanded: { flex: 1, padding: 24, gap: 16 }, fullImage: { flex: 1, width: "100%" },
 });
