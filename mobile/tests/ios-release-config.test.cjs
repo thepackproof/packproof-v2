@@ -48,10 +48,12 @@ test('iOS profiles share current Android feature flags and use an iOS 26 build i
 });
 
 test('Apple build number can advance without changing the Android release identity', () => {
+  const baseline = config({ EAS_BUILD_PROFILE: 'ios-testflight' });
+  assert.equal(baseline.status, 0, baseline.stderr);
   const result = config({ EAS_BUILD_PROFILE: 'ios-testflight', PACKPROOF_IOS_BUILD_NUMBER: '12' });
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.ios.buildNumber, '12');
-  assert.equal(app.android.versionCode, 52);
+  assert.deepEqual(app.android, JSON.parse(baseline.stdout).android);
   assert.notEqual(config({ PACKPROOF_IOS_BUILD_NUMBER: 'invalid' }).status, 0);
 });
