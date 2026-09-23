@@ -20,7 +20,7 @@ The implementation is a native iOS port, with Swift modules for camera capture, 
 | Upload handoff | OS background transfer with the same upload identity; server commit/finalization resumes when app execution is available |
 | Shippo/carrier tracking, map, timeline | Same server observations and embedded map components |
 | eBay/Etsy/Shopify/Google/Facebook connections | Existing provider flows with verified native callback routing |
-| Share to PackProof | App Group Share Extension for text, links, images and PDFs; on-device text extraction and review |
+| Share to PackProof | App Group Share Extension for plain text and one HTTP(S) URL; explicit account-bound submission, local recovery and host review |
 | Proof export, receipt/return records, share links | Same canonical proof/export services and native share sheet |
 | Push notifications and preferences | Expo/APNs delivery; account-scoped local fallback for upload completion |
 | Themes, fonts, calendar, animations and navigation | Shared Android 49 components, with iOS platform gates corrected |
@@ -83,7 +83,7 @@ Before calling the app release-ready, record the exact build/commit and test on 
 2. Record a packing video while scanning real shipping labels; verify feedback, playback, thumbnails and correct tracking association.
 3. Test Face ID and Touch ID, cancellation, enrollment changes, lockout and a fresh challenge after key replacement.
 4. Interrupt a recording; background/lock during upload; lose network; force-close/reopen; resume/discard without losing the original or duplicating evidence.
-5. Import each supported Share Sheet content type, cancel, reopen, sign out and verify account-bound review.
+5. Share plain text and one HTTP(S) URL, cancel, reopen, sign out and verify account-bound review. Image/PDF activation and OCR are not part of the current extension path; see INTAKE_IOS_RELEASE.md.
 6. Exercise actual provider authorization returns and order synchronization.
 7. Confirm APNs permission/denial, muted settings, upload completion, Proof updates and notification routing.
 8. Export/share an evidence packet, view receipt/return stages and check the embedded tracking map.
@@ -102,3 +102,7 @@ iOS may suspend JavaScript while a background upload is running. Upload bytes ca
 - [Expo build infrastructure](https://docs.expo.dev/build-reference/infrastructure/)
 - [Apple App Review purchase rules](https://developer.apple.com/app-store/review/guidelines/)
 - Native implementation details and test gates: module READMEs under `mobile/modules/`.
+
+## September 23 release audit
+
+The current App Store execution record is [ios-app-store-2026-09-23/README.md](releases/ios-app-store-2026-09-23/README.md). It supersedes historical signing and test status above. Store copy must use the current text/URL Share Extension scope in INTAKE_IOS_RELEASE.md.
