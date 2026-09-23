@@ -69,7 +69,10 @@
       }
     },
     "ios-testflight": {
-      "ios": {}
+      "ios": {
+        "appleTeamId": "AAY67GYL4D",
+        "ascAppId": "6815401074"
+      }
     }
   }
 }

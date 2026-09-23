@@ -59,6 +59,7 @@ module.exports = {
     scheme: isCameraSpike ? "packproof-camera-test" : ["packproof-v2", "packproof"],
     ios: {
       bundleIdentifier: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
+      appleTeamId: "AAY67GYL4D",
       buildNumber: iosBuildNumber,
       supportsTablet: false,
       associatedDomains: ["applinks:thepackproof.com", "applinks:www.thepackproof.com"],
