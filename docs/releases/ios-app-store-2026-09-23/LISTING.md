@@ -1,15 +1,25 @@
 # PackProof iPhone App Store listing preparation
 
-Prepared: 2026-09-23. Locale: English (U.S.). Status: **DRAFT — NOT READY FOR SUBMISSION**.
+Prepared: 2026-09-23. Locale: English (U.S.). Status: **DRAFT METADATA SAVED IN APP STORE CONNECT — NOT READY FOR SUBMISSION**.
 
-These are proposed metadata and capture instructions grounded in the current mobile source. They are not evidence that a signed iOS build, these features on a physical iPhone, privacy disclosures, billing behavior, or account-deletion completion have passed release acceptance. Reconcile the draft with the final uploaded build before copying fields into App Store Connect.
+## App Store Connect setup completed
 
-## Proposed metadata
+On 2026-09-23, the iOS app record was created with Apple ID `6815401074`, bundle ID `com.packproof.mobile`, and SKU `packproof-ios-1`. Its status is **1.0.1 Prepare for Submission**. The exact title `PackProof` was rejected by Apple because that name was already in use, so the listing title is **PackProof: Shipment Evidence**. The app's device display name remains PackProof.
+
+The title, subtitle, Business primary category, promotional text, description, keywords, support URL, marketing URL, and version `1.0.1` below were saved through App Store Connect. **Manually release this version** was selected and saved. No App Review submission or release was performed.
+
+Saved metadata is still draft: reconcile it with the signed candidate and complete the acceptance gates below. Screenshots and build selection were not completed by this setup. Copyright ownership, Content Rights, age rating, App Privacy, export compliance, pricing/availability, review access, and applicable Digital Services Act information remain unresolved or unaudited. No declarations were made for those fields.
+
+Verified record: https://appstoreconnect.apple.com/apps/6815401074/distribution/info
+
+These are draft metadata and capture instructions grounded in the current mobile source. Saving the metadata is not evidence that a signed iOS build, these features on a physical iPhone, privacy disclosures, billing behavior, or account-deletion completion have passed release acceptance. Reconcile the saved draft with the final uploaded build before submitting it for review.
+
+## Saved draft metadata
 
 ### Name
 
 ```text
-PackProof
+PackProof: Shipment Evidence
 ```
 
 ### Subtitle
@@ -61,7 +71,7 @@ Counts exclude code fences and the newline immediately before each closing fence
 
 | Field | Characters | UTF-8 bytes | Preparation limit |
 | --- | ---: | ---: | ---: |
-| Name | 9 | 9 | 30 characters |
+| Name | 28 | 28 | 30 characters |
 | Subtitle | 30 | 30 | 30 characters |
 | Promotional text | 159 | 159 | 170 characters |
 | Keywords | 99 | 99 | 100 bytes |
@@ -71,7 +81,7 @@ Counts exclude code fences and the newline immediately before each closing fence
 
 | Field | Prepared value or remaining action |
 | --- | --- |
-| Primary category | Business — proposed; verify existing App Store Connect record before changing. |
+| Primary category | Business — saved in App Store Connect. |
 | Marketing URL | `https://thepackproof.com/` |
 | Support URL | `https://thepackproof.com/contact` — public contact verified during release preparation. |
 | Public support email | `nericollin@thepackproof.com` — public contact; not a credential. |

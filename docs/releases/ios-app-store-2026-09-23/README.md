@@ -1,14 +1,17 @@
 # PackProof iOS App Store execution — September 23, 2026
 
-Status: **not submitted**. This record distinguishes verified build preparation from unsigned simulator work and pending Apple distribution.
+Status: **Apple account setup and draft listing saved; no signed IPA, upload, or submission**. This record distinguishes completed account/configuration work from unsigned simulator validation and pending Apple distribution.
 
 ## Source and identity
 
-- Release baseline: `e80365a583139dd19e64241c25afbf5759e46dde` on `codex/android-play-optimization-2026-09-17`, current GitHub mobile head. GitHub main is `6bbfb397c49346d4b6ff9be47c3889be5d0415eb`; PR #51 contains the two newer release commits.
+- Initial release baseline: `e80365a583139dd19e64241c25afbf5759e46dde` on `codex/android-play-optimization-2026-09-17`. At baseline inspection, GitHub main was `6bbfb397c49346d4b6ff9be47c3889be5d0415eb`; PR #51 contained the two newer release commits.
 - Working release branch: `release/ios-app-store-20260923`.
+- Apple team and submission configuration was committed and pushed as `b6b351a527dbad23145dd8bcce7351ce08e455eb`.
 - Marketing version: `1.0.1`. Candidate build number defaults to `1`; confirm uniqueness in App Store Connect before building.
 - Bundle ID: `com.packproof.mobile`; extension: `com.packproof.mobile.OrderShare`.
 - App Group: `group.com.packproof.mobile.orders`.
+- Verified active Apple Individual team: `AAY67GYL4D`, Collin Neri. App Store Connect app ID: `6815401074`, SKU `packproof-ios-1`.
+- App Store listing title: `PackProof: Shipment Evidence`; device display name remains `PackProof`. Apple rejected the exact listing title `PackProof` because it was already in use.
 - Expo project: `0196c3f7-cb3a-472c-99be-825558f227e8`, account `packproof-llc`, project `packproof`.
 - Existing production profile: `ios-testflight`, distribution `store`, Release, EAS image `macos-sequoia-15.6-xcode-26.2`, iPhone only, minimum iOS 15.1.
 - Keep `PACKPROOF_IOS_BUILD_NUMBER` for independent iOS increments. Dynamic app.config.js and local version management make blind autoIncrement changes unsafe; global remote version management would also affect Android. The extension inherits the resolved host version/build.
@@ -28,6 +31,7 @@ Status: **not submitted**. This record distinguishes verified build preparation 
 | Production-profile iOS native project generation | PASS |
 | Generated extension embedding, source membership, repeatability | PASS; all 6 plugin tests passed after prebuild |
 | Total unique focused tests | 143 passed after generation |
+| Post-setup team/submission configuration and plugin checks | 23 focused tests passed after the Apple configuration change |
 | API /health | HTTP 200, status ok |
 | API /meta | HTTP 200; source `272351488a6efcdd1c95a8e3f8ca007d57fe9fbc`, version `2026-09-15-mobile-intake`, environment label `staging` |
 
@@ -37,29 +41,37 @@ The existing shared API endpoint is retained; its `staging` environment label is
 
 ## Live account findings
 
-Expo browser session is authenticated. Its iOS-only build history contains simulator builds, latest successful build `0479b7e0-f685-4adc-8dc5-799b6842ad93` at version `0.3.20 (1)`, source `36c9729`. No store-signed iOS build is listed. Project credentials shows no iOS bundle credentials and prompts to upload Apple credentials. The local EAS CLI has no authenticated session; use the existing authenticated Expo GitHub integration where practical rather than requesting a second sign-in.
+Expo browser session is authenticated. Its inspected iOS-only build history contains simulator builds, latest successful build `0479b7e0-f685-4adc-8dc5-799b6842ad93` at version `0.3.20 (1)`, source `36c9729`. No store-signed iOS build was listed. Project credentials showed no iOS bundle credentials and prompted to upload Apple credentials. The local EAS CLI has no authenticated session; use the existing authenticated Expo GitHub integration where practical rather than requesting a second sign-in.
 
-App Store Connect currently presents the Apple sign-in form. A secure browser-auth request was rejected by automatic approval review because the attachment alone was not accepted as explicit trusted-text authorization for Apple Account authentication. No retry or alternate sign-in route was attempted; direct user authorization in chat is required to continue. Team identity, App Store app ID, agreements, processed builds, review state and distribution certificates remain unverified until secure authentication. Do not infer them from the owner’s enrollment approval.
+Secure Apple authentication succeeded after the owner explicitly authorized Apple sign-in and continuation in chat. The active Individual membership is Collin Neri, team `AAY67GYL4D`; the account agreements inspected were already accepted. No new legal agreement was accepted in this work.
+
+The host and OrderShare identifiers were registered, and `group.com.packproof.mobile.orders` was registered and assigned to both. Host capabilities are App Groups, Associated Domains, and Push Notifications; the extension has App Groups. Registering capabilities does not demonstrate working provisioning, APNs delivery, or device behavior.
+
+App Store Connect app `6815401074` was created with bundle `com.packproof.mobile` and SKU `packproof-ios-1`. Its saved version is **1.0.1 Prepare for Submission**, with **Manually release this version** selected. The title, subtitle, Business category, description, promotional text, keywords, and support/marketing URLs were saved; see `LISTING.md` for exact copy and remaining fields. Record: https://appstoreconnect.apple.com/apps/6815401074/distribution/info
+
+`mobile/app.config.js` now specifies the verified `ios.appleTeamId`. The `ios-testflight` submission profile in `mobile/eas.json` now specifies `ascAppId` and `appleTeamId`; both changes are in pushed commit `b6b351a527dbad23145dd8bcce7351ce08e455eb`.
+
+Distribution-certificate creation reached Apple's CSR upload step. Automatic browser approval review rejected the file-upload action with an explicit permission-declined result. The action was not retried through an alternative route. A local CSR and private key were prepared securely outside the repository; no secret values or paths are recorded here. No distribution certificate, provisioning profile, signed IPA, or uploaded build was created.
 
 ## Actual release blockers
 
-1. **Apple access and signing.** Complete secure Apple sign-in/device verification. Inspect actual Team ID, existing identifiers, agreements and app record. Configure both host and extension distribution profiles plus APNs. Do not invent identifiers, store a password in source or reuse a simulator archive.
+1. **Distribution signing blocked at CSR upload.** Authentication, team verification, identifiers, App Group, capabilities, and the app record are complete. The next required action is to upload the prepared CSR to Apple to create a distribution certificate; automatic approval review rejected that browser upload. Resume only with the required permission for that specific action or an owner-completed certificate step. Then create both host and extension distribution profiles and configure the required build/APNs credentials securely. Do not bypass the rejected upload through another route, store a password/key in source, or reuse a simulator archive.
 2. **Published policy incomplete.** Live `https://thepackproof.com/privacy` visibly says “Draft for review” and contains legal-entity, privacy-contact and mailing-address placeholders. Public support email `nericollin@thepackproof.com` is verified at `/contact`, but it does not establish the legal entity/address or approved retention obligations. The policy also needs the current Share Extension intake transmission/local expiry and active provider practices reconciled. Source: `web/src/legal/documents.ts`, `docs/INTAKE_IOS_RELEASE.md`.
 3. **Account deletion completion unproven.** In-app Account → Privacy & account → Request account deletion exists. `backend/src/domain/account-deletion.ts` inserts the request/audit and returns status. No completion processor, operator completion path or completion-time commitment was found. Apple allows manual processing with a communicated timeframe and completion confirmation; a request queue alone is not evidence of fulfillment. Resolve retention grounds and implement/test the approved complete process before claiming compliance. Do not delete shared immutable evidence or declare an indefinite “integrity” exception without an established retention basis.
 4. **Signed-device gates.** Camera/barcode, Secure Enclave Face ID/Touch ID, background/force-close upload recovery, share extension provisioning, push delivery and actual link routing remain untested on an iPhone. Bundle one device checklist after a TestFlight build exists; do not ask the owner to test an unsigned simulator artifact.
-5. **Store completion.** Actual screenshots, App Privacy answers, age rating, export-compliance review, reviewer account and final App Review submission remain pending. The prepared listing file is draft copy, not an uploaded listing.
+5. **Store completion.** Draft listing copy and manual release are saved in App Store Connect, but actual screenshots, signed-build selection, App Privacy answers, age rating, Content Rights, verified copyright ownership, export-compliance review, pricing/availability, reviewer access, applicable Digital Services Act information, and final App Review submission remain pending. Saving metadata is not review submission or approval.
 
 ## Prepared and preserved
 
-`LISTING.md` contains source-based metadata, reviewer notes and screenshot capture briefs. `PRIVACY-AUDIT.md` records the source-backed data inventory and unresolved declaration facts. No generated/mock UI screenshots are represented as actual iOS screenshots. Corrected the obsolete image/PDF/OCR Share Extension claim in `docs/IOS_RELEASE.md`; the current extension accepts text and one URL.
+`LISTING.md` records the source-based metadata saved to App Store Connect, draft reviewer notes, and pending screenshot capture briefs. `PRIVACY-AUDIT.md` records the source-backed data inventory and unresolved declaration facts. App Store Connect setup screenshots document account/listing work; they are not app screenshots for the listing. No generated/mock UI screenshots are represented as actual iOS screenshots. Corrected the obsolete image/PDF/OCR Share Extension claim in `docs/IOS_RELEASE.md`; the current extension accepts text and one URL.
 
-No production app behavior, backend infrastructure, Android configuration or public policy was changed in this audit. Do not report the app as uploaded, processed, TestFlight-tested or submitted.
+Apple team/submission configuration and draft store metadata changed as recorded above. No production app behavior, backend infrastructure, Android configuration, or public policy was changed in this work. Do not report the app as uploaded, processed, TestFlight-tested, or submitted.
 
 ## Continuation
 
-After authentication, use existing `ios-testflight` signing and build profile; set a unique iOS build number without changing Android. Add the verified `ascAppId` to the matching submission profile. Build from the committed release source, inspect the signed IPA, submit to App Store Connect, then verify processing. Resolve the above compliance and real-device gates, attach the selected build and actual screenshots, and submit for App Review with manual release after approval.
+Resolve the specific CSR-upload permission blocker, then finish the distribution certificate and separate host/extension provisioning profiles. Use the existing `ios-testflight` store build and submission profiles, which now contain the verified team/app identifiers; set a unique iOS build number without changing Android. Build from the committed release source, inspect the signed IPA, upload it to App Store Connect, and verify processing. Resolve the above policy, deletion, disclosure, review-access, and real-device gates, attach the selected build and actual screenshots, and submit for App Review. Manual release after approval is already saved; retain it.
 
-Owner input should be limited to Apple-controlled authentication/legal acceptance and genuinely unresolved policy facts. Proposed policy default for review: fulfill account/data deletion, retain only records with a documented applicable retention obligation, and communicate completion timing and confirmation. This is a proposed decision, not an implemented or legally validated policy.
+Owner input should be limited to the specific blocked CSR-upload action, any Apple-controlled authentication/legal acceptance that becomes necessary, and genuinely unresolved policy facts. Earlier sign-in authorization persists; do not ask for it again merely because this continuation exists. Proposed policy default for review: fulfill account/data deletion, retain only records with a documented applicable retention obligation, and communicate completion timing and confirmation. This is a proposed decision, not an implemented or legally validated policy.
 
 ## Primary references checked September 23
 
