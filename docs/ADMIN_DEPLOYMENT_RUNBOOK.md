@@ -1,14 +1,22 @@
 # Admin dashboard deployment
 
-Status on 2026-09-24: implementation is prepared; **live AWS state, migrations,
-runtime privileges, and administrator assignment have not been verified**. The
-read-only AWS inventory did not return. This document is a release procedure,
-not evidence that a deployment or bootstrap succeeded.
+Status on 2026-09-24: **the release is deployed and its required deployment gates
+passed**. Migrations 069–073, separate runtime credentials, administrator
+bootstrap, and the candidate runtime verifier succeeded. The candidate rollout
+reached `SUCCESSFUL` at 10:42:41.870 UTC; the old bridge task stopped at
+10:48:50 UTC before owner-secret IAM access was denied at 10:49:38 UTC. Public
+readiness/health and release identity passed after that change. Website version
+33 was published successfully at 10:50:20.306833 UTC. Live Cognito user sessions
+and a live customer capture/upload flow were **NOT EXERCISED** because no user
+bearer tokens were available. The runtime verifier ran before IAM cutover, during
+old-task drain; subsequent IAM/readiness evidence is recorded separately in
+[the release receipt](admin-deployment-2026-09-24/RELEASE.md).
 
 ## Existing deployment and recorded baseline
 
-The following names come from infrastructure code and the **September 15**
-receipts in `docs/intake-deployment-2026-09-15/`. Revalidate them before use.
+The following resource names were corroborated by the September 24 read-only
+discovery and operator task receipts. Revalidate the current service state before
+every subsequent change; the September 15 receipts remain historical context.
 
 | Resource | Recorded value |
 | --- | --- |
@@ -70,10 +78,10 @@ provider credentials, bearer tokens, or presigned upload URLs.
    roles, network, CPU, memory, scaling, health, canary, and rollback settings;
    change only image and release identity. Require completed rollout, exact
    running digest/source, expected healthy task count, `/meta`, and `/ready`.
-6. Use a reviewed one-shot migration task with separate owner authority and the
-   pinned candidate image. Adapt and test the existing controlled runner's
-   inspect/apply discipline for **069–073**; `infra/mobile-intake-migration.mjs`
-   only allows 067/068 and cannot be reused unchanged. Require current RDS
+6. Use `infra/admin-dashboard-migration.mjs` in a reviewed one-shot task with
+   separate owner authority and the pinned candidate image. Its inspect/apply
+   discipline allows exactly **069–073**; the earlier
+   `infra/mobile-intake-migration.mjs` only allows 067/068. Require current RDS
    recovery evidence, exact executed-byte receipts, bounded execution, cleanup,
    and unchanged TLS/durability settings. Keep `PACKPROOF_MIGRATE_ON_START=false`.
    Do not start the application process in the migration task.
@@ -84,16 +92,33 @@ provider credentials, bearer tokens, or presigned upload URLs.
 8. Verify bridge readiness after migration. Deploy the candidate with the same
    preservation/comparison checks. Preserve existing provider/admission flags;
    the new registration and capture pause flags default to false. Require
-   readiness, source/digest identity, CORS, normal authentication, existing
-   capture/upload recovery, worker health, and ordinary-user denial of `/admin`.
+   readiness, source/digest identity, CORS, runtime privilege/internal authorization
+   guard checks, and worker observations. Record real user-session and customer
+   capture/upload coverage separately; without user bearer tokens, mark those
+   live flows **NOT EXERCISED**, without claiming a pass or adding a deployment
+   blocker after the required internal checks pass.
 9. Bootstrap the administrator using the verified identity procedure below.
-   Then verify capability-based navigation and live, source-backed admin data.
+   Verify source-backed admin reads and internal authorization guards through the
+   deployed runtime. Exercise authenticated navigation when an authorized user
+   session is available, recording the actual coverage.
    Publishing frontend code alone does not complete this release.
+
+The reviewed operator bundle contains `admin-dashboard-migration.mjs`,
+`admin-runtime-credentials.mjs`, and `runtime-roles.sql`. The short command from
+`infra/admin-operator-launch.mjs` downloads only the commit-scoped bundle in the
+existing build bucket, verifies its compressed SHA-256 and all file hashes,
+extracts private temporary files, calls the selected operator entry, and removes
+the files. It never starts the API. Preserve the source, bundle, schema, and SQL
+pins in the release receipt. Keep signed URLs and injected credential values in
+protected operator records, and check the complete ECS override size before use.
+On a failure, inspect the phase and transaction-acknowledgement receipt before
+considering another operation; do not retry or reset a database password blindly.
 
 ### Pinned migration bytes
 
-These hashes describe the candidate files when this runbook was written. After
-final code changes, regenerate with `sha256sum backend/migrations/069_system_admin.sql
+These hashes were confirmed by the successful September 24 migration task with
+`EXECUTED_BYTES` provenance for all five entries. For any future candidate,
+regenerate with `sha256sum backend/migrations/069_system_admin.sql
 backend/migrations/070_public_analytics.sql backend/migrations/071_admin_error_triage.sql
 backend/migrations/072_admin_read_indexes.sql backend/migrations/073_client_version_activity.sql` and review **all five** hashes in the
 bridge, runner, candidate, and release receipt. Do not loosen checksum validation.
@@ -108,9 +133,13 @@ bridge, runner, candidate, and release receipt. Do not loosen checksum validatio
 
 ## Database authority gate
 
-September 15 observations recorded the application using owner login `packproof`,
-with CREATEROLE and membership in `rds_superuser`, and no separate runtime login.
-Those observations are not current-state proof. A schema owner can bypass table
+The September 24 baseline still used owner login `packproof` and had no separate
+runtime role. The successful credential operator then created
+`packproof_app_runtime_v1` and verified a fresh connection with that identity,
+TLS 1.3, the expected effective privileges, and ten denied authority probes.
+Candidate service cutover and its verification are separate from credential
+preparation. Both have release evidence; the verifier's scope and timing are in
+the release receipt. A schema owner can bypass table
 ACLs and alter guards; revoking privileges from a different group cannot constrain
 that owner.
 
@@ -121,15 +150,19 @@ owner and application credentials. The application must not own tables, have
 elevated role attributes, inherit owner authority, or be able to assume it.
 Preserve existing recovery/publisher role separation.
 
-In the reviewed privilege window, apply `infra/sql/runtime-roles.sql` as the
-database owner after all five migrations. Then test through the **actual runtime
+The reviewed privilege window applies `infra/sql/runtime-roles.sql` through
+`infra/admin-runtime-credentials.mjs` as the database owner after all five
+migrations. Its successful setup receipt covers a fresh runtime connection,
+163 tables, 285 column checks, and six sequences. Also test through the **deployed runtime
 login**, including any inherited grants, that:
 
 - `user_system_roles` allows SELECT and denies INSERT/UPDATE/DELETE/TRUNCATE.
 - Admin audit, command receipts, and allowance adjustments allow required append
   operations and deny UPDATE/DELETE/TRUNCATE.
 - Schema/trigger alteration and role assignment are unavailable to runtime.
-- Existing account, capture, billing, worker, and evidence operations still work.
+- Existing account, capture, billing, worker, and evidence contracts retain their
+  recorded source/unit/integration coverage; distinguish that evidence from any
+  live customer flow actually exercised.
 
 Keep credentials in existing managed-secret/operator channels. Do not place
 operator credentials in the regular API task, frontend, repository, or workflow
@@ -137,9 +170,10 @@ logs. Verify the role boundary again after the credential/configuration cutover.
 
 ## Initial administrator
 
-After candidate deployment, `admin@thepackproof.com` signs in normally with a
+After candidate deployment, the designated administrator signs in normally with a
 verified Cognito ID token so the backend records its verified contact. Discover
-the identity read-only through an operator database connection:
+the identity read-only through an operator database connection. Substitute the
+verified address from the protected operator record; do not commit identity values:
 
 ```sql
 BEGIN READ ONLY;
@@ -148,7 +182,7 @@ SELECT u.id AS user_id, u.status, a.provider_subject AS cognito_subject,
 FROM users u
 JOIN auth_identities a ON a.user_id = u.id AND a.provider = 'cognito'
 JOIN user_verified_contacts c ON c.user_id = u.id
-WHERE c.email_normalized = 'admin@thepackproof.com' AND c.source = 'COGNITO';
+WHERE c.email_normalized = 'VERIFIED_ADMIN_EMAIL_FROM_OPERATOR_RECORD' AND c.source = 'COGNITO';
 SELECT user_id, role, granted_at FROM user_system_roles;
 ROLLBACK;
 ```
@@ -168,23 +202,41 @@ Run the committed `npm --prefix backend run admin:bootstrap:prod` from the
 repository root, or `npm run admin:bootstrap:prod` inside `/app` of the pinned
 candidate operator task. Retain the bounded bootstrap/audit receipt.
 
-Verify an authenticated admin receives `isAdmin: true` from `/me/capabilities`,
-normal users receive `isAdmin: false`, all admin routes reject normal users, and
-role removal takes effect on the next request. Check recent-authentication,
-confirmation, idempotency, version conflicts, and audit behavior using the
-release tests and an approved reversible production smoke action. Do not change
+The committed bootstrap implementation grants the role and appends its audit
+event in one transaction. A successful task receipt with `alreadyAssigned: false`
+therefore records both the new assignment and the committed audit operation; an
+extra audit-row query is not a new deployment gate.
+
+With an available authorized Cognito session, check that an admin receives
+`isAdmin: true` from `/me/capabilities`, normal users receive `isAdmin: false`,
+admin routes reject normal users, and role removal takes effect on the next
+request. Without user bearer tokens, record these HTTP-session checks as
+**NOT EXERCISED**, separately from the required deployed-runtime internal guards
+and existing authorization test evidence. Preserve the recorded test coverage
+for recent authentication, confirmation, idempotency, version conflicts, and
+audit behavior; do not represent it as a live customer action. Do not change
 customer balances or disable customers merely to test deployment.
 
 ## Rollback and completion evidence
 
-Rollback uses the verified compatibility bridge, preserving all additive schema,
-audit, Proofs, evidence, credentials, and configuration. The pre-bridge image is
-not a valid post-migration fallback. Preserve or deliberately reverse any
-separately reviewed credential cutover; never delete migration receipts to make
-an old binary start.
+Rollback uses the verified compatibility bridge image, preserving all additive
+schema, audit, Proofs, and evidence. After the runtime credential cutover, clone
+the current service configuration and change only the image and corresponding
+release identity to the bridge. Retain the new runtime login/secret references,
+database grants, and credential-access restrictions. Do not restore the old
+bridge task definition verbatim: its original configuration used the owner
+credentials. Verify the bridge's readiness through the retained runtime identity
+before calling rollback complete. Reverting the credential boundary is a
+separate security-sensitive change, not an implicit part of image rollback.
+The pre-bridge image is not a valid post-migration fallback. Never delete
+migration receipts to make an old binary start.
 
 Completion requires candidate/bridge commits and digests, CodeBuild receipts,
 pre-migration recovery timestamp, runner/checksum receipt, migration task exit and
-cleanup, runtime privilege verification, preservation comparison, completed
-service rollout, public readiness/source checks, bootstrap audit, and authenticated
-admin/ordinary-user checks. Missing evidence remains **pending**, not successful.
+cleanup, runtime privilege and internal guard verification, preservation
+comparison, completed service rollout, public readiness/source checks, atomic
+bootstrap/audit evidence, and frontend publication. Missing required evidence
+remains **pending**, not successful. Real Cognito sessions and live customer
+capture/upload flows without available user bearer tokens are **NOT EXERCISED**;
+that coverage limitation is not an additional deployment blocker after the
+required gates pass.

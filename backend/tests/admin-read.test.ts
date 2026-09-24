@@ -77,6 +77,25 @@ describe("System administration read boundary", () => {
       expect((await request(h.app).get(path)).status).toBe(401);
     }
   });
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])(
+    "rejects inherited section name %s for an authenticated administrator",
+    async (name) => {
+      const response = await request(h.app)
+        .get(`/admin/sections/${name}`)
+        .set(auth(admin));
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe("ADMIN_SECTION_NOT_FOUND");
+    },
+  );
+  it("continues to serve an explicitly registered section to administrators", async () => {
+    const response = await request(h.app)
+      .get("/admin/sections/users")
+      .set(auth(admin));
+    expect(response.status).toBe(200);
+    expect(response.body.rows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: user })]),
+    );
+  });
   it("all explorer modules execute against migrated database without raw credentials", async () => {
     for (const name of [
       "users",

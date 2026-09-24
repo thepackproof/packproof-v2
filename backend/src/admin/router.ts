@@ -115,13 +115,13 @@ export function adminRouter(input: AdminReadDeps) {
     infrastructure: (q) => infrastructureSection(deps, q),
   };
   get("/sections/:section", async (req) => {
-    const fn = sections[req.params.section];
-    if (!fn)
+    if (!Object.hasOwn(sections, req.params.section))
       throw new DomainError(
         "ADMIN_SECTION_NOT_FOUND",
         "Unknown administration section",
         404,
       );
+    const fn = sections[req.params.section];
     return req.params.section === "analytics"
       ? cached(`analytics:${JSON.stringify(q(req))}`, () => fn(q(req)))
       : fn(q(req));
