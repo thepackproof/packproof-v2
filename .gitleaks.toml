@@ -106,3 +106,14 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''^docs/intake\-deployment\-2026\-09\-15/bridge\-release\.json$''']
 regexes = ['''^996345cf\-ad9e\-476e\-97e5\-42f61c1e0144$''']
+
+# Reviewed CI run 35984278492 / Source secrets job 107583450405.
+# This exact fixed metric identifier selects the ALB latency display and cannot
+# authenticate. Keep the exception limited to this rule, source path, and value.
+[[allowlists]]
+description = "Fixed ALB p95 latency metric identifier; no authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^backend/src/admin/aws\-telemetry\.ts$''']
+regexes = ['''^apiLatencyP95$''']

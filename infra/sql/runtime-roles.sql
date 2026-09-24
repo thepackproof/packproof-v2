@@ -25,8 +25,15 @@ REVOKE UPDATE,DELETE,TRUNCATE ON final_manifests,audit_events,recovery_events,pr
 REVOKE UPDATE,DELETE,TRUNCATE ON recovery_delivery,policy_recovery_delivery FROM packproof_runtime;
 GRANT SELECT,UPDATE ON recovery_delivery,policy_recovery_delivery TO packproof_recovery;
 REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON recovery_writer_fence,policy_recovery_fence,policy_recovery_overlay,policy_recovery_tables FROM packproof_runtime;
--- Recovery takes a row lock on the writer fence; UPDATE permission permits the lock.
-GRANT SELECT,UPDATE ON recovery_writer_fence TO packproof_recovery;
+-- PostgreSQL row locks require UPDATE on at least one column. The publisher only
+-- locks the writer fence: grant the CHECK-constrained singleton, not authority to
+-- change the writer generation or reopen writes. Remove the old broad grant.
+REVOKE UPDATE ON recovery_writer_fence,policy_recovery_fence FROM packproof_recovery;
+GRANT SELECT ON recovery_writer_fence,policy_recovery_fence TO packproof_recovery;
+GRANT UPDATE(singleton) ON recovery_writer_fence TO packproof_recovery;
+-- Policy publication locks the policy fence and advances only its observed head.
+-- Mode, durability requirement and expected restore watermark stay operator-only.
+GRANT UPDATE(reconciled_sequence,reconciled_head_sha256) ON policy_recovery_fence TO packproof_recovery;
 
 -- Only the reviewed operator bootstrap/recovery workflow assigns system roles.
 REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON user_system_roles FROM packproof_runtime;
