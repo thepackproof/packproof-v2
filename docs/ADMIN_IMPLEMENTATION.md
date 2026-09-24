@@ -40,11 +40,11 @@ Prepared 2026-09-24. Code is implemented locally; **it is not deployed and the i
 
 ## Release status
 
-The GitHub checkout and current Sites checkout have different existing application histories, including different Expo SDK versions. Admin changes have been applied to each without replacing the newer live-site work. Local commits are the reviewable delivery; no remote branch, pull request, or deployment is implied.
+The GitHub checkout and current Sites checkout have different existing application histories, including different Expo SDK versions. Admin changes have been applied to each without replacing the newer live-site work. The reviewed source is now published on GitHub branch `codex/packproof-admin-dashboard` in draft pull request [#52](https://github.com/thepackproof/packproof-v2/pull/52). The remote commit `3d48d562e634af02bb5e30ad78784f659e61c114` has the exact tested source tree `cd3faa41bb2e844853a1b056c7035fd58ad17df9`. No live deployment is implied.
 
-An automatic approval review rejected even a GitHub push dry run because publishing private repository contents was not considered authorized by the implementation request. No alternative publishing route was used. Explicit authorization is needed before pushing to `thepackproof/packproof-v2` and publishing the updated website.
+An automatic approval review initially rejected the GitHub push because source publication was not considered authorized by the implementation request. The owner subsequently gave explicit authorization. The terminal has no GitHub credentials, so the verified connected GitHub app published the identical reviewed tree and created pull request #52. Website publication remains conditional on backend verification; no further owner approval is needed for that agreed sequence.
 
-The read-only AWS inventory did not return, so current service configuration, database identity/privileges, recovery state, and Cognito bootstrap identity remain unverified. Backend deployment and administrator assignment require a working authenticated AWS/operator connection.
+AWS access was retried after authorization with one read-only `sts.get_caller_identity` call. It did not return before interruption after approximately 155 seconds. Current service configuration, database identity/privileges, recovery state, and Cognito bootstrap identity therefore remain unverified. Backend deployment and administrator assignment require a working authenticated AWS/operator connection. The website source/build can be saved, but production publication remains blocked on those checks.
 
 Follow `ADMIN_DEPLOYMENT_RUNBOOK.md` for the compatibility bridge, pinned additive migrations, separate runtime credentials, image-only rollout, verified bootstrap, and production checks. Follow `ADMIN_SECURITY_OPERATIONS.md` for authorization and control semantics. Publishing the frontend by itself does not complete the backend release.
 
@@ -55,4 +55,4 @@ Follow `ADMIN_DEPLOYMENT_RUNBOOK.md` for the compatibility bridge, pinned additi
 | GitHub source branch `codex/packproof-admin-dashboard` | `eb845c1d020a595ec0fba0f88060a6e3d2c90354` |
 | Current Sites source | `3cdf8bb5073ec72e26f3ee4b6339ee0b634ae588` |
 
-These identify the tested code. A later documentation-only commit records these validation results. Neither source has been pushed or deployed.
+These identify the tested code. A later documentation-only commit records these validation results. The equivalent GitHub tree has since been published in pull request #52. The website release is being saved for the agreed deployment sequence; backend and website production deployment remain pending.
