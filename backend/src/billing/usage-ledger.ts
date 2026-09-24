@@ -149,8 +149,9 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
   const usage = (await db.query<{ total: string | number; charge_eligible: string | number }>(`SELECT COALESCE(SUM(units),0) AS total,
     COALESCE(SUM(units) FILTER(WHERE charge_eligible),0) AS charge_eligible FROM billing_proof_usage
     WHERE user_id=$1 AND finalized_at >= $2 AND finalized_at < $3`, [userId, start, end])).rows[0];
-  const current = (await db.query<{ id: string; definition_json: OfferDefinition; period_start: Date | string; period_end: Date | string; used: number | string }>(`SELECT p.id,o.definition_json,p.period_start,p.period_end,
-    (SELECT COALESCE(SUM(units),0) FROM billing_proof_usage u WHERE u.offer_period_id=p.id) AS used
+  const current = (await db.query<{ id: string; definition_json: OfferDefinition; period_start: Date | string; period_end: Date | string; used: number | string; adjustments:number|string }>(`SELECT p.id,o.definition_json,p.period_start,p.period_end,
+    (SELECT COALESCE(SUM(units),0) FROM billing_proof_usage u WHERE u.offer_period_id=p.id) AS used,
+    (SELECT COALESCE(SUM(delta),0) FROM billing_allowance_adjustments a WHERE a.offer_period_id=p.id) AS adjustments
     FROM billing_account_offer_periods p JOIN billing_offer_versions o ON o.version=p.offer_version
     WHERE p.user_id=$1 AND p.period_start <= $2 AND p.period_end > $2`, [userId, now.toISOString()])).rows[0];
   const paymentTotals = (await db.query<{ environment: string; net_minor: string | number }>(`SELECT environment,
@@ -162,8 +163,8 @@ export async function getAccountUsageSummary(db: Database, clock: Clock, userId:
     recordedUsageUnits: Number(usage.total), eligibleUnderConsentedOffer: Number(usage.charge_eligible), automaticChargesEnabled: false,
     currentOffer: current ? { version: current.definition_json.version, currency: current.definition_json.currency, priceMinor: current.definition_json.priceMinor,
       interval: current.definition_json.interval, period: { start: new Date(current.period_start).toISOString(), end: new Date(current.period_end).toISOString() },
-      includedFinalizedProofs: current.definition_json.includedFinalizedProofs, used: Number(current.used),
-      remaining: Math.max(0, current.definition_json.includedFinalizedProofs - Number(current.used)), overage: current.definition_json.overage } : null,
+      includedFinalizedProofs: current.definition_json.includedFinalizedProofs, allowanceAdjustments:Number(current.adjustments), effectiveAllowance:current.definition_json.includedFinalizedProofs+Number(current.adjustments), used: Number(current.used),
+      remaining: Math.max(0, current.definition_json.includedFinalizedProofs + Number(current.adjustments) - Number(current.used)), overage: current.definition_json.overage } : null,
     paymentReconciliationStatus: "unreconciled",
     verifiedProviderAmounts: paymentTotals.map(row => ({ environment: row.environment, currency: "USD", netMinor: safeMoneyTotal(row.net_minor) })),
     preservationAndPastAccessIndependentOfAllowance: true,

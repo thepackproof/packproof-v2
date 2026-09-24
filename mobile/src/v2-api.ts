@@ -2,6 +2,7 @@ import type { ProofRecovery } from "./capture/recovery-model";
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
 import type { IdentifierObservation, IdentifierPolicy, IdentifierReview } from "../../backend/src/identifiers/types";
 import { withRequestTimeout } from "./request-timeout";
+import type { ClientVersion } from "./analytics/client-version";
 
 export interface ApiCapabilities {
   identifiers?: { schemaVersions: number[]; productionQualified: boolean; [key: string]: unknown };
@@ -686,6 +687,14 @@ export class PackProofV2Client {
 
   async getMe(): Promise<ProfileView> {
     return this.request("/me");
+  }
+
+  async reportClientVersion(input: ClientVersion): Promise<void> {
+    await this.request("/me/client-version", {
+      method: "POST",
+      body: { platform: input.platform, version: input.version, ...(input.build ? { build: input.build } : {}) },
+      timeoutMs: 5_000,
+    });
   }
 
   async updateProfile(input: { username?: string; displayName?: string }): Promise<ProfileView> {

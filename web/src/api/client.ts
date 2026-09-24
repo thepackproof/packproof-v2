@@ -60,6 +60,11 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  async adminCapabilities<T>(): Promise<T> { return this.request("/me/capabilities"); }
+  async adminRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+    if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) throw new Error("Invalid administrative request.");
+    return this.request(`/admin${path}`, { method, body });
+  }
   async intakeRequest<T>(path: string, method = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
     return this.request(`/me/intake${path}`, {method, body, headers});
   }
@@ -164,6 +169,10 @@ export class PackProofApi {
 
   async getMe(): Promise<ProfileView> {
     return this.request("/me");
+  }
+
+  async reportClientVersion(input: { platform: "WEB"; version: string; build?: string }): Promise<void> {
+    await this.request("/me/client-version", { method: "POST", body: input });
   }
 
   async updateProfile(input: { username?: string; displayName?: string }): Promise<ProfileView> {

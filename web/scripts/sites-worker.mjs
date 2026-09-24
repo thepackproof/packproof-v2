@@ -60,7 +60,7 @@ export default {
     const response = await env.ASSETS.fetch(new Request(assetUrl, { method: request.method }));
     const headers = new Headers(response.headers);
     headers.set("x-content-type-options", "nosniff");
-    headers.set("referrer-policy", /^\/(app|capture)(\/|$)/.test(url.pathname) ? "no-referrer" : "strict-origin-when-cross-origin");
+    headers.set("referrer-policy", /^\/(app|capture|admin)(\/|$)/.test(url.pathname) ? "no-referrer" : "strict-origin-when-cross-origin");
     if (!isAsset) headers.set("cache-control", "no-cache");
     return new Response(response.body, { status: response.status, headers });
   },
