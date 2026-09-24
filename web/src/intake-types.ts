@@ -2,6 +2,7 @@ export interface IntakeSnapshot {
   id: string; version: number; digest: string; proofId: string; transactionId: string;
   items: Array<{title: string | null; quantity: number | null; variant?: string | null}>;
   store: string; orderReference: string; sourceKind: string;
+  fulfillmentScope?: string;
 }
 export interface IntakeOrder {
   observationId: string; readiness: string; reasons: string[];

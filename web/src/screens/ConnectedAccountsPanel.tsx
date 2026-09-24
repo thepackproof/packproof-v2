@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatDateTime } from "@packproof/copy/format";
 import { connectedAccountStatusLabel, providerDisplay } from "@packproof/copy/status";
-import { ETSY_ATTRIBUTION, orderIntakeExplanation, orderReviewReason } from "@packproof/copy/commerce";
+import { ETSY_ATTRIBUTION, SHOPIFY_AUTOMATIC_PROOFS_LABEL, orderIntakeExplanation, orderReviewReason } from "@packproof/copy/commerce";
 import type { CommerceConnectionView, ConnectedAccountProviderCatalogView, ConnectedAccountView } from "../api/types";
 import "./account-settings.css";
 
@@ -13,7 +13,7 @@ export interface ConnectedAccountsPanelProps {
   connections?: CommerceConnectionView[];
   onAutomation?: (connectionId: string, enabled: boolean) => void;
   onSync?: (connectionId: string) => void;
-  onConnect: (provider: string, extra?: { shop?: string }) => void;
+  onConnect: (provider: string, extra?: { shop?: string; autoSyncEnabled?: boolean }) => void;
   onReauthorize: (accountId: string) => void;
   onDisconnect: (accountId: string) => void;
 }
@@ -30,6 +30,7 @@ function intakeStatus(connection: CommerceConnectionView): string {
 
 export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
   const [shops, setShops] = useState<Record<string, string>>({});
+  const [shopifyAutomaticProofs, setShopifyAutomaticProofs] = useState(true);
   const providers = [...new Set([
     ...props.providers.filter(provider => provider.enabled && provider.capabilities.transactions).map(provider => provider.provider),
     ...props.accounts.map(account => account.provider),
@@ -69,7 +70,7 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
           const canRead = available && connection.status === "ACTIVE" && permissionHealthy && identity?.capabilities.transactions !== false;
           return <div className="stack channel-orders" key={connection.connectionId}>
             {(connections.length > 1 || accounts.length === 0) && <p className="card-title">{connection.externalAccountReference || "Connected store"}</p>}
-            <label className="channel-toggle"><input type="checkbox" checked={connection.autoSyncEnabled === true} disabled={props.busy || !props.onAutomation || ((!canRead || connection.automationAvailable === false) && !connection.autoSyncEnabled)} onChange={event => props.onAutomation?.(connection.connectionId, event.target.checked)} /> <span>Automatically add orders</span></label>
+            <label className="channel-toggle"><input type="checkbox" checked={connection.autoSyncEnabled === true} disabled={props.busy || !props.onAutomation || ((!canRead || connection.automationAvailable === false) && !connection.autoSyncEnabled)} onChange={event => props.onAutomation?.(connection.connectionId, event.target.checked)} /> <span>{provider === "shopify" ? SHOPIFY_AUTOMATIC_PROOFS_LABEL : "Automatically add orders"}</span></label>
             <p className="meta">{intakeStatus(connection)}</p>
             {!permissionHealthy && connection.status === "ACTIVE" && <p className="note">Order checks are paused until this selling account is reconnected.</p>}
             {connection.lastErrorCode && <p className="note" role="status">The latest order check could not finish. {connection.status === "NEEDS_REAUTH" ? "Reconnect your selling account to continue." : "Try checking again. Your saved Proofs are still available."}</p>}
@@ -83,7 +84,11 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
         {currentAccounts.some(account => account.capabilities.transactions) && connections.length === 0 && <p className="note">The account is linked, but order access is not ready yet. Refresh this page to check again. Recording a shipment remains available in Orders.</p>}
         {canConnect && <div className="stack">
           {catalog.requiresShop && <label className="field" htmlFor={`connected-shop-${provider}`}><span>Shopify shop</span><input id={`connected-shop-${provider}`} value={shop} onChange={event => setShops(previous => ({...previous, [provider]: event.target.value}))} placeholder="your-store.myshopify.com" autoComplete="off" /></label>}
-          <button className="btn btn-secondary" type="button" disabled={props.busy || (catalog.requiresShop && !shop.trim())} onClick={() => props.onConnect(provider, catalog.requiresShop ? { shop: shop.trim() } : undefined)}>Connect {label}</button>
+          {provider === "shopify" && <>
+            <label className="channel-toggle"><input type="checkbox" checked={shopifyAutomaticProofs} disabled={props.busy} aria-describedby="shopify-automatic-proofs-explanation" onChange={event => setShopifyAutomaticProofs(event.target.checked)} /> <span>{SHOPIFY_AUTOMATIC_PROOFS_LABEL}</span></label>
+            <p className="note" id="shopify-automatic-proofs-explanation">{orderIntakeExplanation(provider)}</p>
+          </>}
+          <button className="btn btn-secondary" type="button" disabled={props.busy || (catalog.requiresShop && !shop.trim())} onClick={() => props.onConnect(provider, provider === "shopify" ? { shop: shop.trim(), autoSyncEnabled: shopifyAutomaticProofs } : catalog.requiresShop ? { shop: shop.trim() } : undefined)}>Connect {label}</button>
         </div>}
       </article>;
     })}

@@ -16,7 +16,7 @@ const LINE_FIELDS = `id title sku quantity currentQuantity unfulfilledQuantity v
 
 export const ORDER_QUERY = `query PackProofOrder($id: ID!) {
   order(id: $id) {
-    id legacyResourceId name createdAt updatedAt cancelledAt
+    id legacyResourceId name createdAt updatedAt cancelledAt test
     displayFinancialStatus displayFulfillmentStatus
     currentTotalPriceSet { shopMoney { amount currencyCode } }
     lineItems(first: 100) {
@@ -47,6 +47,37 @@ export const FULFILLMENT_LINES_QUERY = `query PackProofFulfillmentLines($id: ID!
       }
     }
   }
+}`;
+
+const ASSIGNMENT_FIELDS = `deliveryMethod { methodType }
+  assignedLocation { location { isFulfillmentService } }`;
+
+// Shopify filters by granted scopes, which can include permissions from an
+// older installation. Always verify the actual assigned location as well.
+export const ORDER_FULFILLMENT_ORDERS_QUERY = `query PackProofOrderFulfillmentOrders($id: ID!, $after: String) {
+  order(id: $id) {
+    id updatedAt
+    fulfillmentOrders(first: 100, after: $after) {
+      nodes { id updatedAt status requestStatus ${ASSIGNMENT_FIELDS} }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+
+export const FULFILLMENT_ORDER_LINES_QUERY = `query PackProofFulfillmentOrderLines($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on FulfillmentOrder {
+      id updatedAt
+      lineItems(first: 100, after: $after) {
+        nodes { id remainingQuantity requiresShipping lineItem { id } }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`;
+
+export const FULFILLMENT_ORDER_REVISION_QUERY = `query PackProofFulfillmentOrderRevision($id: ID!) {
+  node(id: $id) { ... on FulfillmentOrder { id updatedAt ${ASSIGNMENT_FIELDS} } }
 }`;
 
 export const ORDER_REVISION_QUERY = `query PackProofOrderRevision($id: ID!) {

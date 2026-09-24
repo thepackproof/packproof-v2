@@ -25,6 +25,67 @@ async function setup(list: CommerceFulfillmentAdapter["listFulfillmentOrders"]) 
     return { h, user, connection, integrations, deps: { integrations, credentials: h.credentialStore } };
 }
 describe("durable automatic commerce intake", () => {
+    it("advances incremental reads from the covered source window after a slow paginated pass", async () => {
+        const list=vi.fn(async ({cursor}: Parameters<CommerceFulfillmentAdapter['listFulfillmentOrders']>[0])=>({orders:[],cursor:cursor?null:'page-two'}));
+        const {h,user,connection,deps}=await setup(list);
+        const initialTime=now.value;
+        await executeCommerceFulfillmentSync(h.db,clock,user,connection.connectionId,deps,{maxPages:1});
+        now.value+=3600000;
+        await executeCommerceFulfillmentSync(h.db,clock,user,connection.connectionId,deps,{maxPages:1});
+        now.value+=300000;
+        await executeCommerceFulfillmentSync(h.db,clock,user,connection.connectionId,deps,{maxPages:1});
+        expect(list.mock.calls[2][0].updatedSince).toBe(new Date(initialTime-15*60000).toISOString());
+        expect(new Date(String((await h.db.query('SELECT initial_sync_completed_at FROM commerce_connection_sync_states')).rows[0].initial_sync_completed_at)).getTime()).toBe(initialTime+3600000);
+    });
+    it("retains invalidations newer than the frozen start of a pass resumed by another invocation", async () => {
+        const { h, user, connection, deps, integrations } = await setup(async ({cursor}) => ({orders:[],cursor:cursor ? null : "page-two"}));
+        await setCommerceAutomation(h.db, clock, user, connection.connectionId, true, integrations);
+        await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps, {maxPages:1});
+        now.value += 1000;
+        await enqueueCommerceWebhook(h.db, clock, {provider:"test-store",externalAccountReference:"store-one",deliveryId:"between-pages",topic:"orders/updated"});
+        now.value += 1000;
+        const completed = await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps, {maxPages:1});
+        expect(completed.complete).toBe(true);
+        expect((await h.db.query("SELECT processed_at FROM commerce_webhook_inbox")).rows[0].processed_at).toBeNull();
+        await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps);
+        expect((await h.db.query("SELECT processed_at FROM commerce_webhook_inbox")).rows[0].processed_at).not.toBeNull();
+    });
+    it("reconciles old order routing changes after a webhook even without a new order updatedAt", async () => {
+        let routed = false;
+        const oldUpdate = "2026-08-10T12:00:00Z";
+        const list = vi.fn(async (input: Parameters<CommerceFulfillmentAdapter["listFulfillmentOrders"]>[0]) => ({
+            orders: routed && Date.parse(input.updatedSince!) < Date.parse(oldUpdate)
+                ? [order("old-routed-order", "store-one", { providerUpdatedAt: oldUpdate })] : [], cursor: null,
+        }));
+        const { h, user, connection, deps, integrations } = await setup(list);
+        await setCommerceAutomation(h.db, clock, user, connection.connectionId, true, integrations);
+        await executeCommerceFulfillmentSync(h.db, clock, user, connection.connectionId, deps);
+        now.value += 60000;
+        routed = true;
+        await enqueueCommerceWebhook(h.db, clock, {provider:"test-store",externalAccountReference:"store-one",deliveryId:"routing-event",topic:"fulfillment_orders/order_routing_complete"});
+        expect(await dispatchCommerceSyncs(h.db, clock, deps)).toEqual({completed:1,failed:0});
+        expect((await h.db.query("SELECT id FROM proofs")).rows).toHaveLength(1);
+        expect((await h.db.query("SELECT processed_at FROM commerce_webhook_inbox")).rows[0].processed_at).not.toBeNull();
+    });
+    it("retains an invalidation arriving during a read and immediately schedules another pass", async () => {
+        let inject = false;
+        const list = vi.fn(async () => {
+            if (inject) {
+                inject = false; now.value += 1000;
+                await enqueueCommerceWebhook(h!.db, clock, {provider:"test-store",externalAccountReference:"store-one",deliveryId:"late-event",topic:"orders/updated"});
+            }
+            return {orders:[],cursor:null};
+        });
+        const { h: harness, user, connection, deps, integrations } = await setup(list);
+        await setCommerceAutomation(harness.db, clock, user, connection.connectionId, true, integrations);
+        inject = true;
+        await executeCommerceFulfillmentSync(harness.db, clock, user, connection.connectionId, deps);
+        expect((await harness.db.query("SELECT processed_at FROM commerce_webhook_inbox")).rows[0].processed_at).toBeNull();
+        const state=(await harness.db.query("SELECT next_run_at FROM commerce_connection_sync_states")).rows[0];
+        expect(new Date(String(state.next_run_at)).getTime()).toBe(now.value);
+        expect(await dispatchCommerceSyncs(harness.db, clock, deps)).toEqual({completed:1,failed:0});
+        expect((await harness.db.query("SELECT processed_at FROM commerce_webhook_inbox")).rows[0].processed_at).not.toBeNull();
+    });
     it("completes pages, clears its cursor and deduplicates repeated reads", async () => {
         const list = vi.fn(async ({ cursor }: Parameters<CommerceFulfillmentAdapter["listFulfillmentOrders"]>[0]) => ({ orders: [order(cursor ? "two" : "one")], cursor: cursor ? null : "second" }));
         const { h, user, connection, deps } = await setup(list);

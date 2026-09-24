@@ -311,7 +311,7 @@ export interface PackProofContextValue {
   setCommerceAutomation: (connectionId: string, enabled: boolean) => Promise<void>;
   syncCommerceConnection: (connectionId: string) => Promise<void>;
   loadConnectedAccounts: () => Promise<void>;
-  connectConnectedAccount: (provider: string, extra?: { shop?: string }) => Promise<void>;
+  connectConnectedAccount: (provider: string, extra?: { shop?: string; autoSyncEnabled?: boolean }) => Promise<void>;
   reauthorizeConnectedAccount: (accountId: string) => Promise<void>;
   disconnectConnectedAccount: (accountId: string) => Promise<void>;
   ensureAuth: () => Promise<void>;

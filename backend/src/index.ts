@@ -35,6 +35,8 @@ import { webhookConfigFromEnv } from "./platform/webhooks.js";
 import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
 import { createEtsyCommerceAdapter } from "./integrations/etsy/commerce-adapter.js";
 import { createEtsyAccessTokenRunner } from "./integrations/etsy/access.js";
+import { createShopifyCommerceAdapter } from "./integrations/shopify/adapter.js";
+import { createShopifyAccessTokenRunner } from "./integrations/shopify/access.js";
 import { createConnectedAccountRegistry } from "./integrations/connected-accounts/runtime.js";
 
 import { dispatchCommerceSyncs } from "./workers/commerce-worker.js";
@@ -81,6 +83,13 @@ const accountRuntimes={
   google:createGoogleRuntime(config), facebook:createFacebookRuntime(config), credentials:credentialStore,
 };
 const integrations=createDefaultIntegrationRegistry(systemClock);
+if(accountRuntimes.shopify.enabled && accountRuntimes.shopify.client) integrations.registerCommerce(createShopifyCommerceAdapter(accountRuntimes.shopify.client,
+  createShopifyAccessTokenRunner(opened.db,systemClock,{
+    registry:createConnectedAccountRegistry(accountRuntimes),credentials:credentialStore,
+    syncShopifyWebhooks:accountRuntimes.shopify.syncWebhooks,
+    packproofEnvironment:config.release.environment,
+    webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
+  })));
 if(ebayRuntime.enabled) integrations.registerCommerce(createEbayCommerceAdapter(opened.db,systemClock,ebayRuntime,credentialStore));
 if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(createEtsyCommerceAdapter(etsyRuntime.client,
   createEtsyAccessTokenRunner(opened.db,systemClock,{

@@ -13,7 +13,7 @@ const page = (ids: string[], cursor: string | null = null) => ({
 function order(id: string, legacyResourceId: unknown = id) {
   return {
     id: `gid://shopify/Order/${id}`, legacyResourceId, name: "#1001", createdAt: updatedAt, updatedAt,
-    cancelledAt: null, displayFinancialStatus: "PAID", displayFulfillmentStatus: "UNFULFILLED",
+    test: false, cancelledAt: null, displayFinancialStatus: "PAID", displayFulfillmentStatus: "UNFULFILLED",
     currentTotalPriceSet: { shopMoney: { amount: "25.00", currencyCode: "USD" } },
     fulfillments: [], lineItems: {
       nodes: [{ id: "gid://shopify/LineItem/3456789012345", title: "Card", sku: null, quantity: 1, currentQuantity: 1,
@@ -36,6 +36,11 @@ function graphqlFetch(options: {
     if (operation === "PackProofOrders") return Response.json({ data: { orders: options.orders?.(variables.after) ?? page([orderId]) } });
     const id = String(variables.id).split("/").at(-1)!;
     if (operation === "PackProofOrder") return Response.json({ data: { order: order(id, options.legacyId ?? id) } });
+    if (operation === "PackProofOrderFulfillmentOrders") return Response.json({ data: { order: { id: variables.id, updatedAt,
+      fulfillmentOrders: { nodes: [{ id: `gid://shopify/FulfillmentOrder/${id}`, updatedAt, status: "OPEN", requestStatus: "UNSUBMITTED", deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } }], pageInfo: { hasNextPage: false, endCursor: null } } } } });
+    if (operation === "PackProofFulfillmentOrderLines") return Response.json({ data: { node: { id: variables.id, updatedAt,
+      lineItems: { nodes: [{ id: `gid://shopify/FulfillmentOrderLineItem/${id}`, remainingQuantity: 1, requiresShipping: true, lineItem: { id: "gid://shopify/LineItem/3456789012345" } }], pageInfo: { hasNextPage: false, endCursor: null } } } } });
+    if (operation === "PackProofFulfillmentOrderRevision") return Response.json({ data: { node: { id: variables.id, updatedAt, deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } } } });
     if (operation === "PackProofOrderRevision") return Response.json({ data: { order: { id: variables.id, updatedAt } } });
     throw new Error(`Unexpected GraphQL operation ${operation}`);
   });

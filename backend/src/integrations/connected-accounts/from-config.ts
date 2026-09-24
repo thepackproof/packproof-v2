@@ -1,5 +1,6 @@
 import type { AppConfig } from "../../config.js";
 import { createHttpShopifyClient } from "../shopify/client.js";
+import { ensureShopifyWebhookSubscriptions, shopifyWebhookCallbackUrl } from "../shopify/webhooks.js";
 import type { ShopifyOAuthRuntime } from "./providers/shopify.js";
 import type { GoogleOAuthRuntime } from "./providers/google.js";
 import type { FacebookOAuthRuntime } from "./providers/facebook.js";
@@ -29,12 +30,19 @@ export function createEtsyRuntime(config: AppConfig, credentials: IntegrationCre
 }
 
 export function createShopifyRuntime(config: AppConfig): ShopifyOAuthRuntime {
+  if (config.shopify.enabled && !["development", "test"].includes(config.release.environment) &&
+      config.credentialStore !== "secrets-manager") {
+    throw new Error("Enabled Shopify integration requires persistent managed credentials in hosted environments.");
+  }
+  const redirectUri = oauthCallback(config.publicBaseUrl, "shopify");
   return {
     enabled: config.shopify.enabled,
     clientId: config.shopify.clientId,
     appCredentialReference: config.shopify.appCredentialReference,
-    redirectUri: oauthCallback(config.publicBaseUrl, "shopify"),
+    redirectUri,
     client: config.shopify.enabled ? createHttpShopifyClient() : null,
+    ...(config.shopify.enabled ? { syncWebhooks: (input: { shop: string; accessToken: string; scopes: readonly string[] }) =>
+      ensureShopifyWebhookSubscriptions({ ...input, callbackUrl: shopifyWebhookCallbackUrl(redirectUri) }) } : {}),
   };
 }
 

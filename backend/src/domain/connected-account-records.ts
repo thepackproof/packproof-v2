@@ -130,7 +130,7 @@ export async function findConnectedAccountByExternal(
   const found = await db.query<ConnectedAccountRow>(
     `SELECT * FROM connected_accounts
       WHERE provider = $1 AND external_account_id = $2
-      ORDER BY created_at ASC, id ASC
+      ORDER BY CASE WHEN status = 'DISCONNECTED' THEN 1 ELSE 0 END ASC, created_at DESC, id DESC
       LIMIT 1`,
     [requireConnectedAccountProvider(provider), externalAccountId],
   );

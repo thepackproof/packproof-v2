@@ -13,6 +13,7 @@ import { Button } from '../ui/Button';
 import { ApiError } from '../v2-api';
 import { IntakeApi } from './api';
 import { canPollHandoffs, handoffPollDelay, intakeItemLabel, mergeHandoffs, type IntakeCapabilities, type IntakeDeviceCredentials, type IntakeHandoff, type IntakeOrder, type IntakeSnapshot } from './model';
+import { RemainingShipmentNotice } from '../ui/RemainingShipmentNotice';
 import { readIntakeDevice } from './storage';
 
 /** This component only prepares cards. An explicit Record action is the sole camera entry. */
@@ -112,6 +113,7 @@ export function ReadyOrders({ onPreparedProofsChange }: { onPreparedProofsChange
   function touch() { activity.current = Date.now(); if (paused) { setPaused(false); setRefresh(value => value + 1); } }
   function card(snapshot: IntakeSnapshot, handoffId?: string) { return <View key={handoffId ?? snapshot.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <Text style={[styles.title, { color: colors.textPrimary }]}>{snapshot.store} · {snapshot.orderReference ? `Order ${snapshot.orderReference}` : 'Prepared order'}</Text>
+    <RemainingShipmentNotice value={snapshot} />
     {snapshot.items.map((item, index) => <Text key={index} style={[styles.copy, { color: colors.textPrimary }]}>{intakeItemLabel(item)}</Text>)}
     <Text style={[styles.copy, { color: colors.textSecondary }]}>Ready to record · {snapshot.sourceKind === 'FORWARDED_EMAIL' ? 'Forwarded order email' : snapshot.sourceKind === 'BROWSER_CAPTURED' ? 'Selected on your computer' : 'Connected store'}</Text>
     <Button label="Record packing" icon="videocam-outline" disabled={captureBusy} onPress={() => { touch(); void app.startIntakeCapture({ snapshotId: snapshot.id, handoffId }); }} />

@@ -63,8 +63,13 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
         if (current.lease_expires_at && new Date(current.lease_expires_at).getTime() > started.getTime())
             throw new DomainError("COMMERCE_SYNC_IN_PROGRESS", "Orders are already syncing", 409);
         if (!current.window_started_at) await tx.query("DELETE FROM commerce_sync_page_checkpoints WHERE connection_id=$1", [connectionId]);
+        // Fulfillment routing/hold events need not change the order updatedAt.
+        // An invalidation therefore requires a complete accessible-order pass,
+        // not just the ordinary recent-update overlap. Retain an in-flight cursor.
+        const pendingWebhook = !current.window_started_at && (await tx.query(
+            "SELECT id FROM commerce_webhook_inbox WHERE connection_id=$1 AND processed_at IS NULL LIMIT 1", [connectionId])).rows.length > 0;
         const fullReconciliation = current.window_started_at ? current.reconciliation_pass :
-            !current.last_reconciled_at || started.getTime() - new Date(current.last_reconciled_at).getTime() >= (adapter.reconciliationIntervalMs ?? 15 * 60000);
+            pendingWebhook || !current.last_reconciled_at || started.getTime() - new Date(current.last_reconciled_at).getTime() >= (adapter.reconciliationIntervalMs ?? 15 * 60000);
         const windowStart = current.window_started_at ?? new Date(fullReconciliation ? started.getTime() - 60 * 86400000 :
             new Date(current.last_succeeded_at ?? started).getTime() - 15 * 60000).toISOString();
         const windowEnd = current.window_ended_at ?? started.toISOString();
@@ -124,16 +129,26 @@ export async function executeCommerceFulfillmentSync(db: Database, clock: Clock,
         }
         const now = clock.now().toISOString();
         await db.query(`UPDATE commerce_connection_sync_states SET run_status='IDLE',lease_token=NULL,lease_expires_at=NULL,
-      last_succeeded_at=CASE WHEN $3 THEN $4::timestamptz ELSE last_succeeded_at END,
+      last_succeeded_at=CASE WHEN $3 THEN $6::timestamptz ELSE last_succeeded_at END,
       initial_sync_completed_at=CASE WHEN $3 THEN COALESCE(initial_sync_completed_at,$4::timestamptz) ELSE initial_sync_completed_at END,
       window_started_at=CASE WHEN $3 THEN NULL ELSE window_started_at END,
       window_ended_at=CASE WHEN $3 THEN NULL ELSE window_ended_at END,
       last_reconciled_at=CASE WHEN $3 AND reconciliation_pass THEN $4::timestamptz ELSE last_reconciled_at END,
       next_run_at=$5,last_error_code=NULL,last_error_retryable=NULL,attempt_count=0,updated_at=$4
-      WHERE connection_id=$1 AND lease_token=$2`, [connectionId, leaseToken, result.complete, now, new Date(clock.now().getTime() + (result.complete ? pollDelayMs(connectionId, adapter.preferredPollIntervalMs ?? 300000) : 0)).toISOString()]);
+      WHERE connection_id=$1 AND lease_token=$2`, [connectionId, leaseToken, result.complete, now, new Date(clock.now().getTime() + (result.complete ? pollDelayMs(connectionId, adapter.preferredPollIntervalMs ?? 300000) : 0)).toISOString(), new Date(state.window_ended_at!).toISOString()]);
+        // last_succeeded_at is the successfully covered source watermark. Using
+        // wall-clock completion would skip updates during a long paginated pass;
+        // updated_at and initial_sync_completed_at retain completion timing.
         // Incremental reads overlap 15 minutes; each adapter controls its bounded reconciliation cadence.
-        if (result.complete)
-            await db.query("UPDATE commerce_webhook_inbox SET processed_at=$2 WHERE connection_id=$1 AND processed_at IS NULL AND received_at<=$3", [connectionId, now, started.toISOString()]);
+        if (result.complete && state.reconciliation_pass)
+            await db.query("UPDATE commerce_webhook_inbox SET processed_at=$2 WHERE connection_id=$1 AND processed_at IS NULL AND received_at<=$3", [connectionId, now, new Date(state.window_ended_at!).toISOString()]);
+        if (result.complete) {
+            // Do not let completion overwrite an invalidation received during a
+            // read. A retained event starts a fresh full pass on the next tick.
+            await db.query(`UPDATE commerce_connection_sync_states SET next_run_at=$2
+              WHERE connection_id=$1 AND EXISTS(SELECT 1 FROM commerce_webhook_inbox
+                WHERE connection_id=$1 AND processed_at IS NULL)`, [connectionId, now]);
+        }
         result.ineligibleCount = result.discoveredCount - result.eligibleCount;
         return result;
     }
