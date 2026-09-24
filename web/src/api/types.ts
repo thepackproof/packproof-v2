@@ -576,6 +576,7 @@ export interface EbayOrderListView {
 }
 
 export interface PublicProofView {
+  fulfillmentScope?: "REMAINING_SHIPMENT";
   integrity?: {result:string;scope:string};
   evidenceState?: { code: string; message: string };
   disclosure?: {viewHash:string;scopeVersion:number;revocationNotice:string;fields:string[];liveProof?:boolean;sharingNotice?:string};

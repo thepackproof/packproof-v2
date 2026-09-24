@@ -236,7 +236,7 @@ export class PackProofApi {
 
   async startConnectedAccountConnect(
     provider: string,
-    input: { shop?: string } = {},
+    input: { shop?: string; autoSyncEnabled?: boolean } = {},
   ): Promise<{
     authorizationUrl: string;
     expiresAt: string;
@@ -244,7 +244,10 @@ export class PackProofApi {
   }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(provider)}/connect`, {
       method: "POST",
-      body: input.shop ? { shop: input.shop } : {},
+      body: {
+        ...(input.shop ? { shop: input.shop } : {}),
+        ...(typeof input.autoSyncEnabled === "boolean" ? { autoSyncEnabled: input.autoSyncEnabled } : {}),
+      },
     });
   }
 

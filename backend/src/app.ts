@@ -179,6 +179,7 @@ import {
 } from "./integrations/connected-accounts/providers/facebook.js";
 import { parseAppClientSecret } from "./integrations/connected-accounts/app-secret.js";
 import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
+import { SHOPIFY_COMMERCE_WEBHOOK_TOPICS, SHOPIFY_PRIVACY_WEBHOOK_TOPICS } from "./integrations/shopify/webhooks.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
@@ -202,6 +203,8 @@ import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
 import { disabledEtsyRuntime, type EtsyRuntime } from "./integrations/etsy/runtime.js";
 import { createEtsyCommerceAdapter } from "./integrations/etsy/commerce-adapter.js";
 import { createEtsyAccessTokenRunner } from "./integrations/etsy/access.js";
+import { createShopifyCommerceAdapter } from "./integrations/shopify/adapter.js";
+import { createShopifyAccessTokenRunner } from "./integrations/shopify/access.js";
 import { normalizeShopifyShop, shopifyShopHandle } from "./integrations/shopify/shop.js";
 import {
   getRetentionControls,
@@ -301,12 +304,17 @@ export function createApp(deps: AppDependencies): Express {
       credentials: credentialStore,
     }),
     credentials: credentialStore,
+    syncShopifyWebhooks: shopify.syncWebhooks,
     packproofEnvironment: releaseIdentity.environment,
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
   if (etsy.enabled && etsy.client) {
     integrations.registerCommerce(createEtsyCommerceAdapter(etsy.client,
       createEtsyAccessTokenRunner(deps.db, deps.clock, connectedAccounts)));
+  }
+  if (shopify.enabled && shopify.client) {
+    integrations.registerCommerce(createShopifyCommerceAdapter(shopify.client,
+      createShopifyAccessTokenRunner(deps.db, deps.clock, connectedAccounts)));
   }
   app.use(httpBoundary(corsOrigins));
   app.use(publicAnalyticsRouter(deps));
@@ -795,7 +803,7 @@ export function createApp(deps: AppDependencies): Express {
         header: req.header("X-Shopify-Hmac-Sha256"),
       });
       const topic = String(req.header("X-Shopify-Topic") ?? "").toLowerCase();
-      if (["orders/create", "orders/updated", "orders/cancelled", "orders/paid", "fulfillments/create", "fulfillments/update"].includes(topic)) {
+      if (SHOPIFY_COMMERCE_WEBHOOK_TOPICS.includes(topic)) {
         const result = await enqueueCommerceWebhook(deps.db, deps.clock, {
           provider: "shopify",
           externalAccountReference: shopifyShopHandle(normalizeShopifyShop(req.header("X-Shopify-Shop-Domain"))),
@@ -804,8 +812,13 @@ export function createApp(deps: AppDependencies): Express {
         res.status(200).json(result);
         return;
       }
+      if ((SHOPIFY_PRIVACY_WEBHOOK_TOPICS as readonly string[]).includes(topic)) {
+        // Never acknowledge a privacy request without durable processing. Public
+        // app distribution remains gated until the privacy workflow is deployed.
+        throw new DomainError("SHOPIFY_PRIVACY_HANDLER_UNAVAILABLE", "Shopify privacy request processing is not configured", 503);
+      }
       if (topic !== "app/uninstalled") {
-        res.status(200).json({ accepted: true });
+        res.status(200).json({ accepted: true, ignored: true });
         return;
       }
       const shop = String(req.header("X-Shopify-Shop-Domain") ?? "");

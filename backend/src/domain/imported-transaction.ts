@@ -62,6 +62,8 @@ export interface ImportedTransaction {
     environment?: string | null;
     marketplaceId?: string | null;
     pilotCaptureExclusion?: string | null;
+    fulfillmentScope?: "REMAINING_SHIPMENT" | null;
+    fulfillmentOrderId?: string | null;
   } | null;
 }
 
@@ -92,6 +94,8 @@ export interface ParsedImportedTransaction {
     environment: string | null;
     marketplaceId: string | null;
     pilotCaptureExclusion?: string | null;
+    fulfillmentScope?: "REMAINING_SHIPMENT" | null;
+    fulfillmentOrderId?: string | null;
   } | null;
 }
 
@@ -266,6 +270,9 @@ function parseProviderIdentifiers(
   const record = value as Record<string, unknown>;
   const lineItemIds = parseIdList(record.lineItemIds, "providerIdentifiers.lineItemIds");
   const itemIds = parseIdList(record.itemIds, "providerIdentifiers.itemIds");
+  if (record.fulfillmentScope != null && record.fulfillmentScope !== "REMAINING_SHIPMENT") {
+    throw new DomainError("INVALID_IMPORTED_TRANSACTION", "providerIdentifiers.fulfillmentScope is invalid", 400);
+  }
   const identifiers = {
     orderId: normalizeOptionalText(record.orderId, "providerIdentifiers.orderId"),
     legacyOrderId: normalizeOptionalText(record.legacyOrderId, "providerIdentifiers.legacyOrderId"),
@@ -273,6 +280,7 @@ function parseProviderIdentifiers(
     itemIds,
     environment: normalizeOptionalText(record.environment, "providerIdentifiers.environment"),
     marketplaceId: normalizeOptionalText(record.marketplaceId, "providerIdentifiers.marketplaceId"),
+    ...(record.fulfillmentScope === "REMAINING_SHIPMENT" ? {fulfillmentScope: "REMAINING_SHIPMENT" as const, fulfillmentOrderId: normalizeOptionalText(record.fulfillmentOrderId, "providerIdentifiers.fulfillmentOrderId")} : {}),
     ...(record.pilotCaptureExclusion ? {pilotCaptureExclusion: normalizeOptionalText(record.pilotCaptureExclusion,"providerIdentifiers.pilotCaptureExclusion")} : {}),
   };
   if (
@@ -281,7 +289,9 @@ function parseProviderIdentifiers(
     identifiers.lineItemIds.length === 0 &&
     identifiers.itemIds.length === 0 &&
     !identifiers.environment &&
-    !identifiers.marketplaceId
+    !identifiers.marketplaceId &&
+    !identifiers.pilotCaptureExclusion &&
+    !identifiers.fulfillmentScope
   ) {
     return null;
   }

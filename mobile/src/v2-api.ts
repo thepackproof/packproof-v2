@@ -764,7 +764,7 @@ export class PackProofV2Client {
 
   async startConnectedAccountConnect(
     provider: string,
-    input: { shop?: string; surface?: "android" | "ios" | "web" } = {},
+    input: { shop?: string; surface?: "android" | "ios" | "web"; autoSyncEnabled?: boolean } = {},
   ): Promise<{
     authorizationUrl: string;
     expiresAt: string;
@@ -772,7 +772,11 @@ export class PackProofV2Client {
   }> {
     return this.request(`/me/connected-accounts/${encodeURIComponent(provider)}/connect`, {
       method: "POST",
-      body: { ...(input.shop ? { shop: input.shop } : {}), ...(input.surface ? { surface: input.surface } : {}) },
+      body: {
+        ...(input.shop ? { shop: input.shop } : {}),
+        ...(input.surface ? { surface: input.surface } : {}),
+        ...(typeof input.autoSyncEnabled === "boolean" ? { autoSyncEnabled: input.autoSyncEnabled } : {}),
+      },
     });
   }
 

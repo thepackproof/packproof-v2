@@ -8,10 +8,12 @@ import { asIso } from "./types.js";
 import { loadConnection } from "./integration-connections.js";
 import { loadCommerceSyncState, syncStateView } from "./commerce-order-records.js";
 import type { IntegrationAdapterRegistry } from "../integrations/registry.js";
+import { shopifyWebhookTopicsForScopes } from "../integrations/shopify/webhooks.js";
 export const AUTOMATIC_ORDER_POLICY = "Available paid physical orders requiring fulfillment, updated in the last 60 days. Cancelled, fully fulfilled, unpaid and digital-only orders do not create Proofs. No label or buyer account is required.";
 export const ETSY_AUTOMATIC_ORDER_POLICY = "Paid, unshipped physical Etsy orders create a Proof ready for recording. Pending orders have no age cutoff. Updates sync about every five minutes while PackProof is closed; mixed, partially shipped or incomplete orders are held for review. No buyer account or shipping label is required.";
+export const SHOPIFY_AUTOMATIC_ORDER_POLICY = "One Proof per Shopify order with physical items ready for merchant fulfillment. Existing accessible orders and future orders sync in the background. Shopify normally exposes only the last 60 days. Manual-payment orders qualify when Shopify reports the shipment ready. Held, scheduled, test, cancelled, completed and unsupported split orders do not create ready Proofs. The seller still records and confirms packing.";
 export function commerceOrderPolicy(adapterKey: string): string {
-    return adapterKey === "etsy" ? ETSY_AUTOMATIC_ORDER_POLICY : AUTOMATIC_ORDER_POLICY;
+    return adapterKey === "etsy" ? ETSY_AUTOMATIC_ORDER_POLICY : adapterKey === "shopify" ? SHOPIFY_AUTOMATIC_ORDER_POLICY : AUTOMATIC_ORDER_POLICY;
 }
 /** Seller-facing review counts are operational source data, never fabricated Proofs. */
 export async function getCommerceReviewSummary(db: Database, connectionId: string): Promise<{
@@ -23,11 +25,14 @@ export async function getCommerceReviewSummary(db: Database, connectionId: strin
       FROM commerce_order_records r
       JOIN commerce_order_revisions rev ON rev.order_record_id=r.id AND rev.fingerprint=r.normalized_fingerprint
       JOIN integration_connections c ON c.id=r.connection_id
-      WHERE r.connection_id=$1 AND c.provider='etsy' AND r.eligibility='INELIGIBLE'
-        AND r.payment_state='CONFIRMED' AND r.cancelled=false AND r.fulfillment_state NOT IN ('FULFILLED','CANCELLED')
-        AND rev.normalized_order->>'pilotCaptureExclusion' IN (
+      WHERE r.connection_id=$1 AND r.eligibility='INELIGIBLE'
+        AND r.cancelled=false AND r.fulfillment_state NOT IN ('FULFILLED','CANCELLED')
+        AND ((c.provider='etsy' AND r.payment_state='CONFIRMED' AND rev.normalized_order->>'pilotCaptureExclusion' IN (
           'etsy_incomplete_fulfillment_details','etsy_multiple_shipments','etsy_partial_shipment',
-          'etsy_mixed_physical_and_digital_order','etsy_unknown_fulfillment','etsy_inconsistent_currency','etsy_unconfirmed_order_status')
+          'etsy_mixed_physical_and_digital_order','etsy_unknown_fulfillment','etsy_inconsistent_currency','etsy_unconfirmed_order_status'))
+          OR (c.provider='shopify' AND r.payment_state IN ('CONFIRMED','PENDING') AND rev.normalized_order->>'pilotCaptureExclusion' IN (
+          'SHOPIFY_FULFILLMENT_ON_HOLD','SHOPIFY_FULFILLMENT_SCHEDULED','SHOPIFY_FULFILLMENT_REVIEW_REQUIRED',
+          'SHOPIFY_FULFILLMENT_UNAVAILABLE','SHOPIFY_PARTIAL_FULFILLMENT_REVIEW_REQUIRED')))
       GROUP BY rev.normalized_order->>'pilotCaptureExclusion' ORDER BY code`, [connectionId])).rows;
     const reviewReasons = reasons.map(row => ({ code: row.code, count: Number(row.count) }));
     return { reviewOrderCount: reviewReasons.reduce((sum, row) => sum + row.count, 0), reviewReasons };
@@ -71,7 +76,7 @@ export async function enqueueCommerceWebhook(db: Database, clock: Clock, input: 
     }>("SELECT id FROM integration_connections WHERE provider=$1 AND external_account_reference=$2 AND status='ACTIVE' AND auto_sync_enabled=true", [input.provider, input.externalAccountReference])).rows[0];
     if (!connection)
         return { accepted: true, queued: false };
-    await db.transaction(async (tx) => {
+    const queued = await db.transaction(async (tx) => {
         // Keep the existing unique constraint compatible with old binaries while scoping new delivery identities.
         const deliveryIdentity = "account-v1:" + sha256Hex(`${input.provider}\n${input.externalAccountReference}\n${input.deliveryId}`);
         const inserted = await tx.query(`INSERT INTO commerce_webhook_inbox(id,connection_id,provider,delivery_id,topic,received_at)
@@ -79,15 +84,17 @@ export async function enqueueCommerceWebhook(db: Database, clock: Clock, input: 
         if (inserted.rows[0])
             await tx.query(`INSERT INTO commerce_connection_sync_states(connection_id,updated_at,next_run_at) VALUES($1,$2,$2)
       ON CONFLICT(connection_id) DO UPDATE SET next_run_at=$2`, [connection.id, clock.now().toISOString()]);
+        return Boolean(inserted.rows[0]);
     });
-    return { accepted: true, queued: true };
+    return { accepted: true, queued };
 }
 export async function getCommerceOrderContext(db: Database, userId: string, transactionId: string) {
     const authorized = await db.query(`SELECT t.id FROM transactions t WHERE t.id=$1 AND
     (t.created_by=$2 OR EXISTS(SELECT 1 FROM proofs p JOIN proof_participants pp ON pp.proof_id=p.id WHERE p.transaction_id=t.id AND pp.user_id=$2))`, [transactionId, userId]);
     if (!authorized.rows[0])
         throw new DomainError("PARTICIPANT_NOT_AUTHORIZED", "This order context is private", 403);
-    const record = (await db.query("SELECT * FROM commerce_order_records WHERE transaction_id=$1", [transactionId])).rows[0];
+    const record = (await db.query(`SELECT r.*,c.provider FROM commerce_order_records r
+      JOIN integration_connections c ON c.id=r.connection_id WHERE r.transaction_id=$1`, [transactionId])).rows[0];
     if (!record)
         return { order: null, revisions: [], orderPolicy: AUTOMATIC_ORDER_POLICY };
     const revisions = (await db.query(`SELECT id AS "revisionId",provider_updated_at AS "providerUpdatedAt",observed_at AS "observedAt",
@@ -95,7 +102,7 @@ export async function getCommerceOrderContext(db: Database, userId: string, tran
     WHERE order_record_id=$1 ORDER BY observed_at DESC,id DESC LIMIT 100`, [record.id])).rows;
     const latest=(await db.query<{normalized_order:unknown}>("SELECT normalized_order FROM commerce_order_revisions WHERE order_record_id=$1 AND fingerprint=$2",[record.id,record.normalized_fingerprint])).rows[0];
     return { order: { connectionId: record.connection_id, externalOrderId: record.external_order_id, eligibility: record.eligibility, paymentState: record.payment_state, fulfillmentState: record.fulfillment_state, cancelled: record.cancelled,
-            latestSource: latest?.normalized_order ?? null }, revisions, orderPolicy: AUTOMATIC_ORDER_POLICY };
+            latestSource: latest?.normalized_order ?? null }, revisions, orderPolicy: commerceOrderPolicy(String(record.provider ?? "")) };
 }
 
 /** Independent rollout switch; absent config starts all new provider automation disabled. */
@@ -119,7 +126,14 @@ export async function commerceConnectionCapabilities(db: Database, connection: I
     const metadata = account?.provider_metadata ?? {};
     const safeText = (value: unknown) => typeof value === "string" && value.length <= 200 ? value : null;
     const grantedScopes = Array.isArray(account?.scopes) ? account.scopes.filter((value): value is string => typeof value === "string" && value.length <= 250).slice(0,50) : [];
-    const webhookTopics = connection.provider === "shopify" ? ["orders/create", "orders/updated", "orders/cancelled", "orders/paid", "fulfillments/create", "fulfillments/update"] : [];
+    const expectedWebhookTopics = connection.provider === "shopify" ? Object.keys(shopifyWebhookTopicsForScopes(grantedScopes)) : [];
+    const webhookTopics = connection.provider === "shopify" && Array.isArray(metadata.webhookTopics)
+        ? metadata.webhookTopics.filter((topic): topic is string => typeof topic === "string" && expectedWebhookTopics.includes(topic)) : [];
+    const verifiedAt = safeText(metadata.webhookSubscriptionsVerifiedAt);
+    const webhookSubscriptionsVerifiedAt = verifiedAt && Number.isFinite(Date.parse(verifiedAt)) ? new Date(verifiedAt).toISOString() : null;
+    const webhookRegistrationErrorCode = safeText(metadata.webhookRegistrationErrorCode);
+    const lastWebhook = connection.provider === "shopify" ? (await db.query<{received_at: Date|string|null}>(
+        "SELECT MAX(received_at) AS received_at FROM commerce_webhook_inbox WHERE connection_id=$1 AND provider='shopify'", [connection.id])).rows[0]?.received_at : null;
     return {
         automationAvailable: Boolean(adapter && enabled && connection.status === "ACTIVE"),
         automationUnavailableReason: !adapter ? "ADAPTER_UNAVAILABLE" : !enabled ? "ROLLOUT_DISABLED" : connection.status !== "ACTIVE" ? "RECONNECT_REQUIRED" : null,
@@ -129,7 +143,9 @@ export async function commerceConnectionCapabilities(db: Database, connection: I
         incrementalListSupported: Boolean(adapter), paginationSupported: Boolean(adapter),
         lastOrderReadAt: lastOrderReadAt ? asIso(lastOrderReadAt) : null,
         orderReadVerified: Boolean(lastOrderReadAt),
-        webhookTopics, webhookDeliveryVerified: false,
+        webhookTopics, expectedWebhookTopics, webhookSubscriptionsVerifiedAt, webhookRegistrationErrorCode,
+        webhookSubscriptionsVerified: Boolean(webhookSubscriptionsVerifiedAt && !webhookRegistrationErrorCode && expectedWebhookTopics.length && expectedWebhookTopics.every(topic => webhookTopics.includes(topic))),
+        webhookDeliveryVerified: Boolean(lastWebhook), lastWebhookReceivedAt: lastWebhook ? asIso(lastWebhook) : null,
         pollIntervalSeconds: adapter ? (adapter.preferredPollIntervalMs ?? 300000) / 1000 : null,
     };
 }

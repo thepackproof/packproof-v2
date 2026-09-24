@@ -18,6 +18,7 @@ import { ProofTimeline } from "./ProofTimeline";
 import { ShipmentTracking } from "./ShipmentTracking";
 import { StatusBadge } from "./StatusBadge";
 import { PreservationStatus } from "./PreservationStatus";
+import { RemainingShipmentNotice } from "./RemainingShipmentNotice";
 
 const tabs = ["Recording", "Activity", "Tracking"] as const;
 type RecordTab = typeof tabs[number];
@@ -76,6 +77,7 @@ export function WorkspaceProofRecord(props: {
       <div><h2>{title}</h2>{reference && <p>{reference}</p>}<details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p><p>{proof.transaction.provenance ? `From ${providerDisplay(proof.transaction.provenance.provider)}. Imported order details are read-only.` : "Order details supplied by a participant."}</p>{proof.transaction.provenance?.importedAt && <p>Imported {formatWhen(proof.transaction.provenance.importedAt)}</p>}</details></div>
       <span className={`record-seal ${proof.status === "FINALIZED" ? "is-sealed" : ""}`}><Glyph name={proof.status === "FINALIZED" ? "shield" : "file"} size={18}/>{packingRecordLabel(proof.status)}</span>
     </header>
+    <RemainingShipmentNotice value={proof} />
     <p className="record-source-note">Shipment: {shipmentRecordLabel(proof.shipmentObservations?.identity?.trackingNumber || proof.transaction.shipping?.trackingNumber, proof.shipmentObservations?.latest?.eventType)}</p>
     {props.nextAction}
     <div className="record-tabs" role="tablist" aria-label="Proof record views">

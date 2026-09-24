@@ -22,7 +22,7 @@ eBay seller OAuth that already existed (`/me/marketplaces/ebay/*` and `GET /inte
 
 Shopify install dual-writes an `integration_connections` row so existing commerce sync / fulfillment ingestion can import shop orders without a new ingestion pipeline.
 
-The existing REST connector targets Shopify's supported `2026-07` API. It follows `Link: rel="next"` cursors at 50 orders per page, rejects cross-shop pagination URLs, and imports up to ten pages per sync. Completed-page cursors are saved server-side; another sync continues a larger catalog or resumes after a provider failure. The response cursor is non-null while more pages remain. Finishing a scan clears the cursor so the next sync checks current orders again. REST remains a legacy Shopify API; new public-app distribution still requires the separate GraphQL migration and Shopify approval work described by [Shopify's REST documentation](https://shopify.dev/docs/api/admin-rest).
+Shopify uses Admin GraphQL `2026-07`, with independently paginated order, line, fulfillment and fulfillment-order connections. Durable worker checkpoints resume large catalogs and failed pages. Order import and recording rules, expiring offline tokens, automatic webhook setup and deployment requirements are described in [Shopify fulfillment Proofs](SHOPIFY_FULFILLMENT.md). Shopify approval and seller authorization remain external requirements.
 
 ## Provider capability abstraction
 
@@ -68,9 +68,9 @@ Official OAuth Authorization Code Grant. RuName is the token `redirect_uri`. Buy
 | --- | --- |
 | identity | Yes — shop id and `*.myshopify.com` domain |
 | transactions | Yes — Admin API `read_orders` mapped into existing commerce sync |
-| fulfillment | Yes — `read_fulfillments` |
+| fulfillment | Yes — `read_merchant_managed_fulfillment_orders` |
 | shipping | No |
-| webhooks | Yes — verified `app/uninstalled` |
+| webhooks | Yes — HMAC-verified order, fulfillment, routing/hold and uninstall events |
 
 Official OAuth install. Shop host is restricted to `*.myshopify.com`. One PackProof user may connect multiple shops. Shopify Marketplace / Shop App buyer surfaces are not implemented.
 
@@ -101,11 +101,11 @@ Official Facebook Login / Graph API. **Facebook Marketplace has no official publ
 ## HTTP API
 
 - `GET /me/connected-accounts` — `{ accounts, providers }` with capabilities and limitations. No tokens.
-- `POST /me/connected-accounts/:provider/connect` — Shopify body `{ "shop": "store.myshopify.com" }`. Returns `{ authorizationUrl, expiresAt, provider }`.
+- `POST /me/connected-accounts/:provider/connect` — Shopify body `{ "shop": "store.myshopify.com", "autoSyncEnabled": true }`. The optional boolean is explicit consent for a new connection; omission or false leaves automation off, and reconnect preserves the existing selection. Returns `{ authorizationUrl, expiresAt, provider }`.
 - `GET /oauth/:provider/callback` — unauthenticated. eBay still completes through `completeEbayOAuth` because the RuName accepted URL is `/integrations/oauth/ebay/callback`.
 - `POST /me/connected-accounts/:id/reauthorize`
 - `DELETE /me/connected-accounts/:id`
-- `POST /integrations/webhooks/shopify` — HMAC-verified uninstall.
+- `POST /integrations/webhooks/shopify` — HMAC-verified durable order invalidation and installation-aware uninstall handling.
 
 Existing eBay routes are unchanged.
 
@@ -160,7 +160,7 @@ Replace `<API>` with `PACKPROOF_PUBLIC_URL` (no trailing slash).
 | Google authorized redirect URI | `https://<API>/oauth/google/callback` |
 | Facebook Valid OAuth Redirect URI | `https://<API>/oauth/facebook/callback` |
 
-Shopify also needs the webhook: `https://<API>/integrations/webhooks/shopify` (`app/uninstalled`).
+After authorization, PackProof reconciles Shopify order, fulfillment and uninstall subscriptions at `https://<API>/integrations/webhooks/shopify`. See [webhook operations](shopify-webhooks.md) for the separate mandatory privacy-handler gate before public App Store distribution.
 
 Google and Facebook OAuth clients must be **web** clients whose redirect is the API callback, not the Vite or Expo origin. PackProof then redirects the user back to the web Account page (or the user returns to the mobile app, which reloads `GET /me/connected-accounts`).
 

@@ -4,6 +4,7 @@ import type { IntakeCapabilities, IntakeOrder, IntakeSnapshot } from '../intake-
 import { intakePreferenceKey } from '../intake-types';
 import { randomId } from '../random-id';
 import {IntakeResolution} from './IntakeResolution';
+import { RemainingShipmentNotice } from './RemainingShipmentNotice';
 
 export function ReadyIntakeOrders({api,userId,onRecord}: {
   api: PackProofApi; userId: string; onRecord: (snapshot: IntakeSnapshot) => void;
@@ -45,6 +46,7 @@ export function ReadyIntakeOrders({api,userId,onRecord}: {
     {notice&&<p role="status">{notice}</p>}{error&&<p className="banner banner-error" role="alert">{error}</p>}
     {orders.map(order=><article className="section stack" key={order.observationId}>
       {order.snapshot?<><strong>{order.snapshot.orderReference}</strong><span className="meta">{order.snapshot.store}</span>
+        <RemainingShipmentNotice value={order.snapshot} />
         <ul>{order.snapshot.items.map((item,i)=><li key={i}>{item.title}{item.variant?` · ${item.variant}`:''} · Quantity {item.quantity}</li>)}</ul></>:<strong>Order needs information</strong>}
       {order.readiness==='READY'&&order.snapshot?<div className="button-row">
         <button className="btn" disabled={busy!==null} onClick={()=>onRecord(order.snapshot!)}>Record packing</button>

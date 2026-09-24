@@ -16,6 +16,7 @@ import { listSharedProofSources } from './shared-proof-sources.js';
 import { SELLER_SHIPPING_STATEMENT } from './attestation-authorization.js';
 import type { AttestationRow } from './types.js';
 import { assertPolicyAccessSafe } from './policy-recovery.js';
+import { readImportMetadata } from './provenance.js';
 
 export const DISCLOSURE_POLICY_VERSION = 'packproof.disclosure/v1';
 export const DISCLOSURE_FIELDS = ['status', 'order', 'shipping', 'evidence', 'statements', 'itemIdentifiers'] as const;
@@ -174,7 +175,16 @@ export async function getDisclosureProjection(db:Database,ctx:DisclosureContext)
   const identifiers = ctx.fields.includes('itemIdentifiers') && ctx.fields.includes('order') && ctx.fields.includes('evidence') ? await identifierProjection(db,ctx.proofId) : undefined;
   const allowedEvidence = new Set(ctx.media.map(m=>m.evidenceId));
   if (identifiers) identifiers.observations=identifiers.observations.filter(o=>o.evidenceId && allowedEvidence.has(o.evidenceId));
+  // Disclose only the scope label when the link includes order/evidence context,
+  // never private order data. A remaining shipment must not imply full-order capture.
+  let fulfillmentScope: 'REMAINING_SHIPMENT' | undefined;
+  if (ctx.fields.includes('order') || ctx.fields.includes('evidence')) {
+    const metadata=(await db.query<{transaction_metadata:unknown}>('SELECT transaction_metadata FROM transactions WHERE id=$1',[proof.transaction_id])).rows[0]?.transaction_metadata;
+    const imported=readImportMetadata(metadata);
+    if (imported?.provider==='shopify' && imported.source==='STOREFRONT_API' && imported.providerIdentifiers?.fulfillmentScope==='REMAINING_SHIPMENT') fulfillmentScope='REMAINING_SHIPMENT';
+  }
   const value={...record,...(identifiers ? {identifiers} : {}),integrity,evidenceState,schema:'packproof.proof.public/v1' as const,proofId:proof.id,status:proof.status,workflowType:proof.workflow_type,workflowStage:custody.policy.workflowStage,custodyOutcome:custody.policy.custodyOutcome,nextAction:null,scope:ctx.fields.includes('evidence')?'EVIDENCE_VIEW':'SUMMARY',tracker,
+    ...(fulfillmentScope ? {fulfillmentScope} : {}),
     join:{eligible:false,requiresAuthentication:true as const,message:'Sign in with the invited buyer account to document arrival.'},
     evidence:ctx.fields.includes('evidence')?evidence:[],
     statements,

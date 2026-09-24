@@ -2,7 +2,7 @@ export const SHOPIFY_ADAPTER_KEY = "shopify";
 export const SHOPIFY_PROVIDER = "shopify";
 export const SHOPIFY_API_VERSION = "2026-07";
 
-export const SHOPIFY_SCOPES = ["read_orders"] as const;
+export const SHOPIFY_SCOPES = ["read_orders", "read_merchant_managed_fulfillment_orders", "read_locations"] as const;
 
 export const SHOPIFY_CAPABILITIES = {
   identity: true,

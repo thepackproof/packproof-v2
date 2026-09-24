@@ -21,6 +21,7 @@ import {
 } from "../format";
 import { CopyableId } from "./CopyableId";
 import { TrustBadge } from "./TrustBadge";
+import { RemainingShipmentNotice } from "./RemainingShipmentNotice";
 
 export function ProofHeader(props: { proof: CanonicalProof; role?: string }) {
   const title = props.proof.transaction.itemTitle?.trim() || "Untitled item";
@@ -37,6 +38,7 @@ export function ProofHeader(props: { proof: CanonicalProof; role?: string }) {
     <header className="header-block">
       <p className="kicker">Proof record</p>
       <h1>{title}</h1>
+      <RemainingShipmentNotice value={props.proof} />
       <div className="row">
         <span
           className={
