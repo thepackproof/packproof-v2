@@ -27,3 +27,12 @@ GRANT SELECT,UPDATE ON recovery_delivery,policy_recovery_delivery TO packproof_r
 REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON recovery_writer_fence,policy_recovery_fence,policy_recovery_overlay,policy_recovery_tables FROM packproof_runtime;
 -- Recovery takes a row lock on the writer fence; UPDATE permission permits the lock.
 GRANT SELECT,UPDATE ON recovery_writer_fence TO packproof_recovery;
+
+-- Only the reviewed operator bootstrap/recovery workflow assigns system roles.
+REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON user_system_roles FROM packproof_runtime;
+GRANT SELECT ON user_system_roles TO packproof_runtime;
+-- Admin effects append audit/receipts/allowance ledger entries in one transaction.
+REVOKE UPDATE,DELETE,TRUNCATE ON system_admin_audit_events,admin_command_receipts,billing_allowance_adjustments FROM packproof_runtime;
+-- Minimized self-reported release telemetry can be upserted, not erased by API.
+REVOKE DELETE,TRUNCATE ON client_version_activity FROM packproof_runtime;
+GRANT SELECT,INSERT,UPDATE ON client_version_activity TO packproof_runtime;

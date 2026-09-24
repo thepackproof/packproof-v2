@@ -13,6 +13,8 @@ import NetInfo from "@react-native-community/netinfo";
 import { clearSharedLinkCache } from "../copy/share-cache";
 import { completeSavedCapture, prepareSavedCapture, captureCompletionActive } from "../capture/completion";
 import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture,recordNativeStudyInteraction} from '../analytics/native-study';
+import { createClientVersionReporter } from "../analytics/client-version";
+import { readInstalledClientVersion } from "../analytics/native-client-version";
 import { listAccountCaptures, persistCaptureMetadata } from "../capture";
 import { requestUploadNotifications, notifyUploadOutcome } from "../capture/upload-notifications";
 import { hasDurableReceipt, mayCleanUpCapture } from "../capture/recovery-model";
@@ -436,6 +438,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }),
     [apiBaseUrl],
   );
+  const versionReporter = useMemo(() => createClientVersionReporter(readInstalledClientVersion), []);
+  useEffect(() => {
+    if (hydrated) versionReporter.update(session, client);
+  }, [client, hydrated, session, versionReporter]);
 
   const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => {
     if (name === "scan") name = "create";

@@ -1,3 +1,10 @@
+import { clientVersionRouter } from "./admin/client-versions.js";
+import { errorActionsRouter } from "./admin/error-actions.js";
+import { integrationActionsRouter } from "./admin/integration-actions.js";
+import { adminActionsRouter } from "./admin/actions.js";
+import { requireSystemAdmin, getAdminMe } from "./admin/auth.js";
+import { adminRouter } from "./admin/router.js";
+import { publicAnalyticsRouter } from "./admin/analytics-events.js";
 import { notificationPreferences, updateNotificationPreferences, listProofUpdates, registerPushDevice, muteProof } from './domain/notification-center.js';
 import { attachTracking, trackingAssociation } from './domain/tracking-associations.js';
 import { captureEngineRouter } from "./capture/router.js";
@@ -263,6 +270,7 @@ declare global {
   namespace Express {
     interface Request {
       packproofUserId?: string;
+      packproofAuth?: import("./auth/adapter.js").AuthContext;
     }
   }
 }
@@ -301,6 +309,7 @@ export function createApp(deps: AppDependencies): Express {
       createEtsyAccessTokenRunner(deps.db, deps.clock, connectedAccounts)));
   }
   app.use(httpBoundary(corsOrigins));
+  app.use(publicAnalyticsRouter(deps));
   // Admission must happen before a body parser can buffer or accept upload bytes.
   app.put("/upload/:token", asyncRoute(async (req, res) => {
     const result = await receiveAdmittedUpload(deps.db, deps.clock, deps.objectStore, req.params.token, req);
@@ -472,10 +481,15 @@ export function createApp(deps: AppDependencies): Express {
       .authenticate(req.headers)
       .then((auth) => {
         req.packproofUserId = auth.userId;
+        req.packproofAuth = auth;
         next();
       })
       .catch(next);
   });
+
+  app.use(clientVersionRouter(deps));
+  app.get("/me/capabilities", asyncRoute(async(req,res)=>{res.setHeader("Cache-Control","private, no-store");res.json({...await getAdminMe(deps.db,bearerUser(req)),environment:releaseIdentity.environment});}));
+  app.use("/admin", requireSystemAdmin(deps), distributedRateLimit(deps.db,{scope:"system-admin",limit:120,windowMs:60_000,subject:bearerUser}), adminActionsRouter(deps), integrationActionsRouter(deps), errorActionsRouter(deps), adminRouter(deps));
 
   app.get("/me/account-deletion-request", asyncRoute(async(req,res)=>{
     res.json(await getAccountDeletionRequest(deps.db,bearerUser(req)));

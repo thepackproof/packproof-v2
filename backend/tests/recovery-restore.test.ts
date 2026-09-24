@@ -106,6 +106,22 @@ describe('fresh isolated accepted-record reconstruction',()=>{
     await expect(fresh.db.query("UPDATE evidence SET sha256='changed' WHERE id=$1",[fixture.evidence.evidenceId])).rejects.toThrow('EVIDENCE_ALREADY_COMMITTED');
     await expect(fresh.db.query("UPDATE final_manifests SET canonical_json='{}'")).rejects.toThrow('MANIFEST_IMMUTABLE');
   },30000);
+  it('rejects modified or incomplete system-control seeds without opening or rewriting the recovery target',async()=>{
+    const fixture=await source();
+    for(const change of [
+      "UPDATE system_feature_flags SET enabled=true WHERE key='REGISTRATION_PAUSED'",
+      "UPDATE system_feature_flags SET version=2 WHERE key='NEW_CAPTURE_PAUSED'",
+      "DELETE FROM system_feature_flags WHERE key='NEW_CAPTURE_PAUSED'",
+    ]){
+      const fresh=await target();await fresh.db.query(change);
+      const before=(await fresh.db.query('SELECT * FROM system_feature_flags ORDER BY key')).rows;
+      const expectedDatabase=await assumeRestoreRole(fresh.db);
+      await expect(restoreFreshRecoveryDatabase(fresh.db,{...fixture.input,expectedDatabase})).rejects.toMatchObject({code:'RECOVERY_RESTORE_TARGET_NOT_EMPTY'});
+      expect((await fresh.db.query('SELECT * FROM system_feature_flags ORDER BY key')).rows).toEqual(before);
+      expect((await fresh.db.query('SELECT * FROM proofs')).rows).toHaveLength(0);
+      expect((await fresh.db.query('SELECT writes_enabled,generation FROM recovery_writer_fence')).rows[0]).toEqual({writes_enabled:true,generation:'initial'});
+    }
+  },30000);
   it('requires dedicated restore authority and an independently supplied latest signed head',async()=>{
     const fixture=await source(),fresh=await target();
     fixture.input.expectedDatabase=(await fresh.db.query<{name:string}>('SELECT current_database() AS name')).rows[0].name;

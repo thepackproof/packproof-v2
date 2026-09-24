@@ -1,3 +1,4 @@
+import {requireFeatureAvailable} from "../admin/flags.js";
 import { captureSurface, identifierSessionPolicy } from '../identifiers/policy.js';
 import type { IdentifierPolicy } from '../identifiers/types.js';
 import { pinCurrentIntakeCaptureContext, prepareIntakeCaptureEntry } from "../intake/context.js";
@@ -115,6 +116,7 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
       const proof = await loadProof(tx, proofId);
       await assertSupportedParcelCapture(tx, proof.transaction_id);
     }
+    await requireFeatureAvailable(tx,'NEW_CAPTURE_PAUSED');
     const active = await tx.query<{count: string}>("SELECT COUNT(*) AS count FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND state IN ('ISSUED','RECORDED','UPLOADING') AND recover_until > $3",[proofId,actor,clock.now().toISOString()]);
     if (Number(active.rows[0].count) >= 20) throw new DomainError('CAPTURE_QUEUE_FULL','Finish or cancel pending recordings before starting another',409);
     const allowance = input.stageId ? {enforced:false as const} : await reserveApprovedCaptureAllowance(tx,clock,{userId:actor,proofId});

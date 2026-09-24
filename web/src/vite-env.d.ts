@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_PACKPROOF_WEB_VERSION?: string;
+  readonly VITE_PACKPROOF_WEB_BUILD?: string;
   readonly VITE_PACKPROOF_API_BASE_URL?: string;
   readonly VITE_PACKPROOF_AUTH_MODE?: string;
   readonly VITE_PACKPROOF_COGNITO_USER_POOL_ID?: string;

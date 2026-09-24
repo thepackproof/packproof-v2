@@ -17,6 +17,7 @@ export type AppRouteName =
 
 export function AppNav(props: {
   session: WebSession;
+  adminAllowed?: boolean;
   invitationCount: number;
   onGoHome: () => void;
   onOpenAccount: () => void;
@@ -40,6 +41,7 @@ export function AppNav(props: {
   const links = [
     { label: "Proofs", href: "/proofs", icon: "shield", active: ["proofs", "proof", "receipt", "event", "invite", "finalize", "complete", "create", "scan", "station"] },
     { label: "Connections", href: "/stores", icon: "store", active: ["stores"] },
+    ...(props.adminAllowed ? [{label:"Admin",href:"/admin",icon:"grid",active:["admin"]}] : []),
   ];
   return (
     <><header className="workspace-mobile-top" onKeyDown={event => { if (event.key === "Escape") setMobileOpen(false); }}><button ref={mobileTrigger} className="icon-button" aria-label={mobileOpen ? "Close workspace menu" : "Open workspace menu"} aria-expanded={mobileOpen} aria-controls="workspace-navigation" onClick={() => setMobileOpen(!mobileOpen)}><Glyph name={mobileOpen ? "close" : "menu"} /></button><Brand /></header><aside id="workspace-navigation" className={`workspace-nav ${collapsed ? "is-collapsed" : ""} ${mobileOpen ? "mobile-expanded" : ""}`} onKeyDown={event => { if (event.key === "Escape") { setMobileOpen(false); mobileTrigger.current?.focus(); } }}><Brand />
