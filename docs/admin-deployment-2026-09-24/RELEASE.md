@@ -1,12 +1,19 @@
 # Admin dashboard release — September 24, 2026
 
-The release is deployed and its required deployment gates passed. The candidate
-rollout reached formal `SUCCESSFUL` at 10:42:41.870 UTC; the old bridge stopped
+The final API is source `147ecc73e1ae5663c96337df8afd0c60887e5c79`, image
+`sha256:ecbce8061bb86d88b338395c0b32486836f48391494013639ccf306cd316fc24`,
+task-definition revision 35. Its rollout reached native `SUCCESSFUL` at
+11:20:37.372 UTC with 100% production traffic. Required API release gates passed.
+
+The original candidate reached formal `SUCCESSFUL` at 10:42:41.870 UTC; the old bridge stopped
 at 10:48:50 UTC, IAM isolation completed at 10:49:38 UTC, and website v33 was
 published at 10:50:20.306833 UTC. Real Cognito user-session checks and a live
 customer capture/upload flow were **NOT EXERCISED**; no user bearer tokens were
 available. This receipt distinguishes those limits from completed deployment
 checks.
+
+The routing-patch evidence below supersedes the original API as the current
+release. Website v33 remains live unchanged.
 
 ## Reviewed artifacts
 
@@ -17,12 +24,13 @@ release identities.
 | Artifact | Source commit | Immutable image digest / bundle hash |
 | --- | --- | --- |
 | Compatibility bridge | `ed5986dd17aafe33d4e9efa318673722ee52e749` | `sha256:98d02b55bf9b0664f4713b18f46abc32f2f3cdcf71b16d111207fcf5cf71d543` |
-| API candidate | `8cd278ba457de1961e722dee54d7e84b162c2962` | `sha256:e64749d8f5179befc45c4d96371f795a9a753bb9db28c13f592f0e364be10beb` |
+| Previous API / preferred rollback, revision 34 | `8cd278ba457de1961e722dee54d7e84b162c2962` | `sha256:e64749d8f5179befc45c4d96371f795a9a753bb9db28c13f592f0e364be10beb` |
+| Current API, revision 35 | `147ecc73e1ae5663c96337df8afd0c60887e5c79` | `sha256:ecbce8061bb86d88b338395c0b32486836f48391494013639ccf306cd316fc24` |
 | Operator bundle | `6e9cf67a43f5462257fab77fc35cc3f8248dcdcf` | `0237e75757a1a4bd8884b12b714be60e54a209d87a9167a3a5da9a1019318f58` |
 | Website v33, published | `14ffdddf8211dde41341f78b6fe830f16f457571` | Archive SHA-256 `5228ade601989b20052051362767745509f7e355d02c9faf14fbe8a09dd7b4c0` |
 
-The candidate's local equivalent commit was
-`078c140e419835736b8f78987594468ef4631361`; both candidate commits have tree
+The original API's local equivalent commit was
+`078c140e419835736b8f78987594468ef4631361`; both original API commits have tree
 `5a9ac188562e140a4af180be605ab922fc387d91`. The image reports the remote source
 commit in the table. The operator source is separate from the API image source.
 
@@ -30,6 +38,55 @@ commit in the table. The operator source is separate from the API image source.
 | --- | --- | --- |
 | Bridge, build 82 | `packproof-v2-staging-api:cca65242-3562-4efb-95dc-7b69076eec54` | Succeeded |
 | Candidate, build 83 | `packproof-v2-staging-api:0d6aecc1-c010-48b3-9333-b5c015b66812` | Succeeded |
+| Routing patch, build 84 | Build number 84 | Succeeded |
+
+## Final routing patch — deployed
+
+The patch uses an own-property check for admin section dispatch so inherited
+object-property names cannot be treated as valid section handlers. It makes no
+other backend runtime changes. Four invalid-name cases and a valid-section
+regression are covered; the admin-read suite passed all 14 tests and TypeScript
+checking passed.
+
+The remote source is `147ecc73e1ae5663c96337df8afd0c60887e5c79`; its local
+equivalent is `01aa532d74c2c901efb2bf3a419c37eba81bf065`, with shared tree
+`3df0642e9e03a0c82432c72a4e3bfb011276efe5`. CodeBuild 84 succeeded from a
+1,295,693-byte source ZIP with SHA-256
+`d0831ec81dcd2c2fab224e6839b2ffa522ff460c8b93897b7342441ee1b7439f`.
+Required CI run `35990173076` completed successfully at 11:10:30 UTC on the exact
+remote patch SHA: all ten jobs passed, including backend, real PostgreSQL,
+secret scanning, deployment scripts, and Android. Infrastructure run
+`35990172879` and CodeQL run `35990172877` also succeeded on that SHA.
+Independent iOS run `35990173041` was compiling at 11:20:15 UTC with no failed
+steps; it is not a server rollout gate. The earlier `30052b47bb9f` revision passed
+iOS for the same application code, with only secret-scan configuration differing.
+
+Read-only verifier task `ccec5bdc99194063b43392120d0fe16c` emitted a passing
+result at 11:03:11 UTC for the exact patch source, complete 74-migration schema,
+runtime roles, and internal authorization guards. This ran **before traffic
+shift and after the owner-secret IAM deny**. The process exited 0 at
+11:03:11.530 UTC; ECS confirmed `STOPPED` at 11:03:34.809 UTC.
+Worker observations describe the existing service, not patch-worker execution.
+The reviewed rollout request changes only the image and three release-identity
+environment values; all other configuration matches the approved predecessor,
+with unique environment/secret names. The accepted update at 11:11:51 UTC reached
+native `SUCCESSFUL` at 11:20:37.372 UTC: 100% production traffic, one running
+target task, zero pending, no triggered alarms, and no circuit-breaker failures.
+All ten preservation checks passed. Revision 34 had zero traffic and zero running
+tasks in the native service-revision view. At the 11:22:06 UTC observation its
+actual task remained `DEACTIVATING` in the normal 300-second deregistration drain,
+and legacy `DescribeServices` still showed `PRIMARY/IN_PROGRESS`. This receipt
+does not claim that task had stopped. Both API revisions use the same non-owner
+credential boundary; this drain does not reopen owner authority or negate the
+completed native rollout.
+
+Public checks at 11:18:14 UTC, during the 100% traffic bake before formal
+completion, returned the exact patch source/image from `/meta`, HTTP 200 from
+`/ready` and `/health`, and HTTP 401 from unauthenticated `/admin/overview` and
+`/me/capabilities`. Every response had the expected custom-origin CORS. A separate
+final IAM policy readback and per-resource simulation, observed at 11:22:06 UTC,
+reconfirmed the exact runtime secret was allowed and the owner secret explicitly
+denied. No secret values were read.
 
 ## Observed database results
 
@@ -133,7 +190,9 @@ with the existing custom domain [thepackproof.com](https://thepackproof.com).
 | Compatibility bridge | Completed rollout; public identity/readiness checked |
 | Database migrations | Applied and verified; temporary login removed |
 | Runtime credential preparation | Applied; fresh login and privilege checks passed |
-| Candidate API rollout | Formal `SUCCESSFUL` at 10:42:41.870 UTC |
+| Original API rollout | Formal `SUCCESSFUL` at 10:42:41.870 UTC; retained as preferred rollback |
+| Final routing patch | Build 84, required API CI, verifier exit 0, and native `SUCCESSFUL` at 11:20:37.372 UTC |
+| Final API public checks and IAM boundary | Exact source/image, 200 readiness/health, 401 unauthenticated checks, expected CORS, runtime allow/owner explicit deny |
 | Old-task termination and owner-secret IAM isolation | Bridge stopped exit 0 before verified IAM cutover |
 | Candidate runtime identity, privileges, and internal guards | Verifier exit 0; timing and credential-path limits above |
 | Administrator bootstrap and audit | Atomic grant/audit success receipt and exit 0 confirmed |
@@ -152,9 +211,11 @@ after the required runtime/internal authorization guards and other release gates
 have passed. Existing source, unit, integration, and CI evidence keeps its original
 scope; it is not presented as a live Cognito session or customer capture.
 
-After candidate credential cutover, rollback changes the image/release identity
-to the recorded bridge while preserving the new runtime credentials, grants,
-and credential-access restrictions. It must not restore the bridge's original
-owner-credential task configuration. All additive migrations and immutable data
-remain. Verify bridge readiness under the retained runtime identity. The
-pre-bridge image is not a valid post-migration rollback target.
+The preferred routing-patch rollback is the original API source and image
+recorded above, with task-definition revision 34's
+non-owner credentials and the current IAM deny/configuration preserved. For a
+wider backend rollback, the compatibility bridge remains available with those
+same runtime credentials, grants, and credential-access restrictions; do not
+restore its original owner-credential task configuration. All additive migrations
+and immutable data remain. Verify readiness under the retained runtime identity.
+The pre-bridge image is not a valid post-migration rollback target.

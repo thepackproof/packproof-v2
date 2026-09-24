@@ -1,7 +1,13 @@
 # Admin dashboard deployment
 
-Status on 2026-09-24: **the release is deployed and its required deployment gates
-passed**. Migrations 069–073, separate runtime credentials, administrator
+Status on 2026-09-24: **the final API release is deployed and its required gates
+passed**. Current source `147ecc73e1ae5663c96337df8afd0c60887e5c79`, image
+`sha256:ecbce8061bb86d88b338395c0b32486836f48391494013639ccf306cd316fc24`,
+and task-definition revision 35 reached native `SUCCESSFUL` at 11:20:37.372 UTC
+with 100% production traffic, one target task running, zero pending, and no alarm
+or circuit-breaker failures. All ten configuration-preservation checks passed.
+
+Migrations 069–073, separate runtime credentials, administrator
 bootstrap, and the candidate runtime verifier succeeded. The candidate rollout
 reached `SUCCESSFUL` at 10:42:41.870 UTC; the old bridge task stopped at
 10:48:50 UTC before owner-secret IAM access was denied at 10:49:38 UTC. Public
@@ -11,6 +17,18 @@ and a live customer capture/upload flow were **NOT EXERCISED** because no user
 bearer tokens were available. The runtime verifier ran before IAM cutover, during
 old-task drain; subsequent IAM/readiness evidence is recorded separately in
 [the release receipt](admin-deployment-2026-09-24/RELEASE.md).
+
+The final routing patch (CodeBuild 84) rejects section names inherited from
+JavaScript's object prototype. Required API CI and its read-only verifier passed;
+the verifier ran before traffic shift and after the owner-secret IAM deny.
+Public checks at 11:18:14 UTC, during the 100% traffic bake, confirmed the exact
+source/image, readiness, health, unauthenticated denial, and custom-origin CORS.
+The final IAM snapshot at 11:22:06 UTC independently reconfirmed runtime-secret
+allowance and explicit owner-secret denial. At that observation, the previous
+restricted-runtime task was still `DEACTIVATING` in its normal 300-second drain,
+and legacy `DescribeServices` still showed `PRIMARY/IN_PROGRESS`; native rollout
+was already complete. That task has no owner authority. Website v33 remains live
+unchanged.
 
 ## Existing deployment and recorded baseline
 
@@ -219,7 +237,14 @@ customer balances or disable customers merely to test deployment.
 
 ## Rollback and completion evidence
 
-Rollback uses the verified compatibility bridge image, preserving all additive
+For the follow-up routing patch, the preferred rollback is the already deployed
+API source `8cd278ba457de1961e722dee54d7e84b162c2962`, image
+`sha256:e64749d8f5179befc45c4d96371f795a9a753bb9db28c13f592f0e364be10beb`
+(recorded task-definition revision 34). Preserve its non-owner runtime
+credentials, owner-secret IAM deny, and all other current configuration. Do not
+make a credential or privilege change as part of that image rollback.
+
+For a wider backend rollback, use the verified compatibility bridge image, preserving all additive
 schema, audit, Proofs, and evidence. After the runtime credential cutover, clone
 the current service configuration and change only the image and corresponding
 release identity to the bridge. Retain the new runtime login/secret references,
