@@ -2,6 +2,8 @@ import { NodeClient, makeNodeTransport } from '@sentry/node';
 import { randomUUID } from 'node:crypto';
 import { ErrorReporting, validPublicDsn, type ReportingTransportFactory } from './error-reporting.js';
 
+const CANARY_WAIT_BUDGET_MS = 10_000;
+
 export interface ReportingCanaryInput {
   send: boolean;
   dsn: string;
@@ -24,6 +26,7 @@ export async function runReportingCanary(input: ReportingCanaryInput, transportF
   let eventId: string | undefined;
   let wireEventId: string | undefined;
   let flushed = false;
+  let waitBudgetExceeded = false;
   let attempts = 0;
   let statusCode: number | undefined;
   let transportFailed = false;
@@ -34,7 +37,17 @@ export async function runReportingCanary(input: ReportingCanaryInput, transportF
       const client = new NodeClient(options);
       return {
         captureEvent(event, hint, scope) { eventId = randomUUID().replaceAll('-', ''); return client.captureEvent({ ...event, event_id: eventId }, { ...hint, event_id: eventId }, scope); },
-        async close(timeout) { flushed = await client.close(timeout); return flushed; },
+        async close() {
+          // This operator CLI has its own bounded wait; the app keeps its 1.5-second quit budget.
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const deadline = new Promise<boolean>(resolve => {
+            timer = setTimeout(() => { waitBudgetExceeded = true; resolve(false); }, CANARY_WAIT_BUDGET_MS);
+          });
+          try {
+            flushed = await Promise.race([client.close(CANARY_WAIT_BUDGET_MS), deadline]);
+            return flushed;
+          } finally { clearTimeout(timer); }
+        },
       };
     },
     transportFactory(options) {
@@ -70,8 +83,9 @@ export async function runReportingCanary(input: ReportingCanaryInput, transportF
     eventId: eventId && /^[a-f0-9]{32}$/.test(eventId) ? eventId : null,
     category: 'SYSTEM', code: 'REPORTING_CANARY', transportAttempts: attempts,
     httpStatus: statusCode ?? null, sdkFlushed: flushed, wireFilterPassed, ingestAcknowledged,
+    waitBudgetMs: CANARY_WAIT_BUDGET_MS, waitBudgetExceeded,
     deliveryVerified: false,
-    result: ingestAcknowledged ? 'INGEST_ACKNOWLEDGED_READBACK_REQUIRED' : 'INGEST_NOT_CONFIRMED',
+    result: ingestAcknowledged ? 'INGEST_ACKNOWLEDGED_READBACK_REQUIRED' : waitBudgetExceeded ? 'INGEST_WAIT_BUDGET_EXCEEDED' : 'INGEST_NOT_CONFIRMED',
     readbackRequired: 'An authorized operator must locate this event ID in the approved Sentry project and inspect its complete fields before recording delivery acceptance.',
   };
 }

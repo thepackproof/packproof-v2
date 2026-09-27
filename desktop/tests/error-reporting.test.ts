@@ -14,6 +14,12 @@ describe('coded opt-in production reporting', () => {
     expect(validPublicDsn(dsn)).toBe(true);
     for (const value of [dsn.replace('https:', 'http:'), dsn.replace('@', ':secret@'), dsn.replace('sentry.io', 'evil.example'), `${dsn}?token=secret`, `${dsn}#fragment`]) expect(validPublicDsn(value)).toBe(false);
   });
+  it('keeps the desktop lifecycle close budget at 1.5 seconds', async () => {
+    const close = vi.fn(async () => true);
+    const reporter = new ErrorReporting({ dsn, channel: 'production', version: '1.0.0', clientFactory: () => ({ captureEvent: vi.fn(), close }) });
+    await reporter.close();
+    expect(close).toHaveBeenCalledExactlyOnceWith(1_500);
+  });
   it('disables automatic collection and accepts only whitelisted coded reports, at most once per minute', () => {
     const client = { captureEvent: vi.fn(), close: vi.fn(async () => true) }; let options!: ErrorReportingClientOptions; let now = 0;
     const reporter = new ErrorReporting({ dsn, channel: 'production', version: '1.0.0', now: () => now, clientFactory: input => { options = input; return client; } });
