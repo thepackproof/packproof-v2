@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url';
 import type { Database } from './database.js';
 import { splitSqlStatements } from './sql.js';
 const migrationsDir=path.join(path.dirname(fileURLToPath(import.meta.url)),'../../migrations');
+// Optional, reviewed schema envelope for the desktop deployment bridge.
+// This release does not contain or apply 074 and keeps the existing API runtime.
+const compatibleFutureMigrations=new Map<string,string>([
+  ['074_desktop_capture_registration','3d598d733ab8aaf375fc793446b2ed732b42c2bcb9c47fc732af57c9eade692a'],
+]);
 export async function migrationInventory(sourceDir=migrationsDir){
   const files=(await readdir(sourceDir)).filter(name=>name.endsWith('.sql')).sort();
   return Promise.all(files.map(async file=>{const sql=await readFile(path.join(sourceDir,file),'utf8');return {id:file.replace(/\.sql$/i,''),checksum:createHash('sha256').update(sql).digest('hex'),sql};}));
@@ -13,7 +18,7 @@ export async function assertSchemaCurrent(db:Database,sourceDir=migrationsDir):P
   const inventory=await migrationInventory(sourceDir);
   const applied=(await db.query<{id:string;checksum:string|null}>('SELECT id,checksum FROM schema_migrations')).rows;
   const expectedIds=new Set(inventory.map(item=>item.id));
-  if(applied.some(row=>!expectedIds.has(row.id)))throw new Error('Database contains migrations outside this release compatibility envelope');
+  if(applied.some(row=>!expectedIds.has(row.id)&&compatibleFutureMigrations.get(row.id)!==row.checksum))throw new Error('Database contains migrations outside this release compatibility envelope');
   for(const item of inventory){const row=applied.find(entry=>entry.id===item.id);if(!row||row.checksum!==item.checksum)throw new Error(`Migration required or checksum mismatch: ${item.id}`);}
 }
 export async function migrate(db:Database,sourceDir=migrationsDir,options:{adoptLegacyChecksums?:boolean;expectedRole?:string}={}):Promise<void>{
