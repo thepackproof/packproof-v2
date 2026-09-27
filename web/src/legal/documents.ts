@@ -2,7 +2,7 @@ export const LEGAL_LAST_UPDATED = "September 1, 2026";
 
 /** Visible until a legal entity and contact addresses are confirmed. */
 export const LEGAL_ENTITY_PLACEHOLDER = "[LEGAL ENTITY NAME — developer review]";
-export const PRIVACY_CONTACT_PLACEHOLDER = "admin@thepackproof.com";
+export const PRIVACY_CONTACT_EMAIL = "admin@thepackproof.com";
 export const LEGAL_CONTACT_PLACEHOLDER = "[LEGAL / SUPPORT CONTACT EMAIL — developer review]";
 export const MAILING_ADDRESS_PLACEHOLDER = "[MAILING ADDRESS — developer review]";
 export const GOVERNING_LAW_PLACEHOLDER = "[GOVERNING LAW AND VENUE — developer review]";
@@ -57,7 +57,7 @@ export const privacyPolicy: LegalDocument = {
       paragraphs: [
         `This Privacy Policy describes how ${LEGAL_ENTITY_PLACEHOLDER} (“PackProof,” “we,” “us”) handles information in connection with the PackProof service, including the PackProof API, the first-party web application, the mobile client, and the Windows and macOS desktop applications.`,
         "PackProof is evidence infrastructure. It records, timestamps, hashes, stores, and retrieves transaction-bound records (“Proofs”). PackProof does not adjudicate disputes, determine liability, or independently verify that marketplace-supplied transaction claims, packing statements, or carrier events are true in the real world.",
-        `Questions about this policy: ${PRIVACY_CONTACT_PLACEHOLDER}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
+        `Questions about this policy: ${PRIVACY_CONTACT_EMAIL}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
       ],
     },
     {
@@ -309,7 +309,7 @@ export const privacyPolicy: LegalDocument = {
       paragraphs: [
         "PackProof uses HTTPS for the hosted API and web application. Durable Proof changes authenticate, authorize, load the Proof, validate the transition, and persist in a database transaction with constraints and audit events.",
         "Evidence bytes are stored in an object store. Canonical domain state is stored in PostgreSQL. Marketplace tokens are stored server-side as described above. The public web bundle does not contain API secrets or database credentials.",
-        `These practices reduce risk; they are not a guarantee that unauthorized access, loss, or alteration cannot occur. You should notify us promptly at ${PRIVACY_CONTACT_PLACEHOLDER} if you believe your account or a connection has been compromised.`,
+        `These practices reduce risk; they are not a guarantee that unauthorized access, loss, or alteration cannot occur. You should notify us promptly at ${PRIVACY_CONTACT_EMAIL} if you believe your account or a connection has been compromised.`,
       ],
     },
     {
@@ -336,7 +336,7 @@ export const privacyPolicy: LegalDocument = {
       title: "28. Your rights and how to contact us",
       paragraphs: [
         "Depending on where you live, you may have rights to request access to, correction of, or deletion of personal information, or to object to or restrict certain processing. PackProof will consider requests as required by applicable law, subject to the retention of evidentiary records described above and to verification of the requester’s identity.",
-        `To make a request, contact ${PRIVACY_CONTACT_PLACEHOLDER}. If we deny a request in whole or in part, we will explain the reason we are able to provide, including where retention is required to preserve a finalized Proof or to protect the rights of another participant.`,
+        `To make a request, contact ${PRIVACY_CONTACT_EMAIL}. If we deny a request in whole or in part, we will explain the reason we are able to provide, including where retention is required to preserve a finalized Proof or to protect the rights of another participant.`,
       ],
     },
     {
@@ -490,7 +490,7 @@ export const termsOfService: LegalDocument = {
       id: "contact",
       title: "16. Contact",
       paragraphs: [
-        `For these Terms: ${LEGAL_CONTACT_PLACEHOLDER}. For privacy requests: ${PRIVACY_CONTACT_PLACEHOLDER}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
+        `For these Terms: ${LEGAL_CONTACT_PLACEHOLDER}. For privacy requests: ${PRIVACY_CONTACT_EMAIL}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
       ],
     },
   ],

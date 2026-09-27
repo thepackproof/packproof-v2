@@ -70,7 +70,7 @@ test("known placeholders fail before a live page request even when hashes are fr
 test("all existing PackProof developer-review legal placeholders are refused", async () => fixture(async context => {
   const source = await readFile(new URL("../web/src/legal/documents.ts", import.meta.url), "utf8");
   const placeholders = [...source.matchAll(/export const [A-Z_]+_PLACEHOLDER = "([^"]+)";/g)].map(match => match[1]);
-  assert.ok(placeholders.length >= 5);
+  assert.equal(placeholders.length, 4); // The approved privacy contact is an email, not a placeholder.
   const doc = context.manifest.documents.privacy; const original = context.pages.get(doc.servedUrl).toString();
   for (const placeholder of placeholders) {
     doc.artifact = await context.record("privacy.html", `${original}<mark>${placeholder}</mark>`);
