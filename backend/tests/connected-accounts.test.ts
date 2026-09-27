@@ -383,6 +383,11 @@ describe("connected accounts", () => {
           } } });
         }
         const id = String(variables.id).split("/").at(-1)!;
+        if (operation === "PackProofOrderFulfillmentOrders") return Response.json({ data: { order: { id: variables.id, updatedAt,
+          fulfillmentOrders: { nodes: id === "5051" ? [{ id: `gid://shopify/FulfillmentOrder/${id}`, updatedAt, status: "OPEN", requestStatus: "UNSUBMITTED", deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } }] : [], pageInfo: { hasNextPage: false, endCursor: null } } } } });
+        if (operation === "PackProofFulfillmentOrderLines") return Response.json({ data: { node: { id: variables.id, updatedAt,
+          lineItems: { nodes: [{ id: `gid://shopify/FulfillmentOrderLineItem/${id}`, remainingQuantity: 1, requiresShipping: true, lineItem: { id: `gid://shopify/LineItem/${7000 + Number(id)}` } }], pageInfo: { hasNextPage: false, endCursor: null } } } } });
+        if (operation === "PackProofFulfillmentOrderRevision") return Response.json({ data: { node: { id: variables.id, updatedAt, deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } } } });
         if (operation === "PackProofOrderRevision") {
           return Response.json({ data: { order: { id: variables.id, updatedAt } } });
         }
@@ -390,7 +395,7 @@ describe("connected accounts", () => {
           const eligible = id === "5051";
           return Response.json({ data: { order: {
             id: variables.id, legacyResourceId: id, name: `#${id}`, createdAt: updatedAt, updatedAt,
-            cancelledAt: null, displayFinancialStatus: "PAID", displayFulfillmentStatus: eligible ? "UNFULFILLED" : "FULFILLED",
+            test: false, cancelledAt: null, displayFinancialStatus: "PAID", displayFulfillmentStatus: eligible ? "UNFULFILLED" : "FULFILLED",
             currentTotalPriceSet: { shopMoney: { amount: "25.00", currencyCode: "USD" } },
             fulfillments: [], lineItems: {
               nodes: [{ id: `gid://shopify/LineItem/${7000 + Number(id)}`, title: "Test card", sku: null,
@@ -510,11 +515,14 @@ describe("connected accounts", () => {
     });
 
     it("disconnects on a verified app/uninstalled webhook", async () => {
-      await boot();
+      const { shopifyClient } = await boot();
       const userId = await login(harness.app, "seller-1");
       await connectProvider(harness, userId, "shopify", "valid-shopify-code", {
         shop: "packproof-test.myshopify.com",
       });
+      // Shopify invalidates the installation's tokens before this delivery.
+      shopifyClient.tokens.clear();
+      shopifyClient.refreshTokens.clear();
       const raw = "{}";
       const hmac = shopifyWebhookHmac("shopify-secret", Buffer.from(raw, "utf8"));
       const webhook = await request(harness.app)

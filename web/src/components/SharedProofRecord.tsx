@@ -8,6 +8,7 @@ import { PublicMedia } from "./PublicMedia";
 import { ProofTimeline } from "./ProofTimeline";
 import { packingRecordLabel, proofReference } from "../../../mobile/src/copy/evidence-record";
 import { Glyph } from "../site/Brand";
+import { RemainingShipmentNotice } from "./RemainingShipmentNotice";
 
 export type SharedProofView = PublicProofView & {
   identifiers?: IdentifierProjection;
@@ -60,6 +61,7 @@ export function SharedProofRecord({ proof, loadMedia }: {
       <div><h2>{tracker?.itemTitle || "Shared Proof"}</h2><p>{tracker?.reference || proofReference(proof.proofId)}</p></div>
       <span className={`record-seal ${proof.status==='FINALIZED'?'is-sealed':''}`}><Glyph name={proof.status==='FINALIZED'?'shield':'file'} size={18}/>{packingRecordLabel(proof.status)}</span>
     </header>
+    <RemainingShipmentNotice value={proof} />
     <p className="record-source-note">Shipment: {shipments.at(-1)?.label || "No carrier update yet"}</p>
     {proof.recordAsOf && <p className="record-source-note">{proof.recordAsOf.scopeStatement}</p>}
     {proof.integrity && <details className="record-source-note"><summary>{proof.integrity.result==='MANIFEST_HASH_MATCH'?'Preserved manifest integrity checked':proof.integrity.result==='MANIFEST_HASH_MISMATCH'?'Manifest integrity mismatch':'Integrity check available after finalization'}</summary><p>{proof.integrity.scope}</p></details>}

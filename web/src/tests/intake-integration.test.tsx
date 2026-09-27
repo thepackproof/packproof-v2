@@ -12,6 +12,7 @@ import { SelectedOrderHandoff } from '../components/SelectedOrderHandoff';
 import { PackingStationScreen } from '../screens/PackingStationScreen';
 import { canonicalProof } from './fixtures';
 import { recoverStationCapture } from '../capture-queue';
+import { REMAINING_SHIPMENT_EXPLANATION } from '@packproof/copy/fulfillment-scope';
 
 vi.mock('../capture-queue',()=>({recoverStationCapture:vi.fn(async()=>null),saveStationCapture:vi.fn(async()=>{}),updateStationCaptureScans:vi.fn(async()=>{}),resumeStationRecording:vi.fn(async()=>({completion:'FINALIZED'})),stationCaptureKey:(user:string)=>`${user}:station`}));
 vi.mock('../components/RelayStationPanel',()=>({RelayStationPanel:()=>null}));
@@ -67,6 +68,22 @@ it('records the displayed multi-item snapshot in one deliberate action and retai
   expect(consumed).toHaveBeenCalledTimes(1);expect(Recorder.starts).toBe(1);
   expect(api.intakeRequest).toHaveBeenCalledWith('/orders/snapshot%2Fone/capture','POST',{client:'WEB_CAMERA',idempotencyKey:expect.any(String)});
   expect(api.createCaptureSession).not.toHaveBeenCalled();
+});
+
+it('retains the remaining-shipment limit from the ready checklist through recording review',async()=>{
+  const remaining = { ...snapshot, fulfillmentScope: 'REMAINING_SHIPMENT' };
+  const api=client(path=>path==='/capabilities'?caps:path==='/orders'?{orders:[{...ready,snapshot:remaining}]}:path==='/orders/snapshot%2Fone/capture'?{session:{id:'remaining-capture',state:'ISSUED'}}:Promise.reject(new Error(`Unexpected ${path}`)));
+  function Flow(){const [accepted,setAccepted]=useState<IntakeSnapshot|null>(null),[recording,setRecording]=useState(false);
+    return recording?<PackingStationScreen api={api as unknown as PackProofApi} userId={owner} initialProofId={snapshot.proofId} acceptedIntakeSnapshot={accepted} onIntakeIntentConsumed={()=>setAccepted(null)} queue={[]} error={null} onAuthExpired={()=>{}}/>:<ReadyIntakeOrders api={api as unknown as PackProofApi} userId={owner} onRecord={value=>{setAccepted(value);setRecording(true);}}/>;
+  }
+  render(<Flow/>);
+  expect(await screen.findByText('Remaining shipment')).toBeVisible();
+  expect(screen.getByText(REMAINING_SHIPMENT_EXPLANATION)).toBeVisible();
+  await userEvent.click(screen.getByRole('button',{name:'Record packing'}));
+  await userEvent.click(await screen.findByRole('button',{name:'Finish recording'}));
+  expect(await screen.findByRole('heading',{name:'Review recording'})).toBeVisible();
+  expect(screen.getByText('Remaining shipment')).toBeVisible();
+  expect(screen.getByText(REMAINING_SHIPMENT_EXPLANATION)).toBeVisible();
 });
 
 it('resolves incomplete source facts and refreshes the same ready-order surface without selecting another order',async()=>{

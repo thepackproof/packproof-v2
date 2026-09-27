@@ -6,6 +6,7 @@ import { BrowserIdentifierDecoder } from '../capture/identifier-decoder';
 import { browserIdentifierJournal } from '../capture/identifiers';
 import { IdentifierDetails } from '../components/IdentifierDetails';
 import { randomId } from "../random-id";
+import { RemainingShipmentNotice } from "../components/RemainingShipmentNotice";
 import type { IntakeSnapshot } from '../intake-types';
 import {startStationStudy,resumeStationStudy,type StationStudyTimer} from '../analytics/study-capture';
 import { RelayStationPanel } from "../components/RelayStationPanel";
@@ -704,6 +705,7 @@ export function PackingStationScreen(props: {
   return <main className="page packing-page">
     <div className="section-head"><h1 className="page-title">{heldBlob ? "Review recording" : state.order ? state.order.itemSummary : "Pack multiple orders"}</h1></div>
     {state.order ? <p className="meta">{state.order.orderLabel}</p> : <p>Finish one package, then move to the next.</p>}
+    {state.order && <RemainingShipmentNotice value={state.order.fulfillmentScope ? state.order : intakeSnapshot.current?.proofId === state.order.proofId ? intakeSnapshot.current : state.order} />}
     {props.error || localError || state.error ? <p role="alert" className="banner banner-error">{state.error?.message || localError || props.error}</p> : null}
     {(state.phase === "READY" || state.phase === "RECOVERY" && !state.capture) ? <div className="order-list">
       {candidates.map(item => <button type="button" className="order-row" key={item.proofId} disabled={busy} onClick={() => void identify("QUEUE_SELECT",item.orderLabel,item.transactionId)}><span className="order-row-copy"><strong>{item.itemSummary}</strong><span>{item.orderLabel}</span></span><span>Ready to pack</span></button>)}

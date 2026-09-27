@@ -52,7 +52,7 @@ export function AccountScreen(props: {
   onOpenFulfillment: () => void;
   onOpenPrivacy: () => void;
   onOpenTerms: () => void;
-  onConnectAccount: (provider: string, extra?: { shop?: string }) => void;
+  onConnectAccount: (provider: string, extra?: { shop?: string; autoSyncEnabled?: boolean }) => void;
   onReauthorizeAccount: (accountId: string) => void;
   onDisconnectAccount: (accountId: string) => void;
   onBack: () => void;

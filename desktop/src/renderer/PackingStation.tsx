@@ -84,6 +84,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
         if(video.current){video.current.srcObject=media;await video.current.play();}
         media.getTracks().forEach(track=>track.addEventListener('ended',()=>{
           setCameraReady(false);
+          void window.packproof.system.report?.('CAMERA_DISCONNECTED').catch(()=>{});
           const message=`The ${track.kind==='video'?'camera':'microphone'} disconnected. The partial recording has been preserved for review.`;
           if(phaseRef.current==='recording')stopRef.current(message);else setError('A recording device disconnected. Reconnect it or select another device.');
         }));
@@ -91,6 +92,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
       } catch(reason) {
         if(cancelled)return;
         const name=reason instanceof DOMException?reason.name:'';
+        void window.packproof.system.report?.(name==='NotAllowedError'?'CAMERA_PERMISSION_DENIED':'CAMERA_UNAVAILABLE').catch(()=>{});
         setError(name==='NotAllowedError'?'Camera permission was denied. Enable camera access for PackProof in system privacy settings, then retry.':name==='NotReadableError'?'This camera is in use or unavailable. Close other camera apps and retry.':name==='NotFoundError'?'No camera was found. Connect a webcam to prepare your packing station.':errorMessage(reason));
       }
     };
@@ -172,7 +174,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
           }
         }).catch(reason=>{interruption.current=errorMessage(reason);stopRef.current(interruption.current);}).finally(()=>{pendingBytes.current-=event.data.size;});
       };
-      mediaRecorder.onerror=()=>stopRef.current('The camera encoder stopped unexpectedly. Any staged evidence has been preserved.');
+      mediaRecorder.onerror=()=>{void window.packproof.system.report?.('RECORDING_FAILED').catch(()=>{});stopRef.current('The camera encoder stopped unexpectedly. Any staged evidence has been preserved.');};
       mediaRecorder.onstop=()=>{
         void writeChain.current.then(async()=>{
           if(interruption.current){await window.packproof.capture.interrupt(native.id,interruption.current);setError(interruption.current);captureId.current=null;updatePhase('ready');onSaved();}
@@ -217,6 +219,29 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
     };
     window.addEventListener('keydown',shortcut);return()=>window.removeEventListener('keydown',shortcut);
   });
+  useEffect(()=>{
+    let text='';let last=0;
+    const scan=(event:KeyboardEvent)=>{
+      if(event.ctrlKey||event.metaKey||event.altKey||event.repeat||event.defaultPrevented)return;
+      if((event.target as HTMLElement).closest('input,textarea,select,[contenteditable="true"]'))return;
+      const now=performance.now();
+      if(event.key===settings.scannerSuffix){
+        const code=text;text='';
+        if(code.length<6||now-last>150)return;
+        event.preventDefault();
+        if(phaseRef.current==='recording')observe(code,'keyboard-scanner',true);
+        else if(phaseRef.current==='ready'){
+          setResolving(true);setError('');
+          void window.packproof.orders.resolve(code).then(result=>chooseProof(result.proofId)).catch(reason=>setError(errorMessage(reason))).finally(()=>setResolving(false));
+        }
+        return;
+      }
+      if(event.key.length!==1)return;
+      if(now-last>90)text='';
+      text=(text+event.key).slice(-512);last=now;
+    };
+    window.addEventListener('keydown',scan);return()=>window.removeEventListener('keydown',scan);
+  },[settings.scannerSuffix,observe,chooseProof]);
   const canCapture=!!proof&&['READY_FOR_EVIDENCE','EVIDENCE_COMMITTED'].includes(proof.status)&&!proof.finalizedAt;
 
   return <>
@@ -237,7 +262,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
         <div className="camera-settings"><label>Camera<select disabled={busy} value={settings.cameraId} onChange={event=>void window.packproof.system.saveSettings({cameraId:event.target.value}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="">System default</option>{devices.filter(device=>device.kind==='videoinput').map((device,index)=><option key={device.deviceId||index} value={device.deviceId}>{device.label||`Camera ${index+1}`}</option>)}</select></label><label>Resolution<select disabled={busy} value={settings.resolution} onChange={event=>void window.packproof.system.saveSettings({resolution:event.target.value as DesktopSettings['resolution']}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="1080p">1080p · Recommended</option><option value="720p">720p</option></select></label><label>Audio<select disabled={busy} value={settings.audio?'on':'off'} onChange={event=>void window.packproof.system.saveSettings({audio:event.target.value==='on'}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="off">Off</option><option value="on">Microphone on</option></select></label>{settings.audio&&<label>Microphone<select disabled={busy} value={settings.microphoneId} onChange={event=>void window.packproof.system.saveSettings({microphoneId:event.target.value}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="">System default</option>{devices.filter(device=>device.kind==='audioinput').map((device,index)=><option key={device.deviceId||index} value={device.deviceId}>{device.label||`Microphone ${index+1}`}</option>)}</select></label>}</div>
       </section>
       <aside className="station-context">
-        <section className="panel"><h2>{phase==='recording'?'Scan shipping label':'Find your shipment'}</h2><form onSubmit={event=>void resolve(event)}><label className="sr-only" htmlFor="station-reference">Order number or tracking barcode</label><div className="input-action"><input id="station-reference" ref={suffixRef} placeholder="Scan or enter order / tracking" value={reference} onChange={event=>setReference(event.target.value)} onKeyDown={event=>{if(settings.scannerSuffix==='Tab'&&event.key==='Tab'&&reference){event.preventDefault();void resolve(event as unknown as React.FormEvent);}}} disabled={busy&&phase!=='recording'}/><button aria-label="Find shipment or add label" disabled={resolving||!reference.trim()}><Icon name="arrow"/></button></div><p className="help">USB and Bluetooth keyboard scanners supported.</p></form>
+        <section className="panel"><h2>{phase==='recording'?'Scan shipping label':'Find your shipment'}</h2><form onSubmit={event=>void resolve(event)}><label className="sr-only" htmlFor="station-reference">Order number or tracking barcode</label><div className="input-action"><input id="station-reference" ref={suffixRef} autoFocus placeholder="Scan or enter order / tracking" value={reference} onChange={event=>setReference(event.target.value)} onKeyDown={event=>{if(settings.scannerSuffix==='Tab'&&event.key==='Tab'&&reference){event.preventDefault();void resolve(event as unknown as React.FormEvent);}}} disabled={busy&&phase!=='recording'}/><button aria-label="Find shipment or add label" disabled={resolving||!reference.trim()}><Icon name="arrow"/></button></div><p className="help">USB and Bluetooth keyboard scanners supported.</p></form>
           {proof?<div className="selected-order"><span className="eyebrow">SELECTED SHIPMENT</span><h3>{proof.transaction.externalReference||'Manual shipment'}</h3><p>{proof.transaction.itemTitle||'Packing evidence'}</p><dl><dt>Tracking</dt><dd>{expected||'Not assigned'}</dd><dt>Carrier</dt><dd>{proof.transaction.shipping?.carrier||'Not assigned'}</dd></dl>{!canCapture&&<div className="notice warning">This Proof cannot receive packing evidence in its current state.</div>}</div>:<p className="muted">Select a synchronized order or open a Proof to begin.</p>}
         </section>
         <section className="panel"><div className="section-heading"><h2>{phase==='recording'?'Detected labels':'Next in queue'}</h2><Badge>{phase==='recording'?detections.length:orders.length}</Badge></div>{phase==='recording'?(detections.length?<ul className="detection-list">{detections.slice().reverse().map((item,index)=><li key={`${item.detectedAtMs}-${index}`}><Icon name={expected&&trackingMatch(item.rawValue,expected)?'check':'orders'}/><div><strong>{item.rawValue}</strong><span>{item.format} · {duration(item.detectedAtMs)}</span></div></li>)}</ul>:<p className="muted">Labels will appear here as they enter the camera view.</p>):(orders.length?<div className="next-orders">{orders.filter(item=>item.proofStatus!=='FINALIZED').slice(0,7).map(item=><button key={item.proofId} disabled={busy} onClick={()=>chooseProof(item.proofId)}><span><strong>{item.externalReference||item.externalOrderId}</strong><small>{item.itemSummary}</small></span><Icon name="arrow" size={16}/></button>)}</div>:<Empty icon="orders" title="No queued orders">Connect a marketplace or start a manual Proof.</Empty>)}</section>

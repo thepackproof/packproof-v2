@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { PackProofV2Client } from "../src/v2-api.ts";
 import { automaticIntakeStatus, orderIntakeExplanation, providerSetupMessage } from "../src/copy/commerce.ts";
+import { hasRemainingShipmentScope } from "../src/copy/fulfillment-scope.ts";
+import { stationContextFromProof } from "../src/packing-station/display.ts";
 
 test("mobile Etsy connection and intake commands send only explicit actions to authenticated canonical routes", async () => {
   const requests: Array<{ method: string; url: string; body: string; authorization: string }> = [];
@@ -52,4 +54,41 @@ test("mobile Etsy guidance separates server setup, intake preparation and delibe
   assert.match(orderIntakeExplanation("etsy"), /submit your attestation yourself/);
   assert.match(automaticIntakeStatus({ status: "NEEDS_REAUTH", autoSyncEnabled: true }), /paused/);
   assert.equal(automaticIntakeStatus({ status: "ACTIVE", autoSyncEnabled: false }), "Automatic intake off");
+});
+
+test("mobile packing review retains the explicit remaining-shipment scope from the canonical Proof", () => {
+  const proof = { proofId: 'proof_remaining', transactionId: 'txn_remaining', status: 'READY_FOR_EVIDENCE', participants: [], evidence: [],
+    transaction: { itemTitle: 'Remaining item', metadata: { import: { provider: 'shopify', providerIdentifiers: { fulfillmentScope: 'REMAINING_SHIPMENT' } } } } };
+  const context = stationContextFromProof(proof);
+  assert.equal(context.fulfillmentScope, 'REMAINING_SHIPMENT');
+  assert.equal(hasRemainingShipmentScope(context), true);
+  assert.equal(hasRemainingShipmentScope({ fulfillmentScope: 'FULL_ORDER' }), false);
+  assert.equal(hasRemainingShipmentScope({ transaction: { itemDescription: 'Remaining shipment' } }), false);
+});
+
+test("mobile Shopify connect preserves the explicit automation choice and app return surface", async () => {
+  const requests: Array<{ method: string; url: string; body: unknown; authorization: string }> = [];
+  const server = createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk.toString();
+    requests.push({ method: req.method!, url: req.url!, body: JSON.parse(body), authorization: req.headers.authorization ?? "" });
+    res.writeHead(201, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ authorizationUrl: "https://collectibles.myshopify.com/admin/oauth/authorize", provider: "shopify" }));
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert(address && typeof address !== "string");
+  const client = new PackProofV2Client({ baseUrl: `http://127.0.0.1:${address.port}`, getToken: () => "fixture-session" });
+  try {
+    for (const autoSyncEnabled of [true, false]) {
+      await client.startConnectedAccountConnect("shopify", { shop: "collectibles.myshopify.com", autoSyncEnabled, surface: "android" });
+    }
+    assert.deepEqual(requests, [true, false].map(autoSyncEnabled => ({
+      method: "POST", url: "/me/connected-accounts/shopify/connect",
+      body: { shop: "collectibles.myshopify.com", autoSyncEnabled, surface: "android" }, authorization: "Bearer fixture-session",
+    })));
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
 });

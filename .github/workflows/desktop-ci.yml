@@ -4,6 +4,7 @@ on:
   pull_request:
     paths: ['desktop/**', 'packages/**', 'mobile/src/**', '.github/workflows/desktop*.yml']
   push:
+    branches: [main]
     paths: ['desktop/**', 'packages/**', 'mobile/src/**', '.github/workflows/desktop*.yml']
   workflow_dispatch:
 
@@ -43,11 +44,11 @@ jobs:
       APP_ENV: development
       PACKPROOF_BUILD_ARCH: ${{ matrix.arch }}
       PACKPROOF_BUILD_PKG: '1'
-      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_API_BASE_URL || 'http://127.0.0.1:3000' }}
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_API_BASE_URL || 'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' }}
       PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_WEB_BASE_URL || 'https://thepackproof.com' }}
       PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_REGION || 'us-east-1' }}
-      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID }}
-      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID || '34pnucunllka2jcs8hsq762m5e' }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID || 'us-east-1_GdgTeYaOO' }}
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       # No signing credentials are supplied to this job. Permit only configured ad-hoc Mac signatures.
       CSC_FOR_PULL_REQUEST: 'true'
@@ -67,6 +68,8 @@ jobs:
         run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
       - name: Verify inventory and mark unsigned candidate
         run: node scripts/verify-artifacts.cjs
+      - name: Launch packaged application and verify renderer readiness
+        run: node scripts/native-launch-smoke.cjs
       - name: Exercise silent current-user install, reinstall and uninstall
         if: matrix.platform == 'win32'
         run: pwsh -NoProfile -NonInteractive -File scripts/smoke-install-windows.ps1
@@ -84,3 +87,12 @@ jobs:
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/DEVELOPMENT-BUILD.txt
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/installer-smoke.json
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/native-launch-smoke.json
+      - name: Preserve native startup evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packproof-desktop-startup-failure-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/native-launch-smoke.json

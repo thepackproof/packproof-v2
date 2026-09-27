@@ -1,6 +1,6 @@
 /* Explicit test harness only. Fixtures are injected by Playwright and never bundled into the application. */
 const {createServer}=require('node:http');
-const {readFile,mkdir}=require('node:fs/promises');
+const {readFile,mkdir,readdir}=require('node:fs/promises');
 const {resolve,extname,sep}=require('node:path');
 const assert=require('node:assert/strict');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
@@ -37,7 +37,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
         integrations:{list:async()=>({accounts:[{id:'test-account',provider:'shopify',providerDisplay:'Shopify',externalAccountId:'test',externalAccountName:'Test store',status:'CONNECTED',scopes:[],expiresAt:null,capabilities:{identity:false,transactions:true,fulfillment:true,shipping:false,webhooks:true},limitations:[],createdAt:now,updatedAt:now,disconnectedAt:null}],providers:[{provider:'shopify',providerDisplay:'Shopify',enabled:true,capabilities:{identity:false,transactions:true,fulfillment:true,shipping:false,webhooks:true},limitations:[],multipleAccounts:false,requiresShop:true}]}),connect:async()=>{smoke.calls.push('connect');}},
         capture:{begin:async input=>{const id='test-recording-'+(smoke.jobs.length+1);smoke.calls.push('begin');smoke.jobs.unshift({id,proofId:input.proofId,label:input.label,state:'RECORDING',progress:0,byteSize:0,createdAt:now});return {id,maxRecordingBytes:128*1024*1024,maxRecordingSeconds:120};},append:async(id,sequence,bytes)=>{smoke.chunks.push({id,sequence,byteLength:bytes.byteLength,header:Array.from(new Uint8Array(bytes).slice(0,4))});const job=smoke.jobs.find(item=>item.id===id);job.byteSize+=bytes.byteLength;},finish:async(id,input)=>{smoke.finish=input;smoke.calls.push('finish');smoke.jobs.find(item=>item.id===id).state='COMPLETE';smoke.jobs.find(item=>item.id===id).progress=100;emit({type:'queue'});emit({type:'notification',title:'Evidence committed',message:'Test fixture recording secured by PackProof.'});},interrupt:async(id,reason)=>{smoke.interrupt=reason;smoke.jobs.find(item=>item.id===id).state='INTERRUPTED';emit({type:'queue'});}},
         uploads:{list:async()=>structuredClone(smoke.jobs),retry:async()=>{},discard:async id=>{smoke.jobs=smoke.jobs.filter(job=>job.id!==id);emit({type:'queue'});},pause:async()=>{},resume:async()=>{}},
-        system:{state:async()=>structuredClone(state),settings:async()=>structuredClone(settings),saveSettings:async input=>{Object.assign(settings,input);return structuredClone(settings);},openExternal:async url=>{smoke.calls.push(url);},exportDiagnostics:async()=>'test diagnostics'},
+        system:{report:async()=>{},state:async()=>structuredClone(state),settings:async()=>structuredClone(settings),saveSettings:async input=>{Object.assign(settings,input);return structuredClone(settings);},openExternal:async url=>{smoke.calls.push(url);},exportDiagnostics:async()=>'test diagnostics'},
         updates:{check:async()=>{state.update.state='available';emit({type:'update'});},download:async()=>{state.update.state='downloaded';emit({type:'update'});},install:async()=>{smoke.calls.push('install');}},
         events:{subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn);}},
       };
@@ -46,6 +46,17 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.getByRole('heading',{name:'Home',exact:true}).waitFor();
     await page.getByRole('button',{name:'TEST-1048',exact:true}).first().waitFor();
+    const workerFile=(await readdir(resolve(root,'assets'))).find(file=>/^identifier-worker.*\.js$/.test(file));
+    const decoded=await page.evaluate(async workerFile=>{
+      const value='5901234123457',left=['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+      const invert=text=>[...text].map(bit=>bit==='1'?'0':'1').join('');
+      const parity='LGGLLG';
+      const bars='101'+[...value.slice(1,7)].map((digit,index)=>parity[index]==='L'?left[+digit]:invert([...left[+digit]].reverse().join(''))).join('')+'01010'+[...value.slice(7)].map(digit=>invert(left[+digit])).join('')+'101';
+      const canvas=document.createElement('canvas');canvas.width=900;canvas.height=500;const context=canvas.getContext('2d');context.fillStyle='white';context.fillRect(0,0,900,500);context.fillStyle='black';[...bars].forEach((bit,index)=>{if(bit==='1')context.fillRect(200+index*5,100,5,300);});
+      const bitmap=await createImageBitmap(canvas);const worker=new Worker('/assets/'+workerFile,{type:'module'});
+      return await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{worker.terminate();reject(new Error('Bundled barcode decoder timed out'));},15000);worker.onerror=event=>{clearTimeout(timer);worker.terminate();reject(new Error(event.message));};worker.onmessage=event=>{clearTimeout(timer);worker.terminate();resolve(event.data);};worker.postMessage({id:1,bitmap},[bitmap]);});
+    },workerFile);
+    assert.ok(decoded.result.codes.some(code=>code.rawText==='5901234123457'),'bundled local WASM barcode recognition');
     assert.equal(await page.locator('body').evaluate(element=>element.scrollWidth<=innerWidth),true,'dashboard horizontal overflow');
     await page.screenshot({path:resolve(out,'desktop-dashboard.png'),fullPage:true});
     await page.getByRole('button',{name:'TEST-1048',exact:true}).first().click();
@@ -78,7 +89,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     await page.getByText('Secured by PackProof',{exact:true}).waitFor();
     await page.screenshot({path:resolve(out,'desktop-uploads.png'),fullPage:true});
     for(const name of ['Orders','Integrations','Notifications','Settings']){await page.getByRole('navigation').getByRole('button',{name,exact:true}).click();await page.getByRole('heading',{name,exact:true}).waitFor();}
-    await page.getByLabel('Appearance',{exact:true}).selectOption('dark');
+    await page.getByLabel(/^Appearance/).selectOption('dark');
     await page.getByRole('navigation').getByRole('button',{name:'Home',exact:true}).click();
     await page.screenshot({path:resolve(out,'desktop-dashboard-dark.png'),fullPage:true});
     await page.setViewportSize({width:1000,height:700});
@@ -89,6 +100,6 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     await page.getByRole('button',{name:'Forgot password?',exact:true}).click();
     await page.getByRole('heading',{name:'Reset your password.'}).waitFor();
     assert.deepEqual(errors,[],'renderer page errors');
-    console.log(JSON.stringify({ok:true,assertions:['sidebar navigation','account auth views','dashboard/table','proof detail/share','continuous WebM capture','bounded ordered IPC chunks','capture navigation guard','scanner label observation','explicit shipping-label confirmation','explicit attestation','capture timestamps','upload confirmation','dark appearance','1000px minimum window layout'],chunkCount:capture.chunks.length,totalBytes:capture.chunks.reduce((total,item)=>total+item.byteLength,0),screenshots:out},null,2));
+    console.log(JSON.stringify({ok:true,assertions:['sidebar navigation','account auth views','dashboard/table','proof detail/share','bundled local WASM barcode recognition','continuous WebM capture','bounded ordered IPC chunks','capture navigation guard','scanner label observation','explicit shipping-label confirmation','explicit attestation','capture timestamps','upload confirmation','dark appearance','1000px minimum window layout'],chunkCount:capture.chunks.length,totalBytes:capture.chunks.reduce((total,item)=>total+item.byteLength,0),screenshots:out},null,2));
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

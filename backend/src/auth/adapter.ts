@@ -6,6 +6,8 @@ export type PackProofUserId = string;
 
 export interface AuthContext {
   userId: PackProofUserId;
+  /** Verified provider authentication time in epoch seconds; refresh does not reset it. */
+  authenticatedAt?: number;
 }
 
 export interface AuthenticationAdapter {

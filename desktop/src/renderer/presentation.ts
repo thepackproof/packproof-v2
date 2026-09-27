@@ -1,6 +1,6 @@
 import { classifyProofPresentation } from '../../../backend/src/domain/proof-presentation';
 import { normalizeShippingBarcode } from '../../../backend/src/capture/shipping-barcode';
-import type { ProofCollectionItem } from '../../../web/src/api/types';
+import type { FulfillmentQueueItem, ProofCollectionItem } from '../../../web/src/api/types';
 
 export const presentation = (proof: ProofCollectionItem) => proof.presentation ?? classifyProofPresentation(proof);
 export function humanize(value: string | null | undefined): string {
@@ -34,4 +34,17 @@ export function trackingMatch(observed: string, expected: string): boolean {
 export function appearsTracking(value: string): boolean {
   const normalized = normalizedCode(value);
   return /^1Z[A-Z0-9]{16}$/.test(normalized) || /^\d{20,34}$/.test(normalized) || /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(normalized);
+}
+export function filterFulfillmentOrders(orders:FulfillmentQueueItem[],proofs:ProofCollectionItem[],filter:{marketplace:string;state:string;search:string;from:string;to:string}) {
+  const tracking=new Map(proofs.map(proof=>[proof.proofId,proof.transaction.trackingNumber??'']));
+  const from=filter.from?new Date(`${filter.from}T00:00:00`).getTime():-Infinity;
+  const to=filter.to?new Date(`${filter.to}T23:59:59.999`).getTime():Infinity;
+  const query=filter.search.trim().toLowerCase();
+  return orders.filter(order=>{
+    const completed=order.proofStatus==='FINALIZED';
+    if(filter.marketplace!=='all'&&order.provider!==filter.marketplace)return false;
+    if(filter.state==='completed'&&!completed||filter.state==='ready'&&completed||filter.state==='started'&&(completed||order.evidenceCount<1))return false;
+    if(filter.from||filter.to){const at=order.orderedAt?new Date(order.orderedAt).getTime():NaN;if(!Number.isFinite(at)||at<from||at>to)return false;}
+    return `${order.externalOrderId} ${order.externalReference??''} ${order.itemSummary} ${tracking.get(order.proofId)??''}`.toLowerCase().includes(query);
+  });
 }

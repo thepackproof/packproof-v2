@@ -2,6 +2,7 @@ import { isNativeAttestationMethod } from "../attestation/authorization";
 import { TrackingIntake } from "./TrackingIntake";
 import { proofReference, shipmentRecordLabel } from "../copy/evidence-record";
 import { RecordSeal } from "./RecordSeal";
+import { RemainingShipmentNotice } from "./RemainingShipmentNotice";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -169,6 +170,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     <View style={[styles.top, { borderBottomColor: colors.divider }]}>
       <Text style={[styles.title, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
       <Text selectable style={[styles.note,{color:colors.textSecondary}]}>{proofReference(proof.proofId, txn.externalReference)}</Text>
+      <RemainingShipmentNotice value={proof} />
       <Text style={[styles.note,{color:colors.textSecondary}]}>Shipment: {shipmentRecordLabel(shipping?.trackingNumber, presentation.shipmentStatus)}</Text>
       <View style={styles.headerMeta}>
         <RecordSeal status={proof.status} />

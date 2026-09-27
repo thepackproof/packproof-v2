@@ -36,7 +36,8 @@ export async function reserveApprovedCaptureAllowance(tx:Database,clock:Clock,in
       JOIN billing_account_offer_periods op ON op.id=$1 WHERE pp.user_id=$2 AND p.status='FINALIZED'
       AND p.finalized_at>=op.period_start AND p.finalized_at<op.period_end
   ) used`,[period.id,input.userId])).rows[0];
-  if(Number(count.used)>=period.definition_json.includedFinalizedProofs)
+  const adjustments=Number((await tx.query<{total:string}>("SELECT COALESCE(SUM(delta),0) AS total FROM billing_allowance_adjustments WHERE offer_period_id=$1",[period.id])).rows[0].total);
+  if(Number(count.used)>=period.definition_json.includedFinalizedProofs+adjustments)
     throw new DomainError('BILLING_CAPTURE_ALLOWANCE_EXHAUSTED','Your plan allowance is in use. You can finish existing captures and access saved Proofs.',402);
   await tx.query('INSERT INTO billing_capture_reservations(proof_id,user_id,offer_period_id,reserved_at) VALUES($1,$2,$3,$4)',[input.proofId,input.userId,period.id,clock.now().toISOString()]);
   return bounded;

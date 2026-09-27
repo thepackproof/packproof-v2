@@ -66,7 +66,7 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
       throw new DomainError('SHIPPING_SCAN_SESSION_EXPIRED', 'This Proof is no longer accepting packing scans', 409);
     if (session.client_reported_context?.recordedDurationMs != null && input.detectedAtMs > session.client_reported_context.recordedDurationMs)
       throw new DomainError('INVALID_SHIPPING_SCAN', 'The scan falls outside the reported recording', 400);
-    await assertSupportedParcelCapture(tx,proof.transaction_id);
+    await assertSupportedParcelCapture(tx,proof.transaction_id,candidate.trackingNumber);
     const current = context.shipping?.tracking_number;
     const normalizedCurrent = current?.replace(/[ \t\r\n-]/g, '').toUpperCase();
     if (normalizedCurrent && normalizedCurrent !== candidate.trackingNumber)

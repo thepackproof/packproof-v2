@@ -1,3 +1,4 @@
+import { requireFeatureAvailable } from "../admin/flags.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
@@ -37,6 +38,7 @@ export async function ensureIdentityUser(
       return found.rows[0].user_id;
     }
 
+    await requireFeatureAvailable(tx,"REGISTRATION_PAUSED");
     const userId = newId("user");
     const now = clock.now().toISOString();
     try {

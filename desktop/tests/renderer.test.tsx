@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Auth } from '../src/renderer/Auth';
 import { PackingStation } from '../src/renderer/PackingStation';
-import { appearsTracking, presentation, trackingMatch } from '../src/renderer/presentation';
-import type { ProofCollectionItem, SystemView } from '../src/shared/contracts';
+import { appearsTracking, filterFulfillmentOrders, presentation, trackingMatch } from '../src/renderer/presentation';
+import type { FulfillmentQueueItem, ProofCollectionItem, SystemView } from '../src/shared/contracts';
 
 const system:SystemView={version:'1.0.0',platform:'darwin',environment:'staging',online:true,configured:false,secureStorage:false,pendingOtherAccounts:false,update:{state:'idle'},settings:{cameraId:'',microphoneId:'',audio:false,resolution:'1080p',frameRate:30,retentionHours:24,notifications:true,scannerSuffix:'Enter',theme:'system'}};
 describe('desktop renderer safety and shared presentation',()=>{
@@ -34,5 +34,14 @@ describe('desktop renderer safety and shared presentation',()=>{
     const proof={proofId:'proof-a',status:'FINALIZED',role:'SELLER',finalizedAt:null} as ProofCollectionItem;
     expect(presentation(proof).completed).toBe(false);
     expect(presentation({...proof,finalizedAt:'2026-09-27T00:00:00Z'}).completed).toBe(true);
+  });
+  it('filters fulfillment by joined tracking, started evidence, and inclusive local dates',()=>{
+    const base={proofId:'p1',externalOrderId:'1048',externalReference:null,itemSummary:'Collector shipment',provider:'shopify',proofStatus:'READY_FOR_EVIDENCE',evidenceCount:1,orderedAt:'2026-09-27T12:00:00'} as FulfillmentQueueItem;
+    const orders=[base,{...base,proofId:'p2',evidenceCount:0},{...base,proofId:'p3',proofStatus:'FINALIZED'},{...base,proofId:'p4',orderedAt:null}];
+    const proofs=[{proofId:'p1',transaction:{trackingNumber:'9400111899223856928877'}}] as ProofCollectionItem[];
+    const filter={marketplace:'shopify',state:'started',search:'94001118',from:'2026-09-27',to:'2026-09-27'};
+    expect(filterFulfillmentOrders(orders,proofs,filter).map(row=>row.proofId)).toEqual(['p1']);
+    expect(filterFulfillmentOrders(orders,proofs,{...filter,from:'2026-09-28',to:'2026-09-28'})).toHaveLength(0);
+    expect(filterFulfillmentOrders(orders,proofs,{...filter,state:'completed',search:''}).map(row=>row.proofId)).toEqual(['p3']);
   });
 });

@@ -5,6 +5,7 @@ import { providerAuthFailed, providerResponseInvalid } from "../../src/domain/in
 export class FakeShopifyClient implements ShopifyClient {
   codes = new Map<string, { shop: string; name: string }>();
   tokens = new Map<string, { shop: string; name: string }>();
+  refreshTokens = new Map<string, { shop: string; name: string }>();
   orders: ShopifyOrder[] = [];
   revoked = 0;
   tokenSeq = 0;
@@ -17,6 +18,10 @@ export class FakeShopifyClient implements ShopifyClient {
         name: "#1001",
         createdAt: "2026-08-20T15:00:00.000Z",
         cancelledAt: null,
+        test: false,
+        fulfillmentOrders: [{ id: "fo-1", status: "OPEN", requestStatus: "UNSUBMITTED", deliveryMethodType: "SHIPPING", merchantManaged: true, lineItems: [
+          { id: "fol-1", orderLineItemId: "li-1", remainingQuantity: 1, requiresShipping: true },
+        ] }],
         financialStatus: "paid",
         fulfillmentStatus: null,
         totalPrice: "42.00",
@@ -28,6 +33,7 @@ export class FakeShopifyClient implements ShopifyClient {
             title: "Test Card",
             sku: "CARD-1",
             quantity: 1,
+            remainingQuantity: 1,
             price: "42.00",
             requiresShipping: true,
           },
@@ -54,7 +60,22 @@ export class FakeShopifyClient implements ShopifyClient {
     this.tokenSeq += 1;
     const accessToken = `shp-access-${this.tokenSeq}`;
     this.tokens.set(accessToken, found);
-    return { accessToken, scope: "read_orders,read_fulfillments" };
+    const refreshToken = `shp-refresh-${this.tokenSeq}`;
+    this.refreshTokens.set(refreshToken, found);
+    return { accessToken, refreshToken, expiresInSeconds: 3600, refreshTokenExpiresInSeconds: 7_776_000,
+      scope: "read_orders,read_merchant_managed_fulfillment_orders,read_locations" };
+  }
+
+  async refreshUserToken(input: { shop: string; clientId: string; clientSecret: string; refreshToken: string }): Promise<ShopifyTokenSet> {
+    const found = this.refreshTokens.get(input.refreshToken);
+    if (!found || found.shop !== input.shop || input.clientSecret !== "shopify-secret") throw providerAuthFailed();
+    this.refreshTokens.delete(input.refreshToken);
+    this.tokenSeq += 1;
+    const accessToken = `shp-access-${this.tokenSeq}`, refreshToken = `shp-refresh-${this.tokenSeq}`;
+    this.tokens.set(accessToken, found);
+    this.refreshTokens.set(refreshToken, found);
+    return { accessToken, refreshToken, expiresInSeconds: 3600, refreshTokenExpiresInSeconds: 7_776_000,
+      scope: "read_orders,read_merchant_managed_fulfillment_orders,read_locations" };
   }
 
   async getShop(input: { shop: string; accessToken: string }): Promise<ShopifyShopIdentity> {

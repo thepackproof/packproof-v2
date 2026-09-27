@@ -92,7 +92,7 @@ No entry below is considered passed merely because this file or its automation e
 | Soak | Repeated captures/uploads across a packing shift; bounded memory, closed tracks/file handles, no continuously growing logs |
 | Privacy | Camera/audio, local staging, device metadata, diagnostics and retention agree with published disclosures; no secrets or videos in telemetry |
 
-Attach operating-system/build versions, camera/scanner models, observed outcomes and relevant redacted logs to each result. CI's synthetic installer sentinel verifies installer file retention only. It does not prove durable evidence recovery or server commitment.
+Attach operating-system/build versions, camera/scanner models, observed outcomes and relevant redacted logs to each result. CI's native launch report verifies packaged-main startup and renderer/preload execution on a fresh development profile with sandboxing retained. Secure-storage availability is reported independently; login and physical recording remain untested. Its synthetic installer sentinel verifies installer file retention only. Neither check proves durable evidence recovery or server commitment.
 
 ## References checked for this implementation
 

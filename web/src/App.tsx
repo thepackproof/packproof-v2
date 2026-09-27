@@ -1,4 +1,7 @@
 import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchScreen";
+import { lazy, Suspense } from "react";
+import { useAdminAccess } from "./admin/useAdminAccess";
+const AdminWorkspace = lazy(() => import("./admin/AdminWorkspace"));
 import { SubmissionIntakePanel } from "./components/SubmissionIntakePanel";
 import { IntakeLinkFallback, IntakeSignInContext } from "./screens/IntakeLinkFallback";
 import type {EngineSession} from "./capture/engine";
@@ -67,6 +70,7 @@ import { SignInScreen } from "./screens/SignInScreen";
 import { AuthFrame } from "./site/PublicSite";
 
 type Route =
+  | { name: "admin" }
   | { name: "proofs"; view: "all" | "attention" | "completed"; query: string }
   | { name: "capture-launch" }
   | { name: "intake-handoff" }
@@ -90,6 +94,7 @@ type Route =
 function parseHref(href: string): Route {
   const url = new URL(canonicalWorkspacePath(href), "http://packproof.local");
   const pathname = url.pathname.replace(/\/$/, "") || "/";
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return {name:"admin"};
   if (pathname === "/new/delete-account") return { name: "delete-account" };
   if (pathname === "/new/privacy") {
     return { name: "privacy" };
@@ -275,6 +280,7 @@ function needsProof(name: Route["name"]): boolean {
 
 function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "create-account" }) {
   const [enteredFromIntakeLink] = useState(() => window.location.pathname.startsWith("/app/"));
+  const adminLanding = useRef(["/login", "/app", "/overview"].includes(window.location.pathname));
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -345,6 +351,23 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   );
   const loadPublicProof = useCallback((token: string) => api.getPublicProof(token), [api]);
   const developerAllowed = useDeveloperAccess(api, session?.userId ?? "", route.name === "account" || route.name === "developer");
+  const adminAccess = useAdminAccess(api, session?.userId ?? "");
+  useEffect(() => {
+    const version = import.meta.env.VITE_PACKPROOF_WEB_VERSION;
+    if (!session?.userId || !import.meta.env.PROD || !version) return;
+    const report = () => {
+      if (document.visibilityState !== "visible") return;
+      void api.reportClientVersion({ platform: "WEB", version, ...(import.meta.env.VITE_PACKPROOF_WEB_BUILD ? { build: import.meta.env.VITE_PACKPROOF_WEB_BUILD } : {}) }).catch(() => {});
+    };
+    report();
+    const timer = window.setInterval(report, 30 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [api, session?.userId]);
+  useEffect(() => {
+    if (!session || adminAccess.loading || !adminLanding.current) return;
+    adminLanding.current = false;
+    if (adminAccess.allowed) go("/admin");
+  }, [adminAccess.allowed, adminAccess.loading, session?.userId]);
 
   const loadProofEvidence = useCallback(
     async (evidenceId: string) => {
@@ -684,11 +707,14 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     onOpenInvitation: (invitationId: string) => go(`/invitations/${encodeURIComponent(invitationId)}`),
   };
 
+  if (route.name === "admin") return <Suspense fallback={<main className="app-loading" role="status">Opening administration…</main>}><AdminWorkspace api={api} access={adminAccess} accountName={session.displayName || session.username || "Administrator"} onGo={go} onSignOut={signOut} /></Suspense>;
+
   return (
     <div className="app-shell workspace-shell">
         {(route.name==='proofs'||route.name==='create')&&<CompanionBridge api={api} userId={session.userId} connections={connections}/>}
         {route.name==='proof'&&proof?.status==='READY_FOR_EVIDENCE'&&proof.workflowType==='COMMERCE_SALE'&&proof.participationPolicy==='COUNTERPARTY_OPTIONAL'&&<SelectedOrderHandoff key={proof.proofId} api={api} userId={session.userId} transactionId={proof.transaction.transactionId}/>}
         <AppNav
+          adminAllowed={adminAccess.allowed}
           session={session}
           invitationCount={invitations.length}
           currentRoute={route.name}

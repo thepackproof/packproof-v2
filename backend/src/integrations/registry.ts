@@ -14,7 +14,6 @@ import type { EasyPostTrackerClient } from "./easypost/client.js";
 import { createShippoShipmentAdapter } from "./shippo/adapter.js";
 import type { ShippoTrackingClient } from "./shippo/client.js";
 import { createShopifyCommerceAdapter } from "./shopify/adapter.js";
-import { createHttpShopifyClient } from "./shopify/client.js";
 import type { ShopifyClient } from "./shopify/types.js";
 
 export class IntegrationAdapterRegistry {
@@ -104,7 +103,10 @@ export function createDefaultIntegrationRegistry(
   const easypost = createEasyPostShipmentAdapter(options.easypostClient);
   const shippo = createShippoShipmentAdapter(options.shippoClient);
   const storefront = createDemoStorefrontAdapter();
-  const shopify = createShopifyCommerceAdapter(options.shopifyClient ?? createHttpShopifyClient());
+  // Live Shopify is registered by the enabled API/worker runtime with its
+  // owner-bound token runner. Never silently fall back to an unguarded client
+  // when the integration is disabled. Explicit clients support fixture tests.
+  const shopify = options.shopifyClient ? createShopifyCommerceAdapter(options.shopifyClient) : null;
   return new IntegrationAdapterRegistry(
     new Map(options.testFixtures ? [[demo.adapterKey, demo]] : []),
     new Map(options.testFixtures ? [[carrier.adapterKey, carrier]] : []),
@@ -115,7 +117,7 @@ export function createDefaultIntegrationRegistry(
     ]),
     new Map([
       ...(options.testFixtures ? [[storefront.adapterKey, storefront] as const] : []),
-      [shopify.adapterKey, shopify],
+      ...(shopify ? [[shopify.adapterKey, shopify] as const] : []),
     ]),
   );
 }

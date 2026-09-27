@@ -6,6 +6,7 @@ import { typography } from '../theme/tokens';
 import { Button } from '../ui/Button';
 import { ErrorBanner } from '../ui/EmptyState';
 import { InfoCard } from '../ui/ProofCard';
+import { RemainingShipmentNotice } from '../ui/RemainingShipmentNotice';
 import { IntakeApi } from './api';
 import { intakeItemLabel, type IntakeDevice, type IntakeSnapshot } from './model';
 import { approvedRecordingDevices, reviewedHandoffSnapshot, sendReviewedHandoff } from './handoff-sender';
@@ -46,6 +47,7 @@ export function SelectedOrderHandoff({ proofId, transactionId, onManageDevices }
     {expanded ? <InfoCard>
       {snapshot ? <>
         <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{snapshot.store} · {snapshot.orderReference}</Text>
+        <RemainingShipmentNotice value={snapshot} />
         {snapshot.items.map((item, index) => <Text key={index} style={body}>{intakeItemLabel(item)}</Text>)}
         <Text style={secondary}>The selected device will receive this order for review and recording. Sending it does not start a camera or submit evidence.</Text>
       </> : busy ? <Text style={secondary}>Preparing the order for review…</Text> : null}

@@ -161,7 +161,7 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
     if(fence.writes_enabled || fence.generation!==input.targetWriterGeneration)throw failure("RECOVERY_RESTORE_FENCE_CHANGED","Restore fence changed during verification");
     const tables=(await tx.query<{table_name:string}>("SELECT tablename AS table_name FROM pg_catalog.pg_tables WHERE schemaname='public' ORDER BY tablename")).rows;
     for(const table of tables)await tx.query(`LOCK TABLE ${safeIdentifier(table.table_name)} IN ACCESS EXCLUSIVE MODE`);
-    for(const table of tables){if(SEED_TABLES.has(table.table_name)||table.table_name.startsWith('policy_recovery_'))continue;if((await tx.query(`SELECT 1 FROM ${safeIdentifier(table.table_name)} LIMIT 1`)).rows[0])throw failure("RECOVERY_RESTORE_TARGET_NOT_EMPTY","Reconstruction only accepts an empty domain database");}
+    for(const table of tables){if(await isPristineMigrationSeed(tx,table.table_name)||table.table_name.startsWith('policy_recovery_'))continue;if((await tx.query(`SELECT 1 FROM ${safeIdentifier(table.table_name)} LIMIT 1`)).rows[0])throw failure("RECOVERY_RESTORE_TARGET_NOT_EMPTY","Reconstruction only accepts an empty domain database");}
     const columns=new Map<string,Set<string>>();
     for(const row of (await tx.query<{table_name:string;column_name:string}>("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public'")).rows){let value=columns.get(row.table_name);if(!value){value=new Set();columns.set(row.table_name,value);}value.add(row.column_name);}
     const insert=async(table:string,row:Row)=>{
@@ -213,9 +213,22 @@ async function assertAuthority(db:Database,input:FreshRecoveryRestoreInput){
   const identity=(await db.query<{role:string;database:string;superuser:boolean;bypassrls:boolean}>("SELECT current_user AS role,current_database() AS database,r.rolsuper AS superuser,r.rolbypassrls AS bypassrls FROM pg_roles r WHERE r.rolname=current_user")).rows[0];
   if(!identity||identity.role!==input.restoreRole||identity.database!==input.expectedDatabase||identity.superuser||identity.bypassrls)throw failure('RECOVERY_RESTORE_AUTHORITY_REQUIRED','Use the dedicated non-superuser restore login for the identified isolated database');
 }
+/** New migrations may seed operating controls, but an operated or incomplete
+ * control table is never equivalent to a fresh restore target. Evaluate under
+ * the caller's table lock in both preflight and final installation. */
+async function isPristineMigrationSeed(db:Database,table:string):Promise<boolean>{
+  if(table!=='system_feature_flags')return SEED_TABLES.has(table);
+  const rows=(await db.query<{key:string;enabled:boolean;version:number;updated_by:string|null}>(
+    'SELECT key,enabled,version,updated_by FROM system_feature_flags ORDER BY key')).rows;
+  const keys=['NEW_CAPTURE_PAUSED','REGISTRATION_PAUSED'];
+  if(rows.length!==keys.length||rows.some((row,index)=>row.key!==keys[index]||row.enabled!==false||row.version!==0||row.updated_by!==null))
+    throw failure('RECOVERY_RESTORE_TARGET_NOT_EMPTY','System controls differ from their pristine migration defaults; use a new migrated recovery target');
+  // updated_at is the deployment-specific migration timestamp, not domain state.
+  return true;
+}
 async function assertFreshTarget(db:Database){
   const tables=(await db.query<{table_name:string}>("SELECT tablename AS table_name FROM pg_catalog.pg_tables WHERE schemaname='public' ORDER BY tablename")).rows;
-  for(const {table_name} of tables){await db.query(`LOCK TABLE ${safeIdentifier(table_name)} IN ACCESS EXCLUSIVE MODE`);if(!SEED_TABLES.has(table_name)&&(await db.query(`SELECT 1 FROM ${safeIdentifier(table_name)} LIMIT 1`)).rows[0])throw failure('RECOVERY_RESTORE_TARGET_NOT_EMPTY','Reconstruction requires a new migrated database; an older backup must remain a separate comparison source');}
+  for(const {table_name} of tables){await db.query(`LOCK TABLE ${safeIdentifier(table_name)} IN ACCESS EXCLUSIVE MODE`);if(!await isPristineMigrationSeed(db,table_name)&&(await db.query(`SELECT 1 FROM ${safeIdentifier(table_name)} LIMIT 1`)).rows[0])throw failure('RECOVERY_RESTORE_TARGET_NOT_EMPTY','Reconstruction requires a new migrated database; an older backup must remain a separate comparison source');}
 }
 function orderObservationDependencies(rows:Row[]){const result:Row[]=[],pending=new Map(rows.map(row=>[row.id,row])),seen=new Set<unknown>();while(pending.size){let changed=false;for(const [id,row] of pending){if(row.previous_observation_id!=null&&!seen.has(row.previous_observation_id))continue;result.push(row);seen.add(id);pending.delete(id);changed=true;}if(!changed)throw failure('RECOVERY_RESTORE_DEPENDENCY_GAP','Observation ancestry is missing or cyclic');}return result;}
 async function verifyJournalObject(store:FreshRecoveryRestoreInput['sourceStore'],key:string,bytes:Buffer){

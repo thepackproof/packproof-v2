@@ -1,11 +1,12 @@
+import { supportedShopifyRemainingShipment } from '../domain/parcel-scope.js';
 import { indexIntakeIdentifierSnapshot } from '../identifiers/catalog.js';
 // Shared order intake normalization, identity, immutable snapshots and durable capture guards.
 export type IntakeSourceKind = 'API_OBSERVED' | 'BROWSER_CAPTURED' | 'FORWARDED_EMAIL' | 'SELLER_DECLARED';
 export type IntakeReadiness = 'RECEIVED' | 'NEEDS_INFORMATION' | 'READY' | 'QUARANTINED' | 'ARCHIVED';
 export interface IntakeItem { title: string|null; description?:string|null; quantity:number|null; sku?:string|null; variant?:string|null; externalItemId?:string|null; gtin?:string|null; barcode?:string|null; productId?:string|null; variantId?:string|null; imageUrl?:string|null }
 export interface IntakeScope { provider:string; externalAccountReference:string; namespaceSource:'MARKETPLACE_API'|'STOREFRONT_API'|'SHIPPING_PROVIDER_API'; connectionId:string; store?:string; verified:true }
-export interface IntakeObservationInput { receiptId:string;sourceKind:IntakeSourceKind;adapterKey:string;adapterVersion:string;externalOrderId:string|null;orderReference?:string|null;items:IntakeItem[];physicalFulfillment:boolean|null;paid:boolean|null;cancelled:boolean;fulfillmentScope:'FULL_ORDER'|'PARTIAL'|'MULTI_PARCEL'|'UNKNOWN';sourceRevision?:string|null;sourceOccurredAt?:string|null;rawSourceRef?:string|null;sourceText?:string|null;shipmentReferences?:Array<{carrier?:string|null;trackingNumber?:string|null}> }
-export interface IntakeSnapshot {id:string;version:number;digest:string;sha256:string;proofId:string;transactionId:string;tenantKey:string;readiness:'READY';items:IntakeItem[];store:string;orderReference:string;sourceKind:IntakeSourceKind}
+export interface IntakeObservationInput { receiptId:string;sourceKind:IntakeSourceKind;adapterKey:string;adapterVersion:string;externalOrderId:string|null;orderReference?:string|null;items:IntakeItem[];physicalFulfillment:boolean|null;paid:boolean|null;cancelled:boolean;fulfillmentScope:'FULL_ORDER'|'REMAINING_SHIPMENT'|'PARTIAL'|'MULTI_PARCEL'|'UNKNOWN';sourceRevision?:string|null;sourceOccurredAt?:string|null;rawSourceRef?:string|null;sourceText?:string|null;shipmentReferences?:Array<{carrier?:string|null;trackingNumber?:string|null}> }
+export interface IntakeSnapshot {id:string;version:number;digest:string;sha256:string;proofId:string;transactionId:string;tenantKey:string;readiness:'READY';items:IntakeItem[];store:string;orderReference:string;sourceKind:IntakeSourceKind;fulfillmentScope?:IntakeObservationInput['fulfillmentScope']}
 export interface IntakeResult {observationId:string;readiness:IntakeReadiness;reasons:string[];transactionId:string|null;proofId:string|null;snapshot:IntakeSnapshot|null;replayed:boolean}
 // submitIntakeObservation(db,clock,actor,input,scope):Promise<IntakeResult>
 // prepareExistingIntakeOrder(db,clock,actor,transactionId):Promise<IntakeResult>
@@ -21,7 +22,7 @@ import { canonicalize } from '../canonical.js';
 import { sha256Hex } from '../hash.js';
 import { newId } from '../ids.js';
 import { DomainError } from '../domain/errors.js';
-import { tenantKeyForImport } from '../domain/provenance.js';
+import { tenantKeyForImport, readImportMetadata } from '../domain/provenance.js';
 import { importNormalizedTransaction } from '../domain/transaction-import.js';
 import { loadTransactionView } from '../domain/transactions.js';
 import { createOrGetProof } from '../domain/create-proof.js';
@@ -43,7 +44,7 @@ export function normalizeIntakeObservation(input:IntakeObservationInput):IntakeO
   return {...Object.fromEntries(['gtin','barcode','productId','variantId','imageUrl'].filter(k=>k in item).map(k=>[k,clean(item[k as keyof IntakeItem],k==='imageUrl'?2048:300)])),title:clean(item.title),description:clean(item.description,4000),quantity:item.quantity??null,sku:clean(item.sku,300),variant:clean(item.variant,1000),externalItemId:clean(item.externalItemId,300)};
  });
  for(const key of ['physicalFulfillment','paid'] as const)if(input[key]!=null&&typeof input[key]!=='boolean')fail('INVALID_INTAKE_CONTEXT',`${key} must be true, false, or unknown`,400);
- if(typeof input.cancelled!=='boolean'||!['FULL_ORDER','PARTIAL','MULTI_PARCEL','UNKNOWN'].includes(input.fulfillmentScope))fail('INVALID_INTAKE_CONTEXT','Order lifecycle and fulfillment scope are required',400);
+ if(typeof input.cancelled!=='boolean'||!['FULL_ORDER','REMAINING_SHIPMENT','PARTIAL','MULTI_PARCEL','UNKNOWN'].includes(input.fulfillmentScope))fail('INVALID_INTAKE_CONTEXT','Order lifecycle and fulfillment scope are required',400);
  const occurred=clean(input.sourceOccurredAt,100);if(occurred&&!Number.isFinite(Date.parse(occurred)))fail('INVALID_INTAKE_CONTEXT','Source time must be an ISO timestamp',400);
  const shipmentReferences=input.shipmentReferences??[];if(!Array.isArray(shipmentReferences)||shipmentReferences.length>100)fail('INVALID_INTAKE_CONTEXT','Too many shipment references',400);
  return {receiptId:required(input.receiptId,'Receipt ID'),sourceKind:input.sourceKind,adapterKey:required(input.adapterKey,'Adapter key'),adapterVersion:required(input.adapterVersion,'Adapter version'),externalOrderId:clean(input.externalOrderId,300),orderReference:clean(input.orderReference,300),items,physicalFulfillment:input.physicalFulfillment??null,paid:input.paid??null,cancelled:input.cancelled,fulfillmentScope:input.fulfillmentScope,sourceRevision:clean(input.sourceRevision,300),sourceOccurredAt:occurred?new Date(occurred).toISOString():null,rawSourceRef:clean(input.rawSourceRef,2000),sourceText:clean(input.sourceText,30000),shipmentReferences:shipmentReferences.map(s=>({carrier:clean(s.carrier,100),trackingNumber:clean(s.trackingNumber,200)}))};
@@ -54,9 +55,9 @@ export function intakeReadiness(input:IntakeObservationInput):{readiness:IntakeR
  if(!input.items.length)reasons.push('PURCHASED_ITEMS_REQUIRED');
  if(input.items.some(item=>!item.title?.trim()||item.quantity==null))reasons.push('ITEM_DESCRIPTION_AND_QUANTITY_REQUIRED');
  if(input.physicalFulfillment!==true)reasons.push(input.physicalFulfillment===false?'PHYSICAL_ORDER_REQUIRED':'FULFILLMENT_TYPE_REQUIRED');
- if(input.paid!==true)reasons.push(input.paid===false?'PAYMENT_PENDING':'PAYMENT_STATE_REQUIRED');
+ if(input.paid!==true&&!(input.paid===false&&input.fulfillmentScope==='REMAINING_SHIPMENT'&&input.sourceKind==='API_OBSERVED'))reasons.push(input.paid===false?'PAYMENT_PENDING':'PAYMENT_STATE_REQUIRED');
  if(input.cancelled)reasons.push('ORDER_CANCELLED');
- if(input.fulfillmentScope!=='FULL_ORDER')reasons.push('PARCEL_SCOPE_REQUIRES_REVIEW');
+ if(input.fulfillmentScope!=='FULL_ORDER'&&!(input.fulfillmentScope==='REMAINING_SHIPMENT'&&input.sourceKind==='API_OBSERVED'))reasons.push('PARCEL_SCOPE_REQUIRES_REVIEW');
  return {readiness:reasons.length?'NEEDS_INFORMATION':'READY',reasons};
 }
 function scopeNamespace(scope:IntakeScope):string {
@@ -64,7 +65,7 @@ function scopeNamespace(scope:IntakeScope):string {
  required(scope.provider,'Provider',100);required(scope.externalAccountReference,'Store account',200);required(scope.connectionId,'Source connection');
  return tenantKeyForImport(scope.provider,scope.namespaceSource,scope.externalAccountReference);
 }
-function snapshotView(row:SnapshotRow):IntakeSnapshot {return {id:row.id,version:Number(row.version),digest:row.digest,sha256:row.digest,proofId:row.proof_id,transactionId:row.transaction_id,tenantKey:row.context.tenantKey,readiness:'READY',items:row.context.items,store:row.context.store,orderReference:row.context.orderReference,sourceKind:row.context.sourceKind};}
+function snapshotView(row:SnapshotRow):IntakeSnapshot {return {id:row.id,version:Number(row.version),digest:row.digest,sha256:row.digest,proofId:row.proof_id,transactionId:row.transaction_id,tenantKey:row.context.tenantKey,readiness:'READY',items:row.context.items,store:row.context.store,orderReference:row.context.orderReference,sourceKind:row.context.sourceKind,...(row.context.fulfillmentScope==='REMAINING_SHIPMENT'?{fulfillmentScope:row.context.fulfillmentScope}:{})};}
 function materialDigest(context:SnapshotContext):string {return sha256Hex(canonicalize({tenantKey:context.tenantKey,externalOrderId:context.externalOrderId,items:context.items,physicalFulfillment:context.physicalFulfillment,paid:context.paid,cancelled:context.cancelled,fulfillmentScope:context.fulfillmentScope}));}
 async function ownedProof(db:Database,actor:string,proofId:string,lock=false) {
  const row=(await db.query<{id:string;transaction_id:string;status:string;workflow_type:string;participation_policy:string}>(`SELECT p.id,p.transaction_id,p.status,p.workflow_type,p.participation_policy FROM proofs p JOIN transactions t ON t.id=p.transaction_id WHERE p.id=$1 AND t.created_by=$2${lock?' FOR UPDATE OF p,t':''}`,[proofId,actor])).rows[0];
@@ -98,6 +99,7 @@ export async function submitIntakeObservation(db:Database,clock:Clock,actor:stri
   await tx.query(`INSERT INTO intake_source_observations(id,actor_user_id,connection_id,receipt_id,source_kind,adapter_key,adapter_version,tenant_key,external_order_id,source_revision,source_occurred_at,received_at,raw_source_ref,source_digest,context) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,[observationId,actor,scope.connectionId,input.receiptId,input.sourceKind,input.adapterKey,input.adapterVersion,tenantKey,input.externalOrderId,input.sourceRevision??null,input.sourceOccurredAt??null,now,input.rawSourceRef??null,sourceDigest,JSON.stringify(input)]);
   const readiness=intakeReadiness(input);let transactionId:string|null=null;let proofId:string|null=null;let snapshot:IntakeSnapshot|null=null;
   const identity=input.externalOrderId?(await tx.query<{transaction_id:string;created_by:string}>('SELECT i.transaction_id,t.created_by FROM transaction_integration_identities i JOIN transactions t ON t.id=i.transaction_id WHERE i.tenant_key=$1 AND i.external_transaction_id=$2',[tenantKey,input.externalOrderId])).rows[0]:null;
+  if(input.fulfillmentScope==='REMAINING_SHIPMENT'&&(!identity||identity.created_by!==actor||scope.provider!=='shopify'||!await supportedShopifyRemainingShipment(tx,identity.transaction_id))){readiness.readiness='NEEDS_INFORMATION';readiness.reasons=['PARCEL_SCOPE_REQUIRES_REVIEW'];}
   if(identity&&identity.created_by!==actor){readiness.readiness='QUARANTINED';readiness.reasons=['ORDER_SCOPE_CONFLICT'];}
   else if(identity||readiness.readiness==='READY') {
    if(identity)transactionId=identity.transaction_id;
@@ -157,7 +159,8 @@ export async function prepareExistingIntakeOrder(db:Database,clock:Clock,actor:s
   // Bind the existing owned manual transaction even while context is incomplete, so correction cannot create a second transaction.
   const namespace=identity?.tenant_key??`marketplace:packproof:${actor.toLowerCase()}`;const parts=namespace.split(':');
   const identifierItems=(await tx.query<{external_item_id:string;position:number;metadata:Record<string,unknown>}>('SELECT external_item_id,position,metadata FROM transaction_items WHERE transaction_id=$1',[transactionId])).rows;
-  const input:IntakeObservationInput={receiptId:`prepare:${transactionId}:${sha256Hex(canonicalize({items:transaction.items,order:order??null,declaration:declaration??null}))}`,sourceKind:identity&&identity.source!=='PARTICIPANT_SUPPLIED'?'API_OBSERVED':'SELLER_DECLARED',adapterKey:'existing-order-context',adapterVersion:'1',externalOrderId:identity?.external_transaction_id??transactionId,orderReference:transaction.externalReference,items:transaction.items.map(item=>({title:item.title,description:item.description,quantity:item.quantity,sku:item.sku,externalItemId:item.externalItemId,variant:null,...(identifierItems.find(row=>row.position===item.position)?.metadata??{})})),physicalFulfillment:order?.requires_physical_fulfillment??declaration?.physicalFulfillment??null,paid:order?(order.payment_state==='UNKNOWN'?null:order.payment_state==='CONFIRMED'):declaration?.paid??null,cancelled:order?order.cancelled||order.fulfillment_state==='CANCELLED':false,fulfillmentScope:order?(order.fulfillment_state==='AWAITING_FULFILLMENT'?'FULL_ORDER':order.fulfillment_state==='IN_PROGRESS'?'PARTIAL':'UNKNOWN'):declaration?.fulfillmentScope??'UNKNOWN'};
+  const remainingShipment=await supportedShopifyRemainingShipment(tx,transactionId);
+  const input:IntakeObservationInput={receiptId:`prepare:${transactionId}:${sha256Hex(canonicalize({items:transaction.items,order:order??null,declaration:declaration??null}))}`,sourceKind:identity&&identity.source!=='PARTICIPANT_SUPPLIED'?'API_OBSERVED':'SELLER_DECLARED',adapterKey:'existing-order-context',adapterVersion:'1',externalOrderId:identity?.external_transaction_id??transactionId,orderReference:transaction.externalReference,items:transaction.items.map(item=>({title:item.title,description:item.description,quantity:item.quantity,sku:item.sku,externalItemId:item.externalItemId,variant:null,...(identifierItems.find(row=>row.position===item.position)?.metadata??{})})),physicalFulfillment:order?.requires_physical_fulfillment??declaration?.physicalFulfillment??null,paid:order?(order.payment_state==='UNKNOWN'?null:order.payment_state==='CONFIRMED'):declaration?.paid??null,cancelled:order?order.cancelled||order.fulfillment_state==='CANCELLED':false,fulfillmentScope:remainingShipment?'REMAINING_SHIPMENT':order?(order.fulfillment_state==='AWAITING_FULFILLMENT'?'FULL_ORDER':order.fulfillment_state==='IN_PROGRESS'?'PARTIAL':'UNKNOWN'):declaration?.fulfillmentScope??'UNKNOWN'};
   if(!identity)await tx.query(`INSERT INTO transaction_integration_identities(id,transaction_id,tenant_key,external_transaction_id,adapter_key,source,created_at) VALUES($1,$2,$3,$4,'existing-order-context','PARTICIPANT_SUPPLIED',$5)`,[newId('tii'),transactionId,namespace,transactionId,clock.now().toISOString()]);
   return submitIntakeObservation(tx,clock,actor,input,{provider:parts[1],externalAccountReference:parts.slice(2).join(':'),namespaceSource:parts[0]==='storefront'?'STOREFRONT_API':parts[0]==='shipping'?'SHIPPING_PROVIDER_API':'MARKETPLACE_API',connectionId:order?.connection_id??`existing:${transactionId}`,store:parts.slice(2).join(':'),verified:true});
  });
@@ -198,7 +201,7 @@ export async function assertIntakeFinalizeContext(db:Database,proofId:string):Pr
  if(await commerceLifecycleNeedsReview(db,snapshot.transaction_id,'finalize'))fail('ORDER_FULFILLMENT_CONFLICT','The current order lifecycle needs review before finalization',422);
  const captures=(await db.query<{order_snapshot_id:string|null;order_snapshot_version:number|null;order_snapshot_sha256:string|null}>(`SELECT c.order_snapshot_id,c.order_snapshot_version,c.order_snapshot_sha256 FROM evidence e LEFT JOIN capture_sessions c ON c.id=e.capture_session_id WHERE e.proof_id=$1 AND e.validation_status='COMMITTED' AND e.evidence_type='FULFILLMENT_CAPTURE'`,[proofId])).rows;
  if(!captures.length||captures.some(c=>c.order_snapshot_id!==snapshot.id||Number(c.order_snapshot_version)!==Number(snapshot.version)||c.order_snapshot_sha256!==snapshot.digest))fail('ORDER_CAPTURE_CONTEXT_REQUIRED','The packing recording must retain its accepted order context',422);
- return {contractVersion:1,snapshotId:snapshot.id,snapshotVersion:Number(snapshot.version),snapshotSha256:snapshot.digest,transactionId:snapshot.transaction_id,items:snapshot.context.items,store:snapshot.context.store,orderReference:snapshot.context.orderReference,source:{observationId:snapshot.observation_id,kind:source.source_kind,adapterKey:source.adapter_key,adapterVersion:source.adapter_version,sha256:source.source_digest}};
+ return {contractVersion:1,snapshotId:snapshot.id,snapshotVersion:Number(snapshot.version),snapshotSha256:snapshot.digest,transactionId:snapshot.transaction_id,items:snapshot.context.items,store:snapshot.context.store,orderReference:snapshot.context.orderReference,...(snapshot.context.fulfillmentScope==='REMAINING_SHIPMENT'?{fulfillmentScope:snapshot.context.fulfillmentScope}:{}),source:{observationId:snapshot.observation_id,kind:source.source_kind,adapterKey:source.adapter_key,adapterVersion:source.adapter_version,sha256:source.source_digest}};
 }
 
 /** Existing API refreshes must also invalidate a new-contract order when material facts disagree. */
@@ -246,7 +249,12 @@ async function commerceLifecycleNeedsReview(db:Database,transactionId:string,pha
  const rows=(await db.query<{cancelled:boolean;payment_state:string;requires_physical_fulfillment:boolean;fulfillment_state:string}>('SELECT cancelled,payment_state,requires_physical_fulfillment,fulfillment_state FROM commerce_order_records WHERE transaction_id=$1',[transactionId])).rows;
  // FULFILLED may be normal provider progression after accepted capture; it never starts a new automatic capture.
  const allowed=phase==='capture'?['AWAITING_FULFILLMENT']:['AWAITING_FULFILLMENT','FULFILLED'];
- return rows.some(order=>order.cancelled||!order.requires_physical_fulfillment||order.payment_state!=='CONFIRMED'||!allowed.includes(order.fulfillment_state));
+ const remainingShipment=rows.some(order=>order.fulfillment_state==='IN_PROGRESS'||order.payment_state==='PENDING')?await supportedShopifyRemainingShipment(db,transactionId):null;
+ const imported=phase==='finalize'?readImportMetadata((await db.query<{transaction_metadata:unknown}>('SELECT transaction_metadata FROM transactions WHERE id=$1',[transactionId])).rows[0]?.transaction_metadata):null;
+ const retainedRemaining=imported?.provider==='shopify'&&imported.source==='STOREFRONT_API'&&imported.providerIdentifiers?.fulfillmentScope==='REMAINING_SHIPMENT';
+ return rows.some(order=>order.cancelled||(!order.requires_physical_fulfillment&&!(phase==='finalize'&&order.fulfillment_state==='FULFILLED'&&retainedRemaining))||
+  (order.payment_state!=='CONFIRMED'&&!(order.payment_state==='PENDING'&&(remainingShipment||(phase==='finalize'&&order.fulfillment_state==='FULFILLED'&&retainedRemaining))))||
+  (!allowed.includes(order.fulfillment_state)&&!(order.fulfillment_state==='IN_PROGRESS'&&remainingShipment)));
 }
 /** Run before the capture transaction so a failed start leaves a durable, owner-linked resolution card. */
 export async function prepareIntakeCaptureEntry(db:Database,clock:Clock,actor:string,proofId:string):Promise<void> {

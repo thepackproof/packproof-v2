@@ -5,6 +5,7 @@ import type {
   StationProofSnapshot,
 } from "./types";
 import { normalizeStationReference } from "./scan";
+import { hasRemainingShipmentScope } from "../copy/fulfillment-scope";
 
 export { formatTrackingHint, normalizeStationReference } from "./scan";
 
@@ -56,6 +57,7 @@ export function stationContextFromProof(
   const alreadyHasCommittedEvidence = committed > 0;
   const blockReason = blockReasonForProof(proof.status, committed);
   return {
+    ...(hasRemainingShipmentScope(proof) ? { fulfillmentScope: "REMAINING_SHIPMENT" as const } : {}),
     transactionId: proof.transactionId,
     proofId: proof.proofId,
     proofStatus: proof.status,
@@ -161,4 +163,3 @@ export function stationErrorFromUnknown(error: unknown): StationError {
   }
   return { code: "UNKNOWN", message: "Something went wrong." };
 }
-
