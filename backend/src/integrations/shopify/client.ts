@@ -1,11 +1,11 @@
 import { DomainError } from "../../domain/errors.js";
 import { rateLimitDelay } from "../rate-limit-delay.js";
 import { providerAuthFailed, providerResponseInvalid, providerTemporarilyUnavailable } from "../../domain/integration-errors.js";
-import { asNumber, asRecord, asString, mapOAuthHttpError, oauthJson, readJson, type FetchLike } from "../connected-accounts/http.js";
+import { asNumber, asRecord, asString, mapOAuthHttpError, readJson, type FetchLike } from "../connected-accounts/http.js";
 import { shopifyAdminApiUrl, shopifyTokenUrl } from "./constants.js";
-import { identifierOrderQuery, FULFILLMENT_LINES_QUERY, ORDER_LINES_QUERY, ORDER_QUERY, ORDER_REVISION_QUERY, ORDERS_QUERY, SHOP_IDENTITY_QUERY, UNINSTALL_MUTATION } from "./queries.js";
+import { identifierOrderQuery, FULFILLMENT_LINES_QUERY, ORDER_LINES_QUERY, ORDER_QUERY, ORDER_REVISION_QUERY, ORDERS_QUERY, SHOP_IDENTITY_QUERY, UNINSTALL_MUTATION, ORDER_FULFILLMENT_ORDERS_QUERY, FULFILLMENT_ORDER_LINES_QUERY, FULFILLMENT_ORDER_REVISION_QUERY } from "./queries.js";
 import { normalizeShopifyShop } from "./shop.js";
-import type { ShopifyClient, ShopifyOrder, ShopifyOrderPageInput } from "./types.js";
+import type { ShopifyClient, ShopifyOrder, ShopifyOrderPageInput, ShopifyTokenSet } from "./types.js";
 
 const CURSOR_PREFIX = "shopify-graphql-v1:";
 const RECENT_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
@@ -14,14 +14,15 @@ type RequestContext = { shop: string; accessToken: string; onProgress?: () => Pr
 export function createHttpShopifyClient(fetchImpl: FetchLike = fetch): ShopifyClient {
   return {
     async exchangeAuthorizationCode(input) {
-      const record = asRecord(await oauthJson(fetchImpl, {
-        url: shopifyTokenUrl(normalizeShopifyShop(input.shop)), method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ client_id: input.clientId, client_secret: input.clientSecret, code: input.code }),
-      }));
-      const accessToken = asString(record.access_token);
-      if (!accessToken) throw providerResponseInvalid();
-      return { accessToken, scope: asString(record.scope) ?? "" };
+      return requestOfflineToken(fetchImpl, input.shop, {
+        client_id: input.clientId, client_secret: input.clientSecret, code: input.code, expiring: 1,
+      });
+    },
+    async refreshUserToken(input) {
+      return requestOfflineToken(fetchImpl, input.shop, {
+        client_id: input.clientId, client_secret: input.clientSecret,
+        grant_type: "refresh_token", refresh_token: input.refreshToken,
+      });
     },
     async getShop(input) {
       const shop = asRecord((await graphql(fetchImpl, input, SHOP_IDENTITY_QUERY)).shop);
@@ -43,6 +44,40 @@ export function createHttpShopifyClient(fetchImpl: FetchLike = fetch): ShopifyCl
       if (!Array.isArray(payload.userErrors) || payload.userErrors.length) throw providerResponseInvalid();
     },
   };
+}
+
+async function requestOfflineToken(fetchImpl: FetchLike, shop: string, body: Record<string, string | number>): Promise<ShopifyTokenSet> {
+  // Never follow redirects with client credentials or leak provider bodies/errors.
+  const url = shopifyTokenUrl(normalizeShopifyShop(shop));
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      method: "POST", redirect: "error", signal: AbortSignal.timeout(15_000),
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw providerTemporarilyUnavailable();
+  }
+  if (response.status === 429) throw rateLimitDelay(response.headers.get("retry-after"));
+  if (response.status === 401 || response.status === 403 || response.status >= 500) mapOAuthHttpError(response.status);
+  const record = asRecord(await readJson(response));
+  if (!response.ok) {
+    if (response.status === 400 && ["invalid_grant", "invalid_token", "invalid_client"].includes(String(record.error))) {
+      throw providerAuthFailed();
+    }
+    mapOAuthHttpError(response.status);
+  }
+  const accessToken = asString(record.access_token), refreshToken = asString(record.refresh_token);
+  const expiresInSeconds = asNumber(record.expires_in), refreshTokenExpiresInSeconds = asNumber(record.refresh_token_expires_in);
+  if (!accessToken || !refreshToken || !validTokenLifetime(expiresInSeconds) || !validTokenLifetime(refreshTokenExpiresInSeconds)) {
+    throw providerResponseInvalid();
+  }
+  return { accessToken, refreshToken, expiresInSeconds, refreshTokenExpiresInSeconds, scope: asString(record.scope) ?? "" };
+}
+
+function validTokenLifetime(value: number | null): value is number {
+  return value !== null && Number.isSafeInteger(value) && value > 0 && Number.isFinite(new Date(Date.now() + value * 1_000).getTime());
 }
 
 async function listOrderPage(fetchImpl: FetchLike, input: ShopifyOrderPageInput) {
@@ -76,6 +111,7 @@ async function hydrateOrder(fetchImpl: FetchLike, input: RequestContext, summary
   }
   const lineItems = items.map(parseLineItem);
   requireUniqueIds(lineItems);
+  const fulfillmentOrders = await hydrateFulfillmentOrders(fetchImpl, input, id, revision, lineItems);
   if (!Array.isArray(record.fulfillments)) throw providerResponseInvalid();
   const fulfillments: NonNullable<ShopifyOrder["fulfillments"]> = [];
   let trackingCompany: string | null = null, trackingNumber: string | null = null;
@@ -116,13 +152,77 @@ async function hydrateOrder(fetchImpl: FetchLike, input: RequestContext, summary
   if (numericGid(id, "Order") !== legacyId) throw providerResponseInvalid();
   const money = asRecord(asRecord(record.currentTotalPriceSet).shopMoney);
   const fulfillmentStatus = requiredString(record.displayFulfillmentStatus);
+  if (typeof record.test !== "boolean") throw providerResponseInvalid();
   return {
-    id: legacyId, name: asString(record.name), createdAt: requiredDate(record.createdAt), updatedAt: revision,
+    id: legacyId, test: record.test, name: asString(record.name), createdAt: requiredDate(record.createdAt), updatedAt: revision,
     cancelledAt: record.cancelledAt == null ? null : requiredDate(record.cancelledAt),
     fulfillmentHolds: fulfillmentStatus === "ON_HOLD", fulfillmentStatus,
     financialStatus: asString(record.displayFinancialStatus), totalPrice: asString(money.amount), currency: asString(money.currencyCode),
     // Buyer personal data is unnecessary to start packing and is not requested.
-    customer: null, lineItems, fulfillments, trackingCompany, trackingNumber,
+    customer: null, lineItems, fulfillments, fulfillmentOrders, trackingCompany, trackingNumber,
+  };
+}
+
+async function hydrateFulfillmentOrders(
+  fetchImpl: FetchLike, input: RequestContext, id: string, revision: string, orderLines: ShopifyOrder["lineItems"],
+): Promise<ShopifyOrder["fulfillmentOrders"]> {
+  const summaries: Record<string, unknown>[] = [];
+  let after: string | null = null;
+  const seen = new Set<string>();
+  do {
+    if (after) requireNewCursor(seen, after);
+    const record = asRecord((await graphql(fetchImpl, input, ORDER_FULFILLMENT_ORDERS_QUERY, { id, after })).order);
+    requireRevision(record, id, revision);
+    const page = connection(record.fulfillmentOrders);
+    summaries.push(...page.nodes.map(asRecord));
+    after = page.cursor;
+  } while (after);
+  const fulfillmentOrders: ShopifyOrder["fulfillmentOrders"] = [];
+  const orderLineMap = new Map(orderLines.map(line => [line.id, line]));
+  for (const summary of summaries) {
+    const fid = requiredString(summary.id), fRevision = requiredDate(summary.updatedAt);
+    const fulfillmentOrder: ShopifyOrder["fulfillmentOrders"][number] = {
+      id: numericGid(fid, "FulfillmentOrder"), status: requiredString(summary.status),
+      requestStatus: requiredString(summary.requestStatus), ...parseFulfillmentAssignment(summary), lineItems: [],
+    };
+    let lineAfter: string | null = null;
+    const lineSeen = new Set<string>();
+    do {
+      if (lineAfter) requireNewCursor(lineSeen, lineAfter);
+      const record = asRecord((await graphql(fetchImpl, input, FULFILLMENT_ORDER_LINES_QUERY, { id: fid, after: lineAfter })).node);
+      requireRevision(record, fid, fRevision);
+      const page = connection(record.lineItems);
+      for (const value of page.nodes) {
+        const row = asRecord(value), orderLineItemId = numericGid(asRecord(row.lineItem).id, "LineItem");
+        const original = orderLineMap.get(orderLineItemId);
+        if (!original || typeof row.requiresShipping !== "boolean" || original.requiresShipping !== row.requiresShipping) throw providerResponseInvalid();
+        fulfillmentOrder.lineItems.push({ id: numericGid(row.id, "FulfillmentOrderLineItem"), orderLineItemId,
+          remainingQuantity: nonnegativeInteger(row.remainingQuantity)!, requiresShipping: row.requiresShipping });
+      }
+      lineAfter = page.cursor;
+    } while (lineAfter);
+    requireUniqueIds(fulfillmentOrder.lineItems);
+    // Fulfillment-order updates can happen independently of order.updatedAt.
+    const final = asRecord((await graphql(fetchImpl, input, FULFILLMENT_ORDER_REVISION_QUERY, { id: fid })).node);
+    requireRevision(final, fid, fRevision);
+    const finalAssignment = parseFulfillmentAssignment(final);
+    if (finalAssignment.deliveryMethodType !== fulfillmentOrder.deliveryMethodType || finalAssignment.merchantManaged !== fulfillmentOrder.merchantManaged) {
+      throw providerTemporarilyUnavailable();
+    }
+    fulfillmentOrders.push(fulfillmentOrder);
+  }
+  requireUniqueIds(fulfillmentOrders);
+  return fulfillmentOrders;
+}
+
+function parseFulfillmentAssignment(record: Record<string, unknown>): { deliveryMethodType: string | null; merchantManaged: boolean } {
+  const assignedLocation = asRecord(record.assignedLocation);
+  if (!("location" in assignedLocation) || !("deliveryMethod" in record)) throw providerResponseInvalid();
+  const location = assignedLocation.location == null ? null : asRecord(assignedLocation.location);
+  if (location && typeof location.isFulfillmentService !== "boolean") throw providerResponseInvalid();
+  return {
+    deliveryMethodType: record.deliveryMethod == null ? null : requiredString(asRecord(record.deliveryMethod).methodType),
+    merchantManaged: location?.isFulfillmentService === false,
   };
 }
 

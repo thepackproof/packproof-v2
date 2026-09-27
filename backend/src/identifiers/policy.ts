@@ -4,9 +4,10 @@ import {DomainError} from '../domain/errors.js';
 const list=(value:string|undefined)=>new Set((value??'').split(',').map(x=>x.trim()).filter(Boolean));
 /** Surface is a client declaration for feature rollout, never device-origin proof. */
 export function captureSurface(client:string,declared?:unknown):IdentifierSurface {
-  const surface=declared??(client==='WEB_CAMERA'?'WEB':'ANDROID');
-  if(typeof surface!=='string' || !['ANDROID','IOS','WEB','WAREHOUSE'].includes(surface) ||
-      (client==='WEB_CAMERA' && surface!=='WEB') || (client==='NATIVE_CAMERA' && surface==='WEB'))
+  const surface=declared??(client==='WEB_CAMERA'?'WEB':client==='DESKTOP_CAMERA'?'DESKTOP':'ANDROID');
+  if(typeof surface!=='string' || !['ANDROID','IOS','WEB','WAREHOUSE','DESKTOP'].includes(surface) ||
+      (client==='WEB_CAMERA' && surface!=='WEB') || (client==='NATIVE_CAMERA' && ['WEB','DESKTOP'].includes(surface)) ||
+      (client==='DESKTOP_CAMERA' && surface!=='DESKTOP'))
     throw new DomainError('CAPTURE_SURFACE_INVALID','Declare the actual recording platform.',400);
   return surface as IdentifierSurface;
 }

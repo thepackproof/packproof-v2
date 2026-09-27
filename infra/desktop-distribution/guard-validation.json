@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "status": "PASS",
+  "rules": [
+    {
+      "name": "release_bucket_protection",
+      "status": "PASS"
+    },
+    {
+      "name": "signed_origins",
+      "status": "PASS"
+    },
+    {
+      "name": "encrypted_downloads",
+      "status": "PASS"
+    },
+    {
+      "name": "never_override_no_store",
+      "status": "PASS"
+    }
+  ],
+  "checkedAt": "2026-09-27T16:20:01.590Z",
+  "templateSha256": "1623ccea208496246d171ed75b020d0329c7ede7d642ae428afaedcbc411287e",
+  "rulesSha256": "cb51887138ab74533828a00b7100cd933f7813401e2f1a0bb745ba5895445cc0",
+  "scope": "Validation of the exact disabled-bootstrap template and conditional activation security rules deployed in packproof-desktop-updates."
+}

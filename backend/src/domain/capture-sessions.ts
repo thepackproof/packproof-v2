@@ -1,3 +1,4 @@
+import {requireFeatureAvailable} from "../admin/flags.js";
 import { captureSurface, identifierSessionPolicy } from '../identifiers/policy.js';
 import type { IdentifierPolicy } from '../identifiers/types.js';
 import { pinCurrentIntakeCaptureContext, prepareIntakeCaptureEntry } from "../intake/context.js";
@@ -15,6 +16,22 @@ import { asRequiredIso } from './types.js';
 
 export const CAPTURE_POLICY_VERSION = 'packproof.direct-capture/v1';
 export const CAPTURE_ASSURANCE = 'An authenticated participant used an authorized PackProof capture session. Camera origin is not independently attested; a compromised device may inject media.';
+export const DESKTOP_CAPTURE_POLICY_VERSION = 'packproof.desktop-client-capture/v1';
+export const DESKTOP_CAPTURE_ASSURANCE = 'A participant registered a desktop recording after capture. Recording time, device and camera origin are client-reported and not independently verified. Server authorization applies to acceptance, not to the earlier recording.';
+export interface DesktopCaptureContext {
+  schemaVersion: 1;
+  installationId: string;
+  appVersion: string;
+  platform: 'win32' | 'darwin';
+  captureStartedAt: string;
+  captureEndedAt: string;
+  cameraLabel?: string;
+  offline: boolean;
+}
+export function captureRegistrationTiming(s: {client: string; recorded_at: string | Date | null; expires_at: string | Date}) {
+  if (s.client === 'DESKTOP_CAMERA') return 'POST_CAPTURE_CLIENT_REPORTED';
+  return s.recorded_at ? (new Date(s.recorded_at).getTime() > new Date(s.expires_at).getTime() ? 'DELAYED_NOT_INDEPENDENTLY_ATTESTED' : 'WITHIN_START_WINDOW') : 'NOT_REGISTERED';
+}
 const ACQUISITION_MS = 30 * 60 * 1000;
 const RECOVERY_MS = 7 * 24 * 60 * 60 * 1000;
 export const CAPTURE_MAX_BYTES = 250_000_000;
@@ -23,12 +40,14 @@ export interface ClientCaptureContext {
   interrupted: boolean | null;
   recordedDurationMs: number | null;
   provenance: "CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED";
+  desktopContext?: DesktopCaptureContext;
 }
 export async function readCaptureClientContext(db:Database,sessionId:string):Promise<ClientCaptureContext|null> {
   const row=(await db.query<{n:string;interrupted:boolean|null;duration:string|number|null}>(
     "SELECT COUNT(*) AS n,BOOL_OR(interrupted) AS interrupted,MAX(recorded_duration_ms) AS duration FROM capture_session_reports WHERE session_id=$1",[sessionId])).rows[0];
   if(!row || Number(row.n)===0) return null;
-  return {interrupted:row.interrupted,recordedDurationMs:row.duration==null?null:Number(row.duration),provenance:"CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED"};
+  const desktop=(await db.query<{desktop_context:DesktopCaptureContext|null}>('SELECT desktop_context FROM capture_sessions WHERE id=$1',[sessionId])).rows[0]?.desktop_context;
+  return {interrupted:row.interrupted,recordedDurationMs:row.duration==null?null:Number(row.duration),provenance:"CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED",...(desktop?{desktopContext:desktop}:{})};
 }
 async function appendCaptureClientReport(db:Database,clock:Clock,actor:string,proofId:string,sessionId:string,input:{interrupted?:boolean;recordedDurationMs?:number}) {
   if(input.interrupted===undefined && input.recordedDurationMs===undefined) return;
@@ -45,6 +64,7 @@ async function appendCaptureClientReport(db:Database,clock:Clock,actor:string,pr
   if(result.rows[0]) await appendAudit(db,{proofId,actorUserId:actor,eventType:"CAPTURE_CLIENT_CONTEXT_REPORTED",eventData:{sessionId,...context,provenance:"CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED"},at:clock.now()});
 }
 export interface CaptureSessionRow {
+  desktop_context?: DesktopCaptureContext | null;
   identifier_policy?: IdentifierPolicy | null;
   order_snapshot_id?: string | null;
   order_snapshot_version?: number | null;
@@ -60,11 +80,11 @@ export interface CaptureSessionRow {
   max_recording_bytes?: string | number | null;
 }
 export function captureSessionView(s: CaptureSessionRow) {
-  return { ...(s.identifier_policy ? {identifierPolicy:s.identifier_policy} : {}), orderSnapshotId:s.order_snapshot_id??null,orderSnapshotVersion:s.order_snapshot_version??null,orderSnapshotSha256:s.order_snapshot_sha256??null,clientReportedCapture:s.client_reported_context??null,id: s.id, proofId: s.proof_id, stageId: s.stage_id, registrationTiming: s.recorded_at ? (new Date(s.recorded_at).getTime() > new Date(s.expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "NOT_REGISTERED", client: s.client, policyVersion: s.policy_version,
+  return { ...(s.identifier_policy ? {identifierPolicy:s.identifier_policy} : {}), orderSnapshotId:s.order_snapshot_id??null,orderSnapshotVersion:s.order_snapshot_version??null,orderSnapshotSha256:s.order_snapshot_sha256??null,clientReportedCapture:s.client_reported_context??null,id: s.id, proofId: s.proof_id, stageId: s.stage_id, registrationTiming: captureRegistrationTiming(s), client: s.client, policyVersion: s.policy_version,
     workflowStep: s.workflow_step, state: s.state, expiresAt: asRequiredIso(s.expires_at),
     recoverUntil: asRequiredIso(s.recover_until), recordedAt: s.recorded_at ? asRequiredIso(s.recorded_at) : null,
     sha256: s.expected_sha256, byteSize: s.expected_byte_size == null ? null : Number(s.expected_byte_size),
-    contentType: s.content_type, evidenceId: s.evidence_id, assurance: CAPTURE_ASSURANCE,
+    contentType: s.content_type, evidenceId: s.evidence_id, assurance: s.client==='DESKTOP_CAMERA'?DESKTOP_CAPTURE_ASSURANCE:CAPTURE_ASSURANCE,
     maxRecordingBytes: s.max_recording_bytes == null ? CAPTURE_MAX_BYTES : Number(s.max_recording_bytes),
     maxRecordingSeconds: (s.max_duration_ms ?? CAPTURE_MAX_DURATION_MS) / 1000 };
 }
@@ -92,10 +112,13 @@ export async function loadCaptureSession(db: Database, actor: string, proofId: s
   return {...result.rows[0],client_reported_context:await readCaptureClientContext(db,sessionId)};
 }
 export async function createCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, input: {idempotencyKey: string; client: string; stageId?: string; surface?: unknown}) {
+  if (!['WEB_CAMERA','NATIVE_CAMERA'].includes(input.client))
+    throw new DomainError('CAPTURE_CLIENT_REQUIRED','Start recording using the web or native camera workflow; desktop uses post-capture registration',400);
+  return issueCaptureSession(db,clock,actor,proofId,input);
+}
+async function issueCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, input: {idempotencyKey: string; client: string; stageId?: string; surface?: unknown; desktopContext?: DesktopCaptureContext}) {
   if (typeof input.idempotencyKey !== 'string' || !input.idempotencyKey.trim() || input.idempotencyKey.length > 200)
     throw new DomainError('IDEMPOTENCY_KEY_REQUIRED','A capture idempotency key is required',400);
-  if (!['WEB_CAMERA','NATIVE_CAMERA'].includes(input.client))
-    throw new DomainError('CAPTURE_CLIENT_REQUIRED','Start recording using the web or native camera workflow',400);
   const surface=captureSurface(input.client,input.surface);
   if (!input.stageId) await prepareIntakeCaptureEntry(db,clock,actor,proofId);
   return db.transaction(async tx => {
@@ -106,6 +129,8 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
       if (existing.rows[0].client !== input.client || (existing.rows[0].stage_id ?? undefined)!==input.stageId) throw new DomainError('CAPTURE_SESSION_CONFLICT','Capture retry cannot change its client',409);
       if (existing.rows[0].identifier_policy && existing.rows[0].identifier_policy.surface !== surface)
         throw new DomainError('CAPTURE_SESSION_CONFLICT','Capture retry cannot change its recording platform',409);
+      if (JSON.stringify(normalizeDesktopContext(existing.rows[0].desktop_context)) !== JSON.stringify(normalizeDesktopContext(input.desktopContext)))
+        throw new DomainError('CAPTURE_SESSION_CONFLICT','Capture retry cannot change its client-reported desktop context',409);
       return captureSessionView(existing.rows[0]);
     }
     if (!input.stageId) {
@@ -115,6 +140,7 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
       const proof = await loadProof(tx, proofId);
       await assertSupportedParcelCapture(tx, proof.transaction_id);
     }
+    await requireFeatureAvailable(tx,'NEW_CAPTURE_PAUSED');
     const active = await tx.query<{count: string}>("SELECT COUNT(*) AS count FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND state IN ('ISSUED','RECORDED','UPLOADING') AND recover_until > $3",[proofId,actor,clock.now().toISOString()]);
     if (Number(active.rows[0].count) >= 20) throw new DomainError('CAPTURE_QUEUE_FULL','Finish or cancel pending recordings before starting another',409);
     const allowance = input.stageId ? {enforced:false as const} : await reserveApprovedCaptureAllowance(tx,clock,{userId:actor,proofId});
@@ -122,10 +148,38 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
     const maxDurationMs = Math.min(CAPTURE_MAX_DURATION_MS,allowance.enforced ? allowance.maxRecordingSeconds!*1000 : CAPTURE_MAX_DURATION_MS);
     const now=clock.now(); const id=newId('cap');
     const identifierPolicy = input.stageId ? null : await identifierSessionPolicy(tx,actor,proofId,input.client,surface);
-    const result=await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step,max_duration_ms,max_recording_bytes,identifier_policy) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11,$12,$13,$14::jsonb) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,CAPTURE_POLICY_VERSION,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep,maxDurationMs,maxRecordingBytes,identifierPolicy?JSON.stringify(identifierPolicy):null]);
+    const policyVersion=input.desktopContext?DESKTOP_CAPTURE_POLICY_VERSION:CAPTURE_POLICY_VERSION;
+    await tx.query<CaptureSessionRow>(`INSERT INTO capture_sessions(id,proof_id,actor_user_id,idempotency_key,client,policy_version,state,created_at,expires_at,recover_until,stage_id,workflow_step,max_duration_ms,max_recording_bytes,identifier_policy,desktop_context) VALUES($1,$2,$3,$4,$5,$6,'ISSUED',$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb) RETURNING *`,[id,proofId,actor,input.idempotencyKey,input.client,policyVersion,now.toISOString(),new Date(now.getTime()+ACQUISITION_MS).toISOString(),new Date(now.getTime()+RECOVERY_MS).toISOString(),input.stageId??null,context.workflowStep,maxDurationMs,maxRecordingBytes,identifierPolicy?JSON.stringify(identifierPolicy):null,input.desktopContext?JSON.stringify(input.desktopContext):null]);
     if (!input.stageId) await pinCurrentIntakeCaptureContext(tx,clock,actor,proofId,id);
-    await appendAudit(tx,{proofId,actorUserId:actor,eventType:'CAPTURE_SESSION_ISSUED',eventData:{sessionId:id,client:input.client,policyVersion:CAPTURE_POLICY_VERSION,assurance:CAPTURE_ASSURANCE},at:now});
+    await appendAudit(tx,{proofId,actorUserId:actor,eventType:input.desktopContext?'DESKTOP_CAPTURE_ACCEPTANCE_AUTHORIZED':'CAPTURE_SESSION_ISSUED',eventData:{sessionId:id,client:input.client,policyVersion,assurance:input.desktopContext?DESKTOP_CAPTURE_ASSURANCE:CAPTURE_ASSURANCE},at:now});
     return captureSessionView(await loadCaptureSession(tx,actor,proofId,id));
+  });
+}
+function normalizeDesktopContext(value: unknown): DesktopCaptureContext | null {
+  if(value==null) return null;
+  if(typeof value!=='object'||Array.isArray(value)) throw new DomainError('INVALID_DESKTOP_CAPTURE_CONTEXT','Desktop capture context is required',400);
+  const v=value as Record<string,unknown>;
+  const validText=(x:unknown,max:number)=>typeof x==='string'&&x.trim().length>0&&x.length<=max&&!/[\u0000-\u001f]/.test(x);
+  if(v.schemaVersion!==1||!validText(v.installationId,128)||!validText(v.appVersion,80)||!['win32','darwin'].includes(String(v.platform))||typeof v.offline!=='boolean'||(v.cameraLabel!==undefined&&!validText(v.cameraLabel,256)))
+    throw new DomainError('INVALID_DESKTOP_CAPTURE_CONTEXT','Supply supported desktop version, installation, platform and connectivity context',400);
+  const timestamps=[v.captureStartedAt,v.captureEndedAt];
+  if(timestamps.some(x=>typeof x!=='string'||x.length>40||!/^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/.test(x)||!Number.isFinite(Date.parse(x))))
+    throw new DomainError('INVALID_DESKTOP_CAPTURE_CONTEXT','Capture start and end must be ISO timestamps with a timezone',400);
+  const start=new Date(v.captureStartedAt as string),end=new Date(v.captureEndedAt as string);
+  if(end.getTime()<start.getTime()) throw new DomainError('INVALID_DESKTOP_CAPTURE_CONTEXT','Capture end precedes capture start',400);
+  return {schemaVersion:1,installationId:v.installationId as string,appVersion:v.appVersion as string,platform:v.platform as 'win32'|'darwin',captureStartedAt:start.toISOString(),captureEndedAt:end.toISOString(),...(v.cameraLabel?{cameraLabel:v.cameraLabel as string}:{}),offline:v.offline};
+}
+/** Acceptance happens now. No server start authorization or physical timing is claimed. */
+export async function registerDesktopCapture(db:Database,clock:Clock,actor:string,proofId:string,input:{idempotencyKey:string;sha256:string;byteSize:number;contentType:string;recordedDurationMs:number;interrupted?:boolean;desktopContext:unknown}) {
+  const desktopContext=normalizeDesktopContext(input.desktopContext);
+  if(!desktopContext) throw new DomainError('INVALID_DESKTOP_CAPTURE_CONTEXT','Desktop capture context is required',400);
+  if(!Number.isSafeInteger(input.recordedDurationMs)||input.recordedDurationMs<1||input.recordedDurationMs>CAPTURE_MAX_DURATION_MS)
+    throw new DomainError('CAPTURE_RECORDING_LIMIT','Desktop recordings must fit the current 300-second server limit. Preserve the original.',422);
+  return db.transaction(async tx=>{
+    const session=await issueCaptureSession(tx,clock,actor,proofId,{idempotencyKey:input.idempotencyKey,client:'DESKTOP_CAMERA',surface:'DESKTOP',desktopContext});
+    if(input.recordedDurationMs>session.maxRecordingSeconds*1000)
+      throw new DomainError('CAPTURE_RECORDING_LIMIT','This recording exceeds the account capture allowance. Preserve the original.',422);
+    return completeCaptureSession(tx,clock,actor,proofId,session.id,input);
   });
 }
 export async function completeCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, sessionId: string, input: {sha256: string; byteSize: number; contentType: string; interrupted?: boolean; recordedDurationMs?: number}) {
@@ -171,7 +225,7 @@ export async function eligibleCaptureSession(db: Database, clock: Clock, actor: 
   if (!sessionId) throw new DomainError('CAPTURE_SESSION_REQUIRED','Primary packing evidence requires an authorized camera recording session',422);
   const s=await loadCaptureSession(db,actor,proofId,sessionId,true);
   assertCaptureRecoverable(s,clock);
-  if (s.policy_version!==CAPTURE_POLICY_VERSION || (s.stage_id??undefined)!==stageId || (!stageId && s.workflow_step!=='PACKING') || s.content_type !== contentType.split(';')[0].trim().toLowerCase())
+  if (s.policy_version!==(s.client==='DESKTOP_CAMERA'?DESKTOP_CAPTURE_POLICY_VERSION:CAPTURE_POLICY_VERSION) || (s.stage_id??undefined)!==stageId || (!stageId && s.workflow_step!=='PACKING') || s.content_type !== contentType.split(';')[0].trim().toLowerCase())
     throw new DomainError('CAPTURE_SESSION_CONFLICT','The recording does not match this capture workflow',409);
   return s;
 }

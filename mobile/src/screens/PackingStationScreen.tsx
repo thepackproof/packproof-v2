@@ -1,6 +1,7 @@
 import { lightColors, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { Button } from "../ui/Button";
+import { RemainingShipmentNotice } from "../ui/RemainingShipmentNotice";
 import { completeSavedCapture } from "../capture/completion";
 import { captureRecoveryLabel } from "../capture/recovery-model";
 import { PressableScale } from "../ui/motion";
@@ -465,6 +466,7 @@ export function PackingStationScreen(props: {
           <View style={styles.identity}>
             <Text style={[styles.order, { color: tone.ink }]}>{state.order.orderLabel}</Text>
             <Text style={[styles.item, { color: tone.muted }]}>{state.order.itemSummary}</Text>
+            <RemainingShipmentNotice value={state.order} />
             {state.order.trackingHint ? (
               <Text style={[styles.item, { color: tone.muted }]}>{state.order.trackingHint}</Text>
             ) : null}

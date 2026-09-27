@@ -1,3 +1,10 @@
+import { clientVersionRouter } from "./admin/client-versions.js";
+import { errorActionsRouter } from "./admin/error-actions.js";
+import { integrationActionsRouter } from "./admin/integration-actions.js";
+import { adminActionsRouter } from "./admin/actions.js";
+import { requireSystemAdmin, getAdminMe } from "./admin/auth.js";
+import { adminRouter } from "./admin/router.js";
+import { publicAnalyticsRouter } from "./admin/analytics-events.js";
 import { notificationPreferences, updateNotificationPreferences, listProofUpdates, registerPushDevice, muteProof } from './domain/notification-center.js';
 import { attachTracking, trackingAssociation } from './domain/tracking-associations.js';
 import { captureEngineRouter } from "./capture/router.js";
@@ -172,6 +179,7 @@ import {
 } from "./integrations/connected-accounts/providers/facebook.js";
 import { parseAppClientSecret } from "./integrations/connected-accounts/app-secret.js";
 import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
+import { SHOPIFY_COMMERCE_WEBHOOK_TOPICS, SHOPIFY_PRIVACY_WEBHOOK_TOPICS } from "./integrations/shopify/webhooks.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
@@ -195,6 +203,8 @@ import { createEbayCommerceAdapter } from "./integrations/ebay/adapter.js";
 import { disabledEtsyRuntime, type EtsyRuntime } from "./integrations/etsy/runtime.js";
 import { createEtsyCommerceAdapter } from "./integrations/etsy/commerce-adapter.js";
 import { createEtsyAccessTokenRunner } from "./integrations/etsy/access.js";
+import { createShopifyCommerceAdapter } from "./integrations/shopify/adapter.js";
+import { createShopifyAccessTokenRunner } from "./integrations/shopify/access.js";
 import { normalizeShopifyShop, shopifyShopHandle } from "./integrations/shopify/shop.js";
 import {
   getRetentionControls,
@@ -263,6 +273,7 @@ declare global {
   namespace Express {
     interface Request {
       packproofUserId?: string;
+      packproofAuth?: import("./auth/adapter.js").AuthContext;
     }
   }
 }
@@ -293,6 +304,7 @@ export function createApp(deps: AppDependencies): Express {
       credentials: credentialStore,
     }),
     credentials: credentialStore,
+    syncShopifyWebhooks: shopify.syncWebhooks,
     packproofEnvironment: releaseIdentity.environment,
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
@@ -300,7 +312,12 @@ export function createApp(deps: AppDependencies): Express {
     integrations.registerCommerce(createEtsyCommerceAdapter(etsy.client,
       createEtsyAccessTokenRunner(deps.db, deps.clock, connectedAccounts)));
   }
+  if (shopify.enabled && shopify.client) {
+    integrations.registerCommerce(createShopifyCommerceAdapter(shopify.client,
+      createShopifyAccessTokenRunner(deps.db, deps.clock, connectedAccounts)));
+  }
   app.use(httpBoundary(corsOrigins));
+  app.use(publicAnalyticsRouter(deps));
   // Admission must happen before a body parser can buffer or accept upload bytes.
   app.put("/upload/:token", asyncRoute(async (req, res) => {
     const result = await receiveAdmittedUpload(deps.db, deps.clock, deps.objectStore, req.params.token, req);
@@ -472,10 +489,15 @@ export function createApp(deps: AppDependencies): Express {
       .authenticate(req.headers)
       .then((auth) => {
         req.packproofUserId = auth.userId;
+        req.packproofAuth = auth;
         next();
       })
       .catch(next);
   });
+
+  app.use(clientVersionRouter(deps));
+  app.get("/me/capabilities", asyncRoute(async(req,res)=>{res.setHeader("Cache-Control","private, no-store");res.json({...await getAdminMe(deps.db,bearerUser(req)),environment:releaseIdentity.environment});}));
+  app.use("/admin", requireSystemAdmin(deps), distributedRateLimit(deps.db,{scope:"system-admin",limit:120,windowMs:60_000,subject:bearerUser}), adminActionsRouter(deps), integrationActionsRouter(deps), errorActionsRouter(deps), adminRouter(deps));
 
   app.get("/me/account-deletion-request", asyncRoute(async(req,res)=>{
     res.json(await getAccountDeletionRequest(deps.db,bearerUser(req)));
@@ -781,7 +803,7 @@ export function createApp(deps: AppDependencies): Express {
         header: req.header("X-Shopify-Hmac-Sha256"),
       });
       const topic = String(req.header("X-Shopify-Topic") ?? "").toLowerCase();
-      if (["orders/create", "orders/updated", "orders/cancelled", "orders/paid", "fulfillments/create", "fulfillments/update"].includes(topic)) {
+      if (SHOPIFY_COMMERCE_WEBHOOK_TOPICS.includes(topic)) {
         const result = await enqueueCommerceWebhook(deps.db, deps.clock, {
           provider: "shopify",
           externalAccountReference: shopifyShopHandle(normalizeShopifyShop(req.header("X-Shopify-Shop-Domain"))),
@@ -790,8 +812,13 @@ export function createApp(deps: AppDependencies): Express {
         res.status(200).json(result);
         return;
       }
+      if ((SHOPIFY_PRIVACY_WEBHOOK_TOPICS as readonly string[]).includes(topic)) {
+        // Never acknowledge a privacy request without durable processing. Public
+        // app distribution remains gated until the privacy workflow is deployed.
+        throw new DomainError("SHOPIFY_PRIVACY_HANDLER_UNAVAILABLE", "Shopify privacy request processing is not configured", 503);
+      }
       if (topic !== "app/uninstalled") {
-        res.status(200).json({ accepted: true });
+        res.status(200).json({ accepted: true, ignored: true });
         return;
       }
       const shop = String(req.header("X-Shopify-Shop-Domain") ?? "");

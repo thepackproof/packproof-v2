@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
@@ -7,6 +8,14 @@ import { legalDocuments } from "./src/legal/documents";
 import { renderLegalHtml } from "./src/legal/render-html";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const webVersion: string = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
+function webBuild(): string | undefined {
+  try {
+    const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return !dirty && /^[0-9a-f]{40}$/.test(commit) ? commit : undefined;
+  } catch { return undefined; }
+}
 
 const api = {
   target: "http://127.0.0.1:3000",
@@ -33,6 +42,10 @@ function emitLegalPages(): Plugin {
 }
 
 export default defineConfig({
+  define: {
+    "import.meta.env.VITE_PACKPROOF_WEB_VERSION": JSON.stringify(webVersion),
+    "import.meta.env.VITE_PACKPROOF_WEB_BUILD": JSON.stringify(webBuild() ?? ""),
+  },
   plugins: [react(), emitLegalPages()],
   appType: "spa",
   esbuild: { tsconfigRaw: JSON.stringify({ compilerOptions: { jsx: "react-jsx", useDefineForClassFields: true } }) },
@@ -49,6 +62,8 @@ export default defineConfig({
     port: 5173,
     fs: { allow: [".."] },
     proxy: {
+      "/admin": api,
+      "/analytics": api,
       "/v1": api,
       "/order-intake": api,
       "/upload": api,

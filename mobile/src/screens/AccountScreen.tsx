@@ -11,7 +11,7 @@ import { Alert, BackHandler, Keyboard, Linking, StyleSheet, Switch, Text, View }
 import { usePackProof } from "../app/PackProofProvider";
 import { formatBytes, type LocalCapture } from "../capture";
 import { captureRecoveryLabel, mayCleanUpCapture } from "../capture/recovery-model";
-import { ETSY_ATTRIBUTION, automaticIntakeStatus, orderReviewReason } from "../copy/commerce";
+import { ETSY_ATTRIBUTION, SHOPIFY_AUTOMATIC_PROOFS_LABEL, automaticIntakeStatus, orderIntakeExplanation, orderReviewReason } from "../copy/commerce";
 import { formatUserFacingError } from "../copy/errors";
 import { displayName, formatDate, formatDateTime } from "../copy/format";
 import { PACKPROOF_WEB_ORIGIN, PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from "../copy/legal";
@@ -55,6 +55,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   accountRef.current = session?.userId;
   const [signingOut, setSigningOut] = useState(false);
   const [shop, setShop] = useState("");
+  const [shopifyAutomaticProofs, setShopifyAutomaticProofs] = useState(true);
   const [showInvitation, setShowInvitation] = useState(false);
   const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
   const [retentionNotice, setRetentionNotice] = useState("");
@@ -155,7 +156,14 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           {!channel.accounts.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Not connected</Text> : null}
           {salesChannelCanConnect(channel) ? <>
             {channel.catalog?.requiresShop ? <FormField label="Shopify shop" value={shop} onChangeText={setShop} placeholder="your-store.myshopify.com" autoCapitalize="none" /> : null}
-            <Button label={`Connect ${channel.providerDisplay}`} variant="secondary" loading={app.busy} disabled={channel.catalog?.requiresShop && !shop.trim()} onPress={() => void app.connectConnectedAccount(channel.provider, channel.catalog?.requiresShop ? { shop: shop.trim() } : undefined)} />
+            {channel.provider === "shopify" ? <>
+              <View style={styles.automationRow}>
+                <Text style={[styles.automationLabel, { color: colors.textPrimary }]}>{SHOPIFY_AUTOMATIC_PROOFS_LABEL}</Text>
+                <Switch accessibilityLabel={SHOPIFY_AUTOMATIC_PROOFS_LABEL} value={shopifyAutomaticProofs} disabled={app.busy} onValueChange={setShopifyAutomaticProofs} trackColor={{ true: colors.primary }} />
+              </View>
+              <Text style={[styles.meta, { color: colors.textSecondary }]}>{orderIntakeExplanation(channel.provider)}</Text>
+            </> : null}
+            <Button label={`Connect ${channel.providerDisplay}`} variant="secondary" loading={app.busy} disabled={channel.catalog?.requiresShop && !shop.trim()} onPress={() => void app.connectConnectedAccount(channel.provider, channel.provider === "shopify" ? { shop: shop.trim(), autoSyncEnabled: shopifyAutomaticProofs } : channel.catalog?.requiresShop ? { shop: shop.trim() } : undefined)} />
           </> : null}
           {!channel.catalog?.enabled && channel.accounts.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>New connections are temporarily unavailable. Existing connection and order status are shown above.</Text> : null}
         </InfoCard>)}
@@ -219,15 +227,17 @@ function ChannelAccount({ entry: { account, connection }, providerDisplay }: { e
   const { colors } = useTheme();
   const name = account?.externalAccountName || account?.externalAccountId || connection?.externalAccountReference;
   const reconnect = account && (account.status === "NEEDS_REAUTH" || account.status === "ERROR" || connection?.status === "NEEDS_REAUTH");
+  const automationLabel = (connection?.provider ?? account?.provider) === "shopify" ? SHOPIFY_AUTOMATIC_PROOFS_LABEL : "Automatically add orders";
   return <View style={styles.channelAccount}>
     {name ? <Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{name}</Text> : null}
     {account ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{connectedAccountStatusLabel(account.status)}</Text> : null}
     {connection ? <>
       <View style={styles.automationRow}>
-        <Text style={[styles.automationLabel, { color: colors.textPrimary }]}>Automatically add orders</Text>
-        <Switch accessibilityLabel={`Automatically add orders from ${providerDisplay}${name ? `, ${name}` : ""}`} value={connection.autoSyncEnabled === true} disabled={app.busy || ((connection.status !== "ACTIVE" || connection.automationAvailable === false) && !connection.autoSyncEnabled)} onValueChange={enabled => void app.setCommerceAutomation(connection.connectionId, enabled)} trackColor={{ true: colors.primary }} />
+        <Text style={[styles.automationLabel, { color: colors.textPrimary }]}>{automationLabel}</Text>
+        <Switch accessibilityLabel={`${automationLabel} from ${providerDisplay}${name ? `, ${name}` : ""}`} value={connection.autoSyncEnabled === true} disabled={app.busy || ((connection.status !== "ACTIVE" || connection.automationAvailable === false) && !connection.autoSyncEnabled)} onValueChange={enabled => void app.setCommerceAutomation(connection.connectionId, enabled)} trackColor={{ true: colors.primary }} />
       </View>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>{automaticIntakeStatus(connection).replace("above", "here")}</Text>
+      {connection.provider === "shopify" ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{orderIntakeExplanation(connection.provider)}</Text> : null}
       <Text style={[styles.meta, { color: colors.textSecondary }]}>{connection.lastSyncAt ? `Last successful order check: ${formatDateTime(connection.lastSyncAt)}` : "No successful order check yet."}</Text>
       {(connection.reviewOrderCount ?? 0) > 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{connection.reviewOrderCount} orders need review in {providerDisplay}. {(connection.reviewReasons ?? []).map(reason => `${orderReviewReason(reason.code)}: ${reason.count}`).join(" · ")}</Text> : null}
       {connection.lastErrorCode ? <Text accessibilityRole="alert" style={[styles.meta, { color: colors.warningText }]}>The last order check could not finish. {reconnect ? "Reconnect this account to continue." : "Try checking again."}</Text> : null}

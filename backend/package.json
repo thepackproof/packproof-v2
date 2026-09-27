@@ -13,9 +13,13 @@
     "typecheck": "tsc --noEmit",
     "check:integrations": "tsx src/operations/check-integrations-cli.ts",
     "migrate": "tsx src/db/migrate-cli.ts",
-    "migrate:prod": "node dist/db/migrate-cli.js"
+    "migrate:prod": "node dist/db/migrate-cli.js",
+    "admin:bootstrap": "tsx src/admin/bootstrap-cli.ts",
+    "admin:bootstrap:prod": "node dist/admin/bootstrap-cli.js"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "3.1120.0",
+    "@aws-sdk/client-cost-explorer": "3.1120.0",
     "@aws-sdk/client-kms": "3.1120.0",
     "@aws-sdk/client-s3": "^3.864.0",
     "@aws-sdk/client-secrets-manager": "^3.864.0",

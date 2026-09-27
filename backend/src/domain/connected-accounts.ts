@@ -1,5 +1,6 @@
 import { lockEbayPrivacy } from "./ebay-deletion-cases.js";
 import { resumeCommerceAutomation } from "./commerce-automation.js";
+import { applyShopifyInitialAutomationConsent, parseShopifyAutomationConsent } from "./shopify-automation-consent.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
@@ -67,6 +68,7 @@ export interface ConnectedAccountService {
   credentials: IntegrationCredentialStore & Partial<Pick<MutableCredentialStore, "put" | "deleteCredentials">>;
   packproofEnvironment: string;
   webReturnUrl: string | null;
+  syncShopifyWebhooks?: (input: { shop: string; accessToken: string; scopes: readonly string[] }) => Promise<{ topics: string[]; subscriptionIds: string[] }>;
 }
 
 type ConnectExtra = Record<string, unknown>;
@@ -154,6 +156,25 @@ export async function completeConnectedAccountOAuth(
   providerRaw: string,
   query: Record<string, unknown>,
 ): Promise<{ redirectTo: string }> {
+  if (providerRaw !== "shopify") return completeConnectedAccountOAuthUnlocked(db, clock, service, providerRaw, query);
+  let shop: string;
+  try { shop = normalizeShopifyShop(query.shop); }
+  catch { return completeConnectedAccountOAuthUnlocked(db, clock, service, providerRaw, query); }
+  // Shopify token acquisition retires previous refresh tokens. Coordinate it
+  // with refresh and disconnect even when this shop has no account row yet.
+  return db.transaction(async tx => {
+    await lockShopifyAuthorization(tx, shop);
+    return completeConnectedAccountOAuthUnlocked(tx, clock, service, providerRaw, query);
+  });
+}
+
+async function completeConnectedAccountOAuthUnlocked(
+  db: Database,
+  clock: Clock,
+  service: ConnectedAccountService,
+  providerRaw: string,
+  query: Record<string, unknown>,
+): Promise<{ redirectTo: string }> {
   const providerId = requireConnectedAccountProvider(providerRaw);
   const provider = service.registry.get(providerId);
   let returnUrl = service.webReturnUrl || "/account";
@@ -185,6 +206,25 @@ export async function completeConnectedAccountOAuth(
     const extra: ConnectExtra = { ...attempt.metadata };
     if (providerId === "shopify" && normalizeShopifyShop(query.shop) !== normalizeShopifyShop(extra.shop)) {
       throw new DomainError("OAUTH_SHOP_MISMATCH", "Shopify shop does not match the authorization attempt", 400);
+    }
+    if (providerId === "shopify") {
+      const current = await findConnectedAccountByExternal(db, providerId, normalizeShopifyShop(extra.shop));
+      // Override any request metadata: only an existing server-owned identity
+      // may recover a reconnect whose post-exchange shop lookup is unavailable.
+      extra.verifiedShopIdentity = current?.userId === attempt.userId && typeof current.providerMetadata.shopId === "string"
+        ? { shopId: current.providerMetadata.shopId, myshopifyDomain: current.externalAccountId, name: current.externalAccountName }
+        : null;
+      if (current && current.userId !== attempt.userId && current.status !== "DISCONNECTED") {
+        // Reject before exchanging: even rejected linkage must not invalidate
+        // the tokens used by the shop's existing PackProof owner.
+        throw new DomainError("CONNECTED_ACCOUNT_ALREADY_LINKED", "This external account is already connected to another PackProof user", 409);
+      }
+      if (typeof attempt.metadata.reauthorizeAccountId === "string") {
+        const reauthorizing = await requireOwnedAccount(db, attempt.userId, attempt.metadata.reauthorizeAccountId);
+        if (reauthorizing.provider !== "shopify" || reauthorizing.externalAccountId !== normalizeShopifyShop(extra.shop)) {
+          throw new DomainError("CONNECTED_ACCOUNT_IDENTITY_MISMATCH", "Reconnect the same Shopify shop", 409);
+        }
+      }
     }
     const { tokens, identity } = await provider.handleCallback({
       code: query.code.trim(),
@@ -258,6 +298,10 @@ export async function completeConnectedAccountOAuth(
     }
     const record = upserted.record;
     await syncCommerceConnection(db, clock, record);
+    await applyShopifyInitialAutomationConsent(db, clock, record, {
+      requested: attempt.metadata.autoSyncEnabled, isNewAccount: upserted.created && !reauthorizeId,
+    });
+    await syncConnectedShopifyWebhooks(db, clock, service, record, tokens.accessToken);
     const reauthorized = Boolean(reauthorizeId);
     await appendAccountAudit(db, {
       actorUserId: attempt.userId,
@@ -291,11 +335,12 @@ export async function disconnectConnectedAccount(
   service: ConnectedAccountService,
 ): Promise<void> {
   const existing = await requireOwnedAccount(db, userId, accountId);
-  if (existing.provider !== "etsy" && existing.provider !== "ebay") {
+  if (existing.provider !== "etsy" && existing.provider !== "ebay" && existing.provider !== "shopify") {
     return disconnectConnectedAccountUnlocked(db, clock, userId, accountId, service);
   }
   await db.transaction(async (tx) => {
     if (existing.provider === "ebay") await lockEbayPrivacy(tx);
+    if (existing.provider === "shopify") await lockShopifyAuthorization(tx, existing.externalAccountId);
     await tx.query("SELECT id FROM connected_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE", [accountId, userId]);
     await disconnectConnectedAccountUnlocked(tx, clock, userId, accountId, service);
   });
@@ -307,6 +352,7 @@ async function disconnectConnectedAccountUnlocked(
   userId: string,
   accountId: string,
   service: ConnectedAccountService,
+  options: { skipRemoteRevoke?: boolean } = {},
 ): Promise<void> {
   const record = await requireOwnedAccount(db, userId, accountId);
   if (record.status === "DISCONNECTED") {
@@ -318,7 +364,7 @@ async function disconnectConnectedAccountUnlocked(
     credentialReference: record.credentialReference,
     connectionId: record.id,
   });
-  if (stored) {
+  if (stored && !options.skipRemoteRevoke) {
     await provider.disconnect({ material: stored.material });
   }
   if (typeof service.credentials.deleteCredentials === "function") {
@@ -347,13 +393,14 @@ export async function refreshConnectedAccountCredentials(
   options: { preserveCommerceLease?: boolean; expectedAccessToken?: string } = {},
 ): Promise<ConnectedAccountView> {
   const existing = await requireOwnedAccount(db, userId, accountId);
-  if (existing.provider !== "etsy" && existing.provider !== "ebay") {
+  if (existing.provider !== "etsy" && existing.provider !== "ebay" && existing.provider !== "shopify") {
     return refreshConnectedAccountCredentialsUnlocked(db, clock, userId, accountId, service, options);
   }
   // The database lock coordinates API and worker processes as well as disconnect.
   // Read credentials only after locking: a preceding refresh may rotate them.
   const outcome = await db.transaction(async (tx) => {
     if (existing.provider === "ebay") await lockEbayPrivacy(tx);
+    if (existing.provider === "shopify") await lockShopifyAuthorization(tx, existing.externalAccountId);
     await tx.query("SELECT id FROM connected_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE", [accountId, userId]);
     try {
       return { value: await refreshConnectedAccountCredentialsUnlocked(tx, clock, userId, accountId, service, options) };
@@ -375,7 +422,7 @@ async function refreshConnectedAccountCredentialsUnlocked(
   options: { preserveCommerceLease?: boolean; expectedAccessToken?: string },
 ): Promise<ConnectedAccountView> {
   const record = await requireOwnedAccount(db, userId, accountId);
-  if (record.status === "DISCONNECTED" || (record.provider === "etsy" && record.status !== "CONNECTED")) {
+  if (record.status === "DISCONNECTED" || (["etsy", "shopify"].includes(record.provider) && record.status !== "CONNECTED")) {
     throw new DomainError("INTEGRATION_NEEDS_REAUTH", "Reconnect this account to restore authorization", 409);
   }
   const provider = service.registry.get(record.provider);
@@ -388,7 +435,7 @@ async function refreshConnectedAccountCredentialsUnlocked(
     await updateConnectedAccount(db, clock, record.id, { status: "NEEDS_REAUTH" });
     throw new DomainError("INTEGRATION_NEEDS_REAUTH", "The saved authorization is no longer valid", 409);
   }
-  if (record.provider === "etsy" && options.expectedAccessToken !== undefined &&
+  if (["etsy", "shopify"].includes(record.provider) && options.expectedAccessToken !== undefined &&
       stored.material.accessToken !== options.expectedAccessToken) {
     return toView(record, provider);
   }
@@ -412,6 +459,7 @@ async function refreshConnectedAccountCredentialsUnlocked(
       expiresAt: tokens.expiresAt,
     });
     await syncCommerceConnection(db,clock,updated,options);
+    await syncConnectedShopifyWebhooks(db, clock, service, updated, tokens.accessToken);
     return toView(updated, provider);
   } catch (error) {
     const code=error&&typeof error==="object"&&"code" in error?String(error.code):"";
@@ -429,6 +477,38 @@ async function refreshConnectedAccountCredentialsUnlocked(
     });
     throw new DomainError("INTEGRATION_NEEDS_REAUTH", "The saved authorization is no longer valid", 409);
   }
+}
+
+async function lockShopifyAuthorization(db: Database, shop: string): Promise<void> {
+  await db.query("SELECT pg_advisory_xact_lock(1347438150, hashtext($1))", [normalizeShopifyShop(shop)]);
+}
+
+/** Webhook setup is recoverable and must not discard a saved authorization. */
+export async function syncConnectedShopifyWebhooks(
+  db: Database, clock: Clock, service: ConnectedAccountService, record: ConnectedAccountRecord, accessToken: string,
+): Promise<void> {
+  if (record.provider !== "shopify" || !service.syncShopifyWebhooks) return;
+  const lastAttempt = Date.parse(String(record.providerMetadata.webhookRegistrationAttemptedAt ?? ""));
+  const providerRetryAt = Date.parse(String(record.providerMetadata.webhookRegistrationRetryAt ?? ""));
+  const nextAttemptMs = record.providerMetadata.webhookRegistrationErrorCode ? 5 * 60_000 : 24 * 60 * 60_000;
+  if (Number.isFinite(providerRetryAt) && providerRetryAt > clock.now().getTime()) return;
+  if (Number.isFinite(lastAttempt) && lastAttempt + nextAttemptMs > clock.now().getTime()) return;
+  let metadata: Record<string, unknown>;
+  try {
+    const result = await service.syncShopifyWebhooks({ shop: record.externalAccountId, accessToken, scopes: record.scopes });
+    metadata = { webhookTopics: result.topics, webhookSubscriptionsVerifiedAt: clock.now().toISOString(), webhookRegistrationErrorCode: null, webhookRegistrationRetryAt: null };
+  } catch (error) {
+    const retryAfterSeconds = error && typeof error === "object" && "retryAfterSeconds" in error ? Number(error.retryAfterSeconds) : 0;
+    const retryMs = Number.isFinite(retryAfterSeconds) ? Math.max(5 * 60_000, retryAfterSeconds * 1_000) : 5 * 60_000;
+    metadata = {
+      webhookRegistrationErrorCode: error instanceof DomainError ? error.code : "SHOPIFY_WEBHOOK_REGISTRATION_FAILED",
+      webhookRegistrationRetryAt: new Date(clock.now().getTime() + retryMs).toISOString(),
+    };
+  }
+  // Merge inside SQL so a concurrent metadata update cannot be overwritten.
+  await db.query("UPDATE connected_accounts SET provider_metadata = provider_metadata || $2::jsonb, updated_at = $3 WHERE id = $1 AND status = 'CONNECTED'", [
+    record.id, JSON.stringify({ ...metadata, webhookRegistrationAttemptedAt: clock.now().toISOString() }), clock.now().toISOString(),
+  ]);
 }
 
 export async function upsertConnectedAccountFromMarketplace(
@@ -498,12 +578,32 @@ export async function handleShopifyAppUninstalled(
   service: ConnectedAccountService,
 ): Promise<{ accepted: true; disconnected: number }> {
   const shop = normalizeShopifyShop(shopRaw);
-  const record = await findConnectedAccountByExternal(db, "shopify", shop);
-  if (!record || record.status === "DISCONNECTED") {
-    return { accepted: true, disconnected: 0 };
-  }
-  await disconnectConnectedAccount(db, clock, record.userId, record.id, service);
-  return { accepted: true, disconnected: 1 };
+  return db.transaction(async tx => {
+    await lockShopifyAuthorization(tx, shop);
+    const record = await findConnectedAccountByExternal(tx, "shopify", shop);
+    if (!record || record.status === "DISCONNECTED") return { accepted: true as const, disconnected: 0 };
+    let stored = await service.credentials.getCredentials({ adapterKey: "shopify", credentialReference: record.credentialReference, connectionId: record.id });
+    if (stored?.material.accessToken) {
+      try {
+        if (stored.material.refreshToken && Date.parse(stored.material.expiresAt ?? "") <= clock.now().getTime()) {
+          await refreshConnectedAccountCredentialsUnlocked(tx, clock, record.userId, record.id, service, { preserveCommerceLease: true });
+          stored = await service.credentials.getCredentials({ adapterKey: "shopify", credentialReference: record.credentialReference, connectionId: record.id });
+          if (!stored?.material.accessToken) throw new DomainError("INTEGRATION_NEEDS_REAUTH", "Shopify authorization is unavailable", 409);
+        }
+        // A delivery from an older installation can arrive after reconnect.
+        // Shopify revokes tokens on uninstall, so a working current token proves
+        // this notification must not disable the newer installation.
+        await service.registry.get("shopify").getAccountIdentity({ accessToken: stored.material.accessToken, extra: { shop } });
+        return { accepted: true as const, disconnected: 0 };
+      } catch (error) {
+        if (!(error instanceof DomainError) || !["PROVIDER_AUTH_FAILED", "INTEGRATION_NEEDS_REAUTH"].includes(error.code)) throw error;
+      }
+    }
+    // An uninstall notification is an observation, never authorization to send
+    // another appUninstall mutation against a potentially newer installation.
+    await disconnectConnectedAccountUnlocked(tx, clock, record.userId, record.id, service, { skipRemoteRevoke: true });
+    return { accepted: true as const, disconnected: 1 };
+  });
 }
 
 async function syncCommerceConnection(
@@ -588,7 +688,7 @@ function connectMetadata(provider: ConnectedAccountProviderId, extra: ConnectExt
   const metadata = { ...extra, surface: connectSurface(extra.surface) };
   if (provider === "shopify") {
     const shop = normalizeShopifyShop(extra.shop);
-    return { ...metadata, shop };
+    return { ...metadata, shop, autoSyncEnabled: parseShopifyAutomationConsent(extra.autoSyncEnabled) };
   }
   return metadata;
 }

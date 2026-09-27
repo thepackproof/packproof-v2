@@ -1,6 +1,5 @@
 import { DomainError } from "../../../domain/errors.js";
-import { providerAuthFailed } from "../../../domain/integration-errors.js";
-import type { ShopifyClient } from "../../shopify/types.js";
+import type { ShopifyClient, ShopifyTokenSet } from "../../shopify/types.js";
 import {
   SHOPIFY_CAPABILITIES,
   SHOPIFY_LIMITATIONS,
@@ -10,9 +9,9 @@ import {
 } from "../../shopify/constants.js";
 import { normalizeShopifyShop } from "../../shopify/shop.js";
 import { verifyShopifyOAuthHmac } from "../../shopify/hmac.js";
-import { splitScopes } from "../http.js";
+import { asRecord, asString, splitScopes } from "../http.js";
 import { parseAppClientSecret } from "../app-secret.js";
-import type { ConnectedAccountProvider } from "../types.js";
+import type { ConnectedAccountProvider, OAuthTokenSet } from "../types.js";
 import type { IntegrationCredentialStore } from "../../credentials.js";
 
 export interface ShopifyOAuthRuntime {
@@ -21,6 +20,7 @@ export interface ShopifyOAuthRuntime {
   appCredentialReference: string | null;
   redirectUri: string;
   client: ShopifyClient | null;
+  syncWebhooks?: (input: { shop: string; accessToken: string; scopes: readonly string[] }) => Promise<{ topics: string[]; subscriptionIds: string[] }>;
 }
 
 export function createShopifyConnectedAccountProvider(input: {
@@ -58,7 +58,7 @@ export function createShopifyConnectedAccountProvider(input: {
       url.searchParams.set("scope", SHOPIFY_SCOPES.join(","));
       url.searchParams.set("redirect_uri", runtime.redirectUri);
       url.searchParams.set("state", start.state);
-      url.searchParams.set("grant_options[]", "offline");
+      // Offline is Shopify's default; grant_options[]=per-user selects online.
       return { authorizationUrl: url.toString(), redirectUri: runtime.redirectUri };
     },
     async handleCallback(callback) {
@@ -76,21 +76,21 @@ export function createShopifyConnectedAccountProvider(input: {
         clientSecret,
         code: callback.code,
       });
-      const identity = await runtime.client.getShop({
-        shop,
-        accessToken: tokens.accessToken,
-      });
+      let identity;
+      try {
+        identity = await runtime.client.getShop({ shop, accessToken: tokens.accessToken });
+      } catch (error) {
+        const known = asRecord(callback.extra?.verifiedShopIdentity);
+        if (!(error instanceof DomainError) || !["PROVIDER_TEMPORARILY_UNAVAILABLE", "PROVIDER_RATE_LIMITED"].includes(error.code) ||
+            known.myshopifyDomain !== shop || !asString(known.shopId)) throw error;
+        // Acquiring a new offline token retires the prior refresh token. Keep
+        // the verified reconnect usable when this optional identity read fails.
+        identity = { shopId: asString(known.shopId)!, myshopifyDomain: shop, name: asString(known.name), email: null };
+      }
       const scopes = splitScopes(tokens.scope);
-      if (!scopes.includes("read_orders") && !scopes.includes("write_orders")) throw providerAuthFailed();
+      requireShopifyScopes(scopes);
       return {
-        tokens: {
-          accessToken: tokens.accessToken,
-          refreshToken: null,
-          tokenType: "offline",
-          expiresAt: null,
-          scopes,
-          extraMaterial: { shop: identity.myshopifyDomain, shopId: identity.shopId },
-        },
+        tokens: tokenSet(tokens, identity.myshopifyDomain, identity.shopId),
         identity: {
           externalAccountId: identity.myshopifyDomain,
           externalAccountName: identity.name,
@@ -108,15 +108,25 @@ export function createShopifyConnectedAccountProvider(input: {
       if (!accessToken) {
         throw new DomainError("INTEGRATION_NEEDS_REAUTH", "Shopify access token is missing", 409);
       }
-      const identity = await runtime.client.getShop({ shop, accessToken });
-      return {
-        accessToken,
-        refreshToken: null,
-        tokenType: "offline",
-        expiresAt: null,
-        scopes: splitScopes(stored.material.scope),
-        extraMaterial: { shop: identity.myshopifyDomain, shopId: identity.shopId },
-      };
+      const scopes = splitScopes(stored.material.scope);
+      requireShopifyScopes(scopes);
+      const refreshToken = stored.material.refreshToken?.trim();
+      if (!refreshToken) {
+        // Non-expiring credentials can still be valid for legacy/custom apps.
+        // An expiring token without its refresh token can never be renewed.
+        if (stored.material.expiresAt) throw needsReauth();
+        const identity = await runtime.client.getShop({ shop, accessToken });
+        return tokenSet({ accessToken, scope: scopes.join(",") }, identity.myshopifyDomain, identity.shopId);
+      }
+      const refreshExpiry = Date.parse(stored.material.refreshTokenExpiresAt ?? "");
+      if (!Number.isFinite(refreshExpiry) || refreshExpiry <= Date.now() || !runtime.client.refreshUserToken) throw needsReauth();
+      const clientSecret = parseAppClientSecret(await credentials.getCredentials({
+        adapterKey: SHOPIFY_PROVIDER, credentialReference: runtime.appCredentialReference,
+      }));
+      const tokens = await runtime.client.refreshUserToken({ shop, clientId: runtime.clientId, clientSecret, refreshToken });
+      // The refresh grant is already bound to the authenticated shop. Persist
+      // rotated credentials before making unrelated provider reads that may fail.
+      return tokenSet({ ...tokens, scope: tokens.scope || scopes.join(",") }, shop, stored.material.shopId);
     },
     async getAccountIdentity(identityInput) {
       requireEnabled(runtime);
@@ -147,6 +157,35 @@ export function createShopifyConnectedAccountProvider(input: {
       }
     },
   };
+}
+
+function tokenSet(tokens: ShopifyTokenSet, shop: string, shopId: string): OAuthTokenSet {
+  const scopes = splitScopes(tokens.scope);
+  requireShopifyScopes(scopes);
+  const now = Date.now();
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken ?? null,
+    tokenType: "offline",
+    expiresAt: tokens.expiresInSeconds === undefined ? null : new Date(now + tokens.expiresInSeconds * 1_000).toISOString(),
+    scopes,
+    extraMaterial: {
+      shop, shopId,
+      ...(tokens.refreshTokenExpiresInSeconds === undefined ? {} : {
+        refreshTokenExpiresAt: new Date(now + tokens.refreshTokenExpiresInSeconds * 1_000).toISOString(),
+      }),
+    },
+  };
+}
+
+export function requireShopifyScopes(scopes: readonly string[]): void {
+  if (!SHOPIFY_SCOPES.every(scope => scopes.includes(scope) || scopes.includes(scope.replace(/^read_/, "write_")))) {
+    throw needsReauth();
+  }
+}
+
+function needsReauth(): DomainError {
+  return new DomainError("INTEGRATION_NEEDS_REAUTH", "Reconnect Shopify and allow order, merchant fulfillment and location access", 409);
 }
 
 function requireEnabled(

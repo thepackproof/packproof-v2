@@ -23,6 +23,7 @@ import { ErrorBanner } from "../ui/EmptyState";
 import { VideoReview } from "../ui/VideoReview";
 import { SellerAttestation } from "../ui/SellerAttestation";
 import { isGradingWorkflow } from "../copy/custody";
+import { RemainingShipmentNotice } from "../ui/RemainingShipmentNotice";
 
 export function CaptureScreen() {
   const app = usePackProof();
@@ -149,6 +150,7 @@ export function CaptureScreen() {
     {txn ? <View style={{ gap: spacing.xs }}>
       <Text style={[styles.item, { color: colors.textPrimary }]}>{txn.itemTitle || "Your shipment"}</Text>
       {txn.externalReference ? <Text style={[styles.note, { color: colors.textSecondary }]}>Order {txn.externalReference}</Text> : null}
+      <RemainingShipmentNotice value={app.proof} />
     </View> : null}
     <ErrorBanner message={app.error} />
     {capture && !belongs ? <Button label="Return to saved recording" onPress={() => {

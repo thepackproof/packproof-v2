@@ -2,7 +2,7 @@ import { identifierProjection } from '../identifiers/service.js';
 import { readIntakeProofContext } from "../intake/context.js";
 import { classifyProofPresentation, type ProofPresentation } from './proof-presentation.js';
 import { getCaptureShipping } from './capture-shipping.js';
-import { readCaptureClientContext, type ClientCaptureContext } from "./capture-sessions.js";
+import { readCaptureClientContext, DESKTOP_CAPTURE_ASSURANCE, type ClientCaptureContext } from "./capture-sessions.js";
 import type { Database } from "../db/database.js";
 import { listAuditEvents, type AuditEventView } from "./audit.js";
 import { buildChronology, type ChronologyEntry } from "./chronology.js";
@@ -384,13 +384,13 @@ function toCanonicalEvidence(row: EvidenceRow & {capture_client?:string}, client
     evidenceId: row.id,
     evidenceType: row.evidence_type,
     clientReportedCapture,
-    captureRegistrationTiming: row.capture_registered_at && row.capture_expires_at ? (new Date(row.capture_registered_at).getTime()>new Date(row.capture_expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "UNKNOWN",
+    captureRegistrationTiming: row.capture_client==='DESKTOP_CAMERA'?'POST_CAPTURE_CLIENT_REPORTED':row.capture_registered_at && row.capture_expires_at ? (new Date(row.capture_registered_at).getTime()>new Date(row.capture_expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW") : "UNKNOWN",
     capturedDurationMs: row.captured_duration_ms == null ? null : Number(row.captured_duration_ms),
     captureOrigin: row.capture_origin ?? "LEGACY_UNKNOWN",
     // Session recovery is an uploader command context, not a guest or counterparty capability.
     captureSessionId: actorUserId === row.submitted_by ? row.capture_session_id ?? null : null,
     captureClient: actorUserId === row.submitted_by ? row.capture_client ?? null : null,
-    captureAssurance: row.capture_origin === "AUTHORIZED_CAPTURE_SESSION"
+    captureAssurance: row.capture_origin === 'CLIENT_REPORTED_DESKTOP_CAPTURE' ? DESKTOP_CAPTURE_ASSURANCE : row.capture_origin === "AUTHORIZED_CAPTURE_SESSION"
       ? "Authorized capture workflow; camera origin is not independently attested."
       : row.capture_origin === "UPLOADED_ATTACHMENT" ? "Participant-uploaded supporting evidence." : "Historical evidence; capture origin is unknown.",
     validationStatus: row.validation_status,

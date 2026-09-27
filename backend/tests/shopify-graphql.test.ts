@@ -10,7 +10,7 @@ const id = "9007199254740993123", gid = `gid://shopify/Order/${id}`;
 const conn = (nodes: unknown[], cursor: string | null = null) => ({ nodes, pageInfo: { hasNextPage: Boolean(cursor), endCursor: cursor } });
 const line = (n: number) => ({ id: `gid://shopify/LineItem/${n}`, title: `Card ${n}`, sku: "CARD", quantity: 3, currentQuantity: 3, unfulfilledQuantity: 1, variantTitle: "Blue", requiresShipping: true, originalUnitPriceSet: { shopMoney: { amount: "20.00", currencyCode: "USD" } } });
 const fulfillment = { id: "gid://shopify/Fulfillment/432", legacyResourceId: "432", updatedAt: revision, status: "SUCCESS", trackingInfo: [{ company: "USPS", number: "TRACK-1" }] };
-const detail = () => ({ id: gid, legacyResourceId: id, name: "#123", createdAt: "2026-09-04T10:00:00Z", updatedAt: revision, cancelledAt: null, displayFinancialStatus: "PAID", displayFulfillmentStatus: "PARTIALLY_FULFILLED", currentTotalPriceSet: { shopMoney: { amount: "60.00", currencyCode: "USD" } }, lineItems: conn([line(987)]), fulfillments: [fulfillment] });
+const detail = () => ({ id: gid, legacyResourceId: id, name: "#123", createdAt: "2026-09-04T10:00:00Z", updatedAt: revision, test: false, cancelledAt: null, displayFinancialStatus: "PAID", displayFulfillmentStatus: "PARTIALLY_FULFILLED", currentTotalPriceSet: { shopMoney: { amount: "60.00", currencyCode: "USD" } }, lineItems: conn([line(987)]), fulfillments: [fulfillment] });
 type Variables = Record<string, any>;
 function transport(override?: (operation: string, variables: Variables) => unknown) {
   return vi.fn<typeof fetch>(async (_url, init) => {
@@ -20,6 +20,9 @@ function transport(override?: (operation: string, variables: Variables) => unkno
     if (extra !== undefined) return new Response(JSON.stringify(extra));
     const data = operation === "PackProofOrders" ? { orders: conn([{ id: gid, updatedAt: revision }]) }
       : operation === "PackProofOrder" ? { order: detail() }
+      : operation === "PackProofOrderFulfillmentOrders" ? { order: { id: gid, updatedAt: revision, fulfillmentOrders: conn([{ id: "gid://shopify/FulfillmentOrder/12", updatedAt: revision, status: "OPEN", requestStatus: "UNSUBMITTED", deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } }]) } }
+      : operation === "PackProofFulfillmentOrderLines" ? { node: { id: variables.id, updatedAt: revision, lineItems: conn([{ id: "gid://shopify/FulfillmentOrderLineItem/15", remainingQuantity: 1, requiresShipping: true, lineItem: { id: line(987).id } }]) } }
+      : operation === "PackProofFulfillmentOrderRevision" ? { node: { id: variables.id, updatedAt: revision, deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } } }
       : operation === "PackProofOrderRevision" ? { order: { id: gid, updatedAt: revision } }
       : operation === "PackProofFulfillmentLines" ? { node: { id: fulfillment.id, updatedAt: revision, fulfillmentLineItems: conn([{ id: "gid://shopify/FulfillmentLineItem/1", quantity: 2, lineItem: { id: line(987).id } }]) } }
       : operation === "PackProofShopIdentity" ? { shop: { id: "gid://shopify/Shop/21", name: "Store", myshopifyDomain: input.shop } }
@@ -66,7 +69,7 @@ describe("Shopify Admin GraphQL transport", () => {
       expect(request).toMatchObject({ method: "POST", redirect: "error", headers: { "X-Shopify-Access-Token": input.accessToken } });
       expect(String(request?.body)).not.toMatch(/customer|shippingAddress|billingAddress/);
     }
-    expect(SHOPIFY_SCOPES).toEqual(["read_orders"]);
+    expect(SHOPIFY_SCOPES).toEqual(["read_orders", "read_merchant_managed_fulfillment_orders", "read_locations"]);
   });
 
   it("preserves the bounded query across opaque cursor pages and restarts existing REST checkpoints", async () => {
@@ -87,6 +90,7 @@ describe("Shopify Admin GraphQL transport", () => {
   it("fully drains both nested connections before returning one order revision", async () => {
     const fetcher = transport((op, vars) => {
       if (op === "PackProofOrder") return { data: { order: { ...detail(), lineItems: conn(Array.from({ length: 100 }, (_, i) => line(i + 1)), "line-page-2") } } };
+      if (op === "PackProofFulfillmentOrderLines") return { data: { node: { id: vars.id, updatedAt: revision, lineItems: conn([{ id: "gid://shopify/FulfillmentOrderLineItem/15", remainingQuantity: 1, requiresShipping: true, lineItem: { id: line(1).id } }]) } } };
       if (op === "PackProofOrderLines") { expect(vars.after).toBe("line-page-2"); return { data: { order: { id: gid, updatedAt: revision, lineItems: conn([line(101)]) } } }; }
       if (op === "PackProofFulfillmentLines") return { data: { node: { id: fulfillment.id, updatedAt: revision, fulfillmentLineItems: conn([{ id: `gid://shopify/FulfillmentLineItem/${vars.after ? 2 : 1}`, quantity: 1, lineItem: { id: line(vars.after ? 101 : 1).id } }], vars.after ? null : "fulfillment-page-2") } } };
     });
@@ -100,6 +104,64 @@ describe("Shopify Admin GraphQL transport", () => {
     const fetcher = transport(op => op === "PackProofOrder" ? { data: { order: { ...detail(), lineItems: conn([line(1)], "loop") } } }
       : op === "PackProofOrderLines" ? { data: { order: { id: gid, updatedAt: revision, lineItems: conn([line(2)], "loop") } } } : undefined);
     await expect(createHttpShopifyClient(fetcher).listOrdersPage!(input)).rejects.toMatchObject({ code: "PROVIDER_RESPONSE_INVALID" });
+  });
+
+  it("drains fulfillment assignments and their lines independently before trusting readiness", async () => {
+    const fetcher = transport((op, vars) => {
+      if (op === "PackProofOrder") return { data: { order: { ...detail(), lineItems: conn([line(987), line(988)]) } } };
+      if (op === "PackProofOrderFulfillmentOrders") return { data: { order: { id: gid, updatedAt: revision,
+        fulfillmentOrders: conn([{ id: `gid://shopify/FulfillmentOrder/${vars.after ? 13 : 12}`, updatedAt: revision,
+          status: vars.after ? "CLOSED" : "OPEN", requestStatus: "UNSUBMITTED", deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } }], vars.after ? null : "assignment-next") } } };
+      if (op === "PackProofFulfillmentOrderLines") return { data: { node: { id: vars.id, updatedAt: revision,
+        lineItems: conn([{ id: `gid://shopify/FulfillmentOrderLineItem/${vars.after ? 16 : 15}`, remainingQuantity: vars.id.endsWith("/13") ? 0 : 1,
+          requiresShipping: true, lineItem: { id: line(vars.after ? 988 : 987).id } }], vars.id.endsWith("/12") && !vars.after ? "assignment-line-next" : null) } } };
+    });
+    const result = await createHttpShopifyClient(fetcher).listOrdersPage!(input);
+    expect(result.orders[0].fulfillmentOrders).toHaveLength(2);
+    expect(result.orders[0].fulfillmentOrders[0].lineItems.map(line => line.orderLineItemId)).toEqual(["987", "988"]);
+    expect(result.orders[0].fulfillmentOrders[1]).toMatchObject({ id: "13", status: "CLOSED" });
+  });
+
+  it("rejects repeated fulfillment-assignment and assignment-line cursors", async () => {
+    for (const repeating of ["assignments", "lines"]) {
+      const fetcher = transport((op, vars) => {
+        if (op === "PackProofOrderFulfillmentOrders" && repeating === "assignments") return { data: { order: { id: gid, updatedAt: revision,
+          fulfillmentOrders: conn([{ id: "gid://shopify/FulfillmentOrder/12", updatedAt: revision, status: "OPEN", requestStatus: "UNSUBMITTED", deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: false } } }], "loop") } } };
+        if (op === "PackProofFulfillmentOrderLines" && repeating === "lines") return { data: { node: { id: vars.id, updatedAt: revision,
+          lineItems: conn([{ id: "gid://shopify/FulfillmentOrderLineItem/15", remainingQuantity: 1, requiresShipping: true, lineItem: { id: line(987).id } }], "loop") } } };
+      });
+      await expect(createHttpShopifyClient(fetcher).listOrdersPage!(input)).rejects.toMatchObject({ code: "PROVIDER_RESPONSE_INVALID" });
+    }
+  });
+
+  it("retries independent fulfillment-order revisions and rejects another order's line assignment", async () => {
+    const changed = transport((op, vars) => op === "PackProofFulfillmentOrderRevision"
+      ? { data: { node: { id: vars.id, updatedAt: "2026-09-05T11:01:00Z" } } } : undefined);
+    await expect(createHttpShopifyClient(changed).listOrdersPage!(input)).rejects.toMatchObject({ code: "PROVIDER_TEMPORARILY_UNAVAILABLE", retryable: true });
+    const wrongLine = transport((op, vars) => op === "PackProofFulfillmentOrderLines" ? { data: { node: { id: vars.id, updatedAt: revision,
+      lineItems: conn([{ id: "gid://shopify/FulfillmentOrderLineItem/15", remainingQuantity: 1, requiresShipping: true, lineItem: { id: line(999).id } }]) } } } : undefined);
+    await expect(createHttpShopifyClient(wrongLine).listOrdersPage!(input)).rejects.toMatchObject({ code: "PROVIDER_RESPONSE_INVALID" });
+  });
+
+  it.each([false, true, null])("reads actual fulfillment-service location state %s instead of inferring from requestStatus", async service => {
+    const fetcher = transport((op, vars) => {
+      const assignment = { deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: service == null ? null : { isFulfillmentService: service } } };
+      if (op === "PackProofOrderFulfillmentOrders") return { data: { order: { id: gid, updatedAt: revision,
+        fulfillmentOrders: conn([{ id: "gid://shopify/FulfillmentOrder/12", updatedAt: revision, status: "OPEN", requestStatus: "UNSUBMITTED", ...assignment }]) } } };
+      if (op === "PackProofFulfillmentOrderRevision") return { data: { node: { id: vars.id, updatedAt: revision, ...assignment } } };
+    });
+    const result = await createHttpShopifyClient(fetcher).listOrdersPage!(input);
+    expect(result.orders[0].fulfillmentOrders[0]).toMatchObject({ merchantManaged: service === false, deliveryMethodType: "SHIPPING" });
+  });
+
+  it("retries a changed delivery or fulfillment-service assignment even if the fulfillment timestamp did not advance", async () => {
+    for (const changed of [
+      { deliveryMethod: { methodType: "PICK_UP" }, assignedLocation: { location: { isFulfillmentService: false } } },
+      { deliveryMethod: { methodType: "SHIPPING" }, assignedLocation: { location: { isFulfillmentService: true } } },
+    ]) {
+      const fetcher = transport((op, vars) => op === "PackProofFulfillmentOrderRevision" ? { data: { node: { id: vars.id, updatedAt: revision, ...changed } } } : undefined);
+      await expect(createHttpShopifyClient(fetcher).listOrdersPage!(input)).rejects.toMatchObject({ code: "PROVIDER_TEMPORARILY_UNAVAILABLE", retryable: true });
+    }
   });
 
   it("retries if the provider changes the order during hydration", async () => {
@@ -129,11 +191,12 @@ describe("Shopify Admin GraphQL transport", () => {
 
 describe("Shopify GraphQL normalized eligibility", () => {
   it("removes refunded or edited-away quantities from the packing checklist", async () => {
-    const fetcher = transport(op => op === "PackProofOrder" ? { data: { order: { ...detail(), lineItems: conn([{ ...line(1), currentQuantity: 0 }, { ...line(2), currentQuantity: 2 }]) } } } : undefined);
+    const fetcher = transport(op => op === "PackProofOrder" ? { data: { order: { ...detail(), fulfillments: [], lineItems: conn([{ ...line(1), currentQuantity: 0 }, { ...line(2), currentQuantity: 2 }]) } } }
+      : op === "PackProofFulfillmentOrderLines" ? { data: { node: { id: "gid://shopify/FulfillmentOrder/12", updatedAt: revision, lineItems: conn([{ id: "gid://shopify/FulfillmentOrderLineItem/15", remainingQuantity: 1, requiresShipping: true, lineItem: { id: line(2).id } }]) } } } : undefined);
     const adapter = createShopifyCommerceAdapter(createHttpShopifyClient(fetcher));
     const result = await adapter.listFulfillmentOrders({ connection: { external_account_reference: "store" } as IntegrationConnectionRow, credentials: { material: { shop: input.shop, accessToken: input.accessToken } } as any, updatedSince: input.updatedSince, updatedUntil: input.updatedUntil });
     expect(result.orders[0].items).toHaveLength(1);
-    expect(result.orders[0].items[0]).toMatchObject({ externalItemId: "2", quantity: 2 });
+    expect(result.orders[0].items[0]).toMatchObject({ externalItemId: "2", quantity: 1, remainingQuantity: 1 });
   });
   it.each([["PARTIALLY_FULFILLED", false, "IN_PROGRESS"], ["ON_HOLD", true, "AWAITING_FULFILLMENT"], ["FULFILLED", false, "FULFILLED"]])("maps %s while keeping the canonical numeric order identity", async (status, held, expected) => {
     const fetcher = transport(op => op === "PackProofOrder" ? { data: { order: { ...detail(), displayFulfillmentStatus: status } } } : undefined);

@@ -1,0 +1,365 @@
+{
+  "checkedAt": "2026-09-27T16:20:01.590Z",
+  "account": "784514617543",
+  "region": "us-east-1",
+  "templateSha256": "1623ccea208496246d171ed75b020d0329c7ede7d642ae428afaedcbc411287e",
+  "stack": {
+    "StackId": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-desktop-updates/4378f940-ba8e-11f1-902f-0e2c2b5f72f5",
+    "StackName": "packproof-desktop-updates",
+    "Parameters": [
+      {
+        "ParameterKey": "DownloadsDomain",
+        "ParameterValue": "downloads.thepackproof.com"
+      },
+      {
+        "ParameterKey": "ActivateDownloadsDomain",
+        "ParameterValue": "false"
+      },
+      {
+        "ParameterKey": "GitHubImmutableRepositorySubject",
+        "ParameterValue": "thepackproof@314726215/packproof-v2@1349680833"
+      },
+      {
+        "ParameterKey": "CertificateArn",
+        "ParameterValue": "arn:aws:acm:us-east-1:784514617543:certificate/6c64a421-6e58-4791-a537-a006ab629ed0"
+      },
+      {
+        "ParameterKey": "GitHubRepositorySubject",
+        "ParameterValue": "thepackproof/packproof-v2"
+      }
+    ],
+    "CreationTime": "2026-09-27T16:12:40.625000+00:00",
+    "StackStatus": "CREATE_COMPLETE",
+    "Outputs": [
+      {
+        "OutputKey": "HealthUrl",
+        "OutputValue": "https://downloads.thepackproof.com/desktop/health.json",
+        "Description": "Bootstrap health.json after DNS and distribution checks, before release publication."
+      },
+      {
+        "OutputKey": "ProductionPublishRoleArn",
+        "OutputValue": "arn:aws:iam::784514617543:role/packproof/desktop/packproof-desktop-updates-ProductionPublisher-XoHCSIIT9Fj8",
+        "Description": "PACKPROOF_RELEASE_ROLE_ARN for desktop-production-publish only."
+      },
+      {
+        "OutputKey": "ReleaseBucketName",
+        "OutputValue": "packproof-desktop-updates-releasebucket-ta0fwf6zaesv",
+        "Description": "Set PACKPROOF_RELEASE_BUCKET in both protected publish environments."
+      },
+      {
+        "OutputKey": "CloudFrontDistributionId",
+        "OutputValue": "E2A8FXU3T18IM8",
+        "Description": "New isolated desktop distribution; do not reuse the existing website distribution."
+      },
+      {
+        "OutputKey": "ActivationState",
+        "OutputValue": "DISABLED_PENDING_DNS",
+        "Description": "Disabled until the same distribution is explicitly updated with the validated downloads certificate and alias."
+      },
+      {
+        "OutputKey": "CloudFrontDomainName",
+        "OutputValue": "d12zduvn2secdh.cloudfront.net",
+        "Description": "Add external DNS-only CNAME downloads.thepackproof.com to this target after deployment."
+      },
+      {
+        "OutputKey": "StagingPublishRoleArn",
+        "OutputValue": "arn:aws:iam::784514617543:role/packproof/desktop/packproof-desktop-updates-StagingPublisher-eBqfL1b5eMsR",
+        "Description": "PACKPROOF_RELEASE_ROLE_ARN for desktop-staging-publish only."
+      }
+    ]
+  },
+  "resources": [
+    {
+      "LogicalResourceId": "ArtifactCache",
+      "PhysicalResourceId": "a6ccb56c-1d8a-4c24-afd8-4878abfdf955",
+      "ResourceType": "AWS::CloudFront::CachePolicy",
+      "LastUpdatedTimestamp": "2026-09-27T16:13:39.409000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "Distribution",
+      "PhysicalResourceId": "E2A8FXU3T18IM8",
+      "ResourceType": "AWS::CloudFront::Distribution",
+      "LastUpdatedTimestamp": "2026-09-27T16:16:58.959000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "DownloadHeaders",
+      "PhysicalResourceId": "ba8e4bf0-befc-40bf-9ec3-5fe28d9bef58",
+      "ResourceType": "AWS::CloudFront::ResponseHeadersPolicy",
+      "LastUpdatedTimestamp": "2026-09-27T16:13:39.538000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "MetadataHeaders",
+      "PhysicalResourceId": "64e80aa2-73d5-4fe6-bd1c-b9ee43237cb2",
+      "ResourceType": "AWS::CloudFront::ResponseHeadersPolicy",
+      "LastUpdatedTimestamp": "2026-09-27T16:13:39.535000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "OriginAccess",
+      "PhysicalResourceId": "E24GFBI0RLQ1BA",
+      "ResourceType": "AWS::CloudFront::OriginAccessControl",
+      "LastUpdatedTimestamp": "2026-09-27T16:13:39.330000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "ProductionPublisher",
+      "PhysicalResourceId": "packproof-desktop-updates-ProductionPublisher-XoHCSIIT9Fj8",
+      "ResourceType": "AWS::IAM::Role",
+      "LastUpdatedTimestamp": "2026-09-27T16:14:10.660000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "ReleaseBucket",
+      "PhysicalResourceId": "packproof-desktop-updates-releasebucket-ta0fwf6zaesv",
+      "ResourceType": "AWS::S3::Bucket",
+      "LastUpdatedTimestamp": "2026-09-27T16:13:52.699000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "ReleaseBucketPolicy",
+      "PhysicalResourceId": "packproof-desktop-updates-releasebucket-ta0fwf6zaesv",
+      "ResourceType": "AWS::S3::BucketPolicy",
+      "LastUpdatedTimestamp": "2026-09-27T16:17:01.074000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "StagingPublisher",
+      "PhysicalResourceId": "packproof-desktop-updates-StagingPublisher-eBqfL1b5eMsR",
+      "ResourceType": "AWS::IAM::Role",
+      "LastUpdatedTimestamp": "2026-09-27T16:14:10.770000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    },
+    {
+      "LogicalResourceId": "UncachedMetadata",
+      "PhysicalResourceId": "1e5fcdc4-a4b9-4e32-b859-cfeda299d1e9",
+      "ResourceType": "AWS::CloudFront::CachePolicy",
+      "LastUpdatedTimestamp": "2026-09-27T16:13:39.251000+00:00",
+      "ResourceStatus": "CREATE_COMPLETE",
+      "DriftInformation": {
+        "StackResourceDriftStatus": "NOT_CHECKED"
+      }
+    }
+  ],
+  "distribution": {
+    "id": "E2A8FXU3T18IM8",
+    "status": "Deployed",
+    "enabled": false,
+    "aliases": {
+      "Quantity": 0
+    },
+    "domainName": "d12zduvn2secdh.cloudfront.net",
+    "origins": {
+      "Quantity": 1,
+      "Items": [
+        {
+          "Id": "release-s3",
+          "DomainName": "packproof-desktop-updates-releasebucket-ta0fwf6zaesv.s3.us-east-1.amazonaws.com",
+          "OriginPath": "",
+          "CustomHeaders": {
+            "Quantity": 0
+          },
+          "S3OriginConfig": {
+            "OriginAccessIdentity": "",
+            "OriginReadTimeout": 30
+          },
+          "ConnectionAttempts": 3,
+          "ConnectionTimeout": 10,
+          "OriginShield": {
+            "Enabled": false
+          },
+          "OriginAccessControlId": "E24GFBI0RLQ1BA"
+        }
+      ]
+    },
+    "viewerCertificate": {
+      "CloudFrontDefaultCertificate": true,
+      "SSLSupportMethod": "vip",
+      "MinimumProtocolVersion": "TLSv1",
+      "CertificateSource": "cloudfront"
+    }
+  },
+  "privateBucket": {
+    "name": "packproof-desktop-updates-releasebucket-ta0fwf6zaesv",
+    "isPublic": false,
+    "publicAccess": {
+      "BlockPublicAcls": true,
+      "IgnorePublicAcls": true,
+      "BlockPublicPolicy": true,
+      "RestrictPublicBuckets": true
+    },
+    "encryption": {
+      "Rules": [
+        {
+          "ApplyServerSideEncryptionByDefault": {
+            "SSEAlgorithm": "AES256"
+          },
+          "BucketKeyEnabled": false,
+          "BlockedEncryptionTypes": {
+            "EncryptionType": [
+              "SSE-C"
+            ]
+          }
+        }
+      ]
+    },
+    "versioning": {
+      "Status": "Enabled"
+    },
+    "ownership": {
+      "OwnershipControls": {
+        "Rules": [
+          {
+            "ObjectOwnership": "BucketOwnerEnforced"
+          }
+        ]
+      }
+    },
+    "bucketPolicy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "OnlyThisDistributionCanReadReleaseObjects",
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "cloudfront.amazonaws.com"
+          },
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::packproof-desktop-updates-releasebucket-ta0fwf6zaesv/desktop/*",
+          "Condition": {
+            "StringEquals": {
+              "AWS:SourceArn": "arn:aws:cloudfront::784514617543:distribution/E2A8FXU3T18IM8"
+            }
+          }
+        },
+        {
+          "Sid": "DenyInsecureTransport",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            "arn:aws:s3:::packproof-desktop-updates-releasebucket-ta0fwf6zaesv",
+            "arn:aws:s3:::packproof-desktop-updates-releasebucket-ta0fwf6zaesv/*"
+          ],
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "certificate": {
+    "CertificateArn": "arn:aws:acm:us-east-1:784514617543:certificate/6c64a421-6e58-4791-a537-a006ab629ed0",
+    "DomainName": "downloads.thepackproof.com",
+    "DomainValidationOptions": [
+      {
+        "DomainName": "downloads.thepackproof.com",
+        "ValidationDomain": "downloads.thepackproof.com",
+        "ValidationStatus": "PENDING_VALIDATION",
+        "ResourceRecord": {
+          "Name": "_66ba0fc7c91ec654796c2b2e3327b7f2.downloads.thepackproof.com.",
+          "Type": "CNAME",
+          "Value": "_5e83e4d50fe06dead01d399a99934692.wzccmgtwzk.acm-validations.aws."
+        },
+        "ValidationMethod": "DNS"
+      }
+    ],
+    "Status": "PENDING_VALIDATION",
+    "InUseBy": []
+  },
+  "health": {
+    "bucket": "packproof-desktop-updates-releasebucket-ta0fwf6zaesv",
+    "key": "desktop/health.json",
+    "sha256": "756856d7f3ba32e944a092ba4d49bd57c417cbcff66a940ab0bb2419e1a92c62",
+    "checksumSHA256": "dWhW1/O6MulEoJK6TUm9V8QXy8/2apQKsLskGeGpLGI=",
+    "versionId": "2wulHhddiTKe9olFkyqzwAudu.6J8nYI",
+    "contentLength": 58,
+    "contentType": "application/json",
+    "cacheControl": "no-cache,no-store,must-revalidate",
+    "serverSideEncryption": "AES256",
+    "headVerified": true,
+    "onlyObjectIsHealth": true,
+    "distributionEnabled": false,
+    "aliases": [],
+    "externallyAvailable": false,
+    "put": {
+      "ETag": "\"5c2c508790d938b118a11a852718dd3b\"",
+      "ChecksumSHA256": "dWhW1/O6MulEoJK6TUm9V8QXy8/2apQKsLskGeGpLGI=",
+      "ChecksumType": "FULL_OBJECT",
+      "ServerSideEncryption": "AES256",
+      "VersionId": "2wulHhddiTKe9olFkyqzwAudu.6J8nYI"
+    }
+  },
+  "existingWebsiteObservedUnchanged": {
+    "id": "E1TWYI3YRLSHTD",
+    "status": "Deployed",
+    "enabled": true,
+    "aliases": {
+      "Quantity": 0
+    },
+    "domainName": "dvpmnwc27i8tw.cloudfront.net",
+    "origins": {
+      "Quantity": 1,
+      "Items": [
+        {
+          "Id": "web-s3",
+          "DomainName": "packproof-v2-staging-web-784514617543.s3.us-east-1.amazonaws.com",
+          "OriginPath": "",
+          "CustomHeaders": {
+            "Quantity": 0
+          },
+          "S3OriginConfig": {
+            "OriginAccessIdentity": "",
+            "OriginReadTimeout": 30
+          },
+          "ConnectionAttempts": 3,
+          "ConnectionTimeout": 10,
+          "OriginShield": {
+            "Enabled": false
+          },
+          "OriginAccessControlId": "E3NUP6NBEJHZR6"
+        }
+      ]
+    },
+    "viewerCertificate": {
+      "CloudFrontDefaultCertificate": true,
+      "SSLSupportMethod": "vip",
+      "MinimumProtocolVersion": "TLSv1",
+      "CertificateSource": "cloudfront"
+    }
+  },
+  "externalDnsChanged": false,
+  "applicationArtifactsPublished": false,
+  "actualGithubOidcAssumeRoleVerified": false
+}

@@ -33,11 +33,31 @@ export async function validateCapturedMediaStream(body:Readable,contentType:stri
     const args=['-v','error','-max_alloc','67108864','-protocol_whitelist','file,pipe','-count_packets','-show_entries','stream=codec_type,codec_name,nb_read_packets,width,height:format=duration','-of','json',filename];
     // Linux production images require util-linux/prlimit. No unsandboxed parser
     // fallback: a missing resource limiter is an availability failure.
-    const result=process.platform==='linux'
-      ?await run('prlimit',['--as=536870912','--cpu=25','--fsize=1048576','--nofile=64','--','ffprobe',...args],{timeout:30_000,killSignal:'SIGKILL',maxBuffer:256*1024,env:{PATH:process.env.PATH,LANG:'C'}})
-      :await run('ffprobe',args,{timeout:30_000,killSignal:'SIGKILL',maxBuffer:256*1024,env:{PATH:process.env.PATH,LANG:'C'}});
+    const probe=(probeArgs:string[],maxBuffer=256*1024)=>process.platform==='linux'
+      ?run('prlimit',['--as=536870912','--cpu=25','--fsize=1048576','--nofile=64','--','ffprobe',...probeArgs],{timeout:30_000,killSignal:'SIGKILL',maxBuffer,env:{PATH:process.env.PATH,LANG:'C'}})
+      :run('ffprobe',probeArgs,{timeout:30_000,killSignal:'SIGKILL',maxBuffer,env:{PATH:process.env.PATH,LANG:'C'}});
+    const result=await probe(args);
     const media=JSON.parse(result.stdout) as {format?:{duration?:string};streams?:Array<{codec_type?:string;codec_name?:string;nb_read_packets?:string;width?:number;height?:number}>};
-    const duration=Number(media.format?.duration),maxDuration=expected.maxDurationMs??300_000;
+    let duration=Number(media.format?.duration);
+    const maxDuration=expected.maxDurationMs??300_000;
+    // MediaRecorder emits streaming WebM without a duration header. Derive its
+    // duration from encoded video packet timing, not the client's wall clock,
+    // while retaining the exact original file and the same parser resource limits.
+    if(!Number.isFinite(duration)&&contentType.split(';')[0].trim().toLowerCase()==='video/webm'){
+      const packets=await probe(['-v','error','-max_alloc','67108864','-protocol_whitelist','file,pipe','-select_streams','v:0','-show_packets','-show_entries','packet=pts_time,duration_time','-of','csv=p=0',filename],1024*1024);
+      if(packets.stderr.trim())throw new DomainError('INVALID_CAPTURE_MEDIA','The recording packet timeline could not be validated',422);
+      let first:number|undefined,last:number|undefined,lastStep=0,end=0;
+      for(const line of packets.stdout.trim().split('\n')){
+        const [rawTime,rawDuration]=line.trim().split(',');
+        const time=Number(rawTime),packetDuration=Number(rawDuration);
+        if(!rawTime||!Number.isFinite(time)||(last!==undefined&&time<last))throw new DomainError('INVALID_CAPTURE_MEDIA','The recording has an invalid video timeline',422);
+        if(first===undefined)first=time;
+        if(last!==undefined&&time>last)lastStep=time-last;
+        last=time;
+        end=Math.max(end,time+(Number.isFinite(packetDuration)&&packetDuration>0?packetDuration:lastStep));
+      }
+      duration=first===undefined?NaN:end-first;
+    }
     if(!Number.isFinite(duration)||duration<=0||duration*1000>maxDuration||result.stderr.trim()||!media.streams?.some(s=>s.codec_type==='video'&&s.codec_name&&Number(s.nb_read_packets)>0&&Number(s.width)>0&&Number(s.height)>0&&Number(s.width)*Number(s.height)<=33_554_432))throw new DomainError('INVALID_CAPTURE_MEDIA','The recording is incomplete, exceeds its capture limit, or has no supported playable video stream',422);
     return {durationMs:Math.ceil(duration*1000)};
   }catch(error){

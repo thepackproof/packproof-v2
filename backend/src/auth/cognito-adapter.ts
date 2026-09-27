@@ -17,6 +17,7 @@ export interface CognitoTokenClaims {
   aud?: string | string[];
   iss: string;
   exp: number;
+  auth_time?: number;
   email?: string;
   email_verified?: boolean;
 }
@@ -50,6 +51,7 @@ export function createCognitoJwtVerifier(input: {
           client_id: access.client_id,
           iss: access.iss,
           exp: access.exp,
+          auth_time: access.auth_time,
         };
       } catch {
         const id = await idVerifier.verify(token);
@@ -61,6 +63,7 @@ export function createCognitoJwtVerifier(input: {
           email_verified: id.email_verified === true,
           iss: id.iss,
           exp: id.exp,
+          auth_time: id.auth_time,
         };
       }
     },
@@ -96,6 +99,7 @@ export class CognitoJwtAdapter implements AuthenticationAdapter {
     }
 
     const userId = await ensureIdentityUser(this.db, this.clock, "cognito", claims.sub);
+    await requireCurrentSession(this.db,userId,claims.auth_time);
     if (claims.token_use === "id") {
       const verifiedEmail = claims.email_verified === true && typeof claims.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claims.email) && claims.email.length <= 254
         ? claims.email.trim().toLowerCase() : null;
@@ -111,6 +115,15 @@ export class CognitoJwtAdapter implements AuthenticationAdapter {
         }
       });
     }
-    return { userId };
+    return { userId, ...(typeof claims.auth_time === "number" ? {authenticatedAt:claims.auth_time} : {}) };
   }
+}
+
+/** auth_time survives token refresh. A valid JWT from a revoked sign-in is denied
+ * on every authenticated API request, even after the account is re-enabled. */
+export async function requireCurrentSession(db:Database,userId:string,authenticatedAt:unknown):Promise<void>{
+  const row=(await db.query<{sessions_revoked_before:Date|string|null}>('SELECT sessions_revoked_before FROM users WHERE id=$1',[userId])).rows[0];
+  if(!row)throw new DomainError('UNAUTHENTICATED','This account is unavailable',401);
+  if(row.sessions_revoked_before&&(typeof authenticatedAt!=="number"||!Number.isFinite(authenticatedAt)||authenticatedAt<=Math.floor(new Date(row.sessions_revoked_before).getTime()/1000)))
+    throw new DomainError('SESSION_REVOKED','Sign in again to continue',401);
 }

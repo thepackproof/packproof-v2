@@ -1,0 +1,316 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: PackProof desktop release distribution. Private versioned S3, signed CloudFront origin requests, and isolated GitHub publish roles. Provision disabled before DNS validation; activate this same distribution only after its ACM certificate is issued.
+
+Parameters:
+  DownloadsDomain:
+    Type: String
+    Default: downloads.thepackproof.com
+    AllowedValues: [downloads.thepackproof.com]
+  CertificateArn:
+    Type: String
+    AllowedPattern: '^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[a-f0-9-]{36}$'
+    Description: Existing ACM certificate for downloads.thepackproof.com in us-east-1. Must be ISSUED before ActivateDownloadsDomain=true. Certificate is separately managed and retained.
+  ActivateDownloadsDomain:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['false', 'true']
+    Description: False provisions the final distribution disabled, without aliases or custom TLS. Set true only after ACM validation and DNS are ready.
+  GitHubRepositorySubject:
+    Type: String
+    Default: thepackproof/packproof-v2
+    AllowedValues: [thepackproof/packproof-v2]
+  GitHubImmutableRepositorySubject:
+    Type: String
+    Default: thepackproof@314726215/packproof-v2@1349680833
+    AllowedValues: [thepackproof@314726215/packproof-v2@1349680833]
+    Description: Exact immutable repository identity already present in the account's existing GitHub deploy trust; no repository wildcard is accepted.
+
+Conditions:
+  DownloadsDomainActive: !Equals [!Ref ActivateDownloadsDomain, 'true']
+
+Resources:
+  ReleaseBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteReleaseUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - {Key: Application, Value: PackProof}
+        - {Key: Component, Value: DesktopUpdates}
+        - {Key: ManagedBy, Value: CloudFormation}
+
+  OriginAccess:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-desktop-s3'
+        Description: Sign every desktop release origin request; S3 remains private.
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ArtifactCache:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-artifacts'
+        Comment: Respect immutable Cache-Control on versioned binaries; never force caching against no-store metadata.
+        MinTTL: 0
+        DefaultTTL: 60
+        MaxTTL: 31536000
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: false
+          EnableAcceptEncodingGzip: false
+          CookiesConfig: {CookieBehavior: none}
+          HeadersConfig: {HeaderBehavior: none}
+          QueryStringsConfig: {QueryStringBehavior: none}
+
+  UncachedMetadata:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-metadata'
+        Comment: Update pointers and readiness checks must fetch current bytes.
+        MinTTL: 0
+        DefaultTTL: 0
+        MaxTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: false
+          EnableAcceptEncodingGzip: false
+          CookiesConfig: {CookieBehavior: none}
+          HeadersConfig: {HeaderBehavior: none}
+          QueryStringsConfig: {QueryStringBehavior: none}
+
+  DownloadHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-download-headers'
+        SecurityHeadersConfig:
+          ContentTypeOptions: {Override: true}
+          FrameOptions: {FrameOption: DENY, Override: true}
+          ReferrerPolicy: {ReferrerPolicy: no-referrer, Override: true}
+          ContentSecurityPolicy: {ContentSecurityPolicy: "default-src 'none'; frame-ancestors 'none'; sandbox", Override: true}
+          StrictTransportSecurity: {AccessControlMaxAgeSec: 31536000, IncludeSubdomains: false, Preload: false, Override: true}
+        CustomHeadersConfig:
+          Items:
+            - {Header: X-PackProof-Distribution, Value: desktop-updates-v1, Override: true}
+
+  MetadataHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-metadata-headers'
+        SecurityHeadersConfig:
+          ContentTypeOptions: {Override: true}
+          FrameOptions: {FrameOption: DENY, Override: true}
+          ReferrerPolicy: {ReferrerPolicy: no-referrer, Override: true}
+          ContentSecurityPolicy: {ContentSecurityPolicy: "default-src 'none'; frame-ancestors 'none'; sandbox", Override: true}
+          StrictTransportSecurity: {AccessControlMaxAgeSec: 31536000, IncludeSubdomains: false, Preload: false, Override: true}
+        CustomHeadersConfig:
+          Items:
+            - {Header: Cache-Control, Value: 'no-cache,no-store,must-revalidate', Override: true}
+            - {Header: X-PackProof-Distribution, Value: desktop-updates-v1, Override: true}
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: PackProof desktop installers and verified update metadata only.
+        Enabled: !If [DownloadsDomainActive, true, false]
+        Aliases: !If [DownloadsDomainActive, [!Ref DownloadsDomain], !Ref 'AWS::NoValue']
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: release-s3
+            DomainName: !GetAtt ReleaseBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccess.Id
+            S3OriginConfig: {OriginAccessIdentity: ''}
+        DefaultCacheBehavior:
+          TargetOriginId: release-s3
+          ViewerProtocolPolicy: https-only
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: false
+          CachePolicyId: !Ref ArtifactCache
+          ResponseHeadersPolicyId: !Ref DownloadHeaders
+        CacheBehaviors:
+          - PathPattern: desktop/*/latest*.yml
+            TargetOriginId: release-s3
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            Compress: false
+            CachePolicyId: !Ref UncachedMetadata
+            ResponseHeadersPolicyId: !Ref MetadataHeaders
+          - PathPattern: desktop/health.json
+            TargetOriginId: release-s3
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            Compress: false
+            CachePolicyId: !Ref UncachedMetadata
+            ResponseHeadersPolicyId: !Ref MetadataHeaders
+        CustomErrorResponses:
+          - {ErrorCode: 403, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 404, ErrorCachingMinTTL: 0}
+        ViewerCertificate: !If
+          - DownloadsDomainActive
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+      Tags:
+        - {Key: Application, Value: PackProof}
+        - {Key: Component, Value: DesktopUpdates}
+
+  ReleaseBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReleaseBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: OnlyThisDistributionCanReadReleaseObjects
+            Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: s3:GetObject
+            Resource: !Sub '${ReleaseBucket.Arn}/desktop/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: [!GetAtt ReleaseBucket.Arn, !Sub '${ReleaseBucket.Arn}/*']
+            Condition:
+              Bool: {aws:SecureTransport: 'false'}
+
+  StagingPublisher:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /packproof/desktop/
+      Description: Publish verified desktop staging artifacts only; cannot alter production, health, DNS, signing credentials, or infrastructure.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:ref: refs/heads/main
+                token.actions.githubusercontent.com:repository_id: '1349680833'
+                token.actions.githubusercontent.com:repository_owner_id: '314726215'
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubRepositorySubject}:environment:desktop-staging-publish'
+                  - !Sub 'repo:${GitHubImmutableRepositorySubject}:environment:desktop-staging-publish'
+      Policies:
+        - PolicyName: PublishStagingReleasesOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListOnlyStagingPrefix
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ReleaseBucket.Arn
+                Condition:
+                  StringLike: {s3:prefix: ['desktop/staging/*']}
+              - Sid: StagingObjectsOnly
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:AbortMultipartUpload, s3:ListMultipartUploadParts]
+                Resource: !Sub '${ReleaseBucket.Arn}/desktop/staging/*'
+      Tags:
+        - {Key: Application, Value: PackProof}
+        - {Key: Component, Value: DesktopUpdates}
+        - {Key: Channel, Value: staging}
+
+  ProductionPublisher:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /packproof/desktop/
+      Description: Publish verified desktop production artifacts only after protected environment approval; cannot alter staging, health, DNS, signing credentials, or infrastructure.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:ref: refs/heads/main
+                token.actions.githubusercontent.com:repository_id: '1349680833'
+                token.actions.githubusercontent.com:repository_owner_id: '314726215'
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubRepositorySubject}:environment:desktop-production-publish'
+                  - !Sub 'repo:${GitHubImmutableRepositorySubject}:environment:desktop-production-publish'
+      Policies:
+        - PolicyName: PublishProductionReleasesOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListOnlyProductionPrefix
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ReleaseBucket.Arn
+                Condition:
+                  StringLike: {s3:prefix: ['desktop/production/*']}
+              - Sid: ProductionObjectsOnly
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:AbortMultipartUpload, s3:ListMultipartUploadParts]
+                Resource: !Sub '${ReleaseBucket.Arn}/desktop/production/*'
+      Tags:
+        - {Key: Application, Value: PackProof}
+        - {Key: Component, Value: DesktopUpdates}
+        - {Key: Channel, Value: production}
+
+Outputs:
+  ActivationState:
+    Description: Disabled until the same distribution is explicitly updated with the validated downloads certificate and alias.
+    Value: !If [DownloadsDomainActive, ACTIVE, DISABLED_PENDING_DNS]
+  ReleaseBucketName:
+    Description: Set PACKPROOF_RELEASE_BUCKET in both protected publish environments.
+    Value: !Ref ReleaseBucket
+  CloudFrontDistributionId:
+    Description: New isolated desktop distribution; do not reuse the existing website distribution.
+    Value: !Ref Distribution
+  CloudFrontDomainName:
+    Description: Add external DNS-only CNAME downloads.thepackproof.com to this target after deployment.
+    Value: !GetAtt Distribution.DomainName
+  HealthUrl:
+    Description: Bootstrap health.json after DNS and distribution checks, before release publication.
+    Value: !Sub 'https://${DownloadsDomain}/desktop/health.json'
+  StagingPublishRoleArn:
+    Description: PACKPROOF_RELEASE_ROLE_ARN for desktop-staging-publish only.
+    Value: !GetAtt StagingPublisher.Arn
+  ProductionPublishRoleArn:
+    Description: PACKPROOF_RELEASE_ROLE_ARN for desktop-production-publish only.
+    Value: !GetAtt ProductionPublisher.Arn

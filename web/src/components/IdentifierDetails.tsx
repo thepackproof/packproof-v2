@@ -1,7 +1,8 @@
 import type { IdentifierResolution } from '../../../backend/src/identifiers/types';
 import { formatWhen } from '../format';
+import type { IdentifierProjection } from '../api/identifier-types';
+export type { IdentifierProjection } from '../api/identifier-types';
 
-export type IdentifierProjection = {schemaVersion:1;coverage:string;reviewRequired:boolean;observations:IdentifierResolution[]};
 const states:Record<string,string>={MATCH:'Observed identifier matches the selected order',RESOLVED_PRODUCT:'Item details found in the connected store',CONFLICT:'This code does not match the selected order',AMBIGUOUS:'Several records use this code',STALE:'Item details may be out of date',FORBIDDEN:'Item details unavailable',UNKNOWN:'Code read; item details unavailable',UNSUPPORTED:'This code is not supported for item details'};
 export function IdentifierDetails({value,onJump}:{value:IdentifierProjection|null|undefined;onJump?:(sessionId:string,milliseconds:number)=>void}) {
   if(!value)return null;

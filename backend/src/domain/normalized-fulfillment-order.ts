@@ -41,6 +41,10 @@ export interface NormalizedFulfillmentOrder {
   requiresPhysicalFulfillment: boolean;
   cancelled: boolean;
   onHold?: boolean;
+  /** Trusted Shopify fulfillment-order readiness; does not assert payment. */
+  merchantFulfillmentReady?: boolean;
+  /** The one merchant fulfillment assignment represented by the item snapshot. */
+  shopifyRemainingFulfillmentOrderId?: string;
   pilotCaptureExclusion?: string | null;
   packages?: Array<{externalFulfillmentId:string|null;trackingNumber:string|null;lineItems:Array<{id:string|null;quantity:number|null}>}>;
   items: NormalizedOrderItem[];
@@ -126,6 +130,9 @@ export function parseNormalizedFulfillmentOrder(input: unknown): NormalizedFulfi
     requiresPhysicalFulfillment: record.requiresPhysicalFulfillment === true,
     cancelled: record.cancelled === true,
     onHold: record.onHold === true,
+    ...(provider === "shopify" && record.merchantFulfillmentReady === true ? { merchantFulfillmentReady: true } : {}),
+    ...(provider === "shopify" && record.merchantFulfillmentReady === true && record.shopifyRemainingFulfillmentOrderId
+      ? { shopifyRemainingFulfillmentOrderId: normalizeRequiredText(record.shopifyRemainingFulfillmentOrderId, "shopifyRemainingFulfillmentOrderId", 200) } : {}),
     packages: Array.isArray(record.packages) ? record.packages.map(value=>{const p=asRecord(value);return {
       externalFulfillmentId:normalizeOptionalText(p.externalFulfillmentId,"packages.externalFulfillmentId",200),
       trackingNumber:normalizeOptionalText(p.trackingNumber,"packages.trackingNumber",200),
@@ -167,6 +174,8 @@ export function fulfillmentOrderFingerprint(order: NormalizedFulfillmentOrder): 
       requiresPhysicalFulfillment: order.requiresPhysicalFulfillment,
       cancelled: order.cancelled,
       onHold: order.onHold ?? false,
+      ...(order.merchantFulfillmentReady ? { merchantFulfillmentReady: true } : {}),
+      ...(order.shopifyRemainingFulfillmentOrderId ? { shopifyRemainingFulfillmentOrderId: order.shopifyRemainingFulfillmentOrderId } : {}),
       ...(order.pilotCaptureExclusion ? {pilotCaptureExclusion:order.pilotCaptureExclusion} : {}),
       packages: order.packages ?? [],
       items: order.items,
@@ -181,7 +190,12 @@ export function fulfillmentOrderFingerprint(order: NormalizedFulfillmentOrder): 
 }
 
 export function eligibilityOf(order: NormalizedFulfillmentOrder): FulfillmentEligibility {
-  return order.pilotCaptureExclusion ? "INELIGIBLE" : decideFulfillmentEligibility(order);
+  if (order.pilotCaptureExclusion) return "INELIGIBLE";
+  // A merchant can fulfill COD, authorized or manual-payment Shopify orders.
+  // Preserve their PENDING payment state while trusting the provider's ready
+  // fulfillment assignment. Other providers retain the paid-order rule.
+  const pendingMerchantWork = order.provider === "shopify" && order.merchantFulfillmentReady === true && order.paymentState === "PENDING";
+  return decideFulfillmentEligibility(pendingMerchantWork ? { ...order, paymentState: "CONFIRMED" } : order);
 }
 
 export function fulfillmentOrderToImportedTransaction(
@@ -196,12 +210,15 @@ export function fulfillmentOrderToImportedTransaction(
     externalReference: order.externalReference ?? order.externalOrderId,
     transactionDate: order.orderedAt.slice(0, 10),
     itemTitle: summary.itemTitle,
-    itemDescription: summary.itemDescription,
+    itemDescription: order.shopifyRemainingFulfillmentOrderId ? `Remaining shipment${summary.itemDescription ? ` — ${summary.itemDescription}` : ""}` : summary.itemDescription,
     quantity: summary.quantity,
     transactionValue: order.transactionValue ?? summary.transactionValue,
     currency: order.currency ?? summary.currency,
     shipping: order.shipping,
     items: order.items,
+    ...(order.provider === "shopify" && order.shopifyRemainingFulfillmentOrderId ? {
+      providerIdentifiers: { orderId: order.externalOrderId, fulfillmentScope: "REMAINING_SHIPMENT" as const, fulfillmentOrderId: order.shopifyRemainingFulfillmentOrderId },
+    } : {}),
     buyer: order.buyer
       ? {
           externalId: order.buyer.externalId,

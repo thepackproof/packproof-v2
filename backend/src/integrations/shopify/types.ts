@@ -1,6 +1,11 @@
 export interface ShopifyTokenSet {
   accessToken: string;
   scope: string;
+  // Optional only for previously stored non-expiring custom-app authorizations
+  // and legacy adapters. The HTTP client requires an expiring offline response.
+  refreshToken?: string;
+  expiresInSeconds?: number;
+  refreshTokenExpiresInSeconds?: number;
 }
 
 export interface ShopifyShopIdentity {
@@ -12,11 +17,20 @@ export interface ShopifyShopIdentity {
 
 export interface ShopifyOrder {
   id: string;
+  test: boolean;
   name: string | null;
   createdAt: string | null;
   updatedAt?: string | null;
   cancelledAt: string | null;
   fulfillmentHolds?: boolean;
+  fulfillmentOrders: Array<{
+    id: string;
+    status: string;
+    requestStatus: string;
+    deliveryMethodType: string | null;
+    merchantManaged: boolean;
+    lineItems: Array<{ id: string; orderLineItemId: string; remainingQuantity: number; requiresShipping: boolean }>;
+  }>;
   fulfillments?: Array<{ id: string | null; trackingNumber: string | null; lineItems: Array<{id:string|null;quantity:number|null}> }>;
   financialStatus: string | null;
   fulfillmentStatus: string | null;
@@ -59,6 +73,12 @@ export interface ShopifyClient {
     clientId: string;
     clientSecret: string;
     code: string;
+  }): Promise<ShopifyTokenSet>;
+  refreshUserToken?(input: {
+    shop: string;
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
   }): Promise<ShopifyTokenSet>;
   getShop(input: { shop: string; accessToken: string }): Promise<ShopifyShopIdentity>;
   listOrders(input: { shop: string; accessToken: string; limit?: number; includeProductIdentifiers?: boolean }): Promise<ShopifyOrder[]>;

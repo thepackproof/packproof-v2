@@ -8,6 +8,7 @@ export function captureCapabilities(release: ReleaseIdentity, durableReceiptsReq
     identifiers: {schemaVersions:[1],policyVersion:1,productionQualified:false,limits:{maxPayloadBytes:4096,maxEventsPerBatch:50,maxBatchBytes:131072,maxSessionObservations:512,reservedShippingObservations:16},source:'AUTHORIZED_ORDER_INDEX',paidLookupCalls:0},
     captureEngine: {schemas:["packproof.capture/1"],coreVersions:["1.0.0"],intentTtlSeconds:600,productionQualified:false,experimentalDetectorsEnabled:false},
     capture: { protocolVersions: [1], maxBytes: 250_000_000, maxDurationSeconds: 300, maxActiveUploads: 2 },
+    desktopCapture: {registrationVersions:[1],client:'DESKTOP_CAMERA',surface:'DESKTOP',maxBytes:250_000_000,maxDurationSeconds:300,timingProvenance:'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED',registrationTiming:'POST_CAPTURE_CLIENT_REPORTED'},
     accountDeletion: { requestSupported: true },
     correctionPolicy: { importedFactsReadOnly: true, captureBindingLocksManualDetails: true },
     shippingReview: { requiredForObservedConflicts: true, noLabelAllowed: true },

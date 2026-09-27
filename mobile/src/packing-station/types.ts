@@ -73,6 +73,7 @@ export interface StationCaptureRef {
 }
 
 export interface StationOrderContext {
+  fulfillmentScope?: "REMAINING_SHIPMENT";
   transactionId: string;
   proofId: string;
   proofStatus: string;

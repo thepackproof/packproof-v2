@@ -2,7 +2,7 @@ export const LEGAL_LAST_UPDATED = "September 1, 2026";
 
 /** Visible until a legal entity and contact addresses are confirmed. */
 export const LEGAL_ENTITY_PLACEHOLDER = "[LEGAL ENTITY NAME — developer review]";
-export const PRIVACY_CONTACT_PLACEHOLDER = "[PRIVACY CONTACT EMAIL — developer review]";
+export const PRIVACY_CONTACT_EMAIL = "admin@thepackproof.com";
 export const LEGAL_CONTACT_PLACEHOLDER = "[LEGAL / SUPPORT CONTACT EMAIL — developer review]";
 export const MAILING_ADDRESS_PLACEHOLDER = "[MAILING ADDRESS — developer review]";
 export const GOVERNING_LAW_PLACEHOLDER = "[GOVERNING LAW AND VENUE — developer review]";
@@ -49,15 +49,15 @@ export const privacyPolicy: LegalDocument = {
   title: "Privacy Policy",
   description:
     "How PackProof collects, uses, stores, and retains information for accounts, marketplace connections, and evidentiary records.",
-  lastUpdated: "September 8, 2026",
+  lastUpdated: "September 27, 2026",
   sections: [
     {
       id: "who-we-are",
       title: "1. Who we are",
       paragraphs: [
-        `This Privacy Policy describes how ${LEGAL_ENTITY_PLACEHOLDER} (“PackProof,” “we,” “us”) handles information in connection with the PackProof service, including the PackProof API, the first-party web application, and the mobile client.`,
+        `This Privacy Policy describes how ${LEGAL_ENTITY_PLACEHOLDER} (“PackProof,” “we,” “us”) handles information in connection with the PackProof service, including the PackProof API, the first-party web application, the mobile client, and the Windows and macOS desktop applications.`,
         "PackProof is evidence infrastructure. It records, timestamps, hashes, stores, and retrieves transaction-bound records (“Proofs”). PackProof does not adjudicate disputes, determine liability, or independently verify that marketplace-supplied transaction claims, packing statements, or carrier events are true in the real world.",
-        `Questions about this policy: ${PRIVACY_CONTACT_PLACEHOLDER}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
+        `Questions about this policy: ${PRIVACY_CONTACT_EMAIL}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
       ],
     },
     {
@@ -88,6 +88,7 @@ export const privacyPolicy: LegalDocument = {
       paragraphs: [
         "PackProof maps a verified sign-in identity to your PackProof user. We store the identity provider name and the provider’s subject identifier. We do not treat email address as a key that merges separate accounts.",
         "In production deployments, account sign-in is handled by Amazon Cognito. PackProof receives tokens needed to authenticate API requests. The web application keeps the current tab’s session in the browser’s sessionStorage. The password you type into PackProof’s hosted sign-in form is sent to Cognito, not stored by the PackProof API as your account password.",
+        "The desktop application also sends sign-in credentials to Cognito. It keeps authentication tokens and profile information in encrypted local application storage protected by the operating system so you can resume your session. It does not save the password you enter. Signing out removes the saved desktop session; it does not erase previously staged recordings, cached records, or server-side Proofs.",
         "Development environments may use a separate development sign-in adapter. That adapter is not the production authentication system.",
       ],
     },
@@ -163,7 +164,7 @@ export const privacyPolicy: LegalDocument = {
       id: "oauth-credentials",
       title: "12. OAuth authorization and refresh credentials",
       paragraphs: [
-        "When you authorize a marketplace, PackProof receives authorization and refresh credentials from that provider. Those credentials are stored only on the server. They are not returned to the web or mobile client, embedded in client configuration, or written onto Proof records.",
+        "When you authorize a marketplace, PackProof receives authorization and refresh credentials from that provider. Those marketplace credentials are stored only on the server. They are not returned to the web, mobile, or desktop client, embedded in client configuration, or written onto Proof records. They are separate from the PackProof sign-in tokens a client uses to authenticate to our API.",
         "Connection records store a credential reference, not the token values themselves.",
       ],
     },
@@ -196,7 +197,7 @@ export const privacyPolicy: LegalDocument = {
       title: "15. Data minimization",
       paragraphs: [
         "PackProof is designed to store what the product needs to authenticate you, authorize access, import the orders you select, record evidence and attestations, and preserve a retrievable integrity record.",
-        "Marketplace import stores provider identifiers and fields the provider actually returned. PackProof does not synthesize buyer, price, or tracking values. OAuth tokens are not copied into Proof manifests or client storage. Proof tables do not store Firebase, Cognito, Google, or Apple identifiers as Proof identity; those subjects map through separate identity records.",
+        "Marketplace import stores provider identifiers and fields the provider actually returned. PackProof does not synthesize buyer, price, or tracking values. Marketplace OAuth tokens are not copied into Proof manifests or client storage. Proof tables do not store Firebase, Cognito, Google, or Apple identifiers as Proof identity; those subjects map through separate identity records.",
       ],
     },
     {
@@ -217,8 +218,21 @@ export const privacyPolicy: LegalDocument = {
       ],
     },
     {
+      id: "desktop",
+      title: "18. Desktop applications on Windows and macOS",
+      paragraphs: [
+        "Camera, microphone, and labels. Opening the Packing Station requests access to the camera you select and displays a live preview. Audio is off by default. If you enable audio, the selected microphone is also active while that preview is open, and its audio is included when you record. Preview alone does not save a recording. Recording begins when you start a capture, and camera and microphone access ends when you leave the Packing Station or quit. Hiding the window in the tray or menu bar does not itself close an active preview. Recordings may contain people, voices, addresses, shipping labels, and other details in view. Barcode recognition runs on your computer; detected values, formats, recording offsets, and your label confirmations are submitted with the completed capture.",
+        "Local storage and background work. The desktop application encrypts staged original recordings and their queue metadata in its application-data directory. Authentication tokens, the local encryption key, settings, and cached account, Proof, order, and integration information use operating-system-protected encrypted storage. The application separates queued evidence and cached records by PackProof account. It can retain an offline recording and resume its upload after connectivity returns while the originating account is signed in. Choosing to continue in the background keeps uploads and account-status checks running in the tray or menu bar. Quitting stops that work until the application opens again.",
+        "Capture metadata. When a recording is submitted, PackProof receives its account and Proof association, original bytes, size and hash, detected label information, your declaration, a randomly generated installation identifier, app version, operating-system family, selected camera label, capture start and end times, and whether the app reported being offline. Desktop timing and device details are client-reported; they are not independent verification of the recording time, hardware, or your legal identity.",
+        "Local retention. By default, a completed recording becomes eligible for local media cleanup 24 hours after the server confirms its commit, once finalization also succeeds. Settings also offer cleanup after confirmation or after seven days. Cleanup runs while the relevant account is signed in and queue processing is active, so a copy can remain longer when the app is closed or processing is paused. Pending, failed, and interrupted recordings are retained until they can be completed or you explicitly discard an eligible local recording. Cleanup and discard remove local media chunks, not the encrypted queue-history metadata. Cached records and queue history do not currently have automatic age-based deletion. Signing out, upgrading, or uninstalling does not erase the retained application data. This local retention is separate from server-side retention of Proofs and evidence.",
+        "Sharing and exports. Creating a share link requires the current recipient preview and your explicit approval to share original recordings and future updates. Desktop links have a selected expiry of one, seven, or thirty days. Anyone with the link can access its authorized content until access ends; revocation cannot recall downloaded copies or screenshots. A Proof export or diagnostic file is saved to the location you choose outside the protected queue. Those files are not covered by the queue's automatic cleanup and may be accessible to other people or software with access to that location.",
+        "Diagnostics and reporting. The desktop app keeps rotating local logs of coded operational events, timestamps, app version, and operating-system family. An exported diagnostic report also includes architecture, configuration and connection status, available and staged byte counts, unreadable-job count, and update and reporting state. It does not include recording contents or account, Proof, order, tracking, or camera identifiers. If a staging or production build is configured for centralized reporting, it automatically sends limited error reports to PackProof's Sentry project: a fixed error category and code, app version, release channel, operating-system family, and a random event identifier, with ordinary report transport metadata. Automatic reports exclude recordings, audio, attachments, authentication tokens, account and shipment identifiers, camera and installation identifiers, exception text, stack traces, filesystem paths, and screen/session replay. Development builds do not send these reports. Settings shows whether reporting is enabled; the notification preference does not control error reporting. As with other HTTPS services, the receiving provider can observe connection metadata such as source IP address and request time.",
+        "Notifications and updates. While you are signed in, the app checks for Proof-attention and marketplace-sync changes and can show generic operating-system notifications without shipment details. You can disable desktop notifications in Settings. Configured packaged releases check their update service and can download an update when you request it; these requests expose ordinary network and platform/update-request metadata to the distribution provider. The app does not send evidence or account credentials to the update service. Encryption and account separation reduce access risk but do not protect against every action by software, administrators, or people who can access your operating-system account.",
+      ],
+    },
+    {
       id: "use",
-      title: "18. How PackProof uses collected data",
+      title: "19. How PackProof uses collected data",
       paragraphs: [
         "We use the information described in this policy to:",
       ],
@@ -236,7 +250,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "source-labels",
-      title: "19. How marketplace and provider information is distinguished from PackProof facts",
+      title: "20. How marketplace and provider information is distinguished from PackProof facts",
       paragraphs: [
         "Every value on a Proof is treated as one of three kinds:",
       ],
@@ -251,14 +265,14 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "no-sale",
-      title: "20. PackProof does not sell personal data",
+      title: "21. PackProof does not sell personal data",
       paragraphs: [
         "PackProof does not sell personal data. PackProof does not share personal data for cross-context behavioral advertising.",
       ],
     },
     {
       id: "disconnect",
-      title: "21. Disconnecting marketplace integrations",
+      title: "22. Disconnecting marketplace integrations",
       paragraphs: [
         "You may disconnect a marketplace connection such as eBay from PackProof. When you do, PackProof deletes stored OAuth credentials for that connection and disables the connection so PackProof can no longer call that provider on your behalf. The same disconnect control applies to Shopify shops and to Google or Meta/Facebook identity links.",
         "Imported transactions, Proofs, evidence, attestations, manifests, and audit events that already exist are not deleted by disconnecting a marketplace.",
@@ -266,7 +280,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "account-deletion",
-      title: "22. Account deletion requests",
+      title: "23. Account deletion requests",
       paragraphs: [
         "You may request deletion of your PackProof account in Account → Privacy & account, or at /new/delete-account in the web application. Sign in and confirm the request. This starts a review and does not immediately erase your account or retained evidentiary records.",
         "We will review account deletion requests. Access credentials and connection tokens associated with your account can be removed or disabled. PackProof may still retain finalized evidentiary records as described below.",
@@ -274,7 +288,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "provider-deletion",
-      title: "23. Provider account deletion notifications",
+      title: "24. Provider account deletion notifications",
       paragraphs: [
         "Some providers, including eBay, may notify PackProof that a user closed their provider account. When PackProof processes such a notification, it deletes stored OAuth credentials for matching connections, disables those connections, and anonymizes the stored provider display reference.",
         "Provider account closure does not, by itself, delete PackProof Proofs, evidence bytes, manifests, or audit events. Provider account data and PackProof evidentiary records are separate.",
@@ -282,7 +296,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "retention",
-      title: "24. Retention of finalized evidentiary records",
+      title: "25. Retention of finalized evidentiary records",
       paragraphs: [
         "A Proof is a persistent, server-side record. Navigation, logout, capture UI state, and local device storage do not delete or invalidate a Proof.",
         "After a Proof is finalized, PackProof rejects mutation of Proof status, committed evidence, attestations, core transaction facts, and the canonical manifest. PackProof may retain finalized evidentiary records, committed evidence objects, hashes, timestamps, provenance, and audit events where it has a legitimate operational, security, legal, or integrity reason to preserve them—including so that other participants can still retrieve the same record, and so that PackProof can maintain an append-only history.",
@@ -291,16 +305,16 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "security",
-      title: "25. Security practices",
+      title: "26. Security practices",
       paragraphs: [
         "PackProof uses HTTPS for the hosted API and web application. Durable Proof changes authenticate, authorize, load the Proof, validate the transition, and persist in a database transaction with constraints and audit events.",
         "Evidence bytes are stored in an object store. Canonical domain state is stored in PostgreSQL. Marketplace tokens are stored server-side as described above. The public web bundle does not contain API secrets or database credentials.",
-        `These practices reduce risk; they are not a guarantee that unauthorized access, loss, or alteration cannot occur. You should notify us promptly at ${PRIVACY_CONTACT_PLACEHOLDER} if you believe your account or a connection has been compromised.`,
+        `These practices reduce risk; they are not a guarantee that unauthorized access, loss, or alteration cannot occur. You should notify us promptly at ${PRIVACY_CONTACT_EMAIL} if you believe your account or a connection has been compromised.`,
       ],
     },
     {
       id: "processors",
-      title: "26. Third-party service providers",
+      title: "27. Third-party service providers",
       paragraphs: [
         "PackProof uses service providers to operate the product. Depending on configuration, these include:",
       ],
@@ -311,6 +325,7 @@ export const privacyPolicy: LegalDocument = {
         "Google, when you choose to link a Google identity (this is not Cognito sign-in)",
         "Meta/Facebook, when you choose to link a Facebook identity (this is not Cognito sign-in and is not Facebook Marketplace import)",
         "EasyPost, when a staging or test tracking adapter is configured for shipment observations",
+        "Sentry, when a desktop staging or production build is configured to send limited coded error reports",
       ],
       closingParagraphs: [
         "Providers process information according to their terms and PackProof’s instructions where applicable. PackProof does not control a marketplace’s or carrier’s own data practices.",
@@ -318,15 +333,15 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "rights",
-      title: "27. Your rights and how to contact us",
+      title: "28. Your rights and how to contact us",
       paragraphs: [
         "Depending on where you live, you may have rights to request access to, correction of, or deletion of personal information, or to object to or restrict certain processing. PackProof will consider requests as required by applicable law, subject to the retention of evidentiary records described above and to verification of the requester’s identity.",
-        `To make a request, contact ${PRIVACY_CONTACT_PLACEHOLDER}. If we deny a request in whole or in part, we will explain the reason we are able to provide, including where retention is required to preserve a finalized Proof or to protect the rights of another participant.`,
+        `To make a request, contact ${PRIVACY_CONTACT_EMAIL}. If we deny a request in whole or in part, we will explain the reason we are able to provide, including where retention is required to preserve a finalized Proof or to protect the rights of another participant.`,
       ],
     },
     {
       id: "changes",
-      title: "28. Changes to this policy",
+      title: "29. Changes to this policy",
       paragraphs: [
         "We may update this Privacy Policy from time to time. The “Last updated” date at the top of this page will change when we do. The current version is published at the /new/privacy path of the PackProof web application.",
         "If we make material changes, we may also provide additional notice in the product when practical. Continued use of PackProof after an update means the updated policy applies to that ongoing use.",
@@ -475,7 +490,7 @@ export const termsOfService: LegalDocument = {
       id: "contact",
       title: "16. Contact",
       paragraphs: [
-        `For these Terms: ${LEGAL_CONTACT_PLACEHOLDER}. For privacy requests: ${PRIVACY_CONTACT_PLACEHOLDER}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
+        `For these Terms: ${LEGAL_CONTACT_PLACEHOLDER}. For privacy requests: ${PRIVACY_CONTACT_EMAIL}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
       ],
     },
   ],

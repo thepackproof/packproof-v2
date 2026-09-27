@@ -1,5 +1,5 @@
 export interface IntakeItem { title: string | null; description?: string | null; quantity: number | null; variant?: string | null; }
-export interface IntakeSnapshot { id: string; version: number; digest: string; proofId: string; transactionId: string; items: IntakeItem[]; store: string; orderReference: string; sourceKind: string; }
+export interface IntakeSnapshot { id: string; version: number; digest: string; proofId: string; transactionId: string; items: IntakeItem[]; store: string; orderReference: string; sourceKind: string; fulfillmentScope?: string; }
 export interface IntakeOrder { observationId: string; readiness: 'RECEIVED' | 'NEEDS_INFORMATION' | 'READY' | 'QUARANTINED' | 'ARCHIVED'; reasons: string[]; transactionId: string | null; proofId: string | null; snapshot: IntakeSnapshot | null; }
 export interface CaptureSessionGrant { id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string; identifierPolicy?: import('../../../backend/src/identifiers/types').IdentifierPolicy; }
 export interface IntakeAcceptance { session: CaptureSessionGrant; proofId: string; transactionId: string; orderSnapshot: IntakeSnapshot; }
