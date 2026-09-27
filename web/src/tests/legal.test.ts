@@ -69,7 +69,7 @@ describe("public legal documents", () => {
   it("emits static HTML that a CloudFront URL checker can read without javascript", () => {
     const html = renderLegalHtml(privacyPolicy, ".page-legal { max-width: 46rem; }");
     expect(html).toContain("<h1>Privacy Policy</h1>");
-    expect(html).toContain("Last updated September 8, 2026");
+    expect(html).toContain("Last updated September 27, 2026");
     expect(html).toContain("/new/terms");
     expect(html).toContain("/brand/packproof-symbol.svg");
     expect(html).not.toContain('<input type="password"');

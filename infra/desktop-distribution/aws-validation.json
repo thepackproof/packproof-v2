@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-27",
+  "checkedAt": "2026-09-27T16:20:01.590Z",
   "account": "784514617543",
   "region": "us-east-1",
   "policyValidation": {
@@ -119,13 +119,23 @@
     "inUseBy": [],
     "createdAt": "2026-09-27T12:32:28.176000+00:00"
   },
-  "distributionDeployed": false,
+  "distributionDeployed": true,
   "dnsChanged": false,
   "templateValidation": {
     "passed": true,
     "capabilities": [
       "CAPABILITY_IAM"
-    ]
+    ],
+    "templateSha256": "1623ccea208496246d171ed75b020d0329c7ede7d642ae428afaedcbc411287e",
+    "cloudFormationLintVersion": "1.57.0",
+    "cloudFormationLintFindings": 0,
+    "guardRulesPassed": 4,
+    "createChangeSet": "desktop-disabled-20260927-v1",
+    "changeSetValidated": true,
+    "changeSetAdditions": 10,
+    "changeSetModifications": 0,
+    "changeSetDeletions": 0,
+    "describeEventsValidationFailures": 0
   },
   "immutableIdentityConditions": {
     "repository_id": "1349680833",
@@ -133,8 +143,21 @@
     "ref": "refs/heads/main"
   },
   "immutableIdentityReview": {
-    "awsResourcesMutated": false,
+    "awsResourcesMutated": true,
     "cloudFormationLintFindings": 0,
-    "guardRulesPassed": 4
-  }
+    "guardRulesPassed": 4,
+    "mutationContext": "The reviewed new desktop stack is now created; existing roles and website resources were not changed.",
+    "officialClaimMappingConfirmed": true,
+    "reference": "https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_iam-condition-keys.html"
+  },
+  "templateSha256": "1623ccea208496246d171ed75b020d0329c7ede7d642ae428afaedcbc411287e",
+  "distributionEnabled": false,
+  "activationState": "DISABLED_PENDING_DNS",
+  "stackStatus": "CREATE_COMPLETE",
+  "resourceCount": 10,
+  "healthBootstrapVerified": true,
+  "applicationArtifactsPublished": false,
+  "actualGitHubOidcAssumeRoleVerified": false,
+  "policyValidationScope": "Previously validated final policy documents remain unchanged by the disabled activation switch. Deployed IAM trust/permissions and the resolved bucket policy were subsequently verified through AWS APIs; these validation findings do not represent a GitHub OIDC login test.",
+  "deploymentReceipt": "deployment-status.json"
 }

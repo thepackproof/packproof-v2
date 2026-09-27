@@ -288,7 +288,7 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByRole("heading", { name: "Privacy Policy" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
     expect(screen.getAllByText(/does not sell personal data/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Last updated September 8, 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/Last updated September 27, 2026/)).toBeInTheDocument();
   });
 
   it("renders terms of service from a direct URL without signing in", async () => {

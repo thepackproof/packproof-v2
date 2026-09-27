@@ -54,6 +54,8 @@ macOS stores the corresponding application data under `~/Library/Application Sup
 
 The installer updates application files. It does not delete the evidence queue on upgrades or uninstall. This deliberate retention prevents uncommitted evidence loss; uninstall is not an evidence-erasure operation. Use the app's explicit discard/retention controls before removing local evidence.
 
+The [desktop privacy and retention review](docs/privacy.md) maps camera/audio, cached records, original staging, sharing and diagnostics to the implementation. Retention removes eligible media chunks; encrypted queue history and caches persist. The public privacy-policy source includes these distinctions, and publication remains a separate step.
+
 ## Security and release behavior
 
 The packaging configuration enables ASAR integrity and disables Electron's RunAsNode, NODE_OPTIONS and CLI inspection fuses in packaged executables. It uses the existing PackProof icon. Windows requests current-user privileges. macOS uses hardened runtime with camera/audio-input usage descriptions and JIT entitlements; it does not request broad filesystem or address-book access.

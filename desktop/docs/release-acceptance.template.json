@@ -88,6 +88,11 @@
       "id": "privacy-review",
       "status": "pending",
       "evidence": ""
+    },
+    {
+      "id": "centralized-error-reporting-delivery",
+      "status": "pending",
+      "evidence": ""
     }
   ]
 }

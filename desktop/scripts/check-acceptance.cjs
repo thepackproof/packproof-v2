@@ -6,7 +6,7 @@ const required = [
   'live-barcode-and-usb-scanner', 'hash-upload-commit-manifest', 'offline-reconnect-and-restart',
   'machine-restart-and-disk-full', 'expired-upload-authorization', 'marketplace-orders-and-tracking',
   'signed-updater-preserves-queue', 'capture-not-interrupted-by-update', 'high-dpi-and-accessibility',
-  'recording-upload-soak', 'privacy-review',
+  'recording-upload-soak', 'privacy-review', 'centralized-error-reporting-delivery',
 ];
 
 function validateAcceptance(report, expectedCommit) {

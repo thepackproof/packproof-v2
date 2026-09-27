@@ -11,6 +11,8 @@
 
 The build workflow uses the protected environments `desktop-staging` and `desktop-production`. Publication uses `desktop-staging-publish` and `desktop-production-publish`. Repository administrators must actually configure these environments: a matching YAML name alone does not create review or branch protection. Restrict production to approved release refs, require an authorized reviewer, prevent self-review as appropriate, and scope publication OIDC to the corresponding environment subject. Do not put signing credentials at an unrestricted repository scope.
 
+Follow [protected signing setup](SIGNING_SETUP.md) for the exact GitHub environment contract, default-branch workflow requirement, Azure OIDC option, Apple identities and reporting activation. Configuration is not proof that the external identities or acceptance tests exist.
+
 ## Public environment variables
 
 In each build environment, configure the values for that environment:
@@ -22,6 +24,7 @@ In each build environment, configure the values for that environment:
 | `PACKPROOF_COGNITO_REGION` | Existing Cognito region |
 | `PACKPROOF_COGNITO_CLIENT_ID` | Public app-client ID; no client secret |
 | `PACKPROOF_COGNITO_USER_POOL_ID` | Existing user pool ID |
+| `PACKPROOF_SENTRY_DSN` | Public hosted reporting DSN; required for production, with delivery acceptance verified separately |
 | `WINDOWS_PUBLISHER_NAME` | Exact Common Name of the Windows signing certificate |
 | `APPLE_TEAM_ID` | Organization team ID to verify against signed bundles/installers |
 
@@ -33,8 +36,8 @@ Unsigned CI can connect to an approved development/staging backend through repos
 
 | Secret | Purpose |
 |---|---|
-| `WINDOWS_CERTIFICATE_P12` | Exportable Windows code-signing certificate as the electron-builder-supported PFX/P12 content or secure path |
-| `WINDOWS_CERTIFICATE_PASSWORD` | Password for that certificate |
+| `WINDOWS_CERTIFICATE_P12` | Existing exportable Windows PFX/P12 identity for the default `pfx` signing provider; not used by Azure signing |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Password for that PFX/P12 identity; not used by Azure signing |
 | `APPLE_DEVELOPER_ID_APPLICATION_P12` | Developer ID Application certificate with private key |
 | `APPLE_DEVELOPER_ID_APPLICATION_PASSWORD` | Application certificate password |
 | `APPLE_DEVELOPER_ID_INSTALLER_P12` | Developer ID Installer certificate, required when PKG is enabled |
@@ -42,7 +45,7 @@ Unsigned CI can connect to an approved development/staging backend through repos
 | `APPLE_NOTARIZATION_ID` | Apple account authorized for notarization |
 | `APPLE_NOTARIZATION_PASSWORD` | App-specific Apple password |
 
-An iOS distribution certificate or App Store provisioning profile cannot sign a Developer ID desktop release. The build never invents a publisher or team identity. For a Windows certificate protected by a hardware token or a cloud signing provider, extend the dedicated signing configuration and its corresponding fail-closed checks; do not export an unexportable key or disable verification.
+An iOS distribution certificate or App Store provisioning profile cannot sign a Developer ID desktop release. The build never invents a publisher or team identity. Set `PACKPROOF_WINDOWS_SIGNING_PROVIDER=azure` and the documented protected environment variables to use an existing Azure Artifact Signing identity through GitHub OIDC without exporting its private key. Other hardware/cloud providers need a separately validated signing integration; do not export an unexportable key or disable verification.
 
 For organizations using App Store Connect API-key notarization, the scripts also support `APPLE_API_KEY` (temporary `.p8` path), `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` plus `APPLE_TEAM_ID`. Add an approved CI step that materializes the key into the runner's temporary directory with restricted access, and delete it after the build. Never place it under `desktop/`, include it in artifacts or print it. The supplied workflow uses the app-specific-password route.
 
@@ -72,6 +75,16 @@ An update must not install during a capture. Pending jobs must be durably persis
 
 macOS app signing/notarization occurs before ZIP creation, so the updater ZIP contains the stapled application. DMG notarization/stapling runs before update metadata hashing. PKG uses Developer ID Installer signing and separate notarization. `verify-artifacts.cjs` checks all three outputs before producing the release report.
 
+## Installed acceptance kit
+
+Use [INSTALLED_ACCEPTANCE_KIT.md](INSTALLED_ACCEPTANCE_KIT.md) for the compact
+per-platform operator sequence. `scripts/prepare-acceptance-kit.cjs` verifies the
+exact candidate inventories and installer bytes, then creates a worksheet and
+acceptance report with every required gate pending. It never logs in, executes
+hardware tests, approves a result, or weakens the production publication gate.
+Keep previously disabled acceptance accounts disabled; obtain separately
+authorized QA prerequisites from their owners.
+
 ## Required acceptance matrix
 
 No entry below is considered passed merely because this file or its automation exists.
@@ -92,7 +105,7 @@ No entry below is considered passed merely because this file or its automation e
 | Soak | Repeated captures/uploads across a packing shift; bounded memory, closed tracks/file handles, no continuously growing logs |
 | Privacy | Camera/audio, local staging, device metadata, diagnostics and retention agree with published disclosures; no secrets or videos in telemetry |
 
-Attach operating-system/build versions, camera/scanner models, observed outcomes and relevant redacted logs to each result. CI's native launch report verifies packaged-main startup and renderer/preload execution on a fresh development profile with sandboxing retained. Secure-storage availability is reported independently; login and physical recording remain untested. Its synthetic installer sentinel verifies installer file retention only. Neither check proves durable evidence recovery or server commitment.
+Attach operating-system/build versions, camera/scanner models, observed outcomes and relevant redacted logs to each result. The native CI harness verifies two real process launches with independent renderer/preload readiness, normal quit/relaunch, and reopening unchanged OS-protected installation material on its own fresh development profile. Windows runs the registered installed executable and verifies its executable/application bytes against the packaged candidate before reinstall/uninstall retention checks. macOS still launches the app from packaging output; DMG installation and clean-machine Gatekeeper remain separate. Reports explicitly leave authentication, hardware and real queued-evidence recovery untested. The installer sentinel and protected installation material are not a real recording. These checks prove only the behavior observed by a successful exact-source CI run; the scripts' existence is not a pass.
 
 ## References checked for this implementation
 

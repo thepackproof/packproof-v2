@@ -17,15 +17,23 @@ The main process uses an isolated `@sentry/node` client pinned in the lockfile.
 No global Sentry initialization or automatic instrumentation runs. Data
 collection, local-variable capture, hostname collection, breadcrumbs, client
 reports, request instrumentation, logs, metrics and tracing are disabled.
-The final event filter reconstructs the report from allowed fields, discarding
-any unrelated SDK or global-scope context. Shutdown reporting is bounded and
-reporting failure never blocks evidence preservation.
+The final event filter reconstructs the report from allowed fields. A private
+current scope and a final transport filter additionally rebuild the whole
+envelope, removing SDK-added attachments, sessions and inherited header context.
+The actual SDK serializer is tested with contaminated scopes and SDK hooks.
+Shutdown reporting is bounded and reporting failure never blocks evidence
+preservation. Normal HTTPS connection metadata still reaches the provider;
+verify its IP handling and retention settings before activation.
 
 Operators should provision a PackProof-owned Sentry project, set the public DSN
 in the protected staging release configuration, trigger one coded test failure
 and confirm its fields in that project before production activation. There is
 no configured project or certified delivery until that operational check is
 complete. Local redacted diagnostics remain available without Sentry.
+
+See [monitoring activation](monitoring-activation.md) for the fixed-code canary
+CLI and independent project-readback procedure. A successful transport response
+is an ingest acknowledgment; it does not by itself satisfy delivery acceptance.
 
 SDK references:
 

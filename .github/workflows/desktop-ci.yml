@@ -62,15 +62,16 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs
+      - run: node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs tests/native-launch-harness.test.cjs tests/acceptance-kit.test.cjs
       - run: npm run build
       - name: Build isolated development installers
         run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
       - name: Verify inventory and mark unsigned candidate
         run: node scripts/verify-artifacts.cjs
-      - name: Launch packaged application and verify renderer readiness
+      - name: Launch packaged application twice and verify protected installation restart
+        if: matrix.platform != 'win32'
         run: node scripts/native-launch-smoke.cjs
-      - name: Exercise silent current-user install, reinstall and uninstall
+      - name: Exercise installed Windows launch/restart, reinstall and uninstall
         if: matrix.platform == 'win32'
         run: pwsh -NoProfile -NonInteractive -File scripts/smoke-install-windows.ps1
       - uses: actions/upload-artifact@v4

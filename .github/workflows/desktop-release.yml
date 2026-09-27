@@ -28,6 +28,9 @@ jobs:
   signed:
     name: Signed ${{ inputs.channel }} / ${{ matrix.platform }} / ${{ matrix.arch }}
     environment: desktop-${{ inputs.channel }}
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -62,8 +65,15 @@ jobs:
       PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_COGNITO_USER_POOL_ID }}
       PACKPROOF_UPDATES_URL: https://downloads.thepackproof.com/desktop/${{ inputs.channel }}/${{ matrix.platform }}/${{ matrix.arch }}/
       WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
-      WIN_CSC_LINK: ${{ matrix.platform == 'win32' && secrets.WINDOWS_CERTIFICATE_P12 || '' }}
-      WIN_CSC_KEY_PASSWORD: ${{ matrix.platform == 'win32' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+      PACKPROOF_WINDOWS_SIGNING_PROVIDER: ${{ vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER || 'pfx' }}
+      WIN_CSC_LINK: ${{ matrix.platform == 'win32' && vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER != 'azure' && secrets.WINDOWS_CERTIFICATE_P12 || '' }}
+      WIN_CSC_KEY_PASSWORD: ${{ matrix.platform == 'win32' && vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER != 'azure' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+      AZURE_TENANT_ID: ${{ matrix.platform == 'win32' && vars.AZURE_TENANT_ID || '' }}
+      AZURE_CLIENT_ID: ${{ matrix.platform == 'win32' && vars.AZURE_CLIENT_ID || '' }}
+      AZURE_SUBSCRIPTION_ID: ${{ matrix.platform == 'win32' && vars.AZURE_SUBSCRIPTION_ID || '' }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+      AZURE_TRUSTED_SIGNING_PROFILE: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
       CSC_LINK: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_APPLICATION_P12 || '' }}
       CSC_KEY_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_APPLICATION_PASSWORD || '' }}
       CSC_INSTALLER_LINK: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_INSTALLER_P12 || '' }}
@@ -80,6 +90,14 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Refuse missing signing and environment configuration
         run: node scripts/release-policy.cjs
+      - name: Authenticate the protected Windows cloud signer with GitHub OIDC
+        if: matrix.platform == 'win32' && env.PACKPROOF_WINDOWS_SIGNING_PROVIDER == 'azure'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: false
       - run: npm ci
       - run: npm run typecheck
       - run: npm test

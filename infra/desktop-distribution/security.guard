@@ -25,7 +25,15 @@ rule encrypted_downloads when %distributions !empty {
   %distributions.Properties.DistributionConfig {
     DefaultCacheBehavior.ViewerProtocolPolicy == 'https-only'
     CacheBehaviors[*].ViewerProtocolPolicy == 'https-only'
-    ViewerCertificate.MinimumProtocolVersion == 'TLSv1.2_2021'
+    Enabled.'Fn::If'[0] == 'DownloadsDomainActive'
+    Enabled.'Fn::If'[1] == true
+    Enabled.'Fn::If'[2] == false
+    Aliases.'Fn::If'[0] == 'DownloadsDomainActive'
+    Aliases.'Fn::If'[2].Ref == 'AWS::NoValue'
+    ViewerCertificate.'Fn::If'[0] == 'DownloadsDomainActive'
+    ViewerCertificate.'Fn::If'[1].MinimumProtocolVersion == 'TLSv1.2_2021'
+    ViewerCertificate.'Fn::If'[1].AcmCertificateArn.Ref == 'CertificateArn'
+    ViewerCertificate.'Fn::If'[2].CloudFrontDefaultCertificate == true
   }
 }
 let cache_policies = Resources.*[ Type == 'AWS::CloudFront::CachePolicy' ]

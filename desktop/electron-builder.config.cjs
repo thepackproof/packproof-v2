@@ -1,4 +1,4 @@
-const { releaseContext, checkReleaseEnvironment } = require('./scripts/release-policy.cjs');
+const { releaseContext, checkReleaseEnvironment, windowsSigningOptions } = require('./scripts/release-policy.cjs');
 
 const release = releaseContext();
 const signed = release.channel !== 'development';
@@ -40,11 +40,7 @@ module.exports = {
     requestedExecutionLevel: 'asInvoker',
     signExecutable: signed,
     verifyUpdateCodeSignature: true,
-    signtoolOptions: signed ? {
-      publisherName: process.env.WINDOWS_PUBLISHER_NAME,
-      signingHashAlgorithms: ['sha256'],
-      rfc3161TimeStampServer: 'http://timestamp.digicert.com',
-    } : undefined,
+    ...(signed ? windowsSigningOptions() : {}),
   },
   nsis: {
     artifactName: `${release.artifactPrefix}-Setup-\${version}.exe`,

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: PackProof desktop release distribution. Private versioned S3, signed CloudFront origin requests, and isolated GitHub publish roles. Deploy in us-east-1 only after the DNS-validated ACM certificate is issued.
+Description: PackProof desktop release distribution. Private versioned S3, signed CloudFront origin requests, and isolated GitHub publish roles. Provision disabled before DNS validation; activate this same distribution only after its ACM certificate is issued.
 
 Parameters:
   DownloadsDomain:
@@ -9,7 +9,12 @@ Parameters:
   CertificateArn:
     Type: String
     AllowedPattern: '^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[a-f0-9-]{36}$'
-    Description: Existing ISSUED ACM certificate for downloads.thepackproof.com in us-east-1. Certificate is separately managed and retained.
+    Description: Existing ACM certificate for downloads.thepackproof.com in us-east-1. Must be ISSUED before ActivateDownloadsDomain=true. Certificate is separately managed and retained.
+  ActivateDownloadsDomain:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['false', 'true']
+    Description: False provisions the final distribution disabled, without aliases or custom TLS. Set true only after ACM validation and DNS are ready.
   GitHubRepositorySubject:
     Type: String
     Default: thepackproof/packproof-v2
@@ -19,6 +24,9 @@ Parameters:
     Default: thepackproof@314726215/packproof-v2@1349680833
     AllowedValues: [thepackproof@314726215/packproof-v2@1349680833]
     Description: Exact immutable repository identity already present in the account's existing GitHub deploy trust; no repository wildcard is accepted.
+
+Conditions:
+  DownloadsDomainActive: !Equals [!Ref ActivateDownloadsDomain, 'true']
 
 Resources:
   ReleaseBucket:
@@ -129,8 +137,8 @@ Resources:
     Properties:
       DistributionConfig:
         Comment: PackProof desktop installers and verified update metadata only.
-        Enabled: true
-        Aliases: [!Ref DownloadsDomain]
+        Enabled: !If [DownloadsDomainActive, true, false]
+        Aliases: !If [DownloadsDomainActive, [!Ref DownloadsDomain], !Ref 'AWS::NoValue']
         HttpVersion: http2and3
         IPV6Enabled: true
         PriceClass: PriceClass_100
@@ -167,10 +175,12 @@ Resources:
         CustomErrorResponses:
           - {ErrorCode: 403, ErrorCachingMinTTL: 0}
           - {ErrorCode: 404, ErrorCachingMinTTL: 0}
-        ViewerCertificate:
-          AcmCertificateArn: !Ref CertificateArn
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
+        ViewerCertificate: !If
+          - DownloadsDomainActive
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
       Tags:
         - {Key: Application, Value: PackProof}
         - {Key: Component, Value: DesktopUpdates}
@@ -283,6 +293,9 @@ Resources:
         - {Key: Channel, Value: production}
 
 Outputs:
+  ActivationState:
+    Description: Disabled until the same distribution is explicitly updated with the validated downloads certificate and alias.
+    Value: !If [DownloadsDomainActive, ACTIVE, DISABLED_PENDING_DNS]
   ReleaseBucketName:
     Description: Set PACKPROOF_RELEASE_BUCKET in both protected publish environments.
     Value: !Ref ReleaseBucket
