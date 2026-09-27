@@ -9,7 +9,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const root=resolve(__dirname,'../dist/renderer');
   const out=resolve(process.env.SMOKE_OUTPUT||'artifacts/renderer-smoke');await mkdir(out,{recursive:true});
   const server=createServer(async(req,res)=>{
-    try{const name=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname==='/'?'/index.html':new URL(req.url,'http://localhost').pathname));if(!name.startsWith(root+sep))throw Error('outside root');const data=await readFile(name);res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm'}[extname(name)]||'application/octet-stream'));res.end(data);}catch{res.writeHead(404);res.end();}
+    try{if(req.url==='/__smoke/original.webm'){res.setHeader('content-type','video/webm');res.end(await readFile(resolve(__dirname,'../../backend/tests/fixtures/desktop-streaming.webm')));return;}const name=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname==='/'?'/index.html':new URL(req.url,'http://localhost').pathname));if(!name.startsWith(root+sep))throw Error('outside root');const data=await readFile(name);res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm'}[extname(name)]||'application/octet-stream'));res.end(data);}catch{res.writeHead(404);res.end();}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   let browser;
@@ -28,11 +28,11 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
       const session={userId:'test-user',email:'test@example.invalid',profile:{userId:'test-user',username:'testoperator',displayName:'Test Operator',status:'ACTIVE',createdAt:now,updatedAt:now}};
       const settings={cameraId:'',microphoneId:'',audio:false,resolution:'1080p',frameRate:30,retentionHours:24,notifications:true,scannerSuffix:'Enter',theme:'light'};
       const state={version:'1.0.0-test',platform:'win32',environment:'staging',online:true,configured:true,secureStorage:true,pendingOtherAccounts:false,settings,update:{state:'idle'}};
-      const smoke={calls:[],jobs:[],chunks:[],finish:null,interrupt:null};window.__smoke=smoke;
+      const smoke={calls:[],jobs:[],chunks:[],finish:null,interrupt:null,sharePreviews:0,shareRequests:[],mediaRequests:[],rejectShare:false};window.__smoke=smoke;
       const emit=event=>listeners.forEach(fn=>fn(event));
       window.packproof={
         auth:{state:async()=>authenticated?session:null,signIn:async()=>{authenticated=true;return session;},signOut:async()=>{authenticated=false;emit({type:'session'});},signUp:async input=>({email:input.email,userConfirmed:false}),confirmSignUp:async()=>{},resendCode:async()=>{},forgotPassword:async()=>{},resetPassword:async()=>{}},
-        proofs:{list:async()=>[summary],detail:async()=>detail,create:async()=>detail,finalize:async()=>({...detail,status:'FINALIZED',finalizedAt:now}),share:async()=>({url:'https://thepackproof.com/proof/test-fixture'}),export:async()=>({saved:true}),evidenceUrl:async()=>''},
+        proofs:{list:async()=>[summary],detail:async()=>detail,create:async()=>detail,finalize:async()=>({...detail,status:'FINALIZED',finalizedAt:now}),sharePreview:async()=>{smoke.sharePreviews++;return {proofId:'test-proof',status:'FINALIZED',tracker:{itemTitle:'Public recipient item title',headline:'Carrier reported delivery',shipment:{carrier:'USPS'},milestones:[{code:'DELIVERED',label:'Public carrier delivery milestone',occurredAt:now}]},chronology:[{id:'public-activity',title:'Recording saved',occurredAt:now,category:'PROOF',source:'PACKPROOF',eventType:'EVIDENCE_COMMITTED'}],recordTracking:{carrier:'USPS',status:'DELIVERED',lastUpdatedAt:now,source:'SHIPPING_PROVIDER_API',syncState:'UP_TO_DATE',events:[{id:'public-shipping',eventType:'DELIVERED',occurredAt:now,source:'SHIPPING_PROVIDER_API',provider:'shippo'}]},disclosure:{viewHash:smoke.sharePreviews.toString(16).padStart(64,'0'),scopeVersion:1,fields:['status','order','shipping','evidence','statements'],liveProof:true,sharingNotice:'Anyone with this link can view original recordings and future updates until access ends.',revocationNotice:'Revoking a link prevents future access. It cannot recall saved files.'},evidence:[{evidenceId:'test-root-original',slot:'Packing',label:'Original packing recording',committed:true,representation:'ORIGINAL',contentType:'video/webm'},{evidenceId:'test-stage-original',stageId:'test-return-stage',slot:'Return receipt',label:'Original return receipt recording',committed:true,representation:'ORIGINAL',contentType:'video/webm'}]};},share:async(id,input)=>{smoke.shareRequests.push({id,...input});if(input.originalsReviewed!==true)throw new Error('Explicit review required');if(smoke.rejectShare){smoke.rejectShare=false;throw new Error('Review the latest recipient preview before creating this link');}return {url:'https://thepackproof.com/p/test-fixture',expiresAt:input.expiresAt};},export:async()=>({saved:true}),evidenceUrl:async(id,evidenceId,previewHash)=>{smoke.mediaRequests.push({id,evidenceId,previewHash});return '/__smoke/original.webm';}},
         orders:{list:async()=>[order],resolve:async()=>({proofId:'test-proof'}),sync:async()=>{}},
         integrations:{list:async()=>({accounts:[{id:'test-account',provider:'shopify',providerDisplay:'Shopify',externalAccountId:'test',externalAccountName:'Test store',status:'CONNECTED',scopes:[],expiresAt:null,capabilities:{identity:false,transactions:true,fulfillment:true,shipping:false,webhooks:true},limitations:[],createdAt:now,updatedAt:now,disconnectedAt:null}],providers:[{provider:'shopify',providerDisplay:'Shopify',enabled:true,capabilities:{identity:false,transactions:true,fulfillment:true,shipping:false,webhooks:true},limitations:[],multipleAccounts:false,requiresShop:true}]}),connect:async()=>{smoke.calls.push('connect');}},
         capture:{begin:async input=>{const id='test-recording-'+(smoke.jobs.length+1);smoke.calls.push('begin');smoke.jobs.unshift({id,proofId:input.proofId,label:input.label,state:'RECORDING',progress:0,byteSize:0,createdAt:now});return {id,maxRecordingBytes:128*1024*1024,maxRecordingSeconds:120};},append:async(id,sequence,bytes)=>{smoke.chunks.push({id,sequence,byteLength:bytes.byteLength,header:Array.from(new Uint8Array(bytes).slice(0,4))});const job=smoke.jobs.find(item=>item.id===id);job.byteSize+=bytes.byteLength;},finish:async(id,input)=>{smoke.finish=input;smoke.calls.push('finish');smoke.jobs.find(item=>item.id===id).state='COMPLETE';smoke.jobs.find(item=>item.id===id).progress=100;emit({type:'queue'});emit({type:'notification',title:'Evidence committed',message:'Test fixture recording secured by PackProof.'});},interrupt:async(id,reason)=>{smoke.interrupt=reason;smoke.jobs.find(item=>item.id===id).state='INTERRUPTED';emit({type:'queue'});}},
@@ -46,6 +46,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.getByRole('heading',{name:'Home',exact:true}).waitFor();
     await page.getByRole('button',{name:'TEST-1048',exact:true}).first().waitFor();
+    if(!process.env.SHARE_SMOKE_ONLY){
     const workerFile=(await readdir(resolve(root,'assets'))).find(file=>/^identifier-worker.*\.js$/.test(file));
     const decoded=await page.evaluate(async workerFile=>{
       const value='5901234123457',left=['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
@@ -57,13 +58,48 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
       return await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{worker.terminate();reject(new Error('Bundled barcode decoder timed out'));},15000);worker.onerror=event=>{clearTimeout(timer);worker.terminate();reject(new Error(event.message));};worker.onmessage=event=>{clearTimeout(timer);worker.terminate();resolve(event.data);};worker.postMessage({id:1,bitmap},[bitmap]);});
     },workerFile);
     assert.ok(decoded.result.codes.some(code=>code.rawText==='5901234123457'),'bundled local WASM barcode recognition');
+    }
     assert.equal(await page.locator('body').evaluate(element=>element.scrollWidth<=innerWidth),true,'dashboard horizontal overflow');
     await page.screenshot({path:resolve(out,'desktop-dashboard.png'),fullPage:true});
     await page.getByRole('button',{name:'TEST-1048',exact:true}).first().click();
     await page.getByRole('heading',{name:'Record timeline',exact:true}).waitFor();
     await page.getByRole('button',{name:'Share',exact:true}).click();
-    await page.getByRole('heading',{name:'Share this Proof',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Review sharing',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Public recipient item title',exact:true}).waitFor();
+    await page.getByText('Public carrier delivery milestone',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Create share link',exact:true}).isDisabled(),true,'explicit original consent starts unchecked');
+    assert.equal(await page.evaluate(()=>window.__smoke.shareRequests.length),0,'opening preview creates no grant');
     await page.getByRole('button',{name:'Close dialog',exact:true}).click();
+    assert.equal(await page.evaluate(()=>window.__smoke.shareRequests.length),0,'canceling preview creates no grant');
+    await page.getByRole('button',{name:'Share',exact:true}).click();
+    await page.getByRole('button',{name:'Review original',exact:true}).nth(1).click();
+    await page.waitForFunction(()=>document.querySelector('.share-playback video')?.readyState>=2);
+    const reviewedMedia=await page.evaluate(()=>window.__smoke.mediaRequests.at(-1));
+    assert.equal(reviewedMedia.evidenceId,'test-stage-original');assert.equal(reviewedMedia.previewHash,'2'.padStart(64,'0'),'lifecycle original uses issued preview hash');
+    const consent=page.getByLabel('I reviewed this preview and the original recordings, and approve sharing them and future updates with anyone who has the link.');
+    await consent.check();
+    await page.getByRole('button',{name:'Refresh preview',exact:true}).click();
+    await page.getByRole('heading',{name:'Public recipient item title',exact:true}).waitFor();
+    assert.equal(await consent.isChecked(),false,'refresh resets consent');
+    await page.screenshot({path:resolve(out,'desktop-share-review.png'),fullPage:true});
+    await page.evaluate(()=>{window.__smoke.rejectShare=true;});
+    await consent.check();await page.getByRole('button',{name:'Create share link',exact:true}).click();
+    await page.getByRole('alert').getByText('Review the latest recipient preview before creating this link',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Proof link',{exact:true}).count(),0,'stale preview never produces displayed link');
+    await page.getByRole('button',{name:'Review latest preview',exact:true}).click();
+    await page.getByRole('heading',{name:'Public recipient item title',exact:true}).waitFor();
+    assert.equal(await consent.isChecked(),false,'failed grant requires fresh unchecked review');
+    await page.getByLabel('Link expires',{exact:true}).selectOption('1');await consent.check();
+    await page.getByRole('button',{name:'Create share link',exact:true}).click();
+    await page.getByRole('heading',{name:'Share this Proof',exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Proof link',{exact:true}).inputValue(),'https://thepackproof.com/p/test-fixture');
+    const submitted=await page.evaluate(()=>window.__smoke.shareRequests.at(-1));
+    assert.equal(submitted.previewHash,'4'.padStart(64,'0'));assert.equal(submitted.originalsReviewed,true);
+    assert.ok(Date.parse(submitted.expiresAt)>Date.now()+23*3600_000&&Date.parse(submitted.expiresAt)<=Date.now()+24*3600_000);
+    assert.equal(await page.locator('body').evaluate(element=>element.scrollWidth<=innerWidth),true,'share dialog horizontal overflow');
+    await page.screenshot({path:resolve(out,'desktop-share-created.png'),fullPage:true});
+    await page.getByRole('button',{name:'Close dialog',exact:true}).click();
+    if(process.env.SHARE_SMOKE_ONLY){assert.deepEqual(errors,[],'renderer page errors');console.log(JSON.stringify({ok:true,assertions:['server recipient categories and item/shipment projection','cancel creates no grant','unchecked explicit originals and future updates consent','lifecycle original playback with preview hash','refresh clears consent','stale preview rejection and fresh review','current hash and selected expiry submission','reviewed share link display','no horizontal overflow or renderer errors'],screenshots:out},null,2));return;}
     await page.getByRole('button',{name:'Record packing',exact:true}).click();
     await page.getByText('Camera ready',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Record packing',exact:true}).click();

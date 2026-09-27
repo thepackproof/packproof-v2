@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { DesktopConfig } from './config.js';
-import type { CanonicalProof, ProfileView, ProofCollectionItem, FulfillmentQueueItem, PackingStationResolveView, ConnectedAccountsListView, CommerceConnectionView, CommerceSyncView, EvidenceUploadView, AccessLinkView, TransactionWriteInput, ManifestView, ShipmentIntegrityView } from '../../../web/src/api/types.js';
+import type { CanonicalProof, ProfileView, ProofCollectionItem, FulfillmentQueueItem, PackingStationResolveView, ConnectedAccountsListView, CommerceConnectionView, CommerceSyncView, EvidenceUploadView, AccessLinkView, PublicProofView, TransactionWriteInput, ManifestView, ShipmentIntegrityView } from '../../../web/src/api/types.js';
 
 export class DesktopApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly status: number) { super(message); this.name = 'DesktopApiError'; }
@@ -97,14 +97,20 @@ export class DesktopApi {
   syncCommerceConnection(connectionId: string): Promise<CommerceSyncView> { return this.request(`/me/commerce-connections/${id(connectionId)}/sync`, { method: 'POST', body: {} }); }
   startConnectedAccountConnect(provider: string, input: { shop?: string } = {}): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> { return this.request(`/me/connected-accounts/${id(provider)}/connect`, { method: 'POST', body: input }); }
   getShipmentIntegrity(proofId: string): Promise<ShipmentIntegrityView> { return this.request(`/proofs/${id(proofId)}/shipment-integrity`); }
-  createAccessLink(proofId: string): Promise<AccessLinkView> { return this.request(`/proofs/${id(proofId)}/access-links`, { method: 'POST', body: { scope: 'EVIDENCE_VIEW' } }); }
+  previewSharedProof(proofId: string): Promise<PublicProofView> { return this.request(`/proofs/${id(proofId)}/disclosure/preview`, { method: 'POST', body: { purpose: 'SHARED_PROOF' } }); }
+  /** The caller must display the preview and obtain explicit approval before submitting its hash. */
+  createSharedProofLink(proofId: string, input: { previewHash: string; originalsReviewed: true; expiresAt: string }): Promise<AccessLinkView> {
+    if (input.originalsReviewed !== true || !/^[a-f0-9]{64}$/.test(input.previewHash) || !Number.isFinite(Date.parse(input.expiresAt))) throw new DesktopApiError('DISCLOSURE_REVIEW_REQUIRED', 'Review the Proof and approve sharing its original recordings before creating a link.', 400);
+    return this.request(`/proofs/${id(proofId)}/disclosure/grants`, { method: 'POST', body: { purpose: 'SHARED_PROOF', originalsReviewed: true, previewHash: input.previewHash, expiresAt: input.expiresAt } });
+  }
   revokeAccessLink(proofId: string, accessLinkId: string): Promise<void> { return this.request(`/proofs/${id(proofId)}/access-links/${id(accessLinkId)}`, { method: 'DELETE' }); }
   getManifest(proofId: string, signal?: AbortSignal): Promise<ManifestView> { return this.request(`/proofs/${id(proofId)}/manifest`, { signal }); }
   /** Stream to a native file; response is never sent across IPC. */
   exportProofPackage(proofId: string, signal?: AbortSignal): Promise<Response> { return this.response(`/proofs/${id(proofId)}/package`, { signal, timeout: 600_000 }); }
-  getEvidence(proofId: string, evidenceId: string, signal?: AbortSignal, range?: string): Promise<Response> {
+  getEvidence(proofId: string, evidenceId: string, signal?: AbortSignal, range?: string, stageId?: string): Promise<Response> {
     if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) throw new DesktopApiError('INVALID_RANGE', 'Unsupported media byte range.', 416);
-    return this.response(`/proofs/${id(proofId)}/evidence/${id(evidenceId)}`, { signal, range, timeout: 600_000 });
+    const path = stageId ? `/proofs/${id(proofId)}/lifecycle/stages/${id(stageId)}/evidence/${id(evidenceId)}` : `/proofs/${id(proofId)}/evidence/${id(evidenceId)}`;
+    return this.response(path, { signal, range, timeout: 600_000 });
   }
   registerDesktopRecording(proofId: string, idempotencyKey: string, input: DesktopRecording, signal?: AbortSignal): Promise<CaptureSession> { return this.request(`/proofs/${id(proofId)}/capture-sessions/desktop-registration`, { method: 'POST', idempotencyKey, body: input, signal }); }
   completeCaptureSession(proofId: string, sessionId: string, input: { sha256: string; byteSize: number; contentType: string; interrupted?: boolean; recordedDurationMs?: number }, signal?: AbortSignal): Promise<CaptureSession> { return this.request(`/proofs/${id(proofId)}/capture-sessions/${id(sessionId)}/complete`, { method: 'POST', body: input, signal }); }

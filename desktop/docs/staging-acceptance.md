@@ -81,7 +81,10 @@ desktop registration/replay, upload initialization/replay, multipart recovery,
 original digest verification, evidence commitment, explicit synthetic
 declaration, server finalization and manifest replay. It reads original bytes,
 checks HTTP byte ranges and ZIP export, creates a temporary public viewing link,
-verifies the shared original and revokes the link. No invitations, marketplace
+obtains the canonical Shared Proof preview, explicitly approves only the reviewed
+synthetic originals, verifies the shared original and revokes the link. The
+legacy access-link endpoint is intentionally insufficient for sharing media.
+No invitations, marketplace
 connections, carrier registration, customer notifications or financial changes
 are requested.
 
@@ -96,3 +99,16 @@ After reviewing the report, disable the dedicated Cognito account using the
 normal administrative operation. Record that outcome separately: the script
 cannot certify administrative cleanup it did not perform. Retain failed
 artifacts for diagnosis and use a fresh dedicated account for a new run.
+
+The sole supported continuation is an MP4 already finalized by this protocol
+test whose guest download failed before WebM began. Set
+`PACKPROOF_SMOKE_RESUME_REPORT` to its original failed report after fixing and
+testing the sharing client. The report must be under 24 hours old, contain the
+same deployment/migration receipt and MP4 digest, show successful owner playback
+and export, and confirm link/session cleanup. Before any further writes the
+script checks that this account owns exactly that one synthetic Proof, still has
+no billing enrollment, and that its title/reference, committed evidence, capture
+session, bytes and frozen manifest match. It rechecks the MP4 and its reviewed
+sharing flow, then creates only the missing WebM test. The new report references
+the original report by run ID and SHA-256; neither is overwritten. All other
+partial runs stop for diagnosis rather than bypassing the fresh account gate.

@@ -6,6 +6,7 @@ import { AuthService } from '../src/main/auth.js';
 import { DesktopApi, DesktopApiError } from '../src/main/api.js';
 import { DesktopEvidenceTransport } from '../src/main/evidence-api.js';
 import { loadConfig } from '../src/main/config.js';
+import { validateResumeReport } from './staging-resume.js';
 import type { CaptureMetadata } from '../src/main/evidence/types.js';
 
 const mode = process.argv[2] ?? '--preflight';
@@ -19,7 +20,7 @@ const hash = (value: string | Uint8Array) => createHash('sha256').update(value).
 const runId = randomUUID();
 const reportPath = resolve('artifacts', `staging-acceptance-${runId}.json`);
 type FixtureRecord = { fixture: string; sha256: string; byteSize: number; proofId?: string; captureSessionId?: string; evidenceId?: string; manifestSha256?: string; checks: string[] };
-const report: { schemaVersion: number; runId: string; mode: string; status: string; startedAt: string; completedAt?: string; actualHostPlatform: string; desktopPlatformClaim?: string; simulatedPlatformClaim: boolean; sourceCommit?: string; migration?: { name: string; sha256: string; receiptSha256: string }; checks: string[]; fixtures: FixtureRecord[]; cleanup: { shareLinksRevoked: boolean; localSessionCleared: boolean; accountDisabledByOperator: boolean; pendingAccessLinkIds?: string[] }; failure?: { stage: string; code: string; httpStatus?: number }; limitations: string[] } = {
+const report: { schemaVersion: number; runId: string; mode: string; status: string; startedAt: string; completedAt?: string; actualHostPlatform: string; desktopPlatformClaim?: string; simulatedPlatformClaim: boolean; sourceCommit?: string; resumedFrom?: { runId: string; reportSha256: string }; migration?: { name: string; sha256: string; receiptSha256: string }; checks: string[]; fixtures: FixtureRecord[]; cleanup: { shareLinksRevoked: boolean; localSessionCleared: boolean; accountDisabledByOperator: boolean; pendingAccessLinkIds?: string[] }; failure?: { stage: string; code: string; httpStatus?: number }; limitations: string[] } = {
   schemaVersion: 1, runId, mode, status: 'RUNNING', startedAt: new Date().toISOString(), actualHostPlatform: process.platform,
   simulatedPlatformClaim: mode === '--execute-protocol-fixture', checks: [], fixtures: [],
   cleanup: { shareLinksRevoked: true, localSessionCleared: false, accountDisabledByOperator: false },
@@ -30,8 +31,8 @@ let auth: AuthService | undefined;
 let api: DesktopApi | undefined;
 let sessionBytes: string | null = null;
 const links = new Map<string, { proofId: string; token: string }>();
-async function checkpoint() { await writeFile(`${reportPath}.tmp`, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 }); await rename(`${reportPath}.tmp`, reportPath); }
-async function binary(response: Response): Promise<Buffer> { ensure(response.ok, 'DOWNLOAD_FAILED'); return Buffer.from(await response.arrayBuffer()); }
+async function checkpoint() { for (const row of report.fixtures) row.checks = [...new Set(row.checks)]; await writeFile(`${reportPath}.tmp`, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 }); await rename(`${reportPath}.tmp`, reportPath); }
+async function binary(response: Response): Promise<Buffer> { if (!response.ok) throw Object.assign(new Error('DOWNLOAD_FAILED'), { code: 'DOWNLOAD_FAILED', status: response.status }); return Buffer.from(await response.arrayBuffer()); }
 function safeCode(value: unknown) { return typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,99}$/.test(value) ? value : 'ACCEPTANCE_CHECK_FAILED'; }
 
 try {
@@ -52,6 +53,10 @@ try {
   const migration = receipt.migrations?.find(value => value.name === migrationName);
   ensure(migration?.applied === true && migration.sha256 === migrationHash, 'DESKTOP_MIGRATION_CHECKSUM_MISMATCH');
   report.migration = { name: migrationName, sha256: migrationHash, receiptSha256: hash(receiptBytes) };
+  const resumePath = process.env.PACKPROOF_SMOKE_RESUME_REPORT;
+  const resumeBytes = resumePath ? await readFile(resumePath) : null;
+  const resume = resumeBytes ? validateResumeReport(JSON.parse(resumeBytes.toString()), { expectedCommit, migrationReceiptSha256: hash(receiptBytes), mode, fixtureSha256: hash(await readFile(resolve('../backend/tests/fixtures/camera-recording.mp4'))), fixtureByteSize: (await readFile(resolve('../backend/tests/fixtures/camera-recording.mp4'))).length, now: Date.now() }) : undefined;
+  if (resume && resumeBytes) report.resumedFrom = { runId: resume.runId, reportSha256: hash(resumeBytes) };
   await mkdir(dirname(reportPath), { recursive: true, mode: 0o700 });
   await writeFile(reportPath, '{}\n', { mode: 0o600, flag: 'wx' });
   await checkpoint();
@@ -91,63 +96,76 @@ try {
     };
     stage = 'fresh_account_gate';
     const [existingProofs, usage, billing] = await Promise.all([api.listProofs(), privateGet('/me/usage'), privateGet('/me/billing/status')]);
-    ensure(existingProofs.length === 0 && usage.currentOffer === null && usage.finalizedProofs === 0 && usage.automaticChargesEnabled === false && Array.isArray(billing.subscriptions) && billing.subscriptions.length === 0 && billing.pendingCheckout === null, 'FRESH_UNENROLLED_ACCOUNT_REQUIRED');
-    report.checks.push('fresh-account-no-existing-proofs', 'no-priced-offer-subscription-or-checkout', 'no-billing-grants-or-adjustments');
+    ensure((resume ? existingProofs.length === 1 && existingProofs[0].proofId === resume.fixture.proofId : existingProofs.length === 0) && usage.currentOffer === null && usage.finalizedProofs === (resume ? 1 : 0) && usage.automaticChargesEnabled === false && Array.isArray(billing.subscriptions) && billing.subscriptions.length === 0 && billing.pendingCheckout === null, 'FRESH_UNENROLLED_ACCOUNT_REQUIRED');
+    report.checks.push(resume ? 'resume-account-has-only-exact-retained-synthetic-proof' : 'fresh-account-no-existing-proofs', 'no-priced-offer-subscription-or-checkout', 'no-billing-grants-or-adjustments');
     await checkpoint();
     const transport = new DesktopEvidenceTransport(api);
     const fixtures = [ { file: 'camera-recording.mp4', type: 'video/mp4', durationMs: 200 }, { file: 'desktop-streaming.webm', type: 'video/webm', durationMs: 1000 } ];
     for (const fixture of fixtures) {
       const bytes = await readFile(resolve('../backend/tests/fixtures', fixture.file));
-      const row: FixtureRecord = { fixture: fixture.file, sha256: hash(bytes), byteSize: bytes.length, checks: [] };
+      const retained = resume?.fixture.fixture === fixture.file ? resume.fixture : undefined;
+      const row: FixtureRecord = retained ? { ...retained, checks: [...retained.checks] } : { fixture: fixture.file, sha256: hash(bytes), byteSize: bytes.length, checks: [] };
       report.fixtures.push(row);
       stage = `create_synthetic_proof_${fixture.type}`;
-      const proof = await api.createProof({ externalReference: `SYNTHETIC-DESKTOP-${runId}-${fixture.file}`, itemTitle: 'SYNTHETIC DESKTOP API TEST - NOT A SHIPMENT', itemDescription: 'Automated staging contract fixture. No physical packing or shipment occurred. Desktop metadata and the shipping declaration test API behavior only. Never submit this test record to a recipient or claim.', quantity: 1 });
+      const proof = retained ? await api.getProof(retained.proofId) : await api.createProof({ externalReference: `SYNTHETIC-DESKTOP-${runId}-${fixture.file}`, itemTitle: 'SYNTHETIC DESKTOP API TEST - NOT A SHIPMENT', itemDescription: 'Automated staging contract fixture. No physical packing or shipment occurred. Desktop metadata and the shipping declaration test API behavior only. Never submit this test record to a recipient or claim.', quantity: 1 });
       row.proofId = proof.proofId; await checkpoint();
-      ensure(proof.status === 'READY_FOR_EVIDENCE', 'PROOF_NOT_READY');
+      ensure(proof.status === (retained ? 'FINALIZED' : 'READY_FOR_EVIDENCE'), 'PROOF_NOT_READY');
+      if (retained) {
+        ensure(proof.transaction.sellerUserId === session.userId && proof.transaction.itemTitle === 'SYNTHETIC DESKTOP API TEST - NOT A SHIPMENT' && proof.transaction.externalReference === `SYNTHETIC-DESKTOP-${resume!.runId}-${fixture.file}` && proof.transaction.itemDescription?.startsWith('Automated staging contract fixture. No physical packing or shipment occurred.'), 'RESUME_SYNTHETIC_RECORD_MISMATCH');
+        const source = proof.evidence.find(value => value.evidenceId === retained.evidenceId);
+        ensure(proof.evidence.length === 1 && source?.sha256 === row.sha256 && source.byteSize === row.byteSize && source.contentType === fixture.type && source.validationStatus === 'COMMITTED', 'RESUME_COMMITTED_SOURCE_MISMATCH');
+        const recoveredCapture = await api.recoverCaptureSession(proof.proofId, retained.captureSessionId);
+        ensure(recoveredCapture.id === retained.captureSessionId && recoveredCapture.proofId === proof.proofId && recoveredCapture.evidenceId === retained.evidenceId && recoveredCapture.sha256 === row.sha256 && recoveredCapture.byteSize === row.byteSize, 'RESUME_CAPTURE_BINDING_MISMATCH');
+        row.checks.push('retained-synthetic-owner-and-committed-source-reverified');
+      }
       const identity = { accountId: session.userId, proofId: proof.proofId, jobId: `desktop-smoke-${runId}-${fixture.file}` };
       const reportedEnd = new Date();
       const metadata: CaptureMetadata = { captureSource: 'DESKTOP_CAMERA', appVersion: '1.0.0', installationId: `synthetic-smoke-${runId}`, platform: platformClaim, startedAt: new Date(reportedEnd.getTime() - fixture.durationMs).toISOString(), endedAt: reportedEnd.toISOString(), camera: 'SYNTHETIC SOURCE FIXTURE - NO CAMERA USED', offline: false, detections: [], provenance: 'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED' };
       // These are disclosed request-fixture timestamps, not measurements of a physical recording.
       const recording = { ...identity, sha256: row.sha256, byteSize: bytes.length, mimeType: fixture.type, recordedDurationMs: fixture.durationMs, metadata };
-      stage = `register_${fixture.type}`;
-      const capture = await transport.registerCapture(recording, AbortSignal.timeout(120_000));
-      ensure(capture.id, 'SERVER_CAPTURE_ID_REQUIRED'); row.captureSessionId = capture.id; await checkpoint();
-      ensure((await transport.registerCapture(recording, AbortSignal.timeout(120_000))).id === capture.id, 'CAPTURE_REPLAY_CHANGED_ID');
-      row.checks.push('honest-post-capture-registration', 'stable-registration-replay');
-      stage = `initialize_upload_${fixture.type}`;
-      const uploadInput = { ...recording, captureSessionId: capture.id };
-      const upload = await transport.initializeUpload(uploadInput, AbortSignal.timeout(120_000));
-      row.evidenceId = upload.evidenceId; await checkpoint();
-      ensure((await transport.initializeUpload(uploadInput, AbortSignal.timeout(120_000))).evidenceId === upload.evidenceId, 'UPLOAD_REPLAY_CHANGED_ID');
-      const uploadIdentity = { ...identity, evidenceId: upload.evidenceId };
-      const state = await transport.inspectUpload(uploadIdentity, AbortSignal.timeout(60_000));
-      ensure(state.status === 'PENDING' && state.parts?.length === 0 && Number.isSafeInteger(state.partSize) && state.partSize! > 0, 'INITIAL_PART_STATE_INVALID');
-      stage = `upload_${fixture.type}`;
-      for (let offset = 0, partNumber = 1; offset < bytes.length; offset += state.partSize!, partNumber++) {
-        const part = bytes.subarray(offset, offset + state.partSize!);
-        await transport.uploadPart({ ...uploadIdentity, partNumber, bytes: part, sha256: hash(part) }, AbortSignal.timeout(120_000));
-      }
-      // New transport instance verifies remote resumability independent of prior in-memory state.
-      const recovered = await new DesktopEvidenceTransport(api).inspectUpload(uploadIdentity, AbortSignal.timeout(60_000));
-      ensure(recovered.parts?.length === Math.ceil(bytes.length / state.partSize!), 'RECOVERED_PARTS_MISSING');
-      const expected = { ...uploadIdentity, sha256: row.sha256, byteSize: bytes.length };
-      await transport.completeUpload(expected, AbortSignal.timeout(120_000));
-      await transport.commitUpload(expected, AbortSignal.timeout(120_000));
-      const committed = await transport.inspectUpload(uploadIdentity, AbortSignal.timeout(60_000));
-      ensure(committed.status === 'COMMITTED' && committed.sha256 === row.sha256 && committed.byteSize === bytes.length, 'COMMIT_RECEIPT_MISMATCH');
-      row.checks.push('stable-upload-initialization', 'multipart-remote-recovery', 'server-assembly-digest', 'committed-original-digest'); await checkpoint();
-      stage = `finalize_${fixture.type}`;
-      const deadline = Date.now() + 120_000;
-      while (true) {
-        try { await transport.attestAndFinalize({ ...uploadIdentity, captureSessionId: capture.id, statement: 'PACKED_DESCRIBED_ITEM' }, AbortSignal.timeout(60_000)); break; }
-        catch (error) { if (!(error instanceof DesktopApiError) || !['FINALIZATION_PENDING', 'PRESERVATION_PENDING'].includes(error.code) || Date.now() > deadline) throw error; await new Promise(done => setTimeout(done, 2000)); }
+      let capture: { id?: string } = { id: retained?.captureSessionId };
+      let upload = { evidenceId: retained?.evidenceId ?? '' };
+      if (!retained) {
+        stage = `register_${fixture.type}`;
+        capture = await transport.registerCapture(recording, AbortSignal.timeout(120_000));
+        ensure(capture.id, 'SERVER_CAPTURE_ID_REQUIRED'); row.captureSessionId = capture.id; await checkpoint();
+        ensure((await transport.registerCapture(recording, AbortSignal.timeout(120_000))).id === capture.id, 'CAPTURE_REPLAY_CHANGED_ID');
+        row.checks.push('honest-post-capture-registration', 'stable-registration-replay');
+        stage = `initialize_upload_${fixture.type}`;
+        const uploadInput = { ...recording, captureSessionId: capture.id };
+        upload = await transport.initializeUpload(uploadInput, AbortSignal.timeout(120_000));
+        row.evidenceId = upload.evidenceId; await checkpoint();
+        ensure((await transport.initializeUpload(uploadInput, AbortSignal.timeout(120_000))).evidenceId === upload.evidenceId, 'UPLOAD_REPLAY_CHANGED_ID');
+        const uploadIdentity = { ...identity, evidenceId: upload.evidenceId };
+        const state = await transport.inspectUpload(uploadIdentity, AbortSignal.timeout(60_000));
+        ensure(state.status === 'PENDING' && state.parts?.length === 0 && Number.isSafeInteger(state.partSize) && state.partSize! > 0, 'INITIAL_PART_STATE_INVALID');
+        stage = `upload_${fixture.type}`;
+        for (let offset = 0, partNumber = 1; offset < bytes.length; offset += state.partSize!, partNumber++) {
+          const part = bytes.subarray(offset, offset + state.partSize!);
+          await transport.uploadPart({ ...uploadIdentity, partNumber, bytes: part, sha256: hash(part) }, AbortSignal.timeout(120_000));
+        }
+        // New transport instance verifies remote resumability independent of prior in-memory state.
+        const recovered = await new DesktopEvidenceTransport(api).inspectUpload(uploadIdentity, AbortSignal.timeout(60_000));
+        ensure(recovered.parts?.length === Math.ceil(bytes.length / state.partSize!), 'RECOVERED_PARTS_MISSING');
+        const expected = { ...uploadIdentity, sha256: row.sha256, byteSize: bytes.length };
+        await transport.completeUpload(expected, AbortSignal.timeout(120_000));
+        await transport.commitUpload(expected, AbortSignal.timeout(120_000));
+        const committed = await transport.inspectUpload(uploadIdentity, AbortSignal.timeout(60_000));
+        ensure(committed.status === 'COMMITTED' && committed.sha256 === row.sha256 && committed.byteSize === bytes.length, 'COMMIT_RECEIPT_MISMATCH');
+        row.checks.push('stable-upload-initialization', 'multipart-remote-recovery', 'server-assembly-digest', 'committed-original-digest'); await checkpoint();
+        stage = `finalize_${fixture.type}`;
+        const deadline = Date.now() + 120_000;
+        while (true) {
+          try { await transport.attestAndFinalize({ ...uploadIdentity, captureSessionId: capture.id, statement: 'PACKED_DESCRIBED_ITEM' }, AbortSignal.timeout(60_000)); break; }
+          catch (error) { if (!(error instanceof DesktopApiError) || !['FINALIZATION_PENDING', 'PRESERVATION_PENDING'].includes(error.code) || Date.now() > deadline) throw error; await new Promise(done => setTimeout(done, 2000)); }
+        }
       }
       const final = await api.getProof(proof.proofId);
       ensure(final.status === 'FINALIZED', 'FINALIZATION_NOT_CONFIRMED');
       const evidence = final.evidence.find(value => value.evidenceId === upload.evidenceId) as unknown as Record<string, unknown>;
       ensure(evidence?.captureOrigin === 'CLIENT_REPORTED_DESKTOP_CAPTURE' && evidence.captureRegistrationTiming === 'POST_CAPTURE_CLIENT_REPORTED', 'DESKTOP_PROVENANCE_INCORRECT');
       const manifest = await api.getManifest(proof.proofId);
-      ensure(hash(manifest.canonicalJson) === manifest.sha256, 'MANIFEST_DIGEST_MISMATCH');
+      ensure((!retained || manifest.sha256 === retained.manifestSha256) && hash(manifest.canonicalJson) === manifest.sha256, 'MANIFEST_DIGEST_MISMATCH');
       ensure((await api.finalizeProof(proof.proofId)).manifest?.sha256 === manifest.sha256, 'FROZEN_MANIFEST_CHANGED');
       row.manifestSha256 = manifest.sha256;
       row.checks.push('synthetic-explicit-shipping-declaration', 'authoritative-finalization', 'honest-desktop-provenance', 'frozen-manifest-replay');
@@ -159,19 +177,24 @@ try {
       ensure(exported.subarray(0, 2).toString() === 'PK', 'EXPORT_NOT_ZIP');
       row.checks.push('exact-owner-playback', 'byte-range-seeking', 'owner-export-zip');
       stage = `share_${fixture.type}`;
-      const shared = await api.createAccessLink(proof.proofId);
+      const preview = await api.previewSharedProof(proof.proofId);
+      ensure(preview.proofId === proof.proofId && preview.evidence?.some(value => value.evidenceId === upload.evidenceId) && preview.disclosure?.viewHash, 'SHARE_PREVIEW_MISMATCH');
+      // Only these reviewed, synthetic source fixtures qualify for this automated declaration.
+      // General desktop sharing requires the human-facing preview and explicit approval.
+      const shared = await api.createSharedProofLink(proof.proofId, { previewHash: preview.disclosure.viewHash, originalsReviewed: true, expiresAt: new Date(Date.now() + 3_600_000).toISOString() });
       ensure(shared.token && shared.accessLinkId, 'SHARE_LINK_INCOMPLETE');
       links.set(shared.accessLinkId, { proofId: proof.proofId, token: shared.token }); report.cleanup.shareLinksRevoked = false;
       await checkpoint();
       const guest = await fetch(`${config.apiBaseUrl}/public/proofs/${encodeURIComponent(shared.token)}`, { redirect: 'error', signal: AbortSignal.timeout(60_000) });
-      ensure(guest.ok, 'PUBLIC_SHARE_READ_FAILED'); await guest.body?.cancel();
+      ensure(guest.ok, 'PUBLIC_SHARE_READ_FAILED');
+      const guestView = await guest.json(); ensure(guestView.evidence?.some((value: { evidenceId: string }) => value.evidenceId === upload.evidenceId), 'PUBLIC_EVIDENCE_SCOPE_MISSING');
       const guestEvidence = await fetch(`${config.apiBaseUrl}/public/proofs/${encodeURIComponent(shared.token)}/evidence/${encodeURIComponent(upload.evidenceId)}`, { redirect: 'error', signal: AbortSignal.timeout(60_000) });
       ensure(hash(await binary(guestEvidence)) === row.sha256, 'PUBLIC_EVIDENCE_BYTES_CHANGED');
       await api.revokeAccessLink(proof.proofId, shared.accessLinkId);
       const revoked = await fetch(`${config.apiBaseUrl}/public/proofs/${encodeURIComponent(shared.token)}`, { redirect: 'error', signal: AbortSignal.timeout(30_000) });
       ensure(revoked.status === 404, 'SHARE_REVOCATION_NOT_CONFIRMED'); await revoked.body?.cancel();
       links.delete(shared.accessLinkId); report.cleanup.shareLinksRevoked = links.size === 0;
-      row.checks.push('public-link-and-exact-evidence', 'public-link-revocation'); await checkpoint();
+      row.checks.push('reviewed-source-disclosure-preview-and-grant', 'public-link-and-exact-evidence', 'public-link-revocation'); await checkpoint();
     }
     report.status = 'PASS';
   }

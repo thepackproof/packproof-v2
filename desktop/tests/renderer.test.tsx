@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Auth } from '../src/renderer/Auth';
 import { PackingStation } from '../src/renderer/PackingStation';
+import { SharePreviewContents, ShareProof } from '../src/renderer/ShareProof';
 import { appearsTracking, filterFulfillmentOrders, presentation, trackingMatch } from '../src/renderer/presentation';
 import type { FulfillmentQueueItem, ProofCollectionItem, SystemView } from '../src/shared/contracts';
 
@@ -43,5 +44,11 @@ describe('desktop renderer safety and shared presentation',()=>{
     expect(filterFulfillmentOrders(orders,proofs,filter).map(row=>row.proofId)).toEqual(['p1']);
     expect(filterFulfillmentOrders(orders,proofs,{...filter,from:'2026-09-28',to:'2026-09-28'})).toHaveLength(0);
     expect(filterFulfillmentOrders(orders,proofs,{...filter,state:'completed',search:''}).map(row=>row.proofId)).toEqual(['p3']);
+  });
+  it('renders actual recipient categories, item status, milestones and lifecycle originals before sharing',()=>{
+    const html=renderToStaticMarkup(<SharePreviewContents disabled={false} open={()=>{}} preview={{proofId:'p1',status:'FINALIZED',disclosure:{viewHash:'a'.repeat(64),scopeVersion:1,fields:['order','shipping','evidence'],liveProof:true,revocationNotice:'Cannot recall saved copies'},tracker:{itemTitle:'Public server item',headline:'Carrier reported delivery',shipment:{carrier:'USPS'},milestones:[{code:'DELIVERED',label:'Public delivery milestone',occurredAt:'2026-09-27T00:00:00Z'}]},evidence:[{evidenceId:'stage_evidence',stageId:'return_stage',slot:'Return receipt',committed:true,representation:'ORIGINAL',label:'Original return recording'}]}}/>);
+    for(const text of ['Public server item','Carrier reported delivery','Public delivery milestone','Order details','Original return recording','Review original'])expect(html).toContain(text);
+    const initial=renderToStaticMarkup(<ShareProof id="p1" onClose={()=>{}}/>);
+    expect(initial).toContain('Loading the current recipient preview');expect(initial).not.toContain('Share link created');expect(initial).not.toContain('checked=""');
   });
 });

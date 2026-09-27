@@ -47,7 +47,7 @@ installer reports as the distribution record.
 | 4: shared code strategy | Reuses existing PackProof API/domain types, presentation rules and barcode-related code. Native concerns are isolated under desktop main-process modules. | The illustrative monorepo folder tree was not imposed as a separate rewrite; future shared-package extraction should preserve compatibility. |
 | 5, 52: Electron security | Sandboxed renderer, context isolation, Node disabled, local origin/CSP, narrow schema-validated IPC, main-frame sender checks, navigation restrictions, external URL allowlist, account/epoch fences and package hardening. | Verify the final signed packages and perform platform security acceptance; automated boundary checks are not a certification. |
 | 6: authentication | Existing Cognito flow, registration/verification/reset, refresh, sign-out and native protected credentials. Tokens remain out of renderer storage. | Real account verification/reset delivery, refresh, Keychain/DPAPI behavior and two-account isolation on installed Windows/Mac builds. |
-| 7–8, 24–25: navigation, dashboard and Proofs | Sidebar, attention/recent/fulfillment views, filtered and paged tables, detail/timeline/tracking/participants, original evidence playback, sharing, package export and server-controlled finalization. | Live data/permissions parity and large-account performance. Cached information is not authoritative server state. |
+| 7–8, 24–25: navigation, dashboard and Proofs | Sidebar, attention/recent/fulfillment views, filtered and paged tables, detail/timeline/tracking/participants, original evidence playback, reviewed Shared Proof disclosure links, package export and server-controlled finalization. | Live data/permissions parity and large-account performance. Cached information is not authoritative server state. |
 | 9–13: Packing Station and cameras | Device enumeration and preferences, preview, optional audio, resolution/fps, continuous bounded recording, timer, explicit finish/review, navigation guard, device-loss interruption and local barcode fallback. | Physical integrated/USB cameras, occupied/denied/re-enabled permissions, unplugging, label readability and every required barcode format on both OS families. |
 | 10, 26–28: orders and tracking | Existing canonical fulfillment queue and backend integrations, marketplace/status/date/search filters, joined tracking search, order resolution/sync, label matching and explicit conflict handling. | Connected Shopify/eBay merchant walkthrough and real Shippo/carrier linkage in the deployed environment. Desktop creates no alternative marketplace identity system. |
 | 14, 17: evidence metadata and integrity | Streaming SHA-256 over preserved originals; capture/device/version/detection context; server verification and committed manifest references. | End-to-end verification with actual installed camera recordings against the deployed backend. |
@@ -85,6 +85,35 @@ marketplace de-duplication/recovery, account changes, cancellation/non-overlap,
 request failures, shutdown, fixed notification text, and the ten-page polling
 budget. The final complete desktop-suite/build result belongs to the final
 source-specific verification record, not the earlier counts above.
+
+## Reviewed sharing behavior and validation
+
+Desktop sharing uses the canonical `SHARED_PROOF` disclosure preview and grant
+endpoints. The dialog displays the actual server-projected recipient item/status,
+shipping milestones and events, activity, disclosed categories, participant
+statements, integrity scope, and current original recordings. Both packing and
+later lifecycle originals can be reviewed through authenticated opaque native
+media grants. No renderer-selected lifecycle path is accepted.
+
+A default-unchecked checkbox explicitly approves the original recordings and
+future updates for anyone with the link. The user chooses a one-, seven-, or
+thirty-day expiry. Refreshing the preview or a failed grant clears consent and
+requires a new review. Main-process approval is bound to the authenticated
+account/session, Proof, and current issued preview hash, expires after ten
+minutes, and is consumed once; the server independently rejects stale previews.
+The bridge returns the intended share URL and expiry without raw access-link or
+authentication token fields. The preview includes the server's revocation notice:
+revocation prevents future access but cannot recall saved copies. Existing link
+management/revocation is available on the PackProof website; this desktop dialog
+does not add a separate grant management system or opt into item identifiers.
+
+Focused boundary tests cover missing/false consent, malformed hashes, expiry,
+account/epoch isolation, preview refresh/timeout, replay prevention, and
+preview-bound lifecycle playback. The explicit fixture-only browser harness
+checks preview/cancel without grant creation, actual original playback, unchecked
+consent, refresh and stale-preview recovery, exact current-hash submission, and
+selected expiry. Exact-source full-suite, live-service and native artifact
+outcomes remain separate acceptance records.
 
 ## Important contract decisions
 
@@ -130,7 +159,7 @@ source-specific verification record, not the earlier counts above.
    the failure, permissions, account, marketplace, accessibility, signed-update,
    upgrade and extended-soak matrix in [RELEASING.md](RELEASING.md).
 5. **Close operational checks.** Review privacy disclosures; configure and verify
-   coded error-report delivery if enabled; record the exact-commit acceptance
+   the production error-reporting destination and filtered payload delivery required by plan §35; record the exact-commit acceptance
    evidence before public promotion.
 
 Until those gates pass, the accurate delivery description is **implemented and
