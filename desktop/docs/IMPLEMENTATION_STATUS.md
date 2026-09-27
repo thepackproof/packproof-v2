@@ -1,12 +1,14 @@
 # PackProof Desktop implementation and release status
 
-Status recorded September 27, 2026. This is an implementation candidate with
-automated verification and development installer builds. **The production
-definition of done in the attached plan is not yet satisfied.** Signed public
-distribution, live service acceptance and the physical hardware matrix remain
-release gates.
+Implementation coverage updated September 27, 2026. This document describes the
+code and retains historical development-verification snapshots. It is not the
+final CI, deployment, or release-acceptance record. Later outcomes must be recorded
+separately with their exact source commit, image/artifact checksums, and timestamps.
 
-Later deployment and acceptance evidence is recorded separately with its exact source commit and timestamps.
+**The production definition of done in the attached plan is not established by
+this document.** Signed public distribution and installed-app/physical-hardware
+acceptance remain separate gates even when automated checks or backend deployment
+have succeeded.
 
 This report maps the numbered sections of
 `PackProof_Desktop_Windows_macOS_Development_Plan(1).docx` to the implemented
@@ -15,11 +17,11 @@ external service, certificate, operating-system behavior or physical device has
 been verified. The acceptance template remains pending until evidence is recorded
 for the exact release commit.
 
-## Verification recorded so far
+## Historical verification snapshots
 
 | Evidence | Recorded result | What it establishes and does not establish |
 |---|---|---|
-| Desktop automated suite | 44 tests passed, including the added Orders filtering test | Auth/API contracts, encrypted queue failure/recovery behavior, renderer contracts, security helpers and sanitized reporting; not physical camera or OS acceptance. |
+| Earlier desktop automated suite | 44 tests passed in the earlier implementation snapshot, including the added Orders filtering test | Auth/API contracts, encrypted queue failure/recovery behavior, renderer contracts, security helpers and sanitized reporting; not physical camera or OS acceptance. |
 | Renderer smoke | 15 checks passed | Actual Chromium MediaRecorder with a synthetic webcam, original WebM chunks, locally bundled WASM EAN recognition, navigation guard, label confirmation, attestation, timestamps, major screens, dark mode and 1000-pixel layout. Backend/native bridge responses are test fixtures. |
 | Backend regression selection | 51 tests passed | Desktop registration and multipart/commit/manifest contracts, account/allowance boundaries, shipping review, compatible existing capture behavior and media verification. Not a live deployed-service acceptance run. |
 | Release policy and distribution suites | 10 tests passed | Signing/configuration prerequisites, channel separation and promotion validation. Not proof of a real signature or updater installation. |
@@ -30,8 +32,9 @@ for the exact release commit.
 | Windows development CI | Passed in the same run | Packaged native startup with OS secure storage available; silent current-user install, same-version reinstall and uninstall all preserved the queue sentinel. This is not real recorded-evidence recovery or production signing. |
 | Packaged native launch check | Passed on all three native runners | Packaged main-process startup and renderer IPC through sandboxed preload; OS secure storage available. Authentication and physical capture remain separate checks. |
 
-The checkout has been reconciled with the verified live backend source baseline
-(`2328447`); reconciliation is recorded in commit `d45727b`. Test results and
+The development checkout was initially reconciled with the then-observed live
+backend source baseline (`2328447`); that reconciliation is recorded in commit
+`d45727b`. This historical baseline is not a statement of the current deployed head. Test results and
 earlier CI builds are not interchangeable with final-commit artifact acceptance.
 Use the final CI artifact inventories, checksums, native-launch reports and
 installer reports as the distribution record.
@@ -52,17 +55,36 @@ installer reports as the distribution record.
 | 19–20: resumable background upload | Stable upload identities, bounded parts, server part reconciliation, retry/backoff, exact hash/size receipts and separate upload/commit states. Recording can return to the next shipment while uploads continue. | Deployed large-file transport, network changes/loss at 5% and 95%, authorization expiry and sustained throughput. |
 | 21–23: close, crash recovery and cleanup | Background tray/menu behavior, explicit quit choices, persistent job recovery, interrupted-recording retention and configurable verified-completion retention (24-hour default). | Installed-process crash/reboot/relaunch and earlier-version upgrade with actual queued media. Partial recordings are retained but never silently submitted as completed continuous captures. |
 | 29: attestation | Explicit account-authenticated seller statement; no invented desktop biometric claim. Server requires appropriate evidence/attestation/review before finalization. | Full live seller walkthrough and confirmation that the deployed server enforces the same contract. |
-| 30: native notifications | Local evidence completion/failure, connection restoration, marketplace synchronization and update-ready notifications, in-app workstation notifications and notification preference. | Native delivery/permission behavior and server-side attention notification coverage have not been certified. |
+| 30: native notifications | Local evidence completion/failure, connection restoration, Proof attention transitions, marketplace synchronization success/issues and update-ready notifications. Main-process monitoring continues while idle or in the tray; first server snapshots are silent, subsequent transitions are account-scoped and de-duplicated. Notification text is fixed and excludes shipment/account content; the existing desktop-notification preference applies. | Native OS delivery/permissions still require installed acceptance. Monitoring polls every two minutes after the prior poll completes, with a 25-second request-abort deadline and at most ten attention pages (1,000 records) per poll. Incomplete or failed reads emit no transition and preserve the prior baseline. No push delivery or notifications after quit/sign-out are claimed. |
 | 31, 47–48: deep links, scanners, shortcuts | Validated environment-specific protocols, Proof/order/upload navigation, keyboard-emulating scanner input and suffix settings, search/new-Proof/settings/capture shortcuts. | OS protocol registration/cold-start behavior and physical USB/Bluetooth scanner acceptance. Native HID/serial integration is outside V1. |
 | 32–35: settings, diagnostics and reporting | Workstation/retention/theme/notification/update settings, version, redacted diagnostics, rotated coded logs and optional strictly filtered Sentry reporting. | A PackProof-owned reporting destination must be configured and receipt/filtering verified; no production telemetry delivery is claimed. |
 | 36–40: Windows/macOS distribution | NSIS EXE; Mac APP/DMG/ZIP and optional PKG; per-environment metadata/protocols; queue-preserving install policy; signing, entitlements, notarization and verification automation. | Windows signing credentials/publisher identity; Apple Developer ID Application/Installer credentials and notarization; clean-machine signed installation and real upgrade/uninstall acceptance. |
-| 41–42, 58–60: updates, environments and release pipeline | Distinct dev/staging/production identities and feeds, guarded updater, durable shutdown, no update restart during capture, version metadata, native CI matrix and protected promotion workflow. | PackProof update-host deployment/configuration and a genuine signed older-to-newer update with queued evidence. Production publication remains blocked without valid signatures and exact-commit acceptance. |
-| 43–44: API authority | Existing typed domain contracts and backend lifecycle remain authoritative; stable capture/upload identities, request IDs, cancellation and token refresh. | Live backend candidate deployment and capability verification are pending at this snapshot. |
+| 41–42, 58–60: updates, environments and release pipeline | Distinct dev/staging/production identities and feeds, guarded updater, durable shutdown, no update restart during capture, version metadata, native CI matrix and protected promotion workflow. | Update-host deployment/configuration outcomes are recorded separately; a genuine signed older-to-newer update with queued evidence still requires acceptance. Production publication remains blocked without valid signatures and exact-commit acceptance. |
+| 43–44: API authority | Existing typed domain contracts and backend lifecycle remain authoritative; stable capture/upload identities, request IDs, cancellation and token refresh. | Use the separate exact-source deployment record for backend activation, capability, and live acceptance outcomes. |
 | 45–46, 55–56: offline/account behavior | Account-bound cached reads and local capture, protected staging, automatic retry, honest local-versus-remote status, account-switch fences and recovery isolation. | Installed/live-service offline capture, reconnection, revoked permission, expired sessions and machine restart. Offline recording does not guarantee future allowance or permission. |
 | 49–51, 54, 57: accessibility/performance/testing | Keyboard/focus/labels/reduced-motion support, paging, bounded media/IPC processing, stream cleanup and automated failure tests. | Screen-reader use, OS scaling, 125–200% DPI, 4K/multiple monitors, resource soak, large queues and full Windows/Intel/Apple-Silicon hardware matrix. |
 | 53: privacy | Minimal capture permissions, encrypted staging, no secrets/media in automatic reporting and documented retention/reporting behavior. | Review the current public privacy disclosures against shipped desktop behavior and configured telemetry before production. |
 | 61–64, 66–68: phases, non-negotiables and definition of done | Foundation, Proof management, Packing Station, evidence engine, marketplace client, native features and distribution automation are implemented. Neutral positioning, server authority, canonical transaction identity and original preservation remain intact. | Release/hardening phases are not complete until signing, deployment and the acceptance matrix pass. The seller-on-a-clean-PC-or-Mac definition of done has not yet been demonstrated end to end. |
 | 65: future enhancements | Architecture leaves room for additional workstation integrations. | Multi-camera synchronization, scales, native warehouse scanners, printer events, enterprise provisioning and expanded receiving/claims modes remain deferred as the plan permits. |
+
+## Notification behavior and validation
+
+The native monitor reads the authoritative attention-filtered Proof collection
+and commerce-connection status independently of renderer refreshes. A single poll
+is in flight at a time. It stops and aborts pending requests on sign-out/account
+change or quit; stale completions cannot produce another account's notification.
+The first successful snapshot for each account establishes a silent baseline.
+Later attention additions and marketplace error transitions produce one generic
+notification per batch/episode. Explicit synchronization failures are also
+reported once for a server-verified connection (or connection-catalog failure),
+and successful synchronization re-arms that episode. Errors and partial attention
+pages never become a fabricated empty baseline.
+
+Focused tests cover idle polling, initial-snapshot suppression, attention and
+marketplace de-duplication/recovery, account changes, cancellation/non-overlap,
+request failures, shutdown, fixed notification text, and the ten-page polling
+budget. The final complete desktop-suite/build result belongs to the final
+source-specific verification record, not the earlier counts above.
 
 ## Important contract decisions
 
@@ -73,9 +95,9 @@ installer reports as the distribution record.
   billing allowance, original bytes and canonical Proof state.
 - Migration `074_desktop_capture_registration` is additive to the reconciled
   backend. Clients require the advertised desktop capability before submission;
-  an incompatible backend leaves the original on the workstation. Deployment is
-  being prepared following recovered AWS access; successful activation is not
-  recorded here yet. See [the backend contract](../../docs/DESKTOP_CAPTURE_CONTRACT.md).
+  an incompatible backend leaves the original on the workstation. Deployment and successful activation, if completed, are evidenced separately by
+  the exact migration receipt, source/image identifiers, capability checks, and
+  controlled live acceptance results; this paragraph makes no deployment-status claim. See [the backend contract](../../docs/DESKTOP_CAPTURE_CONTRACT.md).
 - Existing server limits remain **300 seconds and 250,000,000 bytes**, with
   possibly lower account allowances. The implementation does not promise
   unlimited offline videos. WebM without a duration header is validated from
@@ -94,10 +116,11 @@ installer reports as the distribution record.
    corrected Windows installer check passed run 36318867124. Subsequent source
    changes require the same checks on their final artifact commit; retain the
    checksums and reports.
-2. **Activate the backend contract safely.** Verify the reconciled source/schema,
-   apply migration 074, deploy the backend candidate, verify capability/health
-   and complete a controlled real evidence upload/commit/finalize. Existing live
-   functionality must remain intact.
+2. **Retain backend acceptance evidence.** Record the reconciled source/schema,
+   executed migration 074 receipt, deployed image and source, capability/health
+   checks, and controlled real evidence upload/commit/finalize results in the
+   deployment record. Verify existing live functionality remains intact; do not
+   infer these outcomes from implementation or historical tests.
 3. **Configure production distribution credentials and hosting.** Supply the
    actual Windows publisher certificate/service, Apple Developer ID identities
    and notarization access, protected CI settings, and the PackProof update

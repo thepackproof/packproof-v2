@@ -68,15 +68,18 @@ export class DesktopApi {
   getMe(signal?: AbortSignal): Promise<ProfileView> { return this.request('/me', { signal }); }
   updateProfile(input: { username?: string; displayName?: string }): Promise<ProfileView> { return this.request('/me/profile', { method: 'PATCH', body: input }); }
   getCapabilities(signal?: AbortSignal): Promise<DesktopCapabilities> { return this.request('/capabilities', { auth: false, signal }); }
-  async listProofs(input: { view?: 'all' | 'attention' | 'completed'; q?: string } = {}): Promise<ProofCollectionItem[]> {
+  async listProofs(input: { view?: 'all' | 'attention' | 'completed'; q?: string; signal?:AbortSignal; maxPages?:number } = {}): Promise<ProofCollectionItem[]> {
     const result = new Map<string, ProofCollectionItem>();
     let offset: number | null = 0;
     const accountId = this.options.getAccountId();
+    let pages=0;
     while (offset !== null) {
+      input.signal?.throwIfAborted();
+      if(input.maxPages!==undefined&&++pages>input.maxPages)throw new DesktopApiError('POLL_PAGE_LIMIT','Attention monitoring will retry later. Open Proofs to review the full list.',502);
       if (!accountId) throw new DesktopApiError('UNAUTHENTICATED', 'Sign in to PackProof.', 401);
       this.assertAccount(accountId);
       const query: URLSearchParams = new URLSearchParams({ view: input.view ?? 'all', q: input.q ?? '', limit: '100', offset: String(offset) });
-      const page: { proofs: ProofCollectionItem[]; nextOffset?: number | null } = await this.request(`/me/proofs?${query}`);
+      const page: { proofs: ProofCollectionItem[]; nextOffset?: number | null } = await this.request(`/me/proofs?${query}`,{signal:input.signal});
       for (const proof of page.proofs) result.set(proof.proofId, proof);
       const next: number | null = page.nextOffset ?? null;
       if (next !== null && (!Number.isSafeInteger(next) || next <= offset)) throw new DesktopApiError('INVALID_PAGINATION', 'PackProof returned an incomplete Proof list. Try again.', 502);
@@ -90,7 +93,7 @@ export class DesktopApi {
   async listOrders(filter: 'ready' | 'completed' | 'all' = 'all'): Promise<FulfillmentQueueItem[]> { return (await this.request<{ items: FulfillmentQueueItem[] }>(`/me/fulfillment-queue?filter=${filter}`)).items; }
   resolvePackingStation(reference: string): Promise<PackingStationResolveView> { return this.request('/me/packing-station/resolve', { method: 'POST', body: { reference } }); }
   listConnectedAccounts(): Promise<ConnectedAccountsListView> { return this.request('/me/connected-accounts'); }
-  listCommerceConnections(): Promise<{ connections: CommerceConnectionView[] }> { return this.request('/me/integration-connections?capability=commerce'); }
+  listCommerceConnections(signal?:AbortSignal): Promise<{ connections: CommerceConnectionView[] }> { return this.request('/me/integration-connections?capability=commerce',{signal}); }
   syncCommerceConnection(connectionId: string): Promise<CommerceSyncView> { return this.request(`/me/commerce-connections/${id(connectionId)}/sync`, { method: 'POST', body: {} }); }
   startConnectedAccountConnect(provider: string, input: { shop?: string } = {}): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> { return this.request(`/me/connected-accounts/${id(provider)}/connect`, { method: 'POST', body: input }); }
   getShipmentIntegrity(proofId: string): Promise<ShipmentIntegrityView> { return this.request(`/proofs/${id(proofId)}/shipment-integrity`); }
