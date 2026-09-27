@@ -1,0 +1,92 @@
+name: BrowserStack iOS device IPA
+
+on:
+  push:
+    branches:
+      - feature/ios-parity-browserstack-20260927
+    paths:
+      - '.github/workflows/browserstack-ios-device.yml'
+      - 'mobile/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-device-ipa:
+    runs-on: macos-15
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+      EXPO_PUBLIC_PACKPROOF_API_BASE_URL: https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws
+      EXPO_PUBLIC_PACKPROOF_AUTH_MODE: cognito
+      EXPO_PUBLIC_COGNITO_USER_POOL_ID: us-east-1_GdgTeYaOO
+      EXPO_PUBLIC_COGNITO_CLIENT_ID: 34pnucunllka2jcs8hsq762m5e
+      EXPO_PUBLIC_COGNITO_REGION: us-east-1
+      EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Select installed Xcode 26 or newer
+        run: |
+          set -euo pipefail
+          XCODE_APP=$(python3 - <<'PY'
+          import glob, re
+          candidates = []
+          for app in glob.glob('/Applications/Xcode_*.app'):
+            match = re.search(r'Xcode_(\d+)\.(\d+)', app)
+            if match and int(match[1]) >= 26 and 'beta' not in app.lower():
+              candidates.append(((int(match[1]), int(match[2])), app))
+          if not candidates:
+              raise SystemExit('Xcode 26+ is required.')
+          print(max(candidates)[1])
+          PY
+          )
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+      - run: npm ci
+      - name: Generate iOS native project and resolve Pods
+        run: |
+          npx expo prebuild --platform ios --no-install
+          cd ios
+          pod install
+      - name: Compile unsigned device application
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace ios/PackProof.xcworkspace -scheme PackProof \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/packproof-ios-device" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            build | tee "$RUNNER_TEMP/ios-device-build.log"
+      - name: Package BrowserStack IPA
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/packproof-ios-device/Build/Products/Release-iphoneos/PackProof.app"
+          test -d "$APP"
+          rm -rf dist/browserstack
+          mkdir -p dist/browserstack/Payload
+          ditto "$APP" dist/browserstack/Payload/PackProof.app
+          (
+            cd dist/browserstack
+            /usr/bin/zip -qry PackProof-BrowserStack.ipa Payload
+            test -s PackProof-BrowserStack.ipa
+            /usr/bin/unzip -l PackProof-BrowserStack.ipa | head -80
+          )
+          shasum -a 256 dist/browserstack/PackProof-BrowserStack.ipa > dist/browserstack/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-browserstack-ios-device-${{ github.sha }}
+          path: |
+            mobile/dist/browserstack/PackProof-BrowserStack.ipa
+            mobile/dist/browserstack/SHA256SUMS
+            ${{ runner.temp }}/ios-device-build.log
+          retention-days: 7
