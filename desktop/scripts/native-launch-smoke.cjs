@@ -6,7 +6,11 @@ const { spawn, spawnSync } = require('node:child_process');
 const { releaseContext } = require('./release-policy.cjs');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const fatalCodes = new Set(['UNCAUGHT_EXCEPTION', 'UNHANDLED_REJECTION', 'RENDERER_CRASH', 'SECURE_STORAGE_OR_QUEUE_UNAVAILABLE']);
+const fatalCodes = new Set(['UNCAUGHT_EXCEPTION', 'UNHANDLED_REJECTION', 'RENDERER_CRASH', 'SECURE_STORAGE_OR_QUEUE_UNAVAILABLE', 'QUIT_FAILED']);
+const shutdownCodes = new Set(['WINDOW_CLOSE_REQUESTED','WINDOW_CLOSE_ALLOWED','WINDOW_CLOSE_WAITING_FOR_DRAIN','WINDOW_CLOSE_CAPTURE_BLOCKED','WINDOW_CLOSE_QUEUE_PROMPT','WINDOW_CLOSE_CANCELED','QUIT_REQUESTED','QUIT_EVIDENCE_DRAINED','QUIT_REPORTING_CLOSED','QUIT_CLOSE_ALLOWED','QUIT_NATIVE_REQUESTED','QUIT_CANCELED','QUIT_FAILED','APP_BEFORE_QUIT','APP_WILL_QUIT']);
+function shutdownDiagnostics(rows) {
+  return rows.filter(row => row.category === 'SYSTEM' && shutdownCodes.has(row.code)).slice(-32).map(row => ({ code: row.code, at: Number.isFinite(Date.parse(row.at)) ? new Date(row.at).toISOString() : null }));
+}
 function gracefulExitOutcome(child) {
   return child.exitCode === 0 && child.signalCode === null ? 'normal-window-close' : 'abnormal-exit-during-window-close';
 }
@@ -106,7 +110,10 @@ async function launchCycle(target, logFile, result) {
     if (!result.started || !result.rendererReady) throw new Error('Timed out waiting for this launch’s STARTED and renderer-to-preload IPC readiness.');
     if (result.secureStorage !== 'available') throw new Error('Native protected storage is unavailable; persisted-installation restart was not exercised.');
   } catch (error) { failure = error; }
-  finally { if (child?.pid) result.shutdown = await stopOwnedChild(child, target, result); }
+  finally {
+    if (child?.pid) result.shutdown = await stopOwnedChild(child, target, result);
+    result.shutdownDiagnostics = shutdownDiagnostics(diagnosticRows(logFile).slice(previousRows));
+  }
   if (failure) throw failure;
   // Quit may fail after readiness: include shutdown diagnostics and require a clean owned-process exit.
   result.exitCode = child.exitCode; result.signalCode = child.signalCode;
@@ -159,5 +166,5 @@ async function main() {
   if (failure) throw failure;
   console.log('Native application launch, normal quit/relaunch and persisted protected installation passed. Authentication, real evidence recovery, hardware and production signing were not tested.');
 }
-module.exports = { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose };
+module.exports = { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose, shutdownDiagnostics };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

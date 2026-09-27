@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose } = require('../scripts/native-launch-smoke.cjs');
+const { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose, shutdownDiagnostics } = require('../scripts/native-launch-smoke.cjs');
 
 test('installed launch accepts only an explicit absolute executable argument', () => {
   assert.deepEqual(launchArguments([]), {});
@@ -72,4 +72,10 @@ test('missing, wrong-process, ambiguous, failed and timed-out Windows delivery c
   const missing = requestWindowsClose(child, executable, () => ({ status: 1, stdout: JSON.stringify({ ...acknowledged, matchedWindows: 0, delivered: false, failureCode: 'NO_UNIQUE_OWNED_WINDOW' }) }));
   assert.equal(missing.matchedWindows, 0);assert.equal(missing.failureCode, 'NO_UNIQUE_OWNED_WINDOW');
   assert.throws(() => assertCleanShutdown({ exitCode: 0, signalCode: null }, 'normal-close-request-not-confirmed', []), /zero-exit/);
+});
+test('shutdown evidence contains only bounded fixed lifecycle codes and timestamps', () => {
+  const rows=[{category:'SYSTEM',code:'QUIT_EVIDENCE_DRAINED',at:'2026-09-27T16:00:00Z',token:'secret',message:'private'}, {category:'SYSTEM',code:'ACCOUNT_PRIVATE',at:'2026-09-27T16:00:00Z'}, {category:'AUTH',code:'QUIT_REQUESTED',at:'2026-09-27T16:00:00Z'}];
+  assert.deepEqual(shutdownDiagnostics(rows),[{code:'QUIT_EVIDENCE_DRAINED',at:'2026-09-27T16:00:00.000Z'}]);
+  assert.equal(shutdownDiagnostics(Array(100).fill(rows[0])).length,32);
+  assert.throws(()=>assertCleanShutdown({exitCode:0,signalCode:null},'normal-window-close',[{category:'SYSTEM',code:'QUIT_FAILED'}]),/QUIT_FAILED/);
 });
