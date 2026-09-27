@@ -6,6 +6,7 @@ import { createHarness, createUser, type TestHarness } from './helpers.js';
 import { DesktopApi } from '../../desktop/src/main/api.js';
 import { DesktopEvidenceTransport } from '../../desktop/src/main/evidence-api.js';
 import type { CaptureMetadata } from '../../desktop/src/main/evidence/types.js';
+import {registerDesktopCapture} from '../src/domain/capture-sessions.js';
 
 let harness: TestHarness, server: Server, seller: string, api: DesktopApi, transport: DesktopEvidenceTransport, media: Buffer;
 const signal = () => new AbortController().signal;
@@ -26,7 +27,7 @@ function metadata(detections: CaptureMetadata['detections'] = []): CaptureMetada
   return { captureSource: 'DESKTOP_CAMERA', installationId: 'desktop-integration-install', appVersion: '1.0.0', platform: 'win32', startedAt: '2026-09-26T13:00:00.000Z', endedAt: '2026-09-26T13:00:01.000Z', camera: 'USB camera fixture', detections, provenance: 'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED', offline: true };
 }
 describe('desktop native transport against real PackProof API', () => {
-  it('registers honest offline capture, resumes original bytes, reconciles commit, attests, freezes and streams range/export', async () => {
+  it('refuses new desktop admission while an existing session resumes, commits, attests, freezes and streams range/export', async () => {
     const proof = await api.createProof({ itemTitle: 'Desktop integration shipment', externalReference: 'desktop-integration-order' });
     expect(proof.status).toBe('READY_FOR_EVIDENCE');
     expect((await api.listProofs()).map(row => row.proofId)).toContain(proof.proofId);
@@ -39,9 +40,13 @@ describe('desktop native transport against real PackProof API', () => {
       { value: '1Z999AA10123456785', format: 'CODE_128', detectedAtMs: 150, notThisPackage: true },
     ]) };
     expect((await transport.authorizeCapture(context, signal())).id).toBeUndefined();
-    const capture = await transport.registerCapture(recording, signal());
+    await expect(transport.registerCapture(recording,signal())).rejects.toMatchObject({code:'DESKTOP_CAPTURE_ADMISSION_PAUSED',status:503});
+    // Seed the already-admitted row, then exercise the unmodified shipped client.
+    const existing=await registerDesktopCapture(harness.db,harness.clock,seller,proof.proofId,{idempotencyKey:context.jobId,...receipt,contentType:recording.mimeType,recordedDurationMs:1000,interrupted:false,desktopContext:{schemaVersion:1,installationId:recording.metadata.installationId,appVersion:recording.metadata.appVersion,platform:'win32',captureStartedAt:recording.metadata.startedAt,captureEndedAt:recording.metadata.endedAt,cameraLabel:recording.metadata.camera,offline:true}});
+    const recovery={...recording,captureSessionId:existing.id};
+    const capture = await transport.registerCapture(recovery, signal());
     expect(capture.id).toMatch(/^cap_/);
-    const replay = await transport.registerCapture(recording, signal());
+    const replay = await transport.registerCapture(recovery, signal());
     expect(replay.id).toBe(capture.id);
     const uploadInput = { ...context, ...receipt, mimeType: 'video/mp4', captureSessionId: capture.id! };
     const upload = await transport.initializeUpload(uploadInput, signal());

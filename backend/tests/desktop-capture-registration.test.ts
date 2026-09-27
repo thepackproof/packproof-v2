@@ -27,11 +27,10 @@ describe('post-capture desktop registration',()=>{
     expect((await request(h.app).get('/capabilities')).body.desktopCapture).toMatchObject({registrationVersions:[1],client:'DESKTOP_CAMERA',registrationTiming:'POST_CAPTURE_CLIENT_REPORTED',maxBytes:250000000,maxDurationSeconds:300});
     await expect(createCaptureSession(h.db,clock,seller,await proof(),{client:'DESKTOP_CAMERA',idempotencyKey:'false-start'})).rejects.toMatchObject({code:'CAPTURE_CLIENT_REQUIRED'});
   });
-  it('registers an earlier offline capture without inventing a server recording start, commits original bytes and freezes honest provenance',async()=>{
+  it('preserves a pre-rollback registered desktop capture, original commitment and honest frozen provenance',async()=>{
     const id=await proof();
-    const response=await request(h.app).post(`/proofs/${id}/capture-sessions/desktop-registration`).set(auth(seller)).set('Idempotency-Key','offline-http').send(input());
-    expect(response.status).toBe(201);
-    const s=response.body;
+    // Domain fixture represents a row admitted before the rollback took effect.
+    const s=await registerDesktopCapture(h.db,clock,seller,id,{...input(),idempotencyKey:'offline-http'});
     expect(s).toMatchObject({state:'RECORDED',client:'DESKTOP_CAMERA',policyVersion:'packproof.desktop-client-capture/v1',registrationTiming:'POST_CAPTURE_CLIENT_REPORTED',recordedAt:now.toISOString(),clientReportedCapture:{provenance:'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED',desktopContext:context}});
     const saved=await upload(id,s.id);
     expect(saved.sha256).toBe(sha256Hex(media));
