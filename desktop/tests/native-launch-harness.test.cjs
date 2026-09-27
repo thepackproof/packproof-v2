@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown } = require('../scripts/native-launch-smoke.cjs');
+const { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose } = require('../scripts/native-launch-smoke.cjs');
 
 test('installed launch accepts only an explicit absolute executable argument', () => {
   assert.deepEqual(launchArguments([]), {});
@@ -50,4 +50,26 @@ test('fatal diagnostics appended after renderer readiness make even a zero-exit 
     fs.appendFileSync(file, '{"code":"UNCAUGHT_EXCEPTION"}\n');
     assert.throws(() => assertCleanShutdown(clean, 'normal-window-close', diagnosticRows(file)), /UNCAUGHT_EXCEPTION/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+test('Windows close request uses a file helper with exact owned PID/executable arguments and explicit delivery acknowledgement', () => {
+  const child = { pid: 1234 }, executable = path.resolve('installed directory', 'PackProof Dev.exe');let invocation;
+  const acknowledged = { method: 'owned-visible-window-wm-close', processId: child.pid, matchedWindows: 1, delivered: true };
+  const result = requestWindowsClose(child, executable, (...args) => { invocation = args;return { status: 0, stdout: JSON.stringify(acknowledged) }; });
+  assert.equal(result.delivered, true);assert.equal(result.matchedWindows, 1);
+  assert.equal(invocation[0], 'powershell.exe');assert.ok(invocation[1].includes('-File'));assert.ok(!invocation[1].includes('-Command'));
+  assert.deepEqual(invocation[1].slice(-4), ['-OwnedProcessId', '1234', '-ExpectedExecutable', executable]);assert.equal(invocation[2].timeout, 10000);
+  assert.throws(() => requestWindowsClose({ pid: '1234; malicious' }, executable, () => { throw new Error('must not run'); }), /owned native process/);
+});
+test('missing, wrong-process, ambiguous, failed and timed-out Windows delivery cannot pass as a normal close', () => {
+  const child = { pid: 1234 }, executable = path.resolve('PackProof Dev.exe');
+  const acknowledged = { method: 'owned-visible-window-wm-close', processId: child.pid, matchedWindows: 1, delivered: true };
+  for (const response of [
+    { status: 0, stdout: '' }, { status: 0, stdout: JSON.stringify({ ...acknowledged, processId: 9999 }) },
+    { status: 0, stdout: JSON.stringify({ ...acknowledged, matchedWindows: 2 }) },
+    { status: 0, stdout: JSON.stringify({ ...acknowledged, delivered: false }) },
+    { status: 1, stdout: JSON.stringify(acknowledged) }, { status: null, error: { code: 'ETIMEDOUT' }, stdout: JSON.stringify(acknowledged) },
+  ]) assert.equal(requestWindowsClose(child, executable, () => response).delivered, false);
+  const missing = requestWindowsClose(child, executable, () => ({ status: 1, stdout: JSON.stringify({ ...acknowledged, matchedWindows: 0, delivered: false, failureCode: 'NO_UNIQUE_OWNED_WINDOW' }) }));
+  assert.equal(missing.matchedWindows, 0);assert.equal(missing.failureCode, 'NO_UNIQUE_OWNED_WINDOW');
+  assert.throws(() => assertCleanShutdown({ exitCode: 0, signalCode: null }, 'normal-close-request-not-confirmed', []), /zero-exit/);
 });

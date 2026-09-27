@@ -15,6 +15,18 @@ function assertCleanShutdown(child, shutdown, rows) {
   if (fatal) throw new Error(`Native application reported ${fatal.code} during this launch or shutdown.`);
   if (shutdown !== 'normal-window-close' || gracefulExitOutcome(child) !== 'normal-window-close') throw new Error('The native application did not complete a normal zero-exit window-close shutdown.');
 }
+function requestWindowsClose(child, executable, run = spawnSync) {
+  if (!Number.isSafeInteger(child.pid) || child.pid < 1 || !path.isAbsolute(executable)) throw new Error('An owned native process and absolute executable are required.');
+  const method = 'owned-visible-window-wm-close';
+  const result = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(__dirname, 'request-native-close-windows.ps1'), '-OwnedProcessId', String(child.pid), '-ExpectedExecutable', executable], { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 16384 });
+  let reported;
+  try { reported = JSON.parse(result.stdout || ''); } catch { /* An error is not a delivery acknowledgement. */ }
+  const targetMatches = reported?.method === method && reported.processId === child.pid;
+  const count = targetMatches && Number.isSafeInteger(reported.matchedWindows) && reported.matchedWindows >= 0 && reported.matchedWindows <= 1000 ? reported.matchedWindows : null;
+  const delivered = result.status === 0 && !result.error && targetMatches && count === 1 && reported.delivered === true;
+  const failureCode = targetMatches && ['NO_UNIQUE_OWNED_WINDOW', 'WINDOW_CLOSE_POST_FAILED'].includes(reported.failureCode) ? reported.failureCode : 'OWNED_WINDOW_CLOSE_NOT_CONFIRMED';
+  return { method, delivered, matchedWindows: count, failureCode: delivered ? null : failureCode };
+}
 function diagnosticRows(file) {
   if (!fs.existsSync(file)) return [];
   return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap(line => {
@@ -46,17 +58,18 @@ async function launchTarget(release, output, installedExecutable) {
   }
   return { executable, appBundle: null, executionLocation: 'registered-current-user-install' };
 }
-async function stopOwnedChild(child, appBundle) {
+async function stopOwnedChild(child, target, result) {
   if (child.exitCode !== null || child.signalCode !== null) return 'already-exited';
   if (process.platform === 'win32') {
-    spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$process = Get-Process -Id ${child.pid} -ErrorAction SilentlyContinue; if ($process) { [void]$process.CloseMainWindow() }`], { timeout: 10000, windowsHide: true, stdio: 'ignore' });
+    result.closeRequest = requestWindowsClose(child, target.executable);
   } else {
-    const quotedPath = appBundle.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-    spawnSync('osascript', ['-e', `tell application "${quotedPath}" to quit`], { timeout: 10000, stdio: 'ignore' });
+    const quotedPath = target.appBundle.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    const request = spawnSync('osascript', ['-e', `tell application "${quotedPath}" to quit`], { timeout: 10000, stdio: 'ignore' });
+    result.closeRequest = { method: 'application-quit', delivered: request.status === 0 && !request.error };
   }
   const gracefulDeadline = Date.now() + 10000;
   while (child.exitCode === null && child.signalCode === null && Date.now() < gracefulDeadline) await delay(200);
-  if (child.exitCode !== null || child.signalCode !== null) return gracefulExitOutcome(child);
+  if (child.exitCode !== null || child.signalCode !== null) return result.closeRequest.delivered ? gracefulExitOutcome(child) : 'normal-close-request-not-confirmed';
   // Only the process created on this fresh unauthenticated CI profile may be terminated.
   child.kill('SIGTERM');
   const deadline = Date.now() + 5000;
@@ -93,7 +106,7 @@ async function launchCycle(target, logFile, result) {
     if (!result.started || !result.rendererReady) throw new Error('Timed out waiting for this launch’s STARTED and renderer-to-preload IPC readiness.');
     if (result.secureStorage !== 'available') throw new Error('Native protected storage is unavailable; persisted-installation restart was not exercised.');
   } catch (error) { failure = error; }
-  finally { if (child?.pid) result.shutdown = await stopOwnedChild(child, target.appBundle); }
+  finally { if (child?.pid) result.shutdown = await stopOwnedChild(child, target, result); }
   if (failure) throw failure;
   // Quit may fail after readiness: include shutdown diagnostics and require a clean owned-process exit.
   result.exitCode = child.exitCode; result.signalCode = child.signalCode;
@@ -146,5 +159,5 @@ async function main() {
   if (failure) throw failure;
   console.log('Native application launch, normal quit/relaunch and persisted protected installation passed. Authentication, real evidence recovery, hardware and production signing were not tested.');
 }
-module.exports = { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown };
+module.exports = { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
