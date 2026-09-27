@@ -1,0 +1,9 @@
+# Reviewed CI run 36333170519 / Source secrets job 108658989998.
+# The finding is existingWebsiteObservedUnchanged.origins.Items[0].OriginAccessControlId.
+# It is a CloudFront OAC resource identifier, not authentication or signing material.
+# The historical JSON matches the verified GetDistribution deployment receipt
+# recorded on 2026-09-27; this exact field also matches the original AWS response.
+# Restrict the exception to this immutable commit, file, rule, and line. All other
+# history and findings remain scanned. Gitleaks v8.30.1 auto-loads this file from
+# the scan source and supports this four-part commit fingerprint (not a global one).
+65d4abcfdc868e5de0d381edaa7c243cf5765fa7:infra/desktop-distribution/deployment-status.json:generic-api-key:200
