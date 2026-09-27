@@ -6,3 +6,4 @@ release/
 !.env.example
 *.p12
 *.pfx
+artifacts/

@@ -1,0 +1,34 @@
+let release_buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+rule release_bucket_protection when %release_buckets !empty {
+  %release_buckets {
+    DeletionPolicy == 'Retain'
+    UpdateReplacePolicy == 'Retain'
+    Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+    Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+    Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+    Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+    Properties.VersioningConfiguration.Status == 'Enabled'
+    Properties.OwnershipControls.Rules[*].ObjectOwnership == 'BucketOwnerEnforced'
+    Properties.BucketEncryption.ServerSideEncryptionConfiguration[*].ServerSideEncryptionByDefault.SSEAlgorithm == 'AES256'
+  }
+}
+let origin_controls = Resources.*[ Type == 'AWS::CloudFront::OriginAccessControl' ]
+rule signed_origins when %origin_controls !empty {
+  %origin_controls.Properties.OriginAccessControlConfig {
+    SigningBehavior == 'always'
+    SigningProtocol == 'sigv4'
+    OriginAccessControlOriginType == 's3'
+  }
+}
+let distributions = Resources.*[ Type == 'AWS::CloudFront::Distribution' ]
+rule encrypted_downloads when %distributions !empty {
+  %distributions.Properties.DistributionConfig {
+    DefaultCacheBehavior.ViewerProtocolPolicy == 'https-only'
+    CacheBehaviors[*].ViewerProtocolPolicy == 'https-only'
+    ViewerCertificate.MinimumProtocolVersion == 'TLSv1.2_2021'
+  }
+}
+let cache_policies = Resources.*[ Type == 'AWS::CloudFront::CachePolicy' ]
+rule never_override_no_store when %cache_policies !empty {
+  %cache_policies.Properties.CachePolicyConfig.MinTTL == 0
+}

@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "status": "PASS",
+  "rules": [
+    {
+      "name": "release_bucket_protection",
+      "status": "PASS"
+    },
+    {
+      "name": "signed_origins",
+      "status": "PASS"
+    },
+    {
+      "name": "encrypted_downloads",
+      "status": "PASS"
+    },
+    {
+      "name": "never_override_no_store",
+      "status": "PASS"
+    }
+  ]
+}

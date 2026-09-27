@@ -95,6 +95,8 @@ export class DesktopApi {
   startConnectedAccountConnect(provider: string, input: { shop?: string } = {}): Promise<{ authorizationUrl: string; expiresAt: string; provider: string }> { return this.request(`/me/connected-accounts/${id(provider)}/connect`, { method: 'POST', body: input }); }
   getShipmentIntegrity(proofId: string): Promise<ShipmentIntegrityView> { return this.request(`/proofs/${id(proofId)}/shipment-integrity`); }
   createAccessLink(proofId: string): Promise<AccessLinkView> { return this.request(`/proofs/${id(proofId)}/access-links`, { method: 'POST', body: { scope: 'EVIDENCE_VIEW' } }); }
+  revokeAccessLink(proofId: string, accessLinkId: string): Promise<void> { return this.request(`/proofs/${id(proofId)}/access-links/${id(accessLinkId)}`, { method: 'DELETE' }); }
+  getManifest(proofId: string, signal?: AbortSignal): Promise<ManifestView> { return this.request(`/proofs/${id(proofId)}/manifest`, { signal }); }
   /** Stream to a native file; response is never sent across IPC. */
   exportProofPackage(proofId: string, signal?: AbortSignal): Promise<Response> { return this.response(`/proofs/${id(proofId)}/package`, { signal, timeout: 600_000 }); }
   getEvidence(proofId: string, evidenceId: string, signal?: AbortSignal, range?: string): Promise<Response> {

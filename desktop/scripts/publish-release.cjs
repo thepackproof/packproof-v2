@@ -20,6 +20,16 @@ function aws(args, allowMissing = false) {
   return result.stdout;
 }
 
+function existingReleaseObject(bucket, key, execute = aws) {
+  // HEAD returns 403 for a missing key when ListBucket is prefix-restricted.
+  // List the exact key first so roles never need to enumerate the other channel.
+  const listing = JSON.parse(execute(['s3api', 'list-objects-v2', '--bucket', bucket, '--prefix', key, '--max-keys', '1', '--output', 'json']));
+  if (listing.Contents !== undefined && !Array.isArray(listing.Contents)) throw new Error('Unexpected release object listing.');
+  if (!(listing.Contents || []).some(object => object.Key === key)) return null;
+  // An existing key disappearing or an access denial is an error, never permission to overwrite.
+  return JSON.parse(execute(['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json']));
+}
+
 async function inspectRelease(directory, { channel, sourceCommit }) {
   const report = JSON.parse(fs.readFileSync(path.join(directory, 'release-evidence.json'), 'utf8'));
   if (report.channel !== channel || report.sourceCommit !== sourceCommit || !report.signed) throw new Error('Artifact identity or signed release verification does not match this promotion.');
@@ -68,9 +78,9 @@ async function main() {
       const versioned = name.includes(release.report.version);
       const key = release.prefix + name;
       if (versioned) {
-        const existing = aws(['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json'], true);
+        const existing = existingReleaseObject(bucket, key);
         if (existing !== null) {
-          if (JSON.parse(existing).Metadata?.sha256 === sha256) continue;
+          if (existing.Metadata?.sha256 === sha256) continue;
           throw new Error('Refusing to overwrite different bytes for an existing release version. Increment the application version.');
         }
       }
@@ -87,5 +97,5 @@ async function main() {
   console.log(`Published verified ${channel} desktop release ${releases[0].report.version}.`);
 }
 
-module.exports = { inspectRelease };
+module.exports = { inspectRelease, existingReleaseObject };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

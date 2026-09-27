@@ -16,7 +16,7 @@
     "package:win": "npm run package -- --win nsis --x64",
     "package:mac": "npm run package -- --mac",
     "check": "npm run typecheck && npm test",
-    "test:release": "node --test tests/release-policy.test.cjs",
+    "test:release": "node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs",
     "verify:artifacts": "node scripts/verify-artifacts.cjs"
   },
   "dependencies": {

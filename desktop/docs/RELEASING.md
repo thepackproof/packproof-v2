@@ -27,7 +27,7 @@ In each build environment, configure the values for that environment:
 
 The workflow sets `APP_ENV`, architecture, and the platform-specific `PACKPROOF_UPDATES_URL`. It allows only `https://downloads.thepackproof.com/desktop/{channel}/{platform}/{architecture}/`. Staging and production cannot select each other's feeds. The publisher emits `latest.yml` on Windows and `latest-mac.yml` on macOS within these isolated directories.
 
-Unsigned CI can connect to an approved development/staging backend through repository variables `PACKPROOF_DESKTOP_DEV_API_BASE_URL`, `PACKPROOF_DESKTOP_DEV_WEB_BASE_URL`, `PACKPROOF_DESKTOP_DEV_COGNITO_REGION`, `PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID` and `PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID`. If these are absent, candidates target localhost and provide no account sign-in. This avoids silently connecting ordinary branch builds to production.
+Unsigned CI can connect to an approved development/staging backend through repository variables `PACKPROOF_DESKTOP_DEV_API_BASE_URL`, `PACKPROOF_DESKTOP_DEV_WEB_BASE_URL`, `PACKPROOF_DESKTOP_DEV_COGNITO_REGION`, `PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID` and `PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID`. If these are absent, candidates use the verified PackProof staging API and its public Cognito client identifiers embedded in the development workflow. These are public service coordinates, not credentials. The application is labeled PackProof Dev and has an isolated local profile; production signing and update channels remain disabled.
 
 ## Required protected signing secrets
 

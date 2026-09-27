@@ -1,0 +1,140 @@
+{
+  "checkedAt": "2026-09-27",
+  "account": "784514617543",
+  "region": "us-east-1",
+  "policyValidation": {
+    "StagingPublisherTrust": {
+      "findings": [
+        {
+          "findingDetails": "The \"token.actions.githubusercontent.com:aud\" (audience) claim key identifies the recipients that the JSON web token is intended for. Because this claim is single-valued, do not use a qualifier.",
+          "findingType": "SUGGESTION",
+          "issueCode": "CONFIRM_AUDIENCE_CLAIM_TYPE",
+          "learnMoreLink": "https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-reference-policy-checks.html#access-analyzer-reference-policy-checks-suggestion-confirm-audience-claim-type",
+          "locations": [
+            {
+              "path": [
+                {
+                  "value": "Statement"
+                },
+                {
+                  "index": 0
+                },
+                {
+                  "value": "Condition"
+                },
+                {
+                  "value": "StringEquals"
+                },
+                {
+                  "key": "token.actions.githubusercontent.com:aud"
+                }
+              ],
+              "span": {
+                "start": {
+                  "line": 1,
+                  "column": 241,
+                  "offset": 241
+                },
+                "end": {
+                  "line": 1,
+                  "column": 282,
+                  "offset": 282
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "StagingPublisherPermissions": {
+      "findings": []
+    },
+    "ProductionPublisherTrust": {
+      "findings": [
+        {
+          "findingDetails": "The \"token.actions.githubusercontent.com:aud\" (audience) claim key identifies the recipients that the JSON web token is intended for. Because this claim is single-valued, do not use a qualifier.",
+          "findingType": "SUGGESTION",
+          "issueCode": "CONFIRM_AUDIENCE_CLAIM_TYPE",
+          "learnMoreLink": "https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-reference-policy-checks.html#access-analyzer-reference-policy-checks-suggestion-confirm-audience-claim-type",
+          "locations": [
+            {
+              "path": [
+                {
+                  "value": "Statement"
+                },
+                {
+                  "index": 0
+                },
+                {
+                  "value": "Condition"
+                },
+                {
+                  "value": "StringEquals"
+                },
+                {
+                  "key": "token.actions.githubusercontent.com:aud"
+                }
+              ],
+              "span": {
+                "start": {
+                  "line": 1,
+                  "column": 241,
+                  "offset": 241
+                },
+                "end": {
+                  "line": 1,
+                  "column": 282,
+                  "offset": 282
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "ProductionPublisherPermissions": {
+      "findings": []
+    },
+    "ReleaseBucketPolicy": {
+      "findings": []
+    }
+  },
+  "certificate": {
+    "arn": "arn:aws:acm:us-east-1:784514617543:certificate/6c64a421-6e58-4791-a537-a006ab629ed0",
+    "domain": "downloads.thepackproof.com",
+    "status": "PENDING_VALIDATION",
+    "validation": [
+      {
+        "DomainName": "downloads.thepackproof.com",
+        "ValidationDomain": "downloads.thepackproof.com",
+        "ValidationStatus": "PENDING_VALIDATION",
+        "ResourceRecord": {
+          "Name": "_66ba0fc7c91ec654796c2b2e3327b7f2.downloads.thepackproof.com.",
+          "Type": "CNAME",
+          "Value": "_5e83e4d50fe06dead01d399a99934692.wzccmgtwzk.acm-validations.aws."
+        },
+        "ValidationMethod": "DNS"
+      }
+    ],
+    "inUseBy": [],
+    "createdAt": "2026-09-27T12:32:28.176000+00:00"
+  },
+  "distributionDeployed": false,
+  "dnsChanged": false,
+  "templateValidation": {
+    "passed": true,
+    "capabilities": [
+      "CAPABILITY_IAM"
+    ]
+  },
+  "immutableIdentityConditions": {
+    "repository_id": "1349680833",
+    "repository_owner_id": "314726215",
+    "ref": "refs/heads/main"
+  },
+  "immutableIdentityReview": {
+    "awsResourcesMutated": false,
+    "cloudFormationLintFindings": 0,
+    "guardRulesPassed": 4
+  }
+}

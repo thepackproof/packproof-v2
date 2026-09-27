@@ -62,7 +62,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: node --test tests/release-policy.test.cjs
+      - run: node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs
       - run: npm run build
       - name: Build isolated development installers
         run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
