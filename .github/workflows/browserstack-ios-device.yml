@@ -21,6 +21,8 @@ jobs:
     env:
       CI: '1'
       EXPO_NO_TELEMETRY: '1'
+      EAS_BUILD_PROFILE: ios-device
+      EXPO_PUBLIC_PACKPROOF_DISABLE_ORDER_SHARE: 'true'
       EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
       EXPO_PUBLIC_PACKPROOF_API_BASE_URL: https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws
       EXPO_PUBLIC_PACKPROOF_AUTH_MODE: cognito
