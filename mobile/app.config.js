@@ -19,6 +19,7 @@ function isReleaseSafeApiUrl(url) {
 
 const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
+const disableOrderShare = env("EXPO_PUBLIC_PACKPROOF_DISABLE_ORDER_SHARE") === "true";
 const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
 const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
 const isRelease = isPlayRelease || isIosRelease;
@@ -98,7 +99,7 @@ module.exports = {
       }],
     },
     plugins: [
-      ...(!isCameraSpike ? ["./plugins/with-order-share"] : []),
+      ...(!isCameraSpike && !disableOrderShare ? ["./plugins/with-order-share"] : []),
       "./plugins/with-android-back-compat",
       "./plugins/with-android-release-optimization",
       "expo-video",
