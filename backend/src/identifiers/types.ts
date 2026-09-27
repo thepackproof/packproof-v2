@@ -1,5 +1,5 @@
 /** Optional, versioned enrichment shared by every supported capture surface. */
-export type IdentifierSurface = 'ANDROID' | 'IOS' | 'WEB' | 'WAREHOUSE';
+export type IdentifierSurface = 'ANDROID' | 'IOS' | 'WEB' | 'WAREHOUSE' | 'DESKTOP';
 export interface IdentifierPolicy {
   version: 1; captureEnabled: boolean; autofillEnabled: boolean; reviewEnabled: boolean;
   surface: IdentifierSurface;

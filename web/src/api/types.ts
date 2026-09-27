@@ -82,7 +82,7 @@ export interface TransactionWriteInput {
 }
 
 export interface CanonicalProof {
-  identifiers?: import('../components/IdentifierDetails').IdentifierProjection;
+  identifiers?: import('./identifier-types').IdentifierProjection;
   presentation?: ProofPresentation;
   schema?: "packproof.proof.canonical/v1" | string;
   proofId: string;

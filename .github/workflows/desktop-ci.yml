@@ -1,0 +1,86 @@
+name: Desktop candidate builds
+
+on:
+  pull_request:
+    paths: ['desktop/**', 'packages/**', 'mobile/src/**', '.github/workflows/desktop*.yml']
+  push:
+    paths: ['desktop/**', 'packages/**', 'mobile/src/**', '.github/workflows/desktop*.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    name: Unsigned development / ${{ matrix.platform }} / ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            platform: win32
+            target: win
+            arch: x64
+          - runner: macos-15-intel
+            platform: darwin
+            target: mac
+            arch: x64
+          - runner: macos-15
+            platform: darwin
+            target: mac
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    env:
+      APP_ENV: development
+      PACKPROOF_BUILD_ARCH: ${{ matrix.arch }}
+      PACKPROOF_BUILD_PKG: '1'
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_API_BASE_URL || 'http://127.0.0.1:3000' }}
+      PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_WEB_BASE_URL || 'https://thepackproof.com' }}
+      PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_REGION || 'us-east-1' }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # No signing credentials are supplied to this job. Permit only configured ad-hoc Mac signatures.
+      CSC_FOR_PULL_REQUEST: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: node --test tests/release-policy.test.cjs
+      - run: npm run build
+      - name: Build isolated development installers
+        run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
+      - name: Verify inventory and mark unsigned candidate
+        run: node scripts/verify-artifacts.cjs
+      - name: Exercise silent current-user install, reinstall and uninstall
+        if: matrix.platform == 'win32'
+        run: pwsh -NoProfile -NonInteractive -File scripts/smoke-install-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-desktop-DEVELOPMENT-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.pkg
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/DEVELOPMENT-BUILD.txt
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/installer-smoke.json

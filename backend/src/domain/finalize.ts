@@ -3,7 +3,7 @@ import { engineRow } from "../capture/service.js";
 import { assertIntakeFinalizeContext } from "../intake/context.js";
 import { assertAttestationContextCurrent, readAttestationContext } from "./attestation-context.js";
 import { assertShippingReviewComplete } from "./capture-label-review.js";
-import { readCaptureClientContext } from "./capture-sessions.js";
+import { readCaptureClientContext, captureRegistrationTiming, DESKTOP_CAPTURE_ASSURANCE } from "./capture-sessions.js";
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
 import type { Database } from "../db/database.js";
@@ -211,7 +211,7 @@ export async function finalizeProof(
       pendingEvidenceCount: pendingEvidence.rows.length,
       committedEvidenceCount: evidence.rows.length,
       committedFulfillmentCaptureCount: evidence.rows.filter((row) =>
-        (row.capture_origin === "LEGACY_UNKNOWN" || (row.capture_origin === "AUTHORIZED_CAPTURE_SESSION" && !!row.capture_session_id && eligibleSessionIds.has(row.capture_session_id))) &&
+        (row.capture_origin === "LEGACY_UNKNOWN" || (["AUTHORIZED_CAPTURE_SESSION","CLIENT_REPORTED_DESKTOP_CAPTURE"].includes(row.capture_origin??'') && !!row.capture_session_id && eligibleSessionIds.has(row.capture_session_id))) &&
         isQualifyingFulfillmentCapture({
           evidenceType: row.evidence_type,
           validationStatus: row.validation_status,
@@ -319,9 +319,9 @@ export async function finalizeProof(
           policyVersion: eligibleSessions.find(session=>session.id===row.capture_session_id)?.policy_version,
           client: eligibleSessions.find(session=>session.id===row.capture_session_id)?.client,
           registeredAt: asRequiredIso(eligibleSessions.find(session=>session.id===row.capture_session_id)!.recorded_at),
-          origin: "AUTHORIZED_CAPTURE_SESSION",
-          registrationTiming: new Date(eligibleSessions.find(session=>session.id===row.capture_session_id)!.recorded_at).getTime()>new Date(eligibleSessions.find(session=>session.id===row.capture_session_id)!.expires_at).getTime() ? "DELAYED_NOT_INDEPENDENTLY_ATTESTED" : "WITHIN_START_WINDOW",
-          assurance: "Workflow authorization; camera origin and offline timing are not independently attested.",
+          origin: row.capture_origin,
+          registrationTiming: captureRegistrationTiming(eligibleSessions.find(session=>session.id===row.capture_session_id)!),
+          assurance: row.capture_origin==='CLIENT_REPORTED_DESKTOP_CAPTURE'?DESKTOP_CAPTURE_ASSURANCE:"Workflow authorization; camera origin and offline timing are not independently attested.",
         }} : {}),
         objectKey: row.object_key,
         ...((row as EvidenceRow & {object_version_id?: string}).object_version_id ? { objectVersionId: (row as EvidenceRow & {object_version_id: string}).object_version_id } : {}),

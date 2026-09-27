@@ -37,7 +37,7 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
     const context = await lockTransactionContext(tx, proof.transaction_id);
     if (context.proofStatus === 'FINALIZED') return null;
     const source = await loadCaptureSession(tx, actor, proofId, sessionId, true);
-    if (!['NATIVE_CAMERA','WEB_CAMERA'].includes(source.client) || source.stage_id || source.workflow_step !== 'PACKING' || source.state === 'CANCELLED'
+    if (!['NATIVE_CAMERA','WEB_CAMERA','DESKTOP_CAMERA'].includes(source.client) || source.stage_id || source.workflow_step !== 'PACKING' || source.state === 'CANCELLED'
       || clock.now().getTime() > new Date(source.recover_until).getTime()
       || (source.client_reported_context?.recordedDurationMs != null && input.detectedAtMs > source.client_reported_context.recordedDurationMs)) return null;
     const contextInput = scanContext(input);
@@ -50,7 +50,7 @@ export async function bindCaptureShipping(db: Database, clock: Clock, actor: str
     // Same lock order as shipping edits/finalization; never hold locks over HTTP.
     const context = await lockTransactionContext(tx, proof.transaction_id);
     const session = await loadCaptureSession(tx, actor, proofId, sessionId, true);
-    if (!['NATIVE_CAMERA','WEB_CAMERA'].includes(session.client) || session.stage_id || session.workflow_step !== 'PACKING' || session.state === 'CANCELLED')
+    if (!['NATIVE_CAMERA','WEB_CAMERA','DESKTOP_CAMERA'].includes(session.client) || session.stage_id || session.workflow_step !== 'PACKING' || session.state === 'CANCELLED')
       throw new DomainError('SHIPPING_SCAN_SESSION_INVALID', 'Use an active packing capture session', 409);
     const candidate = shippingBarcode(input.rawValue);
     if (!candidate) return { status: 'UNRECOGNIZED' as const };

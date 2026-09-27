@@ -145,7 +145,7 @@ export async function initializeEvidenceUpload(
           evidenceType,
           input.idempotencyKey,
           capture?.id ?? null,
-          capture ? "AUTHORIZED_CAPTURE_SESSION" : "UPLOADED_ATTACHMENT",
+          capture ? (capture.client==='DESKTOP_CAMERA'?'CLIENT_REPORTED_DESKTOP_CAPTURE':"AUTHORIZED_CAPTURE_SESSION") : "UPLOADED_ATTACHMENT",
         ],
       );
     } catch (error) {

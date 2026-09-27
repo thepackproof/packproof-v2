@@ -1,0 +1,150 @@
+name: Desktop signed release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Protected release environment
+        type: choice
+        options: [staging, production]
+        default: staging
+      include_pkg:
+        description: Build signed and notarized macOS PKG in addition to DMG and ZIP
+        type: boolean
+        default: true
+      publish:
+        description: Publish verified artifacts and updater metadata (production requires exact-commit acceptance)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  signed:
+    name: Signed ${{ inputs.channel }} / ${{ matrix.platform }} / ${{ matrix.arch }}
+    environment: desktop-${{ inputs.channel }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            platform: win32
+            target: win
+            arch: x64
+          - runner: macos-15-intel
+            platform: darwin
+            target: mac
+            arch: x64
+          - runner: macos-15
+            platform: darwin
+            target: mac
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    env:
+      APP_ENV: ${{ inputs.channel }}
+      PACKPROOF_BUILD_ARCH: ${{ matrix.arch }}
+      PACKPROOF_BUILD_PKG: ${{ inputs.include_pkg && '1' || '0' }}
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
+      PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_WEB_BASE_URL }}
+      PACKPROOF_SENTRY_DSN: ${{ vars.PACKPROOF_SENTRY_DSN }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_COGNITO_CLIENT_ID }}
+      PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_COGNITO_REGION }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_COGNITO_USER_POOL_ID }}
+      PACKPROOF_UPDATES_URL: https://downloads.thepackproof.com/desktop/${{ inputs.channel }}/${{ matrix.platform }}/${{ matrix.arch }}/
+      WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
+      WIN_CSC_LINK: ${{ matrix.platform == 'win32' && secrets.WINDOWS_CERTIFICATE_P12 || '' }}
+      WIN_CSC_KEY_PASSWORD: ${{ matrix.platform == 'win32' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+      CSC_LINK: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_APPLICATION_P12 || '' }}
+      CSC_KEY_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_APPLICATION_PASSWORD || '' }}
+      CSC_INSTALLER_LINK: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_INSTALLER_P12 || '' }}
+      CSC_INSTALLER_KEY_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_INSTALLER_PASSWORD || '' }}
+      APPLE_ID: ${{ matrix.platform == 'darwin' && secrets.APPLE_NOTARIZATION_ID || '' }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_NOTARIZATION_PASSWORD || '' }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Refuse missing signing and environment configuration
+        run: node scripts/release-policy.cjs
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: node --test tests/release-policy.test.cjs
+      - run: npm run build
+      - name: Package, sign and notarize
+        run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
+      - name: Verify OS signatures, notarization, publisher and file hashes
+        run: node scripts/verify-artifacts.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-desktop-${{ inputs.channel }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.pkg
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.blockmap
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/latest*.yml
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
+
+  publish:
+    name: Publish signed artifacts and promote updater metadata
+    needs: signed
+    if: inputs.publish
+    environment: desktop-${{ inputs.channel }}-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      APP_ENV: ${{ inputs.channel }}
+      PACKPROOF_RELEASE_BUCKET: ${{ vars.PACKPROOF_RELEASE_BUCKET }}
+      PACKPROOF_RELEASE_ACCEPTANCE_JSON: ${{ vars.PACKPROOF_RELEASE_ACCEPTANCE_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Validate acceptance and publication target before assuming cloud credentials
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          if (!process.env.PACKPROOF_RELEASE_BUCKET) throw new Error('PACKPROOF_RELEASE_BUCKET is required.');
+          if (process.env.APP_ENV === 'production') {
+            const {validateAcceptance} = await import('./desktop/scripts/check-acceptance.cjs');
+            validateAcceptance(JSON.parse(process.env.PACKPROOF_RELEASE_ACCEPTANCE_JSON || '{}'), process.env.GITHUB_SHA);
+          }
+          NODE
+      - run: npm ci --ignore-scripts
+        working-directory: desktop
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packproof-desktop-${{ inputs.channel }}-*-${{ github.sha }}
+          path: desktop/release-downloads
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.PACKPROOF_RELEASE_ROLE_ARN }}
+          aws-region: ${{ vars.PACKPROOF_RELEASE_AWS_REGION || 'us-east-1' }}
+      - name: Verify all artifacts then publish binaries before update pointers
+        run: node scripts/publish-release.cjs release-downloads
+        working-directory: desktop

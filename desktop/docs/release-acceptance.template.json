@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "",
+  "approvedBy": "",
+  "testedAt": "",
+  "tests": [
+    {
+      "id": "windows-install-upgrade-uninstall",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "macos-intel-install-upgrade",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "macos-arm-install-upgrade",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "authentication-refresh-logout-isolation",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "camera-permissions-disconnect",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "continuous-recording-valid-media",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "live-barcode-and-usb-scanner",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "hash-upload-commit-manifest",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "offline-reconnect-and-restart",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "machine-restart-and-disk-full",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "expired-upload-authorization",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "marketplace-orders-and-tracking",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "signed-updater-preserves-queue",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "capture-not-interrupted-by-update",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "high-dpi-and-accessibility",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "recording-upload-soak",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "privacy-review",
+      "status": "pending",
+      "evidence": ""
+    }
+  ]
+}
