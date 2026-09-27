@@ -34,5 +34,6 @@ export interface NativeOrderShare {
   setIntakeSession(session: IntakeNativeSession): Promise<void>;
   clearIntakeSession(): Promise<void>;
 }
-export const orderShare = ['ios', 'android'].includes(Platform.OS)
+const disableOrderShare = process.env.EXPO_PUBLIC_PACKPROOF_DISABLE_ORDER_SHARE === 'true';
+export const orderShare = !disableOrderShare && ['ios', 'android'].includes(Platform.OS)
   ? requireOptionalNativeModule<NativeOrderShare>('PackProofOrderShare') : null;
