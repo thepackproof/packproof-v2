@@ -9,6 +9,7 @@ async function event(db:Database,user:string,name:string,step=-1,at?:string|Date
   await db.query('INSERT INTO onboarding_events(user_id,version,event,step,occurred_at) VALUES($1,$2,$3,$4,COALESCE($5::timestamptz,now())) ON CONFLICT DO NOTHING',[user,ONBOARDING_VERSION,name,step,at??null]);
 }
 async function read(db:Database,user:string) {
+  if(!(await db.query("SELECT id FROM schema_migrations WHERE id='075_onboarding'")).rows.length)throw new DomainError('ONBOARDING_NOT_READY','Tutorial account sync is being enabled. Try again shortly.',503);
   const row=(await db.query<State>(`SELECT ${fields} FROM users WHERE id=$1`,[user])).rows[0];
   if(!row)throw new DomainError('USER_NOT_FOUND','User not found',404);
   return row;

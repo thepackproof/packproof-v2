@@ -56,7 +56,7 @@ const config = loadConfig();
 const manifestSigning = await initializeManifestSigningRuntime(systemClock);
 const opened = await openDatabase(config);
 if(config.migrateOnStart) await migrate(opened.db);
-else await assertSchemaCurrent(opened.db);
+else await assertSchemaCurrent(opened.db,undefined,true);
 const intakeConfig=intakeConfigFromEnv();
 await enrollConfiguredIntakeCohort(opened.db,intakeConfig);
 
@@ -100,7 +100,7 @@ if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(create
 const readinessProbes=[
   {name:'policy-recovery',check:()=>assertPolicyAccessSafe(opened.db)},
   {name:'database',check:()=>opened.db.query('SELECT 1')},
-  {name:'schema',check:()=>assertSchemaCurrent(opened.db)},
+  {name:'schema',check:()=>assertSchemaCurrent(opened.db,undefined,true)},
   {name:'storage',check:async()=>{
     if(config.objectStore==='local')return;
     const key=process.env.PACKPROOF_READINESS_OBJECT_KEY,versionId=process.env.PACKPROOF_READINESS_OBJECT_VERSION;

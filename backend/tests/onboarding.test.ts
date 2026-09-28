@@ -34,3 +34,12 @@ it('records first-Proof start from domain records without client claims',async()
  for(let i=0;i<2;i++){const res=await request(h.app).get('/me/onboarding').set(auth(user));expect(res.status).toBe(200);expect(res.body.first_proof_id).toBe(proof.proofId);}
  expect((await h.db.query("SELECT * FROM onboarding_events WHERE user_id=$1 AND event='first_proof_started'",[user])).rows.length).toBe(1);
 });
+it('allows only the pending onboarding migration during rolling deployment and keeps its API unavailable',async()=>{
+ h=await createHarness();const user=await login(h.app,'pending-migration');const {assertSchemaCurrent}=await import('../src/db/migrate.js');
+ await h.db.query("DELETE FROM schema_migrations WHERE id='075_onboarding'");
+ await expect(assertSchemaCurrent(h.db,undefined,true)).resolves.toBeUndefined();
+ await expect(assertSchemaCurrent(h.db)).rejects.toThrow('075_onboarding');
+ expect((await request(h.app).get('/me/onboarding').set(auth(user))).status).toBe(503);
+ await h.db.query("DELETE FROM schema_migrations WHERE id='074_desktop_capture_registration'");
+ await expect(assertSchemaCurrent(h.db,undefined,true)).rejects.toThrow('074_desktop_capture_registration');
+});

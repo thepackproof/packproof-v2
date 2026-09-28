@@ -9,12 +9,12 @@ export async function migrationInventory(sourceDir=migrationsDir){
   const files=(await readdir(sourceDir)).filter(name=>name.endsWith('.sql')).sort();
   return Promise.all(files.map(async file=>{const sql=await readFile(path.join(sourceDir,file),'utf8');return {id:file.replace(/\.sql$/i,''),checksum:createHash('sha256').update(sql).digest('hex'),sql};}));
 }
-export async function assertSchemaCurrent(db:Database,sourceDir=migrationsDir):Promise<void>{
+export async function assertSchemaCurrent(db:Database,sourceDir=migrationsDir,allowPendingOnboarding=false):Promise<void>{
   const inventory=await migrationInventory(sourceDir);
   const applied=(await db.query<{id:string;checksum:string|null}>('SELECT id,checksum FROM schema_migrations')).rows;
   const expectedIds=new Set(inventory.map(item=>item.id));
   if(applied.some(row=>!expectedIds.has(row.id)))throw new Error('Database contains migrations outside this release compatibility envelope');
-  for(const item of inventory){const row=applied.find(entry=>entry.id===item.id);if(!row||row.checksum!==item.checksum)throw new Error(`Migration required or checksum mismatch: ${item.id}`);}
+  for(const item of inventory){const row=applied.find(entry=>entry.id===item.id);if(!row&&allowPendingOnboarding&&item.id==='075_onboarding')continue;if(!row||row.checksum!==item.checksum)throw new Error(`Migration required or checksum mismatch: ${item.id}`);}
 }
 export async function migrate(db:Database,sourceDir=migrationsDir,options:{adoptLegacyChecksums?:boolean;expectedRole?:string}={}):Promise<void>{
   const lock=async(tx:Database)=>{await tx.query("SET LOCAL lock_timeout = '15s'");await tx.query('SELECT pg_advisory_xact_lock(1347438146,1)');};

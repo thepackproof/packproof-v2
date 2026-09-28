@@ -16,6 +16,7 @@ COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 COPY certs ./certs
 COPY openapi.json ./openapi.json
+COPY scripts/onboarding-migrate.mjs ./scripts/onboarding-migrate.mjs
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

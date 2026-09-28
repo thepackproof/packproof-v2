@@ -13,7 +13,7 @@ All clients use `packages/onboarding/model.ts`. Replay is session-only and does 
 ## Focused verification
 
 - Backend TypeScript: passed.
-- Backend onboarding tests: 3 passed (resume/skip, deduplication, validation, account isolation/exemption, first-Proof source records).
+- Backend onboarding tests: 4 passed (pending-migration compatibility, resume/skip, deduplication, validation, account isolation/exemption, first-Proof source records).
 - Shared controller tests: 3 passed (offline skip/reopen, replay isolation, existing/future-version suppression).
 - Web production build: passed.
 - Desktop production-code compilation/bundling: passed; this is not a signed installer.
@@ -23,10 +23,10 @@ All clients use `packages/onboarding/model.ts`. Replay is session-only and does 
 
 ## Release order
 
-1. Deploy the additive database migration through the existing owner-role migration process, retaining the project's compatibility and runtime-grant checks. Runtime needs access to the new onboarding table. Do not reuse the hash-pinned desktop-074 operator for migration 075.
-2. Deploy the API including the new authenticated routes. Check an existing exempt account and a newly registered account.
+1. Deploy this API before migration 075. Startup/readiness tolerate only the absence of this optional feature migration; all prior receipts and every present checksum remain mandatory. The onboarding endpoint returns 503 until its receipt exists. This lets the old task drain before the database inventory changes.
+2. Run `scripts/onboarding-migrate.mjs --inspect`, then `--apply`, in the hash-pinned candidate image with owner components injected by the existing execution role. It checks the exact database, verified TLS, existing inventory, and supplied migration SHA-256; uses a separate expiring login for migration; grants only SELECT/INSERT on onboarding events to the existing runtime role; and cleans up the temporary login. Do not reuse the hash-pinned desktop-074 operator. Verify the new endpoint with a runtime login afterward.
 3. Publish the web client; build Android/iOS and Windows/macOS release candidates from this source.
 4. Check the six spotlight positions, font scaling, reduced motion, skip/reopen, cross-device completion, replay, and one first-Proof flow on representative clients.
 5. Promote verified signed packages through the existing app-store/desktop release process.
 
-The AWS release check did not return a result in this session. No live migration, API deployment, signed installer publication, or store release is claimed by these checks.
+Release status is recorded separately; these local checks alone do not claim a live migration, API deployment, signed installer publication, or store release.
