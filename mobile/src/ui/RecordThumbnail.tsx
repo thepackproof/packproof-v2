@@ -7,7 +7,7 @@ export function RecordThumbnail({ proofId, derivativeId }: { proofId: string; de
   const app=usePackProof(), {colors}=useTheme();
   const [failed,setFailed]=useState(false);
   return <View style={[styles.frame,{backgroundColor:colors.surfaceElevated}]} accessibilityLabel={derivativeId&&!failed?'Preview from the packing recording':'Recording preview unavailable'}>
-    {derivativeId&&!failed ? <Image source={{uri:app.client.thumbnailUrl(proofId,derivativeId),headers:app.client.authorizedDownloadHeaders()}} style={styles.image} onError={()=>setFailed(true)} /> : <Ionicons name="videocam-outline" size={26} color={colors.textSecondary}/>}
+    {derivativeId&&!failed ? <Image resizeMethod="resize" source={{uri:app.client.thumbnailUrl(proofId,derivativeId),headers:app.client.authorizedDownloadHeaders()}} style={styles.image} onError={()=>setFailed(true)} /> : <Ionicons name="videocam-outline" size={26} color={colors.textSecondary}/>}
     <View style={styles.play}><Ionicons name="play" size={10} color="#FFFFFF"/></View>
   </View>;
 }

@@ -74,7 +74,7 @@ export function SignaturePlayer({
         {anchors.map((anchor) => (
           <View key={anchor.anchorId} style={{ width: 200, gap: 8 }}>
             {thumbnails?.[anchor.anchorId] ? (
-              <Image
+              <Image resizeMethod="resize"
                 source={{
                   uri: thumbnails[anchor.anchorId],
                   headers: { Authorization: `Bearer ${token}` },

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppModal } from "./AppModal";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -32,6 +34,7 @@ export function DateField(props: {
   optional?: boolean;
 }) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const selected = parseIso(props.value);
   const [cursor, setCursor] = useState(() => {
@@ -82,13 +85,14 @@ export function DateField(props: {
         <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+      <AppModal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={[styles.backdrop, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg, paddingLeft: insets.left + spacing.lg, paddingRight: insets.right + spacing.lg }]} onPress={() => setOpen(false)}>
           <Pressable
             accessibilityViewIsModal
             onPress={(event) => event.stopPropagation()}
             style={[styles.modal, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
+            <ScrollView contentContainerStyle={styles.calendar} keyboardShouldPersistTaps="handled">
             <View style={styles.monthHeader}>
               <Pressable
                 accessibilityRole="button"
@@ -148,9 +152,10 @@ export function DateField(props: {
                 <Text style={[styles.actionText, { color: colors.accentText }]}>Today</Text>
               </Pressable>
             </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
-      </Modal>
+      </AppModal>
     </View>
   );
 }
@@ -161,7 +166,8 @@ const styles = StyleSheet.create({
   field: { minHeight: 48, borderWidth: 1, borderRadius: radii.md, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
   value: { ...typography.body },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: spacing.lg },
-  modal: { width: "100%", maxWidth: 420, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.md },
+  modal: { width: "100%", maxWidth: 420, maxHeight: "100%", flexShrink: 1, borderWidth: 1, borderRadius: radii.lg, overflow: "hidden" },
+  calendar: { padding: spacing.lg, gap: spacing.md },
   monthHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   monthTitle: { ...typography.cardTitle },
   iconButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppModal } from "./AppModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { radii, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -14,8 +15,8 @@ export function BottomSheet(props: {
   const insets = useSafeAreaInsets();
   const { colors, reducedMotion } = useTheme();
   return (
-    <Modal visible={props.visible} transparent animationType={reducedMotion ? "none" : "slide"} onRequestClose={props.onClose}>
-      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+    <AppModal visible={props.visible} transparent animationType={reducedMotion ? "none" : "slide"} onRequestClose={props.onClose}>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
         <Pressable style={styles.backdrop} onPress={props.onClose} accessibilityLabel="Close" />
         <View
           style={[
@@ -31,7 +32,7 @@ export function BottomSheet(props: {
           <ScrollView keyboardShouldPersistTaps="handled">{props.children}</ScrollView>
         </View>
       </View>
-    </Modal>
+    </AppModal>
   );
 }
 

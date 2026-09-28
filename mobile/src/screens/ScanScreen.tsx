@@ -22,6 +22,8 @@ export function ScanScreen() {
         {
           paddingTop: Math.max(insets.top, 16),
           paddingBottom: Math.max(insets.bottom, 16),
+          paddingLeft: insets.left + spacing.lg,
+          paddingRight: insets.right + spacing.lg,
           backgroundColor: colors.scanBackground,
         },
       ]}

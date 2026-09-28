@@ -71,7 +71,7 @@ function CaptureFrame(props: {
     <View style={[styles.frame, { borderColor: colors.divider, backgroundColor: colors.background }]}>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>{props.heading}</Text>
       {props.uri ? (
-        <Image
+        <Image resizeMethod="resize"
           accessibilityLabel={props.heading}
           source={{ uri: props.uri, headers: props.headers }}
           style={styles.image}

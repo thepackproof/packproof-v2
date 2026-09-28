@@ -24,11 +24,7 @@ export async function applySystemBars(input: {
   }
   try {
     const NavigationBar = await import("expo-navigation-bar");
-    await NavigationBar.setBackgroundColorAsync(background);
     await NavigationBar.setButtonStyleAsync(content);
-    if (typeof NavigationBar.setBorderColorAsync === "function") {
-      await NavigationBar.setBorderColorAsync(background);
-    }
   } catch {
     // Navigation bar APIs are Android-only and may be unavailable in some runtimes.
   }

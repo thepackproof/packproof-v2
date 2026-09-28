@@ -1,5 +1,6 @@
+import { AppModal } from "./AppModal";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Linking, Modal, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Image, Linking, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -210,8 +211,8 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
         </PressableScale>;
       }) : <Text style={[styles.note, { color: colors.textSecondary }]}>No shipment observations recorded yet.</Text>}
     </View>
-    <Modal visible={expanded && canMap} animationType={reducedMotion ? "none" : "slide"} onRequestClose={() => setExpanded(false)} presentationStyle="fullScreen">
-      <View style={[styles.modal, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <AppModal visible={expanded && canMap} animationType={reducedMotion ? "none" : "slide"} onRequestClose={() => setExpanded(false)} presentationStyle="fullScreen">
+      <View style={[styles.modal, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }]}>
         <View style={styles.modalHeading}><Text accessibilityRole="header" style={[styles.sectionTitle, { flex: 1, color: colors.textPrimary }]}>Reported shipment location</Text><PressableScale accessibilityRole="button" accessibilityLabel="Close shipment map" onPress={() => setExpanded(false)} style={styles.mapControl}><Ionicons name="close" size={26} color={colors.textPrimary} /></PressableScale></View>
         <ScrollView contentContainerStyle={styles.modalContent}>
           <Text style={[styles.bodyStrong, { color: colors.textPrimary }]}>{location}</Text>
@@ -221,7 +222,7 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
           {linkError && <Text accessibilityRole="alert" style={[styles.note, { color: colors.error }]}>{linkError}</Text>}
         </ScrollView>
       </View>
-    </Modal>
+    </AppModal>
   </View>;
 }
 
