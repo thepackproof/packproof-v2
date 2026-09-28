@@ -1,3 +1,4 @@
+import { Coaching } from "../onboarding/Onboarding";
 import { nativeStudyForCapture } from "../analytics/native-study";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -145,6 +146,8 @@ export function CaptureScreen() {
   return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={[
     styles.root, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 20) },
   ]}>
+    {inFlight && <Coaching kind="secured"/>}
+    <Coaching kind="complete"/>
     <AppHeader title="Proof" onBack={app.goBack} right={app.role === "SELLER" && app.proof?.proofId ? <IconButton label="Share Proof" onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : undefined} />
     <Text style={[styles.title, { color: colors.textPrimary }]}>{inFlight ? "Finishing your Proof" : reviewing ? "Review your recording" : "Ready to pack"}</Text>
     {txn ? <View style={{ gap: spacing.xs }}>

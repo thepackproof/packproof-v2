@@ -1,3 +1,4 @@
+import { ReplayTutorial } from "../onboarding/Onboarding";
 import { BillingPanel } from "../billing/BillingPanel";
 import { DeveloperAccessPanel } from "../developer/DeveloperAccessPanel";
 import { useDeveloperAccess } from "../developer/useDeveloperAccess";
@@ -192,7 +193,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
         })}
       </View> : null}
 
-      {section === "help" ? <>
+      {section === "help" ? <><ReplayTutorial/>
         <SectionHeader title="Make a recording" />
         <Text style={[styles.body, { color: colors.textSecondary }]}>Choose an order, then record the item and package as you pack and seal it. Show the shipping label during that same recording. Review your video and confirm the shipping statement.</Text>
         <SectionHeader title="Find unfinished work" />

@@ -5,6 +5,7 @@ on:
     branches: [main, codex/proof-record-parity]
     paths:
       - "mobile/**"
+      - "packages/onboarding/**"
       - ".github/workflows/android-aab.yml"
   workflow_dispatch:
 

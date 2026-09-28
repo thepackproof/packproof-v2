@@ -1,3 +1,4 @@
+import { getOnboarding, updateOnboarding } from "./domain/onboarding.js";
 import { clientVersionRouter } from "./admin/client-versions.js";
 import { errorActionsRouter } from "./admin/error-actions.js";
 import { integrationActionsRouter } from "./admin/integration-actions.js";
@@ -1463,6 +1464,9 @@ export function createApp(deps: AppDependencies): Express {
       res.json(result);
     }),
   );
+
+  app.get("/me/onboarding", asyncRoute(async (req,res) => { res.json(await getOnboarding(deps.db,bearerUser(req))); }));
+  app.post("/me/onboarding", asyncRoute(async (req,res) => { res.json(await updateOnboarding(deps.db,bearerUser(req),req.body)); }));
 
   app.get(
     "/me",

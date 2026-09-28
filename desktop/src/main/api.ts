@@ -1,3 +1,4 @@
+import type { OnboardingState, Action } from "../../../packages/onboarding/model";
 import { randomUUID } from 'node:crypto';
 import type { DesktopConfig } from './config.js';
 import type { CanonicalProof, ProfileView, ProofCollectionItem, FulfillmentQueueItem, PackingStationResolveView, ConnectedAccountsListView, CommerceConnectionView, CommerceSyncView, EvidenceUploadView, AccessLinkView, PublicProofView, TransactionWriteInput, ManifestView, ShipmentIntegrityView } from '../../../web/src/api/types.js';
@@ -87,6 +88,8 @@ export class DesktopApi {
     }
     return [...result.values()];
   }
+  getOnboarding():Promise<OnboardingState>{return this.request('/me/onboarding');}
+  updateOnboarding(action:Action):Promise<OnboardingState>{return this.request('/me/onboarding',{method:'POST',body:action});}
   getProof(proofId: string, signal?: AbortSignal): Promise<CanonicalProof> { return this.request(`/proofs/${id(proofId)}`, { signal }); }
   /** Creation isn't blindly retried: this legacy backend route has no transaction-create idempotency contract. */
   createProof(input: TransactionWriteInput): Promise<CanonicalProof> { return this.request('/proofs', { method: 'POST', body: { workflowType: 'COMMERCE_SALE', transaction: input } }); }
