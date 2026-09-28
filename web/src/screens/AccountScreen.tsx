@@ -1,3 +1,4 @@
+import { replayTutorial } from "../onboarding/Onboarding";
 import { NotificationCenter } from "../components/NotificationCenter";
 import { UsagePanel } from "../components/UsagePanel";
 import { BillingPanel } from "../components/BillingPanel";
@@ -85,7 +86,7 @@ export function AccountScreen(props: {
           <input type="radio" name="packproof-appearance" value={option.id} checked={theme.preference === option.id} onChange={() => theme.setPreference(option.id)} />
         </label>)}</fieldset>
       </SettingsDisclosure>
-      <SettingsDisclosure title="Help & support">
+      <SettingsDisclosure title="Help & support"><button className="btn btn-secondary" onClick={replayTutorial}>Replay Tutorial</button>
         <p className="note">Choose an order, record the item being packed and sealed, then review the recording and confirm what you are shipping. PackProof shows when saving is complete.</p>
         <p className="note">If saving is interrupted, return to that Proof to continue. Keep your local recording until PackProof confirms it is preserved.</p>
         <p className="note">For account or privacy support, use the contact information in the Privacy Policy.</p>

@@ -1,3 +1,4 @@
+import { OnboardingRoot } from "../onboarding/Onboarding";
 import { SharedOrderScreen } from "../intake/SharedOrderScreen";
 import { canNavigateForIntake } from "../intake/submissions";
 import { orderShare } from "../../modules/packproof-order-share";
@@ -40,10 +41,10 @@ import { RelayStationHost } from "../relay/RelayStationHost";
 
 export function Root() {
   const app = usePackProof();
-  return <>
+  return <OnboardingRoot>
     <RootContent />
     {app.hydrated && app.session && app.route.name !== 'auth' ? <RelayStationHost key={JSON.stringify([app.apiBaseUrl, app.session.userId])} /> : null}
-  </>;
+  </OnboardingRoot>;
 }
 
 function RootContent() {

@@ -1,3 +1,4 @@
+import type { OnboardingState, Action } from "../../packages/onboarding/model";
 import type { ProofRecovery } from "./capture/recovery-model";
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
 import type { IdentifierObservation, IdentifierPolicy, IdentifierReview } from "../../backend/src/identifiers/types";
@@ -684,6 +685,9 @@ export class PackProofV2Client {
       body: { subject },
     });
   }
+
+  getOnboarding():Promise<OnboardingState>{return this.request("/me/onboarding");}
+  updateOnboarding(action:Action):Promise<OnboardingState>{return this.request("/me/onboarding",{method:"POST",body:action});}
 
   async getMe(): Promise<ProfileView> {
     return this.request("/me");

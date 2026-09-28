@@ -1,3 +1,4 @@
+import { Coaching } from "../onboarding/Onboarding";
 import { ProofNotificationMute } from "../notifications/NotificationCenter";
 import { SelectedOrderHandoff } from "../intake/SelectedOrderHandoff";
 import { localProofWork, presentationForProof } from "../copy/proof-list";
@@ -57,7 +58,7 @@ export function ProofDetailScreen() {
   if (!proof || !txn || !app.session) {
     return (
       <AppScreen>
-        <AppHeader title="Proof" onBack={app.goBack} />
+        <Coaching kind="complete"/><AppHeader title="Proof" onBack={app.goBack} />
         <ProofRecordSkeleton />
       </AppScreen>
     );
@@ -262,7 +263,7 @@ export function ProofDetailScreen() {
 
   return (
     <AppScreen scroll={false} extraBottom={0}>
-      <AppHeader
+      <Coaching kind="complete"/><AppHeader
         title="Proof"
         onBack={app.goBack}
         right={

@@ -1,3 +1,4 @@
+import { Coaching } from "../onboarding/Onboarding";
 import { registerRemoteCaptureStop } from "../capture/remote-control";
 import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
 import { haptic } from "../theme/haptics";
@@ -326,7 +327,7 @@ function CameraSession({
           },
         ]}
       >
-        <View style={styles.heading}>
+        <Coaching kind="camera"/><View style={styles.heading}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             {recording
               ? request.stageType

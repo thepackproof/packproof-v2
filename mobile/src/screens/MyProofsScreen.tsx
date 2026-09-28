@@ -1,3 +1,4 @@
+import { TutorialTarget } from "../onboarding/Onboarding";
 import { proofReference, shipmentRecordLabel } from "../copy/evidence-record";
 import { RecordThumbnail } from "../ui/RecordThumbnail";
 import { RecordSeal } from "../ui/RecordSeal";
@@ -83,9 +84,9 @@ export function MyProofsScreen() {
       <View style={styles.brand} accessibilityLabel="PackProof"><Logo size={32} /><Text style={[styles.brandText,{color:colors.textPrimary}]}>Pack<Text style={{color:colors.logoGreen}}>Proof</Text></Text></View>
       <AvatarButton displayName={app.session?.displayName} username={app.session?.username} onPress={() => app.go('account')} />
     </View>
-    <View style={styles.heading}><Text style={[styles.pageTitle, { color:colors.textPrimary }]}>Proofs</Text><Button label="New Proof" icon="add-outline" onPress={() => app.go('create')} /></View>
+    <View style={styles.heading}><Text style={[styles.pageTitle, { color:colors.textPrimary }]}>Proofs</Text><TutorialTarget name="create capture"><Button label="New Proof" icon="add-outline" onPress={() => app.go('create')} /></TutorialTarget></View>
     <View style={[styles.tabs, { borderBottomColor:colors.divider }]} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
-      {([{id:'attention',label:'Needs attention'},{id:'all',label:'All'},{id:'completed',label:'Completed'}] as const).map(option => <PressableScale key={option.id} onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.surfaceElevated : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.textPrimary : colors.textSecondary}]}>{option.label}</Text></PressableScale>)}
+      {([{id:'attention',label:'Needs attention'},{id:'all',label:'All'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} flex={1} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.surfaceElevated : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.textPrimary : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
     </View>
     <View style={styles.searchRow}>
       <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.surface}]}><Ionicons name="search-outline" size={20} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search Proofs" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
@@ -98,7 +99,7 @@ export function MyProofsScreen() {
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
     {rows.filter(item => !preparedProofIds.includes(item.proofId)).map((item, index) => {
-      return <FadeSlideIn key={item.proofId} index={index}>
+      return <TutorialTarget key={item.proofId} name={index===0?"proofs":""}><FadeSlideIn index={index}>
         <View style={[styles.row,{backgroundColor:colors.surface,borderColor:colors.border}]}>
           <LiftPressable onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
             <View style={styles.recordHeading}><RecordThumbnail key={`${app.session?.userId}:${item.proofId}:${item.thumbnailDerivativeId}`} proofId={item.proofId} derivativeId={item.thumbnailDerivativeId} /><View style={{flex:1,gap:6}}>
@@ -116,9 +117,9 @@ export function MyProofsScreen() {
           </LiftPressable>
           {item.presentation.needsAttention ? <Button label={item.presentation.nextAction.label} variant="tertiary" onPress={() => void open(item,true)} loading={app.busy} /> : null}
         </View>
-      </FadeSlideIn>;
+      </FadeSlideIn></TutorialTarget>;
     })}
-    {!loading && !app.error && !app.offline && !rows.length && !preparedProofIds.length ? <EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /> : null}
+    {!loading && !app.error && !app.offline && !rows.length && !preparedProofIds.length ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /></TutorialTarget> : null}
     <BottomSheet visible={filterOpen} title="Filters" onClose={() => setFilterOpen(false)}>
       <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>Your role</Text>
       {(['all','seller','buyer'] as const).map(role => <Button key={role} label={`${library.role === role ? '✓ ' : ''}${role === 'all' ? 'All roles' : role === 'seller' ? 'Seller' : 'Buyer'}`} variant="tertiary" onPress={() => app.setProofsRoleFilter(role)} />)}

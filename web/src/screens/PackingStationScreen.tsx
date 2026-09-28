@@ -646,6 +646,7 @@ export function PackingStationScreen(props: {
     setBusy(true);
     try {
       const pending = await preserveStation(blob, true, interruptedRef.current);
+      window.dispatchEvent(new CustomEvent("packproof:capture-secured",{detail:{userId:props.userId,proofId:order.proofId}}));
       dispatch({ type: "PROCESSING_STARTED", idempotencyKey: pending.uploadKey, submitStep: "upload" });
       // Both foreground submission and the app-level worker join one serialized accepted intent.
       // PackProofApi is account-bound by App; its old token supplier returns null after an account change.

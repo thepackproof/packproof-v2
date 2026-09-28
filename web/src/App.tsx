@@ -1,3 +1,4 @@
+import { Onboarding } from "./onboarding/Onboarding";
 import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchScreen";
 import { lazy, Suspense } from "react";
 import { useAdminAccess } from "./admin/useAdminAccess";
@@ -711,6 +712,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
   return (
     <div className="app-shell workspace-shell">
+      <Onboarding key={`${session.apiBaseUrl}:${session.userId}`} api={api} accountKey={`${session.apiBaseUrl}:${session.userId}`} dashboard={route.name==='proofs'} ready={!busy} onDashboard={()=>go('/proofs')} onCreate={()=>go('/new')} onViewProof={id=>go(`/proofs/${encodeURIComponent(id)}`)} capture={route.name==='station'} />
         {(route.name==='proofs'||route.name==='create')&&<CompanionBridge api={api} userId={session.userId} connections={connections}/>}
         {route.name==='proof'&&proof?.status==='READY_FOR_EVIDENCE'&&proof.workflowType==='COMMERCE_SALE'&&proof.participationPolicy==='COUNTERPARTY_OPTIONAL'&&<SelectedOrderHandoff key={proof.proofId} api={api} userId={session.userId} transactionId={proof.transaction.transactionId}/>}
         <AppNav

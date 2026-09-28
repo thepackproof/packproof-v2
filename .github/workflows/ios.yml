@@ -2,10 +2,10 @@ name: iOS
 
 on:
   pull_request:
-    paths: ['mobile/**', '.github/workflows/ios.yml']
+    paths: ['mobile/**', 'packages/onboarding/**', '.github/workflows/ios.yml']
   push:
     branches: ['feature/ios-parity-*', 'feature/mobile-intake-*']
-    paths: ['mobile/**', '.github/workflows/ios.yml']
+    paths: ['mobile/**', 'packages/onboarding/**', '.github/workflows/ios.yml']
   workflow_dispatch:
     inputs:
       signed_build:
