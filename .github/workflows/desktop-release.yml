@@ -107,7 +107,7 @@ jobs:
         run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
       - name: Verify OS signatures, notarization, publisher and file hashes
         run: node scripts/verify-artifacts.cjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packproof-desktop-${{ inputs.channel }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           if-no-files-found: error

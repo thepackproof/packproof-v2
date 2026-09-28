@@ -54,7 +54,7 @@ jobs:
           NODE
           curl --fail --location "$(cat dist/aab-url.txt)" --output dist/packproof-0.3.2-31.aab
           test -s dist/packproof-0.3.2-31.aab
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packproof-0.3.2-31-aab
           path: mobile/dist/packproof-0.3.2-31.aab
