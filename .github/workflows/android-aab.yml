@@ -7,6 +7,7 @@ on:
       - "mobile/**"
       - "packages/onboarding/**"
       - ".github/workflows/android-aab.yml"
+      - ".github/actions/expo-auth/**"
   workflow_dispatch:
 
 concurrency:
@@ -21,6 +22,9 @@ jobs:
     name: Signed internal AAB
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
     env:
       EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -33,24 +37,11 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      - name: Check Expo automation token
-        id: expo-auth
-        run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::error::The signed Android App Bundle was not built because EXPO_TOKEN is not configured. Configure the authorized Expo automation token and re-run; the existing EAS remote Play signing credentials will be reused."
-            exit 1
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install mobile dependencies
-        if: steps.expo-auth.outputs.available == 'true'
         working-directory: mobile
         run: npm ci
 
       - name: Install EAS CLI
-        if: steps.expo-auth.outputs.available == 'true'
         run: npm install --global eas-cli@24.4.2
 
       - name: Install shared contract test runner
@@ -74,8 +65,10 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact=packproof-${expo.version}-${expo.android.versionCode}\n`);
           NODE
 
+      - name: Authenticate with existing Expo credential
+        uses: ./.github/actions/expo-auth
+
       - name: Build signed Android App Bundle
-        if: steps.expo-auth.outputs.available == 'true'
         working-directory: mobile
         run: |
           set -euo pipefail
@@ -100,7 +93,6 @@ jobs:
           sha256sum "dist/${{ steps.release.outputs.artifact }}.aab" > dist/SHA256SUMS
 
       - name: Upload AAB artifact
-        if: steps.expo-auth.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.release.outputs.artifact }}-aab

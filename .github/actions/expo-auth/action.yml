@@ -1,0 +1,25 @@
+name: Existing PackProof Expo authentication
+description: Reuse the existing Expo credential through main-branch AWS federation.
+runs:
+  using: composite
+  steps:
+    - name: Assume the Expo-secret-only role
+      if: env.EXPO_TOKEN == '' && github.ref == 'refs/heads/main'
+      uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+      with:
+        aws-region: us-east-1
+        role-to-assume: arn:aws:iam::784514617543:role/packproof/mobile/PackProofGitHubMobileBuildSecret
+        role-session-name: packproof-mobile-${{ github.run_id }}
+        role-duration-seconds: 900
+        allowed-account-ids: '784514617543'
+    - name: Inject the existing Expo token
+      if: env.EXPO_TOKEN == '' && github.ref == 'refs/heads/main'
+      uses: aws-actions/aws-secretsmanager-get-secrets@8493673611c1b9db1ceb7c01340109b83eb5e7d4 # v2
+      with:
+        secret-ids: |
+          EXPO_TOKEN,arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/build/expo/2026-09-08-proof-navigation-iYbxja
+        parse-json-secrets: false
+    - name: Verify authentication is available
+      shell: bash
+      run: |
+        test -n "$EXPO_TOKEN" || { echo '::error::Expo authentication is unavailable. The existing AWS credential is available only to main-branch release workflows.'; exit 1; }

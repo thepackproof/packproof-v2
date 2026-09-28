@@ -11,13 +11,14 @@ test('next standard Android candidate advances the installed baseline and retain
   assert.equal(result.status,0,result.stderr);
   const config=JSON.parse(result.stdout);
   assert.equal(config.version,'1.0.1');
-  assert.equal(config.android.versionCode,52);
+  assert.equal(config.android.versionCode,55);
   assert.equal(config.android.package,'com.packproof.mobile');
   assert.equal(config.android.allowBackup,false);
 });
 
 test('store profiles preserve the existing Play package and signing credential', () => {
   const profiles = require('../eas.json').build;
+  assert.equal(profiles['shipping-integration'].env.PACKPROOF_ANDROID_VERSION_CODE, '55');
   assert.equal(profiles['internal-staging'].android.keystoreName, 'Build Credentials pdbJYV45vI');
   assert.equal(profiles['internal-staging'].android.credentialsSource, 'remote');
   for (const profile of ['internal-staging', 'shipping-integration']) {
