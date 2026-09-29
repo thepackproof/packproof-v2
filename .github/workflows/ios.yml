@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ['mobile/**', 'packages/onboarding/**', '.github/workflows/ios.yml']
   push:
-    branches: ['main', 'feature/ios-parity-*', 'feature/mobile-intake-*']
+    branches: ['feature/ios-parity-*', 'feature/mobile-intake-*']
     paths: ['mobile/**', 'packages/onboarding/**', '.github/workflows/ios.yml']
   workflow_dispatch:
     inputs:
@@ -100,7 +100,7 @@ jobs:
 
   app-store:
     name: Signed iOS archive
-    if: (github.event_name == 'workflow_dispatch' && inputs.signed_build) || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.signed_build
     needs: simulator
     permissions:
       contents: read
