@@ -1,8 +1,8 @@
 // @ts-nocheck
 // Simulator-only entry point. Uses unchanged production screen components with synthetic records.
 // The App Store archive never imports this file or includes its navigation hooks.
-import React, { useEffect, useMemo, useState } from 'react';
-import { Linking } from 'react-native';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import * as FileSystem from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider';
@@ -50,7 +50,22 @@ function Screens(){
   const [scene,setScene]=useState('library');
   const [form,setForm]=useState({...EMPTY_FORM,itemTitle:'Vintage trading card collection',itemDescription:'Three cards in protective sleeves and a rigid mailer.',externalReference:'ORDER-1031',quantity:'1',currency:'USD',transactionValue:'125.00'});
   const [library,setLibrary]=useState({view:'all',query:'',role:'all',carrier:null,sort:'updated'});
-  useEffect(()=>{const receive=(url:string)=>{const parsed=new URL(url);if(parsed.hostname!=='store-screenshot')return;setScene(parsed.pathname.replace('/','')||'library');void theme.setPreference(parsed.searchParams.get('theme')==='dark'?'dark':'light');}; const sub=Linking.addEventListener('url',({url})=>receive(url));void Linking.getInitialURL().then(url=>url&&receive(url));return()=>sub.remove();},[]);
+  const requestRef=useRef('');
+  useEffect(()=>{
+    let active=true;
+    const timer=setInterval(()=>{void (async()=>{
+      const path=FileSystem.documentDirectory+'store-scene.json';
+      if(!(await FileSystem.getInfoAsync(path)).exists)return;
+      const raw=await FileSystem.readAsStringAsync(path);
+      if(!active||raw===requestRef.current)return;
+      requestRef.current=raw;
+      const request=JSON.parse(raw);
+      setScene(request.scene);
+      await theme.setPreference(request.theme==='dark'?'dark':'light');
+      setTimeout(()=>{if(active)void FileSystem.writeAsStringAsync(FileSystem.documentDirectory+'store-scene-ready.txt',request.scene+':'+request.theme);},1500);
+    })().catch(()=>{});},300);
+    return()=>{active=false;clearInterval(timer);};
+  },[]);
   const value=useMemo(()=>({ hydrated:true,busy:false,offline:false,error:null,errorDetail:null,route:{name:scene==='library'?'home':scene==='create'?'create':'proof'},session:{userId,displayName:'Alex Morgan',username:'alexmorgan',token:'simulator-fixture'},proof,transactionDetail:transaction,proofCollection:collection,pendingInvites:[],savedRecordings:[],uploadProgressByProof:{},captureStatus:'idle',localCapture:null,uploadPercent:null,role:'SELLER',proofsLibrary:library,apiBaseUrl:'https://example.invalid',client,createForm:form,intakeReview:null,batchPacking:false,
   ensureAuth:resolved,syncWorkspace:resolved,run:async(fn:()=>Promise<void>)=>fn(),readProofsScrollOffset:()=>0,setProofsScrollOffset:noop,setProofsView:(view:string)=>setLibrary(v=>({...v,view})),setProofsQuery:(query:string)=>setLibrary(v=>({...v,query})),setProofsRoleFilter:noop,setProofsCarrierFilter:noop,
   readProofRecordView:()=>({...initialProofRecordView(),tab:scene==='tracking'?'Tracking':'Timeline'}),saveProofRecordView:noop,refreshProof:async()=>proof,go:noop,goBack:()=>setScene('library'),openProof:async()=>setScene('activity'),openReceipt:noop,setCreateForm:setForm,setSelectedEvent:noop,shareProofLink:resolved,createManualProof:resolved,connections:[],connectedAccounts:[],connectedProviders:[],technicalOpen:false,setTechnicalOpen:noop,

@@ -11,9 +11,6 @@ on:
         description: Build signed App Store archive
         type: boolean
         default: true
-  push:
-    branches: [main]
-    paths: ['.github/workflows/ios-store-assets.yml', 'mobile/store-assets/**']
 
 permissions:
   contents: read
@@ -24,7 +21,10 @@ jobs:
     concurrency:
       group: ios-store-screenshots-${{ github.ref }}
       cancel-in-progress: false
-    if: github.event_name == 'workflow_dispatch' && inputs.screenshots || github.run_number == 1
+    if: inputs.screenshots
+    permissions:
+      contents: read
+      actions: read
     runs-on: macos-15
     timeout-minutes: 75
     defaults:
@@ -77,21 +77,27 @@ jobs:
         env:
           PACKPROOF_STORE_SCREENSHOTS: '1'
         run: node store-assets/prepare.cjs
-      - name: Generate iOS native project and resolve Pods
+      - name: Verify cached simulator native sources
         run: |
-          npx expo prebuild --platform ios --no-install
-          cd ios
-          pod install
-      - name: Compile app, Swift modules, and Share Extension
+          git fetch origin b3553f740034190e27c31588c2a57e8bdad2ebd1
+          git diff --exit-code b3553f740034190e27c31588c2a57e8bdad2ebd1 HEAD -- package.json package-lock.json app.config.js plugins modules assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: packproof-ios-simulator-b3553f740034190e27c31588c2a57e8bdad2ebd1
+          run-id: 36593225315
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/native-simulator-artifact
+      - name: Rebundle current screens into verified native simulator app
         run: |
-          set -euo pipefail
-          xcodebuild -workspace ios/PackProof.xcworkspace -scheme PackProof \
-            -configuration Release -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/packproof-ios" \
-            CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/ios-build.log"
+          ARCHIVE=$(find "$RUNNER_TEMP/native-simulator-artifact" -name PackProof-iOS-Simulator.zip -print -quit)
+          test -n "$ARCHIVE"
+          mkdir -p "$RUNNER_TEMP/simulator-app"
+          unzip -q "$ARCHIVE" -d "$RUNNER_TEMP/simulator-app"
+          APP_PATH="$RUNNER_TEMP/simulator-app/PackProof.app"
+          test -f "$APP_PATH/Info.plist"
+          npx expo export:embed --platform ios --dev false --entry-file index.ts --bundle-output "$APP_PATH/main.jsbundle" --assets-dest "$APP_PATH" --minify true
       - name: Capture native iPhone screens
-        run: bash store-assets/capture.sh "$RUNNER_TEMP/packproof-ios/Build/Products/Release-iphonesimulator/PackProof.app"
+        run: bash store-assets/capture.sh "$RUNNER_TEMP/simulator-app/PackProof.app"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -102,7 +108,7 @@ jobs:
 
   app-store:
     name: Signed iOS archive
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.signed_build)
+    if: github.ref == 'refs/heads/main' && inputs.signed_build
     concurrency:
       group: ios-store-signed-${{ github.ref }}
       cancel-in-progress: false
@@ -149,4 +155,3 @@ jobs:
             mobile/dist/PackProof.ipa
             mobile/dist/eas-ios-build.json
             mobile/dist/SHA256SUMS
-
