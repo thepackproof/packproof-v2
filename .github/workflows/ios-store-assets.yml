@@ -7,6 +7,10 @@ on:
         description: Capture App Store screenshots
         type: boolean
         default: true
+      signed_build:
+        description: Build signed App Store archive
+        type: boolean
+        default: true
   push:
     branches: [main]
     paths: ['.github/workflows/ios-store-assets.yml', 'mobile/store-assets/**']
@@ -14,13 +18,12 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ios-store-assets-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   simulator:
     name: Capture App Store screenshots
+    concurrency:
+      group: ios-store-screenshots-${{ github.ref }}
+      cancel-in-progress: false
     if: github.event_name == 'workflow_dispatch' && inputs.screenshots || github.run_number == 1
     runs-on: macos-15
     timeout-minutes: 75
@@ -99,7 +102,10 @@ jobs:
 
   app-store:
     name: Signed iOS archive
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.signed_build)
+    concurrency:
+      group: ios-store-signed-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
