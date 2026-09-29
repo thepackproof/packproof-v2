@@ -24,7 +24,7 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: fa8eff8eccead81b6d8b8f1b97e97672e9d168d9
       - uses: actions/setup-node@v4
