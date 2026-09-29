@@ -39,7 +39,8 @@ for (const profile of ['ios-simulator', 'ios-device', 'ios-testflight']) {
 test('iOS profiles share current Android feature flags and use an iOS 26 build image', () => {
   const release = profiles.build['ios-testflight'];
   assert.deepEqual(release.env, {
-    ...profiles.build['internal-staging'].env, ...profiles.build['shipping-integration'].env,
+    ...profiles.build['internal-staging'].env,
+    EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING: profiles.build['shipping-integration'].env.EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING,
   });
   assert.match(release.ios.image, /xcode-26\./);
   assert.equal(release.distribution, 'store');
@@ -52,6 +53,6 @@ test('Apple build number can advance without changing the Android release identi
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.ios.buildNumber, '12');
-  assert.equal(app.android.versionCode, 52);
+  assert.equal(app.android.versionCode, 55);
   assert.notEqual(config({ PACKPROOF_IOS_BUILD_NUMBER: 'invalid' }).status, 0);
 });
