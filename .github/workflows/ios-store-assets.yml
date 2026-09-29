@@ -137,6 +137,13 @@ jobs:
       - name: Build with existing remote Apple signing credentials
         run: |
           mkdir -p dist
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          config.build['ios-testflight'].env.PACKPROOF_IOS_BUILD_NUMBER = process.env.PACKPROOF_IOS_BUILD_NUMBER;
+          config.build['ios-testflight'].env.EXPO_PUBLIC_PACKPROOF_BUILD_SHA = process.env.EXPO_PUBLIC_PACKPROOF_BUILD_SHA;
+          fs.writeFileSync('eas.json', JSON.stringify(config, null, 2) + '\n');
+          NODE
           npx --yes eas-cli@24.4.2 build --platform ios --profile ios-testflight --non-interactive --wait --json > dist/eas-ios-build.json
           node <<'NODE'
           const fs = require('node:fs');
