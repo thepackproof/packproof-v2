@@ -100,7 +100,7 @@ jobs:
 
   app-store:
     name: Signed iOS archive
-    if: github.event_name == 'workflow_dispatch' && inputs.signed_build
+    if: (github.event_name == 'workflow_dispatch' && inputs.signed_build) || startsWith(github.ref, 'refs/heads/feature/ios-parity-appstore-')
     needs: simulator
     permissions:
       contents: read
