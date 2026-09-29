@@ -2,6 +2,11 @@ name: iOS Store Assets
 
 on:
   workflow_dispatch:
+    inputs:
+      screenshots:
+        description: Capture App Store screenshots
+        type: boolean
+        default: true
   push:
     branches: [main]
     paths: ['.github/workflows/ios-store-assets.yml', 'mobile/store-assets/**']
@@ -16,6 +21,7 @@ concurrency:
 jobs:
   simulator:
     name: Capture App Store screenshots
+    if: github.event_name == 'workflow_dispatch' && inputs.screenshots || github.run_number == 1
     runs-on: macos-15
     timeout-minutes: 75
     defaults:
@@ -105,7 +111,7 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
-      PACKPROOF_IOS_BUILD_NUMBER: 1.${{ github.run_number }}.${{ github.run_attempt }}
+      PACKPROOF_IOS_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -137,3 +143,4 @@ jobs:
             mobile/dist/PackProof.ipa
             mobile/dist/eas-ios-build.json
             mobile/dist/SHA256SUMS
+
