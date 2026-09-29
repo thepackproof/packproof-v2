@@ -1,0 +1,43 @@
+name: Upload verified iOS build to Apple
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: packproof-ios-upload-build-5
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Authenticate with existing Expo credential
+        uses: ./.github/actions/expo-auth
+      - name: Configure the existing Apple app destination
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          config.submit['ios-testflight'].ios.ascAppId = '6815401074';
+          fs.writeFileSync('eas.json', JSON.stringify(config, null, 2) + '\n');
+          NODE
+      - name: Upload verified version 1.0.1 build 5 to Apple
+        run: npx --yes eas-cli@24.4.2 submit --platform ios --profile ios-testflight --id 5240af49-0cb5-4aa1-9387-7a94841801cd --non-interactive --wait
