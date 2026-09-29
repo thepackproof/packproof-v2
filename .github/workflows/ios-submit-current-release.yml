@@ -1,0 +1,39 @@
+name: Submit current iOS release to App Store Connect
+
+on:
+  workflow_run:
+    workflows: ["iOS"]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  submit:
+    name: Submit signed PackProof iOS build
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_sha == 'fa8eff8eccead81b6d8b8f1b97e97672e9d168d9'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fa8eff8eccead81b6d8b8f1b97e97672e9d168d9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Authenticate with existing Expo credential
+        uses: ./.github/actions/expo-auth
+      - name: Submit latest signed iOS build to App Store Connect
+        run: npx --yes eas-cli@24.4.2 submit --platform ios --profile ios-testflight --latest --non-interactive
