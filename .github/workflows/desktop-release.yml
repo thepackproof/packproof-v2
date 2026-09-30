@@ -83,7 +83,7 @@ jobs:
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -138,7 +138,7 @@ jobs:
       PACKPROOF_RELEASE_ACCEPTANCE_JSON: ${{ vars.PACKPROOF_RELEASE_ACCEPTANCE_JSON }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
