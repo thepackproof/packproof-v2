@@ -93,7 +93,7 @@ jobs:
           sha256sum "dist/${{ steps.release.outputs.artifact }}.aab" > dist/SHA256SUMS
 
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.release.outputs.artifact }}-aab
           path: |

@@ -74,7 +74,7 @@ jobs:
       - name: Exercise installed Windows launch/restart, reinstall and uninstall
         if: matrix.platform == 'win32'
         run: pwsh -NoProfile -NonInteractive -File scripts/smoke-install-windows.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packproof-desktop-DEVELOPMENT-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           if-no-files-found: error
@@ -91,7 +91,7 @@ jobs:
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/native-launch-smoke.json
       - name: Preserve native startup evidence on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packproof-desktop-startup-failure-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           if-no-files-found: ignore
