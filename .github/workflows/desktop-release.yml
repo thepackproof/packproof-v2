@@ -82,7 +82,7 @@ jobs:
       APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_NOTARIZATION_PASSWORD || '' }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -137,7 +137,7 @@ jobs:
       PACKPROOF_RELEASE_BUCKET: ${{ vars.PACKPROOF_RELEASE_BUCKET }}
       PACKPROOF_RELEASE_ACCEPTANCE_JSON: ${{ vars.PACKPROOF_RELEASE_ACCEPTANCE_JSON }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
