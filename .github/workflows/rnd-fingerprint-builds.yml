@@ -173,7 +173,41 @@ jobs:
       - run: npm run typecheck
         working-directory: mobile
       - name: Compile research app and native adapters for iOS Simulator
-        run: node scripts/rnd/build-mobile.mjs ios
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/rnd/build-mobile.mjs ios 2>&1 | tee "$RUNNER_TEMP/ios-rnd-build.log"
+      - name: Preserve exact compiler diagnostics after a failed build
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from collections import deque
+          import os, re
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          log=root/'ios-rnd-build.log'
+          lines=log.read_text(errors='replace').splitlines() if log.exists() else ['No compiler log was produced.']
+          selected=set()
+          for index,line in enumerate(lines):
+              if re.search(r'(?i)(?:fatal error|error:|build failed|following build commands failed|xcodebuild.*failed)',line):
+                  selected.update(range(max(0,index-3),min(len(lines),index+9)))
+          if not selected:
+              selected.update(range(max(0,len(lines)-160),len(lines)))
+          summary='\n'.join(lines[index] for index in sorted(selected)[:600])+'\n'
+          (root/'ios-rnd-errors.txt').write_text(summary)
+          print(summary)
+          PY
+      - name: Upload native build log independently of the application artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PackProof-RND-iOS-Diagnostics-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ios-rnd-build.log
+            ${{ runner.temp }}/ios-rnd-errors.txt
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Verify simulator bundle identity
         run: |
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' mobile/dist/rnd/ios-derived/Build/Products/Release-iphonesimulator/PackProofRND.app/Info.plist)" = 'com.packproof.mobile.rnd'
