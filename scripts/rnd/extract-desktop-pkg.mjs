@@ -1,0 +1,20 @@
+/** Recover one immutable PKG from an existing build artifact; do not rebuild or sign. */
+import {readFile,mkdir,copyFile,writeFile,stat} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import path from 'node:path';
+const [input,output,arch]=process.argv.slice(2);
+if(!input||!output||!['x64','arm64'].includes(arch)||process.argv.length!==5)throw new Error('Usage: extract-desktop-pkg.mjs <downloaded-artifact-dir> <output-dir> <x64|arm64>');
+const report=JSON.parse(await readFile(path.join(input,'release-evidence.json'),'utf8'));
+const sourceSha='3637c5038b564fe432d8f218ed731a837301b2c6';
+if(report.sourceCommit!==sourceSha||report.channel!=='research'||report.platform!=='darwin'||report.arch!==arch||report.signed!==false)throw new Error('Unexpected source, application channel, platform or signing scope');
+const candidates=report.artifacts.filter(item=>item.file.endsWith(`-${arch}.pkg`)&&path.basename(item.file)===item.file);
+if(candidates.length!==1)throw new Error('Expected exactly one original versioned PKG');
+const artifact=candidates[0],source=path.join(input,artifact.file),bytes=await readFile(source);
+if(bytes.length!==artifact.bytes||createHash('sha256').update(bytes).digest('hex')!==artifact.sha256)throw new Error('Original PKG commitment does not match bytes');
+if((await stat(source)).size>=480*1024*1024)throw new Error('Individual PKG still exceeds the download limit');
+await mkdir(output,{recursive:true});
+await copyFile(source,path.join(output,artifact.file));
+await writeFile(path.join(output,'SHA256SUMS'),`${artifact.sha256}  ${artifact.file}\n`);
+await copyFile(path.join(input,'release-evidence.json'),path.join(output,'original-release-evidence.json'));
+await writeFile(path.join(output,'artifact-recovery.json'),JSON.stringify({schemaVersion:'surface-artifact-recovery/1',sourceRun:36900668255,sourceCommit:sourceSha,arch,artifact,repacked:true,rebuilt:false,signed:false,note:'Original PKG bytes recovered from the completed research build. No signing, notarization, publication or store submission.'},null,2));
+console.log(`Recovered and rehashed ${artifact.file} (${artifact.bytes} bytes).`);

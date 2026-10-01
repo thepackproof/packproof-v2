@@ -43,7 +43,7 @@ To connect a USB Android phone to the local API, use `adb reverse tcp:3000 tcp:3
 
 The branch push is intentionally outside the existing Android, iOS, desktop, and infrastructure push filters. The existing iOS submission listener matches only the separate workflow named `iOS`, main, and one fixed historical commit. It cannot be activated by the R&D workflow. Existing staging deployment also requires main. Do not run old release/submission workflows to obtain these artifacts.
 
-A follow-up build can select `android`, `ios`, `desktop`, or `checks` with the manual workflow input, or with a push commit marker such as `[rnd-build:android]`. The default is all artifacts. Isolation validation always runs first; selection never enables release signing or publication.
+A follow-up build can select `android`, `ios`, `desktop`, `checks`, or `artifacts` with the manual workflow input, or with a push commit marker such as `[rnd-build:android]`. The default is all artifacts. Isolation validation always runs first; selection never enables release signing or publication.
 
 Validate the isolation contract with:
 
@@ -56,3 +56,5 @@ The build check covers standalone release-bundle runtime behavior, rejection of 
 ## Toolchain evidence from the implementation workspace
 
 The Linux implementation workspace provided Node.js 24, npm, Python, Git, and a Java runtime. It did not provide a Java compiler, Android SDK/Gradle, Xcode/CocoaPods, Windows, or Wine. Desktop main/renderer JavaScript was compiled locally; native Android/iOS/Windows/macOS binaries require the hosted native jobs or the listed local toolchains. A queued or configured build is not a completed artifact; consult the actual workflow outcome and artifact hashes.
+
+The one-time `artifacts` recovery target extracts the original macOS PKGs from completed run `36900668255`, verifies the original source SHA and each package hash, and uploads smaller archives. It does not compile, sign, notarize, or publish an app. Routine desktop artifacts separate installers from disk images and exclude duplicate filename aliases to keep each archive within download limits.

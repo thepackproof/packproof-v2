@@ -11,7 +11,7 @@ on:
       target:
         description: Experimental artifact family to rebuild
         type: choice
-        options: [all, android, ios, desktop, checks]
+        options: [all, android, ios, desktop, checks, artifacts]
         default: all
 
 # No cloud federation, signing credentials, releases, OTA channels, or store submission.
@@ -52,9 +52,9 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require('node:fs');
-          const marker = process.env.PUSH_MESSAGE?.match(/\[rnd-build:(android|ios|desktop|checks)\]/)?.[1];
+          const marker = process.env.PUSH_MESSAGE?.match(/\[rnd-build:(android|ios|desktop|checks|artifacts)\]/)?.[1];
           const target = process.env.REQUESTED_TARGET || marker || 'all';
-          if (!['all', 'android', 'ios', 'desktop', 'checks'].includes(target)) throw new Error('Invalid research build target');
+          if (!['all', 'android', 'ios', 'desktop', 'checks', 'artifacts'].includes(target)) throw new Error('Invalid research build target');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `target=${target}\n`);
           NODE
 
@@ -237,12 +237,54 @@ jobs:
         with:
           name: PackProof-RND-Desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           path: |
-            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
-            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
-            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.pkg
-            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*Setup-*.exe
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*-${{ matrix.arch }}.pkg
             desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
             desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
             desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/DEVELOPMENT-BUILD.txt
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: matrix.platform == 'darwin'
+        with:
+          name: PackProof-RND-Desktop-Images-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*-${{ matrix.arch }}.dmg
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*-${{ matrix.arch }}.zip
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  recover-macos-pkg:
+    needs: isolation
+    if: needs.isolation.outputs.target == 'artifacts'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Download completed research artifact without rebuilding
+        uses: actions/download-artifact@v4
+        with:
+          name: PackProof-RND-Desktop-darwin-${{ matrix.arch }}-3637c5038b564fe432d8f218ed731a837301b2c6
+          path: recovered-input
+          run-id: 36900668255
+          github-token: ${{ github.token }}
+      - name: Verify original source and PKG digest
+        run: node scripts/rnd/extract-desktop-pkg.mjs recovered-input recovered-pkg ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PackProof-RND-macOS-${{ matrix.arch }}-PKG-3637c5038b564fe432d8f218ed731a837301b2c6
+          path: recovered-pkg/*
           if-no-files-found: error
           retention-days: 30
