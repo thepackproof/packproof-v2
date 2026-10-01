@@ -6,6 +6,7 @@ The existing transaction, continuous recording, committed originals and frozen P
 
 | Read | Purpose |
 | --- | --- |
+| [RND_BUILD_REPORT.md](RND_BUILD_REPORT.md) | Actual build artifacts, software checks, local setup and remaining gates |
 | [CLAIMS_AND_THREATS.md](CLAIMS_AND_THREATS.md) | What each scope may say; threat controls and unresolved physical tests |
 | [SUPPORT_AND_GATES.md](SUPPORT_AND_GATES.md) | Empty qualification registry, exact acceptance gates and progression |
 | [PHYSICAL_PROTOCOL.md](PHYSICAL_PROTOCOL.md) | Real corpus collection, blinding, leakage prevention and attack protocol |
