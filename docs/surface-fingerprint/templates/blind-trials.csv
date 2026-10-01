@@ -1,0 +1,1 @@
+trial_id,cluster_id,enrollment_attempt_id,observation_attempt_id,same_print_instance,same_label_substrate,same_carton,same_assembly,closure_scenario,attack_family,requested_scope,frozen_policy_sha256,ground_truth_reviewer,predicted_state,reason,excluded,exclusion_reason

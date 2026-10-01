@@ -1,3 +1,5 @@
+import { surfaceConfigFromEnv } from './surface/config.js';
+import { dispatchSurfaceJobs } from './surface/worker.js';
 import { commerceAutomationProvidersFromEnv } from "./domain/commerce-automation.js";
 import { dispatchEbayDeletionCases } from "./domain/ebay-deletion-cases.js";
 import { dispatchProofPush } from './domain/notification-center.js';
@@ -115,6 +117,7 @@ const readinessProbes=[
   }},
 ];
 const app = config.processRole==='worker'?express():createServerApp({
+  surface: surfaceConfigFromEnv(),
   intake: intakeConfig,
   db: opened.db,
   objectStore,
@@ -144,12 +147,13 @@ if(config.processRole==='worker'){
   app.get('/live',liveness);app.get('/health',liveness);
   app.get('/ready',createReadiness(readinessProbes).handler);
 }
-const server = app.listen(config.port, "0.0.0.0", () => {
+const server = app.listen(config.port, process.env.PACKPROOF_LISTEN_HOST ?? "0.0.0.0", () => {
   console.log(
     `PackProof V2 API listening on ${config.port} engine=${opened.engine} objectStore=${config.objectStore} authMode=${config.authMode}`,
   );
 });
 const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+if(process.env.PACKPROOF_SURFACE_EXTRACTION==='true'||process.env.PACKPROOF_SURFACE_INTERNAL_COMPARISON==='true')jobs.push({name:'surface-rd',intervalMs:5000,run:()=>dispatchSurfaceJobs({db:opened.db,objectStore,clock:systemClock,auth:createAuthentication(config,opened.db,systemClock),publicBaseUrl:config.publicBaseUrl,devAuth:isDevLoginEnabled(config),manifestSigning,surface:surfaceConfigFromEnv()})});
 jobs.push({name:'mobile-intake',intervalMs:30000,run:()=>reconcileIntakeSubmissions(opened.db,systemClock,{integrations,credentials:credentialStore},intakeConfig)});
 jobs.push({name:'order-shippo',intervalMs:15000,run:()=>dispatchShippoIntake(opened.db,systemClock,{credentialStore,config:()=>intakeConfigFromEnv()})});
 if(billing&&billingReconciliationStartAt){

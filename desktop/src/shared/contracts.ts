@@ -1,11 +1,12 @@
 import type { Transport } from "../../../packages/onboarding/model";
+import type { SurfaceSummary, SurfaceComparison, SurfaceComparisonInput } from '../../../web/src/api/surface-types';
 import type { CanonicalProof, ProofCollectionItem, ProfileView, FulfillmentQueueItem, ConnectedAccountsListView, TransactionWriteInput, PublicProofView } from '../../../web/src/api/types';
 export type { CanonicalProof, ProofCollectionItem, ProfileView, FulfillmentQueueItem, ConnectedAccountsListView };
 export interface SessionView { userId: string; profile: ProfileView; email?: string }
 export interface Detection { rawValue: string; format: string; detectedAtMs: number; confirmed?: boolean; notThisPackage?: boolean }
 export interface UploadView { id: string; proofId: string; label: string; state: string; progress: number; byteSize: number; createdAt: string; error?: string; sha256?: string; evidenceId?: string; interrupted?: boolean }
 export interface DesktopSettings { cameraId: string; microphoneId: string; audio: boolean; resolution: '720p'|'1080p'; frameRate: 24|30; retentionHours: 0|24|168; notifications: boolean; scannerSuffix: 'Enter'|'Tab'; theme: 'light'|'dark'|'system' }
-export interface SystemView { version: string; platform: string; environment: string; online: boolean; configured: boolean; secureStorage: boolean; pendingOtherAccounts: boolean; settings: DesktopSettings; reporting?:{enabled:boolean;configured:boolean;provider:string}; update: {state: string; version?: string; error?: string} }
+export interface SystemView { version: string; platform: string; environment: string; online: boolean; configured: boolean; secureStorage: boolean; pendingOtherAccounts: boolean; settings: DesktopSettings; research?: {surfaceReview: boolean; localSignIn: boolean}; reporting?:{enabled:boolean;configured:boolean;provider:string}; update: {state: string; version?: string; error?: string} }
 export interface CaptureInput { proofId: string; label: string; mimeType: string; camera: string; expectedTracking?: string }
 export interface CaptureView { id: string; maxRecordingBytes: number; maxRecordingSeconds: number }
 export type SharedProofPreview = Pick<PublicProofView,'proofId'|'status'|'evidence'|'evidenceState'|'statements'|'recordAsOf'|'fulfillmentScope'|'integrity'> & {
@@ -18,8 +19,9 @@ export interface SharedProofConsent { previewHash:string; originalsReviewed:true
 export interface SharedProofLink { url:string; expiresAt:string|null }
 export interface DesktopEvent { type: 'queue'|'session'|'update'|'navigate'|'notification'|'system'; path?: string; title?: string; message?: string }
 export interface PackProofDesktop {
+ surfaces: { saveSource(id: string, sourceId: string): Promise<{saved: boolean}>; read(id: string): Promise<SurfaceSummary>; compare(id: string, input: SurfaceComparisonInput): Promise<SurfaceComparison>; export(id: string): Promise<{saved: boolean}>; sourceUrl(id: string, sourceId: string): Promise<string> };
  onboarding:Transport;
- auth: { state(): Promise<SessionView|null>; signIn(input:{email:string;password:string}):Promise<SessionView>; signUp(input:{email:string;password:string}):Promise<{email:string;userConfirmed:boolean}>; confirmSignUp(input:{email:string;code:string}):Promise<void>; resendCode(email:string):Promise<void>; forgotPassword(email:string):Promise<void>; resetPassword(input:{email:string;code:string;password:string}):Promise<void>; signOut():Promise<void> };
+ auth: { researchSignIn(subject: string): Promise<SessionView>; state(): Promise<SessionView|null>; signIn(input:{email:string;password:string}):Promise<SessionView>; signUp(input:{email:string;password:string}):Promise<{email:string;userConfirmed:boolean}>; confirmSignUp(input:{email:string;code:string}):Promise<void>; resendCode(email:string):Promise<void>; forgotPassword(email:string):Promise<void>; resetPassword(input:{email:string;code:string;password:string}):Promise<void>; signOut():Promise<void> };
  proofs: { list():Promise<ProofCollectionItem[]>; detail(id:string):Promise<CanonicalProof>; create(input:TransactionWriteInput):Promise<CanonicalProof>; finalize(id:string):Promise<CanonicalProof>; sharePreview(id:string):Promise<SharedProofPreview>; share(id:string,input:SharedProofConsent):Promise<SharedProofLink>; export(id:string):Promise<{saved:boolean}>; evidenceUrl(proofId:string,evidenceId:string,previewHash?:string):Promise<string> };
  orders: { list():Promise<FulfillmentQueueItem[]>; resolve(code:string):Promise<{proofId:string}>; sync(connectionId:string):Promise<void> };
  integrations: { list():Promise<ConnectedAccountsListView>; connect(provider:string):Promise<void> };

@@ -124,7 +124,7 @@ import {
   type ProofsLibraryView,
 } from "./navigation";
 
-const IS_RELEASE_CLIENT = !__DEV__;
+const IS_RELEASE_CLIENT = !__DEV__ && process.env.EXPO_PUBLIC_PACKPROOF_RND_BUILD !== "true";
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN_LENGTH = 2;
 
@@ -139,6 +139,7 @@ function currentRuntime(
 ): ResolvedRuntimeConfig {
   return resolveRuntimeConfig({
     env: {
+      EXPO_PUBLIC_PACKPROOF_RND_BUILD: process.env.EXPO_PUBLIC_PACKPROOF_RND_BUILD,
       EXPO_PUBLIC_PACKPROOF_API_BASE_URL: process.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL,
       EXPO_PUBLIC_PACKPROOF_AUTH_MODE: process.env.EXPO_PUBLIC_PACKPROOF_AUTH_MODE,
       EXPO_PUBLIC_COGNITO_USER_POOL_ID: process.env.EXPO_PUBLIC_COGNITO_USER_POOL_ID,

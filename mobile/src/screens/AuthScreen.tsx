@@ -177,7 +177,7 @@ export function AuthScreen() {
         </View>
       ) : null}
 
-      {__DEV__ ? (
+      {__DEV__ || process.env.EXPO_PUBLIC_PACKPROOF_RND_BUILD === "true" ? (
         <View style={styles.dev}>
           <Text style={[styles.devTitle, { color: colors.textSecondary }]}>Developer options</Text>
           {app.allowsApiOverride ? (

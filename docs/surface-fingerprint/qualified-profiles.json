@@ -1,0 +1,6 @@
+{
+  "schema": "packproof.surface-qualified-profiles.v1",
+  "status": "NO_QUALIFIED_PROFILES",
+  "profiles": [],
+  "reason": "No physical device, corpus, attack, shipping or aging qualification has been completed for this R&D implementation."
+}

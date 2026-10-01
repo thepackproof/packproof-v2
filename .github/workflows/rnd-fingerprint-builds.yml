@@ -1,0 +1,220 @@
+name: Stochastic surface RND builds only
+
+on:
+  push:
+    branches: [rnd/stochastic-surface-2026-10-01]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+# No cloud federation, signing credentials, releases, OTA channels, or store submission.
+permissions:
+  contents: read
+concurrency:
+  group: stochastic-rnd-builds-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: '1'
+  EXPO_NO_TELEMETRY: '1'
+  EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+  EXPO_PUBLIC_PACKPROOF_RND_BUILD: 'true'
+  EXPO_PUBLIC_PACKPROOF_FINGERPRINT_ENABLED: 'true'
+  EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING: 'true'
+  EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'http://127.0.0.1:3000'
+  EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'dev'
+
+jobs:
+  isolation:
+    if: github.ref == 'refs/heads/rnd/stochastic-surface-2026-10-01'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check identities, live-service rejection, and build-only workflow
+        run: node --test scripts/rnd/build-isolation.test.mjs
+
+  research-checks:
+    needs: isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mobile/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned isolated CPU worker and media validation tool
+        run: |
+          python -m venv surface-worker/.venv
+          surface-worker/.venv/bin/python -m pip install --require-hashes --only-binary=:all: -r surface-worker/requirements.lock
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: npm ci
+        working-directory: mobile
+      - run: npm ci
+        working-directory: backend
+      - name: Worker and offline verifier regression checks
+        run: |
+          (cd surface-worker && .venv/bin/python -m unittest discover -s tests -v)
+          python verifier/surface-test.py
+      - name: Real API to Python to export integration using synthetic PNGs
+        run: npm --prefix backend test -- --run tests/surface-fingerprint.test.ts tests/surface-worker-e2e.test.ts --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/surface-tests.xml"
+      - name: Record the validated scope
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report={"schemaVersion":"surface-software-validation/1","sourceSha":os.environ["GITHUB_SHA"],"scope":"Synthetic protocol fixtures through real worker subprocesses and offline verifier","physicalTrials":0,"physicalAccuracy":"NOT_EVALUATED","productionEligible":False}
+          Path(os.environ["RUNNER_TEMP"],"surface-software-validation.json").write_text(json.dumps(report,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: PackProof-RND-Software-Validation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/surface-tests.xml
+            ${{ runner.temp }}/surface-software-validation.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  android:
+    needs: isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+        working-directory: mobile
+      - run: npm run typecheck
+        working-directory: mobile
+      - name: Build standalone RND APK with generated test key
+        run: node scripts/rnd/build-mobile.mjs android
+      - name: Verify the actual APK identity and embedded JS bundle
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging mobile/dist/rnd/PackProof-RND-Android.apk > mobile/dist/rnd/android-package.txt
+          grep -F "package: name='com.packproof.mobile.rnd' " mobile/dist/rnd/android-package.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose mobile/dist/rnd/PackProof-RND-Android.apk
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('mobile/dist/rnd/PackProof-RND-Android.apk') as archive:
+              assert 'assets/index.android.bundle' in archive.namelist(), 'Standalone APK is missing JavaScript'
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PackProof-RND-Android-${{ github.sha }}
+          path: |
+            mobile/dist/rnd/*.apk
+            mobile/dist/rnd/*.sha256
+            mobile/dist/rnd/android-package.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  ios-simulator:
+    needs: isolation
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - run: npm run typecheck
+        working-directory: mobile
+      - name: Compile research app and native adapters for iOS Simulator
+        run: node scripts/rnd/build-mobile.mjs ios
+      - name: Verify simulator bundle identity
+        run: |
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' mobile/dist/rnd/ios-derived/Build/Products/Release-iphonesimulator/PackProofRND.app/Info.plist)" = 'com.packproof.mobile.rnd'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PackProof-RND-iOS-Simulator-${{ github.sha }}
+          path: |
+            mobile/dist/rnd/*.zip
+            mobile/dist/rnd/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  desktop:
+    needs: isolation
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            platform: win32
+            target: win
+            arch: x64
+          - runner: macos-15-intel
+            platform: darwin
+            target: mac
+            arch: x64
+          - runner: macos-15
+            platform: darwin
+            target: mac
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    env:
+      APP_ENV: research
+      PACKPROOF_SURFACE_REVIEW_ENABLED: 'true'
+      PACKPROOF_API_BASE_URL: 'http://127.0.0.1:3000'
+      PACKPROOF_WEB_BASE_URL: 'http://127.0.0.1:5173'
+      PACKPROOF_BUILD_ARCH: ${{ matrix.arch }}
+      PACKPROOF_BUILD_PKG: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CSC_FOR_PULL_REQUEST: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm run build:rnd
+      - name: Package separate unsigned research application
+        run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
+      - name: Record artifact hashes and experimental scope
+        run: node scripts/verify-artifacts.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PackProof-RND-Desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.pkg
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
+            desktop/release/research/${{ matrix.platform }}-${{ matrix.arch }}/DEVELOPMENT-BUILD.txt
+          if-no-files-found: error
+          retention-days: 30

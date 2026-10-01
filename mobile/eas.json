@@ -60,6 +60,37 @@
         "simulator": true,
         "autoIncrement": false
       }
+    },
+    "rnd-android": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_RND_BUILD": "true",
+        "EXPO_PUBLIC_PACKPROOF_FINGERPRINT_ENABLED": "true",
+        "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "http://127.0.0.1:3000",
+        "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "dev",
+        "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true"
+      },
+      "android": {
+        "buildType": "apk",
+        "withoutCredentials": true
+      }
+    },
+    "rnd-ios-simulator": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_RND_BUILD": "true",
+        "EXPO_PUBLIC_PACKPROOF_FINGERPRINT_ENABLED": "true",
+        "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "http://127.0.0.1:3000",
+        "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "dev",
+        "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true"
+      },
+      "ios": {
+        "simulator": true,
+        "buildConfiguration": "Release",
+        "autoIncrement": false
+      }
     }
   },
   "submit": {

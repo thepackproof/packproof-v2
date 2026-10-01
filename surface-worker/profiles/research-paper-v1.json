@@ -1,0 +1,42 @@
+{
+  "id": "research-paper-v1",
+  "schemaVersion": "surface-profile/1",
+  "qualification": "unqualified",
+  "customerFindingsAllowed": false,
+  "captureProfiles": [],
+  "extractorVersion": "classical-residual-0.1.0",
+  "descriptorVersion": "bandpass-projection-0.1.0",
+  "scorerVersion": "bounded-correlation-0.1.0",
+  "coverageVersion": "frozen-multiregion-0.1.0",
+  "thresholdVersion": "none-unvalidated-0.1.0",
+  "thresholds": null,
+  "groups": {"print": 2, "carton": 2, "context": 1},
+  "supportedProcesses": ["inkjet", "laser", "thermal_transfer", "direct_thermal", "substrate"],
+  "engineeringBounds": {
+    "maxSources": 6,
+    "maxRegions": 24,
+    "maxImageBytes": 16777216,
+    "maxImagePixels": 16000000,
+    "maxImageDimension": 8192,
+    "maxPatchDimension": 384,
+    "minNativePatchDimension": 64,
+    "minSharpness": 12.0,
+    "minContrast": 6.0,
+    "minUsableFraction": 0.35,
+    "maxRegistrationCornerShiftPx": 48.0,
+    "maxLocalTranslationPx": 3.0,
+    "maxPerspectiveCoefficient": 0.002,
+    "minInliers": 8,
+    "minInlierFraction": 0.5,
+    "maxFitResidualPx": 3.0,
+    "minSeparatedCenterFraction": 0.12
+  },
+  "limitations": [
+    "Research profile has no physical validation or calibrated decision thresholds.",
+    "Engineering bounds are resource and diagnostic defaults, not qualified optical acceptance thresholds.",
+    "All four print-process branches are experimental and share an initial residual descriptor; none is qualified.",
+    "Content suppression does not establish physical-instance identity; same-content reprints remain a required control.",
+    "A surface observation cannot establish contents, closure, custody, or absence of reopening.",
+    "Optional angular, platform-attestation, and learned channels are unavailable in this baseline."
+  ]
+}

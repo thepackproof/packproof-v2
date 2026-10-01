@@ -18,6 +18,7 @@ function isReleaseSafeApiUrl(url) {
 }
 
 const easProfile = env("EAS_BUILD_PROFILE");
+const isResearch = env("EXPO_PUBLIC_PACKPROOF_RND_BUILD") === "true";
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
 const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
 const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
@@ -29,6 +30,14 @@ if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUM
 const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "55"));
 if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 52 || androidVersionCode > 2100000000)
   throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 51");
+
+if (isResearch) {
+  if (isRelease) throw new Error("Research builds cannot use a store release profile");
+  if (authMode !== "dev") throw new Error("Research builds must use isolated development authentication");
+  const target = new URL(apiBaseUrl || "http://127.0.0.1:3000");
+  if (target.hostname === "thepackproof.com" || target.hostname.endsWith(".thepackproof.com") || target.hostname === new URL(STAGING_API_BASE_URL).hostname) throw new Error("Research builds cannot target live PackProof services");
+  if (env("EXPO_PUBLIC_COGNITO_USER_POOL_ID") || env("EXPO_PUBLIC_COGNITO_CLIENT_ID")) throw new Error("Research builds cannot use Cognito credentials");
+}
 
 if (isRelease) {
   if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");
@@ -44,7 +53,7 @@ if (isRelease) {
 
 module.exports = {
   expo: {
-    name: isCameraSpike ? "PackProof Camera Test" : "PackProof",
+    name: isResearch ? "PackProof RND" : isCameraSpike ? "PackProof Camera Test" : "PackProof",
     slug: "packproof",
     owner: "packproof-llc",
     version: "1.0.1",
@@ -62,12 +71,12 @@ module.exports = {
       barStyle: "dark-content",
     },
     icon: "./assets/icon.png",
-    scheme: isCameraSpike ? "packproof-camera-test" : ["packproof-v2", "packproof"],
+    scheme: isResearch ? "packproof-rnd" : isCameraSpike ? "packproof-camera-test" : ["packproof-v2", "packproof"],
     ios: {
-      bundleIdentifier: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
+      bundleIdentifier: isResearch ? "com.packproof.mobile.rnd" : isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
       buildNumber: iosBuildNumber,
       supportsTablet: false,
-      associatedDomains: ["applinks:thepackproof.com", "applinks:www.thepackproof.com"],
+      associatedDomains: isResearch ? [] : ["applinks:thepackproof.com", "applinks:www.thepackproof.com"],
       config: { usesNonExemptEncryption: false },
       infoPlist: {
         NSCameraUsageDescription:
@@ -81,24 +90,24 @@ module.exports = {
       },
     },
     android: {
-      package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
-      versionCode: androidVersionCode,
+      package: isResearch ? "com.packproof.mobile.rnd" : isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
+      versionCode: isResearch ? Number(env("PACKPROOF_RND_BUILD_NUMBER", "1")) : androidVersionCode,
       allowBackup: false,
       usesCleartextTraffic: !isPlayRelease,
-      ...(process.env.GOOGLE_SERVICES_JSON ? {googleServicesFile:process.env.GOOGLE_SERVICES_JSON} : {}),
+      ...(!isResearch && process.env.GOOGLE_SERVICES_JSON ? {googleServicesFile:process.env.GOOGLE_SERVICES_JSON} : {}),
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#E9EEF4",
       },
       permissions: isCameraSpike ? ["CAMERA", "RECORD_AUDIO"] : ["CAMERA"],
-      intentFilters: isCameraSpike ? [] : [{
+      intentFilters: (isResearch || isCameraSpike) ? [] : [{
         action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"],
         data: ["thepackproof.com", "www.thepackproof.com"].flatMap(host =>
           ["/app/packing", "/app/proofs/", "/app/capture/"].map(pathPrefix => ({scheme:"https",host,pathPrefix}))),
       }],
     },
     plugins: [
-      ...(!isCameraSpike ? ["./plugins/with-order-share"] : []),
+      ...(!isCameraSpike && !isResearch ? ["./plugins/with-order-share"] : []),
       "./plugins/with-android-back-compat",
       "./plugins/with-android-release-optimization",
       "expo-video",
@@ -126,6 +135,7 @@ module.exports = {
         {
           ios: { deploymentTarget: "15.1" },
           android: {
+            ...(isResearch ? { usesCleartextTraffic: true } : {}),
             compileSdkVersion: 36,
             targetSdkVersion: 36,
             buildToolsVersion: "36.0.0",
@@ -142,11 +152,13 @@ module.exports = {
         },
       ],
     ],
+    updates: { enabled: !isResearch },
     extra: {
+      packproofResearchBuild: isResearch,
       eas: {
         projectId: "0196c3f7-cb3a-472c-99be-825558f227e8",
       },
-      packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
+      packproofApiBaseUrl: apiBaseUrl || (isResearch ? "http://127.0.0.1:3000" : isRelease ? STAGING_API_BASE_URL : ""),
     },
   },
 };

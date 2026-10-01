@@ -18,7 +18,7 @@ async function hash(file) {
 
 async function main() {
   const release = checkReleaseEnvironment({ checkRuntime: true });
-  const signed = release.channel !== 'development';
+  const signed = !['development', 'research'].includes(release.channel);
   const output = path.resolve(release.outputDirectory);
   const files = fs.readdirSync(output).filter(file => /\.(exe|dmg|zip|pkg)$/.test(file) && file.startsWith(release.artifactPrefix));
   const expected = release.platform === 'win32' ? ['exe'] : ['dmg', 'zip', ...(release.includePkg ? ['pkg'] : [])];

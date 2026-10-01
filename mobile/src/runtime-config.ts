@@ -12,6 +12,7 @@ export const STAGING_COGNITO: CognitoConfig = {
 export const DEV_DEFAULT_API_BASE_URL = "http://127.0.0.1:3000";
 
 export interface RuntimeEnv {
+  EXPO_PUBLIC_PACKPROOF_RND_BUILD?: string;
   EXPO_PUBLIC_PACKPROOF_API_BASE_URL?: string;
   EXPO_PUBLIC_PACKPROOF_AUTH_MODE?: string;
   EXPO_PUBLIC_COGNITO_USER_POOL_ID?: string;
@@ -130,6 +131,24 @@ export function resolveRuntimeConfig(input: {
   isRelease: boolean;
   cached?: CachedRuntimeOverrides | null;
 }): ResolvedRuntimeConfig {
+  // Release JS bundles set __DEV__=false even for unsigned laboratory APKs.
+  // This build flag prevents those bundles from falling back to live service defaults.
+  if (input.env.EXPO_PUBLIC_PACKPROOF_RND_BUILD === "true") {
+    const apiBaseUrl = normalizeApiBaseUrl(input.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL || DEV_DEFAULT_API_BASE_URL);
+    const target = new URL(apiBaseUrl);
+    if (target.username || target.password || target.search || target.hash ||
+      !["http:", "https:"].includes(target.protocol) ||
+      target.hostname === "thepackproof.com" || target.hostname.endsWith(".thepackproof.com") ||
+      target.hostname === new URL(STAGING_API_BASE_URL).hostname ||
+      (target.protocol === "http:" && !isPrivateOrLocalDevelopmentHost(target.hostname))) {
+      throw new Error("Research builds require a local or explicit isolated HTTPS API");
+    }
+    if (input.env.EXPO_PUBLIC_PACKPROOF_AUTH_MODE === "cognito" ||
+      input.env.EXPO_PUBLIC_COGNITO_CLIENT_ID || input.env.EXPO_PUBLIC_COGNITO_USER_POOL_ID) {
+      throw new Error("Research builds cannot use live account authentication");
+    }
+    return { apiBaseUrl, authMode: "dev", cognito: { region: "us-east-1", clientId: "", userPoolId: "" }, allowsApiOverride: false, allowsDevAuth: true };
+  }
   const compiledApi = compiledApiBaseUrl(input.env, input.isRelease);
   const compiledAuth = compiledAuthMode(input.env, input.isRelease);
   const compiledCognitoConfig = compiledCognito(input.env, input.isRelease);

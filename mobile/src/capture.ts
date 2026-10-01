@@ -1,3 +1,4 @@
+import { prepareSurfaceCollection, uploadSurfaceCapture, checkpointSurfaceVideo } from "./fingerprint/storage";
 import { beginNativeEngine, captureEngineEnabled, sealNativeEngine } from "./capture/engine";
 import type { CaptureContext, CaptureManifest } from "../../backend/src/capture/core";
 import type { CaptureSessionGrant } from "./intake/model";
@@ -56,7 +57,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED" | "SCANNER_TRIGGERED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { surfaceCaptureEnabled?: boolean; surfaceComparison?: boolean; remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -128,6 +129,9 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   const recovery: CaptureRecoveryState = { version: 1, operationId: session.id, apiBaseUrl: input.client.apiBaseUrl,
     userId: input.userId, proofId: input.proofId, stageId: input.stageId, phase: "RECORDING", evidenceIdempotencyKey: newIdempotencyKey(),
     submitRequested: false, needsSellerAttestation: !input.stageId, attempt: 0, nextRetryAt: null, updatedAt: new Date().toISOString() };
+  const surfaceCaptureEnabled = (!input.stageId || input.stageType === 'RETURN_PACKING') && await prepareSurfaceCollection(input.client, { proofId: input.proofId, userId: input.userId,
+    captureSessionId: session.id, expectedTracking: input.stageType === 'RETURN_PACKING' ? '' : captureContext?.expected.find(fact => fact.kind === 'TRACKING')?.value,
+    shipmentLegId: input.stageType === 'RETURN_PACKING' ? 'RETURN' : 'OUTBOUND' }).catch(() => false);
   const identifierPolicy = session.identifierPolicy;
   let identifiers: IdentifierCapture | null = null;
   let identifierCoverage: LocalCapture['identifierCoverage'];
@@ -144,7 +148,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
     identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
   if (input.relay) await input.relay.onSessionIssued(session.id);
-  const captured = await nativeRecorder({ remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+  const captured = await nativeRecorder({ surfaceCaptureEnabled, remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
     ...(identifierCaptureEnabled(identifierPolicy) ? {
       onIdentifierBarcode: async (event: UnifiedBarcodeDetection) => {
         if (!identifiers) return null;
@@ -177,6 +181,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
     // A failed finalization can still leave original bytes. Keep its account journal and capture identity for recovery/export.
     return null;
   }
+  if (surfaceCaptureEnabled) void checkpointSurfaceVideo(input.client, input.userId, session.id).catch(() => undefined);
   const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
   study?.phase('confirmation');
   return persistLocalCapture({ ...captured,identifierPolicy,identifierCoverage,captureContext,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
@@ -618,4 +623,18 @@ export async function uploadCaptureResumable(input: {
   }
   await input.client.completeUploadParts(input.proofId, input.evidenceId, info.size);
   input.onProgress?.(100);
+}
+
+/** Optional recipient R&D observation: same native camera owner, separate additive evidence path. */
+export async function recordSurfaceComparison(input: { client: PackProofV2Client; userId: string; proofId: string;
+  enrollmentId: string; expectedTracking: string; contextStage: import('./fingerprint/model').SurfaceStage; shipmentLegId: 'OUTBOUND' | 'RETURN' }): Promise<string | null> {
+  await requestCapturePermissions();
+  if (!nativeRecorder) throw new Error('The camera is not ready.');
+  const id = `cap_surface_${newIdempotencyKey().replace(/[^A-Za-z0-9_-]/g, '')}`;
+  const prepared = await prepareSurfaceCollection(input.client, { ...input, captureSessionId: id, operation: 'observation' });
+  if (!prepared) throw new Error('Experimental surface collection is unavailable. Enable research collection in Account.');
+  const result = await nativeRecorder({ proofId: input.proofId, orderLabel: 'Experimental package observation', captureSessionId: id,
+    surfaceCaptureEnabled: true, surfaceComparison: true, stageType: 'SURFACE_OBSERVATION' });
+  if (!result) return null;
+  return uploadSurfaceCapture(input.client, input.userId, id);
 }

@@ -1,3 +1,4 @@
+import { SurfaceResearchPanel } from "../fingerprint/ResearchPanels";
 import { Coaching } from "../onboarding/Onboarding";
 import { ProofNotificationMute } from "../notifications/NotificationCenter";
 import { SelectedOrderHandoff } from "../intake/SelectedOrderHandoff";
@@ -336,6 +337,7 @@ export function ProofDetailScreen() {
         </> : null}
       />
 
+      <SurfaceResearchPanel key={proof.proofId} proofId={proof.proofId} trackingNumber={txn.shipping?.trackingNumber} />
       <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
         <ProofNotificationMute key={proof.proofId}/>
         {menuOpen && app.role === "SELLER" && proof.status === "READY_FOR_EVIDENCE" && proof.workflowType === "COMMERCE_SALE" && proof.participationPolicy === "COUNTERPARTY_OPTIONAL" && !captureBelongs ? <SelectedOrderHandoff key={proof.proofId} proofId={proof.proofId} transactionId={proof.transaction.transactionId} onManageDevices={() => { setMenuOpen(false); app.go("account", { accountSection: "channels" }); }} /> : null}

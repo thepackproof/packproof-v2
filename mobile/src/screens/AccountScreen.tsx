@@ -1,3 +1,4 @@
+import { SurfaceResearchConsent } from "../fingerprint/ResearchPanels";
 import { ReplayTutorial } from "../onboarding/Onboarding";
 import { BillingPanel } from "../billing/BillingPanel";
 import { DeveloperAccessPanel } from "../developer/DeveloperAccessPanel";
@@ -117,6 +118,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       <AppHeader title={section ? SECTION_TITLES[section] : "Account"} onBack={() => section ? setSection(null) : app.goBack()} />
       <OfflineBanner visible={app.offline} />
       <ErrorBanner message={app.error} />
+      {!section ? <SurfaceResearchConsent key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
 
       {!section ? <>
         <View style={styles.identity}>

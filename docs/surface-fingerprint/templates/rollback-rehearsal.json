@@ -1,0 +1,19 @@
+{
+  "schema": "packproof.surface-rollback-rehearsal.v1",
+  "status": "NOT_RUN",
+  "environment": null,
+  "operator": null,
+  "startedAt": null,
+  "completedAt": null,
+  "beforeBuild": null,
+  "afterBuild": null,
+  "flagsBefore": null,
+  "flagsAfter": null,
+  "rootBeforeSha256": null,
+  "rootAfterSha256": null,
+  "ordinaryCaptureCommitFinalizePassed": null,
+  "historicalReadExportPassed": null,
+  "pendingUploadPreserved": null,
+  "queueDisposition": null,
+  "evidencePaths": []
+}

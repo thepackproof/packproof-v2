@@ -1,0 +1,21 @@
+{
+  "schema": "packproof.surface-gate-record.v1",
+  "status": "NOT_ESTABLISHED",
+  "gate": null,
+  "protocolVersion": null,
+  "evaluator": null,
+  "independentReviewer": null,
+  "buildCommit": null,
+  "policySha256": null,
+  "testSetSha256": null,
+  "physicalInstances": null,
+  "independentTrials": null,
+  "dependenceAndSamplingMethod": null,
+  "metrics": [],
+  "exclusions": [],
+  "unresolvedAttacks": [],
+  "evidencePaths": [],
+  "permittedProfiles": [],
+  "decision": null,
+  "signedOffAt": null
+}

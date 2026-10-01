@@ -71,7 +71,7 @@ export class ErrorReporting {
     this.client = null;
     if (!input.dsn) { this.state = { configured: false, enabled: false, provider: 'sentry', reason: 'NOT_CONFIGURED' }; return; }
     if (!validPublicDsn(input.dsn)) { this.state = { configured: false, enabled: false, provider: 'sentry', reason: 'INVALID_DSN' }; return; }
-    if (input.channel === 'development') { this.state = { configured: true, enabled: false, provider: 'sentry', reason: 'DISABLED_IN_DEVELOPMENT' }; return; }
+    if (['development', 'research'].includes(input.channel)) { this.state = { configured: true, enabled: false, provider: 'sentry', reason: 'DISABLED_IN_DEVELOPMENT' }; return; }
     const version = /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/.test(input.version) ? input.version : 'unknown';
     const release = `packproof-desktop@${version}`;
     try {

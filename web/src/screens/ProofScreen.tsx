@@ -1,4 +1,5 @@
 import { MediaPrivacyTools } from "../components/MediaPrivacyTools";
+import { SurfaceResearchReview } from '../components/SurfaceResearchReview';
 import { EvidenceResponsePanel } from "../components/EvidenceResponsePanel";
 import { SignatureWorkbench } from "../components/SignatureWorkbench";
 import { PrivacySharePanel } from "../components/PrivacySharePanel";
@@ -365,6 +366,7 @@ export function ProofScreen(props: {
         <summary>Share Proof</summary>
         <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} currentUserId={props.currentUserId} /></div>
       </details>}
+      {props.api && <SurfaceResearchReview proofId={proof.proofId} api={props.api} />}
       {detailed ? (
         <EvidenceReviewPanel
           key={proof.proofId}

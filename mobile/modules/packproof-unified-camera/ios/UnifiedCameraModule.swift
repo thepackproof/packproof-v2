@@ -9,6 +9,12 @@ public final class UnifiedCameraModule: Module {
 
     Function("newOperationNonce") { UUID().uuidString }
     Function("identifierScannerVersion") { 1 }
+    Function("surfaceSamplerVersion") { 1 }
+    AsyncFunction("bindSurfaceContext") { (sessionID: String, contextJSON: String) in
+      try SurfaceSampler.bind(sessionID: sessionID, contextJSON: contextJSON)
+    }
+    AsyncFunction("inspectSurfaceSource") { (sessionID: String, fileName: String) in try SurfaceSampler.inspectSource(sessionID: sessionID, fileName: fileName) }
+    AsyncFunction("readSurfaceJournal") { (sessionID: String) in try SurfaceSampler.read(sessionID: sessionID) }
     // iOS provides no public switch for reading the global system haptics preference;
     // system haptics APIs apply the user's settings when the caller requests feedback.
     AsyncFunction("getHapticsEnabled") { true }
@@ -40,6 +46,7 @@ public final class UnifiedCameraModule: Module {
       Events("onReady", "onBarcodeDetected", "onRecordingStarted", "onCaptureError")
       Prop("active") { (view: UnifiedCameraView, active: Bool) in view.setActive(active) }
       Prop("torchEnabled") { (view: UnifiedCameraView, enabled: Bool) in view.setTorchEnabled(enabled) }
+      Prop("surfaceCaptureEnabled") { (view: UnifiedCameraView, enabled: Bool) in view.setSurfaceCaptureEnabled(enabled) }
       Prop("identifierCaptureEnabled") { (view: UnifiedCameraView, enabled: Bool) in view.setIdentifierCaptureEnabled(enabled) }
       AsyncFunction("startRecording") { (view: UnifiedCameraView, sessionID: String, audioEnabled: Bool, promise: Promise) in
         view.startRecording(sessionID: sessionID, audioEnabled: audioEnabled, promise: promise)

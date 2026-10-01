@@ -95,6 +95,27 @@ export class AuthService {
     await this.persist(row, generation); this.fence(generation);
     this.current = row; this.options.onSession?.(session); return { ...session };
   }
+  /** Available only in the isolated research build and only against a loopback development API. */
+  async researchSignIn(subject: string): Promise<AuthSession> {
+    const config = this.options.config; const target = new URL(config.apiBaseUrl);
+    if (config.channel !== 'research' || !['localhost', '127.0.0.1', '[::1]'].includes(target.hostname) || !['http:', 'https:'].includes(target.protocol) || config.cognito.clientId) throw new AuthError('RESEARCH_AUTH_DISABLED', 'Local research sign-in is unavailable in this build.');
+    if (!/^[a-zA-Z0-9_.@-]{1,128}$/.test(subject)) throw new AuthError('INVALID_SUBJECT', 'Use a short research identity containing letters, numbers, dots, dashes or underscores.');
+    const generation = ++this.generation;
+    this.current = null; this.pendingRefresh = null; await this.persist(null, generation); this.options.onSession?.(null);
+    const response = await this.fetcher(`${config.apiBaseUrl}/auth/dev/login`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000), headers: {'Content-Type': 'application/json', Accept: 'application/json'}, body: JSON.stringify({subject})});
+    this.fence(generation);
+    if (!response.ok) throw new AuthError('RESEARCH_AUTH_UNAVAILABLE', 'Start the local PackProof R&D sandbox with development authentication enabled.');
+    const login = await response.json() as {userId?: string; token?: string}; this.fence(generation);
+    if (!text(login.token) || !text(login.userId)) throw new AuthError('PROFILE_UNAVAILABLE', 'Local research sign-in returned an invalid account.');
+    const profileResponse = await this.fetcher(`${config.apiBaseUrl}/me`, {redirect: 'error', signal: AbortSignal.timeout(30_000), headers: {Authorization: `Bearer ${login.token}`, Accept: 'application/json'}});
+    this.fence(generation);
+    if (!profileResponse.ok) throw new AuthError('PROFILE_UNAVAILABLE', 'The local research account could not be loaded.');
+    const profile = await profileResponse.json() as ProfileView; this.fence(generation);
+    if (profile.userId !== login.userId) throw new AuthError('PROFILE_UNAVAILABLE', 'The local research account does not match its sign-in.');
+    const session: AuthSession = {userId: profile.userId, email: subject, username: profile.username ?? null, displayName: profile.displayName ?? null, status: profile.status ?? 'ACTIVE', profile};
+    const row: StoredSession = {version: 1, scope: this.scope, session, accessToken: login.token, refreshToken: null, expiresAt: Date.now() + 3600_000};
+    await this.persist(row, generation); this.fence(generation); this.current = row; this.options.onSession?.(session); return {...session};
+  }
   async getAccessToken(forceRefresh = false): Promise<string> {
     const row = this.current;
     if (!row) throw new AuthError('UNAUTHENTICATED', 'Sign in to PackProof.');

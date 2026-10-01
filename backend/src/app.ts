@@ -1,3 +1,5 @@
+import { surfaceRouter } from './surface/router.js';
+import type { SurfaceConfig } from './surface/config.js';
 import { getOnboarding, updateOnboarding } from "./domain/onboarding.js";
 import { clientVersionRouter } from "./admin/client-versions.js";
 import { errorActionsRouter } from "./admin/error-actions.js";
@@ -226,6 +228,7 @@ import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proo
 import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 
 export interface AppDependencies {
+  surface?: SurfaceConfig;
   futurePlatform?: FuturePlatformConfig;
   intake?: IntakeRuntimeConfig;
   db: Database;
@@ -574,6 +577,7 @@ export function createApp(deps: AppDependencies): Express {
     res.json({association:a?{trackingNumber:a.tracking_number,carrier:a.carrier,source:a.source,createdAt:a.created_at}:null});
   }));
   app.use("/proofs/:id/capture-sessions", captureSessionRouter(deps));
+  app.use("/proofs/:id/surfaces", surfaceRouter(deps));
   app.use("/me/packing-relay", packingRelayRouter(deps));
   app.use((req,res,next)=>{
     const isProofAdmission=req.path==='/proofs'||/^\/transactions\/[^/]+\/proof$/.test(req.path);

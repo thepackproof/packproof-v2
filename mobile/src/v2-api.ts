@@ -1100,6 +1100,26 @@ export class PackProofV2Client {
     });
   }
 
+  async surfaceRequest<T>(proofId: string, path = '', method = 'GET', body?: unknown, idempotencyKey?: string): Promise<T> {
+    if (!/^(?:\/[A-Za-z0-9_/-]+)?$/.test(path)) throw new Error('Invalid surface route');
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/surfaces${path}`, { method, body,
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined });
+  }
+  surfaceMediaSource(proofId: string, sourceId: string): { uri: string; headers: Record<string,string> } {
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(sourceId)) throw new Error('Invalid surface source');
+    const token = this.options.getToken();
+    if (!token) throw new ApiError('UNAUTHENTICATED', 'Sign in to view original surface sources.', 401);
+    return { uri: joinUrl(this.apiBaseUrl, `/proofs/${encodeURIComponent(proofId)}/surfaces/media/${sourceId}`), headers: { Authorization: `Bearer ${token}` } };
+  }
+  surfaceUploadTarget(proofId: string, target: UploadTarget): UploadTarget {
+    const url = new URL(target.url, this.apiBaseUrl);
+    if (target.method !== 'PUT' || url.origin !== new URL(this.apiBaseUrl).origin ||
+      !url.pathname.startsWith(`/proofs/${encodeURIComponent(proofId)}/surfaces/media/`)) throw new Error('Invalid experimental source upload target');
+    const token = this.options.getToken();
+    if (!token) throw new ApiError('UNAUTHENTICATED', 'Sign in before uploading saved surface sources.', 401);
+    return { ...target, url: url.toString(), headers: { ...target.headers, Authorization: `Bearer ${token}` } };
+  }
+
   async captureEngineRequest<T>(path:string,method="GET",body?:unknown):Promise<T> {
     if(!/^\/(capture-intents|capture-sessions)(\/|$)/.test(path)) throw new Error('Invalid capture route');
     return this.request(path,{method,body});

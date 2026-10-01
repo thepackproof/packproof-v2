@@ -1,5 +1,6 @@
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { surfaceCommand, surfaceCanonicalJson, type SurfaceSummary, type SurfaceComparison, type SurfaceComparisonInput } from '../../../web/src/api/surface-types';
 import type { DesktopConfig } from './config.js';
 import type { CanonicalProof, ProfileView, ProofCollectionItem, FulfillmentQueueItem, PackingStationResolveView, ConnectedAccountsListView, CommerceConnectionView, CommerceSyncView, EvidenceUploadView, AccessLinkView, PublicProofView, TransactionWriteInput, ManifestView, ShipmentIntegrityView } from '../../../web/src/api/types.js';
 
@@ -91,6 +92,17 @@ export class DesktopApi {
   getOnboarding():Promise<OnboardingState>{return this.request('/me/onboarding');}
   updateOnboarding(action:Action):Promise<OnboardingState>{return this.request('/me/onboarding',{method:'POST',body:action});}
   getProof(proofId: string, signal?: AbortSignal): Promise<CanonicalProof> { return this.request(`/proofs/${id(proofId)}`, { signal }); }
+  getSurfaceResearch(proofId: string): Promise<SurfaceSummary> { return this.request(`/proofs/${id(proofId)}/surfaces`); }
+  async compareSurfaceResearch(proofId: string, input: SurfaceComparisonInput): Promise<SurfaceComparison> {
+    const path = `/proofs/${id(proofId)}/surfaces`, command = surfaceCommand(input);
+    const account = this.options.getAccountId(); if (!account) throw new DesktopApiError('UNAUTHENTICATED', 'Sign in to PackProof.', 401);
+    const requestDigest = createHash('sha256').update(surfaceCanonicalJson(command)).digest('hex');
+    const intent = await this.request<{intentId: string}>(`${path}/intents`, { method: 'POST', body: {operation: 'comparison', requestDigest} });
+    this.assertAccount(account);
+    return this.request(`${path}/comparisons`, {method: 'POST', idempotencyKey: input.idempotencyKey, body: {...command, intentId: intent.intentId}});
+  }
+  exportSurfaceResearch(proofId: string, signal?: AbortSignal): Promise<Response> { return this.response(`/proofs/${id(proofId)}/surfaces/export`, {signal}); }
+  getSurfaceOriginal(proofId: string, sourceId: string, signal?: AbortSignal): Promise<Response> { return this.response(`/proofs/${id(proofId)}/surfaces/media/${id(sourceId)}`, {signal, timeout: 120_000}); }
   /** Creation isn't blindly retried: this legacy backend route has no transaction-create idempotency contract. */
   createProof(input: TransactionWriteInput): Promise<CanonicalProof> { return this.request('/proofs', { method: 'POST', body: { workflowType: 'COMMERCE_SALE', transaction: input } }); }
   async listOrders(filter: 'ready' | 'completed' | 'all' = 'all'): Promise<FulfillmentQueueItem[]> { return (await this.request<{ items: FulfillmentQueueItem[] }>(`/me/fulfillment-queue?filter=${filter}`)).items; }

@@ -11,6 +11,16 @@ class UnifiedCameraModule : Module() {
     Name("PackProofUnifiedCamera")
     Function("newOperationNonce") { java.util.UUID.randomUUID().toString() }
     Function("identifierScannerVersion") { 1 }
+    Function("surfaceSamplerVersion") { 1 }
+    AsyncFunction("bindSurfaceContext") { sessionId: String, contextJson: String ->
+      SurfaceSampler.bind(appContext.reactContext ?: throw IllegalStateException("App unavailable"), sessionId, contextJson)
+    }
+    AsyncFunction("inspectSurfaceSource") { sessionId: String, fileName: String ->
+      SurfaceSampler.inspectSource(appContext.reactContext ?: throw IllegalStateException("App unavailable"), sessionId, fileName)
+    }
+    AsyncFunction("readSurfaceJournal") { sessionId: String ->
+      SurfaceSampler.read(appContext.reactContext ?: throw IllegalStateException("App unavailable"), sessionId)
+    }
     AsyncFunction("beginUploadService") { operationId: String ->
       val context = appContext.reactContext ?: throw IllegalStateException("App unavailable")
       UploadNotificationService.begin(context, operationId)
@@ -77,6 +87,7 @@ class UnifiedCameraModule : Module() {
       Prop("identifierCaptureEnabled") { view: UnifiedCameraView, enabled: Boolean ->
         view.setIdentifierCaptureEnabled(enabled)
       }
+      Prop("surfaceCaptureEnabled") { view: UnifiedCameraView, enabled: Boolean -> view.setSurfaceCaptureEnabled(enabled) }
       OnViewDidUpdateProps { view: UnifiedCameraView -> view.ensureCamera() }
 
       AsyncFunction("startRecording") { view: UnifiedCameraView, sessionId: String, audioEnabled: Boolean, promise: Promise ->

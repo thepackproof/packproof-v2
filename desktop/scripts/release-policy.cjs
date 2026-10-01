@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const channels = new Set(['development', 'staging', 'production']);
+const channels = new Set(['development', 'research', 'staging', 'production']);
 const updateOrigin = 'https://downloads.thepackproof.com';
 const azureSigningHosts = new Set('brs cus eus jpe krc ncus neu plc scus swn wcus weu wus wus2 wus3'.split(' ').map(region => `${region}.codesigning.azure.net`));
 
@@ -33,18 +33,18 @@ function windowsSigningOptions(env = process.env) {
 
 function releaseContext(env = process.env, platform = env.PACKPROOF_BUILD_PLATFORM || process.platform, arch = env.PACKPROOF_BUILD_ARCH || process.arch) {
   const channel = env.APP_ENV || 'development';
-  if (!channels.has(channel)) throw new Error('APP_ENV must be development, staging or production.');
+  if (!channels.has(channel)) throw new Error('APP_ENV must be development, research, staging or production.');
   if (!['x64', 'arm64'].includes(arch)) throw new Error('Desktop builds support only x64 and arm64.');
-  const suffix = channel === 'production' ? '' : channel === 'staging' ? ' Staging' : ' Dev';
+  const suffix = channel === 'production' ? '' : channel === 'staging' ? ' Staging' : channel === 'research' ? ' RND' : ' Dev';
   return {
     channel, platform, arch,
     appId: `com.thepackproof.desktop${channel === 'production' ? '' : `.${channel}`}`,
     productName: `PackProof${suffix}`,
     packageName: `packproof-desktop${channel === 'production' ? '' : `-${channel}`}`,
     artifactPrefix: `PackProof${suffix.replaceAll(' ', '-')}`,
-    protocol: channel === 'production' ? 'packproof' : channel === 'staging' ? 'packproof-staging' : 'packproof-dev',
+    protocol: channel === 'production' ? 'packproof' : channel === 'staging' ? 'packproof-staging' : channel === 'research' ? 'packproof-rnd' : 'packproof-dev',
     outputDirectory: `release/${channel}/${platform}-${arch}`,
-    updateUrl: `${updateOrigin}/desktop/${channel}/${platform}/${arch}/`,
+    updateUrl: channel === 'research' ? '' : `${updateOrigin}/desktop/${channel}/${platform}/${arch}/`,
     includePkg: env.PACKPROOF_BUILD_PKG === '1',
   };
 }
@@ -53,7 +53,7 @@ function checkReleaseEnvironment({ env = process.env, platform = process.platfor
   const release = releaseContext(env, env.PACKPROOF_BUILD_PLATFORM || platform);
   const errors = [];
   const required = name => { if (!env[name]?.trim()) errors.push(`${name} is required`); };
-  if (release.channel !== 'development') {
+  if (!['development', 'research'].includes(release.channel)) {
     if (!['win32', 'darwin'].includes(platform)) errors.push('Signed releases must be built on native Windows or macOS runners');
     if (release.platform !== platform) errors.push('Signed release target must match the native build runner');
     for (const key of ['PACKPROOF_API_BASE_URL', 'PACKPROOF_COGNITO_CLIENT_ID', 'PACKPROOF_COGNITO_REGION', 'PACKPROOF_UPDATES_URL']) required(key);
@@ -94,11 +94,17 @@ function checkReleaseEnvironment({ env = process.env, platform = process.platfor
     }
     if (env.CSC_IDENTITY_AUTO_DISCOVERY === 'false' && platform === 'darwin') errors.push('Signed macOS builds cannot disable certificate discovery');
   }
+  if (release.channel === 'research') {
+    for (const key of ['PACKPROOF_UPDATES_URL', 'PACKPROOF_SENTRY_DSN', 'SENTRY_DSN', 'PACKPROOF_COGNITO_CLIENT_ID', 'PACKPROOF_COGNITO_USER_POOL_ID', 'WIN_CSC_LINK', 'CSC_LINK', 'APPLE_ID', 'APPLE_API_KEY']) {
+      if (env[key]) errors.push(`${key} is forbidden for research builds`);
+    }
+  }
   if (checkRuntime) {
     try {
       const runtime = JSON.parse(fs.readFileSync(path.join(cwd, 'dist/main/runtime-config.json'), 'utf8'));
+      if (release.channel === 'research' && (runtime.updateUrl || runtime.sentryDsn || runtime.cognito?.clientId || runtime.cognito?.userPoolId)) errors.push('Research runtime contains a distribution or live authentication destination');
       if (runtime.channel !== release.channel) errors.push('Built runtime channel does not match packaging channel; rebuild with the correct APP_ENV');
-      if (release.channel !== 'development' && (runtime.updateUrl !== release.updateUrl || runtime.apiBaseUrl !== env.PACKPROOF_API_BASE_URL || runtime.cognito?.clientId !== env.PACKPROOF_COGNITO_CLIENT_ID)) errors.push('Built runtime does not match release API, Cognito client and isolated update feed');
+      if (!['development', 'research'].includes(release.channel) && (runtime.updateUrl !== release.updateUrl || runtime.apiBaseUrl !== env.PACKPROOF_API_BASE_URL || runtime.cognito?.clientId !== env.PACKPROOF_COGNITO_CLIENT_ID)) errors.push('Built runtime does not match release API, Cognito client and isolated update feed');
       if (release.channel === 'production' && runtime.sentryDsn !== env.PACKPROOF_SENTRY_DSN) errors.push('Built runtime does not match the required production reporting destination');
     } catch { errors.push('Build dist/main/runtime-config.json before packaging'); }
   }

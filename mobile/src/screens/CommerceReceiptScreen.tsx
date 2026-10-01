@@ -1,3 +1,4 @@
+import { uploadSurfaceCapture } from "../fingerprint/storage";
 import { useEffect, useRef, useState } from "react";
 import { Image, Text, View, Share } from "react-native";
 import * as FileSystem from "expo-file-system";
@@ -150,6 +151,7 @@ export function CommerceReceiptScreen() {
       });
       await request(`/stages/${saved.stageId}/evidence/${saved.evidenceId}/commit`, "POST", {});
     }
+    if(saved.captureSessionId)void uploadSurfaceCapture(app.client,app.session!.userId,saved.captureSessionId).catch(()=>undefined);
     if (saved.evidenceId) await saveCaptureBookmarks(app.client, proofId, saved.evidenceId, saved).catch(() => undefined);
     await AsyncStorage.removeItem(storageKey);
     setRecording(null);

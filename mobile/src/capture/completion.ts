@@ -1,3 +1,4 @@
+import { uploadSurfaceCapture } from "../fingerprint/storage";
 import { bindRecordedCapture, inspectCaptureShipping, persistCaptureMetadata, uploadCaptureFile, uploadCaptureResumable, type LocalCapture } from "../capture";
 import { authorizeSellerCapture } from "../attestation/seller-attestation";
 import type { PackProofV2Client, ProofView, UploadTarget } from "../v2-api";
@@ -105,6 +106,7 @@ export function completeSavedCapture(input: SavedCaptureInput): Promise<ProofVie
       finalize: async () => {study?.phase('finalization');await client.finalizeProof(proofId);},
     });
     if(proof.status==='FINALIZED')study?.event('server_completed');
+    if(capture.captureSessionId)void uploadSurfaceCapture(client,userId,capture.captureSessionId).catch(()=>undefined);
     input.assertAccount();
     await notifyUploadOutcome({ ...capture, recovery: state }, proof).then(save).catch(() => undefined);
     study?.end('succeeded');return proof as ProofView;

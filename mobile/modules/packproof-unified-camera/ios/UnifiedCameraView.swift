@@ -24,6 +24,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
   private var ready = false
   private var torchRequested = false
   private var identifiersEnabled = false
+  private var surfaceEnabled = false
   private var current: Recording?
   private var recentCodes: [String: Double] = [:]
   private var candidateReads: [String: (time: Double, count: Int)] = [:]
@@ -36,6 +37,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
     let url: URL
     let promise: Promise
     let journal: CaptureJournal?
+    var surfaceSampler: SurfaceSampler?
     let maxDurationMs: Int64
     let maxBytes: Int64
     var writer: AVAssetWriter?
@@ -76,6 +78,9 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
     let center = NotificationCenter.default
     notificationTokens.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
       self?.willLeaveForeground()
+    })
+    notificationTokens.append(center.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { [weak self] _ in
+      self?.captureQueue.async { self?.current?.surfaceSampler?.unavailable("MEMORY_PRESSURE", timeMs: Double(self?.current?.durationMs ?? 0)) }
     })
     notificationTokens.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
       guard let self else { return }
@@ -137,6 +142,10 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
 
   func setTorchEnabled(_ enabled: Bool) {
     captureQueue.async { self.torchRequested = enabled; self.applyTorch() }
+  }
+
+  func setSurfaceCaptureEnabled(_ enabled: Bool) {
+    captureQueue.async { if self.current == nil { self.surfaceEnabled = enabled } }
   }
 
   func setIdentifierCaptureEnabled(_ enabled: Bool) {
@@ -239,6 +248,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
         }
         let url = try CaptureStorage.reserveVideo(directory)
         let recording = Recording(url: url, promise: promise, proofCapture: sessionID.hasPrefix("cap_"))
+        if self.surfaceEnabled { recording.surfaceSampler = try? SurfaceSampler(directory: directory) }
         self.current = recording
         self.recentCodes.removeAll()
         self.candidateReads.removeAll()
@@ -306,6 +316,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
           recording.interrupted = true
           recording.journal?.append("INTERRUPTION", mediaTimeMs: Int64(elapsed), value: "ENCODER_BACKPRESSURE")
           recording.lastBackpressureReport = Int64(elapsed)
+          recording.surfaceSampler?.unavailable("ENCODER_BACKPRESSURE", timeMs: elapsed)
         }
         return
       }
@@ -320,6 +331,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
       } else if let previous = recording.lastPTS, CMTimeGetSeconds(CMTimeSubtract(timestamp, previous)) > 1 {
         recording.interrupted = true
         recording.journal?.append("INTERRUPTION", mediaTimeMs: Int64(elapsed), value: "CAMERA_FRAME_GAP")
+        recording.surfaceSampler?.unavailable("CAMERA_FRAME_GAP", timeMs: elapsed)
       }
       recording.lastPTS = timestamp
       let sampleDuration = CMSampleBufferGetDuration(sampleBuffer)
@@ -327,6 +339,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
         CMTimeCompare(sampleDuration, .zero) > 0,
         CMTimeGetSeconds(sampleDuration) <= 1 { recording.lastSampleDuration = sampleDuration }
       recording.durationMs = Int64(elapsed)
+      recording.surfaceSampler?.sample(pixelBuffer, timeMs: elapsed, sensorPTS: timestamp, device: device)
       let now = ProcessInfo.processInfo.systemUptime
       if now - recording.lastStorageCheck >= 1 {
         recording.lastStorageCheck = now
@@ -394,6 +407,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
   private func finishRecording() {
     guard let recording = current, !recording.stopping else { return }
     recording.stopping = true
+    recording.surfaceSampler?.finish(timeMs: Double(recording.durationMs), interrupted: recording.interrupted)
     DispatchQueue.main.async { if self.eventRecording === recording { self.eventRecording = nil } }
     guard let writer = recording.writer, recording.lastPTS != nil, writer.status == .writing else {
       // cancelWriting deletes partial output. Keep any bytes for explicit recovery instead.

@@ -1,4 +1,5 @@
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
+import { surfaceCommand, surfaceCanonicalJson, type SurfaceSummary, type SurfaceComparison, type SurfaceComparisonInput } from './surface-types';
 import { withRequestTimeout } from "./timeout";
 import { uploadBlob } from "./upload-transport";
 import type { IdentifierObservation, IdentifierPolicy, IdentifierReview } from '../../../backend/src/identifiers/types';
@@ -146,6 +147,19 @@ export class PackProofApi {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/${path}`, {method,body});
   }
   async featureDownload(proofId:string,path:string): Promise<Blob> { return this.download(`/proofs/${encodeURIComponent(proofId)}/${path}`); }
+  getSurfaceResearch(proofId: string): Promise<SurfaceSummary> {
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/surfaces`);
+  }
+  async compareSurfaceResearch(proofId: string, input: SurfaceComparisonInput): Promise<SurfaceComparison> {
+    const path = `/proofs/${encodeURIComponent(proofId)}/surfaces`;
+    const command = surfaceCommand(input);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(surfaceCanonicalJson(command)));
+    const requestDigest = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    const intent = await this.request<{ intentId: string }>(`${path}/intents`, { method: 'POST', body: { operation: 'comparison', requestDigest } });
+    return this.request(`${path}/comparisons`, { method: 'POST', headers: { 'Idempotency-Key': input.idempotencyKey }, body: { ...command, intentId: intent.intentId } });
+  }
+  exportSurfaceResearch(proofId: string): Promise<Blob> { return this.featureDownload(proofId, 'surfaces/export'); }
+  getSurfaceOriginal(proofId: string, sourceId: string): Promise<Blob> { return this.featureDownload(proofId, `surfaces/media/${encodeURIComponent(sourceId)}`); }
   async setCommerceAutomation(connectionId:string,enabled:boolean) { return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/automation`, {method:"POST",body:{enabled}}); }
   async relayRequest<T>(path:string,method="GET",body?:unknown,token?:string): Promise<T> { return this.request(`/me/packing-relay${path}`,{method,body,headers:token?{"X-PackProof-Station-Token":token}:undefined}); }
   async loginDev(subject: string): Promise<{ userId: string; token: string }> {

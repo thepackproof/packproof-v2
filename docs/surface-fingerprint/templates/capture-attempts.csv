@@ -1,0 +1,1 @@
+attempt_id,assembly_id,physical_print_id,carton_id,capture_session_id,operator_id,device_family,device_model,os_build,app_commit,lens_id,stream_profile,capture_mode,coached,device_wall_time,monotonic_start_ns,server_received_at,source_sha256,source_bytes,passive_enrollment_state,continuity_state,unavailable_reason,split

@@ -4,7 +4,7 @@ const { spawnSync } = require('node:child_process');
 
 // This hook runs BEFORE artifactCreated and update-metadata hashing. Stapling changes bytes.
 module.exports = async function notarizeDiskImage(event) {
-  if (process.env.APP_ENV === 'development' || !process.env.APP_ENV || !event.file?.endsWith('.dmg')) return;
+  if (['development', 'research'].includes(process.env.APP_ENV) || !process.env.APP_ENV || !event.file?.endsWith('.dmg')) return;
   if (process.platform !== 'darwin') throw new Error('Disk-image notarization requires macOS.');
   const env = process.env;
   const auth = env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER

@@ -69,6 +69,8 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   )
   private var identifierScanner: com.google.mlkit.vision.barcode.BarcodeScanner? = null
   @Volatile private var identifiersEnabled = false
+  @Volatile private var surfaceEnabled = false
+  @Volatile private var surfaceSampler: SurfaceSampler? = null
   private val previewView = PreviewView(context).apply {
     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
     scaleType = PreviewView.ScaleType.FILL_CENTER
@@ -145,6 +147,10 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   fun setTorchEnabled(enabled: Boolean) {
     torchEnabled = enabled
     applyTorch()
+  }
+
+  fun setSurfaceCaptureEnabled(enabled: Boolean) {
+    if (session == null) surfaceEnabled = enabled // Pinned before recording; no stream reconfiguration.
   }
 
   fun setIdentifierCaptureEnabled(enabled: Boolean) {
@@ -283,6 +289,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       }
       val current = CaptureSession(output, promise)
       session = current
+      surfaceSampler = if (surfaceEnabled && File(directory, "surface-context.json").exists()) try { SurfaceSampler(context, directory) } catch (_: Exception) { null } else null
       epoch = null
       recentCodes.clear()
       candidateReads.clear()
@@ -333,6 +340,9 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       }
       is VideoRecordEvent.Finalize -> {
         epoch = null
+        val finishedSampler = surfaceSampler
+        surfaceSampler = null
+        if (finishedSampler != null && !analyzerExecutor.isShutdown) analyzerExecutor.execute { finishedSampler.finish(event.recordingStats.recordedDurationNanos / 1_000_000L, current.interrupted || event.error != VideoRecordEvent.Finalize.ERROR_NONE) }
         session = null
         recording = null
         val durationMs = event.recordingStats.recordedDurationNanos / 1_000_000L
@@ -388,6 +398,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     val observedEpoch = epoch
     val sampledNanos = SystemClock.elapsedRealtimeNanos()
     val sampledEncodedMs = encodedDurationMs
+    val sampledSurface = surfaceSampler
     if (destroyed || observedEpoch == null || observedEpoch.generation != expectedGeneration ||
       expectedGeneration != generation || sampledNanos - lastAnalysisNanos < analysisCadenceNanos()) {
       image.close()
@@ -458,10 +469,14 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
             reportError("BARCODE_ANALYSIS_FAILED", "Barcode reading is unavailable for this frame. Video recording continues.")
           }
         }
-        .addOnCompleteListener(mainExecutor) {
-          image.close()
-          analysisInFlight.decrementAndGet()
-          closeScannerIfDestroyed()
+        .addOnCompleteListener(analyzerExecutor) { task ->
+          try {
+            if (task.isSuccessful && !destroyed && epoch === observedEpoch && generation == expectedGeneration) sampledSurface?.sample(image, task.result, sampledEncodedMs)
+          } finally {
+            image.close()
+            analysisInFlight.decrementAndGet()
+            mainExecutor.execute { closeScannerIfDestroyed() }
+          }
         }
     } catch (_: Exception) {
       image.close()
@@ -523,7 +538,6 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     desiredActive = false
     lifecycleOwner?.lifecycle?.removeObserver(lifecycleObserver)
     interruptAndRelease()
-    analyzerExecutor.shutdown()
     closeScannerIfDestroyed()
   }
 
@@ -532,6 +546,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       scannerClosed = true
       scanner.close()
       identifierScanner?.close()
+      analyzerExecutor.shutdown()
     }
   }
 

@@ -42,6 +42,7 @@ export type UnifiedCameraViewProps = ViewProps & {
   active: boolean;
   torchEnabled: boolean;
   identifierCaptureEnabled?: boolean;
+  surfaceCaptureEnabled?: boolean;
   onReady?: (event: NativeEvent<Record<string, never>>) => void;
   onBarcodeDetected?: (event: NativeEvent<UnifiedBarcodeDetection>) => void;
   onRecordingStarted?: (event: NativeEvent<{ startedAtUnixMs: number }>) => void;
@@ -57,7 +58,7 @@ export interface EncodedVideoInspection {
   timestampPrecision: "NEAR_REQUESTED_TIME";
 }
 
-const nativeModule = (Platform.OS === 'android' || Platform.OS === 'ios') ? requireOptionalNativeModule<{ identifierScannerVersion?(): number; bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection>; inspectIdentifierVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
+const nativeModule = (Platform.OS === 'android' || Platform.OS === 'ios') ? requireOptionalNativeModule<{ surfaceSamplerVersion?(): number; inspectSurfaceSource?(sessionId: string, fileName: string): Promise<{sha256:string;byteSize:number}>; bindSurfaceContext?(sessionId: string, contextJson: string): Promise<void>; readSurfaceJournal?(sessionId: string): Promise<string>; identifierScannerVersion?(): number; bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection>; inspectIdentifierVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
 const nativeAvailable = nativeModule != null;
 export function newStudyOperationNonce():string {
   if(!nativeModule?.newOperationNonce)throw new Error('This build cannot enable study collection. Install the current native build.');
@@ -102,3 +103,18 @@ export async function readNativeCaptureJournal(sessionId:string):Promise<string>
 }
 
 export function isNativeCaptureEngineAvailable():boolean {return !!nativeModule?.bindCaptureContext && !!nativeModule?.readCaptureJournal;}
+
+export function isSurfaceSamplerAvailable(): boolean { return nativeModule?.surfaceSamplerVersion?.() === 1; }
+export async function bindNativeSurfaceContext(sessionId: string, contextJson: string): Promise<void> {
+  if (!nativeModule?.bindSurfaceContext) throw new Error('This build cannot collect experimental surfaces.');
+  await nativeModule.bindSurfaceContext(sessionId, contextJson);
+}
+export async function readNativeSurfaceJournal(sessionId: string): Promise<string> {
+  if (!nativeModule?.readSurfaceJournal) throw new Error('This build cannot read experimental surface originals.');
+  return nativeModule.readSurfaceJournal(sessionId);
+}
+
+export async function inspectNativeSurfaceSource(sessionId: string, fileName: string): Promise<{sha256:string;byteSize:number}> {
+  if (!nativeModule?.inspectSurfaceSource) throw new Error('This build cannot verify experimental originals.');
+  return nativeModule.inspectSurfaceSource(sessionId, fileName);
+}

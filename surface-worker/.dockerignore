@@ -1,0 +1,7 @@
+.venv
+__pycache__
+tests
+dataset
+media
+.private
+reports

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "surface-dataset/1",
+  "datasetId": "packproof-surface-screening-a",
+  "version": "0.1.0-empty",
+  "stage": "planned-not-collected",
+  "splitPolicy": {
+    "physicalIdentitiesAlwaysDisjoint": ["physicalPrintId", "labelSubstrateId", "cartonId"],
+    "disjointDomains": ["captureSessionId"],
+    "domainHoldoutDesign": "Validation lead must declare printer, lot, design, operator and device holdouts before collection."
+  },
+  "plannedPhysicalLabels": 240,
+  "plannedCartons": 60,
+  "captures": [],
+  "pairs": []
+}

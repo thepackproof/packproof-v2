@@ -329,7 +329,7 @@ function CameraSession({
       >
         <Coaching kind="camera"/><View style={styles.heading}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
-            {recording
+            {request.surfaceComparison ? (recording ? "Recording package observation" : "Compare package · experimental") : recording
               ? request.stageType
                 ? "Recording receipt / return"
                 : "Recording packing"
@@ -357,6 +357,7 @@ function CameraSession({
             active
             torchEnabled={false}
             identifierCaptureEnabled={identifiersEnabled && isIdentifierScannerAvailable()}
+            surfaceCaptureEnabled={request.surfaceCaptureEnabled === true}
             onReady={()=>setReady(true)}
             onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;request.onRecordingStarted?.(); void haptic("medium");}}
             onBarcodeDetected={({nativeEvent})=>{void detected(nativeEvent);}}
@@ -412,6 +413,9 @@ function CameraSession({
             </Text>
             {shippingError ? <Text style={{color:colors.error}}>{shippingError}</Text> : null}
           </View> : null}
+          {request.surfaceCaptureEnabled ? <Text style={{ color: colors.textSecondary }}>
+            Experimental surface collection. {request.surfaceComparison ? 'Show the expected label and surrounding package. Finish when ready.' : 'Pack normally; useful surface frames are saved automatically.'} No camera profile is qualified for identity findings.
+          </Text> : null}
           {request.guide ? (
             <Text style={{ color: colors.textSecondary }}>
               Match the translucent outbound view where practical. The guide
@@ -433,7 +437,7 @@ function CameraSession({
             <Button label="Finish recording" loading={saving} onPress={stop} />
           ) : (
             <Button
-              label={request.stageType ? "Record this stage" : "Record packing"}
+              label={request.surfaceComparison ? "Record package observation" : request.stageType ? "Record this stage" : "Record packing"}
               disabled={!ready || saving}
               onPress={() => void start()}
             />

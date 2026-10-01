@@ -6,10 +6,10 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 process.chdir(root);
 await mkdir('dist/main',{recursive:true});
-const channel=process.env.APP_ENV??'development';
-if(!['development','staging','production'].includes(channel))throw new Error('APP_ENV must be development, staging or production');
-const config={channel,apiBaseUrl:process.env.PACKPROOF_API_BASE_URL??'',webBaseUrl:process.env.PACKPROOF_WEB_BASE_URL??'https://thepackproof.com',cognito:{region:process.env.PACKPROOF_COGNITO_REGION??'us-east-1',clientId:process.env.PACKPROOF_COGNITO_CLIENT_ID??'',userPoolId:process.env.PACKPROOF_COGNITO_USER_POOL_ID??''},updateUrl:process.env.PACKPROOF_UPDATES_URL??'',sentryDsn:process.env.PACKPROOF_SENTRY_DSN??process.env.SENTRY_DSN??''};
-if(channel!=='development'&&(!config.apiBaseUrl||!config.cognito.clientId||!config.cognito.userPoolId))throw new Error('Signed builds require explicit API and Cognito configuration.');
+// Reuse the same validated configuration in source builds and packaged runtime.
+const configModule = await bundle({entryPoints:['src/main/config.ts'],bundle:true,platform:'node',target:'node24',format:'esm',write:false});
+const {loadConfig} = await import('data:text/javascript;base64,' + Buffer.from(configModule.outputFiles[0].text).toString('base64'));
+const config = loadConfig();
 await writeFile('dist/main/runtime-config.json',JSON.stringify(config,null,2));
 for(const name of ['index','preload'])await bundle({entryPoints:[`src/main/${name}.ts`],outfile:`dist/main/${name}.cjs`,bundle:true,platform:'node',target:'node24',format:'cjs',external:['electron','electron-updater','@sentry/node'],sourcemap:false});
 await vite({configFile:path.join(root,'vite.config.ts')});

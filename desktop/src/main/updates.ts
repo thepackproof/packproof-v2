@@ -5,7 +5,7 @@ export class Updates {
  state:{state:string;version?:string;error?:string}={state:'unavailable'};
  constructor(private config:DesktopConfig|null,private changed:()=>void,private busy:()=>boolean,private prepare:()=>Promise<void>,private report?:()=>void){
   autoUpdater.autoDownload=false;autoUpdater.autoInstallOnAppQuit=false;autoUpdater.allowDowngrade=false;autoUpdater.allowPrerelease=false;
-  if(!app.isPackaged||!config?.updateUrl||config.channel==='development')return;
+  if(!app.isPackaged||!config?.updateUrl||['development','research'].includes(config.channel))return;
   // The packaged app-update.yml embeds the trusted feed and publisher identity. Runtime cannot override it.
   this.state={state:'idle'};
   for(const [event,state] of [['checking-for-update','checking'],['update-not-available','current'],['download-progress','downloading']] as const)autoUpdater.on(event,()=>this.set({state}));

@@ -1,7 +1,7 @@
 const { releaseContext, checkReleaseEnvironment, windowsSigningOptions } = require('./scripts/release-policy.cjs');
 
 const release = releaseContext();
-const signed = release.channel !== 'development';
+const signed = !['development', 'research'].includes(release.channel);
 
 /** Every packaged environment has its own identity, protocol and update feed. */
 module.exports = {
