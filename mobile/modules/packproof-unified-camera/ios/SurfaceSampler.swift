@@ -73,76 +73,103 @@ final class SurfaceSampler {
       "focusDistance": NSNull(), "viewAngle": NSNull()]
     let monotonic = DispatchTime.now().uptimeNanoseconds
     writer.async {
-      defer { self.lock.lock(); self.busy = false; self.lock.unlock() }
-      self.lock.lock(); let closed = self.closed; self.lock.unlock()
-      guard !closed else { return }
-      do {
-        guard self.count < 200 else { self.unavailable("SAMPLING_BUDGET_REACHED", timeMs: timeMs); return }
-        guard !self.expected.isEmpty else { self.unavailable("NO_EXPECTED_SHIPMENT_IDENTIFIER", timeMs: timeMs); return }
-        guard CaptureStorage.availableBytes(self.directory) >= 192 * 1024 * 1024 else { self.unavailable("DISK_PRESSURE", timeMs: timeMs); return }
-        guard ProcessInfo.processInfo.thermalState == .nominal || ProcessInfo.processInfo.thermalState == .fair else { self.unavailable("THERMAL_PRESSURE", timeMs: timeMs); return }
-        let width = CVPixelBufferGetWidth(pixelBuffer), height = CVPixelBufferGetHeight(pixelBuffer)
-        guard width * height <= 4_194_304, CVPixelBufferGetPlaneCount(pixelBuffer) > 0 else { self.unavailable("STREAM_UNSUPPORTED", timeMs: timeMs); return }
-        // Verify parcel association on this exact sample; asynchronous metadata events cannot bind it.
-        let request = VNDetectBarcodesRequest()
-        try VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up).perform([request])
-        let observations = request.results ?? []
-        let identities = Set(observations.compactMap { $0.payloadStringValue.map(Self.normalize) })
-        guard identities.count == 1, identities.first == self.expected,
-          let observation = observations.first(where: { Self.normalize($0.payloadStringValue ?? "") == self.expected }) else {
-          if self.stableReads > 0 { try self.append("CONTINUITY", ["reason": identities.count > 1 ? "AMBIGUOUS_PARCELS" : "TRACK_LOST", "frameTimeMs": timeMs]) }
-          self.stableReads = 0; self.lastBounds = nil; return
-        }
-        let bounds = observation.boundingBox
-        let prior = self.lastBounds
-        let overlap = prior?.intersection(bounds) ?? .null
-        self.stableReads = !overlap.isNull && overlap.width * overlap.height >= min(bounds.width*bounds.height, (prior?.width ?? 0)*(prior?.height ?? 0))/2 ? self.stableReads + 1 : 1
-        self.lastBounds = bounds
-        guard self.stableReads >= 3, timeMs - self.lastSaved >= 1_500 else { return }
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly); return }
-        let stride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
-        let pixels = base.assumingMemoryBound(to: UInt8.self)
-        var sum = 0.0, sum2 = 0.0, gradient = 0.0, saturated = 0.0, n = 0.0
-        for y in Swift.stride(from: 1, to: height, by: 8) { for x in Swift.stride(from: 1, to: width, by: 8) {
-          let v = Double(pixels[y*stride+x]); sum += v; sum2 += v*v
-          gradient += abs(v - Double(pixels[y*stride+x-1])); saturated += v >= 250 || v <= 5 ? 1 : 0; n += 1
-        } }
-        CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-        let variance = sum2/n - (sum/n)*(sum/n)
-        guard variance >= 20, gradient/n >= 1, saturated/n <= 0.8 else { return }
-        let image = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let bytes = self.imageContext.jpegRepresentation(of: image, colorSpace: CGColorSpaceCreateDeviceRGB(),
-          options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.95]), bytes.count <= 8*1024*1024 else {
-          self.unavailable("SOURCE_BUDGET_EXCEEDED", timeMs: timeMs); return
-        }
-        guard self.retained.reduce(Int64(0), { $0 + CaptureStorage.bytes(self.directory.appendingPathComponent($1)) }) + Int64(bytes.count) <= 8*1024*1024 else {
-          self.unavailable("CAPTURE_BYTE_BUDGET_REACHED", timeMs: timeMs); return
-        }
-        let name = "surface-original-\(self.count).jpg"
-        let file = self.directory.appendingPathComponent(name)
-        guard !CaptureStorage.fileManager.fileExists(atPath: file.path) else { throw CaptureFailure.sessionExists }
-        try CaptureStorage.durableWrite(bytes, to: file)
-        var frame = metadata
-        frame.merge(["fileName": name, "sha256": SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined(),
-          "byteSize": bytes.count, "width": width, "height": height, "rotationDegrees": 0,
-          "frameTimeMs": timeMs, "timestampPrecision": "SAME_SAMPLE_VIDEO_PTS", "sensorTimestampNs": NSNull(),
-          "samplePTS": ["value": String(sensorPTS.value), "timescale": sensorPTS.timescale], "monotonicNs": String(monotonic),
-          "glareFraction": NSNull(), "motionBlur": NSNull(),
-          "quality": ["lumaVariance": variance, "meanAbsGradient": gradient/n, "saturatedFraction": saturated/n, "calibrated": false],
-          "barcodeBounds": [Double(bounds.minX)*Double(width), Double(1-bounds.maxY)*Double(height), Double(bounds.maxX)*Double(width), Double(1-bounds.minY)*Double(height)],
-          "boundsSpace": "ROTATED_ANALYSIS_PIXELS", "transform": "VIDEO_PIXEL_BUFFER_TO_JPEG_QUALITY_95_NO_CROP_NO_RESIZE",
-          "trackId": "expected-barcode-overlap", "association": "SAME_FRAME_EXPECTED_BARCODE_ONLY"]) { _, new in new }
-        try self.append("SOURCE", frame)
-        self.retained.append(name)
-        if self.retained.count > 6 {
-          let discarded = self.retained.removeFirst()
-          try self.append("SUPERSEDED", ["fileName": discarded, "reason": "PREFER_LATER_PACKAGE_SEGMENT"])
-          try CaptureStorage.fileManager.removeItem(at: self.directory.appendingPathComponent(discarded))
-        }
-        self.lock.lock(); self.count += 1; self.lock.unlock(); self.lastSaved = timeMs
-      } catch { self.unavailable("SIDECAR_WRITE_OR_ANALYSIS_FAILED", timeMs: timeMs) }
+      self.processSample(pixelBuffer, timeMs: timeMs, sensorPTS: sensorPTS,
+        metadata: metadata, monotonic: monotonic)
     }
+  }
+
+  /// Keep DispatchQueue's overloaded closure small and bound Swift's dictionary inference.
+  /// This method remains on the same serial utility queue with one retained buffer.
+  private func processSample(_ pixelBuffer: CVPixelBuffer, timeMs: Double, sensorPTS: CMTime,
+    metadata: [String: Any], monotonic: UInt64) {
+    defer { self.lock.lock(); self.busy = false; self.lock.unlock() }
+    self.lock.lock(); let closed = self.closed; self.lock.unlock()
+    guard !closed else { return }
+    do {
+      guard self.count < 200 else { self.unavailable("SAMPLING_BUDGET_REACHED", timeMs: timeMs); return }
+      guard !self.expected.isEmpty else { self.unavailable("NO_EXPECTED_SHIPMENT_IDENTIFIER", timeMs: timeMs); return }
+      guard CaptureStorage.availableBytes(self.directory) >= 192 * 1024 * 1024 else { self.unavailable("DISK_PRESSURE", timeMs: timeMs); return }
+      guard ProcessInfo.processInfo.thermalState == .nominal || ProcessInfo.processInfo.thermalState == .fair else { self.unavailable("THERMAL_PRESSURE", timeMs: timeMs); return }
+      let width = CVPixelBufferGetWidth(pixelBuffer), height = CVPixelBufferGetHeight(pixelBuffer)
+      guard width * height <= 4_194_304, CVPixelBufferGetPlaneCount(pixelBuffer) > 0 else { self.unavailable("STREAM_UNSUPPORTED", timeMs: timeMs); return }
+      // Verify parcel association on this exact sample; asynchronous metadata events cannot bind it.
+      let request = VNDetectBarcodesRequest()
+      try VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up).perform([request])
+      let observations = request.results ?? []
+      let identities = Set(observations.compactMap { $0.payloadStringValue.map(Self.normalize) })
+      guard identities.count == 1, identities.first == self.expected,
+        let observation = observations.first(where: { Self.normalize($0.payloadStringValue ?? "") == self.expected }) else {
+        if self.stableReads > 0 { try self.append("CONTINUITY", ["reason": identities.count > 1 ? "AMBIGUOUS_PARCELS" : "TRACK_LOST", "frameTimeMs": timeMs]) }
+        self.stableReads = 0; self.lastBounds = nil; return
+      }
+      let bounds = observation.boundingBox
+      let prior = self.lastBounds
+      let overlap: CGRect = prior?.intersection(bounds) ?? .null
+      let priorArea: CGFloat = (prior?.width ?? 0) * (prior?.height ?? 0)
+      let currentArea: CGFloat = bounds.width * bounds.height
+      let requiredOverlap: CGFloat = min(currentArea, priorArea) / 2
+      let stable = !overlap.isNull && overlap.width * overlap.height >= requiredOverlap
+      self.stableReads = stable ? self.stableReads + 1 : 1
+      self.lastBounds = bounds
+      guard self.stableReads >= 3, timeMs - self.lastSaved >= 1_500 else { return }
+      CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+      guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly); return }
+      let stride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+      let pixels = base.assumingMemoryBound(to: UInt8.self)
+      var sum = 0.0, sum2 = 0.0, gradient = 0.0, saturated = 0.0, n = 0.0
+      for y in Swift.stride(from: 1, to: height, by: 8) { for x in Swift.stride(from: 1, to: width, by: 8) {
+        let v = Double(pixels[y*stride+x]); sum += v; sum2 += v*v
+        gradient += abs(v - Double(pixels[y*stride+x-1])); saturated += v >= 250 || v <= 5 ? 1 : 0; n += 1
+      } }
+      CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+      let variance = sum2/n - (sum/n)*(sum/n)
+      guard variance >= 20, gradient/n >= 1, saturated/n <= 0.8 else { return }
+      let image = CIImage(cvPixelBuffer: pixelBuffer)
+      guard let bytes = self.imageContext.jpegRepresentation(of: image, colorSpace: CGColorSpaceCreateDeviceRGB(),
+        options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.95]), bytes.count <= 8*1024*1024 else {
+        self.unavailable("SOURCE_BUDGET_EXCEEDED", timeMs: timeMs); return
+      }
+      guard self.retained.reduce(Int64(0), { $0 + CaptureStorage.bytes(self.directory.appendingPathComponent($1)) }) + Int64(bytes.count) <= 8*1024*1024 else {
+        self.unavailable("CAPTURE_BYTE_BUDGET_REACHED", timeMs: timeMs); return
+      }
+      let name = "surface-original-\(self.count).jpg"
+      let file = self.directory.appendingPathComponent(name)
+      guard !CaptureStorage.fileManager.fileExists(atPath: file.path) else { throw CaptureFailure.sessionExists }
+      try CaptureStorage.durableWrite(bytes, to: file)
+      var frame: [String: Any] = metadata
+      frame["fileName"] = name
+      frame["sha256"] = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+      frame["byteSize"] = bytes.count
+      frame["width"] = width
+      frame["height"] = height
+      frame["rotationDegrees"] = 0
+      frame["frameTimeMs"] = timeMs
+      frame["timestampPrecision"] = "SAME_SAMPLE_VIDEO_PTS"
+      frame["sensorTimestampNs"] = NSNull()
+      let sampleTiming: [String: Any] = ["value": String(sensorPTS.value), "timescale": sensorPTS.timescale]
+      frame["samplePTS"] = sampleTiming
+      frame["monotonicNs"] = String(monotonic)
+      frame["glareFraction"] = NSNull()
+      frame["motionBlur"] = NSNull()
+      let quality: [String: Any] = ["lumaVariance": variance, "meanAbsGradient": gradient/n,
+        "saturatedFraction": saturated/n, "calibrated": false]
+      frame["quality"] = quality
+      let nativeBounds: [Double] = [Double(bounds.minX)*Double(width), Double(1-bounds.maxY)*Double(height),
+        Double(bounds.maxX)*Double(width), Double(1-bounds.minY)*Double(height)]
+      frame["barcodeBounds"] = nativeBounds
+      frame["boundsSpace"] = "ROTATED_ANALYSIS_PIXELS"
+      frame["transform"] = "VIDEO_PIXEL_BUFFER_TO_JPEG_QUALITY_95_NO_CROP_NO_RESIZE"
+      frame["trackId"] = "expected-barcode-overlap"
+      frame["association"] = "SAME_FRAME_EXPECTED_BARCODE_ONLY"
+      try self.append("SOURCE", frame)
+      self.retained.append(name)
+      if self.retained.count > 6 {
+        let discarded = self.retained.removeFirst()
+        try self.append("SUPERSEDED", ["fileName": discarded, "reason": "PREFER_LATER_PACKAGE_SEGMENT"])
+        try CaptureStorage.fileManager.removeItem(at: self.directory.appendingPathComponent(discarded))
+      }
+      self.lock.lock(); self.count += 1; self.lock.unlock(); self.lastSaved = timeMs
+    } catch { self.unavailable("SIDECAR_WRITE_OR_ANALYSIS_FAILED", timeMs: timeMs) }
   }
 
   func finish(timeMs: Double, interrupted: Bool) {
