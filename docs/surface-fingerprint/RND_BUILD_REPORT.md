@@ -2,7 +2,7 @@
 
 Report snapshot: October 1, 2026. This is an experimental implementation and build record. **No real physical corpus has been collected and no phone, print process, material or device pair is qualified.** The application deliberately cannot issue customer-visible physical consistency or difference findings.
 
-Application source: `3637c5038b564fe432d8f218ed731a837301b2c6` on `rnd/stochastic-surface-2026-10-01`. Android build-workflow correction: `1f72154fe6a69b4f78565892a385a1aadc1d1254`. The correction replaces obsolete Android SDK tooling; it does not introduce a new matching method.
+Common implementation source: `3637c5038b564fe432d8f218ed731a837301b2c6` on `rnd/stochastic-surface-2026-10-01` (Windows, macOS and web). Android was built from workflow-only correction `1f72154fe6a69b4f78565892a385a1aadc1d1254`, replacing obsolete SDK tooling. iOS was built from `221f1e8ed5806c8affa87cda9a2e72a72ca33a4c`, which splits the frame sampler into smaller explicitly typed expressions to resolve a confirmed Swift compiler error. Its queue, limits, timing and evidence fields retain the same behavior. No matching-method change was needed for either compiler/toolchain correction.
 
 No build was submitted to Google Play, App Store Connect, TestFlight or another distribution platform. No production backend, website, update feed or OTA release was deployed. The research workflow only compiles and retains build artifacts. Existing application review submissions remain outside this work.
 
@@ -47,7 +47,7 @@ The generated fixtures exercised a mobile-shaped context/barcode input and candi
 
 ## Build artifact ledger
 
-Initial hosted run: `36900668255`, application source `3637c5038b564fe432d8f218ed731a837301b2c6`. Android-only retry: `36901301069`, workflow-fix commit `1f72154fe6a69b4f78565892a385a1aadc1d1254`.
+Initial hosted run: `36900668255`, application source `3637c5038b564fe432d8f218ed731a837301b2c6`. Android-only retry: `36901301069`, workflow-fix commit `1f72154fe6a69b4f78565892a385a1aadc1d1254`. Corrected iOS build: `36904325576`, source `221f1e8ed5806c8affa87cda9a2e72a72ca33a4c`. All deliverables below completed successfully; earlier failed attempts remain visible in the build history.
 
 Installer hashes below describe the delivered files, not their enclosing Actions ZIPs. macOS PKGs were copied unchanged from the initial build into smaller archives in run `36901626891` (workflow commit `6526cc46dab7288cb2c2c1eb12418f856937bce5`); their original source and byte commitments were checked before and after download. The application was not rebuilt for that transfer.
 
@@ -57,7 +57,7 @@ Installer hashes below describe the delivered files, not their enclosing Actions
 | macOS Intel research installer | Build succeeded; original PKG verified | `PackProof-RND-macOS-Intel.pkg`; artifact `11182370651` | `f08f73641edc696979691d6d6d5a04821fb9ed6c04d7ff7e5efc92d9b208f1b3` |
 | macOS Apple Silicon research installer | Build succeeded; original PKG verified | `PackProof-RND-macOS-Apple-Silicon.pkg`; artifact `11182240738` | `e750b6690a15bb7bd7ab86efc67ced73165bc9cac070124125f183190b7e022f` |
 | Android ARM64 standalone research APK | Corrected build succeeded; actual package/bundle/signature checked and downloaded bytes verified | `PackProof-RND-Android.apk`; artifact `11182011996` | `28713053044f23b58226563d871c5b905317904c43319a50a9b5e186e06d3f34` |
-| iOS Simulator research application ZIP | Initial native build failed; diagnostic rerun `36903416758` is compiling at workflow-only commit `44ba541b43fd5db28592a274f2de817b33974595` | Pending successful completion and artifact verification | Pending |
+| iOS Simulator research application ZIP | Corrected native build succeeded; simulator identity, embedded JS, architectures and downloaded bytes verified | `PackProof-RND-iOS-Simulator.zip`; artifact `11185920290` | `086e3d89c6c943328f28a9a5e828d3c57d92a052165a3ddcc6114d5acb477cca` |
 | Standalone web research ZIP | Compiled locally from application source above | `PackProof-RND-Web.zip` | `a354d9cf65924059a281f03cd8e904f2c1f0d7fd4218c1bba35dc6ac085fd2e7` |
 
 Research Android uses package `com.packproof.mobile.rnd` and a generated test signing key. iOS uses the same separate bundle identifier and produces a **Simulator application**, not an installable iPhone IPA. Desktop uses `com.thepackproof.desktop.research` and “PackProof RND”; Windows is unsigned and macOS uses ad-hoc application signing without notarization. Native build success does not mean the installers have been manually exercised or the cameras qualified.
@@ -109,7 +109,15 @@ Replace the serial and APK path with the actual values. Repeat the reverse mappi
 
 Review the committed source references and coverage in the same local Proof on web/desktop. A later authorized “Compare package” capture must use the expected enrollment. Device time, stage statements and app/request assurance remain explicit metadata; they do not certify when or what the camera saw. The connection procedure has not itself been exercised on physical phones in this task.
 
-An iOS Simulator artifact, if compilation succeeds, supports installation in Simulator on a Mac with Xcode. It cannot run on an iPhone and cannot validate optics. A separately provisioned research device build and independent physical iPhone testing remain necessary.
+The verified iOS ZIP contains a universal x86_64/ARM64 Simulator executable and its embedded JavaScript bundle. With a compatible simulator booted on a Mac with Xcode, extract and install it:
+
+```sh
+unzip PackProof-RND-iOS-Simulator.zip -d ios-simulator
+xcrun simctl install booted ios-simulator/PackProofRND.app
+xcrun simctl launch booted com.packproof.mobile.rnd
+```
+
+The local API or authenticated loopback tunnel must be running. This Simulator artifact cannot run on an iPhone and cannot validate optics. A separately provisioned research device build and independent physical iPhone testing remain necessary.
 
 ## Measurements and remaining gates
 
