@@ -7,12 +7,18 @@ on:
       - 'docs/**'
       - '**/*.md'
   workflow_dispatch:
+    inputs:
+      target:
+        description: Experimental artifact family to rebuild
+        type: choice
+        options: [all, android, ios, desktop, checks]
+        default: all
 
 # No cloud federation, signing credentials, releases, OTA channels, or store submission.
 permissions:
   contents: read
 concurrency:
-  group: stochastic-rnd-builds-${{ github.ref }}
+  group: stochastic-rnd-builds-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 env:
@@ -29,6 +35,8 @@ jobs:
   isolation:
     if: github.ref == 'refs/heads/rnd/stochastic-surface-2026-10-01'
     runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.target.outputs.target }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,9 +44,23 @@ jobs:
           node-version: '24'
       - name: Check identities, live-service rejection, and build-only workflow
         run: node --test scripts/rnd/build-isolation.test.mjs
+      - name: Select requested experimental artifacts
+        id: target
+        env:
+          REQUESTED_TARGET: ${{ inputs.target }}
+          PUSH_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const marker = process.env.PUSH_MESSAGE?.match(/\[rnd-build:(android|ios|desktop|checks)\]/)?.[1];
+          const target = process.env.REQUESTED_TARGET || marker || 'all';
+          if (!['all', 'android', 'ios', 'desktop', 'checks'].includes(target)) throw new Error('Invalid research build target');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `target=${target}\n`);
+          NODE
 
   research-checks:
     needs: isolation
+    if: needs.isolation.outputs.target == 'all' || needs.isolation.outputs.target == 'checks'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -89,6 +111,7 @@ jobs:
 
   android:
     needs: isolation
+    if: needs.isolation.outputs.target == 'all' || needs.isolation.outputs.target == 'android'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -103,6 +126,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci
         working-directory: mobile
@@ -132,6 +158,7 @@ jobs:
 
   ios-simulator:
     needs: isolation
+    if: needs.isolation.outputs.target == 'all' || needs.isolation.outputs.target == 'ios'
     runs-on: macos-15
     timeout-minutes: 90
     steps:
@@ -161,6 +188,7 @@ jobs:
 
   desktop:
     needs: isolation
+    if: needs.isolation.outputs.target == 'all' || needs.isolation.outputs.target == 'desktop'
     strategy:
       fail-fast: false
       matrix:
