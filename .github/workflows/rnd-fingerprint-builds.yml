@@ -11,7 +11,7 @@ on:
       target:
         description: Experimental artifact family to rebuild
         type: choice
-        options: [all, android, ios, desktop, checks, artifacts]
+        options: [all, android, ios, desktop, checks, artifacts, ios-logs]
         default: all
 
 # No cloud federation, signing credentials, releases, OTA channels, or store submission.
@@ -52,9 +52,9 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require('node:fs');
-          const marker = process.env.PUSH_MESSAGE?.match(/\[rnd-build:(android|ios|desktop|checks|artifacts)\]/)?.[1];
+          const marker = process.env.PUSH_MESSAGE?.match(/\[rnd-build:(android|ios|desktop|checks|artifacts|ios-logs)\]/)?.[1];
           const target = process.env.REQUESTED_TARGET || marker || 'all';
-          if (!['all', 'android', 'ios', 'desktop', 'checks', 'artifacts'].includes(target)) throw new Error('Invalid research build target');
+          if (!['all', 'android', 'ios', 'desktop', 'checks', 'artifacts', 'ios-logs'].includes(target)) throw new Error('Invalid research build target');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `target=${target}\n`);
           NODE
 
@@ -320,5 +320,69 @@ jobs:
         with:
           name: PackProof-RND-macOS-${{ matrix.arch }}-PKG-3637c5038b564fe432d8f218ed731a837301b2c6
           path: recovered-pkg/*
+          if-no-files-found: error
+          retention-days: 30
+
+  recover-original-ios-log:
+    needs: isolation
+    if: needs.isolation.outputs.target == 'ios-logs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read the exact completed iOS job log without rebuilding
+        env:
+          ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          const {createWriteStream} = require('node:fs');
+          const {pipeline} = require('node:stream/promises');
+          const {Readable} = require('node:stream');
+          const {join} = require('node:path');
+          (async () => {
+            let response = await fetch('https://api.github.com/repos/thepackproof/packproof-v2/actions/jobs/110498820354/logs', {
+              headers: {Authorization: `Bearer ${process.env.ACTIONS_READ_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'},
+              redirect: 'manual'
+            });
+            if (response.status === 302) {
+              const target = new URL(response.headers.get('location'));
+              if (target.protocol !== 'https:') throw new Error('Unexpected log download protocol');
+              // The expiring location is returned by authenticated GitHub. Do not forward credentials.
+              response = await fetch(target, {redirect: 'follow'});
+            }
+            if (!response.ok || !response.body) throw new Error(`Log retrieval failed: HTTP ${response.status}`);
+            await pipeline(Readable.fromWeb(response.body), createWriteStream(join(process.env.RUNNER_TEMP, 'original-ios-job-110498820354.log')));
+            console.log('Recovered the existing completed iOS build log. No app was built.');
+          })().catch(error => { console.error(error.message); process.exitCode = 1; });
+          NODE
+      - name: Extract exact compiler errors from the recovered log
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          lines=(root/'original-ios-job-110498820354.log').read_text(errors='replace').splitlines()
+          selected=set()
+          for index,line in enumerate(lines):
+              if re.search(r'(?i)(?:fatal error|error:|build failed|following build commands failed|xcodebuild.*failed)',line):
+                  selected.update(range(max(0,index-3),min(len(lines),index+9)))
+          if not selected:
+              selected.update(range(max(0,len(lines)-160),len(lines)))
+          summary='\n'.join(lines[index] for index in sorted(selected)[:600])+'\n'
+          (root/'original-ios-compiler-errors.txt').write_text(summary)
+          print(summary)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: PackProof-RND-Original-iOS-Diagnostics-110498820354
+          path: |
+            ${{ runner.temp }}/original-ios-job-110498820354.log
+            ${{ runner.temp }}/original-ios-compiler-errors.txt
           if-no-files-found: error
           retention-days: 30
