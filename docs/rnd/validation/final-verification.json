@@ -3,7 +3,7 @@
   "recordedAt": "2026-10-02T11:37:53.542331+00:00",
   "branch": "rnd/trust-infrastructure-2026-10-02",
   "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
-  "codeCommitReference": null,
+  "codeCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
   "scope": "Local research implementation and synthetic protocol verification only; no scientific or release qualification.",
   "releaseAuthorized": false,
   "fullyQualifiedPlan": false,

@@ -1,6 +1,6 @@
 # Research implementation handoff
 
-Branch: `rnd/trust-infrastructure-2026-10-02`, based directly on `main` at `a157356924bf4bf688e171c9ff223576fcb6ca3d`. All work is on this one branch. The implementation commit is recorded in `status-ledger.json` and `validation/final-verification.json`.
+Branch: `rnd/trust-infrastructure-2026-10-02`, based directly on `main` at `a157356924bf4bf688e171c9ff223576fcb6ca3d`. All work is on this one branch. Implementation commit: `08892e142ad383680fd4b9cc085a272a69daa543`. The ledger and verification record refer to this exact source commit; the following commit records this handoff metadata.
 
 The reconciled 71-ticket ledger contains **60 engineered within documented local research scope** and **11 blocked on external qualification**. There are no outstanding local integration rows. This does **not** mean the full scientific R&D plan has completed: physical experiments, independent review and pilot gates remain open. Release authorization is false.
 

@@ -1104,5 +1104,6 @@
     "Native owner reports actual exact-current Kotlin compile and4 JVM tests pass,6 live encoded-fragment tests pass, and mobile TypeScript passes. Swift/Xcode and physical capture remain unexecuted.",
     "Federated transport independent review identified live profile expiry and restart replay state; both were fixed and22 tests pass.",
     "Web29 tests, desktop21 tests and both builds pass per parent; final global evidence is owned by parent."
-  ]
+  ],
+  "codeCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543"
 }

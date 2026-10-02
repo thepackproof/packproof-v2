@@ -29,7 +29,7 @@
         "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
         "docs/rnd/validation/native-status.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -69,7 +69,7 @@
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
         "research/benchmarks/evaluate.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -110,7 +110,7 @@
         "research/vision/enrollment.py",
         "research/benchmarks/run.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -150,7 +150,7 @@
         "backend/src/rnd/enrollment.ts",
         "backend/migrations/082_rnd_enrollments.sql"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -192,7 +192,7 @@
         "backend/src/rnd/exports.ts",
         "mobile/src/research/ResearchArtifacts.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -232,7 +232,7 @@
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
         "research/benchmarks/evaluate.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -274,7 +274,7 @@
         "backend/src/rnd/capture.ts",
         "backend/src/rnd/platform-assurance-service.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
@@ -316,7 +316,7 @@
         "backend/src/rnd/capture.ts",
         "backend/src/rnd/platform-assurance-service.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
@@ -361,7 +361,7 @@
         "research/capture-fragments/fragments.test.mjs",
         "docs/rnd/validation/fragment-benchmark.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
@@ -405,7 +405,7 @@
         "backend/tests/rnd-android-key-policy.test.ts",
         "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchKeyAttestation.kt"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
@@ -450,7 +450,7 @@
         "research/capture-fragments/fragments.test.mjs",
         "docs/rnd/validation/fragment-benchmark.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
@@ -494,7 +494,7 @@
         "backend/tests/rnd-capture-sidecars.test.ts",
         "mobile/src/research/sidecars.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
@@ -537,7 +537,7 @@
         "verifier/test_rnd_bundle.mjs",
         "backend/tests/rnd-capture-sidecars.test.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
@@ -577,7 +577,7 @@
         "research/benchmarks/README.md",
         "backend/src/rnd/annotations.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -616,7 +616,7 @@
       "codeReferences": [
         "research/vision/engine.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -657,7 +657,7 @@
         "research/vision/worker.py",
         "research/vision/IMPLEMENTATION_STATUS.md"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -696,7 +696,7 @@
       "codeReferences": [
         "research/vision/engine.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -739,7 +739,7 @@
         "mobile/src/research/ResearchAnnotations.tsx",
         "mobile/src/research/ResearchArtifacts.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -778,7 +778,7 @@
       "codeReferences": [
         "research/benchmarks/README.md"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -819,7 +819,7 @@
         "research/vision/sfm.py",
         "research/vision/result.schema.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -858,7 +858,7 @@
         "research/vision/sfm.py",
         "research/vision/result.schema.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -897,7 +897,7 @@
         "research/vision/sfm.py",
         "research/vision/result.schema.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -936,7 +936,7 @@
         "research/vision/sfm.py",
         "research/vision/result.schema.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -976,7 +976,7 @@
         "mobile/src/research/ResearchPanel.tsx",
         "mobile/src/research/ResearchArtifacts.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1014,7 +1014,7 @@
         "research/benchmarks/evaluate.py",
         "research/benchmarks/configs/physical-qualification-v1.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1054,7 +1054,7 @@
         "backend/src/rnd/matrix.ts",
         "mobile/src/research/ResearchPanel.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
@@ -1096,7 +1096,7 @@
         "backend/tests/rnd-evidence.test.ts",
         "web/src/rnd/RndReview.test.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
@@ -1137,7 +1137,7 @@
         "backend/src/rnd/matrix.ts",
         "mobile/src/research/ResearchPanel.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
@@ -1178,7 +1178,7 @@
         "backend/src/rnd/matrix.ts",
         "mobile/src/research/ResearchPanel.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
@@ -1220,7 +1220,7 @@
         "backend/tests/rnd-evidence.test.ts",
         "web/src/rnd/RndReview.test.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
@@ -1258,7 +1258,7 @@
       "codeReferences": [
         "research/benchmarks/README.md"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
@@ -1298,7 +1298,7 @@
         "research/vision/policy.json",
         "research/benchmarks/configs/physical-qualification-v1.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1337,7 +1337,7 @@
         "mobile/src/research/capture-policy.ts",
         "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1376,7 +1376,7 @@
         "mobile/src/research/capture-policy.ts",
         "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1413,7 +1413,7 @@
       "codeReferences": [
         "research/vision/engine.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1450,7 +1450,7 @@
       "codeReferences": [
         "research/benchmarks/configs/physical-qualification-v1.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1489,7 +1489,7 @@
         "backend/src/rnd/config.ts",
         "web/src/rnd/RndReview.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
@@ -1528,7 +1528,7 @@
         "backend/src/rnd/worker.ts",
         "research/privacy/test_redact.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -1568,7 +1568,7 @@
         "backend/src/rnd/worker.ts",
         "research/privacy/test_redact.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -1612,7 +1612,7 @@
         "backend/tests/rnd-derivative-grants.test.ts",
         "mobile/src/research/ResearchArtifacts.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -1652,7 +1652,7 @@
         "backend/src/rnd/worker.ts",
         "research/privacy/test_redact.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -1693,7 +1693,7 @@
         "research/privacy/zk/verify.mjs",
         "backend/src/rnd/zk-service.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -1732,7 +1732,7 @@
         "research/privacy/reports",
         "research/privacy/zk/benchmark.mjs"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -1773,7 +1773,7 @@
         "research/vision/engine.py",
         "backend/src/rnd/capture-sidecars.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm run test:research --prefix mobile",
@@ -1814,7 +1814,7 @@
         "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
         "docs/rnd/validation/native-status.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm run test:research --prefix mobile",
@@ -1851,7 +1851,7 @@
         "mobile/src/research/capture-policy.ts",
         "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm run test:research --prefix mobile",
@@ -1892,7 +1892,7 @@
         "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
         "docs/rnd/validation/native-status.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm run test:research --prefix mobile",
@@ -1931,7 +1931,7 @@
         "research/vision/engine.py",
         "backend/src/rnd/capture-sidecars.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm run test:research --prefix mobile",
@@ -1967,7 +1967,7 @@
       "codeReferences": [
         "research/benchmarks/README.md"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm run test:research --prefix mobile",
@@ -2005,7 +2005,7 @@
         "backend/src/rnd/worker.ts",
         "verifier/rnd_verify.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -2044,7 +2044,7 @@
         "backend/src/rnd/worker.ts",
         "verifier/rnd_verify.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -2085,7 +2085,7 @@
         "backend/tests/rnd-evidence.test.ts",
         "docs/rnd/validation/backend-status.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -2122,7 +2122,7 @@
       "codeReferences": [
         "research/witness/README.md"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -2161,7 +2161,7 @@
         "backend/src/rnd/worker.ts",
         "verifier/rnd_verify.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -2202,7 +2202,7 @@
         "backend/tests/rnd-evidence.test.ts",
         "docs/rnd/validation/backend-status.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
@@ -2241,7 +2241,7 @@
         "research/federated/proofcollective/protocol.py",
         "backend/src/rnd/learning-registry.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
@@ -2282,7 +2282,7 @@
         "research/federated/reports/2026-10-02-mtls/transport-validation.json",
         "docs/rnd/validation/f10-status.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
@@ -2320,7 +2320,7 @@
         "research/federated/proofcollective/protocol.py",
         "backend/src/rnd/learning-registry.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
@@ -2358,7 +2358,7 @@
         "research/federated/proofcollective/protocol.py",
         "backend/src/rnd/learning-registry.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
@@ -2395,7 +2395,7 @@
         "research/federated/model-policy.json",
         "research/federated/proofcollective/cli.py"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
@@ -2433,7 +2433,7 @@
         "research/federated/proofcollective/protocol.py",
         "backend/src/rnd/learning-registry.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
@@ -2470,7 +2470,7 @@
         "docs/rnd/REPOSITORY_AUDIT.md",
         "docs/rnd/baseline-source-inventory.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2514,7 +2514,7 @@
         "backend/tests/durable-recovery.test.ts",
         "mobile/tests"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2558,7 +2558,7 @@
         "mobile/src/research/isolation.ts",
         "desktop/src/main/config.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2606,7 +2606,7 @@
         "packages/evidence-contracts/generated-client.d.mts",
         "docs/rnd/validation/api-contracts.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2650,7 +2650,7 @@
         "backend/src/rnd/capture-sidecars.ts",
         "packages/evidence-contracts/schemas/capture-sidecar-receipt.schema.json"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2693,7 +2693,7 @@
         "backend/src/rnd/worker.ts",
         "backend/src/rnd/operations.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2738,7 +2738,7 @@
         "mobile/src/research/ResearchAnnotations.tsx",
         "mobile/src/research/ResearchArtifacts.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2782,7 +2782,7 @@
         "research/federated/proofcollective/governance.py",
         "backend/src/rnd/learning-registry.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2828,7 +2828,7 @@
         "backend/tests/rnd-evidence.test.ts",
         "backend/tests/rnd-runtime-isolation.test.ts"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2872,7 +2872,7 @@
         "scripts/rnd.mjs",
         "web/src/rnd/RndOperations.tsx"
       ],
-      "commitReference": null,
+      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
@@ -2898,7 +2898,7 @@
     }
   ],
   "branch": "rnd/trust-infrastructure-2026-10-02",
-  "codeCommitReference": null,
+  "codeCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
   "fullyImplementedPlan": false,
   "qualificationComplete": false,
   "ticketCounts": {
