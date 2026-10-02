@@ -1,0 +1,41 @@
+import { Router,type Request,type Response,type NextFunction } from 'express';
+import { pipeline } from 'node:stream/promises';
+import { FEATURES,type RndDeps } from './types.js';
+import { bad } from './security.js';
+import { closeIntent,issueIntent,issueLiveChallenge,recordConsent,startIntent } from './capture.js';
+import { getAnalysis,listAnalyses,requestAnalysis } from './analyses.js';
+import { artifactFor,extensions,exportDerivativeZip,exportResearchZip,researchBundle,reviewDerivative } from './exports.js';
+import { rndPlatformRouter } from './platform-assurance-service.js';
+import { rndEnrollmentRouter } from './enrollment.js';
+import { rndAnnotationsRouter } from './annotations.js';
+import { rndCaptureSidecarsRouter } from './capture-sidecars.js';
+
+const route=(fn:(r:Request,s:Response)=>Promise<unknown>)=>(r:Request,s:Response,n:NextFunction)=>{void fn(r,s).catch(n);};
+const actor=(r:Request)=>r.packproofUserId??bad('UNAUTHENTICATED','Authentication required',401);
+export function rndRouter(deps:RndDeps) {
+ const router=Router();
+ router.use(['/rnd','/proofs/:id/rnd'],(_r,s,n)=>{s.setHeader('Cache-Control','private, no-store');n();});
+ router.use(rndPlatformRouter(deps));
+ router.use(rndEnrollmentRouter(deps));
+ router.use(rndAnnotationsRouter(deps));
+ router.use(rndCaptureSidecarsRouter(deps));
+ router.get('/rnd/capabilities',route(async(_r,s)=>s.json({environment:deps.rnd?.environment??'disabled',features:deps.rnd?.features??Object.fromEntries(FEATURES.map(f=>[f,{collection:false,processing:false,internalDisplay:false,customerDisplay:false}])),enabled:deps.rnd?.enabled??false,killSwitch:deps.rnd?.killSwitch??true,releaseAuthorized:false})));
+ const base='/proofs/:id/rnd';
+ router.post(`${base}/consents`,route(async(r,s)=>s.json(await recordConsent(deps,actor(r),r.params.id,r.header('Idempotency-Key'),r.body))));
+ router.post(`${base}/capture-intents`,route(async(r,s)=>s.status(201).json(await issueIntent(deps,actor(r),r.params.id,r.header('Idempotency-Key'),r.body))));
+ router.post(`${base}/capture-intents/:intent/start`,route(async(r,s)=>s.json(await startIntent(deps,actor(r),r.params.id,r.params.intent,r.header('Idempotency-Key'),r.body))));
+ router.post(`${base}/capture-intents/:intent/close`,route(async(r,s)=>s.json(await closeIntent(deps,actor(r),r.params.id,r.params.intent,r.header('Idempotency-Key'),r.body))));
+ router.post(`${base}/live-challenges`,route(async(r,s)=>s.status(201).json(await issueLiveChallenge(deps,actor(r),r.params.id,r.header('Idempotency-Key'),r.body))));
+ router.post(`${base}/analyses`,route(async(r,s)=>s.status(202).json(await requestAnalysis(deps,actor(r),r.params.id,r.header('Idempotency-Key'),r.body))));
+ router.post(`${base}/comparisons`,route(async(r,s)=>s.status(202).json(await requestAnalysis(deps,actor(r),r.params.id,r.header('Idempotency-Key'),{...r.body,feature:'proofmatch'}))));
+ router.post(`${base}/derivatives`,route(async(r,s)=>s.status(202).json(await requestAnalysis(deps,actor(r),r.params.id,r.header('Idempotency-Key'),{...r.body,feature:'proofshield'}))));
+ router.get(`${base}/analyses`,route(async(r,s)=>s.json(await listAnalyses(deps,actor(r),r.params.id))));
+ router.get('/rnd/analyses/:analysisId',route(async(r,s)=>s.json(await getAnalysis(deps,actor(r),r.params.analysisId))));
+ router.get(`${base}/extensions`,route(async(r,s)=>s.json(await extensions(deps,actor(r),r.params.id,Number(r.query.after??0)))));
+ router.post(`${base}/exports`,route(async(r,s)=>s.json(await researchBundle(deps,actor(r),r.params.id))));
+ router.get(`${base}/export.zip`,route(async(r,s)=>{const zip=await exportResearchZip(deps,actor(r),r.params.id);s.type('application/zip').set('Content-Disposition','attachment; filename="packproof-research.zip"');await pipeline(zip,s);}));
+ router.get(`${base}/analyses/:analysisId/artifacts/:index`,route(async(r,s)=>{const {artifact,bytes}=await artifactFor(deps,actor(r),r.params.id,r.params.analysisId,Number(r.params.index));s.set('X-Content-Type-Options','nosniff').type(String(artifact.mimeType)).send(bytes.body);}));
+ router.post(`${base}/analyses/:analysisId/review`,route(async(r,s)=>s.json(await reviewDerivative(deps,actor(r),r.params.id,r.params.analysisId,r.header('Idempotency-Key'),r.body))));
+ router.get(`${base}/analyses/:analysisId/export.zip`,route(async(r,s)=>{const zip=await exportDerivativeZip(deps,actor(r),r.params.id,r.params.analysisId);s.type('application/zip').set('Content-Disposition','attachment; filename="packproof-redacted.zip"');await pipeline(zip,s);}));
+ return router;
+}

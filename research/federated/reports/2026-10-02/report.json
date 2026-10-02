@@ -1,0 +1,223 @@
+{
+  "schema": "proofcollective-report/v1",
+  "feature": "F10",
+  "runId": "fbed1409-6b09-4864-a9ff-ac22c05ca487",
+  "scope": "SYNTHETIC_LOCAL_MULTI_CLIENT_SIMULATION",
+  "status": "ENGINEERED",
+  "productionReleaseAuthorized": false,
+  "independentContributors": 0,
+  "syntheticClients": 24,
+  "rounds": [
+    {
+      "round": 1,
+      "privacy": {
+        "epsilonMaxCumulative": 1.1431687205814116,
+        "delta": 1e-06,
+        "noiseMultiplier": 4.0,
+        "accountant": "google-dp-accounting/0.6.0:RdpAccountant",
+        "sampling": "full-participation; no amplification",
+        "adjacency": "replace one bounded enrolled partner contribution",
+        "reservation": "spent before aggregate; no refund on abort"
+      },
+      "noiseStd": 0.33333365122477215,
+      "l2Sensitivity": 0.08333341280619304,
+      "protocol": {
+        "protocol": "Flower 1.39.0 SecAggPlusWorkflow + secaggplus_mod",
+        "contributors": 24,
+        "independentOrganizations": 0,
+        "topology": "all-to-all shares",
+        "reconstructionThreshold": 20,
+        "quantizationRange": 4194304,
+        "quantizationL2Slack": 9.5367431640625e-07,
+        "transport": "Fernet authenticated encrypted protobuf in process; simulation only",
+        "stages": [
+          {
+            "stage": "setup",
+            "requested": 24,
+            "received": 24
+          },
+          {
+            "stage": "share_keys",
+            "requested": 24,
+            "received": 24
+          },
+          {
+            "stage": "collect_masked_vectors",
+            "requested": 24,
+            "received": 24
+          },
+          {
+            "stage": "unmask",
+            "requested": 24,
+            "received": 24
+          }
+        ],
+        "rawSamplesUploaded": 0,
+        "individualUpdatesLogged": 0
+      },
+      "quality": {
+        "accuracy": 0.87890625,
+        "groups": {
+          "synthetic-device-group-0": 0.880859375,
+          "synthetic-device-group-1": 0.8857421875,
+          "synthetic-device-group-2": 0.8701171875
+        },
+        "n": 3072,
+        "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+        "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+      }
+    },
+    {
+      "round": 2,
+      "privacy": {
+        "epsilonMaxCumulative": 1.6606191992577408,
+        "delta": 1e-06,
+        "noiseMultiplier": 4.0,
+        "accountant": "google-dp-accounting/0.6.0:RdpAccountant",
+        "sampling": "full-participation; no amplification",
+        "adjacency": "replace one bounded enrolled partner contribution",
+        "reservation": "spent before aggregate; no refund on abort"
+      },
+      "noiseStd": 0.33333365122477215,
+      "l2Sensitivity": 0.08333341280619304,
+      "protocol": {
+        "protocol": "Flower 1.39.0 SecAggPlusWorkflow + secaggplus_mod",
+        "contributors": 24,
+        "independentOrganizations": 0,
+        "topology": "all-to-all shares",
+        "reconstructionThreshold": 20,
+        "quantizationRange": 4194304,
+        "quantizationL2Slack": 9.5367431640625e-07,
+        "transport": "Fernet authenticated encrypted protobuf in process; simulation only",
+        "stages": [
+          {
+            "stage": "setup",
+            "requested": 24,
+            "received": 24
+          },
+          {
+            "stage": "share_keys",
+            "requested": 24,
+            "received": 24
+          },
+          {
+            "stage": "collect_masked_vectors",
+            "requested": 24,
+            "received": 24
+          },
+          {
+            "stage": "unmask",
+            "requested": 24,
+            "received": 24
+          }
+        ],
+        "rawSamplesUploaded": 0,
+        "individualUpdatesLogged": 0
+      },
+      "quality": {
+        "accuracy": 0.9153645833333334,
+        "groups": {
+          "synthetic-device-group-0": 0.9287109375,
+          "synthetic-device-group-1": 0.9072265625,
+          "synthetic-device-group-2": 0.91015625
+        },
+        "n": 3072,
+        "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+        "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+      }
+    }
+  ],
+  "comparisons": {
+    "currentBaseline": {
+      "accuracy": 0.849609375,
+      "groups": {
+        "synthetic-device-group-0": 0.84375,
+        "synthetic-device-group-1": 0.8544921875,
+        "synthetic-device-group-2": 0.8505859375
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    },
+    "singleLocalSyntheticClient": {
+      "accuracy": 0.9446614583333334,
+      "groups": {
+        "synthetic-device-group-0": 0.94140625,
+        "synthetic-device-group-1": 0.947265625,
+        "synthetic-device-group-2": 0.9453125
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    },
+    "federatedWithoutDpSyntheticOnly": {
+      "accuracy": 0.9602864583333334,
+      "groups": {
+        "synthetic-device-group-0": 0.9599609375,
+        "synthetic-device-group-1": 0.962890625,
+        "synthetic-device-group-2": 0.9580078125
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    },
+    "federatedWithActualCentralDp": {
+      "accuracy": 0.9153645833333334,
+      "groups": {
+        "synthetic-device-group-0": 0.9287109375,
+        "synthetic-device-group-1": 0.9072265625,
+        "synthetic-device-group-2": 0.91015625
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    }
+  },
+  "qualityGate": {
+    "passed": true,
+    "requiredGain": 0.05,
+    "observedGain": 0.06575520833333337,
+    "maximumAllowedGroupDrop": 0.02,
+    "groupDeltas": {
+      "synthetic-device-group-0": 0.0849609375,
+      "synthetic-device-group-1": 0.052734375,
+      "synthetic-device-group-2": 0.0595703125
+    }
+  },
+  "candidateDigest": "92b72f362c6e909ae403fc2d3720847a1c395c5c52f122d1fe8955a4fdd2f3e3",
+  "candidateArtifact": "models/92b72f362c6e909ae403fc2d3720847a1c395c5c52f122d1fe8955a4fdd2f3e3.json",
+  "signerPublicKey": "7fd89859b3946e8e5a61f3b46fcc1ecdd140636fb4cc441faa71b75d9bb8abee",
+  "privacyBoundary": {
+    "protectedUnit": "one enrolled partner contribution, replacement adjacency",
+    "coordinatorSeesPreNoiseAggregate": true,
+    "dpProtects": "released noisy model outputs under trusted coordinator assumptions",
+    "individualUpdatesHiddenBy": "Flower SecAgg+ semi-honest protocol; this simulator owns all node memory",
+    "withdrawal": "future rounds stop; existing artifacts do not automatically forget contributions",
+    "sampling": "all selected clients; no privacy amplification claimed",
+    "maliciousClientClippingProven": false,
+    "noiseGenerator": "OS-entropy-seeded SystemRandom Gaussian floating point; specialist finite-precision review required",
+    "strongerDistributedNoise": "BLOCKED pending reviewed dropout/collusion/noise mechanism"
+  },
+  "openGates": [
+    "Representative consented partner-local examples and useful task baseline",
+    "20 independently enrolled contributors per released pilot aggregate",
+    "Independent secure-aggregation and DP adjacency/finite-precision/accountant review",
+    "Actual Flower TLS + SuperNode authentication deployment/attack exercise",
+    "Cross-partner and supported-camera holdout; synthetic device groups cannot qualify hardware",
+    "Poisoning evaluation against governed enrolled adversaries",
+    "Explicit separate authorization for any pilot, distribution or production release"
+  ],
+  "elapsedSeconds": 7.7775327530000595,
+  "environment": {
+    "python": "3.12.14",
+    "flwr": "1.39.0",
+    "dp-accounting": "0.6.0",
+    "numpy": "2.5.3"
+  },
+  "telemetry": {
+    "rawImages": 0,
+    "labels": 0,
+    "individualUpdates": 0,
+    "partnerIdentities": "synthetic labels only in protected lab ledger"
+  }
+}

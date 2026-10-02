@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/capture-sidecar-receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "intentId",
+    "proofId",
+    "tenantId",
+    "captureSessionId",
+    "parentEvidenceId",
+    "parentSourceSha256",
+    "nativeInventoryDigest",
+    "parentReceiptDigest",
+    "fileName",
+    "source",
+    "relationship",
+    "frameReference",
+    "receivedAt",
+    "assurance"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.capture-sidecar-receipt.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "intentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "captureSessionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "parentEvidenceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "parentSourceSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nativeInventoryDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "parentReceiptDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "fileName": {
+      "type": "string",
+      "pattern": "^(research-acquisition\\.json|native-journal\\.jsonl|research-frame-[0-5]\\.pgm)$"
+    },
+    "source": {
+      "$ref": "committed-source.schema.json"
+    },
+    "relationship": {
+      "enum": [
+        "CONCURRENT_SIDECAR",
+        "CAPTURE_METADATA"
+      ]
+    },
+    "frameReference": {
+      "anyOf": [
+        {
+          "$ref": "native-frame.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "assurance": {
+      "type": "object",
+      "required": [
+        "byteReceipt",
+        "association",
+        "pixelEquivalence",
+        "sensorAttestation"
+      ],
+      "properties": {
+        "byteReceipt": {
+          "const": "SIGNED_BYTES_RECEIVED"
+        },
+        "association": {
+          "const": "CLIENT_SIGNED_ACQUISITION_COMMITMENT"
+        },
+        "pixelEquivalence": {
+          "const": "NOT_ASSERTED"
+        },
+        "sensorAttestation": {
+          "const": "UNSUPPORTED"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "if": {
+    "properties": {
+      "relationship": {
+        "const": "CONCURRENT_SIDECAR"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "fileName": {
+        "type": "string",
+        "pattern": "^research-frame-[0-5]\\.pgm$"
+      },
+      "frameReference": {
+        "$ref": "native-frame.schema.json"
+      },
+      "source": {
+        "properties": {
+          "relationship": {
+            "const": "CONCURRENT_SIDECAR"
+          },
+          "mimeType": {
+            "const": "image/x-portable-graymap"
+          }
+        }
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "fileName": {
+        "enum": [
+          "research-acquisition.json",
+          "native-journal.jsonl"
+        ]
+      },
+      "frameReference": {
+        "type": "null"
+      },
+      "source": {
+        "properties": {
+          "relationship": {
+            "const": "CAPTURE_METADATA"
+          }
+        }
+      }
+    }
+  }
+}

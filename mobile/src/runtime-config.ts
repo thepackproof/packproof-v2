@@ -1,3 +1,4 @@
+import { assertResearchEndpoint } from "./research/isolation";
 import type { AuthMode, CognitoConfig } from "./cognito";
 
 export const STAGING_API_BASE_URL =
@@ -12,6 +13,7 @@ export const STAGING_COGNITO: CognitoConfig = {
 export const DEV_DEFAULT_API_BASE_URL = "http://127.0.0.1:3000";
 
 export interface RuntimeEnv {
+  EXPO_PUBLIC_PACKPROOF_RND?: string;
   EXPO_PUBLIC_PACKPROOF_API_BASE_URL?: string;
   EXPO_PUBLIC_PACKPROOF_AUTH_MODE?: string;
   EXPO_PUBLIC_COGNITO_USER_POOL_ID?: string;
@@ -130,6 +132,11 @@ export function resolveRuntimeConfig(input: {
   isRelease: boolean;
   cached?: CachedRuntimeOverrides | null;
 }): ResolvedRuntimeConfig {
+  if (input.env.EXPO_PUBLIC_PACKPROOF_RND === "true") return {
+    apiBaseUrl: assertResearchEndpoint(input.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL || DEV_DEFAULT_API_BASE_URL),
+    authMode: "dev", cognito: { userPoolId: "", clientId: "", region: "" },
+    allowsApiOverride: false, allowsDevAuth: true,
+  };
   const compiledApi = compiledApiBaseUrl(input.env, input.isRelease);
   const compiledAuth = compiledAuthMode(input.env, input.isRelease);
   const compiledCognitoConfig = compiledCognito(input.env, input.isRelease);

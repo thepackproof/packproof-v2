@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
+const policyPath = path.resolve(__dirname, '../../config/rnd/research-build.json');
+const researchOnly = fs.existsSync(policyPath) && JSON.parse(fs.readFileSync(policyPath, 'utf8')).researchOnly;
 const profiles = require('../eas.json');
 
 function config(env = {}) {
@@ -13,8 +16,9 @@ function config(env = {}) {
 }
 
 for (const profile of ['ios-simulator', 'ios-device', 'ios-testflight']) {
-  test(`${profile} resolves the production app identity and authenticated HTTPS API`, () => {
+  test(`${profile} ${researchOnly ? "is blocked by the research distribution policy" : "resolves the production app identity and authenticated HTTPS API"}`, () => {
     const result = config({ EAS_BUILD_PROFILE: profile });
+    if (researchOnly) { assert.notEqual(result.status, 0); assert.match(result.stderr, /R&D branch cannot use distribution/); return; }
     assert.equal(result.status, 0, result.stderr);
     const app = JSON.parse(result.stdout);
     assert.equal(app.ios.bundleIdentifier, 'com.packproof.mobile');
@@ -49,7 +53,7 @@ test('iOS profiles share current Android feature flags and use an iOS 26 build i
 });
 
 test('Apple build number can advance without changing the Android release identity', () => {
-  const result = config({ EAS_BUILD_PROFILE: 'ios-testflight', PACKPROOF_IOS_BUILD_NUMBER: '12' });
+  const result = config({ EAS_BUILD_PROFILE: researchOnly ? '' : 'ios-testflight', PACKPROOF_IOS_BUILD_NUMBER: '12' });
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.ios.buildNumber, '12');

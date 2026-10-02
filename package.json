@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node web/scripts/build-sites.mjs",
-    "dev": "npm --prefix web run dev --"
+    "dev": "npm --prefix web run dev --",
+    "rnd": "node scripts/rnd.mjs",
+    "test:rnd-contracts": "node packages/evidence-contracts/test/contracts.test.mjs"
   }
 }

@@ -20,7 +20,21 @@ export const idSchema=z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 const previewHash=z.string().regex(/^[a-f0-9]{64}$/);
 const email=z.string().trim().email().max(254), password=z.string().min(1).max(1024), code=z.string().trim().min(1).max(128);
 export const settingsSchema=z.object({cameraId:z.string().max(512),microphoneId:z.string().max(512),audio:z.boolean(),resolution:z.enum(['720p','1080p']),frameRate:z.union([z.literal(24),z.literal(30)]),retentionHours:z.union([z.literal(0),z.literal(24),z.literal(168)]),notifications:z.boolean(),scannerSuffix:z.enum(['Enter','Tab']),theme:z.enum(['light','dark','system'])}).strict();
+const rndKey=z.string().min(8).max(200);
+const rndFeature=z.enum(['proofprint','verifiedcapture','proofsight','prooftwin','proofmatch','prooflive','proofshield','proofpilot','proofwitness','proofcollective']);
+const rndParameters=z.record(z.string(),z.unknown()).refine(value=>JSON.stringify(value).length<=32768,'Research parameters are too large');
 export const schemas={
+ rndSource:z.tuple([idSchema,idSchema]),
+ rndConsent:z.tuple([idSchema,z.boolean(),rndKey]),
+ rndRequest:z.tuple([idSchema,z.object({feature:rndFeature,evidenceIds:z.array(idSchema).min(1).max(32),scope:z.string().min(1).max(200).optional(),parameters:rndParameters.optional(),relatedAnalysisIds:z.array(idSchema).max(32).optional()}).strict(),rndKey]),
+ rndDerivative:z.tuple([idSchema,z.object({evidenceIds:z.array(idSchema).length(1),parameters:rndParameters}).strict(),rndKey]),
+ rndGrantPair:z.tuple([idSchema,idSchema]),
+ rndCreateGrant:z.tuple([idSchema,idSchema,z.object({artifactSha256:z.string().regex(/^[a-f0-9]{64}$/),recipeSha256:z.string().regex(/^[a-f0-9]{64}$/),expiresInSeconds:z.number().int().min(60).max(86400)}).strict(),rndKey]),
+ rndAnnotate:z.tuple([idSchema,z.object({analysisId:idSchema,sourceId:idSchema,text:z.string().min(1).max(2000),interval:z.object({startMs:z.number().min(0),endMs:z.number().positive().max(86400000)}).strict().optional(),supersedesId:idSchema.optional()}).strict(),rndKey]),
+ rndArchive:z.tuple([idSchema,idSchema.optional()]),
+ rndExport:z.tuple([idSchema,rndKey]),
+ rndArtifact:z.tuple([idSchema,idSchema,z.number().int().min(0).max(31)]),
+ rndReview:z.tuple([idSchema,idSchema,z.object({approved:z.literal(true),artifactSha256:z.string().regex(/^[a-f0-9]{64}$/),recipeSha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),rndKey]),
  onboarding:z.tuple([z.object({action:z.enum(['start','step','skip','complete','dismiss_coaching']),version:z.literal(1),step:z.number().int().min(0).max(5).optional()}).strict()]),
  empty:z.tuple([]),report:z.tuple([z.enum(['CAMERA_PERMISSION_DENIED','CAMERA_DISCONNECTED','CAMERA_UNAVAILABLE','RECORDING_FAILED'])]),id:z.tuple([idSchema]),login:z.tuple([z.object({email,password}).strict()]),email:z.tuple([email]),code:z.tuple([z.object({email,code}).strict()]),reset:z.tuple([z.object({email,code,password}).strict()]),
  capture:z.tuple([z.object({proofId:idSchema,label:z.string().max(512),mimeType:z.enum(['video/webm','video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/mp4']),camera:z.string().max(256),expectedTracking:z.string().max(256).optional()}).strict()]),

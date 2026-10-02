@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "packproof.rnd-ticket-evidence.v1",
+  "feature": "F10",
+  "workstream": "ProofCollective",
+  "owner": "federated implementation agent",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "status": "ENGINEERED",
+  "validatedScope": "LOCAL_SYNTHETIC_PROTOCOL_ONLY",
+  "releaseAuthorized": false,
+  "code": [
+    "research/federated/proofcollective",
+    "research/federated/model-policy.json",
+    "backend/src/rnd/learning-registry.ts",
+    "backend/migrations/080_rnd_learning.sql"
+  ],
+  "versions": {
+    "model": "proofcollective-candidate/v1",
+    "recipe": "proofcollective-recipe/v1",
+    "policy": "proofcollective-policy/v1",
+    "flwr": "1.39.0",
+    "dp-accounting": "0.6.0"
+  },
+  "tickets": [
+    {
+      "id": "F10-01",
+      "status": "ENGINEERED",
+      "evidence": "Append-only purpose/dataset consent; withdrawal checked before/during/after protocol; ordinary customer evidence never ingested.",
+      "open": "Real partner consent/controller/retention review and stable enrollment authority."
+    },
+    {
+      "id": "F10-02",
+      "status": "ENGINEERED",
+      "evidence": "Bounded local quality preprocessing/training; Ed25519 exact recipe/model verification; real Flower protobuf over actual TLS 1.3 mutually authenticated loopback sockets with CA/EKU/hostname checks, certificate/node pins, replay/session binding and governed operational profiles. Twenty-client signed training completed 80 TLS exchanges; adversarial ciphertext/wrong-cert/party tests pass. Operational profiles enforce live expiry and private persistent monotonic session admission across restarts.",
+      "open": "Independent partner-controlled machines/enrollment; operational revocation/rotation and deployment-specific security qualification."
+    },
+    {
+      "id": "F10-03",
+      "status": "VALIDATED FOR SCOPE",
+      "scope": "Synthetic in-process SecAgg+ protocol and adversarial message tests only",
+      "evidence": "Unmodified Flower stages execute actual key sharing/masking/threshold recovery; 24 clients with 2 dropouts recover expected aggregate; <20 aborts.",
+      "open": "Independent operators and security review; semi-honest protocol does not prove malicious-client clipping."
+    },
+    {
+      "id": "F10-04",
+      "status": "ENGINEERED",
+      "evidence": "Google RDP composition persists per stable partner across campaign IDs; cap epsilon3, stricter delta preserved, reservation before execution; tampering/withdrawal/budget test cases pass.",
+      "open": "External DP adjacency/noise/finite-precision/accountant review and protected central ledger."
+    },
+    {
+      "id": "F10-05",
+      "status": "BLOCKED",
+      "evidence": "Distributed mode explicitly rejects before execution. Central coordinator pre-noise visibility disclosed.",
+      "open": "Reviewed honest-noise, collusion, dropout and independent-cohort assumptions."
+    },
+    {
+      "id": "F10-06",
+      "status": "ENGINEERED",
+      "evidence": "Signed candidates separated from releases; synthetic holdout/group/privacy gates; append-only registry and verified rollback; backend admin-only exact signed candidate import/export.",
+      "open": "Prespecified representative cross-partner/device evaluation, poisoning review and explicit pilot authorization."
+    }
+  ],
+  "tests": [
+    {
+      "command": "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
+      "result": "22 passed",
+      "artifact": "research/federated/reports/2026-10-02-mtls/tests.xml"
+    },
+    {
+      "command": "npm --prefix backend test -- --run tests/rnd-learning-registry.test.ts",
+      "result": "5 passed",
+      "artifact": "research/federated/reports/2026-10-02/backend-tests.xml"
+    },
+    {
+      "command": "npm --prefix backend run typecheck",
+      "result": "passed"
+    }
+  ],
+  "measuredRun": {
+    "population": "24 synthetic local clients; 0 independent contributors; 3072 frozen synthetic heldout vectors",
+    "rounds": 2,
+    "baselineAccuracy": 0.849609375,
+    "singleLocalAccuracy": 0.9446614583333334,
+    "federatedWithoutDpAccuracy": 0.9602864583333334,
+    "federatedCentralDpAccuracy": 0.9153645833333334,
+    "gainPointsOverBaseline": 6.575520833333337,
+    "epsilonCumulative": 1.6606191992577408,
+    "delta": 1e-06,
+    "elapsedSeconds": 7.7775327530000595,
+    "candidateDigest": "92b72f362c6e909ae403fc2d3720847a1c395c5c52f122d1fe8955a4fdd2f3e3",
+    "artifact": "research/federated/reports/2026-10-02/report.json",
+    "limitations": [
+      "Synthetic results do not qualify real phones/partners or certify privacy.",
+      "Noisy federated model did not beat local-only synthetic model in this run.",
+      "Coordinator sees the pre-noise aggregate; simulation operator controls all node memory."
+    ]
+  },
+  "openDependencies": [
+    "20 independently enrolled and explicitly consented contributors per pilot aggregate",
+    "Representative partner-local technical quality dataset and frozen cross-partner/device holdout",
+    "Independent security/privacy review",
+    "Independent partner enrollment and operational TLS/identity deployment attack qualification",
+    "Reviewed protected enrollment/ledger retention and recovery",
+    "Explicit fresh pilot/production authorization"
+  ],
+  "transportRun": {
+    "artifact": "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+    "clients": 20,
+    "rounds": 1,
+    "tlsConnections": 80,
+    "elapsedSeconds": 6.4162228470004266,
+    "independentOrganizations": 0,
+    "qualityGatePassed": false,
+    "candidatePromoted": false,
+    "accuracy": 0.7477213541666666,
+    "baselineAccuracy": 0.849609375,
+    "limitation": "Actual socket/TLS transport validated locally; one noisy candidate failed utility and was not promoted. No independent cohort or pilot qualification claimed."
+  }
+}

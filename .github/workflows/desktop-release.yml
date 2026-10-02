@@ -25,7 +25,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   signed:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') }}
+    needs: rnd-release-policy
     name: Signed ${{ inputs.channel }} / ${{ matrix.platform }} / ${{ matrix.arch }}
     environment: desktop-${{ inputs.channel }}
     permissions:
@@ -123,9 +130,9 @@ jobs:
             desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
 
   publish:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (inputs.publish) }}
     name: Publish signed artifacts and promote updater metadata
-    needs: signed
-    if: inputs.publish
+    needs: [signed, rnd-release-policy]
     environment: desktop-${{ inputs.channel }}-publish
     runs-on: ubuntu-latest
     timeout-minutes: 25

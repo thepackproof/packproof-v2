@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/derivative.schema.json",
+  "type": "object",
+  "required": [
+    "sourceDigest",
+    "outputDigest",
+    "recipe",
+    "verificationLevel",
+    "reviewStatus",
+    "limitations"
+  ],
+  "properties": {
+    "sourceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "outputDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "recipe": {
+      "type": "object"
+    },
+    "verificationLevel": {
+      "enum": [
+        "SIGNED_TRANSFORMATION_RECORD",
+        "RECOMPUTED_TRANSFORM",
+        "ZERO_KNOWLEDGE_TRANSFORM_PROOF"
+      ]
+    },
+    "reviewStatus": {
+      "enum": [
+        "PENDING_HUMAN_REVIEW",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    }
+  }
+}

@@ -1,0 +1,404 @@
+{
+  "schemaVersion": "packproof.fragment-benchmark.v1",
+  "executedAt": "2026-10-02T11:28:21.840Z",
+  "population": {
+    "unit": "local synthetic encoder process",
+    "sampleCount": 5,
+    "physicalDevices": 0,
+    "recordingDurationSeconds": 3,
+    "realTimePacing": true
+  },
+  "encoderVersion": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "allVerified": true,
+  "allFirstMediaBeforeProcessExit": true,
+  "statistics": {
+    "producerWallMs": {
+      "min": 2614.931723,
+      "max": 2630.41377,
+      "mean": 2622.6732994
+    },
+    "firstMediaArrivalMs": {
+      "min": 610.795883,
+      "max": 625.781337,
+      "mean": 617.1127863999999
+    },
+    "journalHashParseMs": {
+      "min": 0.968183,
+      "max": 2.877882,
+      "mean": 1.4432006000000002
+    },
+    "totalEncodedBytes": {
+      "min": 233842,
+      "max": 233842,
+      "mean": 233842
+    },
+    "peakUnclosedChunkBytes": {
+      "min": 65108,
+      "max": 65108,
+      "mean": 65108
+    }
+  },
+  "runs": [
+    {
+      "schemaVersion": "packproof.fragment-spike-report.v1",
+      "fixture": "SYNTHETIC_TEST_PATTERN_AND_SINE",
+      "producer": "LOCAL_FFMPEG_STREAMING_FMP4_STDOUT",
+      "profile": "packproof.software-fmp4-spike.v1",
+      "syntheticDurationSeconds": 3,
+      "realTimePacing": true,
+      "mediaDeliveredBeforeProducerExit": true,
+      "firstMediaArrivalMs": 617.611988,
+      "producerWallMs": 2620.748199,
+      "journalHashParseMs": 2.877882,
+      "peakUnclosedChunkBytes": 65108,
+      "totalEncodedBytes": 233842,
+      "unitCount": 6,
+      "tracks": [
+        {
+          "trackId": 1,
+          "kind": "VIDEO",
+          "timescale": 15360,
+          "codec": "avc1",
+          "defaultSampleDuration": 0
+        },
+        {
+          "trackId": 2,
+          "kind": "AUDIO",
+          "timescale": 48000,
+          "codec": "mp4a",
+          "defaultSampleDuration": 0
+        }
+      ],
+      "verification": {
+        "valid": true,
+        "entryCount": 6,
+        "trackCount": 2,
+        "audioCoverage": "ENCODED_BYTES_CHECKED",
+        "byteCoverage": "COMPLETE_DECLARED_STREAM",
+        "chainCoverage": "SOFTWARE_ENCODED_FRAGMENT_CHAIN",
+        "nativeCaptureAssurance": "UNSUPPORTED",
+        "sensorAttestation": "UNSUPPORTED"
+      },
+      "nativeProfiles": [
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "android",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "CameraX Recorder FileOutputOptions",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Current recorder adapter exposes final file completion, not immutable encoded fragment completion."
+        },
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "ios",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "AVAssetWriter existing unfragmented MP4",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Existing writer configuration is unfragmented; encoder-safe fragment callback and recording continuity require a separate device spike."
+        }
+      ],
+      "qualification": "SOFTWARE_PROTOCOL_ONLY",
+      "limitations": [
+        "Synthetic local encoder benchmark is not a mobile capture benchmark.",
+        "No finalized-file splitting is represented as incremental capture.",
+        "No sensor attestation, physical scene or safe native fragment timing is inferred.",
+        "AAC/video decode ranges are encoded timeline positions, not wall clock or sensor exposure time.",
+        "Native interruption/thermal/resource overhead remains unmeasured on devices."
+      ]
+    },
+    {
+      "schemaVersion": "packproof.fragment-spike-report.v1",
+      "fixture": "SYNTHETIC_TEST_PATTERN_AND_SINE",
+      "producer": "LOCAL_FFMPEG_STREAMING_FMP4_STDOUT",
+      "profile": "packproof.software-fmp4-spike.v1",
+      "syntheticDurationSeconds": 3,
+      "realTimePacing": true,
+      "mediaDeliveredBeforeProducerExit": true,
+      "firstMediaArrivalMs": 619.367176,
+      "producerWallMs": 2630.41377,
+      "journalHashParseMs": 1.170737,
+      "peakUnclosedChunkBytes": 65108,
+      "totalEncodedBytes": 233842,
+      "unitCount": 6,
+      "tracks": [
+        {
+          "trackId": 1,
+          "kind": "VIDEO",
+          "timescale": 15360,
+          "codec": "avc1",
+          "defaultSampleDuration": 0
+        },
+        {
+          "trackId": 2,
+          "kind": "AUDIO",
+          "timescale": 48000,
+          "codec": "mp4a",
+          "defaultSampleDuration": 0
+        }
+      ],
+      "verification": {
+        "valid": true,
+        "entryCount": 6,
+        "trackCount": 2,
+        "audioCoverage": "ENCODED_BYTES_CHECKED",
+        "byteCoverage": "COMPLETE_DECLARED_STREAM",
+        "chainCoverage": "SOFTWARE_ENCODED_FRAGMENT_CHAIN",
+        "nativeCaptureAssurance": "UNSUPPORTED",
+        "sensorAttestation": "UNSUPPORTED"
+      },
+      "nativeProfiles": [
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "android",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "CameraX Recorder FileOutputOptions",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Current recorder adapter exposes final file completion, not immutable encoded fragment completion."
+        },
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "ios",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "AVAssetWriter existing unfragmented MP4",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Existing writer configuration is unfragmented; encoder-safe fragment callback and recording continuity require a separate device spike."
+        }
+      ],
+      "qualification": "SOFTWARE_PROTOCOL_ONLY",
+      "limitations": [
+        "Synthetic local encoder benchmark is not a mobile capture benchmark.",
+        "No finalized-file splitting is represented as incremental capture.",
+        "No sensor attestation, physical scene or safe native fragment timing is inferred.",
+        "AAC/video decode ranges are encoded timeline positions, not wall clock or sensor exposure time.",
+        "Native interruption/thermal/resource overhead remains unmeasured on devices."
+      ]
+    },
+    {
+      "schemaVersion": "packproof.fragment-spike-report.v1",
+      "fixture": "SYNTHETIC_TEST_PATTERN_AND_SINE",
+      "producer": "LOCAL_FFMPEG_STREAMING_FMP4_STDOUT",
+      "profile": "packproof.software-fmp4-spike.v1",
+      "syntheticDurationSeconds": 3,
+      "realTimePacing": true,
+      "mediaDeliveredBeforeProducerExit": true,
+      "firstMediaArrivalMs": 612.007548,
+      "producerWallMs": 2614.931723,
+      "journalHashParseMs": 1.042545,
+      "peakUnclosedChunkBytes": 65108,
+      "totalEncodedBytes": 233842,
+      "unitCount": 6,
+      "tracks": [
+        {
+          "trackId": 1,
+          "kind": "VIDEO",
+          "timescale": 15360,
+          "codec": "avc1",
+          "defaultSampleDuration": 0
+        },
+        {
+          "trackId": 2,
+          "kind": "AUDIO",
+          "timescale": 48000,
+          "codec": "mp4a",
+          "defaultSampleDuration": 0
+        }
+      ],
+      "verification": {
+        "valid": true,
+        "entryCount": 6,
+        "trackCount": 2,
+        "audioCoverage": "ENCODED_BYTES_CHECKED",
+        "byteCoverage": "COMPLETE_DECLARED_STREAM",
+        "chainCoverage": "SOFTWARE_ENCODED_FRAGMENT_CHAIN",
+        "nativeCaptureAssurance": "UNSUPPORTED",
+        "sensorAttestation": "UNSUPPORTED"
+      },
+      "nativeProfiles": [
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "android",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "CameraX Recorder FileOutputOptions",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Current recorder adapter exposes final file completion, not immutable encoded fragment completion."
+        },
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "ios",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "AVAssetWriter existing unfragmented MP4",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Existing writer configuration is unfragmented; encoder-safe fragment callback and recording continuity require a separate device spike."
+        }
+      ],
+      "qualification": "SOFTWARE_PROTOCOL_ONLY",
+      "limitations": [
+        "Synthetic local encoder benchmark is not a mobile capture benchmark.",
+        "No finalized-file splitting is represented as incremental capture.",
+        "No sensor attestation, physical scene or safe native fragment timing is inferred.",
+        "AAC/video decode ranges are encoded timeline positions, not wall clock or sensor exposure time.",
+        "Native interruption/thermal/resource overhead remains unmeasured on devices."
+      ]
+    },
+    {
+      "schemaVersion": "packproof.fragment-spike-report.v1",
+      "fixture": "SYNTHETIC_TEST_PATTERN_AND_SINE",
+      "producer": "LOCAL_FFMPEG_STREAMING_FMP4_STDOUT",
+      "profile": "packproof.software-fmp4-spike.v1",
+      "syntheticDurationSeconds": 3,
+      "realTimePacing": true,
+      "mediaDeliveredBeforeProducerExit": true,
+      "firstMediaArrivalMs": 610.795883,
+      "producerWallMs": 2622.272346,
+      "journalHashParseMs": 1.156656,
+      "peakUnclosedChunkBytes": 65108,
+      "totalEncodedBytes": 233842,
+      "unitCount": 6,
+      "tracks": [
+        {
+          "trackId": 1,
+          "kind": "VIDEO",
+          "timescale": 15360,
+          "codec": "avc1",
+          "defaultSampleDuration": 0
+        },
+        {
+          "trackId": 2,
+          "kind": "AUDIO",
+          "timescale": 48000,
+          "codec": "mp4a",
+          "defaultSampleDuration": 0
+        }
+      ],
+      "verification": {
+        "valid": true,
+        "entryCount": 6,
+        "trackCount": 2,
+        "audioCoverage": "ENCODED_BYTES_CHECKED",
+        "byteCoverage": "COMPLETE_DECLARED_STREAM",
+        "chainCoverage": "SOFTWARE_ENCODED_FRAGMENT_CHAIN",
+        "nativeCaptureAssurance": "UNSUPPORTED",
+        "sensorAttestation": "UNSUPPORTED"
+      },
+      "nativeProfiles": [
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "android",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "CameraX Recorder FileOutputOptions",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Current recorder adapter exposes final file completion, not immutable encoded fragment completion."
+        },
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "ios",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "AVAssetWriter existing unfragmented MP4",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Existing writer configuration is unfragmented; encoder-safe fragment callback and recording continuity require a separate device spike."
+        }
+      ],
+      "qualification": "SOFTWARE_PROTOCOL_ONLY",
+      "limitations": [
+        "Synthetic local encoder benchmark is not a mobile capture benchmark.",
+        "No finalized-file splitting is represented as incremental capture.",
+        "No sensor attestation, physical scene or safe native fragment timing is inferred.",
+        "AAC/video decode ranges are encoded timeline positions, not wall clock or sensor exposure time.",
+        "Native interruption/thermal/resource overhead remains unmeasured on devices."
+      ]
+    },
+    {
+      "schemaVersion": "packproof.fragment-spike-report.v1",
+      "fixture": "SYNTHETIC_TEST_PATTERN_AND_SINE",
+      "producer": "LOCAL_FFMPEG_STREAMING_FMP4_STDOUT",
+      "profile": "packproof.software-fmp4-spike.v1",
+      "syntheticDurationSeconds": 3,
+      "realTimePacing": true,
+      "mediaDeliveredBeforeProducerExit": true,
+      "firstMediaArrivalMs": 625.781337,
+      "producerWallMs": 2625.000459,
+      "journalHashParseMs": 0.968183,
+      "peakUnclosedChunkBytes": 65108,
+      "totalEncodedBytes": 233842,
+      "unitCount": 6,
+      "tracks": [
+        {
+          "trackId": 1,
+          "kind": "VIDEO",
+          "timescale": 15360,
+          "codec": "avc1",
+          "defaultSampleDuration": 0
+        },
+        {
+          "trackId": 2,
+          "kind": "AUDIO",
+          "timescale": 48000,
+          "codec": "mp4a",
+          "defaultSampleDuration": 0
+        }
+      ],
+      "verification": {
+        "valid": true,
+        "entryCount": 6,
+        "trackCount": 2,
+        "audioCoverage": "ENCODED_BYTES_CHECKED",
+        "byteCoverage": "COMPLETE_DECLARED_STREAM",
+        "chainCoverage": "SOFTWARE_ENCODED_FRAGMENT_CHAIN",
+        "nativeCaptureAssurance": "UNSUPPORTED",
+        "sensorAttestation": "UNSUPPORTED"
+      },
+      "nativeProfiles": [
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "android",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "CameraX Recorder FileOutputOptions",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Current recorder adapter exposes final file completion, not immutable encoded fragment completion."
+        },
+        {
+          "schemaVersion": "packproof.fragment-capability.v1",
+          "platform": "ios",
+          "activeProfile": "FINAL_FILE_ONLY",
+          "incrementalFragments": "UNSUPPORTED",
+          "encoder": "AVAssetWriter existing unfragmented MP4",
+          "safeFragmentClosureCallback": false,
+          "hardwareQualified": false,
+          "reason": "Existing writer configuration is unfragmented; encoder-safe fragment callback and recording continuity require a separate device spike."
+        }
+      ],
+      "qualification": "SOFTWARE_PROTOCOL_ONLY",
+      "limitations": [
+        "Synthetic local encoder benchmark is not a mobile capture benchmark.",
+        "No finalized-file splitting is represented as incremental capture.",
+        "No sensor attestation, physical scene or safe native fragment timing is inferred.",
+        "AAC/video decode ranges are encoded timeline positions, not wall clock or sensor exposure time.",
+        "Native interruption/thermal/resource overhead remains unmeasured on devices."
+      ]
+    }
+  ],
+  "qualification": "SOFTWARE_PROTOCOL_ONLY",
+  "limitations": [
+    "Five repeated runs describe one local FFmpeg/CPU environment, not a device population or accuracy estimate.",
+    "No confidence interval, native performance budget or physical qualification is inferred.",
+    "No native camera encoder or normal capture flow was changed."
+  ]
+}

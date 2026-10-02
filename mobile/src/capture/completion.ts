@@ -1,3 +1,4 @@
+import { closeResearchSession } from "../research/capture";
 import { bindRecordedCapture, inspectCaptureShipping, persistCaptureMetadata, uploadCaptureFile, uploadCaptureResumable, type LocalCapture } from "../capture";
 import { authorizeSellerCapture } from "../attestation/seller-attestation";
 import type { PackProofV2Client, ProofView, UploadTarget } from "../v2-api";
@@ -107,6 +108,7 @@ export function completeSavedCapture(input: SavedCaptureInput): Promise<ProofVie
     if(proof.status==='FINALIZED')study?.event('server_completed');
     input.assertAccount();
     await notifyUploadOutcome({ ...capture, recovery: state }, proof).then(save).catch(() => undefined);
+    if (capture.research && capture.uploadEvidenceId) void closeResearchSession(client, capture, capture.uploadEvidenceId, save).then(save).catch(() => undefined);
     study?.end('succeeded');return proof as ProofView;
   })().catch(error=>{
     const code=String(error?.code);

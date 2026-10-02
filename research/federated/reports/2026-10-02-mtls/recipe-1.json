@@ -1,0 +1,22 @@
+{
+  "payload": {
+    "schema": "proofcollective-recipe/v1",
+    "purpose": "capture-frame-usefulness/v1",
+    "featureOrder": [
+      "sharpness",
+      "glare_fraction",
+      "local_contrast",
+      "bias"
+    ],
+    "modelDigest": "e5d7a9e8b99255698200edcd2d112c636be77b9361fcd08e1dbdc48124af7dbb",
+    "localSteps": 32,
+    "learningRate": 0.5,
+    "clipNorm": 1.0,
+    "weighting": "one equal bounded contribution per partner",
+    "roundId": "793841dc-6ddc-4c70-8977-d47cd182f012:1",
+    "scope": "SYNTHETIC_LOCAL_RESEARCH"
+  },
+  "canonicalPayload": "{\"clipNorm\":1.0,\"featureOrder\":[\"sharpness\",\"glare_fraction\",\"local_contrast\",\"bias\"],\"learningRate\":0.5,\"localSteps\":32,\"modelDigest\":\"e5d7a9e8b99255698200edcd2d112c636be77b9361fcd08e1dbdc48124af7dbb\",\"purpose\":\"capture-frame-usefulness/v1\",\"roundId\":\"793841dc-6ddc-4c70-8977-d47cd182f012:1\",\"schema\":\"proofcollective-recipe/v1\",\"scope\":\"SYNTHETIC_LOCAL_RESEARCH\",\"weighting\":\"one equal bounded contribution per partner\"}",
+  "signature": "5MMQGWH62UPwlbmzRgpR6t4KmGPoIdjv8xvKjXnEXCbK2x/UtC7KUhwcPB3JMLS30IzizfuHDuZPuEKRXvE3CA==",
+  "keyId": "cc0ae644c033d39eac628ebf522713ceb220622fea8abdfb565a7f45d49d7c6c"
+}

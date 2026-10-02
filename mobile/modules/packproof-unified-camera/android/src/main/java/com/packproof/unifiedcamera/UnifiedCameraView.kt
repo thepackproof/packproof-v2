@@ -89,6 +89,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   private var lifecycleOwner: LifecycleOwner? = null
   private var recording: Recording? = null
   private var session: CaptureSession? = null
+  private var researchLease: CaptureSession? = null
   @Volatile private var epoch: RecordingEpoch? = null
   private var releaseAfterFinalize = false
   @Volatile private var encodedDurationMs = 0L
@@ -97,8 +98,9 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   private val recentCodes = LinkedHashMap<String, Long>()
   private val candidateReads = LinkedHashMap<String, Pair<Long, Int>>()
 
-  private class CaptureSession(val file: File, val promise: Promise) {
-    val journal = if (File(file.parentFile, "capture-context.json").exists()) CaptureJournal(file.parentFile!!) else null
+  private inner class CaptureSession(val file: File, val promise: Promise) {
+    val research = ResearchCapture.create(context, file.parentFile!!)
+    val journal = if (File(file.parentFile, "capture-context.json").exists() || File(file.parentFile, "research-context.json").exists()) CaptureJournal(file.parentFile!!) else null
     var interrupted = false
     var stopping = false
     var started = false
@@ -135,6 +137,21 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
     super.onLayout(changed, left, top, right, bottom)
     previewView.layout(0, 0, right - left, bottom - top)
+  }
+
+  fun disableResearchSampling(reason: String) { releaseResearchLease(reason.take(100)); session?.research?.disable(reason.take(100)) }
+  private fun beginResearchLease(current: CaptureSession) {
+    val duration = current.research?.passiveLeaseDurationMs() ?: 0
+    if (duration <= 0 || researchLease != null) return
+    researchLease = current
+    current.research?.controlEvent("PASSIVE_EXCLUSIVE_LEASE_STARTED", "NO_ILLUMINATION_COMMANDS")
+    mainHandler.postDelayed({ if (researchLease === current) releaseResearchLease("TIME_LIMIT") }, duration)
+  }
+  private fun releaseResearchLease(reason: String) {
+    val owner = researchLease ?: return
+    researchLease = null
+    owner.research?.controlEvent("CONTROL_LEASE_RELEASED", reason)
+    applyTorch() // Restore the user's ordinary control request; the passive lease never emits light.
   }
 
   fun setCaptureActive(active: Boolean) {
@@ -230,6 +247,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   }
 
   private fun applyTorch() {
+    if (researchLease != null) return
     val current = camera ?: return
     if (!current.cameraInfo.hasFlashUnit()) return
     val requested = torchEnabled && canUseCamera()
@@ -316,6 +334,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       is VideoRecordEvent.Start -> {
         current.started = true
         current.journal?.start()
+        beginResearchLease(current)
         val started = RecordingEpoch(generation, SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis())
         if (!current.stopping && canUseCamera()) {
           epoch = started
@@ -332,6 +351,8 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
         }
       }
       is VideoRecordEvent.Finalize -> {
+        releaseResearchLease("FINALIZE")
+        current.research?.finish {}
         epoch = null
         session = null
         recording = null
@@ -378,6 +399,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
   fun stopRecording() {
     val current = session ?: return
     if (current.stopping) return
+    releaseResearchLease("STOP_OR_INTERRUPTION")
     current.stopping = true
     epoch = null // Drop late analyzer callbacks as soon as stop is requested.
     recording?.stop()
@@ -398,6 +420,7 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       image.close()
       return
     }
+    session?.research?.sample(image, sampledEncodedMs)
     lastAnalysisNanos = sampledNanos
     analysisInFlight.incrementAndGet()
     try {
@@ -407,6 +430,9 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
           // A stale ML task must not leak into another session, after Stop, or after backgrounding.
           if (destroyed || epoch !== observedEpoch || generation != expectedGeneration) return@addOnSuccessListener
           val now = SystemClock.elapsedRealtimeNanos()
+          // Reuse this existing decoder's actual geometry; never start another camera/ML request.
+          session?.research?.observeBarcodeRegions(image.imageInfo.timestamp.toString(),image.width,image.height,image.imageInfo.rotationDegrees,
+            codes.map { code -> code.boundingBox?.let { intArrayOf(it.left,it.top,it.right,it.bottom) } ?: intArrayOf() })
           for (code in codes) {
             val raw = code.rawValue ?: continue
             if (raw.isEmpty() || raw.toByteArray(Charsets.UTF_8).size > (if (identifiersEnabled) 4096 else 512)) continue

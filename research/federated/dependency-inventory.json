@@ -1,0 +1,321 @@
+{
+  "scope": "isolated Python research environment",
+  "reviewStatus": "Direct licenses recorded; full transitive/security review required before pilot",
+  "packages": [
+    {
+      "name": "absl-py",
+      "version": "2.5.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "alembic",
+      "version": "1.20.0",
+      "license": "MIT"
+    },
+    {
+      "name": "annotated-doc",
+      "version": "0.0.5",
+      "license": "MIT"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "license": "MIT"
+    },
+    {
+      "name": "anyio",
+      "version": "4.15.1",
+      "license": "MIT"
+    },
+    {
+      "name": "attrs",
+      "version": "23.2.0",
+      "license": "MIT"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "license": "MPL-2.0"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "license": "MIT-0"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "license": "MIT"
+    },
+    {
+      "name": "click",
+      "version": "8.5.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "cryptography",
+      "version": "46.0.7",
+      "license": "Apache-2.0 OR BSD-3-Clause"
+    },
+    {
+      "name": "dm-tree",
+      "version": "0.1.10",
+      "license": "Apache 2.0"
+    },
+    {
+      "name": "dp-accounting",
+      "version": "0.6.0",
+      "license": "Apache 2.0"
+    },
+    {
+      "name": "fastapi",
+      "version": "0.138.2",
+      "license": "MIT"
+    },
+    {
+      "name": "flwr",
+      "version": "1.39.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "greenlet",
+      "version": "3.5.6",
+      "license": "MIT AND PSF-2.0"
+    },
+    {
+      "name": "grpcio",
+      "version": "1.84.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "grpcio-health-checking",
+      "version": "1.81.1",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "license": "MIT"
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "httptools",
+      "version": "0.8.0",
+      "license": "MIT"
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "iniconfig",
+      "version": "2.3.0",
+      "license": "MIT"
+    },
+    {
+      "name": "iterators",
+      "version": "0.0.2",
+      "license": "UNKNOWN"
+    },
+    {
+      "name": "Mako",
+      "version": "1.4.3",
+      "license": "MIT"
+    },
+    {
+      "name": "markdown-it-py",
+      "version": "4.2.0",
+      "license": "License :: OSI Approved :: MIT License"
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "3.0.3",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "mdurl",
+      "version": "0.1.2",
+      "license": "License :: OSI Approved :: MIT License"
+    },
+    {
+      "name": "mpmath",
+      "version": "1.4.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "numpy",
+      "version": "2.5.3",
+      "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
+    },
+    {
+      "name": "packaging",
+      "version": "25.0",
+      "license": "License :: OSI Approved :: Apache Software License; License :: OSI Approved :: BSD License"
+    },
+    {
+      "name": "pathspec",
+      "version": "1.1.1",
+      "license": "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0",
+      "license": "MIT"
+    },
+    {
+      "name": "prompt_toolkit",
+      "version": "3.0.53",
+      "license": "License :: OSI Approved :: BSD License"
+    },
+    {
+      "name": "protobuf",
+      "version": "6.33.6",
+      "license": "3-Clause BSD License"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "pycryptodome",
+      "version": "3.23.0",
+      "license": "BSD, Public Domain"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.5",
+      "license": "MIT"
+    },
+    {
+      "name": "pydantic_core",
+      "version": "2.46.5",
+      "license": "MIT"
+    },
+    {
+      "name": "Pygments",
+      "version": "2.21.0",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "pytest",
+      "version": "9.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "python-dotenv",
+      "version": "1.2.4",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "rich",
+      "version": "14.3.4",
+      "license": "MIT"
+    },
+    {
+      "name": "scipy",
+      "version": "1.18.1",
+      "license": "Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers."
+    },
+    {
+      "name": "shellingham",
+      "version": "1.5.4",
+      "license": "ISC License"
+    },
+    {
+      "name": "SQLAlchemy",
+      "version": "2.1.2",
+      "license": "MIT"
+    },
+    {
+      "name": "starlette",
+      "version": "1.3.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "tomli",
+      "version": "2.4.1",
+      "license": "MIT"
+    },
+    {
+      "name": "tomli_w",
+      "version": "1.2.0",
+      "license": "License :: OSI Approved :: MIT License"
+    },
+    {
+      "name": "typer",
+      "version": "0.20.1",
+      "license": "MIT"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "license": "MIT"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "license": "PSF-2.0"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "license": "MIT"
+    },
+    {
+      "name": "uv",
+      "version": "0.11.33",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "uvicorn",
+      "version": "0.49.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "uvloop",
+      "version": "0.23.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "watchfiles",
+      "version": "1.3.0",
+      "license": "MIT"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.9.1",
+      "license": "License :: OSI Approved :: MIT License"
+    },
+    {
+      "name": "websockets",
+      "version": "17.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "wrapt",
+      "version": "2.5.0",
+      "license": "BSD-2-Clause"
+    }
+  ]
+}

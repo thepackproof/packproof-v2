@@ -1,0 +1,244 @@
+name: Isolated R&D checks
+
+on:
+  push:
+    branches: ['rnd/**']
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'web/**'
+      - 'desktop/**'
+      - 'mobile/**'
+      - 'packages/**'
+      - 'research/**'
+      - 'verifier/**'
+      - 'config/rnd/**'
+      - 'docs/rnd/**'
+      - 'scripts/rnd*'
+      - 'scripts/generate-rnd-client.mjs'
+      - 'scripts/check-rnd-openapi.py'
+      - 'scripts/requirements-rnd-contracts.txt'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rnd-source-${{ github.ref }}
+  cancel-in-progress: true
+
+# All jobs are local build/test work on experimental source. No deployment,
+# publishing, signing credentials, cloud secrets, or artifact upload actions.
+jobs:
+  source-isolation:
+    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PACKPROOF_RESEARCH_BUILD: 'true'
+      PACKPROOF_RND: 'true'
+      PACKPROOF_DISTRIBUTION_AUTHORIZED: 'false'
+      PACKPROOF_RND_OPTIONAL_ANALYSIS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test research branch and source distribution interlocks
+        run: node --test scripts/rnd-release-guard.test.mjs scripts/rnd-runtime.test.mjs
+      - name: Assert this experimental source cannot distribute
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { evaluateRepository } from './scripts/rnd-release-guard.mjs';
+          const decision = evaluateRepository('.');
+          assert.equal(decision.allowed, false);
+          console.log(JSON.stringify(decision));
+          JS
+
+  backend-protocols:
+    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PACKPROOF_DISTRIBUTION_AUTHORIZED: 'false'
+      PACKPROOF_RND_TEST_PYTHON: /tmp/packproof-vision-venv/bin/python
+      PACKPROOF_RND_PYTHON: /tmp/packproof-vision-venv/bin/python
+      EXPO_NO_TELEMETRY: '1'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mobile/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install bounded local media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg tesseract-ocr
+          ffmpeg -version
+          tesseract --version
+      - name: Install separate pinned vision and privacy protocol environments
+        run: |
+          python -m venv /tmp/packproof-vision-venv
+          /tmp/packproof-vision-venv/bin/pip install --require-hashes -r research/vision/requirements-linux-py312.lock
+          python -m venv /tmp/packproof-privacy-venv
+          /tmp/packproof-privacy-venv/bin/pip install -r research/privacy/requirements.lock.txt
+          python -m venv /tmp/packproof-openapi-venv
+          /tmp/packproof-openapi-venv/bin/pip install -r scripts/requirements-rnd-contracts.txt
+          /tmp/packproof-vision-venv/bin/python -c 'import cv2, pycolmap, rfc8785, scipy'
+          /tmp/packproof-privacy-venv/bin/python -c 'import cryptography, pymerkle, cv2, PIL'
+      - name: Install exact backend and shared client dependency locks
+        run: |
+          npm ci --prefix mobile
+          npm ci --prefix backend
+          npm ci --ignore-scripts --prefix research/privacy/zk
+      - name: Validate canonical contracts and portable evidence verification
+        run: |
+          node scripts/generate-rnd-client.mjs --check
+          node packages/evidence-contracts/test/generated-client.test.mjs
+          node backend/node_modules/typescript/bin/tsc --noEmit --strict --module nodenext --target ES2022 --lib es2022,dom packages/evidence-contracts/test/generated-client-types.mts
+          /tmp/packproof-openapi-venv/bin/python scripts/check-rnd-openapi.py
+          node packages/evidence-contracts/test/contracts.test.mjs
+          node --test verifier/test_rnd_bundle.mjs
+          /tmp/packproof-privacy-venv/bin/python -m unittest discover -s verifier -p 'test_*.py'
+      - name: Run actual bounded vision and canonicalization protocols
+        run: /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical -v
+      - name: Run redaction and private witness protocols
+        run: /tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness -v
+      - name: Typecheck backend
+        run: npm run typecheck
+        working-directory: backend
+      - name: Exercise real worker integration, authorization and selected core regressions
+        working-directory: backend
+        run: >-
+          npm test -- tests/rnd-*.test.ts
+          tests/canonical.test.ts tests/core-integrity-audit.test.ts
+          tests/api-flow.test.ts tests/durable-recovery.test.ts
+          tests/finalize-requirements.test.ts
+      - name: Compile API without deployment
+        run: npm run build
+        working-directory: backend
+
+  surfaces:
+    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      PACKPROOF_DISTRIBUTION_AUTHORIZED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mobile/package-lock.json
+            web/package-lock.json
+            desktop/package-lock.json
+      - name: Install exact client and shared dependency locks
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix mobile
+          npm ci --prefix web
+          npm ci --prefix desktop
+      - name: Typecheck all presentation surfaces
+        run: |
+          npm run typecheck --prefix mobile
+          npm run typecheck --prefix web
+          npm run typecheck --prefix desktop
+      - name: Test authenticated research UI and ordinary API regression
+        working-directory: web
+        run: npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx
+      - name: Test desktop research isolation and existing account boundaries
+        working-directory: desktop
+        run: npm test -- tests/rnd-isolation.test.ts tests/auth-api.test.ts tests/security.test.ts
+      - name: Test mobile research paths and ordinary capture recovery
+        working-directory: mobile
+        run: |
+          npm run test:research
+          npm run test:recovery
+          node --test tests/ios-release-config.test.cjs tests/release-identity.test.cjs
+      - name: Compile the isolated web build without publishing
+        working-directory: web
+        env:
+          VITE_PACKPROOF_RND: '1'
+          VITE_PACKPROOF_API_BASE_URL: http://127.0.0.1:3000
+        run: npm run build
+      - name: Compile isolated desktop main/preload/renderer without installers
+        working-directory: desktop
+        env:
+          APP_ENV: development
+          PACKPROOF_RESEARCH_BUILD: '1'
+          PACKPROOF_API_BASE_URL: http://127.0.0.1:3000
+          PACKPROOF_WEB_BASE_URL: http://127.0.0.1:5173
+        run: npm run build
+
+  federated-protocol:
+    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: research/federated
+      PACKPROOF_DISTRIBUTION_AUTHORIZED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the isolated exact Flower/accountant dependency lock
+        run: |
+          python -m venv "$RUNNER_TEMP/federated-venv"
+          "$RUNNER_TEMP/federated-venv/bin/pip" install -r research/federated/requirements.lock
+      - name: Exercise real SecAgg+ dropout, tamper, consent, budget and rollback cases
+        run: '"$RUNNER_TEMP/federated-venv/bin/python" -m pytest research/federated/tests -q'
+      - name: Train one bounded synthetic candidate; never release or contact partners
+        run: '"$RUNNER_TEMP/federated-venv/bin/python" -m proofcollective.cli simulate --clients 24 --rounds 2 --output "$RUNNER_TEMP/federated-synthetic-report"'
+
+      - name: Exercise signed synthetic training over actual mutual TLS sockets
+        run: '"$RUNNER_TEMP/federated-venv/bin/python" -m proofcollective.cli simulate --clients 20 --rounds 1 --transport local-mtls --output "$RUNNER_TEMP/federated-mtls-report"'
+
+  image-transform-proof:
+    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PACKPROOF_DISTRIBUTION_AUTHORIZED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: research/privacy/zk/package-lock.json
+      - name: Install pinned proving framework without package scripts
+        run: npm ci --ignore-scripts --prefix research/privacy/zk
+      - name: Verify the committed synthetic proof against its pinned test trust policy
+        run: node research/privacy/zk/verify.mjs research/privacy/zk/fixtures/synthetic-proof.json research/privacy/zk/fixtures/synthetic-redacted.png research/privacy/zk/fixtures/synthetic-trust.json
+      - name: Generate a real bounded proof and exercise adversarial transformation checks
+        run: timeout 300s node research/privacy/zk/benchmark.mjs "$RUNNER_TEMP/zk-synthetic-report"

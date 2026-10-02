@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
+const policyPath = path.resolve(__dirname, '../../config/rnd/research-build.json');
+const researchOnly = fs.existsSync(policyPath) && JSON.parse(fs.readFileSync(policyPath, 'utf8')).researchOnly;
 
 test('next standard Android candidate advances the installed baseline and retains account media protection', () => {
   const result=spawnSync(process.execPath,['-e','process.stdout.write(JSON.stringify(require("./app.config.js").expo))'],{
@@ -27,6 +30,7 @@ test('store profiles preserve the existing Play package and signing credential',
       env: {...process.env, EAS_BUILD_PROFILE: profile, EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false', EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'cognito', ...overrides},
     });
     const result = run();
+    if (researchOnly) { assert.notEqual(result.status, 0); assert.match(result.stderr, /R&D branch cannot use distribution/); continue; }
     assert.equal(result.status, 0, result.stderr);
     const config = JSON.parse(result.stdout);
     assert.equal(config.android.package, 'com.packproof.mobile');

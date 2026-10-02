@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/capture-subject.schema.json",
+  "type": "object",
+  "required": [
+    "id",
+    "proofId",
+    "tenantId",
+    "legId",
+    "packageInstanceId"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "legId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "packageInstanceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    }
+  },
+  "additionalProperties": false
+}

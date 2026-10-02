@@ -16,12 +16,18 @@ permissions:
   contents: read
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   simulator:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (inputs.screenshots) }}
+    needs: rnd-release-policy
     name: Capture App Store screenshots
     concurrency:
       group: ios-store-screenshots-${{ github.ref }}
       cancel-in-progress: false
-    if: inputs.screenshots
     permissions:
       contents: read
       actions: read
@@ -107,8 +113,9 @@ jobs:
             ${{ runner.temp }}/ios-build.log
 
   app-store:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (github.ref == 'refs/heads/main' && inputs.signed_build) }}
+    needs: rnd-release-policy
     name: Signed iOS archive
-    if: github.ref == 'refs/heads/main' && inputs.signed_build
     concurrency:
       group: ios-store-signed-${{ github.ref }}
       cancel-in-progress: false

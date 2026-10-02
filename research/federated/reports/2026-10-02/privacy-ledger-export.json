@@ -1,0 +1,631 @@
+{
+  "scope": "SYNTHETIC_ONLY",
+  "events": [
+    {
+      "seq": 1,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-01",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 2,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-02",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 3,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-03",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 4,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-04",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 5,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-05",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 6,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-06",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 7,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-07",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 8,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-08",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 9,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-09",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 10,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-10",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 11,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-11",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 12,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-12",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 13,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-13",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 14,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-14",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 15,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-15",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 16,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-16",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 17,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-17",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 18,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-18",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 19,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-19",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 20,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-20",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 21,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-21",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 22,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-22",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 23,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-23",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 24,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:1",
+      "partner": "synthetic-partner-24",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 25,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-01",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 26,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-02",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 27,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-03",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 28,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-04",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 29,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-05",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 30,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-06",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 31,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-07",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 32,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-08",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 33,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-09",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 34,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-10",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 35,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-11",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 36,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-12",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 37,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-13",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 38,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-14",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 39,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-15",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 40,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-16",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 41,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-17",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 42,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-18",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 43,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-19",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 44,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-20",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 45,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-21",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 46,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-22",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 47,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-23",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    },
+    {
+      "seq": 48,
+      "campaign": "synthetic-quality-v1",
+      "round_id": "fbed1409-6b09-4864-a9ff-ac22c05ca487:2",
+      "partner": "synthetic-partner-24",
+      "sigma": 4.0,
+      "delta": 1e-06,
+      "eligible": 24
+    }
+  ],
+  "consentEvents": [
+    {
+      "seq": 1,
+      "partner": "synthetic-partner-01",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "c1f93ea39c814fd28f225cb8ce523f040583b9f7beacf510061577c973422e03",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 2,
+      "partner": "synthetic-partner-02",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "e45a3be21e2110cef4d705e59939ef158ec15bb64a20ac9f9e505b14c692777c",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 3,
+      "partner": "synthetic-partner-03",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "a86a0f74cc9d85fd4e91cb471d762ecdb08b9c0c06477b95185ac140a9f3bd37",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 4,
+      "partner": "synthetic-partner-04",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "ecdc2115a6cb3c1dbab1f53980d6fa9e861984eab65ddaf1c4b166b13189f17f",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 5,
+      "partner": "synthetic-partner-05",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "46ed01722d618bfea9ae52de28e94c7ec6f05c2efdb102d0556482213de25e5c",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 6,
+      "partner": "synthetic-partner-06",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "4f7b258195d1fd9eb38915c5cc51bd409169e6e97ea009cd5b8f428e6c54a474",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 7,
+      "partner": "synthetic-partner-07",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "80940a4693cf06c18653ea8ad37afa4beac5ab89eca86d65e528cfbdce42f83c",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 8,
+      "partner": "synthetic-partner-08",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "204e1acd2f5db4c9c33468144c5b50be3412062f17155ba3a319788a2ee5c353",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 9,
+      "partner": "synthetic-partner-09",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "34133955a29026a9de5b8aab47a352f9c4106ce22ecd25881d070b0b25e74001",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 10,
+      "partner": "synthetic-partner-10",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "8a808441c7afbe4b2c70c1da919a1ac4946a81394ce69349774ea21db178b5d2",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 11,
+      "partner": "synthetic-partner-11",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "c2d6570656f4b13ef477eb42fd8fd5244fa42df742afcf59bc4a7df28f7b499e",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 12,
+      "partner": "synthetic-partner-12",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "5060bc9e36ec0509822f90cc2afd166c2b67653a6e31aa3bdcadd98ffccb5612",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 13,
+      "partner": "synthetic-partner-13",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "981ec8fee10910442d5384bc8107c8c099f515d76614805270ce3973046cf77c",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 14,
+      "partner": "synthetic-partner-14",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "aaf24ca1c9e811930c090af7029131933a4a9c12bfe1b48ef9edc39908b2a96d",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 15,
+      "partner": "synthetic-partner-15",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "c214d4a39a6ac16d0882a5ebff2200da97d581a959ad8ceb084b9a86c8ab7443",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 16,
+      "partner": "synthetic-partner-16",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "402a48292dd20d462a8ccef57f8c087b7ee2202dfe075ed67a1a1918a1663607",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 17,
+      "partner": "synthetic-partner-17",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "3d677fb83dfd21dd86217b1eba1ec089cda49e16263e6e856c153f5c93fdd0c9",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 18,
+      "partner": "synthetic-partner-18",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "e4683f803d932ce3c1e9911876972b207e7f52b8e51f5c6161bf942428b3d61c",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 19,
+      "partner": "synthetic-partner-19",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "9db08dcbed92b0055bb2901d338a1a9a15f7f34a74ef486bbe0ba5b2b9563b93",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 20,
+      "partner": "synthetic-partner-20",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "2b7bb44a5da5e1a33d976f4da152a2053137fec99890475601250476ac1ef876",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 21,
+      "partner": "synthetic-partner-21",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "aca6838fdc30a804b2e9a3af2fe149a085c3cab17b880c67653b1077dfd73b18",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 22,
+      "partner": "synthetic-partner-22",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "e06f6a6abf71918eb1657945dba11361b7f8c606bd95549064f3b819ce9f97a6",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 23,
+      "partner": "synthetic-partner-23",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "29536c210d27ca4de17bba0d3798fdbfe9299aa809f60fa746428f1fcfb72617",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    },
+    {
+      "seq": 24,
+      "partner": "synthetic-partner-24",
+      "purpose": "capture-frame-usefulness/v1",
+      "dataset": "a3bd6b15c4aeb5eaf469c81f2a1e3c2b3402dbecb15b4b4fef91ed89fd4c1f50",
+      "action": "GRANTED",
+      "at": "2026-10-02 10:47:59"
+    }
+  ]
+}

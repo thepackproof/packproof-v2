@@ -1,3 +1,4 @@
+import { ResearchPanel } from "../research/ResearchPanel";
 import { isNativeAttestationMethod } from "../attestation/authorization";
 import { TrackingIntake } from "./TrackingIntake";
 import { proofReference, shipmentRecordLabel } from "../copy/evidence-record";
@@ -206,6 +207,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
             {bookmarkError ? <Text style={[styles.note, { color: colors.textSecondary }]}>Saved bookmarks could not be loaded. Pull down to refresh; the original recording remains available.</Text> : null}
           </>}
           <IdentifierDetails value={proof.identifiers} />
+          <ResearchPanel />
           <View style={[styles.details,{borderBottomColor:colors.divider}]}>
             <Text style={[styles.heading,{color:colors.textPrimary}]}>Participants</Text>
             {proof.participants.map(person => <Text key={person.participantId} style={[styles.note,{color:colors.textSecondary}]}>{person.userId === app.session?.userId ? "You · " : ""}{person.role === "SELLER" ? "Seller" : person.role === "BUYER" ? "Buyer" : person.role} · Joined {formatDateTime(person.joinedAt)}</Text>)}

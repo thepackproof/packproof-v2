@@ -132,6 +132,18 @@ function CameraSession({
 }) {
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
+  useEffect(() => {
+    if (!request.researchPolicyCheck) return;
+    let current = true, checking = false;
+    const check = async () => {
+      if (checking) return; checking = true;
+      const allowed = await request.researchPolicyCheck!().catch(() => false);
+      if (current && !allowed) await unifiedCamera.current?.disableResearchSampling?.('SERVER_POLICY_OR_CONNECTION_UNAVAILABLE').catch(() => undefined);
+      checking = false;
+    };
+    const timer = setInterval(() => { void check(); }, 5000);
+    return () => { current = false; clearInterval(timer); };
+  }, [request]);
   const useUnified = isUnifiedCameraAvailable() && Boolean(request.captureSessionId);
   const identifiersEnabled = identifierCaptureEnabled(request.identifierPolicy);
   const [codeStatus, setCodeStatus] = useState<string | null>(null);

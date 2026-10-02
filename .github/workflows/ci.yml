@@ -17,6 +17,11 @@ permissions:
   contents: read
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
@@ -133,6 +138,8 @@ jobs:
       - run: npm run test:api
 
   native-attestation:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') }}
+    needs: rnd-release-policy
     name: Android attestation Kotlin
     runs-on: ubuntu-latest
     timeout-minutes: 45

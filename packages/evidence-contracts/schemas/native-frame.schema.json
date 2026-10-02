@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/native-frame.schema.json",
+  "description": "Exact native acquisition commitment. Additional acquisition telemetry is retained as declared input, not independently attested. Width times height and exact PGM payload are checked by receipt service.",
+  "type": "object",
+  "required": [
+    "fileName",
+    "sha256",
+    "byteLength",
+    "width",
+    "height",
+    "mediaTimeMs",
+    "relationship",
+    "transform"
+  ],
+  "properties": {
+    "fileName": {
+      "type": "string",
+      "pattern": "^research-frame-[0-5]\\.pgm$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "byteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2097216
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 1048576
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 1048576
+    },
+    "mediaTimeMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000
+    },
+    "relationship": {
+      "const": "CONCURRENT_CAPTURED_SIDECAR"
+    },
+    "transform": {
+      "const": "NATIVE_LUMA_PLANE_PGM_NO_RESIZE"
+    }
+  },
+  "additionalProperties": true
+}

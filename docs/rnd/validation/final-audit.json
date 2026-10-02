@@ -1,0 +1,1108 @@
+{
+  "schemaVersion": "packproof.rnd-independent-final-audit.v1",
+  "auditedAt": "2026-10-02T11:16:02.427229+00:00",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
+  "scope": "Independent plan-to-code review of all 71 tickets, reconciled against directly inspected final modules and named owner validation artifacts. Android platform policy and shared sidecar schema were implemented and tested by this auditor after identifying gaps.",
+  "sourcePlan": "PackProof_Executive_Overview_and_ASTRA_RnD_Development_Plan_2026-10-02(1).docx",
+  "snapshotNotice": "Final independent code-scope reconciliation after owner validation. No unresolved integration-in-progress row remains. ENGINEERED_LOCAL_SCOPE means the named executable scope/fallback is delivered, not that every proposed scientific or hardware capability is qualified. Eleven explicit external qualification/gated branches remain. The parent owns final aggregate test record, ledger and branch handoff.",
+  "fullyImplementedPlan": false,
+  "releaseAuthorized": false,
+  "findings": [
+    {
+      "id": "AUDIT-01",
+      "severity": "HIGH",
+      "kind": "COMPLETION_SCOPE",
+      "tickets": [
+        "F02-05",
+        "F03-03",
+        "F06-02",
+        "F08-03",
+        "F10-02"
+      ],
+      "finding": "The executable R&D scope and explicit fallback branches are delivered. Physical qualification, independent operators/cohorts, active control profiles, external security/privacy review and release authorization are not completed by local software tests.",
+      "status": "EXTERNAL_QUALIFICATION_AND_SCOPE_LIMITS",
+      "reconciliation": "The executable R&D scope and explicit fallback branches are delivered. Physical qualification, independent operators/cohorts, active control profiles, external security/privacy review and release authorization are not completed by local software tests.",
+      "initialFinding": "Several requested branches have real partial implementations but still contain engineering work; do not describe all 71 tickets or the complete R&D plan as finished. This is distinct from unavailable physical qualification."
+    },
+    {
+      "id": "AUDIT-02",
+      "severity": "HIGH",
+      "kind": "FUNCTIONAL_DEFECT",
+      "tickets": [
+        "F05-02",
+        "F05-05"
+      ],
+      "finding": "Backend exact observed-value adapters and actual appearance worker implemented; parent matrix rendering now shows comparisonState, conflicts and missingness.",
+      "refs": [
+        "backend/src/rnd/matrix.ts",
+        "web/src/rnd/RndReview.tsx"
+      ],
+      "status": "RESOLVED_LOCAL_SCOPE",
+      "reconciliation": "Backend exact observed-value adapters and actual appearance worker implemented; parent matrix rendering now shows comparisonState, conflicts and missingness.",
+      "initialFinding": "Real channel adapters and matrix rendering did not form a complete useful path in inspected code. Backend and parent notified; fixes in progress."
+    },
+    {
+      "id": "AUDIT-03",
+      "severity": "HIGH",
+      "kind": "RESOURCE_CONTROL",
+      "tickets": [
+        "CORE-09"
+      ],
+      "finding": "Actor minute limits and transactionally serialized tenant active/comparison-hour budgets added with cross-Proof admission test.",
+      "refs": [
+        "backend/src/app.ts",
+        "backend/src/rnd/analyses.ts"
+      ],
+      "status": "RESOLVED_LOCAL_SCOPE",
+      "reconciliation": "Actor minute limits and transactionally serialized tenant active/comparison-hour budgets added with cross-Proof admission test.",
+      "initialFinding": "No dedicated research admission rate limiter at inspected mount; bounded individual jobs do not bound queue cardinality. Backend notified."
+    },
+    {
+      "id": "AUDIT-04",
+      "severity": "MEDIUM",
+      "kind": "CLIENT_PARITY",
+      "tickets": [
+        "CORE-07",
+        "F01-05",
+        "F03-05",
+        "F04-05",
+        "F07-03"
+      ],
+      "finding": "Mobile reviewer annotations/corrections, artifact/geometry/privacy review and verification export controls now implemented. Exact-current TypeScript and Android compile/tests pass; iOS Xcode/device qualification remains external.",
+      "refs": [
+        "mobile/src/research/ResearchPanel.tsx"
+      ],
+      "status": "RESOLVED_LOCAL_SCOPE",
+      "reconciliation": "Mobile reviewer annotations/corrections, artifact/geometry/privacy review and verification export controls now implemented. Exact-current TypeScript and Android compile/tests pass; iOS Xcode/device qualification remains external.",
+      "initialFinding": "Mobile generic source/JSON review lacks several specialized artifact, correction, redaction and portable verification flows required across clients."
+    },
+    {
+      "id": "AUDIT-05",
+      "severity": "MEDIUM",
+      "kind": "WITNESS_INTEGRATION",
+      "tickets": [
+        "F09-03",
+        "F09-06"
+      ],
+      "finding": "Actual backend two controlled test witnesses/checkpoint/consistency/reexecution verified; organizational independence explicitly remains zero.",
+      "refs": [
+        "backend/src/rnd/worker.ts",
+        "research/witness/witness.py"
+      ],
+      "status": "RESOLVED_LOCAL_SCOPE",
+      "reconciliation": "Actual backend two controlled test witnesses/checkpoint/consistency/reexecution verified; organizational independence explicitly remains zero.",
+      "initialFinding": "Standalone test witnessing exists; persisted backend results currently stop at log inclusion, with no automatic test-witness collection path found. External independence remains a separate dependency."
+    },
+    {
+      "id": "AUDIT-06",
+      "severity": "MEDIUM",
+      "kind": "IN_PROGRESS",
+      "tickets": [
+        "CORE-05",
+        "F01-01",
+        "F02-06",
+        "F02-07",
+        "F08-02"
+      ],
+      "finding": "Sidecar085 exact-byte intake/export and18 portable tests plus3 actual backend-sidecar export tests pass; shared sidecar/native-frame schemas added.",
+      "status": "RESOLVED_LOCAL_SCOPE",
+      "reconciliation": "Sidecar085 exact-byte intake/export and18 portable tests plus3 actual backend-sidecar export tests pass; shared sidecar/native-frame schemas added.",
+      "initialFinding": "Sidecar085 and final export snapshot/verifier integration active during review. Reconcile final schema, source eligibility, MIME/luma profile and immutable late-receipt export before final handoff."
+    },
+    {
+      "id": "AUDIT-07",
+      "severity": "MEDIUM",
+      "kind": "ISOLATION_VALIDATION",
+      "tickets": [
+        "CORE-09"
+      ],
+      "finding": "Bubblewrap launcher fails closed but namespace containment could not run on this host; bounded subprocess testing is not OS decoder isolation qualification.",
+      "refs": [
+        "research/ISOLATION.md"
+      ],
+      "status": "EXTERNAL_ENVIRONMENT_REQUIRED",
+      "reconciliation": "Fail-closed sandbox launcher remains; this host cannot qualify namespace isolation. Required supported deployment host and security review recorded."
+    },
+    {
+      "id": "AUDIT-08",
+      "severity": "INFO",
+      "kind": "EXTERNAL_PREREQUISITES",
+      "tickets": [
+        "F01-02",
+        "F01-06",
+        "F03-06",
+        "F04-06",
+        "F05-06",
+        "F06-05",
+        "F07-06",
+        "F08-06",
+        "F09-04",
+        "F10-05"
+      ],
+      "finding": "Zero physical qualification devices/corpus, zero independent witness operators and zero independently consented training partners are evidenced. Generated media/certificates/ZK proofs and simulated clients prove their named protocol scope only.",
+      "status": "EXTERNAL_PREREQUISITES",
+      "reconciliation": "Physical qualification populations, independent witnesses and consented independent partners are still unavailable; no synthetic population is promoted."
+    }
+  ],
+  "counts": {
+    "ENGINEERED_LOCAL_SCOPE": 60,
+    "EXTERNAL_QUALIFICATION_BLOCKED": 11
+  },
+  "tickets": [
+    {
+      "ticket": "F01-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/enrollment.py",
+        "mobile/src/research/capture.ts",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Uncoached real-device comparison must establish no extra steps and uninterrupted recording.",
+      "title": "Native enrollment",
+      "scopeLimitations": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage."
+    },
+    {
+      "ticket": "F01-02",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "research/benchmarks/evaluate.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
+      "title": "Optical benchmark",
+      "scopeLimitations": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed."
+    },
+    {
+      "ticket": "F01-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/enrollment.py",
+        "research/benchmarks/run.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Physical content/print/substrate ablations and frozen thresholds; no physical correspondence finding is enabled.",
+      "title": "Extractor and scorer"
+    },
+    {
+      "ticket": "F01-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/enrollment.ts",
+        "backend/migrations/082_rnd_enrollments.sql"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Every current profile terminates UNAVAILABLE then LOCKED; physical qualification needed before any QUALIFIED transition.",
+      "title": "Enrollment lifecycle"
+    },
+    {
+      "ticket": "F01-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "mobile/src/research/ResearchPanel.tsx",
+        "backend/src/rnd/exports.ts",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Qualified source profiles before physical findings.",
+      "title": "Viewer and export",
+      "scopeLimitations": "Mobile now hashes and previews real artifacts, displays source-linked sparse projections and supports verification archive export. Hardware/region finding qualification remains unavailable."
+    },
+    {
+      "ticket": "F01-06",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "research/benchmarks/evaluate.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
+      "title": "Security qualification",
+      "scopeLimitations": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed."
+    },
+    {
+      "ticket": "F02-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "docs/rnd/PLATFORM_ASSURANCE.md",
+        "mobile/RESEARCH_CAPTURE_2026-10-02.md",
+        "backend/src/rnd/capture.ts",
+        "backend/src/rnd/platform-assurance-service.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": null,
+      "title": "Threat model and inventory"
+    },
+    {
+      "ticket": "F02-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "docs/rnd/PLATFORM_ASSURANCE.md",
+        "mobile/RESEARCH_CAPTURE_2026-10-02.md",
+        "backend/src/rnd/capture.ts",
+        "backend/src/rnd/platform-assurance-service.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": null,
+      "title": "Intent service"
+    },
+    {
+      "ticket": "F02-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchProvenance.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchProvenance.swift",
+        "packages/evidence-contracts/index.mjs",
+        "packages/evidence-contracts/fragments.mjs",
+        "research/capture-fragments/run-spike.mjs",
+        "research/capture-fragments/fragments.test.mjs",
+        "docs/rnd/validation/fragment-benchmark.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
+      "title": "Canonical signer / verifier",
+      "scopeLimitations": "Real-time synthetic AVC+AAC FFmpeg output is consumed before producer exit into init, sealed fragment and terminal units; exact P256 signed chain has audio/video coverage and five-run software benchmark. Existing native recorder remains FINAL_FILE_ONLY. Native encoder callbacks/continuity and physical overhead are not established by this software spike."
+    },
+    {
+      "ticket": "F02-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/platform-assurance.ts",
+        "backend/src/rnd/platform-assurance-service.ts",
+        "backend/migrations/081_rnd_platform.sql",
+        "backend/src/rnd/android-key-policy.ts",
+        "backend/tests/rnd-android-key-policy.test.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchKeyAttestation.kt"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Authentic provider roots/app signing pins, research developer credentials/entitlements, real compatible devices, revocation governance and platform security review.",
+      "title": "Native assurance adapters",
+      "scopeLimitations": "Strict KeyMint100\u2013500 P256 request-key profile now verifies challenge, X509 signatures, external roots/current revocation, app identity, hardware lists, verified boot and patch floors; unsupported delegated/legacy factory profiles do not receive trust. Dedicated request-key result does not upgrade recording key."
+    },
+    {
+      "ticket": "F02-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchProvenance.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchProvenance.swift",
+        "packages/evidence-contracts/index.mjs",
+        "packages/evidence-contracts/fragments.mjs",
+        "research/capture-fragments/run-spike.mjs",
+        "research/capture-fragments/fragments.test.mjs",
+        "docs/rnd/validation/fragment-benchmark.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
+      "title": "Incremental chain",
+      "scopeLimitations": "Real-time synthetic AVC+AAC FFmpeg output is consumed before producer exit into init, sealed fragment and terminal units; exact P256 signed chain has audio/video coverage and five-run software benchmark. Existing native recorder remains FINAL_FILE_ONLY. Native encoder callbacks/continuity and physical overhead are not established by this software spike."
+    },
+    {
+      "ticket": "F02-06",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/src/research/capture.ts",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/tests/research",
+        "backend/tests/rnd-platform-service.test.ts",
+        "backend/tests/rnd-capture-sidecars.test.ts",
+        "mobile/src/research/sidecars.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; Xcode runner for iOS.",
+      "title": "Recovery and lifecycle",
+      "scopeLimitations": "Durable original upload plus separately committed sidecar chunks/receipts and retries; native hardware force-stop/thermal/key-loss qualification still external."
+    },
+    {
+      "ticket": "F02-07",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "verifier/rnd_bundle.mjs",
+        "verifier/rnd_verify.py",
+        "web/src/rnd/RndReview.tsx",
+        "verifier/test_rnd_bundle.mjs",
+        "backend/tests/rnd-capture-sidecars.test.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": null,
+      "title": "Portable verifier",
+      "scopeLimitations": "Portable offline verifier checks declared snapshot scope, raw root, chains, source bytes, intents/receipts, subject binding, native sidecar acquisition/PGM semantics and artifact inventories. Metadata-only bytes remain NOT_CHECKED. Local specialist witness/ZK commands remain separate."
+    },
+    {
+      "ticket": "F03-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/benchmarks/README.md",
+        "backend/src/rnd/annotations.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Independent double labeling and blinded disagreement adjudication on authorized ordinary-packing corpus.",
+      "title": "Annotation contract"
+    },
+    {
+      "ticket": "F03-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
+      "title": "Baseline worker"
+    },
+    {
+      "ticket": "F03-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/action_model.py",
+        "research/vision/worker.py",
+        "research/vision/IMPLEMENTATION_STATUS.md"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Consented ordinary packing and natural failure corpus with independent event labels/holdout; task-specific model qualification.",
+      "title": "Tracking and action models",
+      "scopeLimitations": "Actual attributed parcel/item masks, controlled background masks, numerical event-model training and pinned worker inference exist. Learned automatic class segmentation and qualified model weights require consented labels/holdouts."
+    },
+    {
+      "ticket": "F03-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
+      "title": "Continuity coverage"
+    },
+    {
+      "ticket": "F03-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "backend/src/rnd/annotations.ts",
+        "mobile/src/research/ResearchPanel.tsx",
+        "mobile/src/research/ResearchAnnotations.tsx",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Reviewer comprehension/accessibility validation.",
+      "title": "Timeline integration",
+      "scopeLimitations": "Mobile now includes exact analysis/source reviewer statements, own-note amendments with retained history, source time/region navigation, hash-verified artifact preview, sparse geometry projections, exact derivative review, reviewed ZIP and source-linked verification archive. Web/desktop shared results retain comparison missingness/conflict, method limits and source navigation. Offline full bundle verification remains an exported tool rather than a client assertion of scene truth."
+    },
+    {
+      "ticket": "F03-06",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/benchmarks/README.md"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Independent reviewers; randomized original-only versus enriched review tasks; event-search/accuracy/contradiction metrics.",
+      "title": "Reviewer evaluation",
+      "scopeLimitations": "No blinded human comparison completed."
+    },
+    {
+      "ticket": "F04-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "title": "Condition schema",
+      "scopeLimitations": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference."
+    },
+    {
+      "ticket": "F04-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "title": "Registered 2D baseline",
+      "scopeLimitations": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference."
+    },
+    {
+      "ticket": "F04-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "title": "Sparse 3D worker",
+      "scopeLimitations": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference."
+    },
+    {
+      "ticket": "F04-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "title": "Change detector",
+      "scopeLimitations": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference."
+    },
+    {
+      "ticket": "F04-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "web/src/rnd/ArtifactPreview.tsx",
+        "desktop/src/renderer/RndDesktopPanel.tsx",
+        "mobile/src/research/ResearchPanel.tsx",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": null,
+      "title": "Cross-platform viewer",
+      "scopeLimitations": "Mobile now hashes and previews real artifacts, displays source-linked sparse projections and supports verification archive export. Hardware/region finding qualification remains unavailable."
+    },
+    {
+      "ticket": "F04-06",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/benchmarks/evaluate.py",
+        "research/benchmarks/configs/physical-qualification-v1.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Measured physical carton changes, sizes/materials, lighting/reflective tape, missing faces and natural shipping wear with independent lab metrology.",
+      "title": "Bench and field study"
+    },
+    {
+      "ticket": "F05-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/matrix.ts",
+        "mobile/src/research/ResearchPanel.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "title": "Leg and subject mapping"
+    },
+    {
+      "ticket": "F05-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/matrix.ts",
+        "backend/src/rnd/worker.ts",
+        "backend/tests/rnd-matrix.test.ts",
+        "backend/tests/rnd-evidence.test.ts",
+        "web/src/rnd/RndReview.test.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Qualified OCR/physical/condition channels before evidentiary discrepancy/consistency claims; provider weight must retain attribution.",
+      "title": "Channel adapters",
+      "scopeLimitations": "Exact paired OCR text, missing/conflicting alternatives and uncertainty; source-attributed report tracking/weight; actual unqualified Python appearance diagnostics; web comparison rows render observations without fusion."
+    },
+    {
+      "ticket": "F05-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/matrix.ts",
+        "mobile/src/research/ResearchPanel.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "title": "Comparison policy"
+    },
+    {
+      "ticket": "F05-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/matrix.ts",
+        "mobile/src/research/ResearchPanel.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "title": "Recipient workflow"
+    },
+    {
+      "ticket": "F05-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "backend/src/rnd/matrix.ts",
+        "backend/tests/rnd-matrix.test.ts",
+        "backend/tests/rnd-evidence.test.ts",
+        "web/src/rnd/RndReview.test.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": null,
+      "title": "Reviewer matrix",
+      "scopeLimitations": "Exact paired OCR text, missing/conflicting alternatives and uncertainty; source-attributed report tracking/weight; actual unqualified Python appearance diagnostics; web comparison rows render observations without fusion."
+    },
+    {
+      "ticket": "F05-06",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/benchmarks/README.md"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Same-SKU substitutions, copied serials, partial returns, new cartons, legitimate repairs, absent recipients, and blinded matrix-assisted review study.",
+      "title": "Calibration and review study"
+    },
+    {
+      "ticket": "F06-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/src/research/capture-policy.ts",
+        "research/vision/policy.json",
+        "research/benchmarks/configs/physical-qualification-v1.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Freeze supported active illumination/device/safety threat profile before challenge tuning.",
+      "title": "Protocol and threat scope"
+    },
+    {
+      "ticket": "F06-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/capture.ts",
+        "mobile/src/research/capture-policy.ts",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
+      "title": "Native instrumentation",
+      "scopeLimitations": "Passive native capability/luma/clock instrumentation plus unpredictable bound challenge consumption are implemented. Active illumination is unavailable without safety-reviewed qualified hardware profile; its absence is not a failed freshness or liveness claim."
+    },
+    {
+      "ticket": "F06-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/capture.ts",
+        "mobile/src/research/capture-policy.ts",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
+      "title": "Challenge service",
+      "scopeLimitations": "Passive native capability/luma/clock instrumentation plus unpredictable bound challenge consumption are implemented. Active illumination is unavailable without safety-reviewed qualified hardware profile; its absence is not a failed freshness or liveness claim."
+    },
+    {
+      "ticket": "F06-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/vision/engine.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Actual timed response/attack recordings and calibrated supported profile; synthetic command metadata is not emitted-light evidence.",
+      "title": "Baseline response detector"
+    },
+    {
+      "ticket": "F06-05",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/benchmarks/configs/physical-qualification-v1.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Authorized genuine/real display/print/lamination/reflection/delay/adaptive display/injected stream experiments with held-out devices/materials; safety review.",
+      "title": "Replay lab"
+    },
+    {
+      "ticket": "F06-06",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/src/research/capture.ts",
+        "backend/src/rnd/config.ts",
+        "web/src/rnd/RndReview.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real record-in-progress opt-out/kill-switch timing and accessibility checks; active profiles remain unavailable.",
+      "title": "UI and kill switch"
+    },
+    {
+      "ticket": "F07-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/privacy/redact.py",
+        "backend/src/rnd/worker.ts",
+        "research/privacy/test_redact.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "title": "Policy and detector"
+    },
+    {
+      "ticket": "F07-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/privacy/redact.py",
+        "backend/src/rnd/worker.ts",
+        "research/privacy/test_redact.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "title": "Derivative pipeline"
+    },
+    {
+      "ticket": "F07-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "web/src/rnd/MaskEditor.tsx",
+        "backend/src/rnd/exports.ts",
+        "mobile/src/research/ResearchPanel.tsx",
+        "backend/src/rnd/derivative-grants.ts",
+        "backend/migrations/086_rnd_derivative_grants.sql",
+        "backend/tests/rnd-derivative-grants.test.ts",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Human review of each proposed mask/derivative; residual privacy/access policy review.",
+      "title": "Review and sharing",
+      "scopeLimitations": "Actual opaque derivative review and byte-bound export plus token-hashed, expiring, revocable hosted grants. Six direct/HTTP tests pass; all clients provide exact derivative preview. Recipient copies cannot be recalled."
+    },
+    {
+      "ticket": "F07-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/privacy/redact.py",
+        "backend/src/rnd/worker.ts",
+        "research/privacy/test_redact.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "title": "Verification levels"
+    },
+    {
+      "ticket": "F07-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/privacy/zk/circuit.mjs",
+        "research/privacy/zk/prove.mjs",
+        "research/privacy/zk/verify.mjs",
+        "backend/src/rnd/zk-service.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Tiny4x4/8x8 RGB8 relation only; source extraction remains trusted-signer boundary. No full-size/video proof or physical sensor attestation implied.",
+      "title": "ZK circuit and binding"
+    },
+    {
+      "ticket": "F07-06",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/privacy/reports",
+        "research/privacy/zk/benchmark.mjs"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Independent qualified cryptographic/parameter/constraint/issuer review, target runtime cost and larger supported profiles before public reliance.",
+      "title": "Performance and review",
+      "scopeLimitations": "Actual tiny circuit proofs/measurements exist; not p95 full-image/video cost measurements."
+    },
+    {
+      "ticket": "F08-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "title": "Capability and diagnostics",
+      "scopeLimitations": "Per-profile capability/unknown telemetry, real native luma timestamps, bounded buffers and thermal/memory/disk disable plus nonblocking UI/sidecar receipt path exist; representative device overhead and pressure qualification are external."
+    },
+    {
+      "ticket": "F08-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "title": "Passive selector",
+      "scopeLimitations": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage."
+    },
+    {
+      "ticket": "F08-03",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "mobile/src/research/capture-policy.ts",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Measured passive recorder stability and qualified device/OS/control profiles, conservative hardware bounds, restoration/continuity benchmarks and independent safety review before implementing or enabling active focus/exposure assistance.",
+      "title": "Control policy",
+      "scopeLimitations": "No qualified native camera-control profile exists and no automatic focus/exposure driver is enabled or claimed. Native ROI selection hysteresis/cooldown and camera lease/restore infrastructure are implemented, but they are not a camera adjustment driver. Implement/qualify any future active driver only after measured stable passive profiles and safety review."
+    },
+    {
+      "ticket": "F08-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "title": "Task-aware selection",
+      "scopeLimitations": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage."
+    },
+    {
+      "ticket": "F08-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "title": "UI and pressure handling",
+      "scopeLimitations": "Per-profile capability/unknown telemetry, real native luma timestamps, bounded buffers and thermal/memory/disk disable plus nonblocking UI/sidecar receipt path exist; representative device overhead and pressure qualification are external."
+    },
+    {
+      "ticket": "F08-06",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/benchmarks/README.md"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Matched/randomized physical feature-on/off packing trials with blinded independent readability/downstream assessment.",
+      "title": "Controlled comparison"
+    },
+    {
+      "ticket": "F09-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "verifier/rnd_verify.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "title": "Log/receipt specification"
+    },
+    {
+      "ticket": "F09-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "verifier/rnd_verify.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "title": "Private log and outbox"
+    },
+    {
+      "ticket": "F09-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "research/witness/README.md",
+        "backend/tests/rnd-evidence.test.ts",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
+      "title": "Witness integration",
+      "scopeLimitations": "Backend now obtains two locally controlled test countersignatures, retrieves durable checkpoints/consistency, verifies TEST_WITNESSED, retries/reexecutes the same leaf, and preserves INCLUDED without configured operators. Zero independent operators; external SLO routing/restore rehearsal not qualified."
+    },
+    {
+      "ticket": "F09-04",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/witness/README.md"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Two named genuinely independent external witness organizations, authenticated key exchange, service/freshness/retention agreements, incident contacts and security review. Current independent operator count0.",
+      "title": "Independent-operator profile"
+    },
+    {
+      "ticket": "F09-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "verifier/rnd_verify.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "title": "Verifier and UI"
+    },
+    {
+      "ticket": "F09-06",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "research/witness/README.md",
+        "backend/tests/rnd-evidence.test.ts",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
+      "title": "Monitoring and recovery",
+      "scopeLimitations": "Backend now obtains two locally controlled test countersignatures, retrieves durable checkpoints/consistency, verifies TEST_WITNESSED, retries/reexecutes the same leaf, and preserves INCLUDED without configured operators. Zero independent operators; external SLO routing/restore rehearsal not qualified."
+    },
+    {
+      "ticket": "F10-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "title": "Threat model and consent"
+    },
+    {
+      "ticket": "F10-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/federated/proofcollective/model.py",
+        "research/federated/proofcollective/protocol.py",
+        "research/federated/proofcollective/mtls.py",
+        "research/federated/TRANSPORT.md",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/f10-status.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
+      "title": "Local training agent",
+      "scopeLimitations": "Actual TLS 1.3 mutually authenticated Flower protobuf exchanges validate CA/EKU/hostname/ALPN and exact leaf/node pins. Real 20-client/80-connection local transport run and 22 tests include ciphertext tamper, live profile expiry and persistent monotonic run admission across endpoint restarts. Operators remain controlled synthetic identities; the noisy candidate failed its quality gate and was not promoted."
+    },
+    {
+      "ticket": "F10-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "title": "Secure aggregation"
+    },
+    {
+      "ticket": "F10-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "title": "Privacy accountant"
+    },
+    {
+      "ticket": "F10-05",
+      "auditStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "codeReferences": [
+        "research/federated/model-policy.json",
+        "research/federated/proofcollective/cli.py"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Reviewed dropout/collusion/distributed-noise mechanism and cohort assumptions before stronger coordinator privacy can be implemented/claimed.",
+      "title": "Stronger privacy branch",
+      "scopeLimitations": "Distributed-noise mode explicitly fails closed; central Gaussian DP baseline retained as plan permits."
+    },
+    {
+      "ticket": "F10-06",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "title": "Release and rollback"
+    },
+    {
+      "ticket": "CORE-01",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "docs/rnd/REPOSITORY_AUDIT.md",
+        "docs/rnd/baseline-source-inventory.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Review of any deployed environment requires its authorized configuration; the referenced October 1 detailed fingerprint plan was retrieved and reviewed by the parent and is not missing.",
+      "title": "Repository and release audit"
+    },
+    {
+      "ticket": "CORE-02",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "scripts/rnd.mjs",
+        "backend/tests/core-integrity-audit.test.ts",
+        "backend/tests/durable-recovery.test.ts",
+        "mobile/tests"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Physical feature-off/on recorder, interrupted upload and recovery qualification. Parent owns final regression report; audit did not rerun tests.",
+      "title": "Baseline protection"
+    },
+    {
+      "ticket": "CORE-03",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "scripts/rnd-release-guard.mjs",
+        "backend/src/rnd/runtime-isolation.ts",
+        "mobile/src/research/isolation.ts",
+        "desktop/src/main/config.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Research device identities/development signing and separate runtime provisioning; no production authorization.",
+      "title": "Research isolation"
+    },
+    {
+      "ticket": "CORE-04",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "packages/evidence-contracts/schemas",
+        "packages/evidence-contracts/contracts.mjs",
+        "backend/migrations/079_rnd_evidence.sql",
+        "backend/src/rnd/router.ts",
+        "backend/rnd-openapi.json",
+        "packages/evidence-contracts/generated-client.mjs",
+        "packages/evidence-contracts/generated-client.d.mts",
+        "docs/rnd/validation/api-contracts.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": null,
+      "title": "Contracts and migrations",
+      "scopeLimitations": "33 operations/28 paths documented in research OpenAPI with generated transport/types, strict schema and negative type fixtures. The normal Proof root schema/canonical serializer is preserved."
+    },
+    {
+      "ticket": "CORE-05",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "backend/src/rnd/capture-sidecars.ts",
+        "packages/evidence-contracts/schemas/capture-sidecar-receipt.schema.json"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Real Android/iOS stream/frame-gap/thermal/disk/memory on/off tests; macOS/Xcode iOS build.",
+      "title": "Capture coordinator",
+      "scopeLimitations": "Bounded native luma adapters/scheduler and durable chunked sidecar receipt/source ingestion implemented. Device continuity/shedding performance requires physical qualification."
+    },
+    {
+      "ticket": "CORE-06",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/worker.ts",
+        "backend/src/rnd/operations.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Production workload and crash/restore qualification; parent/backend final restart regression results pending at snapshot.",
+      "title": "Durable analysis service"
+    },
+    {
+      "ticket": "CORE-07",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "mobile/src/research/ResearchPanel.tsx",
+        "verifier/rnd_bundle.mjs",
+        "mobile/src/research/ResearchAnnotations.tsx",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": null,
+      "title": "Viewer and export contract",
+      "scopeLimitations": "Mobile now includes exact analysis/source reviewer statements, own-note amendments with retained history, source time/region navigation, hash-verified artifact preview, sparse geometry projections, exact derivative review, reviewed ZIP and source-linked verification archive. Web/desktop shared results retain comparison missingness/conflict, method limits and source navigation. Offline full bundle verification remains an exported tool rather than a client assertion of scene truth."
+    },
+    {
+      "ticket": "CORE-08",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "research/benchmarks",
+        "research/vision/action_model.py",
+        "research/federated/proofcollective/governance.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Authorized physical/partner datasets, blind evaluation and license/security reviews; synthetic reports do not supply physical datasets.",
+      "title": "Research and model registry"
+    },
+    {
+      "ticket": "CORE-09",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/annotations.ts",
+        "scripts/rnd-worker-sandbox.mjs",
+        "backend/src/rnd/router.ts",
+        "backend/tests/rnd-evidence.test.ts",
+        "backend/tests/rnd-runtime-isolation.test.ts"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
+      "title": "Security and privacy controls",
+      "scopeLimitations": "120 requests/minute/actor admission plus32 active jobs per tenant and20 comparisons per hour under tenant advisory lock; permissions, source ownership, consent and immutable reviewer logs tested. OS namespace sandbox must be qualified on a host that permits it."
+    },
+    {
+      "ticket": "CORE-10",
+      "auditStatus": "ENGINEERED_LOCAL_SCOPE",
+      "codeReferences": [
+        "backend/src/rnd/operations.ts",
+        "research/benchmarks/reports",
+        "scripts/rnd.mjs",
+        "web/src/rnd/RndOperations.tsx"
+      ],
+      "remainingEngineering": null,
+      "externalPrerequisites": "Measured target-host/cloud prices, workload and hardware telemetry; approved alert thresholds and rollback/restore drill.",
+      "title": "Observability and operations",
+      "scopeLimitations": "Queue/error/latency/attempt metrics, local expired-lease/10-minute queue alerts and audited retry UI exist; signed per-job resource measurements and benchmark reports remain available. Hosted attributable unit cost and physical device budgets remain NOT_MEASURED."
+    }
+  ],
+  "reconciledAt": "2026-10-02T11:36:57.899631+00:00",
+  "validationEvidence": [
+    "docs/rnd/validation/platform-assurance.json",
+    "docs/rnd/validation/backend-status.json",
+    "docs/rnd/validation/privacy-witness-status.json",
+    "docs/rnd/validation/f10-status.json",
+    "research/vision/IMPLEMENTATION_STATUS.md",
+    "mobile/RESEARCH_CAPTURE_2026-10-02.md",
+    "docs/rnd/validation/native-status.json",
+    "docs/rnd/validation/api-contracts.json",
+    "docs/rnd/validation/fragment-benchmark.json",
+    "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+  ],
+  "auditFrozen": true,
+  "finalReviewNotes": [
+    "The October 1 detailed fingerprint plan was retrieved/reviewed by the parent; it is not an outstanding document dependency.",
+    "Android targeted exact-current source run passes 29 tests. The parent combined run observed one assertion failure during concurrent source/test edits; the exact-current targeted rerun passes. Existing pure platform 13 and persisted/HTTP platform 6 tests pass.",
+    "Shared contracts pass9 tests including sidecar and public grant record shape/tamper checks.",
+    "Native owner reports actual exact-current Kotlin compile and4 JVM tests pass,6 live encoded-fragment tests pass, and mobile TypeScript passes. Swift/Xcode and physical capture remain unexecuted.",
+    "Federated transport independent review identified live profile expiry and restart replay state; both were fixed and22 tests pass.",
+    "Web29 tests, desktop21 tests and both builds pass per parent; final global evidence is owned by parent."
+  ]
+}

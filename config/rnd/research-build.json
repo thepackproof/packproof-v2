@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "packproof.build-policy.v1",
+  "researchOnly": true,
+  "distributionAllowed": false,
+  "program": "trust-infrastructure-2026-10-02",
+  "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "releaseAuthorization": "NOT_AUTHORIZED",
+  "reason": "Experimental R&D: no production deploy, platform upload, store submission, desktop updater publication or public claim publication."
+}

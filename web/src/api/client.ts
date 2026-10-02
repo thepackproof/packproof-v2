@@ -1,3 +1,5 @@
+import {buildRndRequest,type RndOperationId,type RndInput,type RndOutput} from '../../../packages/evidence-contracts/generated-client.mjs';
+import type {RndSnapshot,RndCapabilities,Feature,ReviewerAnnotation,DerivativeGrant} from "../rnd/types";
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
 import { withRequestTimeout } from "./timeout";
 import { uploadBlob } from "./upload-transport";
@@ -61,6 +63,22 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  private rndOperation<K extends RndOperationId>(operation:K,input:RndInput<K>):Promise<RndOutput<K>>{const request=buildRndRequest(operation,input);return this.request(request.path,request);}
+  async rndCapabilities(): Promise<RndCapabilities> { return this.rndOperation('getCapabilities',{}); }
+  async rndAnalyses(proofId:string):Promise<RndSnapshot> { return this.rndOperation('listAnalyses',{path:{id:proofId}}); }
+  async rndWrite<T>(proofId:string,operation:'consents'|'analyses'|'derivatives'|'exports',body:unknown,key:string):Promise<T> { return this.request(`/proofs/${encodeURIComponent(proofId)}/rnd/${operation}`,{method:'POST',body,headers:{'Idempotency-Key':key}}); }
+  async rndRequest(proofId:string,input:{feature:Feature;evidenceIds:string[];scope?:string;parameters?:Record<string,unknown>;relatedAnalysisIds?:string[]},key:string):Promise<unknown> { return this.rndWrite(proofId,'analyses',input,key); }
+  async rndArtifact(proofId:string,analysisId:string,index:number):Promise<Blob> { if(!Number.isSafeInteger(index)||index<0)throw new Error('Invalid artifact');return this.download(`/proofs/${encodeURIComponent(proofId)}/rnd/analyses/${encodeURIComponent(analysisId)}/artifacts/${index}`); }
+  async rndGrants(proofId:string,analysisId:string):Promise<{grants:DerivativeGrant[]}>{return this.rndOperation('listDerivativeGrants',{path:{id:proofId,analysisId}});}
+  async rndCreateGrant(proofId:string,analysisId:string,input:{artifactSha256:string;recipeSha256:string;expiresInSeconds:number},key:string):Promise<DerivativeGrant>{return this.rndOperation('createDerivativeGrant',{path:{id:proofId,analysisId},body:input,idempotencyKey:key});}
+  async rndRevokeGrant(proofId:string,grantId:string):Promise<unknown>{return this.rndOperation('revokeDerivativeGrant',{path:{id:proofId,grantId},body:{}});}
+  async rndRedeemGrant(token:string):Promise<Blob>{if(!/^rndg_[A-Za-z0-9_-]{43}$/.test(token))throw new Error('Invalid access code.');return withRequestTimeout(async signal=>{const response=await fetch(joinUrl(this.options.baseUrl,'/rnd/derivative-grants/redeem'),{method:'POST',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({token}),referrerPolicy:'no-referrer',credentials:'omit'});if(!response.ok)throw await errorFromResponse(response);return response.blob();},120000);}
+  async rndRetry(analysisId:string,reason:string,key:string):Promise<unknown>{return this.rndOperation('retryAnalysis',{path:{analysisId},body:{reason},idempotencyKey:key});}
+  async rndAnnotations(proofId:string):Promise<{annotations:ReviewerAnnotation[]}>{return this.rndOperation('listAnnotations',{path:{id:proofId}});}
+  async rndAnnotate(proofId:string,input:{analysisId:string;sourceId:string;text:string;interval?:{startMs:number;endMs:number};supersedesId?:string},key:string):Promise<unknown>{return this.rndOperation('addAnnotation',{path:{id:proofId},body:input,idempotencyKey:key});}
+  async rndArchive(proofId:string,analysisId?:string):Promise<Blob>{return this.download(`/proofs/${encodeURIComponent(proofId)}/rnd/${analysisId?`analyses/${encodeURIComponent(analysisId)}/`:''}export.zip`);}
+  async rndReview(proofId:string,analysisId:string,input:{approved:true;artifactSha256:string;recipeSha256:string},key:string):Promise<unknown> {return this.rndOperation('derivativeReview',{path:{id:proofId,analysisId},body:input,idempotencyKey:key});}
+
   async adminCapabilities<T>(): Promise<T> { return this.request("/me/capabilities"); }
   async adminRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
     if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) throw new Error("Invalid administrative request.");
@@ -75,7 +93,15 @@ export class PackProofApi {
       getToken: () => string | null | Promise<string | null>;
       getIdentityToken?: () => string | null;
     },
-  ) {}
+  ) {
+    if(import.meta.env.VITE_PACKPROOF_RND === '1') {
+      const endpoint=new URL(options.baseUrl || '/',typeof location === 'undefined' ? undefined : location.origin);
+      if(!['http:','https:'].includes(endpoint.protocol)||!['localhost','127.0.0.1','[::1]'].includes(endpoint.hostname)||endpoint.username||endpoint.password||endpoint.search||endpoint.hash)throw new Error('Research builds require an isolated loopback API.');
+      // Pin the same resolved URL that was checked; empty/relative paths must not
+      // validate against an invented localhost fallback and fetch from another origin.
+      this.options={...options,baseUrl:endpoint.href.replace(/\/$/,'')};
+    }
+  }
 
   get recoveryScope(): string { return new URL(this.options.baseUrl || "/api", location.origin).href.replace(/\/$/, ""); }
 

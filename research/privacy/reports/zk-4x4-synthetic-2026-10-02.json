@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "packproof.zk-benchmark.v1",
+  "generatedAt": "2026-10-02T10:46:13.186Z",
+  "fixture": "synthetic 4x4 RGB8; not captured evidence",
+  "framework": "o1js 2.15.0",
+  "hardware": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "workers": 2
+  },
+  "compileMs": 17968.65736,
+  "proverMs": 12287.085065000003,
+  "verifierMs": 1285.8986020000011,
+  "proofJsonBytes": 30151,
+  "bundleBytes": 31529,
+  "maxRssKiB": 890900,
+  "cloudSpendUsd": 0,
+  "perImageCloudCost": "unmeasured",
+  "tests": [
+    {
+      "name": "mask",
+      "rejected": true
+    },
+    {
+      "name": "nonboolean mask",
+      "rejected": true
+    },
+    {
+      "name": "dimensions",
+      "rejected": true
+    },
+    {
+      "name": "format",
+      "rejected": true
+    },
+    {
+      "name": "transform",
+      "rejected": true
+    },
+    {
+      "name": "commitment",
+      "rejected": true
+    },
+    {
+      "name": "circuit",
+      "rejected": true
+    },
+    {
+      "name": "verification key",
+      "rejected": true
+    },
+    {
+      "name": "missing source binding",
+      "rejected": true
+    },
+    {
+      "name": "source inventory link",
+      "rejected": true
+    },
+    {
+      "name": "output digest",
+      "rejected": true
+    },
+    {
+      "name": "proof field",
+      "rejected": true
+    },
+    {
+      "name": "proof bytes",
+      "rejected": true
+    },
+    {
+      "name": "output channel 0",
+      "rejected": true
+    },
+    {
+      "name": "output channel 1",
+      "rejected": true
+    },
+    {
+      "name": "output channel 2",
+      "rejected": true
+    },
+    {
+      "name": "output channel 3",
+      "rejected": true
+    },
+    {
+      "name": "output channel 47",
+      "rejected": true
+    },
+    {
+      "name": "wrong private source",
+      "rejected": true
+    },
+    {
+      "name": "range overflow",
+      "rejected": true
+    }
+  ],
+  "securityReview": "PENDING",
+  "independentReview": false,
+  "publicReliance": false,
+  "setup": "o1js Kimchi/Pasta framework; no application-specific trusted ceremony; verify framework and parameters in specialist review",
+  "limits": [
+    "Only 4x4 exact RGB8 profile implemented and measured.",
+    "Decoding/extraction and source signer remain trusted.",
+    "No device capture, detector recall, real image size or public-use qualification."
+  ]
+}

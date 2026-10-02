@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/extension.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "extensionId",
+    "proofId",
+    "tenantId",
+    "rootManifestDigest",
+    "sequence",
+    "previousDigest",
+    "eventKind",
+    "analysis",
+    "issuedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.extension.v1"
+    },
+    "extensionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "rootManifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "previousDigest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "eventKind": {
+      "const": "ANALYSIS_COMPLETED"
+    },
+    "analysis": {
+      "$ref": "analysis.schema.json"
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "sequence": {
+            "const": 1
+          }
+        },
+        "required": [
+          "sequence"
+        ]
+      },
+      "then": {
+        "properties": {
+          "previousDigest": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "previousDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  ],
+  "description": "The signed immutable extension payload, not its detached transport wrapper. Runtime additionally checks child Proof, tenant and root equality."
+}

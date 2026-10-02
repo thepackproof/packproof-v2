@@ -37,7 +37,7 @@ export class AuthService {
   constructor(private readonly options: { config: DesktopConfig; store: ProtectedSessionStore; fetch?: typeof fetch; onSession?: (session: AuthSession | null) => void }) {
     this.fetcher = options.fetch ?? fetch;
   }
-  private get scope() { const c = this.options.config; return `${c.channel}|${c.apiBaseUrl}|${c.cognito.clientId}`; }
+  private get scope() { const c = this.options.config; const scope = `${c.channel}|${c.apiBaseUrl}|${c.cognito.clientId}`; return c.research ? `research|${scope}` : scope; }
   getSession(): AuthSession | null { return this.current ? { ...this.current.session } : null; }
   getAccountId(): string | null { return this.current?.session.userId ?? null; }
   private fence(generation: number) { if (this.generation !== generation) throw new AuthError('SESSION_CHANGED', 'Your account changed. Sign in again.'); }
@@ -80,7 +80,14 @@ export class AuthService {
     await this.persist(null, generation);
     this.options.onSession?.(null);
     const email = normalizeEmail(input.email);
-    const result = await this.cognito<AuthResult>('InitiateAuth', { ClientId: this.options.config.cognito.clientId, AuthFlow: 'USER_PASSWORD_AUTH', AuthParameters: { USERNAME: email, PASSWORD: input.password } });
+    let result:AuthResult;
+    if(this.options.config.research) {
+      const endpoint=new URL(this.options.config.apiBaseUrl);
+      if(this.options.config.channel!=='development'||!['localhost','127.0.0.1','[::1]'].includes(endpoint.hostname))throw new AuthError('RESEARCH_ISOLATION_REQUIRED','Research login requires an isolated local service.');
+      const response=await this.fetcher(`${this.options.config.apiBaseUrl}/auth/dev/login`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:email})});
+      this.fence(generation);if(!response.ok)throw new AuthError('RESEARCH_LOGIN_FAILED','Local research login is unavailable.');
+      const local=await response.json() as {token?:string};result={AuthenticationResult:{AccessToken:local.token,ExpiresIn:3600}};
+    } else result = await this.cognito<AuthResult>('InitiateAuth', { ClientId: this.options.config.cognito.clientId, AuthFlow: 'USER_PASSWORD_AUTH', AuthParameters: { USERNAME: email, PASSWORD: input.password } });
     this.fence(generation);
     if (result.ChallengeName || !result.AuthenticationResult?.AccessToken) throw new AuthError('CHALLENGE_REQUIRED', 'This account requires an additional sign-in step. Complete sign-in through PackProof support.');
     const tokens = result.AuthenticationResult;

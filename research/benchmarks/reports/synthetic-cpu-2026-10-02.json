@@ -1,0 +1,1678 @@
+{
+  "schemaVersion": "packproof.synthetic-benchmark.v1",
+  "dataOrigin": "SYNTHETIC_DETERMINISTIC",
+  "qualification": "ENGINEERING_ONLY_NO_PHYSICAL_VALIDATION",
+  "hardware": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "cpu": "x86_64",
+    "python": "3.12.14"
+  },
+  "fixtureSeed": [
+    173,
+    719
+  ],
+  "cases": [
+    {
+      "case": "F01-passive-enrollment",
+      "feature": "proofprint",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "INCONCLUSIVE",
+      "diagnostics": {
+        "associationCandidateAvailable": true,
+        "enrollmentDigest": "bcb0c643446b247406586730847f1537db3ddf1148198231a8059767466bd859",
+        "locked": true,
+        "mode": "enroll",
+        "qualificationState": "UNAVAILABLE",
+        "requiredGroups": [
+          "label",
+          "carton"
+        ],
+        "stateHistory": [
+          "CANDIDATE",
+          "SOURCES_COMMITTED",
+          "ANALYZED",
+          "UNAVAILABLE",
+          "LOCKED"
+        ]
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 278.898
+      },
+      "artifactCount": 14,
+      "resultPath": "F01-passive-enrollment/result.json",
+      "wallIncludingStartupMs": 335.458
+    },
+    {
+      "case": "F01-recapture",
+      "feature": "proofprint",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "INCONCLUSIVE",
+      "diagnostics": {
+        "autoRegionProposal": null,
+        "enrollmentFrameRef": null,
+        "enrollmentPolicyFrozen": "rnd-vision-2026-10-02-v1",
+        "expectedEnrollmentDigest": null,
+        "missingGroups": [],
+        "observedGroups": [
+          "carton",
+          "label"
+        ],
+        "qualified": false,
+        "registration": {
+          "homographyNativeSecondToFirst": [
+            [
+              1.0003816392948506,
+              -0.014797562606864384,
+              -2.977291400883103
+            ],
+            [
+              0.008050659869555003,
+              1.0007055943975003,
+              -4.051575037211502
+            ],
+            [
+              -9.117294022028512e-06,
+              -1.803700476189794e-05,
+              1.0
+            ]
+          ],
+          "homographySecondToFirst": [
+            [
+              1.0003816392948506,
+              -0.014797562606864384,
+              -2.977291400883103
+            ],
+            [
+              0.008050659869555003,
+              1.0007055943975003,
+              -4.051575037211502
+            ],
+            [
+              -9.117294022028512e-06,
+              -1.803700476189794e-05,
+              1.0
+            ]
+          ],
+          "inlierRatio": 0.9245283018867925,
+          "inliers": 196,
+          "matches": 212,
+          "medianResidualPixels": 0.10028025507926941,
+          "registrationMethod": "SIFT_RATIO_RANSAC_HOMOGRAPHY"
+        },
+        "requiredGroups": [
+          "label",
+          "carton"
+        ]
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 280.295
+      },
+      "artifactCount": 17,
+      "resultPath": "F01-recapture/result.json",
+      "wallIncludingStartupMs": 332.282
+    },
+    {
+      "case": "F01-same-content-copy",
+      "feature": "proofprint",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "INCONCLUSIVE",
+      "diagnostics": {
+        "autoRegionProposal": null,
+        "enrollmentFrameRef": null,
+        "enrollmentPolicyFrozen": "rnd-vision-2026-10-02-v1",
+        "expectedEnrollmentDigest": null,
+        "missingGroups": [],
+        "observedGroups": [
+          "carton",
+          "label"
+        ],
+        "qualified": false,
+        "registration": {
+          "homographyNativeSecondToFirst": [
+            [
+              0.9993294910083865,
+              0.00039308701285910514,
+              -0.017366138415711756
+            ],
+            [
+              -0.00019981448994154996,
+              0.999609228632612,
+              0.06298307757172074
+            ],
+            [
+              -1.4365321724813635e-06,
+              -3.5848130287153626e-07,
+              1.0
+            ]
+          ],
+          "homographySecondToFirst": [
+            [
+              0.9993294910083865,
+              0.00039308701285910514,
+              -0.017366138415711756
+            ],
+            [
+              -0.00019981448994154996,
+              0.999609228632612,
+              0.06298307757172074
+            ],
+            [
+              -1.4365321724813635e-06,
+              -3.5848130287153626e-07,
+              1.0
+            ]
+          ],
+          "inlierRatio": 0.9661016949152542,
+          "inliers": 171,
+          "matches": 177,
+          "medianResidualPixels": 0.03921765461564064,
+          "registrationMethod": "SIFT_RATIO_RANSAC_HOMOGRAPHY"
+        },
+        "requiredGroups": [
+          "label",
+          "carton"
+        ]
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 259.035
+      },
+      "artifactCount": 17,
+      "resultPath": "F01-same-content-copy/result.json",
+      "wallIncludingStartupMs": 311.263
+    },
+    {
+      "case": "F01-label-transfer",
+      "feature": "proofprint",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "INCONCLUSIVE",
+      "diagnostics": {
+        "autoRegionProposal": null,
+        "enrollmentFrameRef": null,
+        "enrollmentPolicyFrozen": "rnd-vision-2026-10-02-v1",
+        "expectedEnrollmentDigest": null,
+        "missingGroups": [],
+        "observedGroups": [
+          "carton",
+          "label"
+        ],
+        "qualified": false,
+        "registration": {
+          "homographyNativeSecondToFirst": [
+            [
+              0.9998210337319767,
+              -0.0010626424699455709,
+              0.1399611323801077
+            ],
+            [
+              4.953482601276068e-05,
+              0.9992555229226796,
+              0.05735170174610694
+            ],
+            [
+              9.786695207573929e-08,
+              -2.0480422205745543e-06,
+              1.0
+            ]
+          ],
+          "homographySecondToFirst": [
+            [
+              0.9998210337319767,
+              -0.0010626424699455709,
+              0.1399611323801077
+            ],
+            [
+              4.953482601276068e-05,
+              0.9992555229226796,
+              0.05735170174610694
+            ],
+            [
+              9.786695207573929e-08,
+              -2.0480422205745543e-06,
+              1.0
+            ]
+          ],
+          "inlierRatio": 0.995,
+          "inliers": 199,
+          "matches": 200,
+          "medianResidualPixels": 0.013475446030497551,
+          "registrationMethod": "SIFT_RATIO_RANSAC_HOMOGRAPHY"
+        },
+        "requiredGroups": [
+          "label",
+          "carton"
+        ]
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 274.195
+      },
+      "artifactCount": 17,
+      "resultPath": "F01-label-transfer/result.json",
+      "wallIncludingStartupMs": 332.252
+    },
+    {
+      "case": "F01-missing-carton",
+      "feature": "proofprint",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "INCONCLUSIVE",
+      "diagnostics": {
+        "autoRegionProposal": null,
+        "enrollmentFrameRef": null,
+        "enrollmentPolicyFrozen": "rnd-vision-2026-10-02-v1",
+        "expectedEnrollmentDigest": null,
+        "missingGroups": [
+          "carton"
+        ],
+        "observedGroups": [
+          "label"
+        ],
+        "qualified": false,
+        "registration": {
+          "homographyNativeSecondToFirst": [
+            [
+              1.0003816392948506,
+              -0.014797562606864384,
+              -2.977291400883103
+            ],
+            [
+              0.008050659869555003,
+              1.0007055943975003,
+              -4.051575037211502
+            ],
+            [
+              -9.117294022028512e-06,
+              -1.803700476189794e-05,
+              1.0
+            ]
+          ],
+          "homographySecondToFirst": [
+            [
+              1.0003816392948506,
+              -0.014797562606864384,
+              -2.977291400883103
+            ],
+            [
+              0.008050659869555003,
+              1.0007055943975003,
+              -4.051575037211502
+            ],
+            [
+              -9.117294022028512e-06,
+              -1.803700476189794e-05,
+              1.0
+            ]
+          ],
+          "inlierRatio": 0.9245283018867925,
+          "inliers": 196,
+          "matches": 212,
+          "medianResidualPixels": 0.10028025507926941,
+          "registrationMethod": "SIFT_RATIO_RANSAC_HOMOGRAPHY"
+        },
+        "requiredGroups": [
+          "label",
+          "carton"
+        ]
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 276.136
+      },
+      "artifactCount": 9,
+      "resultPath": "F01-missing-carton/result.json",
+      "wallIncludingStartupMs": 331.791
+    },
+    {
+      "case": "F08-quality",
+      "feature": "proofpilot",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "RECORDED",
+      "diagnostics": {
+        "attemptedCount": 3,
+        "cameraControlsApplied": false,
+        "selectedCount": 1,
+        "usableCount": 1
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 121.918
+      },
+      "artifactCount": 3,
+      "resultPath": "F08-quality/result.json",
+      "wallIncludingStartupMs": 176.173
+    },
+    {
+      "case": "F03-timeline",
+      "feature": "proofsight",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "RECORDED",
+      "diagnostics": {
+        "actionClassifierQualified": false,
+        "exactTextConsensus": [
+          {
+            "distinctFrames": 6,
+            "observedText": "PP",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 0,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    177.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    152.0
+                  ],
+                  [
+                    177.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 0.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 10,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    177.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    152.0
+                  ],
+                  [
+                    177.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 1000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 20,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    177.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    152.0
+                  ],
+                  [
+                    177.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 2000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 40,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    177.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    152.0
+                  ],
+                  [
+                    177.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 4000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 50,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    177.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    152.0
+                  ],
+                  [
+                    177.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 5000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 70,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    177.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    132.0
+                  ],
+                  [
+                    208.0,
+                    152.0
+                  ],
+                  [
+                    177.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 7000.0
+              }
+            ]
+          },
+          {
+            "distinctFrames": 5,
+            "observedText": "713820",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 0,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    223.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    152.0
+                  ],
+                  [
+                    223.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 0.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 10,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    223.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    152.0
+                  ],
+                  [
+                    223.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 1000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 40,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    223.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    152.0
+                  ],
+                  [
+                    223.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 4000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 50,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    223.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    152.0
+                  ],
+                  [
+                    223.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 5000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 70,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    223.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    132.0
+                  ],
+                  [
+                    317.0,
+                    152.0
+                  ],
+                  [
+                    223.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 7000.0
+              }
+            ]
+          },
+          {
+            "distinctFrames": 6,
+            "observedText": "SERIAL",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 0,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    176.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    197.0
+                  ],
+                  [
+                    176.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 0.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 10,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    176.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    197.0
+                  ],
+                  [
+                    176.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 1000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 20,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    176.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    197.0
+                  ],
+                  [
+                    176.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 2000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 40,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    176.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    197.0
+                  ],
+                  [
+                    176.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 4000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 50,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    176.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    197.0
+                  ],
+                  [
+                    176.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 5000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 70,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    176.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    182.0
+                  ],
+                  [
+                    233.0,
+                    197.0
+                  ],
+                  [
+                    176.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 7000.0
+              }
+            ]
+          },
+          {
+            "distinctFrames": 6,
+            "observedText": "AB12345",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 0,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    240.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    197.0
+                  ],
+                  [
+                    240.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 0.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 10,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    240.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    197.0
+                  ],
+                  [
+                    240.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 1000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 20,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    240.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    197.0
+                  ],
+                  [
+                    240.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 2000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 40,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    240.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    197.0
+                  ],
+                  [
+                    240.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 4000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 50,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    240.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    197.0
+                  ],
+                  [
+                    240.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 5000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 70,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    240.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    182.0
+                  ],
+                  [
+                    317.0,
+                    197.0
+                  ],
+                  [
+                    240.0,
+                    197.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 7000.0
+              }
+            ]
+          },
+          {
+            "distinctFrames": 5,
+            "observedText": "iil",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 0,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    179.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    281.0
+                  ],
+                  [
+                    179.0,
+                    281.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 0.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 10,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    179.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    281.0
+                  ],
+                  [
+                    179.0,
+                    281.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 1000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 40,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    179.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    281.0
+                  ],
+                  [
+                    179.0,
+                    281.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 4000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 50,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    179.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    281.0
+                  ],
+                  [
+                    179.0,
+                    281.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 5000.0
+              },
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 70,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    179.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    281.0
+                  ],
+                  [
+                    179.0,
+                    281.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 7000.0
+              }
+            ]
+          },
+          {
+            "distinctFrames": 1,
+            "observedText": "71",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 20,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    223.0,
+                    132.0
+                  ],
+                  [
+                    248.0,
+                    132.0
+                  ],
+                  [
+                    248.0,
+                    152.0
+                  ],
+                  [
+                    223.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 2000.0
+              }
+            ]
+          },
+          {
+            "distinctFrames": 1,
+            "observedText": "aa",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 20,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    255.0,
+                    99.0
+                  ],
+                  [
+                    317.0,
+                    99.0
+                  ],
+                  [
+                    317.0,
+                    152.0
+                  ],
+                  [
+                    255.0,
+                    152.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 2000.0
+              }
+            ]
+          },
+          {
+            "distinctFrames": 1,
+            "observedText": "il",
+            "sourceRefs": [
+              {
+                "analysisScale": 1.0,
+                "captureSessionId": "synthetic-session",
+                "coordinateSpace": "stored-decoded-pixels",
+                "decodedDimensions": [
+                  640,
+                  480
+                ],
+                "frameIndex": 20,
+                "objectVersionId": "synthetic-v1",
+                "polygon": [
+                  [
+                    179.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    220.0
+                  ],
+                  [
+                    448.0,
+                    281.0
+                  ],
+                  [
+                    179.0,
+                    281.0
+                  ]
+                ],
+                "sha256": "b3ab3fb094eed18561c169e18cd4d7cf8f20d9bb8aa798e5e71591566e520b15",
+                "sourceId": "response",
+                "timeMs": 2000.0
+              }
+            ]
+          }
+        ],
+        "fullContinuity": false,
+        "modelInference": {
+          "qualified": false,
+          "state": "NOT_CONFIGURED"
+        },
+        "objectIdentityQualified": false,
+        "ocrFailures": []
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 1205.691
+      },
+      "artifactCount": 6,
+      "resultPath": "F03-timeline/result.json",
+      "wallIncludingStartupMs": 1256.323
+    },
+    {
+      "case": "F04-condition",
+      "feature": "prooftwin",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "INCONCLUSIVE",
+      "diagnostics": {
+        "mode": "condition2d",
+        "unobservedFaces": "ALL_NOT_EXPLICITLY_SOURCED"
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 244.716
+      },
+      "artifactCount": 3,
+      "resultPath": "F04-condition/result.json",
+      "wallIncludingStartupMs": 292.009
+    },
+    {
+      "case": "F04-sparse3d",
+      "feature": "prooftwin",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "RECORDED",
+      "diagnostics": {
+        "attemptedImages": 6,
+        "geometryScreenPassed": true,
+        "medianReprojectionErrorPixels": 0.1427297057174406,
+        "medianTriangulationAngleDegrees": 27.62770312885576,
+        "points3D": 193,
+        "qualified": false,
+        "registeredImages": 6,
+        "toolVersion": "3.13.0"
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 170376,
+        "wallTimeMs": 1273.832
+      },
+      "artifactCount": 1,
+      "resultPath": "F04-sparse3d/result.json",
+      "wallIncludingStartupMs": 1388.244
+    },
+    {
+      "case": "F05-appearance",
+      "feature": "proofmatch",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "RECORDED",
+      "diagnostics": {
+        "method": "COLOR_HISTOGRAM_AND_CONSTRAINED_REGISTRATION",
+        "qualified": false
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 141784,
+        "wallTimeMs": 274.078
+      },
+      "artifactCount": 1,
+      "resultPath": "F05-appearance/result.json",
+      "wallIncludingStartupMs": 345.725
+    },
+    {
+      "case": "F06-response",
+      "feature": "prooflive",
+      "returnCode": 0,
+      "operationalState": "SUCCEEDED",
+      "findingState": "INCONCLUSIVE",
+      "diagnostics": {
+        "challengeId": "synthetic-not-server-issued",
+        "freshnessValidatedByWorker": false,
+        "illuminationCorrelation": 0.9999806501876852,
+        "livenessProbability": null,
+        "motionParallaxDiagnostic": {
+          "fundamentalInlierFraction": 0.9081632653061225,
+          "homographyInlierFraction": 0.8316326530612245,
+          "homographyResidualP90Pixels": 4.920803070068359,
+          "limitation": "Epipolar versus planar residuals can reflect tracking error or object motion; no calibrated depth/replay decision.",
+          "matchedPoints": 196,
+          "medianMotionPixels": 0.07921052724123001,
+          "parallaxConclusion": null,
+          "qualified": false,
+          "state": "DIAGNOSTIC_ONLY"
+        },
+        "motionPlanarFit": {
+          "homographySecondToFirst": [
+            [
+              1.0008061144582296,
+              0.0007332466083894142,
+              -0.16958734450863208
+            ],
+            [
+              0.00011538990251576633,
+              1.0011746993662676,
+              -0.09835294747244953
+            ],
+            [
+              2.5674979182044887e-07,
+              3.4170136631398745e-06,
+              1.0
+            ]
+          ],
+          "inlierRatio": 0.9214659685863874,
+          "inliers": 176,
+          "matches": 191,
+          "medianResidualPixels": 0.07525910437107086,
+          "registrationMethod": "SIFT_RATIO_RANSAC_HOMOGRAPHY"
+        },
+        "parallaxDiscriminationQualified": false,
+        "qualified": false,
+        "responseState": "INCONCLUSIVE",
+        "spatialTileCorrelations": [
+          0.9999775642950506,
+          0.9999855076123076,
+          0.9999776253010987,
+          0.9999792134291456
+        ]
+      },
+      "resourceUsage": {
+        "limits": {
+          "addressSpaceBytes": 2147483648,
+          "cpuThreads": 1,
+          "decodedPixelsPerFrame": 24000000,
+          "inputBytes": 134217728,
+          "selectedFrames": 120,
+          "wallSeconds": 55
+        },
+        "maxRssKiB": 144740,
+        "wallTimeMs": 514.297
+      },
+      "artifactCount": 1,
+      "resultPath": "F06-response/result.json",
+      "wallIncludingStartupMs": 575.986
+    }
+  ],
+  "physicalAttempts": 0,
+  "nativeDeviceAttempts": 0,
+  "rareErrorRequirements": {
+    "method": "Exact one-sided Clopper-Pearson at the prespecified independent experimental unit; any error counts the unit as error.",
+    "families": [],
+    "zeroErrorUnitsNeeded": 29956,
+    "limitations": [
+      "A statistical bound assumes genuinely independent prespecified units and cannot excuse a repeatable bypass.",
+      "Error bound alone does not satisfy conclusive coverage, eligible population or physical validation gates."
+    ]
+  },
+  "cost": {
+    "providerSpendMeasured": false,
+    "cloudCostPerProof": null,
+    "reason": "Local runtime and output sizes measured; no cloud pricing or lifetime retention assumed."
+  },
+  "unresolved": [
+    "Consented physical corpus and real camera tests unavailable.",
+    "No qualified physical/capture/condition/liveness claim.",
+    "Synthetic copy/transfer images test plumbing and channel separation only."
+  ],
+  "commands": {
+    "protocolTests": "python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -q",
+    "benchmark": "python research/benchmarks/run.py --output <new-private-directory> --sparse3d",
+    "backendEnrollment": "cd backend && npm test -- --run tests/rnd-enrollment.test.ts"
+  },
+  "verification": {
+    "pythonTests": 28,
+    "pythonTestsPassed": 28,
+    "pythonTestsWallSeconds": 9.89,
+    "backendEnrollmentTests": 2,
+    "backendEnrollmentTestsPassed": 2,
+    "backendTypecheck": "PASSED",
+    "canonicalPositiveVectors": 4,
+    "canonicalRejectionVectors": 5
+  },
+  "sourceFiles": {
+    "research/vision/worker.py": "b252e480320e8b7991c563347bf0673c5bde5ad6578e12c7fb99b3a06d30ed65",
+    "research/vision/engine.py": "d711cbb48a2184766742053306439d00f8696c28744a22a2895178117ee3aed0",
+    "research/vision/enrollment.py": "3d6bcef621f1767ccf1695a36b9b955ff500fb481c0a59a9294cd0f8fa0af37e",
+    "research/vision/sfm.py": "a371f6e09000cadb68e9a1998859e818a4492813b7781d49b75da8bc2ee8923a",
+    "research/vision/action_model.py": "2cecb4dd8257c9335de6bd3581487cea32992254c1c216b398de1e19f83deca1",
+    "research/vision/segmentation.py": "f478dc33226d2199d916c0bacfb9efb93018137c81952257f09cf07427c83494",
+    "research/vision/policy.json": "8fb8499032467d09ea84dcf2e9c43a341cfb6c33ad14a8cd80fad36033b7919b",
+    "research/vision/requirements-linux-py312.lock": "beaeaf3a0d2efbccaef404c1cff976ce6425da0266914665a263d57bb6e722b9"
+  }
+}

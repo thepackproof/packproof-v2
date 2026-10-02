@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "packproof.vision-policy.v1",
+  "policyVersion": "rnd-vision-2026-10-02-v1",
+  "customerFindingsEnabled": false,
+  "physicalQualification": false,
+  "sceneResponseQualification": false,
+  "conditionQualification": false,
+  "requiredRegionGroups": ["label", "carton"],
+  "registration": {"minInliers": 12, "minInlierRatio": 0.35, "maxMedianResidualPixels": 3.0},
+  "quality": {"minLaplacianVariance": 60.0, "maxClippedBrightFraction": 0.3, "minDynamicRange": 25.0},
+  "limitations": [
+    "All thresholds are frozen engineering screening values, not calibrated physical decision thresholds.",
+    "No threshold permits a consistency, liveness, or physical-difference finding.",
+    "Physical qualification requires independent held-out device, material, printing, and attack trials."
+  ]
+}

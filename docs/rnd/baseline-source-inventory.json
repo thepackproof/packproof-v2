@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "packproof.rnd-baseline.v1",
+  "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "auditDate": "2026-10-02",
+  "scope": "Repository source only; no deployed infrastructure or device audit",
+  "sourcePlan": {
+    "filename": "PackProof_Executive_Overview_and_ASTRA_RnD_Development_Plan_2026-10-02(1).docx",
+    "sha256": "4ea1c8a76569acffa40d69247c3910b375ea778429ab68178ab1cff5fc46b166"
+  },
+  "protectedSourceInventory": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "b074d4fe9c24e78abe17f37b92f8c61dad14375b4201ea43679e39df57fa425e",
+      "bytes": 413
+    },
+    {
+      "path": "docs/DEVELOPMENT_PLAN.md",
+      "sha256": "c485b2547e51461d3acbedb32d2d4c3bf8344ee074b1b7a24d07e852876c5c5e",
+      "bytes": 8327
+    },
+    {
+      "path": "backend/src/canonical.ts",
+      "sha256": "7da11458b8dc9255d3851dbb77c38448b891f95f90cd64ae5641f543fe186132",
+      "bytes": 706
+    },
+    {
+      "path": "backend/src/domain/evidence.ts",
+      "sha256": "c98ddd415b4aa5ad4eff5d7a31cce6cdd312f5fb551a9fc4ef36461a97ca3ad7",
+      "bytes": 25318
+    },
+    {
+      "path": "backend/src/domain/finalize.ts",
+      "sha256": "65b8f8202f3205800409598393cba6284bcf70d6442d93f716fb493891b86161",
+      "bytes": 20955
+    },
+    {
+      "path": "backend/src/domain/finalize-requirements.ts",
+      "sha256": "df43a327ea01db0597abfa1692c011ed886864cca0d7681cd8a38ae1e11a3e91",
+      "bytes": 4195
+    },
+    {
+      "path": "backend/src/domain/resumable-upload.ts",
+      "sha256": "7f479979c71ffb51ed90d0bd48d615eb0893f9437e2bc6f3c3134eef5e9fd8b4",
+      "bytes": 11817
+    },
+    {
+      "path": "backend/src/domain/evidence-review.ts",
+      "sha256": "dcc7a6369724dbbf8679ee3ef359a0e04c4f283467cc7185271d64682a9a5e3c",
+      "bytes": 17909
+    },
+    {
+      "path": "backend/src/domain/disclosure-package.ts",
+      "sha256": "2d52a5685035f4ee92e31e5080b77939094091b8591b3da5338521a5e7900656",
+      "bytes": 7048
+    },
+    {
+      "path": "backend/src/domain/manifest-signing.ts",
+      "sha256": "df6241aaf2f46863821310eaeae76bf24e2d5d8bcd24698fbc8e58c628544a58",
+      "bytes": 3902
+    },
+    {
+      "path": "backend/src/domain/retention.ts",
+      "sha256": "5317446f14b85c48c51101a9694f1dfbdbd6f754f2d5f54100bb9d3c175085f4",
+      "bytes": 2088
+    },
+    {
+      "path": "backend/src/domain/retention-policy.ts",
+      "sha256": "15e8c7ff659ccaa788ef05440e9166f2636e40da20c9abb4d941a69f2e4d2e24",
+      "bytes": 11796
+    },
+    {
+      "path": "mobile/src/capture.ts",
+      "sha256": "3ed9321a80a0ea39258823bdd57aeeda17b381b017c47efc025f62d31af302e0",
+      "bytes": 35531
+    },
+    {
+      "path": "mobile/src/capture/engine.ts",
+      "sha256": "e6812d0b927c2f70267781cc77e02f1b35e4c9b2572f92332610c6545277d295",
+      "bytes": 7972
+    },
+    {
+      "path": "mobile/src/capture/recovery-model.ts",
+      "sha256": "9ad8e228c6367bf1a8e7a8c84772548b59b85b900b03cfc59ddf187cff2e1611",
+      "bytes": 5293
+    },
+    {
+      "path": "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/UnifiedCameraView.kt",
+      "sha256": "d109b2bbf3128de46444d867c7a3dad0206c2958c54c82f35a066ca9cd852c99",
+      "bytes": 25558
+    },
+    {
+      "path": "mobile/modules/packproof-unified-camera/ios/UnifiedCameraView.swift",
+      "sha256": "4177b23ab8bfe9adac3d69091a6abf17b1ae5e5015778e05704f8c133527a170",
+      "bytes": 25058
+    },
+    {
+      "path": "web/src/capture-queue.ts",
+      "sha256": "aa7adaa57c95179aeb72f1ee5b797bfda59174b49268fcdce303124f1faa3b72",
+      "bytes": 40008
+    },
+    {
+      "path": "desktop/src/main/evidence/engine.ts",
+      "sha256": "4486713b8ad520e49d1820779c786a26a76fdc9736457fb9a20e4840b2cbb4db",
+      "bytes": 31551
+    }
+  ],
+  "lockedDependencyVersions": {
+    "backend": {
+      "express": "4.22.2",
+      "pg": "8.23.0",
+      "typescript": "5.9.3",
+      "vitest": "3.2.7"
+    },
+    "web": {
+      "react": "19.2.8",
+      "vite": "7.3.6",
+      "typescript": "5.9.3"
+    },
+    "mobile": {
+      "expo": "53.0.27",
+      "expo-camera": "16.1.11",
+      "react-native": "0.79.6",
+      "typescript": "5.8.3"
+    },
+    "desktop": {
+      "electron": "44.4.5",
+      "electron-builder": "26.15.3",
+      "electron-updater": "6.8.9",
+      "typescript": "5.9.3"
+    }
+  },
+  "runtimeRetentionObservedInSource": {
+    "minimumProtectionDays": 90,
+    "automaticDeletion": false,
+    "productionConfigurationAudited": false
+  },
+  "baselineRootAndMediaFixtures": "Owned by CORE-02; not established by these source hashes",
+  "releaseAuthorization": "NOT_AUTHORIZED"
+}

@@ -1,3 +1,5 @@
+import {buildRndRequest,type RndOperationId,type RndInput,type RndOutput} from '../../../packages/evidence-contracts/generated-client.mjs';
+import type {RndCapabilities,RndSnapshot,Feature,ReviewerAnnotation,DerivativeGrant} from '../../../web/src/rnd/types';
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
 import { randomUUID } from 'node:crypto';
 import type { DesktopConfig } from './config.js';
@@ -27,6 +29,7 @@ const id = (value: string) => encodeURIComponent(value);
 
 /** Main-process-only transport. No arbitrary endpoint is exposed to renderer IPC. */
 export class DesktopApi {
+  private rndOperation<K extends RndOperationId>(operation:K,input:RndInput<K>):Promise<RndOutput<K>>{this.requireResearch();const request=buildRndRequest(operation,input);return this.request(request.path,{method:request.method as RequestOptions['method'],body:request.body,idempotencyKey:request.headers['Idempotency-Key']});}
   private readonly fetcher: typeof fetch;
   constructor(private readonly options: { config: DesktopConfig; getToken: (forceRefresh?: boolean) => Promise<string | null>; getAccountId: () => string | null; fetch?: typeof fetch }) { this.fetcher = options.fetch ?? fetch; }
   assertAccount(accountId: string): void {
@@ -66,6 +69,19 @@ export class DesktopApi {
     if (options.auth !== false && accountId) this.assertAccount(accountId);
     return result;
   }
+  rndCapabilities():Promise<RndCapabilities>{this.requireResearch();return this.rndOperation('getCapabilities',{});}
+  private requireResearch(){if(!this.options.config.research)throw new Error('Research tools are unavailable in this build.');}
+  rndList(proofId:string):Promise<RndSnapshot>{this.requireResearch();return this.rndOperation('listAnalyses',{path:{id:proofId}});}
+  rndWrite<T>(proofId:string,operation:'consents'|'analyses'|'derivatives'|'exports',body:unknown,key:string):Promise<T>{this.requireResearch();return this.request(`/proofs/${id(proofId)}/rnd/${operation}`,{method:'POST',body,idempotencyKey:key});}
+  rndRequest(proofId:string,input:{feature:Feature;evidenceIds:string[];scope?:string;parameters?:Record<string,unknown>;relatedAnalysisIds?:string[]},key:string):Promise<unknown>{return this.rndWrite(proofId,'analyses',input,key);}
+  rndArtifact(proofId:string,analysisId:string,index:number,signal?:AbortSignal):Promise<Response>{this.requireResearch();if(!Number.isSafeInteger(index)||index<0||index>31)throw new Error('Invalid artifact');return this.response(`/proofs/${id(proofId)}/rnd/analyses/${id(analysisId)}/artifacts/${index}`,{signal,timeout:120000});}
+  rndGrants(proofId:string,analysisId:string):Promise<{grants:DerivativeGrant[]}>{this.requireResearch();return this.rndOperation('listDerivativeGrants',{path:{id:proofId,analysisId}});}
+  rndCreateGrant(proofId:string,analysisId:string,input:{artifactSha256:string;recipeSha256:string;expiresInSeconds:number},key:string):Promise<DerivativeGrant>{this.requireResearch();return this.rndOperation('createDerivativeGrant',{path:{id:proofId,analysisId},body:input,idempotencyKey:key});}
+  rndRevokeGrant(proofId:string,grantId:string):Promise<unknown>{this.requireResearch();return this.rndOperation('revokeDerivativeGrant',{path:{id:proofId,grantId},body:{}});}
+  rndAnnotations(proofId:string):Promise<{annotations:ReviewerAnnotation[]}>{this.requireResearch();return this.rndOperation('listAnnotations',{path:{id:proofId}});}
+  rndAnnotate(proofId:string,input:{analysisId:string;sourceId:string;text:string;interval?:{startMs:number;endMs:number};supersedesId?:string},key:string):Promise<unknown>{this.requireResearch();return this.rndOperation('addAnnotation',{path:{id:proofId},body:input,idempotencyKey:key});}
+  rndArchive(proofId:string,analysisId?:string,signal?:AbortSignal):Promise<Response>{this.requireResearch();return this.response(`/proofs/${id(proofId)}/rnd/${analysisId?`analyses/${id(analysisId)}/`:''}export.zip`,{signal,timeout:600000});}
+  rndReview(proofId:string,analysisId:string,input:{approved:true;artifactSha256:string;recipeSha256:string},key:string):Promise<unknown>{this.requireResearch();return this.rndOperation('derivativeReview',{path:{id:proofId,analysisId},body:input,idempotencyKey:key});}
   getMe(signal?: AbortSignal): Promise<ProfileView> { return this.request('/me', { signal }); }
   updateProfile(input: { username?: string; displayName?: string }): Promise<ProfileView> { return this.request('/me/profile', { method: 'PATCH', body: input }); }
   getCapabilities(signal?: AbortSignal): Promise<DesktopCapabilities> { return this.request('/capabilities', { auth: false, signal }); }

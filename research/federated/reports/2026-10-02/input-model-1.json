@@ -1,0 +1,15 @@
+{
+  "payload": {
+    "schema": "proofcollective-model/v1",
+    "weights": [
+      0.6,
+      -0.4,
+      0.0,
+      0.0
+    ],
+    "purpose": "capture-frame-usefulness/v1"
+  },
+  "signature": "N9h+HYNy2pICUvkRuYCMRwTLb59+dOoq9uFtBMOi4GGzZ1ZDk7UyN0k763qpV3RRgXzDQvwvRT1QDRMqMW9YAQ==",
+  "keyId": "6f5497155b5ef6c8aef5973e849a87489489d6aea2bacfaa2dc37a135d743572",
+  "canonicalPayload": "{\"purpose\":\"capture-frame-usefulness/v1\",\"schema\":\"proofcollective-model/v1\",\"weights\":[0.6,-0.4,0.0,0.0]}"
+}

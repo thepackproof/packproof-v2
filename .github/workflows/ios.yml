@@ -21,7 +21,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   simulator:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') }}
+    needs: rnd-release-policy
     name: Compile iOS app and Share Extension
     runs-on: macos-15
     timeout-minutes: 75
@@ -99,9 +106,9 @@ jobs:
             ${{ runner.temp }}/ios-build.log
 
   app-store:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (github.event_name == 'workflow_dispatch' && inputs.signed_build) }}
     name: Signed iOS archive
-    if: github.event_name == 'workflow_dispatch' && inputs.signed_build
-    needs: simulator
+    needs: [simulator, rnd-release-policy]
     permissions:
       contents: read
       id-token: write

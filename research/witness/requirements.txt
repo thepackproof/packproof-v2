@@ -1,0 +1,3 @@
+pymerkle==6.1.0
+cryptography==46.0.3
+rfc8785==0.1.4

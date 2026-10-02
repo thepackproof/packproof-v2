@@ -25,6 +25,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
   private var torchRequested = false
   private var identifiersEnabled = false
   private var current: Recording?
+  private weak var researchLease: Recording?
   private var recentCodes: [String: Double] = [:]
   private var candidateReads: [String: (time: Double, count: Int)] = [:]
   private var notificationTokens: [NSObjectProtocol] = []
@@ -36,6 +37,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
     let url: URL
     let promise: Promise
     let journal: CaptureJournal?
+    let research: ResearchCapture?
     let maxDurationMs: Int64
     let maxBytes: Int64
     var writer: AVAssetWriter?
@@ -60,7 +62,8 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
       maxDurationMs = proofCapture ? 300_000 : 600_000
       maxBytes = proofCapture ? 250_000_000 : 512 * 1024 * 1024
       let directory = url.deletingLastPathComponent()
-      journal = CaptureStorage.fileManager.fileExists(atPath: directory.appendingPathComponent("capture-context.json").path)
+      research = ResearchCapture.create(directory: directory)
+      journal = (CaptureStorage.fileManager.fileExists(atPath: directory.appendingPathComponent("capture-context.json").path) || CaptureStorage.fileManager.fileExists(atPath: directory.appendingPathComponent("research-context.json").path))
         ? CaptureJournal(directory: directory) : nil
     }
   }
@@ -76,6 +79,10 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
     let center = NotificationCenter.default
     notificationTokens.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
       self?.willLeaveForeground()
+    })
+    notificationTokens.append(center.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+      guard let self else { return }
+      self.captureQueue.async { self.current?.research?.disable("MEMORY_PRESSURE") }
     })
     notificationTokens.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
       guard let self else { return }
@@ -124,6 +131,25 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
       if isAttached { self.ensureCamera() }
       else { self.interrupt("VIEW_DETACHED"); self.releaseCamera() }
     }
+  }
+
+  func disableResearchSampling(_ reason: String) { captureQueue.async {
+    self.releaseResearchLease(reason); self.current?.research?.disable(String(reason.prefix(100)))
+  } }
+  private func beginResearchLease(_ recording: Recording) {
+    let duration = recording.research?.passiveLeaseDurationMs() ?? 0
+    guard duration > 0, researchLease == nil else { return }
+    researchLease = recording
+    recording.research?.controlEvent("PASSIVE_EXCLUSIVE_LEASE_STARTED", reason: "NO_ILLUMINATION_COMMANDS")
+    captureQueue.asyncAfter(deadline: .now() + duration / 1000) {
+      if self.researchLease === recording { self.releaseResearchLease("TIME_LIMIT") }
+    }
+  }
+  private func releaseResearchLease(_ reason: String) {
+    guard let owner = researchLease else { return }
+    researchLease = nil
+    owner.research?.controlEvent("CONTROL_LEASE_RELEASED", reason: reason)
+    applyTorch()
   }
 
   func setActive(_ active: Bool) {
@@ -211,6 +237,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
   }
 
   private func applyTorch() {
+    guard researchLease == nil else { return }
     guard let device, device.hasTorch else { return }
     do {
       try device.lockForConfiguration()
@@ -313,6 +340,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
       if recording.lastPTS == nil {
         recording.startedUnixMs = Date().timeIntervalSince1970 * 1000
         recording.journal?.start()
+        beginResearchLease(recording)
         DispatchQueue.main.async {
           self.eventRecording = recording
           self.onRecordingStarted(["startedAtUnixMs": recording.startedUnixMs])
@@ -327,6 +355,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
         CMTimeCompare(sampleDuration, .zero) > 0,
         CMTimeGetSeconds(sampleDuration) <= 1 { recording.lastSampleDuration = sampleDuration }
       recording.durationMs = Int64(elapsed)
+      recording.research?.sample(pixelBuffer, pts: timestamp, mediaMs: recording.durationMs, device: device)
       let now = ProcessInfo.processInfo.systemUptime
       if now - recording.lastStorageCheck >= 1 {
         recording.lastStorageCheck = now
@@ -345,6 +374,12 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
     let now = ProcessInfo.processInfo.systemUptime * 1000
     guard now - recording.lastMetadataMs >= 150 else { return }
     recording.lastMetadataMs = now
+    if let videoConnection = videoOutput.connection(with: .video) {
+      let regions = metadataObjects.compactMap { $0 as? AVMetadataMachineReadableCodeObject }.map { code in
+        (code.time, videoOutput.transformedMetadataObject(for: code, connection: videoConnection)?.bounds)
+      }
+      recording.research?.observeBarcodeRegions(regions, width: recording.frameWidth, height: recording.frameHeight)
+    }
     for object in metadataObjects {
       guard let code = object as? AVMetadataMachineReadableCodeObject, let value = code.stringValue,
         let format = BarcodePayloadPolicy.format(code.type.rawValue),
@@ -393,7 +428,9 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
 
   private func finishRecording() {
     guard let recording = current, !recording.stopping else { return }
+    releaseResearchLease("STOP_OR_INTERRUPTION")
     recording.stopping = true
+    recording.research?.finish {}
     DispatchQueue.main.async { if self.eventRecording === recording { self.eventRecording = nil } }
     guard let writer = recording.writer, recording.lastPTS != nil, writer.status == .writing else {
       // cancelWriting deletes partial output. Keep any bytes for explicit recovery instead.

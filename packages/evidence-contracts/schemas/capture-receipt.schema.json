@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/capture-receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "intentId",
+    "intentDigest",
+    "proofId",
+    "captureSessionId",
+    "tenantId",
+    "subject",
+    "sources",
+    "sourceInventoryDigest",
+    "clientInventory",
+    "platformAssurances",
+    "receivedAt",
+    "assurance",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.capture-receipt.v1"
+    },
+    "intentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "intentDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "captureSessionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "subject": {
+      "$ref": "capture-subject.schema.json"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "committed-source.schema.json"
+      },
+      "maxItems": 16,
+      "minItems": 1
+    },
+    "sourceInventoryDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "clientInventory": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "canonicalJson",
+            "signatureBase64",
+            "publicKeyPem",
+            "keyProtection",
+            "sidecarStatus"
+          ],
+          "properties": {
+            "canonicalJson": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32768
+            },
+            "signatureBase64": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 2048,
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+            },
+            "publicKeyPem": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "keyProtection": {
+              "const": "UNVERIFIED"
+            },
+            "sidecarStatus": {
+              "const": "UNRECEIVED_SIDECAR_COMMITMENTS"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "platformAssurances": {
+      "type": "array",
+      "items": {
+        "$ref": "signed-record.schema.json"
+      },
+      "maxItems": 16
+    },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "assurance": {
+      "type": "object",
+      "required": [
+        "acquisitionMode",
+        "appAttestation",
+        "keyProtection",
+        "challengeFreshness",
+        "chainCoverage",
+        "serverReceipt",
+        "signatureVerification",
+        "sensorAttestation"
+      ],
+      "properties": {
+        "acquisitionMode": {
+          "enum": [
+            "ONLINE",
+            "OFFLINE"
+          ]
+        },
+        "appAttestation": {
+          "enum": [
+            "APP_REQUEST_VALIDATED",
+            "UNSUPPORTED"
+          ]
+        },
+        "keyProtection": {
+          "const": "UNKNOWN"
+        },
+        "challengeFreshness": {
+          "enum": [
+            "ONLINE_START_BOUND",
+            "OFFLINE_NOT_FRESH"
+          ]
+        },
+        "chainCoverage": {
+          "const": "FINAL_FILE_ONLY"
+        },
+        "serverReceipt": {
+          "const": "SIGNED_BYTES_RECEIVED"
+        },
+        "signatureVerification": {
+          "enum": [
+            "BOUND_CLIENT_AND_SERVER_SIGNATURES",
+            "SERVER_SIGNATURE_ONLY"
+          ]
+        },
+        "sensorAttestation": {
+          "const": "UNSUPPORTED"
+        }
+      },
+      "additionalProperties": false
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      },
+      "maxItems": 100
+    }
+  },
+  "additionalProperties": false
+}

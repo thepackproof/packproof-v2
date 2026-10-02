@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/derivative-grant-event.schema.json",
+  "description": "Public signed record only; bearer tokens and stored token hashes must never appear here.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "grantId",
+    "kind",
+    "actorId",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.derivative-grant-event.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "grantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "kind": {
+      "enum": [
+        "CREATED",
+        "REVOKED",
+        "REDEEM_STARTED",
+        "REDEEM_COMPLETED",
+        "REDEEM_ABORTED"
+      ]
+    },
+    "actorId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

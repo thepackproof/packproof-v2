@@ -1,4 +1,4 @@
-const STORAGE_KEY = "packproof-v2-web.session";
+const STORAGE_KEY = import.meta.env.VITE_PACKPROOF_RND === "1" ? "packproof-rnd-web.session" : "packproof-v2-web.session";
 
 export type AuthMode = "dev" | "cognito";
 
@@ -16,6 +16,7 @@ export interface WebSession {
 }
 
 export function defaultApiBaseUrl(): string {
+  if(import.meta.env.VITE_PACKPROOF_RND === "1") return import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() || "http://127.0.0.1:3000";
   const configured = import.meta.env.VITE_PACKPROOF_API_BASE_URL?.trim() ?? "";
   // URL-based media and API helpers require an absolute base, including when
   // a hosted preview uses the same-origin API bridge.

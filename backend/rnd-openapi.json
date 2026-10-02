@@ -1,0 +1,5326 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "PackProof isolated R&D API",
+    "version": "0.1.0-rnd.1",
+    "description": "Additive research API only; production API remains backend/openapi.json. All findings are governed by server flags, authorization, explicit consent, immutable committed sources and qualification gates. An accepted asynchronous job can later fail/abstain. Parameter shape validation does not establish source dimensions, physical association, consent, qualification or cryptographic validity. No deployment authorization is granted."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/rnd/capabilities": {
+      "get": {
+        "operationId": "getCapabilities",
+        "summary": "Read server research feature flags",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/consents": {
+      "post": {
+        "operationId": "recordConsent",
+        "summary": "Record or withdraw explicit research consent",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consent"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/capture-intents": {
+      "post": {
+        "operationId": "issueCaptureIntent",
+        "summary": "Issue signed online or offline capture intent",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueIntentInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/capture-intents/{intent}/start": {
+      "post": {
+        "operationId": "startCaptureIntent",
+        "summary": "Bind a fresh capture session and optional public key",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "intent",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartIntentInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/capture-intents/{intent}/close": {
+      "post": {
+        "operationId": "closeCaptureIntent",
+        "summary": "Seal signed committed source inventory",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "intent",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseIntentInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/capture-intents/{intent}/sidecars/{name}": {
+      "post": {
+        "operationId": "uploadCaptureSidecar",
+        "summary": "Commit one exact chunk of a signed native sidecar",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "intent",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(research-acquisition\\.json|native-journal\\.jsonl|research-frame-[0-5]\\.pgm)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SidecarResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SidecarChunkInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/live-challenges": {
+      "post": {
+        "operationId": "issueLiveChallenge",
+        "summary": "Issue passive laboratory challenge; illumination disabled",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveChallengeResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveChallengeInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/analyses": {
+      "post": {
+        "operationId": "requestAnalysis",
+        "summary": "Queue a bounded research analysis",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisView"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listAnalyses",
+        "summary": "List visible analyses and committed source inventory",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/comparisons": {
+      "post": {
+        "operationId": "requestComparison",
+        "summary": "Queue a bounded research analysis",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisView"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComparisonRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/derivatives": {
+      "post": {
+        "operationId": "requestDerivative",
+        "summary": "Queue a bounded research analysis",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisView"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DerivativeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rnd/analyses/{analysisId}": {
+      "get": {
+        "operationId": "getAnalysis",
+        "summary": "Read an authorized immutable analysis",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisView"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/extensions": {
+      "get": {
+        "operationId": "listExtensions",
+        "summary": "Page signed append-only evidence extensions",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/exports": {
+      "post": {
+        "operationId": "exportResearchMetadata",
+        "summary": "Export signed research metadata without original bytes",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchExport"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/export.zip": {
+      "get": {
+        "operationId": "downloadResearchZip",
+        "summary": "Download authorized originals and research bundle",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/analyses/{analysisId}/artifacts/{index}": {
+      "get": {
+        "operationId": "getAnalysisArtifact",
+        "summary": "Download a digest-verified source-linked artifact",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/analyses/{analysisId}/review": {
+      "post": {
+        "operationId": "derivativeReview",
+        "summary": "Review the exact derivative and recipe digest",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivativeReviewResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DerivativeReviewInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/analyses/{analysisId}/export.zip": {
+      "get": {
+        "operationId": "downloadDerivativeZip",
+        "summary": "Download reviewed derivative without originals",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/enrollments": {
+      "post": {
+        "operationId": "createEnrollment",
+        "summary": "Create passive frozen region enrollment",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentCreated"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollmentInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listEnrollments",
+        "summary": "Read immutable enrollment lifecycle",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/annotations": {
+      "post": {
+        "operationId": "addAnnotation",
+        "summary": "Append a source-attributed reviewer statement",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnotationInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listAnnotations",
+        "summary": "Read reviewer statements",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/platform-challenges": {
+      "post": {
+        "operationId": "issuePlatformChallenge",
+        "summary": "Issue request-bound platform challenge",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformChallengeResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformChallengeInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/platform-challenges/{challengeId}/verify": {
+      "post": {
+        "operationId": "verifyPlatformChallenge",
+        "summary": "Verify platform assertion against server policy",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "challengeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformAssuranceResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformVerifyInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/analyses/{analysisId}/grants": {
+      "post": {
+        "operationId": "createDerivativeGrant",
+        "summary": "Issue expiring bearer access to an exact reviewed derivative",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivativeGrantResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DerivativeGrantInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listDerivativeGrants",
+        "summary": "Read grant status and signed audit events",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivativeGrantList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/derivative-grants/{grantId}/revoke": {
+      "post": {
+        "operationId": "revokeDerivativeGrant",
+        "summary": "Revoke future bearer access",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivativeGrantRevokeResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rnd/derivative-grants/redeem": {
+      "post": {
+        "operationId": "redeemDerivativeGrant",
+        "summary": "Redeem bearer grant as a redacted archive",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemInput"
+              }
+            }
+          }
+        },
+        "security": [],
+        "description": "Bearer grant is submitted in the JSON body, never a query or path. Only the approved redacted archive is returned. Revocation does not recall downloaded bytes."
+      }
+    },
+    "/admin/rnd/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "summary": "Read system administrator research queue metrics",
+        "tags": [
+          "Research administration"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Metrics"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/rnd/analyses/{analysisId}/retry": {
+      "post": {
+        "operationId": "retryAnalysis",
+        "summary": "Create audited retry of a failed research analysis",
+        "tags": [
+          "Research administration"
+        ],
+        "parameters": [
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "description": "Retry the same operation and body with the original key. No automatic retries are performed by the generated client."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/rnd/learning-reports": {
+      "post": {
+        "operationId": "importLearningReport",
+        "summary": "Import a signed synthetic candidate without launching training",
+        "tags": [
+          "Research administration"
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningImportInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listLearningReports",
+        "summary": "Read signed synthetic research candidate summaries",
+        "tags": [
+          "Research administration"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/rnd/learning-reports/{id}/export": {
+      "get": {
+        "operationId": "exportLearningReport",
+        "summary": "Export exact signed synthetic candidate",
+        "tags": [
+          "Research administration"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningExport"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing PackProof authenticated session; access remains scoped to the caller and Proof. Admin endpoints additionally require system administrator role."
+      }
+    },
+    "schemas": {
+      "Feature": {
+        "enum": [
+          "proofprint",
+          "verifiedcapture",
+          "proofsight",
+          "prooftwin",
+          "proofmatch",
+          "prooflive",
+          "proofshield",
+          "proofpilot",
+          "proofwitness",
+          "proofcollective"
+        ]
+      },
+      "EvidenceIds": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+        },
+        "minItems": 1,
+        "maxItems": 16,
+        "uniqueItems": true
+      },
+      "AnalysisEnvelope": {
+        "$ref": "../packages/evidence-contracts/schemas/analysis.schema.json"
+      },
+      "SourceRef": {
+        "$ref": "../packages/evidence-contracts/schemas/source.schema.json"
+      },
+      "SignedRecord": {
+        "$ref": "../packages/evidence-contracts/schemas/extension-record.schema.json"
+      },
+      "CaptureIntent": {
+        "$ref": "../packages/evidence-contracts/schemas/capture-intent.schema.json"
+      },
+      "CaptureReceipt": {
+        "$ref": "../packages/evidence-contracts/schemas/capture-receipt.schema.json"
+      },
+      "PlatformChallenge": {
+        "$ref": "../packages/evidence-contracts/schemas/platform-challenge.schema.json"
+      },
+      "PlatformAssurance": {
+        "$ref": "../packages/evidence-contracts/schemas/platform-assurance.schema.json"
+      },
+      "CaptureSubject": {
+        "$ref": "../packages/evidence-contracts/schemas/capture-subject.schema.json"
+      },
+      "Signature": {
+        "$ref": "../packages/evidence-contracts/schemas/signature.schema.json"
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 180
+              },
+              "message": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "Capabilities": {
+        "type": "object",
+        "properties": {
+          "environment": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "features": {
+            "type": "object",
+            "properties": {
+              "proofprint": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "verifiedcapture": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "proofsight": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "prooftwin": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "proofmatch": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "prooflive": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "proofshield": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "proofpilot": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "proofwitness": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              },
+              "proofcollective": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "boolean"
+                  },
+                  "processing": {
+                    "type": "boolean"
+                  },
+                  "internalDisplay": {
+                    "type": "boolean"
+                  },
+                  "customerDisplay": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "collection",
+                  "processing",
+                  "internalDisplay",
+                  "customerDisplay"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "proofprint",
+              "verifiedcapture",
+              "proofsight",
+              "prooftwin",
+              "proofmatch",
+              "prooflive",
+              "proofshield",
+              "proofpilot",
+              "proofwitness",
+              "proofcollective"
+            ],
+            "additionalProperties": false
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "killSwitch": {
+            "type": "boolean"
+          },
+          "releaseAuthorized": {
+            "const": false
+          }
+        },
+        "required": [
+          "environment",
+          "features",
+          "enabled",
+          "killSwitch",
+          "releaseAuthorized"
+        ],
+        "additionalProperties": false
+      },
+      "ConsentInput": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "enum": [
+              "EXPERIMENTAL_ANALYSIS",
+              "LEARNING"
+            ]
+          },
+          "version": {
+            "const": "packproof.research-consent.v1"
+          },
+          "granted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "purpose",
+          "version",
+          "granted"
+        ],
+        "additionalProperties": false
+      },
+      "Consent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "proofId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "actorId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "purpose": {
+            "enum": [
+              "EXPERIMENTAL_ANALYSIS",
+              "LEARNING"
+            ]
+          },
+          "version": {
+            "const": "packproof.research-consent.v1"
+          },
+          "granted": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notice": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "id",
+          "proofId",
+          "actorId",
+          "purpose",
+          "version",
+          "granted",
+          "createdAt",
+          "notice"
+        ],
+        "additionalProperties": false
+      },
+      "IssueIntentInput": {
+        "type": "object",
+        "properties": {
+          "legId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "acquisitionMode": {
+            "enum": [
+              "ONLINE",
+              "OFFLINE"
+            ]
+          },
+          "profileId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          }
+        },
+        "required": [
+          "acquisitionMode"
+        ],
+        "additionalProperties": false
+      },
+      "StartIntentInput": {
+        "type": "object",
+        "properties": {
+          "nonce": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "captureSessionId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "clientPublicKeyPem": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "nonce",
+          "captureSessionId"
+        ],
+        "additionalProperties": false
+      },
+      "CloseIntentInput": {
+        "type": "object",
+        "properties": {
+          "evidenceIds": {
+            "$ref": "#/components/schemas/EvidenceIds"
+          },
+          "clientCanonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 32768
+          },
+          "clientSignatureBase64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "evidenceIds"
+        ],
+        "additionalProperties": false
+      },
+      "IntentResponse": {
+        "type": "object",
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/CaptureIntent"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "intent",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "StartResponse": {
+        "type": "object",
+        "properties": {
+          "intentId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "captureSessionId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "state": {
+            "const": "STARTED"
+          }
+        },
+        "required": [
+          "intentId",
+          "captureSessionId",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "ReceiptResponse": {
+        "type": "object",
+        "properties": {
+          "receipt": {
+            "$ref": "#/components/schemas/CaptureReceipt"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "receipt",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "SidecarChunkInput": {
+        "type": "object",
+        "properties": {
+          "partIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "partCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "byteLength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2097216
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "dataBase64": {
+            "type": "string",
+            "maxLength": 349528,
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          }
+        },
+        "required": [
+          "partIndex",
+          "partCount",
+          "byteLength",
+          "sha256",
+          "dataBase64"
+        ],
+        "additionalProperties": false,
+        "description": "262144-byte chunks. partCount must equal ceil(byteLength/262144); every decoded chunk must have the exact expected length. Receipt is bound to the sealed native inventory."
+      },
+      "SidecarResponse": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "const": "PART_RECEIVED"
+              },
+              "partIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 8
+              }
+            },
+            "required": [
+              "state",
+              "partIndex"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "const": "RECEIVED"
+              },
+              "sidecar": {
+                "$ref": "#/components/schemas/CaptureSidecarReceipt"
+              },
+              "canonicalJson": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 4194304
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Signature"
+              }
+            },
+            "required": [
+              "state",
+              "sidecar",
+              "canonicalJson",
+              "digest",
+              "signature"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "LiveChallengeInput": {
+        "type": "object",
+        "properties": {
+          "intentId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "mode": {
+            "const": "PASSIVE_LAB"
+          }
+        },
+        "required": [
+          "intentId",
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "LiveChallenge": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.live-challenge.v1"
+          },
+          "challengeId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "intentId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "proofId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/CaptureSubject"
+          },
+          "nonce": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "nonceDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "issuedAtMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expiresAtMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mode": {
+            "const": "PASSIVE_LAB"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+            },
+            "minItems": 0,
+            "maxItems": 0
+          },
+          "activeIlluminationEnabled": {
+            "const": false
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "challengeId",
+          "intentId",
+          "proofId",
+          "subject",
+          "nonce",
+          "nonceDigest",
+          "issuedAtMs",
+          "expiresAtMs",
+          "mode",
+          "commands",
+          "activeIlluminationEnabled"
+        ],
+        "additionalProperties": false
+      },
+      "LiveChallengeResponse": {
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "$ref": "#/components/schemas/LiveChallenge"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "challenge",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "Point": {
+        "type": "array",
+        "items": {
+          "type": "number",
+          "minimum": 0
+        },
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "Polygon": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Point"
+        },
+        "minItems": 3,
+        "maxItems": 16
+      },
+      "Region": {
+        "type": "object",
+        "properties": {
+          "regionId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "group": {
+            "enum": [
+              "label",
+              "carton",
+              "support",
+              "face"
+            ]
+          },
+          "polygon": {
+            "$ref": "#/components/schemas/Polygon"
+          },
+          "material": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "group",
+          "polygon"
+        ],
+        "additionalProperties": false
+      },
+      "ObjectMask": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "frameIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "polygon": {
+            "$ref": "#/components/schemas/Polygon"
+          }
+        },
+        "required": [
+          "sourceId",
+          "polygon"
+        ],
+        "additionalProperties": false
+      },
+      "RegionAnnotation": {
+        "type": "object",
+        "properties": {
+          "annotationId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "frameIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "semanticClass": {
+            "enum": [
+              "PARCEL",
+              "ITEM",
+              "HAND",
+              "OCCLUDER",
+              "OPENING",
+              "SEAM",
+              "OTHER"
+            ]
+          },
+          "polygon": {
+            "$ref": "#/components/schemas/Polygon"
+          }
+        },
+        "required": [
+          "annotationId",
+          "sourceId",
+          "semanticClass",
+          "polygon"
+        ],
+        "additionalProperties": false
+      },
+      "RedactionMask": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "start": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 300
+          },
+          "end": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 300
+          },
+          "class": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 64
+          },
+          "evidenceCritical": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "additionalProperties": false
+      },
+      "ProofprintParameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "enum": [
+              "enroll",
+              "compare"
+            ]
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Region"
+            },
+            "minItems": 0,
+            "maxItems": 16
+          },
+          "enrollmentId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "ProofsightParameters": {
+        "type": "object",
+        "properties": {
+          "samplingHz": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 8
+          },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegionAnnotation"
+            },
+            "minItems": 0,
+            "maxItems": 24
+          },
+          "segmentation": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "STATIC_BACKGROUND_DIAGNOSTIC"
+              },
+              "backgroundSourceId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              }
+            },
+            "required": [
+              "mode",
+              "backgroundSourceId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "ProoftwinParameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "enum": [
+              "condition2d",
+              "sparse3d"
+            ]
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Region"
+            },
+            "minItems": 0,
+            "maxItems": 16
+          },
+          "objectMasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectMask"
+            },
+            "minItems": 0,
+            "maxItems": 12
+          },
+          "focalLengthPixels": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 100000
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "ProofliveParameters": {
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          }
+        },
+        "required": [
+          "challengeId"
+        ],
+        "additionalProperties": false
+      },
+      "ProofshieldParameters": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "redact"
+              },
+              "kind": {
+                "enum": [
+                  "still",
+                  "video"
+                ]
+              },
+              "masks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RedactionMask"
+                },
+                "minItems": 0,
+                "maxItems": 128
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "zk-enroll"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "zk-prove"
+              },
+              "enrollmentId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "mask": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "boolean"
+                    },
+                    "minItems": 16,
+                    "maxItems": 16
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "boolean"
+                    },
+                    "minItems": 64,
+                    "maxItems": 64
+                  }
+                ]
+              }
+            },
+            "required": [
+              "mode",
+              "enrollmentId",
+              "mask"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ProofpilotParameters": {
+        "type": "object",
+        "properties": {
+          "samplingHz": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 8
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "ProofcollectiveParameters": {
+        "type": "object",
+        "properties": {
+          "learningReportId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "learningReportId"
+        ],
+        "additionalProperties": false
+      },
+      "EmptyParameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "AnalysisRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "proofprint"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/ProofprintParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "verifiedcapture"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/EmptyParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "proofsight"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/ProofsightParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "prooftwin"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/ProoftwinParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "proofmatch"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/EmptyParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "prooflive"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/ProofliveParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature",
+              "parameters"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "proofshield"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/ProofshieldParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "proofpilot"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/ProofpilotParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "proofwitness"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/EmptyParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "feature": {
+                "const": "proofcollective"
+              },
+              "evidenceIds": {
+                "$ref": "#/components/schemas/EvidenceIds"
+              },
+              "scope": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "parameters": {
+                "$ref": "#/components/schemas/ProofcollectiveParameters"
+              },
+              "relatedAnalysisIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "evidenceIds",
+              "feature",
+              "parameters"
+            ],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Only client-accepted parameters are exposed. Canonical parameters are limited to 32768 characters. Sources must already be committed, authorized and collectively <=128 MiB. Model paths, scores, policies, challenges and qualification are resolved by the server."
+      },
+      "ComparisonRequest": {
+        "type": "object",
+        "properties": {
+          "evidenceIds": {
+            "$ref": "#/components/schemas/EvidenceIds"
+          },
+          "scope": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/EmptyParameters"
+          },
+          "relatedAnalysisIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "minItems": 0,
+            "maxItems": 20,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "evidenceIds"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeRequest": {
+        "type": "object",
+        "properties": {
+          "evidenceIds": {
+            "$ref": "#/components/schemas/EvidenceIds"
+          },
+          "scope": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ProofshieldParameters"
+          },
+          "relatedAnalysisIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            },
+            "minItems": 0,
+            "maxItems": 20,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "evidenceIds"
+        ],
+        "additionalProperties": false
+      },
+      "AnalysisView": {
+        "type": "object",
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/Feature"
+          },
+          "operationalState": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED",
+              "CANCELLED"
+            ]
+          },
+          "findingState": {
+            "enum": [
+              "RECORDED",
+              "CONSISTENT",
+              "DIFFERENCE_OBSERVED",
+              "INCONCLUSIVE",
+              "NOT_CHECKED",
+              "UNSUPPORTED"
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisEnvelope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "analysisId",
+          "feature",
+          "operationalState",
+          "findingState",
+          "result",
+          "errorCode",
+          "createdAt",
+          "completedAt"
+        ],
+        "additionalProperties": false
+      },
+      "AvailableSource": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "evidenceId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "proofId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "byteLength": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "legId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "retentionState": {
+            "const": "AVAILABLE"
+          },
+          "relationship": {
+            "enum": [
+              "ORIGINAL_RECORDING",
+              "CONCURRENT_SIDECAR"
+            ]
+          },
+          "parentEvidenceId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "frameReference": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+          }
+        },
+        "required": [
+          "sourceId",
+          "evidenceId",
+          "proofId",
+          "mimeType",
+          "byteLength",
+          "sha256",
+          "legId",
+          "retentionState",
+          "relationship"
+        ],
+        "additionalProperties": false
+      },
+      "AnalysisList": {
+        "type": "object",
+        "properties": {
+          "analyses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisView"
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailableSource"
+            },
+            "minItems": 0
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2048
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "analyses",
+          "sources",
+          "limitations"
+        ],
+        "additionalProperties": false
+      },
+      "ExtensionList": {
+        "type": "object",
+        "properties": {
+          "extensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignedRecord"
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "extensions",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "EnrollmentInput": {
+        "type": "object",
+        "properties": {
+          "evidenceIds": {
+            "$ref": "#/components/schemas/EvidenceIds"
+          },
+          "supersedesEnrollmentId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          }
+        },
+        "required": [
+          "evidenceIds"
+        ],
+        "additionalProperties": false
+      },
+      "EnrollmentCreated": {
+        "type": "object",
+        "properties": {
+          "enrollmentId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "analysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/AnalysisView"
+          },
+          "requiredGroups": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "label",
+                "carton"
+              ]
+            },
+            "minItems": 0
+          },
+          "qualified": {
+            "const": false
+          }
+        },
+        "required": [
+          "enrollmentId",
+          "analysisId",
+          "analysis",
+          "requiredGroups",
+          "qualified"
+        ],
+        "additionalProperties": false
+      },
+      "EnrollmentEvent": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "CANDIDATE",
+              "SOURCES_COMMITTED",
+              "ANALYZED",
+              "UNAVAILABLE",
+              "LOCKED"
+            ]
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "state",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "Enrollment": {
+        "type": "object",
+        "properties": {
+          "enrollmentId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "analysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "subjectId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "rootManifestDigest": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "sourceInventory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+            },
+            "minItems": 0
+          },
+          "frozenRequiredGroups": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "label",
+                "carton"
+              ]
+            },
+            "minItems": 0
+          },
+          "policyVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "analysisOperationalState": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED",
+              "CANCELLED",
+              "UNAVAILABLE"
+            ]
+          },
+          "analysisErrorCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supersedesEnrollmentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "CANDIDATE",
+              "SOURCES_COMMITTED",
+              "ANALYZED",
+              "UNAVAILABLE",
+              "QUALIFIED",
+              "LOCKED"
+            ]
+          },
+          "qualified": {
+            "const": false
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrollmentEvent"
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "enrollmentId",
+          "analysisId",
+          "subjectId",
+          "rootManifestDigest",
+          "sourceInventory",
+          "frozenRequiredGroups",
+          "policyVersion",
+          "analysisOperationalState",
+          "analysisErrorCode",
+          "supersedesEnrollmentId",
+          "state",
+          "qualified",
+          "events"
+        ],
+        "additionalProperties": false
+      },
+      "EnrollmentList": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.enrollment-list.v1"
+          },
+          "enrollments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Enrollment"
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "enrollments"
+        ],
+        "additionalProperties": false
+      },
+      "AnnotationInput": {
+        "type": "object",
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "interval": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 86400000
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 86400000
+                  }
+                },
+                "required": [
+                  "startMs",
+                  "endMs"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observationIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "supersedesId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          }
+        },
+        "required": [
+          "analysisId",
+          "sourceId",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "ReviewerAnnotation": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.reviewer-annotation.v1"
+          },
+          "annotationId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "proofId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "tenantId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "analysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "actorId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "attribution": {
+            "const": "PARTICIPANT_STATEMENT"
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceRef"
+            },
+            "minItems": 1,
+            "maxItems": 1
+          },
+          "interval": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 86400000
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 86400000
+                  }
+                },
+                "required": [
+                  "startMs",
+                  "endMs"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observationIndex": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supersedesId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2048
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "annotationId",
+          "proofId",
+          "tenantId",
+          "analysisId",
+          "actorId",
+          "attribution",
+          "statement",
+          "sourceRefs",
+          "interval",
+          "observationIndex",
+          "supersedesId",
+          "createdAt",
+          "limitations"
+        ],
+        "additionalProperties": false
+      },
+      "AnnotationResponse": {
+        "type": "object",
+        "properties": {
+          "annotation": {
+            "$ref": "#/components/schemas/ReviewerAnnotation"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "annotation",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "AnnotationList": {
+        "type": "object",
+        "properties": {
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnnotationResponse"
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "annotations"
+        ],
+        "additionalProperties": false
+      },
+      "PlatformChallengeInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "intentId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "purpose": {
+                "const": "REGISTER_KEY"
+              }
+            },
+            "required": [
+              "intentId",
+              "purpose"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "intentId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+              },
+              "purpose": {
+                "const": "CLOSE_INVENTORY"
+              },
+              "inventoryDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "intentId",
+              "purpose",
+              "inventoryDigest"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "PlatformVerifyInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "platform": {
+                "const": "android"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 90000
+              }
+            },
+            "required": [
+              "platform",
+              "token"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "platform": {
+                "const": "android"
+              },
+              "certificateChainBase64": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 22000
+                },
+                "minItems": 1,
+                "maxItems": 5
+              },
+              "publicKeyPem": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 90000
+              },
+              "clientCanonicalJson": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 90000
+              },
+              "inventorySignatureBase64": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 90000
+              }
+            },
+            "required": [
+              "platform",
+              "certificateChainBase64",
+              "publicKeyPem"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "platform": {
+                "const": "ios"
+              },
+              "keyId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 90000
+              },
+              "attestationObjectBase64": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 90000
+              },
+              "assertionObjectBase64": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 90000
+              }
+            },
+            "required": [
+              "platform",
+              "keyId"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "PlatformChallengeResponse": {
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "$ref": "#/components/schemas/PlatformChallenge"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          },
+          "expectedClientDataHash": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]{43}=$"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          }
+        },
+        "required": [
+          "challenge",
+          "canonicalJson",
+          "digest",
+          "signature",
+          "expectedClientDataHash",
+          "requestHash"
+        ],
+        "additionalProperties": false
+      },
+      "PlatformAssuranceResponse": {
+        "type": "object",
+        "properties": {
+          "assurance": {
+            "$ref": "#/components/schemas/PlatformAssurance"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "assurance",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeReviewInput": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "type": "boolean"
+          },
+          "artifactSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recipeSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "approved",
+          "artifactSha256",
+          "recipeSha256"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeReview": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.derivative-review.v1"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "proofId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "analysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "reviewerId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "artifactSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recipeSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "id",
+          "proofId",
+          "analysisId",
+          "reviewerId",
+          "approved",
+          "artifactSha256",
+          "recipeSha256",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeReviewResponse": {
+        "type": "object",
+        "properties": {
+          "review": {
+            "$ref": "#/components/schemas/DerivativeReview"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "review",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeGrantInput": {
+        "type": "object",
+        "properties": {
+          "artifactSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recipeSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400
+          }
+        },
+        "required": [
+          "artifactSha256",
+          "recipeSha256",
+          "expiresInSeconds"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeGrant": {
+        "$ref": "../packages/evidence-contracts/schemas/derivative-grant.schema.json"
+      },
+      "DerivativeGrantResponse": {
+        "type": "object",
+        "properties": {
+          "grant": {
+            "$ref": "#/components/schemas/DerivativeGrant"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^rndg_[A-Za-z0-9_-]{43}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenDelivery": {
+            "enum": [
+              "ONCE",
+              "ALREADY_ISSUED_CREATE_NEW_GRANT"
+            ]
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "grant",
+          "token",
+          "tokenDelivery",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeGrantList": {
+        "type": "object",
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "grant": {
+                  "$ref": "#/components/schemas/DerivativeGrant"
+                },
+                "expired": {
+                  "type": "boolean"
+                },
+                "revoked": {
+                  "type": "boolean"
+                },
+                "audit": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SignedRecord"
+                  },
+                  "minItems": 0
+                },
+                "canonicalJson": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 4194304
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "signature": {
+                  "$ref": "#/components/schemas/Signature"
+                }
+              },
+              "required": [
+                "grant",
+                "expired",
+                "revoked",
+                "audit",
+                "canonicalJson",
+                "digest",
+                "signature"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "grants"
+        ],
+        "additionalProperties": false
+      },
+      "DerivativeGrantEvent": {
+        "$ref": "../packages/evidence-contracts/schemas/derivative-grant-event.schema.json"
+      },
+      "DerivativeGrantRevokeResponse": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/DerivativeGrantEvent"
+          },
+          "canonicalJson": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4194304
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        },
+        "required": [
+          "event",
+          "canonicalJson",
+          "digest",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "RedeemInput": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^rndg_[A-Za-z0-9_-]{43}$"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "additionalProperties": false
+      },
+      "ResearchExport": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.rnd-export.v1"
+          },
+          "proofId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "mode": {
+            "enum": [
+              "METADATA_ONLY",
+              "ORIGINALS_INCLUDED"
+            ]
+          },
+          "audience": {
+            "const": "AUTHORIZED_PROOF_PARTICIPANT"
+          },
+          "exportSnapshot": {
+            "$ref": "#/components/schemas/SignedRecord"
+          },
+          "root": {
+            "type": "object",
+            "properties": {
+              "canonicalJson": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 4194304
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "signature": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Signature"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "canonicalJson",
+              "digest",
+              "signature"
+            ],
+            "additionalProperties": false
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignedRecord"
+            },
+            "minItems": 0
+          },
+          "captureIntents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignedRecord"
+            },
+            "minItems": 0
+          },
+          "captureReceipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignedRecord"
+            },
+            "minItems": 0
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+            },
+            "minItems": 0
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+            },
+            "minItems": 0
+          },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnnotationResponse"
+            },
+            "minItems": 0
+          },
+          "enrollmentRecords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Enrollment"
+            },
+            "minItems": 0
+          },
+          "sidecars": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+            },
+            "minItems": 0
+          },
+          "trustList": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "omissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2048
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "proofId",
+          "exportedAt",
+          "mode",
+          "audience",
+          "exportSnapshot",
+          "root",
+          "extensions",
+          "captureIntents",
+          "captureReceipts",
+          "sources",
+          "artifacts",
+          "annotations",
+          "enrollmentRecords",
+          "sidecars",
+          "trustList",
+          "omissions"
+        ],
+        "additionalProperties": false
+      },
+      "RetryInput": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "RetryResponse": {
+        "type": "object",
+        "properties": {
+          "analysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "originalAnalysisId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+          },
+          "operationalState": {
+            "const": "QUEUED"
+          }
+        },
+        "required": [
+          "analysisId",
+          "originalAnalysisId",
+          "operationalState"
+        ],
+        "additionalProperties": false
+      },
+      "Metrics": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.rnd-metrics.v1"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "killSwitch": {
+            "type": "boolean"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "feature": {
+                  "$ref": "#/components/schemas/Feature"
+                },
+                "operational_state": {
+                  "enum": [
+                    "QUEUED",
+                    "RUNNING",
+                    "SUCCEEDED",
+                    "FAILED",
+                    "CANCELLED"
+                  ]
+                },
+                "jobs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "attempts": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "expired_leases": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "average_completion_ms": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "oldest_created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "oldest_age_ms": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "feature",
+                "operational_state",
+                "jobs",
+                "attempts",
+                "expired_leases",
+                "average_completion_ms",
+                "oldest_created_at",
+                "oldest_age_ms"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "feature": {
+                  "$ref": "#/components/schemas/Feature"
+                },
+                "error_code": {
+                  "type": "string",
+                  "minLength": 0,
+                  "maxLength": 512
+                },
+                "count": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 0,
+                      "maxLength": 512
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "feature",
+                "error_code",
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2048
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "asOf",
+          "killSwitch",
+          "rows",
+          "errors",
+          "limitations"
+        ],
+        "additionalProperties": false
+      },
+      "LearningPrivacy": {
+        "type": "object",
+        "properties": {
+          "epsilonMaxCumulative": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "delta": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1e-06
+          },
+          "noiseMultiplier": {
+            "const": 4
+          },
+          "accountant": {
+            "const": "google-dp-accounting/0.6.0:RdpAccountant"
+          },
+          "sampling": {
+            "const": "full-participation; no amplification"
+          },
+          "adjacency": {
+            "const": "replace one bounded enrolled partner contribution"
+          },
+          "reservation": {
+            "const": "spent before aggregate; no refund on abort"
+          }
+        },
+        "required": [
+          "epsilonMaxCumulative",
+          "delta",
+          "noiseMultiplier",
+          "accountant",
+          "sampling",
+          "adjacency",
+          "reservation"
+        ],
+        "additionalProperties": false
+      },
+      "LearningEvaluation": {
+        "type": "object",
+        "properties": {
+          "accuracy": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "groups": {
+            "type": "object",
+            "properties": {
+              "synthetic-device-group-0": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "synthetic-device-group-1": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "synthetic-device-group-2": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "synthetic-device-group-0",
+              "synthetic-device-group-1",
+              "synthetic-device-group-2"
+            ],
+            "additionalProperties": false
+          },
+          "n": {
+            "const": 3072
+          },
+          "population": {
+            "const": "frozen synthetic held-out quality vectors; no camera or partner validation"
+          },
+          "split": {
+            "const": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+          }
+        },
+        "required": [
+          "accuracy",
+          "groups",
+          "n",
+          "population",
+          "split"
+        ],
+        "additionalProperties": false
+      },
+      "LearningQualityGate": {
+        "type": "object",
+        "properties": {
+          "passed": {
+            "type": "boolean"
+          },
+          "requiredGain": {
+            "const": 0.05
+          },
+          "observedGain": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          },
+          "maximumAllowedGroupDrop": {
+            "const": 0.02
+          },
+          "groupDeltas": {
+            "type": "object",
+            "properties": {
+              "synthetic-device-group-0": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              },
+              "synthetic-device-group-1": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              },
+              "synthetic-device-group-2": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "synthetic-device-group-0",
+              "synthetic-device-group-1",
+              "synthetic-device-group-2"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "passed",
+          "requiredGain",
+          "observedGain",
+          "maximumAllowedGroupDrop",
+          "groupDeltas"
+        ],
+        "additionalProperties": false
+      },
+      "LearningCandidate": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "const": "proofcollective-candidate/v1"
+          },
+          "scope": {
+            "const": "SYNTHETIC_LOCAL_RESEARCH"
+          },
+          "purpose": {
+            "const": "capture-frame-usefulness/v1"
+          },
+          "featureOrder": {
+            "const": [
+              "sharpness",
+              "glare_fraction",
+              "local_contrast",
+              "bias"
+            ]
+          },
+          "model": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -20,
+              "maximum": 20
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "modelSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "parentSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recipeSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "datasetManifestSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "holdoutManifestSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "rollbackModelSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "privacy": {
+            "$ref": "#/components/schemas/LearningPrivacy"
+          },
+          "qualityGate": {
+            "$ref": "#/components/schemas/LearningQualityGate"
+          },
+          "evaluation": {
+            "$ref": "#/components/schemas/LearningEvaluation"
+          },
+          "productionReleaseAuthorized": {
+            "const": false
+          },
+          "reviewStatus": {
+            "const": "EXTERNAL_PRIVACY_SECURITY_AND_PARTNER_VALIDATION_REQUIRED"
+          }
+        },
+        "required": [
+          "schema",
+          "scope",
+          "purpose",
+          "featureOrder",
+          "model",
+          "modelSha256",
+          "parentSha256",
+          "recipeSha256",
+          "datasetManifestSha256",
+          "holdoutManifestSha256",
+          "rollbackModelSha256",
+          "privacy",
+          "qualityGate",
+          "evaluation",
+          "productionReleaseAuthorized",
+          "reviewStatus"
+        ],
+        "additionalProperties": false
+      },
+      "LearningImportInput": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/LearningCandidate"
+          },
+          "canonicalPayload": {
+            "type": "string",
+            "maxLength": 32768,
+            "pattern": "^[\\x20-\\x7e]+$"
+          },
+          "signature": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]{86}==$"
+          },
+          "keyId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "payload",
+          "canonicalPayload",
+          "signature",
+          "keyId"
+        ],
+        "additionalProperties": false
+      },
+      "LearningSummary": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.learning-summary.v1"
+          },
+          "reportId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "feature": {
+            "const": "proofcollective"
+          },
+          "modelSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "parentSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recipeSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "holdoutManifestSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signerKeyId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "scope": {
+            "const": "SYNTHETIC_LOCAL_RESEARCH"
+          },
+          "purpose": {
+            "const": "capture-frame-usefulness/v1"
+          },
+          "privacy": {
+            "type": "object",
+            "properties": {
+              "epsilonMaxCumulative": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3
+              },
+              "delta": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1e-06
+              },
+              "coordinatorSeesPreNoiseAggregate": {
+                "const": true
+              }
+            },
+            "required": [
+              "epsilonMaxCumulative",
+              "delta",
+              "coordinatorSeesPreNoiseAggregate"
+            ],
+            "additionalProperties": false
+          },
+          "evaluation": {
+            "type": "object",
+            "properties": {
+              "accuracy": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "n": {
+                "const": 3072
+              },
+              "groups": {
+                "type": "object",
+                "properties": {
+                  "synthetic-device-group-0": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "synthetic-device-group-1": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "synthetic-device-group-2": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "synthetic-device-group-0",
+                  "synthetic-device-group-1",
+                  "synthetic-device-group-2"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "accuracy",
+              "n",
+              "groups"
+            ],
+            "additionalProperties": false
+          },
+          "qualityGate": {
+            "$ref": "#/components/schemas/LearningQualityGate"
+          },
+          "operationalState": {
+            "const": "SUCCEEDED"
+          },
+          "findingState": {
+            "const": "RECORDED"
+          },
+          "qualification": {
+            "const": "SYNTHETIC_PROTOCOL_ONLY"
+          },
+          "independentContributors": {
+            "const": 0
+          },
+          "trainingStarted": {
+            "const": false
+          },
+          "productionReleaseAuthorized": {
+            "const": false
+          },
+          "importedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "reportId",
+          "feature",
+          "modelSha256",
+          "parentSha256",
+          "recipeSha256",
+          "holdoutManifestSha256",
+          "signerKeyId",
+          "scope",
+          "purpose",
+          "privacy",
+          "evaluation",
+          "qualityGate",
+          "operationalState",
+          "findingState",
+          "qualification",
+          "independentContributors",
+          "trainingStarted",
+          "productionReleaseAuthorized"
+        ],
+        "additionalProperties": false
+      },
+      "LearningList": {
+        "type": "object",
+        "properties": {
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LearningSummary"
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "productionReleaseAuthorized": {
+            "const": false
+          }
+        },
+        "required": [
+          "reports",
+          "productionReleaseAuthorized"
+        ],
+        "additionalProperties": false
+      },
+      "LearningExport": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.learning-export.v1"
+          },
+          "signedCandidate": {
+            "$ref": "#/components/schemas/LearningImportInput"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/LearningSummary"
+          },
+          "importedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2048
+            },
+            "minItems": 0
+          },
+          "productionReleaseAuthorized": {
+            "const": false
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "signedCandidate",
+          "summary",
+          "importedAt",
+          "limitations",
+          "productionReleaseAuthorized"
+        ],
+        "additionalProperties": false
+      },
+      "CaptureSidecarReceipt": {
+        "$ref": "../packages/evidence-contracts/schemas/capture-sidecar-receipt.schema.json"
+      }
+    }
+  },
+  "externalDocs": {
+    "url": "https://spec.openapis.org/oas/v3.1.0",
+    "description": "OpenAPI 3.1 and JSON Schema 2020-12 reference semantics"
+  }
+}

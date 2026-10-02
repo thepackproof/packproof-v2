@@ -224,8 +224,15 @@ import { packingRequestsRouter, parcelScopeRouter } from "./http/packing-request
 import { recipientExportsRouter } from "./http/recipient-exports-router.js";
 import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proof-supplements.js";
 import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
+import { rndRouter } from './rnd/router.js';
+import type { RndConfig } from './rnd/types.js';
+import { rndLearningRouter } from './rnd/learning-registry.js';
+import { rndOperationsRouter } from './rnd/operations.js';
+import { rndDerivativeGrantPublicRouter,rndDerivativeGrantRouter } from './rnd/derivative-grants.js';
+import { parseStrictJson } from '../../packages/evidence-contracts/contracts.mjs';
 
 export interface AppDependencies {
+  rnd?: RndConfig;
   futurePlatform?: FuturePlatformConfig;
   intake?: IntakeRuntimeConfig;
   db: Database;
@@ -344,7 +351,7 @@ export function createApp(deps: AppDependencies): Express {
     if(submissionPath&&(['POST','PUT','PATCH'].includes(req.method)||Number(req.header('content-length')??0)>0||!!req.header('transfer-encoding'))&&!req.is('application/json')){
       next(new DomainError('UNSUPPORTED_INTAKE_CONTENT_TYPE','Order intake accepts JSON text or URL submissions only.',415));return;
     }
-    express.json({limit:submissionPath?'64kb':'2mb'})(req,res,(error)=>{
+    express.json({limit:submissionPath?'64kb':'2mb',verify:(request,_response,bytes)=>{if(/\/rnd(?:\/|$)/.test(request.url??'')&&bytes.length)parseStrictJson(bytes.toString('utf8'),2*1024*1024);}})(req,res,(error)=>{
       if(submissionPath&&error?.type==='entity.too.large')return next(new DomainError('INPUT_TOO_LARGE','Share at most 20,000 characters and 64 KiB.',413));
       next(error);
     });
@@ -459,6 +466,8 @@ export function createApp(deps: AppDependencies): Express {
   }
 
   app.use("/v1", createPlatformRouter(deps));
+  app.use("/rnd/derivative-grants/redeem",distributedRateLimit(deps.db,{scope:"rnd-derivative-redemption",limit:30,windowMs:60_000}));
+  app.use(rndDerivativeGrantPublicRouter(deps));
 
   app.use((req, res, next) => {
     const scopedToken=req.header('authorization')?.replace(/^Bearer\s+/i,'')??'';
@@ -498,7 +507,7 @@ export function createApp(deps: AppDependencies): Express {
 
   app.use(clientVersionRouter(deps));
   app.get("/me/capabilities", asyncRoute(async(req,res)=>{res.setHeader("Cache-Control","private, no-store");res.json({...await getAdminMe(deps.db,bearerUser(req)),environment:releaseIdentity.environment});}));
-  app.use("/admin", requireSystemAdmin(deps), distributedRateLimit(deps.db,{scope:"system-admin",limit:120,windowMs:60_000,subject:bearerUser}), adminActionsRouter(deps), integrationActionsRouter(deps), errorActionsRouter(deps), adminRouter(deps));
+  app.use("/admin", requireSystemAdmin(deps), distributedRateLimit(deps.db,{scope:"system-admin",limit:120,windowMs:60_000,subject:bearerUser}), rndLearningRouter(deps), rndOperationsRouter(deps), adminActionsRouter(deps), integrationActionsRouter(deps), errorActionsRouter(deps), adminRouter(deps));
 
   app.get("/me/account-deletion-request", asyncRoute(async(req,res)=>{
     res.json(await getAccountDeletionRequest(deps.db,bearerUser(req)));
@@ -554,6 +563,9 @@ export function createApp(deps: AppDependencies): Express {
   }));
   app.use("/proofs/:id/lifecycle", commerceLifecycleRouter(deps));
   app.use(captureEngineRouter(deps));
+  app.use(['/rnd','/proofs/:id/rnd'],distributedRateLimit(deps.db,{scope:'experimental-rnd',limit:120,windowMs:60_000,subject:bearerUser}));
+  app.use(rndRouter(deps));
+  app.use(rndDerivativeGrantRouter(deps));
   app.use(futurePlatformRouter(deps));
   app.get('/me/notifications',asyncRoute(async(req,res)=>{res.setHeader('Cache-Control','private, no-store');res.json({notifications:await listProofUpdates(deps.db,bearerUser(req))});}));
   app.get('/me/notification-preferences',asyncRoute(async(req,res)=>{res.setHeader('Cache-Control','private, no-store');res.json(await notificationPreferences(deps.db,bearerUser(req)));}));

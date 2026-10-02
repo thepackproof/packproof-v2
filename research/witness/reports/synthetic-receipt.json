@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "packproof.witness-receipt.v1",
+  "commitment": "9baaf03950e9b393a31e20d64a4d320e381351956ca07788bdee51556d95fda3",
+  "opening": {
+    "recordDigest": "d0eed63d6d1eec12dd19074ca41b5c0e1c2b7e9caea9a9c87e0f7f82e31e046f",
+    "blind": "f1d3cce1f8ccde85802e0df3845b025d4fc456d5c84c90bf50bf5cfef5c4bd45"
+  },
+  "leafIndex": 32,
+  "checkpoint": {
+    "schemaVersion": "packproof.checkpoint.v1",
+    "origin": "packproof-local-research",
+    "treeSize": 32,
+    "rootHash": "eaecc5c56bb75aa99421081c6c308e041c93f47a67e87b76a4b73701ac5da36d",
+    "hashAlgorithm": "rfc6962-sha256",
+    "issuedAt": "2026-10-02T10:50:10.000923+00:00"
+  },
+  "logSignature": {
+    "keyId": "f89055442cbf9022a61b6585c06ace05958dba0efcbb1b6faec019d5ad88ca66",
+    "signature": "FpblW9s/Cia7mz249mODhwWIHtW1kWoGWqOkXW9h1HxDEYFKSHbRqD/jEwztrLM/PTzPeV/SUlZENUxnZ/69AA=="
+  },
+  "inclusionProof": {
+    "metadata": {
+      "algorithm": "sha256",
+      "security": true,
+      "size": 32
+    },
+    "rule": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      0
+    ],
+    "subset": [],
+    "path": [
+      "3c7881fa0529fb6a674555753a14c8f63f6bd2cd5c19c16844552ad2dabe223c",
+      "6dd2d50b36c28d975df0388444562cde6a190602ea40aeb4a9c9945787f8faeb",
+      "35bcb1f8c8394a0fcac7116f93bb3ffe26c4cdba658eb53430ac959114f0724c",
+      "407cde44732174cd5c591542209c6d3e6f5050cf538de52b4a731f5540d3d3e0",
+      "d9025629fc6b3102d42f7e968e771a21f5cc5c3e26fbde4054a16ea931a46b2c",
+      "c9d919806a3ab47bdf5b9b2c33ffa26dff575cef9544b49b3a288ce2d1c77262"
+    ]
+  },
+  "witnessSignatures": [
+    {
+      "keyId": "b548b882079c497bfe29ca1e2017f44d69e91dad6a3c2e094e1ea2e0d8e9b47a",
+      "signature": "AYqZEFex/0zNNmmSmDvJRblM31S2+DOv2jUtZPKcO4CnZy0cJiI49bpe1eAXe7T7KzWcH46zVW3j1LWSraIYDA==",
+      "operatorId": "packproof-test-a",
+      "testOnly": true,
+      "previousCheckpoint": {
+        "hashAlgorithm": "rfc6962-sha256",
+        "issuedAt": "2026-10-02T10:50:09.998304+00:00",
+        "origin": "packproof-local-research",
+        "rootHash": "704ab3616f36c59aeb9de9b24e64406e44d92327eb1bcb7a0206731dbf81dc73",
+        "schemaVersion": "packproof.checkpoint.v1",
+        "treeSize": 31
+      }
+    },
+    {
+      "keyId": "9b1586c8b2d14c0e3f5f245492691bed0ad027900a3e99a049c4962d57a47597",
+      "signature": "pDe3I2jNECSYYJQRiZUYkjUx57MJAXV+lZblF1Tj9K1lp6onL5qxXiBvbb3NNYHPgGJtoL7h9UWVo1BQnaK6Dw==",
+      "operatorId": "packproof-test-b",
+      "testOnly": true,
+      "previousCheckpoint": {
+        "hashAlgorithm": "rfc6962-sha256",
+        "issuedAt": "2026-10-02T10:50:09.998304+00:00",
+        "origin": "packproof-local-research",
+        "rootHash": "704ab3616f36c59aeb9de9b24e64406e44d92327eb1bcb7a0206731dbf81dc73",
+        "schemaVersion": "packproof.checkpoint.v1",
+        "treeSize": 31
+      }
+    }
+  ],
+  "consistencyLinks": [],
+  "publicationState": "INCLUDED",
+  "limitations": [
+    "Only this committed record is checked; omitted records and future extensions are not covered.",
+    "Witnesses do not inspect source media or certify scene truth.",
+    "Public log timing and volume remain observable."
+  ],
+  "trustPolicyId": "synthetic-local-test-v1"
+}

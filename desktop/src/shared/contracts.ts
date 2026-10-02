@@ -1,3 +1,4 @@
+import type {RndTransport} from '../../../web/src/rnd/types';
 import type { Transport } from "../../../packages/onboarding/model";
 import type { CanonicalProof, ProofCollectionItem, ProfileView, FulfillmentQueueItem, ConnectedAccountsListView, TransactionWriteInput, PublicProofView } from '../../../web/src/api/types';
 export type { CanonicalProof, ProofCollectionItem, ProfileView, FulfillmentQueueItem, ConnectedAccountsListView };
@@ -18,6 +19,7 @@ export interface SharedProofConsent { previewHash:string; originalsReviewed:true
 export interface SharedProofLink { url:string; expiresAt:string|null }
 export interface DesktopEvent { type: 'queue'|'session'|'update'|'navigate'|'notification'|'system'; path?: string; title?: string; message?: string }
 export interface PackProofDesktop {
+ rnd:RndTransport & {source(proofId:string,evidenceId:string):Promise<import('../../../web/src/rnd/types').SourcePreview>};
  onboarding:Transport;
  auth: { state(): Promise<SessionView|null>; signIn(input:{email:string;password:string}):Promise<SessionView>; signUp(input:{email:string;password:string}):Promise<{email:string;userConfirmed:boolean}>; confirmSignUp(input:{email:string;code:string}):Promise<void>; resendCode(email:string):Promise<void>; forgotPassword(email:string):Promise<void>; resetPassword(input:{email:string;code:string;password:string}):Promise<void>; signOut():Promise<void> };
  proofs: { list():Promise<ProofCollectionItem[]>; detail(id:string):Promise<CanonicalProof>; create(input:TransactionWriteInput):Promise<CanonicalProof>; finalize(id:string):Promise<CanonicalProof>; sharePreview(id:string):Promise<SharedProofPreview>; share(id:string,input:SharedProofConsent):Promise<SharedProofLink>; export(id:string):Promise<{saved:boolean}>; evidenceUrl(proofId:string,evidenceId:string,previewHash?:string):Promise<string> };

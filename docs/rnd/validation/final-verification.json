@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "packproof.rnd-final-verification.v1",
+  "recordedAt": "2026-10-02T11:37:53.542331+00:00",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
+  "codeCommitReference": null,
+  "scope": "Local research implementation and synthetic protocol verification only; no scientific or release qualification.",
+  "releaseAuthorized": false,
+  "fullyQualifiedPlan": false,
+  "ticketCounts": {
+    "ENGINEERED_LOCAL_SCOPE": 60,
+    "EXTERNAL_QUALIFICATION_BLOCKED": 11
+  },
+  "checks": [
+    {
+      "name": "Backend combined regression and exact-source policy recheck",
+      "command": "cd backend && npm test -- tests/rnd-*.test.ts tests/canonical.test.ts tests/core-integrity-audit.test.ts tests/api-flow.test.ts tests/durable-recovery.test.ts tests/finalize-requirements.test.ts tests/accounts-search-invitations.test.ts --reporter=json",
+      "combinedRun": {
+        "total": 132,
+        "passed": 131,
+        "failed": 1,
+        "skipped": 0
+      },
+      "initialFailure": "Android public-key rejection assertion during concurrent final source edits.",
+      "resolution": {
+        "command": "cd backend && npm test -- tests/rnd-android-key-policy.test.ts --reporter=json",
+        "passed": 29,
+        "failed": 0,
+        "skipped": 0
+      },
+      "result": "PASS_AFTER_TARGETED_FINAL_RECHECK",
+      "laterFocusedChecks": [
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "note": "This is not represented as one all-green combined run. The later witness metrics and kill-switch grant revocation changes received the targeted regressions in their named reports."
+    },
+    {
+      "name": "Web research, auth and admin regressions",
+      "command": "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+      "result": "PASS",
+      "passed": 29
+    },
+    {
+      "name": "Desktop research, auth and security",
+      "command": "cd desktop && npm test -- tests/rnd-isolation.test.ts tests/auth-api.test.ts tests/security.test.ts",
+      "result": "PASS",
+      "passed": 21
+    },
+    {
+      "name": "Canonical and payload contracts",
+      "command": "node packages/evidence-contracts/test/contracts.test.mjs",
+      "result": "PASS",
+      "passed": 9
+    },
+    {
+      "name": "Generated API transport and drift",
+      "command": "node packages/evidence-contracts/test/generated-client.test.mjs",
+      "result": "PASS",
+      "passed": 5
+    },
+    {
+      "name": "Distribution interlock",
+      "command": "node scripts/rnd-release-guard.test.mjs",
+      "result": "PASS",
+      "passed": 7
+    },
+    {
+      "name": "Private local runtime",
+      "command": "node scripts/rnd-runtime.test.mjs",
+      "result": "PASS",
+      "passed": 6
+    },
+    {
+      "name": "Backend compile",
+      "command": "npm run build --prefix backend",
+      "result": "PASS"
+    },
+    {
+      "name": "Isolated web build",
+      "command": "VITE_PACKPROOF_RND=1 VITE_PACKPROOF_API_BASE_URL=http://127.0.0.1:3000 npm run build --prefix web",
+      "result": "PASS"
+    },
+    {
+      "name": "Desktop compile",
+      "command": "npm run build --prefix desktop",
+      "result": "PASS"
+    },
+    {
+      "name": "All surface types",
+      "command": "npm run typecheck --prefix backend && npm run typecheck --prefix mobile && npm run typecheck --prefix web && npm run typecheck --prefix desktop",
+      "result": "PASS"
+    }
+  ],
+  "featureEvidence": [
+    "docs/rnd/validation/backend-status.json",
+    "docs/rnd/validation/platform-assurance.json",
+    "docs/rnd/validation/native-status.json",
+    "docs/rnd/validation/fragment-benchmark.json",
+    "docs/rnd/validation/api-contracts.json",
+    "docs/rnd/validation/privacy-witness-status.json",
+    "docs/rnd/validation/f10-status.json",
+    "docs/rnd/validation/local-runtime.json",
+    "docs/rnd/validation/final-audit.json",
+    "research/vision/IMPLEMENTATION_STATUS.md",
+    "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+  ],
+  "unperformed": [
+    "Physical 240-label/60-carton collection, repeatability and attack trials",
+    "Blind human review and field pilots",
+    "Physical recorder continuity, thermal, disk and feature-on/off budgets",
+    "Real Apple/Google hardware attestation qualification",
+    "Native incremental recorder integration beyond FINAL_FILE_ONLY and software encoder protocol spike",
+    "Qualified active illumination/focus/exposure profiles",
+    "Independent witness operators and organizationally independent consented federated partners",
+    "Independent cryptographic/privacy/security/safety review",
+    "OS namespace decoder containment on a permitting host",
+    "Unsigned iOS simulator compilation: dedicated macOS CI prepared, not yet observed",
+    "Production deployment, store upload, desktop distribution, paid cloud or partner contact"
+  ]
+}

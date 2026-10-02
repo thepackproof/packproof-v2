@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/capture-session.schema.json",
+  "$ref": "capture-receipt.schema.json",
+  "description": "Implemented capture session evidence is the server-signed packproof.capture-receipt.v1 receipt. Ordinary core capture_sessions retain their existing schema."
+}

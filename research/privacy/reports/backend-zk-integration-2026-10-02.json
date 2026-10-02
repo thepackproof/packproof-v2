@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "packproof.zk-service-validation.v1",
+  "testCommand": "npm --prefix backend run test -- --reporter=verbose tests/rnd-zk-service.test.ts",
+  "fixture": "synthetic committed 4x4 PNG, PGlite research database, ephemeral source/server signing keys, externally configured fixed circuit-key registry",
+  "passed": 3,
+  "failed": 0,
+  "suiteDurationSeconds": 44.79,
+  "actualProofJobTestSeconds": 38.5,
+  "checks": [
+    "No proof allowed without a completed earlier enrollment",
+    "Enrollment binding persisted immutably and private RGB8 pixels/blind omitted from published result",
+    "Real queued proof generated and independently pinned verification-key check passed",
+    "Committed derivative persisted; reviewed export blocked until exact artifact/recipe approval"
+  ],
+  "configuredLimits": {"rssBytes": 1073741824, "rssSampleIntervalMs": 200, "proverTimeoutMs": 120000, "heavyJobAttempts": 1, "proversPerWorkerProcess": 1},
+  "cloudSpendUsd": 0,
+  "securityReview": "PENDING",
+  "nativeCameraBindingQualified": false,
+  "publicReliance": false,
+  "limitations": ["Sampled RSS is not an operating-system allocation limit", "Only tiny canonical PNG source profile", "Source decoding/commitment issuer is trusted", "No hardware or physical-scene authenticity claim"]
+}

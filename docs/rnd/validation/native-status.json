@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "packproof.rnd-native-validation.v1",
+  "date": "2026-10-02",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "releaseAuthorized": false,
+  "environment": "Linux isolated local research build",
+  "engineering": {
+    "CORE-05": "Implemented in the existing CameraX/AVFoundation camera owners: one bounded native sampling task, durable luma sidecars, shared monotonic clock metadata, optional pressure shedding, no live frame bridge transfer.",
+    "F01": "Received native PGM sidecars are bound through a signed acquisition inventory to the original session and separately signed server receipts. Automatic region enrollment uses source-linked worker processing; luma-only color association remains unavailable. Existing barcode geometry now supports one exact-timestamp, rotation-mapped region winner. Multiple/clipped/unmatched proposals are rejected; OCR/serial/carton/item/condition targets retain explicit unmet reasons.",
+    "F02": "Implemented native exact-final-file P-256 signing, fresh server intent/session binding, immutable sidecar commitments/receipts, real Play Integrity and App Attest SDK adapters, and server verification protocols. Hardware/sensor assurance is not inferred from signatures. Separate fresh AndroidKeyStore attestation request key returns real certificate chain and signs exact inventory without upgrading the original key.",
+    "F06": "Implemented fresh passive-lab challenges, bounded exclusive native control leases, native timer expiry, deferred ordinary torch requests and restore-on-release/stop/finalization/policy cancellation. Active illumination profiles are explicitly rejected.",
+    "F08": "Implemented passive sharpness/exposure ranking with context and ambiguous-frame retention, temporal diversity, native telemetry, disk/thermal/memory shedding. Automatic focus/exposure actions remain disabled pending measured recorder profiles. ROI selection uses a 750ms cooldown and 10% improvement threshold; these do not represent automatic camera focus/exposure actions.",
+    "mobileReview": "Analysis requests, separate operation/finding states, source-linked observation times/regions, cross-leg comparison, hash-verified artifact previews, sparse XY/XZ/YZ projections, exact derivative/recipe review, reviewed ZIP and source-linked verification ZIP export. Attributed exact-source reviewer corrections and own-statement amendments preserve prior signed statements.",
+    "F02-fragments": "Implemented isolated live FFmpeg AVC/AAC fMP4 protocol spike: actual closed init/media/index units, nonce/session/sequence/track decode range chain, P-256 manifest and exact-byte verifier. Six mutation tests and five measured synthetic process runs pass. Both native adapters truthfully remain FINAL_FILE_ONLY until safe immutable encoder fragment callbacks and device continuity are qualified."
+  },
+  "executed": [
+    {
+      "gate": "mobile TypeScript",
+      "result": "PASS",
+      "command": "npm run typecheck --prefix mobile"
+    },
+    {
+      "gate": "research policy contracts",
+      "result": "PASS",
+      "tests": 10,
+      "command": "npm run test:research --prefix mobile"
+    },
+    {
+      "gate": "baseline recovery",
+      "result": "PASS",
+      "tests": 19,
+      "command": "npm run test:recovery --prefix mobile"
+    },
+    {
+      "gate": "baseline release identity and isolated distribution guards",
+      "result": "PASS",
+      "tests": 20
+    },
+    {
+      "gate": "existing iOS parity/native API/identifier contracts",
+      "result": "PASS",
+      "tests": 15
+    },
+    {
+      "gate": "Android Kotlin actual compile and native JVM unit tests",
+      "result": "PASS",
+      "tests": 4,
+      "toolchain": "JDK 17, official Android SDK 36, Gradle 8.13, disposable Expo prebuild",
+      "tasks": [
+        ":packproof-unified-camera:compileDebugKotlin",
+        ":packproof-unified-camera:testDebugUnitTest"
+      ],
+      "initialBuildSeconds": 502,
+      "exactNativeSourceRepeatSeconds": 25,
+      "vectors": "All four shared UTF-8 canonical vectors, exact byte digest and real P-256 signature/tamper checks"
+    },
+    {
+      "gate": "Android Metro bundle",
+      "result": "PASS",
+      "profile": "research-local",
+      "nativeArchiveSubmitted": false
+    },
+    {
+      "gate": "backend sidecar integration",
+      "result": "PASS",
+      "tests": 3,
+      "coverage": [
+        "exact-byte assembly",
+        "out-of-order retry",
+        "bound original signature",
+        "immutable source and receipt",
+        "wrong actor",
+        "tamper rejection",
+        "uncommitted frame",
+        "current consent withdrawal",
+        "real signed backend export through offline pinned-trust verifier with exact source and all sidecar bytes"
+      ]
+    },
+    {
+      "gate": "Live encoded fragment software protocol",
+      "result": "PASS",
+      "tests": 6,
+      "benchmarkRuns": 5,
+      "report": "docs/rnd/validation/fragment-benchmark.json",
+      "qualification": "SOFTWARE_PROTOCOL_ONLY"
+    }
+  ],
+  "blocked": [
+    {
+      "gate": "iOS Swift/XCTest compile",
+      "reason": "The environment is Linux without macOS, Xcode, iOS SDK or signing. XCTest sources are present; no compile success is claimed."
+    },
+    {
+      "gate": "physical capture qualification",
+      "reason": "No attached Android/iOS devices: sustained video continuity, dropped frames, force-stop recovery, memory/disk/thermal pressure, passive detail gains, cross-device accuracy and sensor timing require actual recordings."
+    },
+    {
+      "gate": "vendor app-attestation hardware validation",
+      "reason": "Requires actual research app builds, controlled Play project/Apple entitlement registration and enrolled devices. Native and server adapters exist; unconfigured environments return unsupported."
+    },
+    {
+      "gate": "F06 active illumination and F08 automatic camera action qualification",
+      "reason": "No independently measured safe native control profile exists. Backend only issues PASSIVE_LAB with zero light commands; native rejects active commands. Actual active torch/exposure/focus sequences are not enabled or claimed complete."
+    }
+  ],
+  "qualification": "ENGINEERING_IMPLEMENTED_WITH_EXPLICIT_UNQUALIFIED_DEVICE_GATES",
+  "claims": {
+    "physicalIdentity": false,
+    "liveness": false,
+    "sensorAttestation": false,
+    "hardwareKeyAttestation": false,
+    "activeLightSafetyQualified": false,
+    "nativeFramePixelEquivalentToVideo": false
+  },
+  "ci": {
+    "workflow": ".github/workflows/rnd-native.yml",
+    "android": "Actual Kotlin+JVM tests and Metro",
+    "ios": "Unsigned macOS15 simulator app/Swift module compile, no credentials or distribution",
+    "githubExecution": "NOT_EXECUTED_IN_THIS_SESSION"
+  }
+}

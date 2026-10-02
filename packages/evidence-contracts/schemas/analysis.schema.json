@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/analysis.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "feature",
+    "tenantId",
+    "proofId",
+    "rootManifestDigest",
+    "subject",
+    "analysisId",
+    "sourceRefs",
+    "inputDigest",
+    "method",
+    "operationalState",
+    "findingState",
+    "scope",
+    "coverage",
+    "reasonCodes",
+    "limitations",
+    "supersedesId",
+    "serverReceivedAt",
+    "analyzedAt",
+    "details"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.analysis.v1"
+    },
+    "feature": {
+      "enum": [
+        "proofprint",
+        "verifiedcapture",
+        "proofsight",
+        "prooftwin",
+        "proofmatch",
+        "prooflive",
+        "proofshield",
+        "proofpilot",
+        "proofwitness",
+        "proofcollective"
+      ]
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "rootManifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "subject": {
+      "$ref": "subject.schema.json"
+    },
+    "analysisId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "sourceRefs": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "source.schema.json"
+      }
+    },
+    "inputDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "method": {
+      "type": "object",
+      "required": [
+        "executableDigest",
+        "modelDigest",
+        "policyVersion"
+      ],
+      "properties": {
+        "executableDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "modelDigest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "additionalProperties": false
+    },
+    "operationalState": {
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "findingState": {
+      "enum": [
+        "RECORDED",
+        "CONSISTENT",
+        "DIFFERENCE_OBSERVED",
+        "INCONCLUSIVE",
+        "NOT_CHECKED",
+        "UNSUPPORTED"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "coverage": {
+      "type": "object"
+    },
+    "reasonCodes": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    },
+    "supersedesId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "serverReceivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "analyzedAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "details": {
+      "type": "object"
+    },
+    "qualification": {
+      "type": "object",
+      "required": [
+        "gate",
+        "scope",
+        "recordId"
+      ],
+      "properties": {
+        "gate": {
+          "enum": [
+            "G0",
+            "G1",
+            "G2",
+            "G3",
+            "G4",
+            "G5"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "recordId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operationalState": {
+            "not": {
+              "const": "SUCCEEDED"
+            }
+          }
+        },
+        "required": [
+          "operationalState"
+        ]
+      },
+      "then": {
+        "properties": {
+          "findingState": {
+            "enum": [
+              "NOT_CHECKED",
+              "UNSUPPORTED",
+              "INCONCLUSIVE"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

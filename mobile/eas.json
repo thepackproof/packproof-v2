@@ -60,6 +60,22 @@
         "simulator": true,
         "autoIncrement": false
       }
+    },
+    "research-local": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_RND": "true",
+        "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "http://127.0.0.1:3000",
+        "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "dev"
+      }
     }
   },
   "submit": {

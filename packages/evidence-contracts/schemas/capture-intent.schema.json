@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/capture-intent.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "tenantId",
+    "proofId",
+    "subject",
+    "actorId",
+    "nonce",
+    "issuedAt",
+    "expiresAt",
+    "acquisitionMode",
+    "profileId",
+    "coverageMode",
+    "requestBindingDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.capture-intent.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "subject": {
+      "$ref": "capture-subject.schema.json"
+    },
+    "actorId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "acquisitionMode": {
+      "enum": [
+        "ONLINE",
+        "OFFLINE"
+      ]
+    },
+    "profileId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "coverageMode": {
+      "const": "FINAL_FILE_ONLY"
+    },
+    "requestBindingDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "additionalProperties": false
+}

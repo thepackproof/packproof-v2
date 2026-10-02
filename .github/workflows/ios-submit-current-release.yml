@@ -10,12 +10,15 @@ permissions:
   id-token: write
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   submit:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == 'fa8eff8eccead81b6d8b8f1b97e97672e9d168d9') }}
+    needs: rnd-release-policy
     name: Submit signed PackProof iOS build
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_sha == 'fa8eff8eccead81b6d8b8f1b97e97672e9d168d9'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:

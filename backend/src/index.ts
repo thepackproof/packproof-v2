@@ -38,6 +38,9 @@ import { createEtsyAccessTokenRunner } from "./integrations/etsy/access.js";
 import { createShopifyCommerceAdapter } from "./integrations/shopify/adapter.js";
 import { createShopifyAccessTokenRunner } from "./integrations/shopify/access.js";
 import { createConnectedAccountRegistry } from "./integrations/connected-accounts/runtime.js";
+import { rndConfigFromEnv } from './rnd/config.js';
+import { runRndWorkerOnce } from './rnd/analyses.js';
+import { assertResearchRuntimeIsolation } from './rnd/runtime-isolation.js';
 
 import { dispatchCommerceSyncs } from "./workers/commerce-worker.js";
 import { dispatchWebhooks } from "./platform/webhooks.js";
@@ -52,6 +55,8 @@ loadEnvFile(path.resolve(process.cwd()));
 assertRealDataRuntime();
 
 const config = loadConfig();
+const rnd=rndConfigFromEnv();
+assertResearchRuntimeIsolation(config,rnd);
 // Validate signing configuration before opening the database or starting workers.
 const manifestSigning = await initializeManifestSigningRuntime(systemClock);
 const opened = await openDatabase(config);
@@ -115,6 +120,7 @@ const readinessProbes=[
   }},
 ];
 const app = config.processRole==='worker'?express():createServerApp({
+  rnd,
   intake: intakeConfig,
   db: opened.db,
   objectStore,
@@ -144,12 +150,13 @@ if(config.processRole==='worker'){
   app.get('/live',liveness);app.get('/health',liveness);
   app.get('/ready',createReadiness(readinessProbes).handler);
 }
-const server = app.listen(config.port, "0.0.0.0", () => {
+const server = app.listen(config.port, config.release.environment==='research'?"127.0.0.1":"0.0.0.0", () => {
   console.log(
     `PackProof V2 API listening on ${config.port} engine=${opened.engine} objectStore=${config.objectStore} authMode=${config.authMode}`,
   );
 });
 const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+if(rnd.enabled)jobs.push({name:'experimental-rnd',intervalMs:5000,run:()=>runRndWorkerOnce({db:opened.db,clock:systemClock,objectStore,manifestSigning,rnd:rndConfigFromEnv()})});
 jobs.push({name:'mobile-intake',intervalMs:30000,run:()=>reconcileIntakeSubmissions(opened.db,systemClock,{integrations,credentials:credentialStore},intakeConfig)});
 jobs.push({name:'order-shippo',intervalMs:15000,run:()=>dispatchShippoIntake(opened.db,systemClock,{credentialStore,config:()=>intakeConfigFromEnv()})});
 if(billing&&billingReconciliationStartAt){

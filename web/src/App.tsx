@@ -1,3 +1,4 @@
+import {DerivativeRedeem} from "./rnd/DerivativeRedeem";
 import { Onboarding } from "./onboarding/Onboarding";
 import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchScreen";
 import { lazy, Suspense } from "react";
@@ -1251,6 +1252,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 }
 
 export function App({ authInitialView }: { authInitialView?: "sign-in" | "create-account" } = {}) {
+  if(import.meta.env.VITE_PACKPROOF_RND==='1'&&window.location.pathname==='/research/derivative')return <ThemeProvider><DerivativeRedeem/></ThemeProvider>;
   retainCaptureLaunch();
   return (
     <ThemeProvider>

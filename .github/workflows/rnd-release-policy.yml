@@ -1,0 +1,35 @@
+name: Research distribution policy
+
+on:
+  workflow_call:
+    outputs:
+      allowed:
+        description: True only for an explicitly authorized nonresearch main source
+        value: ${{ jobs.policy.outputs.allowed }}
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      allowed: ${{ steps.policy.outputs.allowed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reject research source before any signing or cloud credential job
+        id: policy
+        env:
+          PACKPROOF_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          PACKPROOF_SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch || github.head_ref || github.ref_name }}
+          PACKPROOF_DISTRIBUTION_AUTHORIZED: ${{ vars.PACKPROOF_DISTRIBUTION_AUTHORIZED }}
+        run: node scripts/rnd-release-guard.mjs

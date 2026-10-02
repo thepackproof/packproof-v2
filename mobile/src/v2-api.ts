@@ -1,3 +1,4 @@
+import { assertResearchEndpoint, researchEnabled } from "./research/isolation";
 import type { OnboardingState, Action } from "../../packages/onboarding/model";
 import type { ProofRecovery } from "./capture/recovery-model";
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
@@ -1100,6 +1101,27 @@ export class PackProofV2Client {
     });
   }
 
+  async researchCapabilities(): Promise<{ enabled: boolean; killSwitch: boolean; features: Record<string, { collection: boolean }> }> {
+    if (!researchEnabled()) throw new Error("Research features are disabled");
+    assertResearchEndpoint(this.options.baseUrl);
+    return this.request('/rnd/capabilities', { timeoutMs: 1500 });
+  }
+
+  async researchRequest<T>(proofId: string, path = "", method = "GET", body?: unknown, idempotencyKey?: string): Promise<T> {
+    if (!researchEnabled()) throw new Error("Research features are disabled in this app");
+    assertResearchEndpoint(this.options.baseUrl);
+    if (path && !/^\/[a-zA-Z0-9_/?=&.-]*$/.test(path)) throw new Error("Invalid research path");
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/rnd${path}`, { method, body, timeoutMs: 3000,
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined });
+  }
+
+  researchContentUrl(proofId: string, path: string): string {
+    if (!researchEnabled()) throw new Error("Research features are disabled");
+    assertResearchEndpoint(this.options.baseUrl);
+    if (!/^\/(?:analyses\/[a-zA-Z0-9_-]+\/(?:artifacts\/[0-9]+|export\.zip)|export\.zip)$/.test(path)) throw new Error("Invalid research content path");
+    return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/rnd${path}`);
+  }
+
   async captureEngineRequest<T>(path:string,method="GET",body?:unknown):Promise<T> {
     if(!/^\/(capture-intents|capture-sessions)(\/|$)/.test(path)) throw new Error('Invalid capture route');
     return this.request(path,{method,body});
@@ -1316,6 +1338,7 @@ export class PackProofV2Client {
       timeoutMs?: number;
     } = {},
   ): Promise<T> {
+    if (researchEnabled()) assertResearchEndpoint(this.options.baseUrl);
     const headers: Record<string, string> = {
       "X-PackProof-Intake-Version": "1",
       Accept: "application/json",

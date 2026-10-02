@@ -1,0 +1,140 @@
+name: Isolated native research compilation
+
+on:
+  push:
+    branches: ['rnd/**']
+    paths: ['mobile/**', 'packages/**', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
+  pull_request:
+    paths: ['mobile/**', 'packages/**', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rnd-native-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_PUBLIC_PACKPROOF_RND: 'true'
+  EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'http://127.0.0.1:3000'
+  EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'dev'
+  EXPO_PUBLIC_PACKPROOF_RND_PLATFORM_ASSURANCE: 'false'
+  EXPO_PUBLIC_PACKPROOF_RND_KEY_ATTESTATION: 'false'
+  EAS_BUILD_PROFILE: 'research-local'
+  PACKPROOF_DISTRIBUTION_AUTHORIZED: 'false'
+  EXPO_NO_TELEMETRY: '1'
+  CI: '1'
+
+# Compiler work only: no EAS command, signing identity, credential, submission or artifact upload.
+jobs:
+  source-isolation:
+    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require immutable research source marker and isolated app configuration
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import {createRequire} from 'node:module';
+          import {evaluateRepository} from './scripts/rnd-release-guard.mjs';
+          const marker=JSON.parse(fs.readFileSync('config/rnd/research-build.json','utf8'));
+          assert.equal(marker.researchOnly,true);
+          assert.equal(marker.distributionAllowed,false);
+          assert.equal(evaluateRepository('.').allowed,false);
+          const config=createRequire(import.meta.url)('./mobile/app.config.js').expo;
+          assert.equal(config.ios.bundleIdentifier,'com.packproof.mobile.research');
+          assert.equal(config.android.package,'com.packproof.mobile.research');
+          assert.deepEqual(config.ios.associatedDomains,[]);
+          assert.deepEqual(config.android.intentFilters,[]);
+          JS
+
+  android-library:
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Install isolated JavaScript dependencies
+        run: npm ci --prefix mobile --ignore-scripts
+      - name: Generate disposable native project
+        working-directory: mobile
+        run: node node_modules/expo/bin/cli prebuild --platform android --no-install
+      - name: Compile actual Kotlin library and execute research JVM tests
+        working-directory: mobile/android
+        run: ./gradlew :packproof-unified-camera:compileDebugKotlin :packproof-unified-camera:testDebugUnitTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx3072m
+      - name: Compile isolated JavaScript bundle
+        working-directory: mobile
+        run: node node_modules/expo/bin/cli export --platform android --output-dir dist/rnd-ci --max-workers 2
+
+  ios-simulator-compile:
+    needs: source-isolation
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Record installed compiler and simulator SDK
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+      - name: Install isolated JavaScript dependencies
+        run: npm ci --prefix mobile --ignore-scripts
+      - name: Generate disposable iOS project without signing
+        working-directory: mobile
+        run: node node_modules/expo/bin/cli prebuild --platform ios --no-install
+      - name: Resolve native dependencies
+        working-directory: mobile/ios
+        run: pod install
+      - name: Compile unsigned simulator application and local Swift camera module
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace=$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          test -n "$workspace"
+          xcodebuild -list -json -workspace "$workspace" > "$RUNNER_TEMP/rnd-ios-schemes.json"
+          scheme=$(node -e 'const fs=require("node:fs");const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const schemes=data.workspace.schemes.filter(name=>/^PackProofResearch$/i.test(name));if(schemes.length!==1)throw Error("Isolated research scheme missing or ambiguous");process.stdout.write(schemes[0]);' "$RUNNER_TEMP/rnd-ios-schemes.json")
+          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/packproof-research-ios" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM='' build
+
+  encoded-fragment-protocol:
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install local software encoder tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Test actual init/audio/video fragment integrity and native unsupported boundary
+        run: node --test research/capture-fragments/fragments.test.mjs

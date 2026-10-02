@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "packproof.benchmark-policy.v1",
+  "version": "physical-qualification-v1",
+  "freezeBeforeTestSetAccess": true,
+  "confidence": 0.95,
+  "errorTargets": {"F01": 0.0001, "F04": 0.01, "F06": 0.01},
+  "holdoutDimensions": ["physicalInstanceId", "captureSessionId", "sourceDigest", "printRunId", "cartonId", "labelId", "deviceId", "materialLot", "printerUnitId", "attackDeviceId"],
+  "F01": {
+    "screeningPopulationLabels": 240,
+    "screeningPopulationCartons": 60,
+    "requiredAttackFamilies": ["same-content-reprint", "photographed-print", "screen-replay", "label-transfer", "carton-patch-transfer", "wrong-template", "probing", "malicious-baseline"],
+    "minimumPassiveEnrollment": 0.95,
+    "minimumConclusiveCoverage": 0.95,
+    "maximumGenuineDiscrepancy": 0.01,
+    "requiredCaptureModes": ["ordinary-video", "coached-lab-separate"],
+    "deviceStrata": ["S24-Ultra-to-A16", "A16-to-S24-Ultra", "independent-Android", "independent-iPhone"]
+  },
+  "F04": {
+    "requiredAttackFamilies": ["unchanged-control", "prespecified-visible-change", "lighting-shadow", "repeated-label-different-box", "missing-face", "warped-reconstruction"],
+    "minimumDetection": 0.95,
+    "minimumConclusiveCoverage": 0.90,
+    "metricDimensionTolerance": "max(5 mm, 2%); only independently calibrated scale"
+  },
+  "F06": {
+    "requiredAttackFamilies": ["display-replay", "printed-photo", "laminated-photo", "delayed-replay", "adaptive-display", "injected-stream"],
+    "maximumGenuineRejection": 0.05,
+    "minimumConclusiveCoverage": 0.90,
+    "illuminationSafetyReviewRequired": true
+  },
+  "qualification": false,
+  "note": "Frozen proposed gates, not achieved results. Device/material holdout partitions require enough independent clusters; a 240-label screening corpus cannot establish the F01 rare-error bound."
+}

@@ -36,6 +36,36 @@ public final class UnifiedCameraModule: Module {
       self.inspect(sessionID: sessionID, offsetsMs: offsetsMs, identifiersEnabled: true, promise: promise)
     }
 
+    AsyncFunction("bindResearchCapture") { (session: String, proof: String, binding: String, promise: Promise) in
+      self.inspectionQueue.async {
+        do { try ResearchProvenance.bind(session: session, proof: proof, binding: binding); promise.resolve(nil) }
+        catch { promise.reject("RND_BINDING_FAILED", "Optional research binding unavailable; original capture remains available.") }
+      }
+    }
+    AsyncFunction("readResearchCapture") { (session: String, promise: Promise) in
+      self.inspectionQueue.async {
+        do { let result = try ResearchProvenance.read(session); promise.resolve(String(data: try CaptureStorage.json(result), encoding: .utf8)) }
+        catch { promise.reject("RND_CAPTURE_UNAVAILABLE", "Research metadata is pending or unavailable; original is kept.") }
+      }
+    }
+    AsyncFunction("prepareResearchKey") { (scope: String, promise: Promise) in
+      self.inspectionQueue.async {
+        do { promise.resolve(try ResearchProvenance.prepare(scope)) }
+        catch { promise.reject("RND_KEY_UNAVAILABLE", "Research signing key unavailable.") }
+      }
+    }
+    AsyncFunction("signResearchCapture") { (session: String, scope: String, payload: String, promise: Promise) in
+      self.inspectionQueue.async {
+        do { promise.resolve(try ResearchProvenance.sign(session: session, scope: scope, payload: payload)) }
+        catch { promise.reject("RND_SIGNING_FAILED", "Research signature unavailable; original is kept.") }
+      }
+    }
+
+    Function("appAttestAvailability") { ResearchPlatformAssurance.availability() }
+    AsyncFunction("generateAppAttestKey") { (promise: Promise) in ResearchPlatformAssurance.generate(promise) }
+    AsyncFunction("requestAppAttest") { (key: String, hash: String, assertion: Bool, promise: Promise) in
+      ResearchPlatformAssurance.request(key: key, hashBase64: hash, assertion: assertion, promise: promise)
+    }
     View(UnifiedCameraView.self) {
       Events("onReady", "onBarcodeDetected", "onRecordingStarted", "onCaptureError")
       Prop("active") { (view: UnifiedCameraView, active: Bool) in view.setActive(active) }
@@ -44,6 +74,7 @@ public final class UnifiedCameraModule: Module {
       AsyncFunction("startRecording") { (view: UnifiedCameraView, sessionID: String, audioEnabled: Bool, promise: Promise) in
         view.startRecording(sessionID: sessionID, audioEnabled: audioEnabled, promise: promise)
       }
+      AsyncFunction("disableResearchSampling") { (view: UnifiedCameraView, reason: String) in view.disableResearchSampling(reason) }
       AsyncFunction("stopRecording") { (view: UnifiedCameraView) in view.stopRecording() }
     }
   }

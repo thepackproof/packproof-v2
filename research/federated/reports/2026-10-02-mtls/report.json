@@ -1,0 +1,165 @@
+{
+  "schema": "proofcollective-report/v1",
+  "feature": "F10",
+  "runId": "793841dc-6ddc-4c70-8977-d47cd182f012",
+  "scope": "SYNTHETIC_LOCAL_MULTI_CLIENT_SIMULATION",
+  "status": "ENGINEERED",
+  "productionReleaseAuthorized": false,
+  "independentContributors": 0,
+  "syntheticClients": 20,
+  "rounds": [
+    {
+      "round": 1,
+      "privacy": {
+        "epsilonMaxCumulative": 1.1431687205814116,
+        "delta": 1e-06,
+        "noiseMultiplier": 4.0,
+        "accountant": "google-dp-accounting/0.6.0:RdpAccountant",
+        "sampling": "full-participation; no amplification",
+        "adjacency": "replace one bounded enrolled partner contribution",
+        "reservation": "spent before aggregate; no refund on abort"
+      },
+      "noiseStd": 0.40000038146972655,
+      "l2Sensitivity": 0.10000009536743164,
+      "protocol": {
+        "protocol": "Flower 1.39.0 SecAggPlusWorkflow + secaggplus_mod",
+        "contributors": 20,
+        "independentOrganizations": 0,
+        "topology": "all-to-all shares",
+        "reconstructionThreshold": 20,
+        "quantizationRange": 4194304,
+        "quantizationL2Slack": 9.5367431640625e-07,
+        "transport": "TLS 1.3 mutual certificate authentication + pinned node IDs; loopback threaded synthetic lab",
+        "tlsConnections": 80,
+        "stages": [
+          {
+            "stage": "setup",
+            "requested": 20,
+            "received": 20
+          },
+          {
+            "stage": "share_keys",
+            "requested": 20,
+            "received": 20
+          },
+          {
+            "stage": "collect_masked_vectors",
+            "requested": 20,
+            "received": 20
+          },
+          {
+            "stage": "unmask",
+            "requested": 20,
+            "received": 20
+          }
+        ],
+        "rawSamplesUploaded": 0,
+        "individualUpdatesLogged": 0
+      },
+      "quality": {
+        "accuracy": 0.7477213541666666,
+        "groups": {
+          "synthetic-device-group-0": 0.7568359375,
+          "synthetic-device-group-1": 0.75,
+          "synthetic-device-group-2": 0.736328125
+        },
+        "n": 3072,
+        "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+        "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+      }
+    }
+  ],
+  "comparisons": {
+    "currentBaseline": {
+      "accuracy": 0.849609375,
+      "groups": {
+        "synthetic-device-group-0": 0.84375,
+        "synthetic-device-group-1": 0.8544921875,
+        "synthetic-device-group-2": 0.8505859375
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    },
+    "singleLocalSyntheticClient": {
+      "accuracy": 0.9446614583333334,
+      "groups": {
+        "synthetic-device-group-0": 0.94140625,
+        "synthetic-device-group-1": 0.947265625,
+        "synthetic-device-group-2": 0.9453125
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    },
+    "federatedWithoutDpSyntheticOnly": {
+      "accuracy": 0.9446614583333334,
+      "groups": {
+        "synthetic-device-group-0": 0.9482421875,
+        "synthetic-device-group-1": 0.94921875,
+        "synthetic-device-group-2": 0.9365234375
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    },
+    "federatedWithActualCentralDp": {
+      "accuracy": 0.7477213541666666,
+      "groups": {
+        "synthetic-device-group-0": 0.7568359375,
+        "synthetic-device-group-1": 0.75,
+        "synthetic-device-group-2": 0.736328125
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    }
+  },
+  "qualityGate": {
+    "passed": false,
+    "requiredGain": 0.05,
+    "observedGain": -0.10188802083333337,
+    "maximumAllowedGroupDrop": 0.02,
+    "groupDeltas": {
+      "synthetic-device-group-2": -0.1142578125,
+      "synthetic-device-group-1": -0.1044921875,
+      "synthetic-device-group-0": -0.0869140625
+    }
+  },
+  "candidateDigest": "b7bef6ef228902aad3dd15290534c1eb96360b965773e206f25e615eea07f5e9",
+  "candidateArtifact": "models/b7bef6ef228902aad3dd15290534c1eb96360b965773e206f25e615eea07f5e9.json",
+  "signerPublicKey": "caaa30d43fc4ee53dad7da5264b54ba5d288b2395d77331039a342854db95940",
+  "privacyBoundary": {
+    "protectedUnit": "one enrolled partner contribution, replacement adjacency",
+    "coordinatorSeesPreNoiseAggregate": true,
+    "dpProtects": "released noisy model outputs under trusted coordinator assumptions",
+    "individualUpdatesHiddenBy": "Flower SecAgg+ semi-honest protocol; this simulator owns all node memory",
+    "withdrawal": "future rounds stop; existing artifacts do not automatically forget contributions",
+    "sampling": "all selected clients; no privacy amplification claimed",
+    "maliciousClientClippingProven": false,
+    "noiseGenerator": "OS-entropy-backed SystemRandom Gaussian floating point; specialist finite-precision review required",
+    "strongerDistributedNoise": "BLOCKED pending reviewed dropout/collusion/noise mechanism"
+  },
+  "openGates": [
+    "Representative consented partner-local examples and useful task baseline",
+    "20 independently enrolled contributors per released pilot aggregate",
+    "Independent secure-aggregation and DP adjacency/finite-precision/accountant review",
+    "Separately operated partner TLS/identity enrollment, key lifecycle and network attack exercise",
+    "Cross-partner and supported-camera holdout; synthetic device groups cannot qualify hardware",
+    "Poisoning evaluation against governed enrolled adversaries",
+    "Explicit separate authorization for any pilot, distribution or production release"
+  ],
+  "elapsedSeconds": 6.4162228470004266,
+  "environment": {
+    "python": "3.12.14",
+    "flwr": "1.39.0",
+    "dp-accounting": "0.6.0",
+    "numpy": "2.5.3"
+  },
+  "telemetry": {
+    "rawImages": 0,
+    "labels": 0,
+    "individualUpdates": 0,
+    "partnerIdentities": "synthetic labels only in protected lab ledger"
+  }
+}

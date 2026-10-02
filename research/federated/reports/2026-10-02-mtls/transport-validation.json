@@ -1,0 +1,44 @@
+{
+  "schema": "proofcollective-mtls-validation/v1",
+  "scope": "LOCAL_LOOPBACK_THREADED_SYNTHETIC_ONLY",
+  "productionReleaseAuthorized": false,
+  "independentOrganizations": 0,
+  "openssl": "OpenSSL 3.5.8 25 Aug 2026",
+  "protocol": "TLSv1.3",
+  "authentication": "CA/EKU/hostname validation plus exact certificate SHA256 and node URI SAN pinning in both directions",
+  "trainingCommand": "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m proofcollective.cli simulate --clients 20 --rounds 1 --transport local-mtls --output /tmp/packproof-f10-mtls-measured",
+  "tlsConnections": 80,
+  "contributors": 20,
+  "rounds": 1,
+  "elapsedSeconds": 6.4162228470004266,
+  "candidateSignature": "VALID",
+  "candidateDigest": "b7bef6ef228902aad3dd15290534c1eb96360b965773e206f25e615eea07f5e9",
+  "candidatePromotions": 0,
+  "utilityGatePassed": false,
+  "baselineAccuracy": 0.849609375,
+  "noisyAccuracy": 0.7477213541666666,
+  "tests": {
+    "passed": 22,
+    "failed": 0,
+    "seconds": 26.067,
+    "artifact": "tests.xml"
+  },
+  "transportAdversarialCases": [
+    "TLS encrypted record bitflip after real handshake",
+    "wrong CA, pinned certificate or hostname",
+    "missing client certificate",
+    "cross-participant and cross-run metadata",
+    "replay and bounded frame lengths",
+    "22 real Flower clients with 2 dropouts leave 20 contributors",
+    "thread consent withdrawal visible without cached permission",
+    "operational roster expiry, identity and duplicate-pin rejection",
+    "live profile expiry and persistent monotonic session admission reject restart replay"
+  ],
+  "artifactsContainPrivateKeys": false,
+  "openGates": [
+    "Separate partner-controlled machines and independently approved enrollments",
+    "Operational certificate revocation/rotation and deployment-specific network attacks",
+    "External protocol/privacy review and protected accounting",
+    "Representative useful task evaluation and explicit pilot authorization"
+  ]
+}

@@ -1,0 +1,6 @@
+# Pinned maintained protocol and accountant, isolated from production dependencies.
+flwr==1.39.0
+dp-accounting==0.6.0
+cryptography==46.0.7
+numpy==2.5.3
+pytest==9.0.2

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "packproof.witness-trust.v1",
+  "policyId": "synthetic-local-test-v1",
+  "logId": "packproof-local-research",
+  "testOnly": true,
+  "requiredOperators": [
+    "packproof-test-a",
+    "packproof-test-b"
+  ],
+  "logKeys": {
+    "f89055442cbf9022a61b6585c06ace05958dba0efcbb1b6faec019d5ad88ca66": {
+      "keyId": "f89055442cbf9022a61b6585c06ace05958dba0efcbb1b6faec019d5ad88ca66",
+      "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAijOJMcaxARfLiZzXvMZFFrPIVw67eRqERASluBZSWHU=\n-----END PUBLIC KEY-----\n",
+      "operatorId": "log",
+      "independent": false,
+      "testOnly": true
+    }
+  },
+  "witnessKeys": {
+    "b548b882079c497bfe29ca1e2017f44d69e91dad6a3c2e094e1ea2e0d8e9b47a": {
+      "keyId": "b548b882079c497bfe29ca1e2017f44d69e91dad6a3c2e094e1ea2e0d8e9b47a",
+      "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAsMzpDbc90oJq6JuZscUVyJseKURDWW/SlAiN5hKeJXU=\n-----END PUBLIC KEY-----\n",
+      "operatorId": "packproof-test-a",
+      "independent": false,
+      "testOnly": true
+    },
+    "9b1586c8b2d14c0e3f5f245492691bed0ad027900a3e99a049c4962d57a47597": {
+      "keyId": "9b1586c8b2d14c0e3f5f245492691bed0ad027900a3e99a049c4962d57a47597",
+      "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAMLNBrv+p82I3dx+bupoWujOp2isbRYFpbjnnSGIVMCQ=\n-----END PUBLIC KEY-----\n",
+      "operatorId": "packproof-test-b",
+      "independent": false,
+      "testOnly": true
+    }
+  }
+}

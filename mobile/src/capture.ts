@@ -1,3 +1,4 @@
+import { prepareResearchSession, bindResearchSession, signResearchSession, type ResearchCaptureState } from "./research/capture";
 import { beginNativeEngine, captureEngineEnabled, sealNativeEngine } from "./capture/engine";
 import type { CaptureContext, CaptureManifest } from "../../backend/src/capture/core";
 import type { CaptureSessionGrant } from "./intake/model";
@@ -29,6 +30,7 @@ import {
 const LOCAL_CAPTURE_NAME = "packproof-seller-evidence.mp4";
 
 export interface LocalCapture {
+  research?: ResearchCaptureState;
   localFileAvailable?: boolean;
   identifierPolicy?: IdentifierPolicy;
   identifierCoverage?: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE';
@@ -56,7 +58,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED" | "SCANNER_TRIGGERED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { researchPolicyCheck?: () => Promise<boolean>; remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -117,11 +119,13 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   await capturePreflight(input.client, input.userId, !input.stageId);
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
+  const preparedResearch = input.authorizedSession ? undefined : await prepareResearchSession(input.client, input);
   // Authorization exists before a frame is recorded. No gallery or camera-error file path.
   const session = input.authorizedSession ?? (captureEngineEnabled() && !input.stageId ? await beginNativeEngine(input.client,input.proofId) : await input.client.createCaptureSession(input.proofId, newIdempotencyKey(), input.stageId, Platform.OS === "ios" ? "IOS" : "ANDROID"));
   const captureContext = "captureContext" in session ? session.captureContext as CaptureContext : undefined;
   if (session.proofId !== input.proofId || session.state !== "ISSUED" || Date.parse(session.expiresAt) <= Date.now())
     throw new Error("This camera authorization is no longer ready. Open the original order to recover or restart its recording.");
+  const research = await bindResearchSession(input.client, { proofId: input.proofId, captureSessionId: session.id, userId: input.userId }, preparedResearch);
   const journal: ShippingScanJournal = {proofId:input.proofId,sessionId:session.id,userId:input.userId,entries:[]};
   const queue = shippingQueue(input.client,journal);
   await queue.flush();
@@ -142,9 +146,9 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   }
   // Write the account binding before native acquisition. A process restart can discover finalized native media.
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
-    identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+    research, identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
   if (input.relay) await input.relay.onSessionIssued(session.id);
-  const captured = await nativeRecorder({ remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+  const captured = await nativeRecorder({ ...(research ? { researchPolicyCheck: async () => { const flags = await input.client.researchCapabilities(); return flags.enabled && !flags.killSwitch && flags.features.proofpilot?.collection === true; } } : {}), remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
     ...(identifierCaptureEnabled(identifierPolicy) ? {
       onIdentifierBarcode: async (event: UnifiedBarcodeDetection) => {
         if (!identifiers) return null;
@@ -179,7 +183,9 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   }
   const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
   study?.phase('confirmation');
-  return persistLocalCapture({ ...captured,identifierPolicy,identifierCoverage,captureContext,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  const saved = await persistLocalCapture({ ...captured,research,identifierPolicy,identifierCoverage,captureContext,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  if (saved.research) { await signResearchSession(saved); await persistCaptureMetadata(saved); }
+  return saved;
 }
 
 const inspections = new Map<string, Promise<EncodedVideoInspection | null>>();
@@ -441,6 +447,9 @@ export async function discardLocalCapture(uri: string | null | undefined, operat
       ? `${FileSystem.documentDirectory}packproof-captures/${sessionId}/` : null;
     if (nativeDirectory && uri === `${nativeDirectory}video.mp4`) {
       for (let index = 0; index < 3; index += 1) await FileSystem.deleteAsync(`${nativeDirectory}review-frame-${index}.png`, { idempotent: true });
+      for (let index = 0; index < 6; index += 1) await FileSystem.deleteAsync(`${nativeDirectory}research-frame-${index}.pgm`, { idempotent: true });
+      for (const name of ['research-context.json', 'research-acquisition.json', 'research-complete.json', 'research-signed-inventory.json'])
+        await FileSystem.deleteAsync(`${nativeDirectory}${name}`, { idempotent: true });
     }
     await FileSystem.deleteAsync(uri, { idempotent: true });
     await FileSystem.deleteAsync(`${uri}.finalized.json`, { idempotent: true });

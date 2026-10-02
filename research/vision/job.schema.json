@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packproof.vision-job.v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "feature",
+    "sources"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.vision-job.v1"
+    },
+    "feature": {
+      "enum": [
+        "proofprint",
+        "proofsight",
+        "prooftwin",
+        "prooflive",
+        "proofpilot",
+        "proofmatch"
+      ]
+    },
+    "analysisId": {
+      "type": "string"
+    },
+    "sandboxRoot": {
+      "type": "string"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 24,
+      "items": {
+        "type": "object",
+        "required": [
+          "sourceId",
+          "path",
+          "sha256",
+          "byteLength"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^(sha256:)?[a-f0-9]{64}$"
+          },
+          "byteLength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 134217728
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "objectVersionId": {
+            "type": "string"
+          },
+          "captureSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "binding": {
+      "type": "object"
+    },
+    "parameters": {
+      "type": "object"
+    },
+    "policyVersion": {
+      "type": "string"
+    }
+  }
+}

@@ -25,9 +25,12 @@
     "@aws-sdk/client-secrets-manager": "^3.864.0",
     "@aws-sdk/client-sqs": "3.1120.0",
     "@aws-sdk/s3-request-presigner": "^3.864.0",
+    "asn1js": "3.0.10",
     "aws-jwt-verify": "^5.2.1",
+    "cbor": "10.0.11",
     "express": "^4.21.2",
     "pg": "^8.16.3",
+    "pkijs": "3.4.1",
     "ulid": "^2.4.0"
   },
   "devDependencies": {

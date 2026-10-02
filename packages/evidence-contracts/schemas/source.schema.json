@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/source.schema.json",
+  "type": "object",
+  "required": [
+    "sourceId",
+    "proofId",
+    "objectKey",
+    "objectVersionId",
+    "sha256",
+    "byteLength",
+    "mimeType",
+    "captureSessionId",
+    "relationship",
+    "retentionState"
+  ],
+  "properties": {
+    "sourceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "objectKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "objectVersionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "byteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1073741824
+    },
+    "mimeType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "captureSessionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "relationship": {
+      "enum": [
+        "ORIGINAL_RECORDING",
+        "CONCURRENT_SIDECAR",
+        "DECODED_FRAME",
+        "PARTICIPANT_IMPORT"
+      ]
+    },
+    "frameReference": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "sampleId",
+            "offsetMs",
+            "clockDomain",
+            "decoderBuild",
+            "rotation",
+            "colorConversion"
+          ],
+          "properties": {
+            "sampleId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "offsetMs": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clockDomain": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "decoderBuild": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "rotation": {
+              "anyOf": [
+                {
+                  "enum": [
+                    0,
+                    90,
+                    180,
+                    270
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "colorConversion": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "retentionState": {
+      "enum": [
+        "AVAILABLE",
+        "EXPIRED",
+        "DELETED"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,3 +1,4 @@
+import { closeResearchSession } from "../research/capture";
 import { orderShare } from '../../modules/packproof-order-share';
 import { clearNativeIntakeSession, stopNativeIntakeSession } from '../intake/native-session';
 import { clearIntakeQueueCache } from '../intake/queue-cache';
@@ -139,6 +140,7 @@ function currentRuntime(
 ): ResolvedRuntimeConfig {
   return resolveRuntimeConfig({
     env: {
+      EXPO_PUBLIC_PACKPROOF_RND: process.env.EXPO_PUBLIC_PACKPROOF_RND,
       EXPO_PUBLIC_PACKPROOF_API_BASE_URL: process.env.EXPO_PUBLIC_PACKPROOF_API_BASE_URL,
       EXPO_PUBLIC_PACKPROOF_AUTH_MODE: process.env.EXPO_PUBLIC_PACKPROOF_AUTH_MODE,
       EXPO_PUBLIC_COGNITO_USER_POOL_ID: process.env.EXPO_PUBLIC_COGNITO_USER_POOL_ID,
@@ -1158,6 +1160,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }
       setSavedRecordings(captures);
       if (recoveryConnection.current === false) return;
+      for (const capture of captures.filter(item => item.research && item.research.state !== 'RECEIVED' && item.uploadEvidenceId && ['FINALIZED', 'SUBMITTED'].includes(item.recovery?.phase ?? ''))) {
+        const saveResearch = () => persistCaptureMetadata(capture);
+        void closeResearchSession(client, capture, capture.uploadEvidenceId!, saveResearch).then(saveResearch).catch(() => undefined);
+      }
       if (captureSubmitLock.current || captureCompletionActive()) return;
       const discard = captures.find(capture => capture.recovery?.discardRequested);
       if (discard) { await discardSavedRecording(discard); return; }

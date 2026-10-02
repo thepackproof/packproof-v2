@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/extension-record.schema.json",
+  "type": "object",
+  "required": [
+    "canonicalJson",
+    "digest",
+    "signature"
+  ],
+  "properties": {
+    "canonicalJson": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 4194304
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "signature": {
+      "$ref": "signature.schema.json"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Actual export/API extension wrapper; parse canonicalJson as extension.schema.json and verify digest/signature using an external pinned trust policy."
+}

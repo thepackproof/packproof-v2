@@ -1,0 +1,2909 @@
+{
+  "schemaVersion": "packproof.rnd-status-ledger.v1",
+  "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
+  "sourcePlan": "PackProof_Executive_Overview_and_ASTRA_RnD_Development_Plan_2026-10-02(1).docx",
+  "lastUpdated": "2026-10-02T11:38:59.413083+00:00",
+  "status": "ENGINEERING_HANDOFF_WITH_EXTERNAL_QUALIFICATION_GATES",
+  "releaseAuthorization": "NOT_AUTHORIZED",
+  "tickets": [
+    {
+      "id": "F01-01",
+      "title": "Native enrollment",
+      "owner": "native / vision / backend",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/enrollment.py",
+        "mobile/src/research/capture.ts",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm --prefix backend test -- tests/rnd-enrollment.test.ts",
+        "npm run test:research --prefix mobile",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "28 vision/protocol tests, two real-worker enrollment tests; 11 synthetic worker jobs across features. Planned240labels/60cartons; collected0.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage.",
+      "unresolvedLimitation": "Uncoached real-device comparison must establish no extra steps and uninterrupted recording.",
+      "nextDependency": "Uncoached real-device comparison must establish no extra steps and uninterrupted recording.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F01-02",
+      "title": "Optical benchmark",
+      "owner": "native / vision / backend",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "research/benchmarks/evaluate.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm --prefix backend test -- tests/rnd-enrollment.test.ts",
+        "npm run test:research --prefix mobile",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "28 vision/protocol tests, two real-worker enrollment tests; 11 synthetic worker jobs across features. Planned240labels/60cartons; collected0.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed.",
+      "unresolvedLimitation": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
+      "nextDependency": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F01-03",
+      "title": "Extractor and scorer",
+      "owner": "native / vision / backend",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/enrollment.py",
+        "research/benchmarks/run.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm --prefix backend test -- tests/rnd-enrollment.test.ts",
+        "npm run test:research --prefix mobile",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "28 vision/protocol tests, two real-worker enrollment tests; 11 synthetic worker jobs across features. Planned240labels/60cartons; collected0.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Physical content/print/substrate ablations and frozen thresholds; no physical correspondence finding is enabled.",
+      "nextDependency": "Physical content/print/substrate ablations and frozen thresholds; no physical correspondence finding is enabled.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F01-04",
+      "title": "Enrollment lifecycle",
+      "owner": "native / vision / backend",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/enrollment.ts",
+        "backend/migrations/082_rnd_enrollments.sql"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm --prefix backend test -- tests/rnd-enrollment.test.ts",
+        "npm run test:research --prefix mobile",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "28 vision/protocol tests, two real-worker enrollment tests; 11 synthetic worker jobs across features. Planned240labels/60cartons; collected0.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Every current profile terminates UNAVAILABLE then LOCKED; physical qualification needed before any QUALIFIED transition.",
+      "nextDependency": "Every current profile terminates UNAVAILABLE then LOCKED; physical qualification needed before any QUALIFIED transition.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F01-05",
+      "title": "Viewer and export",
+      "owner": "native / vision / backend",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "mobile/src/research/ResearchPanel.tsx",
+        "backend/src/rnd/exports.ts",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm --prefix backend test -- tests/rnd-enrollment.test.ts",
+        "npm run test:research --prefix mobile",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "28 vision/protocol tests, two real-worker enrollment tests; 11 synthetic worker jobs across features. Planned240labels/60cartons; collected0.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Mobile now hashes and previews real artifacts, displays source-linked sparse projections and supports verification archive export. Hardware/region finding qualification remains unavailable.",
+      "unresolvedLimitation": "Qualified source profiles before physical findings.",
+      "nextDependency": "Qualified source profiles before physical findings.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F01-06",
+      "title": "Security qualification",
+      "owner": "native / vision / backend",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "research/benchmarks/evaluate.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm --prefix backend test -- tests/rnd-enrollment.test.ts",
+        "npm run test:research --prefix mobile",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "28 vision/protocol tests, two real-worker enrollment tests; 11 synthetic worker jobs across features. Planned240labels/60cartons; collected0.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "research/benchmarks/configs/physical-corpus-240-60-v1.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed.",
+      "unresolvedLimitation": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
+      "nextDependency": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F02-01",
+      "title": "Threat model and inventory",
+      "owner": "native / platform / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "docs/rnd/PLATFORM_ASSURANCE.md",
+        "mobile/RESEARCH_CAPTURE_2026-10-02.md",
+        "backend/src/rnd/capture.ts",
+        "backend/src/rnd/platform-assurance-service.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
+        "node verifier/test_rnd_bundle.mjs",
+        "node research/capture-fragments/fragments.test.mjs",
+        "npm --prefix backend test -- tests/rnd-capture-sidecars.test.ts"
+      ],
+      "testPopulation": "48 platform-policy/service tests with generated certificate fixtures;18 portable tests;3 sidecar tests;6 fragment tests and5 live software encoder measurements;0 enrolled hardware devices.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/platform-assurance.json",
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/fragment-benchmark.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
+      "nextDependency": "Independent G2/G3 qualification and explicit later release authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F02-02",
+      "title": "Intent service",
+      "owner": "native / platform / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "docs/rnd/PLATFORM_ASSURANCE.md",
+        "mobile/RESEARCH_CAPTURE_2026-10-02.md",
+        "backend/src/rnd/capture.ts",
+        "backend/src/rnd/platform-assurance-service.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
+        "node verifier/test_rnd_bundle.mjs",
+        "node research/capture-fragments/fragments.test.mjs",
+        "npm --prefix backend test -- tests/rnd-capture-sidecars.test.ts"
+      ],
+      "testPopulation": "48 platform-policy/service tests with generated certificate fixtures;18 portable tests;3 sidecar tests;6 fragment tests and5 live software encoder measurements;0 enrolled hardware devices.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/platform-assurance.json",
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/fragment-benchmark.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
+      "nextDependency": "Independent G2/G3 qualification and explicit later release authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F02-03",
+      "title": "Canonical signer / verifier",
+      "owner": "native / platform / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchProvenance.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchProvenance.swift",
+        "packages/evidence-contracts/index.mjs",
+        "packages/evidence-contracts/fragments.mjs",
+        "research/capture-fragments/run-spike.mjs",
+        "research/capture-fragments/fragments.test.mjs",
+        "docs/rnd/validation/fragment-benchmark.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
+        "node verifier/test_rnd_bundle.mjs",
+        "node research/capture-fragments/fragments.test.mjs",
+        "npm --prefix backend test -- tests/rnd-capture-sidecars.test.ts"
+      ],
+      "testPopulation": "48 platform-policy/service tests with generated certificate fixtures;18 portable tests;3 sidecar tests;6 fragment tests and5 live software encoder measurements;0 enrolled hardware devices.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/platform-assurance.json",
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/fragment-benchmark.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "observedResult": "Real-time synthetic AVC+AAC FFmpeg output is consumed before producer exit into init, sealed fragment and terminal units; exact P256 signed chain has audio/video coverage and five-run software benchmark. Existing native recorder remains FINAL_FILE_ONLY. Native encoder callbacks/continuity and physical overhead are not established by this software spike.",
+      "unresolvedLimitation": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
+      "nextDependency": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F02-04",
+      "title": "Native assurance adapters",
+      "owner": "native / platform / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/platform-assurance.ts",
+        "backend/src/rnd/platform-assurance-service.ts",
+        "backend/migrations/081_rnd_platform.sql",
+        "backend/src/rnd/android-key-policy.ts",
+        "backend/tests/rnd-android-key-policy.test.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchKeyAttestation.kt"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
+        "node verifier/test_rnd_bundle.mjs",
+        "node research/capture-fragments/fragments.test.mjs",
+        "npm --prefix backend test -- tests/rnd-capture-sidecars.test.ts"
+      ],
+      "testPopulation": "48 platform-policy/service tests with generated certificate fixtures;18 portable tests;3 sidecar tests;6 fragment tests and5 live software encoder measurements;0 enrolled hardware devices.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/platform-assurance.json",
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/fragment-benchmark.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "observedResult": "Strict KeyMint100\u2013500 P256 request-key profile now verifies challenge, X509 signatures, external roots/current revocation, app identity, hardware lists, verified boot and patch floors; unsupported delegated/legacy factory profiles do not receive trust. Dedicated request-key result does not upgrade recording key.",
+      "unresolvedLimitation": "Authentic provider roots/app signing pins, research developer credentials/entitlements, real compatible devices, revocation governance and platform security review.",
+      "nextDependency": "Authentic provider roots/app signing pins, research developer credentials/entitlements, real compatible devices, revocation governance and platform security review.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F02-05",
+      "title": "Incremental chain",
+      "owner": "native / platform / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchProvenance.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchProvenance.swift",
+        "packages/evidence-contracts/index.mjs",
+        "packages/evidence-contracts/fragments.mjs",
+        "research/capture-fragments/run-spike.mjs",
+        "research/capture-fragments/fragments.test.mjs",
+        "docs/rnd/validation/fragment-benchmark.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
+        "node verifier/test_rnd_bundle.mjs",
+        "node research/capture-fragments/fragments.test.mjs",
+        "npm --prefix backend test -- tests/rnd-capture-sidecars.test.ts"
+      ],
+      "testPopulation": "48 platform-policy/service tests with generated certificate fixtures;18 portable tests;3 sidecar tests;6 fragment tests and5 live software encoder measurements;0 enrolled hardware devices.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/platform-assurance.json",
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/fragment-benchmark.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "observedResult": "Real-time synthetic AVC+AAC FFmpeg output is consumed before producer exit into init, sealed fragment and terminal units; exact P256 signed chain has audio/video coverage and five-run software benchmark. Existing native recorder remains FINAL_FILE_ONLY. Native encoder callbacks/continuity and physical overhead are not established by this software spike.",
+      "unresolvedLimitation": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
+      "nextDependency": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F02-06",
+      "title": "Recovery and lifecycle",
+      "owner": "native / platform / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/src/research/capture.ts",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/tests/research",
+        "backend/tests/rnd-platform-service.test.ts",
+        "backend/tests/rnd-capture-sidecars.test.ts",
+        "mobile/src/research/sidecars.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
+        "node verifier/test_rnd_bundle.mjs",
+        "node research/capture-fragments/fragments.test.mjs",
+        "npm --prefix backend test -- tests/rnd-capture-sidecars.test.ts"
+      ],
+      "testPopulation": "48 platform-policy/service tests with generated certificate fixtures;18 portable tests;3 sidecar tests;6 fragment tests and5 live software encoder measurements;0 enrolled hardware devices.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/platform-assurance.json",
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/fragment-benchmark.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "observedResult": "Durable original upload plus separately committed sidecar chunks/receipts and retries; native hardware force-stop/thermal/key-loss qualification still external.",
+      "unresolvedLimitation": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; Xcode runner for iOS.",
+      "nextDependency": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; Xcode runner for iOS.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F02-07",
+      "title": "Portable verifier",
+      "owner": "native / platform / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "verifier/rnd_bundle.mjs",
+        "verifier/rnd_verify.py",
+        "web/src/rnd/RndReview.tsx",
+        "verifier/test_rnd_bundle.mjs",
+        "backend/tests/rnd-capture-sidecars.test.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-platform-assurance.test.ts tests/rnd-platform-service.test.ts tests/rnd-android-key-policy.test.ts",
+        "node verifier/test_rnd_bundle.mjs",
+        "node research/capture-fragments/fragments.test.mjs",
+        "npm --prefix backend test -- tests/rnd-capture-sidecars.test.ts"
+      ],
+      "testPopulation": "48 platform-policy/service tests with generated certificate fixtures;18 portable tests;3 sidecar tests;6 fragment tests and5 live software encoder measurements;0 enrolled hardware devices.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/platform-assurance.json",
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/fragment-benchmark.json",
+        "docs/rnd/validation/privacy-witness-status.json"
+      ],
+      "observedResult": "Portable offline verifier checks declared snapshot scope, raw root, chains, source bytes, intents/receipts, subject binding, native sidecar acquisition/PGM semantics and artifact inventories. Metadata-only bytes remain NOT_CHECKED. Local specialist witness/ZK commands remain separate.",
+      "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
+      "nextDependency": "Independent G2/G3 qualification and explicit later release authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F03-01",
+      "title": "Annotation contract",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/README.md",
+        "backend/src/rnd/annotations.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts"
+      ],
+      "testPopulation": "28 shared vision/training/protocol tests and source-linked synthetic model/annotation examples;0 real packing corpus or blinded reviewers.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Independent double labeling and blinded disagreement adjudication on authorized ordinary-packing corpus.",
+      "nextDependency": "Independent double labeling and blinded disagreement adjudication on authorized ordinary-packing corpus.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F03-02",
+      "title": "Baseline worker",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts"
+      ],
+      "testPopulation": "28 shared vision/training/protocol tests and source-linked synthetic model/annotation examples;0 real packing corpus or blinded reviewers.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
+      "nextDependency": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F03-03",
+      "title": "Tracking and action models",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/action_model.py",
+        "research/vision/worker.py",
+        "research/vision/IMPLEMENTATION_STATUS.md"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts"
+      ],
+      "testPopulation": "28 shared vision/training/protocol tests and source-linked synthetic model/annotation examples;0 real packing corpus or blinded reviewers.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Actual attributed parcel/item masks, controlled background masks, numerical event-model training and pinned worker inference exist. Learned automatic class segmentation and qualified model weights require consented labels/holdouts.",
+      "unresolvedLimitation": "Consented ordinary packing and natural failure corpus with independent event labels/holdout; task-specific model qualification.",
+      "nextDependency": "Consented ordinary packing and natural failure corpus with independent event labels/holdout; task-specific model qualification.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F03-04",
+      "title": "Continuity coverage",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts"
+      ],
+      "testPopulation": "28 shared vision/training/protocol tests and source-linked synthetic model/annotation examples;0 real packing corpus or blinded reviewers.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
+      "nextDependency": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F03-05",
+      "title": "Timeline integration",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "backend/src/rnd/annotations.ts",
+        "mobile/src/research/ResearchPanel.tsx",
+        "mobile/src/research/ResearchAnnotations.tsx",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts"
+      ],
+      "testPopulation": "28 shared vision/training/protocol tests and source-linked synthetic model/annotation examples;0 real packing corpus or blinded reviewers.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Mobile now includes exact analysis/source reviewer statements, own-note amendments with retained history, source time/region navigation, hash-verified artifact preview, sparse geometry projections, exact derivative review, reviewed ZIP and source-linked verification archive. Web/desktop shared results retain comparison missingness/conflict, method limits and source navigation. Offline full bundle verification remains an exported tool rather than a client assertion of scene truth.",
+      "unresolvedLimitation": "Reviewer comprehension/accessibility validation.",
+      "nextDependency": "Reviewer comprehension/accessibility validation.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F03-06",
+      "title": "Reviewer evaluation",
+      "owner": "vision / clients",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/README.md"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts"
+      ],
+      "testPopulation": "28 shared vision/training/protocol tests and source-linked synthetic model/annotation examples;0 real packing corpus or blinded reviewers.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "No blinded human comparison completed.",
+      "unresolvedLimitation": "Independent reviewers; randomized original-only versus enriched review tasks; event-search/accuracy/contradiction metrics.",
+      "nextDependency": "Independent reviewers; randomized original-only versus enriched review tasks; event-search/accuracy/contradiction metrics.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F04-01",
+      "title": "Condition schema",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Actual six-view synthetic COLMAP reconstruction:193 points,0.143px mean reprojection error,27.6degree median triangulation;0 physical metrology/field specimens.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
+      "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "nextDependency": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F04-02",
+      "title": "Registered 2D baseline",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Actual six-view synthetic COLMAP reconstruction:193 points,0.143px mean reprojection error,27.6degree median triangulation;0 physical metrology/field specimens.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
+      "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "nextDependency": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F04-03",
+      "title": "Sparse 3D worker",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Actual six-view synthetic COLMAP reconstruction:193 points,0.143px mean reprojection error,27.6degree median triangulation;0 physical metrology/field specimens.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
+      "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "nextDependency": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F04-04",
+      "title": "Change detector",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py",
+        "research/vision/sfm.py",
+        "research/vision/result.schema.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Actual six-view synthetic COLMAP reconstruction:193 points,0.143px mean reprojection error,27.6degree median triangulation;0 physical metrology/field specimens.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
+      "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "nextDependency": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F04-05",
+      "title": "Cross-platform viewer",
+      "owner": "vision / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "web/src/rnd/ArtifactPreview.tsx",
+        "desktop/src/renderer/RndDesktopPanel.tsx",
+        "mobile/src/research/ResearchPanel.tsx",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Actual six-view synthetic COLMAP reconstruction:193 points,0.143px mean reprojection error,27.6degree median triangulation;0 physical metrology/field specimens.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Mobile now hashes and previews real artifacts, displays source-linked sparse projections and supports verification archive export. Hardware/region finding qualification remains unavailable.",
+      "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
+      "nextDependency": "Independent G2/G3 qualification and explicit later release authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F04-06",
+      "title": "Bench and field study",
+      "owner": "vision / clients",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/evaluate.py",
+        "research/benchmarks/configs/physical-qualification-v1.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Actual six-view synthetic COLMAP reconstruction:193 points,0.143px mean reprojection error,27.6degree median triangulation;0 physical metrology/field specimens.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
+      "unresolvedLimitation": "Measured physical carton changes, sizes/materials, lighting/reflective tape, missing faces and natural shipping wear with independent lab metrology.",
+      "nextDependency": "Measured physical carton changes, sizes/materials, lighting/reflective tape, missing faces and natural shipping wear with independent lab metrology.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F05-01",
+      "title": "Leg and subject mapping",
+      "owner": "backend / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/matrix.ts",
+        "mobile/src/research/ResearchPanel.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Three channel-matrix tests,12 backend boundary tests and source/leg synthetic fixtures;0 paired real shipments or reviewer cohorts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "nextDependency": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F05-02",
+      "title": "Channel adapters",
+      "owner": "backend / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/matrix.ts",
+        "backend/src/rnd/worker.ts",
+        "backend/tests/rnd-matrix.test.ts",
+        "backend/tests/rnd-evidence.test.ts",
+        "web/src/rnd/RndReview.test.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Three channel-matrix tests,12 backend boundary tests and source/leg synthetic fixtures;0 paired real shipments or reviewer cohorts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Exact paired OCR text, missing/conflicting alternatives and uncertainty; source-attributed report tracking/weight; actual unqualified Python appearance diagnostics; web comparison rows render observations without fusion.",
+      "unresolvedLimitation": "Qualified OCR/physical/condition channels before evidentiary discrepancy/consistency claims; provider weight must retain attribution.",
+      "nextDependency": "Qualified OCR/physical/condition channels before evidentiary discrepancy/consistency claims; provider weight must retain attribution.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F05-03",
+      "title": "Comparison policy",
+      "owner": "backend / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/matrix.ts",
+        "mobile/src/research/ResearchPanel.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Three channel-matrix tests,12 backend boundary tests and source/leg synthetic fixtures;0 paired real shipments or reviewer cohorts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "nextDependency": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F05-04",
+      "title": "Recipient workflow",
+      "owner": "backend / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/matrix.ts",
+        "mobile/src/research/ResearchPanel.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Three channel-matrix tests,12 backend boundary tests and source/leg synthetic fixtures;0 paired real shipments or reviewer cohorts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "nextDependency": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F05-05",
+      "title": "Reviewer matrix",
+      "owner": "backend / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "backend/src/rnd/matrix.ts",
+        "backend/tests/rnd-matrix.test.ts",
+        "backend/tests/rnd-evidence.test.ts",
+        "web/src/rnd/RndReview.test.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Three channel-matrix tests,12 backend boundary tests and source/leg synthetic fixtures;0 paired real shipments or reviewer cohorts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Exact paired OCR text, missing/conflicting alternatives and uncertainty; source-attributed report tracking/weight; actual unqualified Python appearance diagnostics; web comparison rows render observations without fusion.",
+      "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
+      "nextDependency": "Independent G2/G3 qualification and explicit later release authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F05-06",
+      "title": "Calibration and review study",
+      "owner": "backend / clients",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/README.md"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-matrix.test.ts tests/rnd-evidence.test.ts",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx",
+        "npm run test:research --prefix mobile"
+      ],
+      "testPopulation": "Three channel-matrix tests,12 backend boundary tests and source/leg synthetic fixtures;0 paired real shipments or reviewer cohorts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
+      "unresolvedLimitation": "Same-SKU substitutions, copied serials, partial returns, new cartons, legitimate repairs, absent recipients, and blinded matrix-assisted review study.",
+      "nextDependency": "Same-SKU substitutions, copied serials, partial returns, new cartons, legitimate repairs, absent recipients, and blinded matrix-assisted review study.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F06-01",
+      "title": "Protocol and threat scope",
+      "owner": "native / vision / safety qualification",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/src/research/capture-policy.ts",
+        "research/vision/policy.json",
+        "research/benchmarks/configs/physical-qualification-v1.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts"
+      ],
+      "testPopulation": "Passive synthetic time-aligned signal/motion protocol only;0 emitted active challenges,0 qualified safety profiles and0 physical replay attempts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Freeze supported active illumination/device/safety threat profile before challenge tuning.",
+      "nextDependency": "Freeze supported active illumination/device/safety threat profile before challenge tuning.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F06-02",
+      "title": "Native instrumentation",
+      "owner": "native / vision / safety qualification",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/capture.ts",
+        "mobile/src/research/capture-policy.ts",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts"
+      ],
+      "testPopulation": "Passive synthetic time-aligned signal/motion protocol only;0 emitted active challenges,0 qualified safety profiles and0 physical replay attempts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Passive native capability/luma/clock instrumentation plus unpredictable bound challenge consumption are implemented. Active illumination is unavailable without safety-reviewed qualified hardware profile; its absence is not a failed freshness or liveness claim.",
+      "unresolvedLimitation": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
+      "nextDependency": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F06-03",
+      "title": "Challenge service",
+      "owner": "native / vision / safety qualification",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/capture.ts",
+        "mobile/src/research/capture-policy.ts",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts"
+      ],
+      "testPopulation": "Passive synthetic time-aligned signal/motion protocol only;0 emitted active challenges,0 qualified safety profiles and0 physical replay attempts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Passive native capability/luma/clock instrumentation plus unpredictable bound challenge consumption are implemented. Active illumination is unavailable without safety-reviewed qualified hardware profile; its absence is not a failed freshness or liveness claim.",
+      "unresolvedLimitation": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
+      "nextDependency": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F06-04",
+      "title": "Baseline response detector",
+      "owner": "native / vision / safety qualification",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/vision/engine.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts"
+      ],
+      "testPopulation": "Passive synthetic time-aligned signal/motion protocol only;0 emitted active challenges,0 qualified safety profiles and0 physical replay attempts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Actual timed response/attack recordings and calibrated supported profile; synthetic command metadata is not emitted-light evidence.",
+      "nextDependency": "Actual timed response/attack recordings and calibrated supported profile; synthetic command metadata is not emitted-light evidence.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F06-05",
+      "title": "Replay lab",
+      "owner": "native / vision / safety qualification",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/configs/physical-qualification-v1.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts"
+      ],
+      "testPopulation": "Passive synthetic time-aligned signal/motion protocol only;0 emitted active challenges,0 qualified safety profiles and0 physical replay attempts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
+      "unresolvedLimitation": "Authorized genuine/real display/print/lamination/reflection/delay/adaptive display/injected stream experiments with held-out devices/materials; safety review.",
+      "nextDependency": "Authorized genuine/real display/print/lamination/reflection/delay/adaptive display/injected stream experiments with held-out devices/materials; safety review.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F06-06",
+      "title": "UI and kill switch",
+      "owner": "native / vision / safety qualification",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/src/research/capture.ts",
+        "backend/src/rnd/config.ts",
+        "web/src/rnd/RndReview.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v",
+        "npm run test:research --prefix mobile",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts"
+      ],
+      "testPopulation": "Passive synthetic time-aligned signal/motion protocol only;0 emitted active challenges,0 qualified safety profiles and0 physical replay attempts.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "docs/rnd/validation/native-status.json",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Real record-in-progress opt-out/kill-switch timing and accessibility checks; active profiles remain unavailable.",
+      "nextDependency": "Real record-in-progress opt-out/kill-switch timing and accessibility checks; active profiles remain unavailable.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F07-01",
+      "title": "Policy and detector",
+      "owner": "privacy / verifier / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/privacy/redact.py",
+        "backend/src/rnd/worker.ts",
+        "research/privacy/test_redact.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-zk-service.test.ts tests/rnd-derivative-grants.test.ts",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Actual4x4/8x8 RGB8 proofs,20 adversarial cases/profile;3 queued-ZK integration and6 grants tests plus focused kill-switch regression;0 privacy certifications or full-size proof qualification.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
+        "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "nextDependency": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F07-02",
+      "title": "Derivative pipeline",
+      "owner": "privacy / verifier / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/privacy/redact.py",
+        "backend/src/rnd/worker.ts",
+        "research/privacy/test_redact.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-zk-service.test.ts tests/rnd-derivative-grants.test.ts",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Actual4x4/8x8 RGB8 proofs,20 adversarial cases/profile;3 queued-ZK integration and6 grants tests plus focused kill-switch regression;0 privacy certifications or full-size proof qualification.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
+        "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "nextDependency": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F07-03",
+      "title": "Review and sharing",
+      "owner": "privacy / verifier / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "web/src/rnd/MaskEditor.tsx",
+        "backend/src/rnd/exports.ts",
+        "mobile/src/research/ResearchPanel.tsx",
+        "backend/src/rnd/derivative-grants.ts",
+        "backend/migrations/086_rnd_derivative_grants.sql",
+        "backend/tests/rnd-derivative-grants.test.ts",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-zk-service.test.ts tests/rnd-derivative-grants.test.ts",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Actual4x4/8x8 RGB8 proofs,20 adversarial cases/profile;3 queued-ZK integration and6 grants tests plus focused kill-switch regression;0 privacy certifications or full-size proof qualification.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
+        "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+      ],
+      "observedResult": "Actual opaque derivative review and byte-bound export plus token-hashed, expiring, revocable hosted grants. Six direct/HTTP tests pass; all clients provide exact derivative preview. Recipient copies cannot be recalled.",
+      "unresolvedLimitation": "Human review of each proposed mask/derivative; residual privacy/access policy review.",
+      "nextDependency": "Human review of each proposed mask/derivative; residual privacy/access policy review.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F07-04",
+      "title": "Verification levels",
+      "owner": "privacy / verifier / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/privacy/redact.py",
+        "backend/src/rnd/worker.ts",
+        "research/privacy/test_redact.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-zk-service.test.ts tests/rnd-derivative-grants.test.ts",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Actual4x4/8x8 RGB8 proofs,20 adversarial cases/profile;3 queued-ZK integration and6 grants tests plus focused kill-switch regression;0 privacy certifications or full-size proof qualification.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
+        "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "nextDependency": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F07-05",
+      "title": "ZK circuit and binding",
+      "owner": "privacy / verifier / clients",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/privacy/zk/circuit.mjs",
+        "research/privacy/zk/prove.mjs",
+        "research/privacy/zk/verify.mjs",
+        "backend/src/rnd/zk-service.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-zk-service.test.ts tests/rnd-derivative-grants.test.ts",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Actual4x4/8x8 RGB8 proofs,20 adversarial cases/profile;3 queued-ZK integration and6 grants tests plus focused kill-switch regression;0 privacy certifications or full-size proof qualification.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
+        "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Tiny4x4/8x8 RGB8 relation only; source extraction remains trusted-signer boundary. No full-size/video proof or physical sensor attestation implied.",
+      "nextDependency": "Tiny4x4/8x8 RGB8 relation only; source extraction remains trusted-signer boundary. No full-size/video proof or physical sensor attestation implied.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F07-06",
+      "title": "Performance and review",
+      "owner": "privacy / verifier / clients",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/privacy/reports",
+        "research/privacy/zk/benchmark.mjs"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-zk-service.test.ts tests/rnd-derivative-grants.test.ts",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Actual4x4/8x8 RGB8 proofs,20 adversarial cases/profile;3 queued-ZK integration and6 grants tests plus focused kill-switch regression;0 privacy certifications or full-size proof qualification.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
+        "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+      ],
+      "observedResult": "Actual tiny circuit proofs/measurements exist; not p95 full-image/video cost measurements.",
+      "unresolvedLimitation": "Independent qualified cryptographic/parameter/constraint/issuer review, target runtime cost and larger supported profiles before public reliance.",
+      "nextDependency": "Independent qualified cryptographic/parameter/constraint/issuer review, target runtime cost and larger supported profiles before public reliance.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F08-01",
+      "title": "Capability and diagnostics",
+      "owner": "native / vision",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm run test:research --prefix mobile",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v"
+      ],
+      "testPopulation": "10 mobile research contract tests,4 Android JVM tests and real Kotlin compile; bounded passive barcode ROI selection;0 paired physical feature-on/off trials.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/native-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Per-profile capability/unknown telemetry, real native luma timestamps, bounded buffers and thermal/memory/disk disable plus nonblocking UI/sidecar receipt path exist; representative device overhead and pressure qualification are external.",
+      "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "nextDependency": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F08-02",
+      "title": "Passive selector",
+      "owner": "native / vision",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm run test:research --prefix mobile",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v"
+      ],
+      "testPopulation": "10 mobile research contract tests,4 Android JVM tests and real Kotlin compile; bounded passive barcode ROI selection;0 paired physical feature-on/off trials.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/native-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage.",
+      "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "nextDependency": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F08-03",
+      "title": "Control policy",
+      "owner": "native / vision",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/src/research/capture-policy.ts",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm run test:research --prefix mobile",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v"
+      ],
+      "testPopulation": "10 mobile research contract tests,4 Android JVM tests and real Kotlin compile; bounded passive barcode ROI selection;0 paired physical feature-on/off trials.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/native-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "No qualified native camera-control profile exists and no automatic focus/exposure driver is enabled or claimed. Native ROI selection hysteresis/cooldown and camera lease/restore infrastructure are implemented, but they are not a camera adjustment driver. Implement/qualify any future active driver only after measured stable passive profiles and safety review.",
+      "unresolvedLimitation": "Measured passive recorder stability and qualified device/OS/control profiles, conservative hardware bounds, restoration/continuity benchmarks and independent safety review before implementing or enabling active focus/exposure assistance.",
+      "nextDependency": "Measured passive recorder stability and qualified device/OS/control profiles, conservative hardware bounds, restoration/continuity benchmarks and independent safety review before implementing or enabling active focus/exposure assistance.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F08-04",
+      "title": "Task-aware selection",
+      "owner": "native / vision",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts",
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchRegions.kt",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm run test:research --prefix mobile",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v"
+      ],
+      "testPopulation": "10 mobile research contract tests,4 Android JVM tests and real Kotlin compile; bounded passive barcode ROI selection;0 paired physical feature-on/off trials.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/native-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage.",
+      "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "nextDependency": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F08-05",
+      "title": "UI and pressure handling",
+      "owner": "native / vision",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "research/vision/engine.py",
+        "backend/src/rnd/capture-sidecars.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm run test:research --prefix mobile",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v"
+      ],
+      "testPopulation": "10 mobile research contract tests,4 Android JVM tests and real Kotlin compile; bounded passive barcode ROI selection;0 paired physical feature-on/off trials.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/native-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Per-profile capability/unknown telemetry, real native luma timestamps, bounded buffers and thermal/memory/disk disable plus nonblocking UI/sidecar receipt path exist; representative device overhead and pressure qualification are external.",
+      "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "nextDependency": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F08-06",
+      "title": "Controlled comparison",
+      "owner": "native / vision",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks/README.md"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm run test:research --prefix mobile",
+        "PACKPROOF_RND_PYTHON=/tmp/packproof-vision-venv/bin/python /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training -v"
+      ],
+      "testPopulation": "10 mobile research contract tests,4 Android JVM tests and real Kotlin compile; bounded passive barcode ROI selection;0 paired physical feature-on/off trials.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/native-status.json",
+        "research/vision/IMPLEMENTATION_STATUS.md",
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+      ],
+      "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
+      "unresolvedLimitation": "Matched/randomized physical feature-on/off packing trials with blinded independent readability/downstream assessment.",
+      "nextDependency": "Matched/randomized physical feature-on/off packing trials with blinded independent readability/downstream assessment.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F09-01",
+      "title": "Log/receipt specification",
+      "owner": "witness / backend / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "verifier/rnd_verify.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts",
+        "node verifier/test_rnd_bundle.mjs"
+      ],
+      "testPopulation": "32 local append/inclusion/consistency rounds, two controlled test witnesses, SQLite backup/restore and outage cases;0 organizationally independent operators.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/witness/reports/local-synthetic-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "nextDependency": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F09-02",
+      "title": "Private log and outbox",
+      "owner": "witness / backend / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "verifier/rnd_verify.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts",
+        "node verifier/test_rnd_bundle.mjs"
+      ],
+      "testPopulation": "32 local append/inclusion/consistency rounds, two controlled test witnesses, SQLite backup/restore and outage cases;0 organizationally independent operators.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/witness/reports/local-synthetic-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "nextDependency": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F09-03",
+      "title": "Witness integration",
+      "owner": "witness / backend / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "research/witness/README.md",
+        "backend/tests/rnd-evidence.test.ts",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts",
+        "node verifier/test_rnd_bundle.mjs"
+      ],
+      "testPopulation": "32 local append/inclusion/consistency rounds, two controlled test witnesses, SQLite backup/restore and outage cases;0 organizationally independent operators.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/witness/reports/local-synthetic-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "observedResult": "Backend now obtains two locally controlled test countersignatures, retrieves durable checkpoints/consistency, verifies TEST_WITNESSED, retries/reexecutes the same leaf, and preserves INCLUDED without configured operators. Zero independent operators; external SLO routing/restore rehearsal not qualified.",
+      "unresolvedLimitation": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
+      "nextDependency": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F09-04",
+      "title": "Independent-operator profile",
+      "owner": "witness / backend / verifier",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/witness/README.md"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts",
+        "node verifier/test_rnd_bundle.mjs"
+      ],
+      "testPopulation": "32 local append/inclusion/consistency rounds, two controlled test witnesses, SQLite backup/restore and outage cases;0 organizationally independent operators.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/witness/reports/local-synthetic-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
+      "unresolvedLimitation": "Two named genuinely independent external witness organizations, authenticated key exchange, service/freshness/retention agreements, incident contacts and security review. Current independent operator count0.",
+      "nextDependency": "Two named genuinely independent external witness organizations, authenticated key exchange, service/freshness/retention agreements, incident contacts and security review. Current independent operator count0.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F09-05",
+      "title": "Verifier and UI",
+      "owner": "witness / backend / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "verifier/rnd_verify.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts",
+        "node verifier/test_rnd_bundle.mjs"
+      ],
+      "testPopulation": "32 local append/inclusion/consistency rounds, two controlled test witnesses, SQLite backup/restore and outage cases;0 organizationally independent operators.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/witness/reports/local-synthetic-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "nextDependency": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F09-06",
+      "title": "Monitoring and recovery",
+      "owner": "witness / backend / verifier",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/witness/witness.py",
+        "backend/src/rnd/worker.ts",
+        "research/witness/README.md",
+        "backend/tests/rnd-evidence.test.ts",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts",
+        "node verifier/test_rnd_bundle.mjs"
+      ],
+      "testPopulation": "32 local append/inclusion/consistency rounds, two controlled test witnesses, SQLite backup/restore and outage cases;0 organizationally independent operators.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/privacy-witness-status.json",
+        "research/witness/reports/local-synthetic-2026-10-02.json",
+        "docs/rnd/validation/backend-status.json"
+      ],
+      "observedResult": "Backend now obtains two locally controlled test countersignatures, retrieves durable checkpoints/consistency, verifies TEST_WITNESSED, retries/reexecutes the same leaf, and preserves INCLUDED without configured operators. Zero independent operators; external SLO routing/restore rehearsal not qualified.",
+      "unresolvedLimitation": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
+      "nextDependency": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F10-01",
+      "title": "Threat model and consent",
+      "owner": "federated / model registry",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
+        "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
+      ],
+      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/f10-status.json",
+        "research/federated/reports/2026-10-02/report.json",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F10-02",
+      "title": "Local training agent",
+      "owner": "federated / model registry",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/federated/proofcollective/model.py",
+        "research/federated/proofcollective/protocol.py",
+        "research/federated/proofcollective/mtls.py",
+        "research/federated/TRANSPORT.md",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/f10-status.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
+        "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
+      ],
+      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/f10-status.json",
+        "research/federated/reports/2026-10-02/report.json",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+      ],
+      "observedResult": "Actual TLS 1.3 mutually authenticated Flower protobuf exchanges validate CA/EKU/hostname/ALPN and exact leaf/node pins. Real 20-client/80-connection local transport run and 22 tests include ciphertext tamper, live profile expiry and persistent monotonic run admission across endpoint restarts. Operators remain controlled synthetic identities; the noisy candidate failed its quality gate and was not promoted.",
+      "unresolvedLimitation": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
+      "nextDependency": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F10-03",
+      "title": "Secure aggregation",
+      "owner": "federated / model registry",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
+        "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
+      ],
+      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/f10-status.json",
+        "research/federated/reports/2026-10-02/report.json",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F10-04",
+      "title": "Privacy accountant",
+      "owner": "federated / model registry",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
+        "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
+      ],
+      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/f10-status.json",
+        "research/federated/reports/2026-10-02/report.json",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F10-05",
+      "title": "Stronger privacy branch",
+      "owner": "federated / model registry",
+      "engineeringStatus": "EXTERNAL_QUALIFICATION_BLOCKED",
+      "qualificationStatus": "EXTERNAL_EVIDENCE_REQUIRED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "TEST_PROGRAM_READY",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/federated/model-policy.json",
+        "research/federated/proofcollective/cli.py"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
+        "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
+      ],
+      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/f10-status.json",
+        "research/federated/reports/2026-10-02/report.json",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+      ],
+      "observedResult": "Distributed-noise mode explicitly fails closed; central Gaussian DP baseline retained as plan permits.",
+      "unresolvedLimitation": "Reviewed dropout/collusion/distributed-noise mechanism and cohort assumptions before stronger coordinator privacy can be implemented/claimed.",
+      "nextDependency": "Reviewed dropout/collusion/distributed-noise mechanism and cohort assumptions before stronger coordinator privacy can be implemented/claimed.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "F10-06",
+      "title": "Release and rollback",
+      "owner": "federated / model registry",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/federated/proofcollective/governance.py",
+        "research/federated/proofcollective/protocol.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
+        "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
+      ],
+      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/f10-status.json",
+        "research/federated/reports/2026-10-02/report.json",
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-01",
+      "title": "Repository and release audit",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "docs/rnd/REPOSITORY_AUDIT.md",
+        "docs/rnd/baseline-source-inventory.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Review of any deployed environment requires its authorized configuration; the referenced October 1 detailed fingerprint plan was retrieved and reviewed by the parent and is not missing.",
+      "nextDependency": "Review of any deployed environment requires its authorized configuration; the referenced October 1 detailed fingerprint plan was retrieved and reviewed by the parent and is not missing.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-02",
+      "title": "Baseline protection",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "scripts/rnd.mjs",
+        "backend/tests/core-integrity-audit.test.ts",
+        "backend/tests/durable-recovery.test.ts",
+        "mobile/tests"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Physical feature-off/on recorder, interrupted upload and recovery qualification. Parent owns final regression report; audit did not rerun tests.",
+      "nextDependency": "Physical feature-off/on recorder, interrupted upload and recovery qualification. Parent owns final regression report; audit did not rerun tests.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-03",
+      "title": "Research isolation",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "scripts/rnd-release-guard.mjs",
+        "backend/src/rnd/runtime-isolation.ts",
+        "mobile/src/research/isolation.ts",
+        "desktop/src/main/config.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Research device identities/development signing and separate runtime provisioning; no production authorization.",
+      "nextDependency": "Research device identities/development signing and separate runtime provisioning; no production authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-04",
+      "title": "Contracts and migrations",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "packages/evidence-contracts/schemas",
+        "packages/evidence-contracts/contracts.mjs",
+        "backend/migrations/079_rnd_evidence.sql",
+        "backend/src/rnd/router.ts",
+        "backend/rnd-openapi.json",
+        "packages/evidence-contracts/generated-client.mjs",
+        "packages/evidence-contracts/generated-client.d.mts",
+        "docs/rnd/validation/api-contracts.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "33 operations/28 paths documented in research OpenAPI with generated transport/types, strict schema and negative type fixtures. The normal Proof root schema/canonical serializer is preserved.",
+      "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
+      "nextDependency": "Independent G2/G3 qualification and explicit later release authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-05",
+      "title": "Capture coordinator",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "mobile/modules/packproof-unified-camera/android/src/main/java/com/packproof/unifiedcamera/ResearchCapture.kt",
+        "mobile/modules/packproof-unified-camera/ios/ResearchCapture.swift",
+        "backend/src/rnd/capture-sidecars.ts",
+        "packages/evidence-contracts/schemas/capture-sidecar-receipt.schema.json"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Bounded native luma adapters/scheduler and durable chunked sidecar receipt/source ingestion implemented. Device continuity/shedding performance requires physical qualification.",
+      "unresolvedLimitation": "Real Android/iOS stream/frame-gap/thermal/disk/memory on/off tests; macOS/Xcode iOS build.",
+      "nextDependency": "Real Android/iOS stream/frame-gap/thermal/disk/memory on/off tests; macOS/Xcode iOS build.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-06",
+      "title": "Durable analysis service",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/analyses.ts",
+        "backend/src/rnd/worker.ts",
+        "backend/src/rnd/operations.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Production workload and crash/restore qualification; parent/backend final restart regression results pending at snapshot.",
+      "nextDependency": "Production workload and crash/restore qualification; parent/backend final restart regression results pending at snapshot.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-07",
+      "title": "Viewer and export contract",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "web/src/rnd/RndReview.tsx",
+        "mobile/src/research/ResearchPanel.tsx",
+        "verifier/rnd_bundle.mjs",
+        "mobile/src/research/ResearchAnnotations.tsx",
+        "mobile/src/research/ResearchArtifacts.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Mobile now includes exact analysis/source reviewer statements, own-note amendments with retained history, source time/region navigation, hash-verified artifact preview, sparse geometry projections, exact derivative review, reviewed ZIP and source-linked verification archive. Web/desktop shared results retain comparison missingness/conflict, method limits and source navigation. Offline full bundle verification remains an exported tool rather than a client assertion of scene truth.",
+      "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
+      "nextDependency": "Independent G2/G3 qualification and explicit later release authorization.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-08",
+      "title": "Research and model registry",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "research/benchmarks",
+        "research/vision/action_model.py",
+        "research/federated/proofcollective/governance.py",
+        "backend/src/rnd/learning-registry.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "unresolvedLimitation": "Authorized physical/partner datasets, blind evaluation and license/security reviews; synthetic reports do not supply physical datasets.",
+      "nextDependency": "Authorized physical/partner datasets, blind evaluation and license/security reviews; synthetic reports do not supply physical datasets.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-09",
+      "title": "Security and privacy controls",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/security.ts",
+        "backend/src/rnd/annotations.ts",
+        "scripts/rnd-worker-sandbox.mjs",
+        "backend/src/rnd/router.ts",
+        "backend/tests/rnd-evidence.test.ts",
+        "backend/tests/rnd-runtime-isolation.test.ts"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "120 requests/minute/actor admission plus32 active jobs per tenant and20 comparisons per hour under tenant advisory lock; permissions, source ownership, consent and immutable reviewer logs tested. OS namespace sandbox must be qualified on a host that permits it.",
+      "unresolvedLimitation": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
+      "nextDependency": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "CORE-10",
+      "title": "Observability and operations",
+      "owner": "integration / audit",
+      "engineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "qualificationStatus": "LOCAL_RESEARCH_SCOPE_VALIDATED",
+      "gate": {
+        "G0": "DOCUMENTED_AND_ENFORCED",
+        "G1": "LOCAL_EXECUTION_VALIDATED",
+        "G2": "NOT_QUALIFIED",
+        "G3": "NOT_QUALIFIED",
+        "G4": "NOT_AUTHORIZED",
+        "G5": "NOT_AUTHORIZED"
+      },
+      "codeReferences": [
+        "backend/src/rnd/operations.ts",
+        "research/benchmarks/reports",
+        "scripts/rnd.mjs",
+        "web/src/rnd/RndOperations.tsx"
+      ],
+      "commitReference": null,
+      "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
+      "exactTestCommand": [
+        "npm --prefix backend test -- tests/rnd-evidence.test.ts tests/rnd-matrix.test.ts tests/rnd-runtime-isolation.test.ts tests/rnd-restart.test.ts",
+        "node scripts/rnd-release-guard.test.mjs",
+        "node scripts/rnd-runtime.test.mjs",
+        "node packages/evidence-contracts/test/contracts.test.mjs",
+        "node packages/evidence-contracts/test/generated-client.test.mjs",
+        "cd web && npx --no-install vitest run src/rnd/RndReview.test.tsx src/tests/client.test.ts src/tests/admin-dashboard.test.tsx"
+      ],
+      "testPopulation": "Isolated local database/API, synthetic immutable evidence, process restart, source guards and authenticated client fixtures. Combined backend132 tests with one resolved targeted recheck; web29; desktop21. No production or physical workload.",
+      "outputArtifacts": [
+        "docs/rnd/validation/final-verification.json",
+        "docs/rnd/validation/final-audit.json",
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/api-contracts.json",
+        "docs/rnd/validation/local-runtime.json",
+        "docs/rnd/validation/native-status.json"
+      ],
+      "observedResult": "Queue/error/latency/attempt metrics, local expired-lease/10-minute queue alerts and audited retry UI exist; signed per-job resource measurements and benchmark reports remain available. Hosted attributable unit cost and physical device budgets remain NOT_MEASURED.",
+      "unresolvedLimitation": "Measured target-host/cloud prices, workload and hardware telemetry; approved alert thresholds and rollback/restore drill.",
+      "nextDependency": "Measured target-host/cloud prices, workload and hardware telemetry; approved alert thresholds and rollback/restore drill.",
+      "releaseAuthorization": "NOT_AUTHORIZED"
+    }
+  ],
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "codeCommitReference": null,
+  "fullyImplementedPlan": false,
+  "qualificationComplete": false,
+  "ticketCounts": {
+    "ENGINEERED_LOCAL_SCOPE": 60,
+    "EXTERNAL_QUALIFICATION_BLOCKED": 11
+  },
+  "commandContext": "Commands run from repository root except explicit cd; private environments are installed from committed locks. Exact feature artifacts disambiguate overlapping test populations; counts must not be added."
+}

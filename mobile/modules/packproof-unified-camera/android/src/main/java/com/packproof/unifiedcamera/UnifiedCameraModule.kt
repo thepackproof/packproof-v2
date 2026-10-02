@@ -6,6 +6,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class UnifiedCameraModule : Module() {
+  private val researchAssurance = ResearchPlatformAssurance()
   private val inspectionExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
   override fun definition() = ModuleDefinition {
     Name("PackProofUnifiedCamera")
@@ -63,6 +64,31 @@ class UnifiedCameraModule : Module() {
       else inspectionExecutor.execute { try { promise.resolve(CaptureJournal.read(context,sessionId)) }
         catch(_:Exception) { promise.reject("CAPTURE_JOURNAL_UNAVAILABLE","The recording journal is unavailable. Keep the original.",null) } }
     }
+    AsyncFunction("bindResearchCapture") { session: String, proof: String, binding: String, promise: Promise ->
+      inspectionExecutor.execute { try { ResearchProvenance.bind(appContext.reactContext!!, session, proof, binding); promise.resolve(null) }
+        catch (_: Exception) { promise.reject("RND_BINDING_FAILED", "Optional research binding unavailable; original capture remains available.", null) } }
+    }
+    AsyncFunction("readResearchCapture") { session: String, promise: Promise ->
+      inspectionExecutor.execute { try { promise.resolve(ResearchProvenance.read(appContext.reactContext!!, session)) }
+        catch (_: Exception) { promise.reject("RND_CAPTURE_UNAVAILABLE", "Research metadata is pending or unavailable; original is kept.", null) } }
+    }
+    AsyncFunction("prepareResearchKey") { scope: String, promise: Promise ->
+      inspectionExecutor.execute { try { promise.resolve(ResearchProvenance.prepare(appContext.reactContext!!, scope)) }
+        catch (_: Exception) { promise.reject("RND_KEY_UNAVAILABLE", "Research signing key unavailable.", null) } }
+    }
+    AsyncFunction("signResearchCapture") { session: String, scope: String, payload: String, promise: Promise ->
+      inspectionExecutor.execute { try { promise.resolve(ResearchProvenance.sign(appContext.reactContext!!, session, scope, payload)) }
+        catch (_: Exception) { promise.reject("RND_SIGNING_FAILED", "Research signature unavailable; original is kept.", null) } }
+    }
+    AsyncFunction("requestAndroidKeyAttestation") { session: String, scope: String, challenge: String, payload: String, promise: Promise ->
+      inspectionExecutor.execute { try { promise.resolve(ResearchKeyAttestation.request(appContext.reactContext!!, session, scope, challenge, payload)) }
+        catch (_: Exception) { promise.reject("RND_KEY_ATTESTATION_UNAVAILABLE", "Optional fresh request-key attestation unavailable; original signer and capture are unchanged.", null) } }
+    }
+    AsyncFunction("preparePlayIntegrity") { project: String, promise: Promise ->
+      val context = appContext.reactContext
+      if (context == null) promise.reject("RND_PLATFORM_UNAVAILABLE", "App unavailable", null) else researchAssurance.prepare(context, project, promise)
+    }
+    AsyncFunction("requestPlayIntegrity") { hash: String, promise: Promise -> researchAssurance.request(hash, promise) }
     OnDestroy { inspectionExecutor.shutdown() }
 
     View(UnifiedCameraView::class) {
@@ -87,6 +113,7 @@ class UnifiedCameraModule : Module() {
         view.stopRecording()
       }.runOnQueue(Queues.MAIN)
 
+      AsyncFunction("disableResearchSampling") { view: UnifiedCameraView, reason: String -> view.disableResearchSampling(reason) }.runOnQueue(Queues.MAIN)
       OnViewDestroys { view: UnifiedCameraView -> view.destroy() }
     }
   }
