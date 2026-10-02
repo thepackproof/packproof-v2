@@ -36,7 +36,40 @@
     ],
     "backendEnumeratedTests": 227,
     "backendIntegrationTests": 122,
-    "noDeployments": true
+    "noDeployments": true,
+    "followup": {
+      "runId": 37004907105,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/37004907105",
+      "commit": "330544272d2b4fb5c30ad5509e65b9422f659a59",
+      "status": "SUCCESS",
+      "jobs": [
+        {
+          "id": 110830781022,
+          "name": "source-isolation",
+          "conclusion": "success"
+        },
+        {
+          "id": 110830824298,
+          "name": "backend-protocols",
+          "conclusion": "success"
+        },
+        {
+          "id": 110830824308,
+          "name": "surfaces",
+          "conclusion": "success"
+        },
+        {
+          "id": 110830824324,
+          "name": "federated-protocol",
+          "conclusion": "success"
+        },
+        {
+          "id": 110830824350,
+          "name": "image-transform-proof",
+          "conclusion": "success"
+        }
+      ]
+    }
   },
   "native": {
     "firstRunId": 37002876919,
@@ -45,8 +78,26 @@
     "sourceIsolation": "PASS",
     "encodedFragmentProtocol": "PASS",
     "android": {
-      "status": "SETUP_FAILURE",
-      "reason": "setup-android attempted the removed SDK package tools before Kotlin compilation; explicit Android 36 command-line-tool package selection prepared."
+      "status": "PASS",
+      "initialSetupFailure": {
+        "runId": 37002876919,
+        "jobId": 110824397150,
+        "reason": "setup-android requested the removed SDK package tools; no Kotlin compilation occurred in that attempt."
+      },
+      "followup": {
+        "runId": 37004907115,
+        "jobId": 110830823252,
+        "commit": "330544272d2b4fb5c30ad5509e65b9422f659a59",
+        "url": "https://github.com/thepackproof/packproof-v2/actions/runs/37004907115",
+        "scope": [
+          "Explicit Android 36 SDK setup",
+          "Actual Kotlin camera library compilation",
+          "Research JVM tests",
+          "Android Metro bundle"
+        ],
+        "result": "PASS"
+      },
+      "nativeSourceChanged": false
     },
     "ios": {
       "status": "PASS",
@@ -57,6 +108,15 @@
       "cameraModuleTree": "d564cd9688d06bec35769cc005ad17beaa5112e2",
       "mobilePackageLockBlob": "32fe0b357cef348f3f57cf1056ab488fb7b6ff26",
       "appConfigBlob": "e2badd6eaf5082917cf9533d4462998ac83b3f2b"
+    },
+    "followup": {
+      "runId": 37004907115,
+      "commit": "330544272d2b4fb5c30ad5509e65b9422f659a59",
+      "sourceIsolation": "PASS",
+      "encodedFragmentProtocol": "PASS",
+      "iosRepeatStatus": "IN_PROGRESS_AT_RECORDING",
+      "iosRepeatRequiredForSourceValidation": false,
+      "reason": "First unsigned iOS compile already passed on identical native source, dependency lock and app configuration hashes; only SDK setup and log verbosity changed."
     }
   },
   "limitations": [

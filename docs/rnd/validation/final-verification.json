@@ -107,6 +107,22 @@
       "jobId": 110824397163,
       "toolchain": "Xcode 16.4 / iOS Simulator 18.5",
       "scope": "Unsigned simulator compile; no XCTest or physical device execution."
+    },
+    {
+      "name": "Cloud Android SDK fix and actual Kotlin/JVM/Metro validation",
+      "result": "PASS",
+      "commit": "330544272d2b4fb5c30ad5509e65b9422f659a59",
+      "runUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/37004907115",
+      "jobId": 110830823252,
+      "scope": "Actual Android Kotlin camera library compile, JVM tests and Android Metro bundle; native code unchanged from initial iOS success."
+    },
+    {
+      "name": "Follow-up general research CI",
+      "result": "PASS",
+      "commit": "330544272d2b4fb5c30ad5509e65b9422f659a59",
+      "runUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/37004907105",
+      "jobsPassed": 5,
+      "note": "Repeated validation of unchanged application source; not additional unique tests."
     }
   ],
   "featureEvidence": [

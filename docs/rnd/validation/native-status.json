@@ -3,7 +3,7 @@
   "date": "2026-10-02",
   "branch": "rnd/trust-infrastructure-2026-10-02",
   "releaseAuthorized": false,
-  "environment": "Linux isolated local research build and GitHub macOS 15 unsigned simulator compile",
+  "environment": "Linux isolated local research build and GitHub Android/macOS 15 unsigned simulator compile gates",
   "engineering": {
     "CORE-05": "Implemented in the existing CameraX/AVFoundation camera owners: one bounded native sampling task, durable luma sidecars, shared monotonic clock metadata, optional pressure shedding, no live frame bridge transfer.",
     "F01": "Received native PGM sidecars are bound through a signed acquisition inventory to the original session and separately signed server receipts. Automatic region enrollment uses source-linked worker processing; luma-only color association remains unavailable. Existing barcode geometry now supports one exact-timestamp, rotation-mapped region winner. Multiple/clipped/unmatched proposals are rejected; OCR/serial/carton/item/condition targets retain explicit unmet reasons.",
@@ -102,6 +102,31 @@
       "codeSigningAllowed": false,
       "nativeArchiveSubmitted": false,
       "qualification": "COMPILER_GATE_ONLY"
+    },
+    {
+      "gate": "Android GitHub Kotlin library compile, research JVM tests and Metro bundle",
+      "result": "PASS",
+      "toolchain": "GitHub Ubuntu 24.04, JDK 17, official Android SDK 36, Gradle 8.13, disposable Expo prebuild",
+      "runId": 37004907115,
+      "jobId": 110830823252,
+      "runUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/37004907115",
+      "sourceCommit": "330544272d2b4fb5c30ad5509e65b9422f659a59",
+      "sourceGitObjects": {
+        "cameraModuleTree": "d564cd9688d06bec35769cc005ad17beaa5112e2",
+        "androidSourceTree": "144c9b19dbf3f9542c036d6def928e6fa8d301e8",
+        "iosSourceTree": "956d42fd271ae131713aae3b7ac89eb2aa0efe0f",
+        "mobilePackageLockBlob": "32fe0b357cef348f3f57cf1056ab488fb7b6ff26",
+        "appConfigBlob": "e2badd6eaf5082917cf9533d4462998ac83b3f2b"
+      },
+      "tasks": [
+        ":packproof-unified-camera:compileDebugKotlin",
+        ":packproof-unified-camera:testDebugUnitTest"
+      ],
+      "gradleBuildSeconds": 210,
+      "metroBundleMilliseconds": 16742,
+      "metroModules": 1051,
+      "nativeArchiveSubmitted": false,
+      "qualification": "COMPILER_AND_JVM_TEST_GATES_ONLY"
     }
   ],
   "blocked": [
@@ -135,7 +160,7 @@
     "workflow": ".github/workflows/rnd-native.yml",
     "android": "Actual Kotlin+JVM tests and Metro",
     "ios": "Unsigned macOS15 simulator app/Swift module compile, no credentials or distribution",
-    "githubExecution": "EXECUTED_INITIAL_RUN_WITH_ANDROID_SETUP_FAILURE",
+    "githubExecution": "PASS_ACROSS_SOURCE_EQUIVALENT_RUNS",
     "initialRun": {
       "runId": 37002876919,
       "sourceCommit": "6feba3258bdca60bf5671e6b6cce2e7d6f1035fa",
@@ -143,7 +168,16 @@
       "encodedFragmentProtocol": "PASS",
       "iosSimulatorCompile": "PASS",
       "androidLibrary": "FAILED_BEFORE_COMPILATION",
-      "androidFailure": "setup-android requested the obsolete SDK package tools. The workflow now requests explicit platform-tools, platforms;android-36 and build-tools;36.0.0 using command-line tools 13114758. Follow-up CI execution is pending; the existing local Kotlin/JVM compile remains PASS."
+      "androidFailure": "setup-android requested the obsolete SDK package tools. The workflow was corrected to request explicit platform-tools, platforms;android-36 and build-tools;36.0.0 using command-line tools 13114758; follow-up Android compilation, JVM tests and Metro passed."
+    },
+    "followUpRun": {
+      "runId": 37004907115,
+      "sourceCommit": "330544272d2b4fb5c30ad5509e65b9422f659a59",
+      "sourceIsolation": "PASS",
+      "encodedFragmentProtocol": "PASS",
+      "androidLibrary": "PASS",
+      "iosSimulatorCompile": "SOURCE_EQUIVALENT_PASS_IN_INITIAL_RUN",
+      "sourceEquivalence": "Camera module tree, iOS source tree, mobile dependency lock and app configuration Git objects are unchanged between the two CI commits. Initial iOS success remains the recorded compiler gate; duplicate iOS execution is not required to validate workflow-only SDK and log-volume changes."
     }
   }
 }
