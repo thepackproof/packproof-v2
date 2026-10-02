@@ -3,7 +3,7 @@
   "date": "2026-10-02",
   "branch": "rnd/trust-infrastructure-2026-10-02",
   "releaseAuthorized": false,
-  "environment": "Linux isolated local research build",
+  "environment": "Linux isolated local research build and GitHub macOS 15 unsigned simulator compile",
   "engineering": {
     "CORE-05": "Implemented in the existing CameraX/AVFoundation camera owners: one bounded native sampling task, durable luma sidecars, shared monotonic clock metadata, optional pressure shedding, no live frame bridge transfer.",
     "F01": "Received native PGM sidecars are bound through a signed acquisition inventory to the original session and separately signed server receipts. Automatic region enrollment uses source-linked worker processing; luma-only color association remains unavailable. Existing barcode geometry now supports one exact-timestamp, rotation-mapped region winner. Multiple/clipped/unmatched proposals are rejected; OCR/serial/carton/item/condition targets retain explicit unmet reasons.",
@@ -83,12 +83,31 @@
       "benchmarkRuns": 5,
       "report": "docs/rnd/validation/fragment-benchmark.json",
       "qualification": "SOFTWARE_PROTOCOL_ONLY"
+    },
+    {
+      "gate": "iOS unsigned simulator application and local Swift camera module compile",
+      "result": "PASS",
+      "toolchain": "GitHub macOS 15, Xcode 16.4, iOS Simulator 18.5, disposable Expo prebuild",
+      "runId": 37002876919,
+      "jobId": 110824397163,
+      "runUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/37002876919",
+      "sourceCommit": "6feba3258bdca60bf5671e6b6cce2e7d6f1035fa",
+      "sourceGitObjects": {
+        "cameraModuleTree": "d564cd9688d06bec35769cc005ad17beaa5112e2",
+        "iosSourceTree": "956d42fd271ae131713aae3b7ac89eb2aa0efe0f",
+        "mobilePackageLockBlob": "32fe0b357cef348f3f57cf1056ab488fb7b6ff26",
+        "appConfigBlob": "e2badd6eaf5082917cf9533d4462998ac83b3f2b"
+      },
+      "xctestExecuted": false,
+      "codeSigningAllowed": false,
+      "nativeArchiveSubmitted": false,
+      "qualification": "COMPILER_GATE_ONLY"
     }
   ],
   "blocked": [
     {
-      "gate": "iOS Swift/XCTest compile",
-      "reason": "The environment is Linux without macOS, Xcode, iOS SDK or signing. XCTest sources are present; no compile success is claimed."
+      "gate": "iOS XCTest execution",
+      "reason": "The GitHub macOS unsigned app/Swift compile passed. That workflow does not execute the pod ResearchTests test specification; no XCTest execution or physical device qualification is claimed."
     },
     {
       "gate": "physical capture qualification",
@@ -116,6 +135,15 @@
     "workflow": ".github/workflows/rnd-native.yml",
     "android": "Actual Kotlin+JVM tests and Metro",
     "ios": "Unsigned macOS15 simulator app/Swift module compile, no credentials or distribution",
-    "githubExecution": "NOT_EXECUTED_IN_THIS_SESSION"
+    "githubExecution": "EXECUTED_INITIAL_RUN_WITH_ANDROID_SETUP_FAILURE",
+    "initialRun": {
+      "runId": 37002876919,
+      "sourceCommit": "6feba3258bdca60bf5671e6b6cce2e7d6f1035fa",
+      "sourceIsolation": "PASS",
+      "encodedFragmentProtocol": "PASS",
+      "iosSimulatorCompile": "PASS",
+      "androidLibrary": "FAILED_BEFORE_COMPILATION",
+      "androidFailure": "setup-android requested the obsolete SDK package tools. The workflow now requests explicit platform-tools, platforms;android-36 and build-tools;36.0.0 using command-line tools 13114758. Follow-up CI execution is pending; the existing local Kotlin/JVM compile remains PASS."
+    }
   }
 }

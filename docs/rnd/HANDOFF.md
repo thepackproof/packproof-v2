@@ -20,7 +20,7 @@ The reconciled 71-ticket ledger contains **60 engineered within documented local
 
 Backend, web, desktop, mobile types and actual Android Kotlin/Metro builds passed. Vision28, privacy/witness17, portable verifier18 and federated22 tests passed within their named scopes. The sidecar test exercises actual bytes through the worker, signed export and pinned-trust portable verification. Actual ZK proofs and six live fragment-protocol tests were executed. Counts overlap some backend integration reports and must not be summed as unique tests.
 
-The macOS workflow defines an unsigned iOS simulator compile; no local iOS compile result is claimed. The Linux execution host rejected the namespace mount needed for Bubblewrap, so OS decoder containment remains unqualified. Source-reviewed research Docker configuration was not built on this host.
+The actual macOS CI run successfully compiled the unsigned simulator app and Swift camera module with Xcode16.4/iOS Simulator18.5. It did not run XCTest or a physical device. Cloud CI also passed a clean122-test backend integration run and all five general research jobs. Exact run IDs and source hashes are in `validation/ci-results.json`. The first Android cloud attempt failed before Kotlin compilation because its setup action requested the removed SDK package `tools`; this branch now explicitly requests Android36 and the previously validated command-line tools. The Linux execution host rejected the namespace mount needed for Bubblewrap, so OS decoder containment remains unqualified. Source-reviewed research Docker configuration was not built on this host.
 
 ## External work still required
 

@@ -69,12 +69,12 @@
         "F04-05",
         "F07-03"
       ],
-      "finding": "Mobile reviewer annotations/corrections, artifact/geometry/privacy review and verification export controls now implemented. Exact-current TypeScript and Android compile/tests pass; iOS Xcode/device qualification remains external.",
+      "finding": "Mobile reviewer annotations/corrections, artifact/geometry/privacy review and verification export controls now implemented. Exact-current TypeScript and Android compile/tests pass; The unsigned iOS app/Swift CI build now passes; XCTest execution and physical device qualification remain outstanding.",
       "refs": [
         "mobile/src/research/ResearchPanel.tsx"
       ],
       "status": "RESOLVED_LOCAL_SCOPE",
-      "reconciliation": "Mobile reviewer annotations/corrections, artifact/geometry/privacy review and verification export controls now implemented. Exact-current TypeScript and Android compile/tests pass; iOS Xcode/device qualification remains external.",
+      "reconciliation": "Mobile reviewer annotations/corrections, artifact/geometry/privacy review and verification export controls now implemented. Exact-current TypeScript and Android compile/tests pass; The unsigned iOS app/Swift CI build now passes; XCTest execution and physical device qualification remain outstanding.",
       "initialFinding": "Mobile generic source/JSON review lacks several specialized artifact, correction, redaction and portable verification flows required across clients."
     },
     {
@@ -316,7 +316,7 @@
         "mobile/src/research/sidecars.ts"
       ],
       "remainingEngineering": null,
-      "externalPrerequisites": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; Xcode runner for iOS.",
+      "externalPrerequisites": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; native XCTest execution remains outstanding. The unsigned iOS app/Swift build completed successfully in native CI.",
       "title": "Recovery and lifecycle",
       "scopeLimitations": "Durable original upload plus separately committed sidecar chunks/receipts and retries; native hardware force-stop/thermal/key-loss qualification still external."
     },
@@ -1008,7 +1008,7 @@
         "packages/evidence-contracts/schemas/capture-sidecar-receipt.schema.json"
       ],
       "remainingEngineering": null,
-      "externalPrerequisites": "Real Android/iOS stream/frame-gap/thermal/disk/memory on/off tests; macOS/Xcode iOS build.",
+      "externalPrerequisites": "Real Android/iOS stream/frame-gap/thermal/disk/memory feature-on/off tests and actual native XCTest execution. The unsigned iOS app/Swift build completed successfully in native CI.",
       "title": "Capture coordinator",
       "scopeLimitations": "Bounded native luma adapters/scheduler and durable chunked sidecar receipt/source ingestion implemented. Device continuity/shedding performance requires physical qualification."
     },
@@ -1083,7 +1083,7 @@
       "scopeLimitations": "Queue/error/latency/attempt metrics, local expired-lease/10-minute queue alerts and audited retry UI exist; signed per-job resource measurements and benchmark reports remain available. Hosted attributable unit cost and physical device budgets remain NOT_MEASURED."
     }
   ],
-  "reconciledAt": "2026-10-02T11:36:57.899631+00:00",
+  "reconciledAt": "2026-10-02T12:07:27.893464+00:00",
   "validationEvidence": [
     "docs/rnd/validation/platform-assurance.json",
     "docs/rnd/validation/backend-status.json",
@@ -1101,9 +1101,10 @@
     "The October 1 detailed fingerprint plan was retrieved/reviewed by the parent; it is not an outstanding document dependency.",
     "Android targeted exact-current source run passes 29 tests. The parent combined run observed one assertion failure during concurrent source/test edits; the exact-current targeted rerun passes. Existing pure platform 13 and persisted/HTTP platform 6 tests pass.",
     "Shared contracts pass9 tests including sidecar and public grant record shape/tamper checks.",
-    "Native owner reports actual exact-current Kotlin compile and4 JVM tests pass,6 live encoded-fragment tests pass, and mobile TypeScript passes. Swift/Xcode and physical capture remain unexecuted.",
+    "Native owner reports actual exact-current Kotlin compile and 4 JVM tests pass, 6 live encoded-fragment tests pass, and mobile TypeScript passes. The parent confirms native CI unsigned iOS app/Swift compilation completed successfully with all build steps green. XCTest execution and physical capture qualification are not claimed.",
     "Federated transport independent review identified live profile expiry and restart replay state; both were fixed and22 tests pass.",
-    "Web29 tests, desktop21 tests and both builds pass per parent; final global evidence is owned by parent."
+    "Web29 tests, desktop21 tests and both builds pass per parent; final global evidence is owned by parent.",
+    "The requested read-only Swift integration sanity check found no concrete compiler/API mismatch before the actual unsigned iOS build succeeded; further optional checking stopped."
   ],
   "codeCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543"
 }

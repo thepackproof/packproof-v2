@@ -75,6 +75,10 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
       - name: Install isolated JavaScript dependencies
         run: npm ci --prefix mobile --ignore-scripts
       - name: Generate disposable native project
@@ -121,7 +125,7 @@ jobs:
           test -n "$workspace"
           xcodebuild -list -json -workspace "$workspace" > "$RUNNER_TEMP/rnd-ios-schemes.json"
           scheme=$(node -e 'const fs=require("node:fs");const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const schemes=data.workspace.schemes.filter(name=>/^PackProofResearch$/i.test(name));if(schemes.length!==1)throw Error("Isolated research scheme missing or ambiguous");process.stdout.write(schemes[0]);' "$RUNNER_TEMP/rnd-ios-schemes.json")
-          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/packproof-research-ios" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM='' build
+          xcodebuild -quiet -workspace "$workspace" -scheme "$scheme" -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/packproof-research-ios" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM='' build
 
   encoded-fragment-protocol:
     needs: source-isolation

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "packproof.rnd-ci-verification.v1",
+  "researchOnly": true,
+  "releaseAuthorized": false,
+  "general": {
+    "runId": 37002877020,
+    "url": "https://github.com/thepackproof/packproof-v2/actions/runs/37002877020",
+    "commit": "6feba3258bdca60bf5671e6b6cce2e7d6f1035fa",
+    "status": "SUCCESS",
+    "jobs": [
+      {
+        "id": 110824357727,
+        "name": "source-isolation",
+        "conclusion": "success"
+      },
+      {
+        "id": 110824414349,
+        "name": "federated-protocol",
+        "conclusion": "success"
+      },
+      {
+        "id": 110824414402,
+        "name": "image-transform-proof",
+        "conclusion": "success"
+      },
+      {
+        "id": 110824414407,
+        "name": "surfaces",
+        "conclusion": "success"
+      },
+      {
+        "id": 110824414449,
+        "name": "backend-protocols",
+        "conclusion": "success"
+      }
+    ],
+    "backendEnumeratedTests": 227,
+    "backendIntegrationTests": 122,
+    "noDeployments": true
+  },
+  "native": {
+    "firstRunId": 37002876919,
+    "url": "https://github.com/thepackproof/packproof-v2/actions/runs/37002876919",
+    "sourceCommit": "6feba3258bdca60bf5671e6b6cce2e7d6f1035fa",
+    "sourceIsolation": "PASS",
+    "encodedFragmentProtocol": "PASS",
+    "android": {
+      "status": "SETUP_FAILURE",
+      "reason": "setup-android attempted the removed SDK package tools before Kotlin compilation; explicit Android 36 command-line-tool package selection prepared."
+    },
+    "ios": {
+      "status": "PASS",
+      "jobId": 110824397163,
+      "scope": "Unsigned simulator app and Swift module compilation, arm64 observed; no XCTest, signing or physical device run.",
+      "toolchain": "Xcode 16.4 / iOS Simulator 18.5",
+      "iosSourceTree": "956d42fd271ae131713aae3b7ac89eb2aa0efe0f",
+      "cameraModuleTree": "d564cd9688d06bec35769cc005ad17beaa5112e2",
+      "mobilePackageLockBlob": "32fe0b357cef348f3f57cf1056ab488fb7b6ff26",
+      "appConfigBlob": "e2badd6eaf5082917cf9533d4462998ac83b3f2b"
+    }
+  },
+  "limitations": [
+    "All test data and cryptographic identities are local research fixtures.",
+    "Physical experiments, independent review/operators/partners and release remain unauthorized or unqualified."
+  ]
+}

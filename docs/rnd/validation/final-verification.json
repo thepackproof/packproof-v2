@@ -90,6 +90,23 @@
       "name": "All surface types",
       "command": "npm run typecheck --prefix backend && npm run typecheck --prefix mobile && npm run typecheck --prefix web && npm run typecheck --prefix desktop",
       "result": "PASS"
+    },
+    {
+      "name": "Clean cloud backend and protocol CI",
+      "result": "PASS",
+      "commit": "6feba3258bdca60bf5671e6b6cce2e7d6f1035fa",
+      "runUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/37002877020",
+      "backendIntegrationTestsPassed": 122,
+      "backendJobEnumeratedTestsAcrossSuites": 227,
+      "allFiveWorkflowJobsPassed": true
+    },
+    {
+      "name": "Actual unsigned iOS simulator app and Swift module compile",
+      "result": "PASS",
+      "commit": "6feba3258bdca60bf5671e6b6cce2e7d6f1035fa",
+      "jobId": 110824397163,
+      "toolchain": "Xcode 16.4 / iOS Simulator 18.5",
+      "scope": "Unsigned simulator compile; no XCTest or physical device execution."
     }
   ],
   "featureEvidence": [
@@ -115,7 +132,8 @@
     "Independent witness operators and organizationally independent consented federated partners",
     "Independent cryptographic/privacy/security/safety review",
     "OS namespace decoder containment on a permitting host",
-    "Unsigned iOS simulator compilation: dedicated macOS CI prepared, not yet observed",
-    "Production deployment, store upload, desktop distribution, paid cloud or partner contact"
-  ]
+    "Production deployment, store upload, desktop distribution, paid cloud or partner contact",
+    "iOS XCTest execution and physical-device native qualification"
+  ],
+  "remoteCiEvidence": "docs/rnd/validation/ci-results.json"
 }

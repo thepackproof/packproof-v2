@@ -2,7 +2,7 @@
   "schemaVersion": "packproof.rnd-status-ledger.v1",
   "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
   "sourcePlan": "PackProof_Executive_Overview_and_ASTRA_RnD_Development_Plan_2026-10-02(1).docx",
-  "lastUpdated": "2026-10-02T11:38:59.413083+00:00",
+  "lastUpdated": "2026-10-02T12:07:50.763236+00:00",
   "status": "ENGINEERING_HANDOFF_WITH_EXTERNAL_QUALIFICATION_GATES",
   "releaseAuthorization": "NOT_AUTHORIZED",
   "tickets": [
@@ -44,7 +44,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage.",
       "unresolvedLimitation": "Uncoached real-device comparison must establish no extra steps and uninterrupted recording.",
@@ -84,7 +85,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed.",
       "unresolvedLimitation": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
@@ -125,7 +127,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Physical content/print/substrate ablations and frozen thresholds; no physical correspondence finding is enabled.",
@@ -165,7 +168,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Every current profile terminates UNAVAILABLE then LOCKED; physical qualification needed before any QUALIFIED transition.",
@@ -207,7 +211,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Mobile now hashes and previews real artifacts, displays source-linked sparse projections and supports verification archive export. Hardware/region finding qualification remains unavailable.",
       "unresolvedLimitation": "Qualified source profiles before physical findings.",
@@ -247,7 +252,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "research/benchmarks/configs/physical-corpus-240-60-v1.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed.",
       "unresolvedLimitation": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
@@ -289,7 +295,8 @@
         "docs/rnd/validation/platform-assurance.json",
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/fragment-benchmark.json",
-        "docs/rnd/validation/privacy-witness-status.json"
+        "docs/rnd/validation/privacy-witness-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
@@ -331,7 +338,8 @@
         "docs/rnd/validation/platform-assurance.json",
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/fragment-benchmark.json",
-        "docs/rnd/validation/privacy-witness-status.json"
+        "docs/rnd/validation/privacy-witness-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
@@ -376,7 +384,8 @@
         "docs/rnd/validation/platform-assurance.json",
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/fragment-benchmark.json",
-        "docs/rnd/validation/privacy-witness-status.json"
+        "docs/rnd/validation/privacy-witness-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Real-time synthetic AVC+AAC FFmpeg output is consumed before producer exit into init, sealed fragment and terminal units; exact P256 signed chain has audio/video coverage and five-run software benchmark. Existing native recorder remains FINAL_FILE_ONLY. Native encoder callbacks/continuity and physical overhead are not established by this software spike.",
       "unresolvedLimitation": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
@@ -420,7 +429,8 @@
         "docs/rnd/validation/platform-assurance.json",
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/fragment-benchmark.json",
-        "docs/rnd/validation/privacy-witness-status.json"
+        "docs/rnd/validation/privacy-witness-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Strict KeyMint100\u2013500 P256 request-key profile now verifies challenge, X509 signatures, external roots/current revocation, app identity, hardware lists, verified boot and patch floors; unsupported delegated/legacy factory profiles do not receive trust. Dedicated request-key result does not upgrade recording key.",
       "unresolvedLimitation": "Authentic provider roots/app signing pins, research developer credentials/entitlements, real compatible devices, revocation governance and platform security review.",
@@ -465,7 +475,8 @@
         "docs/rnd/validation/platform-assurance.json",
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/fragment-benchmark.json",
-        "docs/rnd/validation/privacy-witness-status.json"
+        "docs/rnd/validation/privacy-witness-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Real-time synthetic AVC+AAC FFmpeg output is consumed before producer exit into init, sealed fragment and terminal units; exact P256 signed chain has audio/video coverage and five-run software benchmark. Existing native recorder remains FINAL_FILE_ONLY. Native encoder callbacks/continuity and physical overhead are not established by this software spike.",
       "unresolvedLimitation": "Recorder-specific immutable-fragment feasibility and continuous-recording physical benchmark; no recorder replacement allowed.",
@@ -509,11 +520,12 @@
         "docs/rnd/validation/platform-assurance.json",
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/fragment-benchmark.json",
-        "docs/rnd/validation/privacy-witness-status.json"
+        "docs/rnd/validation/privacy-witness-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Durable original upload plus separately committed sidecar chunks/receipts and retries; native hardware force-stop/thermal/key-loss qualification still external.",
-      "unresolvedLimitation": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; Xcode runner for iOS.",
-      "nextDependency": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; Xcode runner for iOS.",
+      "unresolvedLimitation": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; native XCTest execution remains outstanding. The unsigned iOS app/Swift build completed successfully in native CI.",
+      "nextDependency": "Physical device power/force-stop/storage/thermal/interruption recovery and offline tests; native XCTest execution remains outstanding. The unsigned iOS app/Swift build completed successfully in native CI.",
       "releaseAuthorization": "NOT_AUTHORIZED"
     },
     {
@@ -552,7 +564,8 @@
         "docs/rnd/validation/platform-assurance.json",
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/fragment-benchmark.json",
-        "docs/rnd/validation/privacy-witness-status.json"
+        "docs/rnd/validation/privacy-witness-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Portable offline verifier checks declared snapshot scope, raw root, chains, source bytes, intents/receipts, subject binding, native sidecar acquisition/PGM semantics and artifact inventories. Metadata-only bytes remain NOT_CHECKED. Local specialist witness/ZK commands remain separate.",
       "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
@@ -592,7 +605,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "docs/rnd/validation/backend-status.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Independent double labeling and blinded disagreement adjudication on authorized ordinary-packing corpus.",
@@ -631,7 +645,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "docs/rnd/validation/backend-status.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
@@ -672,7 +687,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "docs/rnd/validation/backend-status.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Actual attributed parcel/item masks, controlled background masks, numerical event-model training and pinned worker inference exist. Learned automatic class segmentation and qualified model weights require consented labels/holdouts.",
       "unresolvedLimitation": "Consented ordinary packing and natural failure corpus with independent event labels/holdout; task-specific model qualification.",
@@ -711,7 +727,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "docs/rnd/validation/backend-status.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "OCR/feature tracking and sparse gap results need ordinary packing coverage/precision validation. Optical feature IDs explicitly do not prove object identity/custody.",
@@ -754,7 +771,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "docs/rnd/validation/backend-status.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Mobile now includes exact analysis/source reviewer statements, own-note amendments with retained history, source time/region navigation, hash-verified artifact preview, sparse geometry projections, exact derivative review, reviewed ZIP and source-linked verification archive. Web/desktop shared results retain comparison missingness/conflict, method limits and source navigation. Offline full bundle verification remains an exported tool rather than a client assertion of scene truth.",
       "unresolvedLimitation": "Reviewer comprehension/accessibility validation.",
@@ -793,7 +811,8 @@
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
         "docs/rnd/validation/backend-status.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "No blinded human comparison completed.",
       "unresolvedLimitation": "Independent reviewers; randomized original-only versus enriched review tasks; event-search/accuracy/contradiction metrics.",
@@ -832,7 +851,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
       "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
@@ -871,7 +891,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
       "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
@@ -910,7 +931,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
       "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
@@ -949,7 +971,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Implemented 2D support registration and actual COLMAP sparse branch require researcher-supplied support polygons/object masks; no automatic dynamic masking or absolute-scale inference.",
       "unresolvedLimitation": "Measured unchanged/changed cartons, valid masks/stable geometry, calibrated scale, repeat-capture noise, supported minimum detectable changes.",
@@ -989,7 +1012,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Mobile now hashes and previews real artifacts, displays source-linked sparse projections and supports verification archive export. Hardware/region finding qualification remains unavailable.",
       "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
@@ -1027,7 +1051,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Measured physical carton changes, sizes/materials, lighting/reflective tape, missing faces and natural shipping wear with independent lab metrology.",
@@ -1068,7 +1093,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/backend-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
@@ -1110,7 +1136,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/backend-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Exact paired OCR text, missing/conflicting alternatives and uncertainty; source-attributed report tracking/weight; actual unqualified Python appearance diagnostics; web comparison rows render observations without fusion.",
       "unresolvedLimitation": "Qualified OCR/physical/condition channels before evidentiary discrepancy/consistency claims; provider weight must retain attribution.",
@@ -1151,7 +1178,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/backend-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
@@ -1192,7 +1220,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/backend-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Real optional recipient/return workflow trials and ambiguous parcel cases; authorization regression final report owned backend.",
@@ -1234,7 +1263,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/backend-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Exact paired OCR text, missing/conflicting alternatives and uncertainty; source-attributed report tracking/weight; actual unqualified Python appearance diagnostics; web comparison rows render observations without fusion.",
       "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
@@ -1272,7 +1302,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/backend-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Same-SKU substitutions, copied serials, partial returns, new cartons, legitimate repairs, absent recipients, and blinded matrix-assisted review study.",
@@ -1311,7 +1342,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "docs/rnd/validation/native-status.json",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Freeze supported active illumination/device/safety threat profile before challenge tuning.",
@@ -1350,7 +1382,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "docs/rnd/validation/native-status.json",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Passive native capability/luma/clock instrumentation plus unpredictable bound challenge consumption are implemented. Active illumination is unavailable without safety-reviewed qualified hardware profile; its absence is not a failed freshness or liveness claim.",
       "unresolvedLimitation": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
@@ -1389,7 +1422,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "docs/rnd/validation/native-status.json",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Passive native capability/luma/clock instrumentation plus unpredictable bound challenge consumption are implemented. Active illumination is unavailable without safety-reviewed qualified hardware profile; its absence is not a failed freshness or liveness claim.",
       "unresolvedLimitation": "Device/exposure/accessibility safety review, supported native torch profiles and measured optical timing. Normal recorder must remain independent.",
@@ -1426,7 +1460,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "docs/rnd/validation/native-status.json",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Actual timed response/attack recordings and calibrated supported profile; synthetic command metadata is not emitted-light evidence.",
@@ -1463,7 +1498,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "docs/rnd/validation/native-status.json",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Authorized genuine/real display/print/lamination/reflection/delay/adaptive display/injected stream experiments with held-out devices/materials; safety review.",
@@ -1502,7 +1538,8 @@
         "docs/rnd/validation/final-audit.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
         "docs/rnd/validation/native-status.json",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Real record-in-progress opt-out/kill-switch timing and accessibility checks; active profiles remain unavailable.",
@@ -1542,7 +1579,8 @@
         "docs/rnd/validation/privacy-witness-status.json",
         "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
         "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
-        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
@@ -1582,7 +1620,8 @@
         "docs/rnd/validation/privacy-witness-status.json",
         "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
         "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
-        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
@@ -1626,7 +1665,8 @@
         "docs/rnd/validation/privacy-witness-status.json",
         "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
         "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
-        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Actual opaque derivative review and byte-bound export plus token-hashed, expiring, revocable hosted grants. Six direct/HTTP tests pass; all clients provide exact derivative preview. Recipient copies cannot be recalled.",
       "unresolvedLimitation": "Human review of each proposed mask/derivative; residual privacy/access policy review.",
@@ -1666,7 +1706,8 @@
         "docs/rnd/validation/privacy-witness-status.json",
         "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
         "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
-        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Independent sensitive-class/codec/audio/metadata corpus and detector recall/leakage review. No automatic privacy guarantee.",
@@ -1707,7 +1748,8 @@
         "docs/rnd/validation/privacy-witness-status.json",
         "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
         "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
-        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Tiny4x4/8x8 RGB8 relation only; source extraction remains trusted-signer boundary. No full-size/video proof or physical sensor attestation implied.",
@@ -1746,7 +1788,8 @@
         "docs/rnd/validation/privacy-witness-status.json",
         "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json",
         "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json",
-        "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+        "research/privacy/reports/backend-zk-integration-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Actual tiny circuit proofs/measurements exist; not p95 full-image/video cost measurements.",
       "unresolvedLimitation": "Independent qualified cryptographic/parameter/constraint/issuer review, target runtime cost and larger supported profiles before public reliance.",
@@ -1785,7 +1828,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/native-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Per-profile capability/unknown telemetry, real native luma timestamps, bounded buffers and thermal/memory/disk disable plus nonblocking UI/sidecar receipt path exist; representative device overhead and pressure qualification are external.",
       "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
@@ -1826,7 +1870,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/native-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage.",
       "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
@@ -1863,7 +1908,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/native-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "No qualified native camera-control profile exists and no automatic focus/exposure driver is enabled or claimed. Native ROI selection hysteresis/cooldown and camera lease/restore infrastructure are implemented, but they are not a camera adjustment driver. Implement/qualify any future active driver only after measured stable passive profiles and safety review.",
       "unresolvedLimitation": "Measured passive recorder stability and qualified device/OS/control profiles, conservative hardware bounds, restoration/continuity benchmarks and independent safety review before implementing or enabling active focus/exposure assistance.",
@@ -1904,7 +1950,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/native-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Bounded native selector now uses existing barcode-decoder geometry for an exact-timestamp rotation-mapped luma ROI candidate, rejects multiple/clipped/unmatched proposals, applies 750 ms cooldown and 10% improvement hysteresis, and retains original context/adverse/general frames. OCR, serial, carton, item and condition targets have explicit unmet reasons; a barcode candidate does not establish label/carton association or physical identity. Postcommit region enrollment remains a separate worker stage.",
       "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
@@ -1943,7 +1990,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/native-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Per-profile capability/unknown telemetry, real native luma timestamps, bounded buffers and thermal/memory/disk disable plus nonblocking UI/sidecar receipt path exist; representative device overhead and pressure qualification are external.",
       "unresolvedLimitation": "Real per-device useful detail, thermal/battery/memory/disk/frame-gap measurements; clipping is not calibrated glare.",
@@ -1979,7 +2027,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/native-status.json",
         "research/vision/IMPLEMENTATION_STATUS.md",
-        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json"
+        "research/benchmarks/reports/synthetic-cpu-2026-10-02.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Matched/randomized physical feature-on/off packing trials with blinded independent readability/downstream assessment.",
@@ -2018,7 +2067,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/privacy-witness-status.json",
         "research/witness/reports/local-synthetic-2026-10-02.json",
-        "docs/rnd/validation/backend-status.json"
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
@@ -2057,7 +2107,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/privacy-witness-status.json",
         "research/witness/reports/local-synthetic-2026-10-02.json",
-        "docs/rnd/validation/backend-status.json"
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
@@ -2098,7 +2149,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/privacy-witness-status.json",
         "research/witness/reports/local-synthetic-2026-10-02.json",
-        "docs/rnd/validation/backend-status.json"
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Backend now obtains two locally controlled test countersignatures, retrieves durable checkpoints/consistency, verifies TEST_WITNESSED, retries/reexecutes the same leaf, and preserves INCLUDED without configured operators. Zero independent operators; external SLO routing/restore rehearsal not qualified.",
       "unresolvedLimitation": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
@@ -2135,7 +2187,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/privacy-witness-status.json",
         "research/witness/reports/local-synthetic-2026-10-02.json",
-        "docs/rnd/validation/backend-status.json"
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Two named genuinely independent external witness organizations, authenticated key exchange, service/freshness/retention agreements, incident contacts and security review. Current independent operator count0.",
@@ -2174,7 +2227,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/privacy-witness-status.json",
         "research/witness/reports/local-synthetic-2026-10-02.json",
-        "docs/rnd/validation/backend-status.json"
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Protocol/license/interoperability review before external reliance; local pymerkle encoding is not Tessera signed-note compatibility. Backend currently outputs private inclusion only, correctly labeled.",
@@ -2215,7 +2269,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/privacy-witness-status.json",
         "research/witness/reports/local-synthetic-2026-10-02.json",
-        "docs/rnd/validation/backend-status.json"
+        "docs/rnd/validation/backend-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Backend now obtains two locally controlled test countersignatures, retrieves durable checkpoints/consistency, verifies TEST_WITNESSED, retries/reexecutes the same leaf, and preserves INCLUDED without configured operators. Zero independent operators; external SLO routing/restore rehearsal not qualified.",
       "unresolvedLimitation": "Separate service runtime/retained checkpoints, operational SLO and restore drill; explicit reviewed key rotation.",
@@ -2253,7 +2308,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
-        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
@@ -2294,7 +2350,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
-        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Actual TLS 1.3 mutually authenticated Flower protobuf exchanges validate CA/EKU/hostname/ALPN and exact leaf/node pins. Real 20-client/80-connection local transport run and 22 tests include ciphertext tamper, live profile expiry and persistent monotonic run admission across endpoint restarts. Operators remain controlled synthetic identities; the noisy candidate failed its quality gate and was not promoted.",
       "unresolvedLimitation": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
@@ -2332,7 +2389,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
-        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
@@ -2370,7 +2428,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
-        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
@@ -2407,7 +2466,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
-        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Distributed-noise mode explicitly fails closed; central Gaussian DP baseline retained as plan permits.",
       "unresolvedLimitation": "Reviewed dropout/collusion/distributed-noise mechanism and cohort assumptions before stronger coordinator privacy can be implemented/claimed.",
@@ -2445,7 +2505,8 @@
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
-        "research/federated/reports/2026-10-02-mtls/transport-validation.json"
+        "research/federated/reports/2026-10-02-mtls/transport-validation.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
@@ -2487,7 +2548,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Review of any deployed environment requires its authorized configuration; the referenced October 1 detailed fingerprint plan was retrieved and reviewed by the parent and is not missing.",
@@ -2531,7 +2593,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Physical feature-off/on recorder, interrupted upload and recovery qualification. Parent owns final regression report; audit did not rerun tests.",
@@ -2575,7 +2638,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Research device identities/development signing and separate runtime provisioning; no production authorization.",
@@ -2623,7 +2687,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "33 operations/28 paths documented in research OpenAPI with generated transport/types, strict schema and negative type fixtures. The normal Proof root schema/canonical serializer is preserved.",
       "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
@@ -2667,11 +2732,12 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Bounded native luma adapters/scheduler and durable chunked sidecar receipt/source ingestion implemented. Device continuity/shedding performance requires physical qualification.",
-      "unresolvedLimitation": "Real Android/iOS stream/frame-gap/thermal/disk/memory on/off tests; macOS/Xcode iOS build.",
-      "nextDependency": "Real Android/iOS stream/frame-gap/thermal/disk/memory on/off tests; macOS/Xcode iOS build.",
+      "unresolvedLimitation": "Real Android/iOS stream/frame-gap/thermal/disk/memory feature-on/off tests and actual native XCTest execution. The unsigned iOS app/Swift build completed successfully in native CI.",
+      "nextDependency": "Real Android/iOS stream/frame-gap/thermal/disk/memory feature-on/off tests and actual native XCTest execution. The unsigned iOS app/Swift build completed successfully in native CI.",
       "releaseAuthorization": "NOT_AUTHORIZED"
     },
     {
@@ -2710,7 +2776,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Production workload and crash/restore qualification; parent/backend final restart regression results pending at snapshot.",
@@ -2755,7 +2822,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Mobile now includes exact analysis/source reviewer statements, own-note amendments with retained history, source time/region navigation, hash-verified artifact preview, sparse geometry projections, exact derivative review, reviewed ZIP and source-linked verification archive. Web/desktop shared results retain comparison missingness/conflict, method limits and source navigation. Offline full bundle verification remains an exported tool rather than a client assertion of scene truth.",
       "unresolvedLimitation": "No additional local software gate recorded; independent system/security qualification and release authorization remain pending.",
@@ -2799,7 +2867,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
       "unresolvedLimitation": "Authorized physical/partner datasets, blind evaluation and license/security reviews; synthetic reports do not supply physical datasets.",
@@ -2845,7 +2914,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "120 requests/minute/actor admission plus32 active jobs per tenant and20 comparisons per hour under tenant advisory lock; permissions, source ownership, consent and immutable reviewer logs tested. OS namespace sandbox must be qualified on a host that permits it.",
       "unresolvedLimitation": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
@@ -2889,7 +2959,8 @@
         "docs/rnd/validation/backend-status.json",
         "docs/rnd/validation/api-contracts.json",
         "docs/rnd/validation/local-runtime.json",
-        "docs/rnd/validation/native-status.json"
+        "docs/rnd/validation/native-status.json",
+        "docs/rnd/validation/ci-results.json"
       ],
       "observedResult": "Queue/error/latency/attempt metrics, local expired-lease/10-minute queue alerts and audited retry UI exist; signed per-job resource measurements and benchmark reports remain available. Hosted attributable unit cost and physical device budgets remain NOT_MEASURED.",
       "unresolvedLimitation": "Measured target-host/cloud prices, workload and hardware telemetry; approved alert thresholds and rollback/restore drill.",
