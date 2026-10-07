@@ -51,11 +51,18 @@ describe("Etsy selling account and automatic intake", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  it("omits a never-connected unavailable provider without offering a broken connect action", () => {
-    render(<ConnectedAccountsPanel {...accountProps()} providers={[{ ...provider, enabled: false }]} />);
+  it("shows an unavailable provider with a disabled connection action and an explanation", async () => {
+    const props = accountProps();
+    render(<ConnectedAccountsPanel {...props} providers={[{ ...provider, enabled: false }]} />);
     expect(screen.queryByText(/connection setup is pending|not enabled in this environment/)).not.toBeInTheDocument();
-    expect(screen.getByText(/No sales channels are available/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Connect Etsy" })).not.toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Etsy" })).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    const connect = screen.getByRole("button", { name: "Connect Etsy" });
+    expect(connect).toBeDisabled();
+    await userEvent.click(connect);
+    expect(props.onConnect).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByText("Connection details", { selector: "summary" }));
+    expect(screen.getByText("Etsy is temporarily unavailable for new connections.")).toBeVisible();
     expect(screen.queryByText(/^Connected$/)).not.toBeInTheDocument();
   });
 

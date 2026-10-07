@@ -4,6 +4,7 @@ import { connectedAccountStatusLabel, providerDisplay } from "@packproof/copy/st
 import { ETSY_ATTRIBUTION, SHOPIFY_AUTOMATIC_PROOFS_LABEL, orderIntakeExplanation, orderReviewReason } from "@packproof/copy/commerce";
 import type { CommerceConnectionView, ConnectedAccountProviderCatalogView, ConnectedAccountView } from "../api/types";
 import "./account-settings.css";
+import "./workstation-tools.css";
 
 export interface ConnectedAccountsPanelProps {
   accounts: ConnectedAccountView[];
@@ -30,18 +31,19 @@ function intakeStatus(connection: CommerceConnectionView): string {
 
 export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
   const [shops, setShops] = useState<Record<string, string>>({});
+  const [connectionSetup, setConnectionSetup] = useState<Record<string, boolean>>({});
   const [shopifyAutomaticProofs, setShopifyAutomaticProofs] = useState(true);
   const providers = [...new Set([
-    ...props.providers.filter(provider => provider.enabled && provider.capabilities.transactions).map(provider => provider.provider),
+    ...props.providers.map(provider => provider.provider),
     ...props.accounts.map(account => account.provider),
     ...(props.connections ?? []).map(connection => connection.provider),
   ])];
 
-  return <section className="stack" aria-label="Sales channels">
-    <p className="note">Your marketplace sign-in is separate from PackProof sign-in. Connect a selling account, then choose whether to add its eligible orders automatically.</p>
+  return <section className="stack ws-integrations" aria-label="Sales channels">
+    <div className="ws-integration-notice"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg><p>Your marketplace sign-in is separate from PackProof sign-in. Connect a selling account, then choose whether to add its eligible orders automatically.</p></div>
     {props.notice && <div className="banner banner-info" role="status">{props.notice}</div>}
     {providers.length === 0 && <p className="note">No sales channels are available to connect right now. You can still record a shipment from Orders.</p>}
-    {providers.map(provider => {
+    <div className="ws-integration-grid">{providers.map(provider => {
       const catalog = props.providers.find(row => row.provider === provider);
       const accounts = props.accounts.filter(row => row.provider === provider);
       const connections = (props.connections ?? []).filter(row => row.provider === provider);
@@ -50,9 +52,14 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
       const label = catalog?.providerDisplay || accounts[0]?.providerDisplay || connections[0]?.providerDisplay || providerDisplay(provider);
       const canConnect = catalog?.enabled && catalog.capabilities.transactions && (catalog.multipleAccounts || currentAccounts.length === 0) && (connections.length === 0 || accounts.length > 0);
       const shop = shops[provider] ?? "";
-      return <article className="section stack sales-channel" key={provider} aria-label={label}>
+      const connected = currentAccounts.some(account => ["CONNECTED", "ACTIVE"].includes(account.status)) || (accounts.length === 0 && connections.some(connection => connection.status === "ACTIVE"));
+      const needsAttention = currentAccounts.some(account => ["NEEDS_REAUTH", "ERROR"].includes(account.status)) || connections.some(connection => connection.status === "NEEDS_REAUTH");
+      const status = !available ? "Unavailable" : needsAttention ? "Needs attention" : connected ? "Connected" : "Not connected";
+      return <article className="section stack sales-channel ws-integration-card" key={provider} aria-label={label}>
+        <div className="ws-provider-heading"><span className={`ws-provider-mark ws-provider-${provider}`} aria-hidden="true">{provider === "ebay" ? "e" : label.charAt(0)}</span><span className={`ws-provider-status${connected && available && !needsAttention ? " is-connected" : needsAttention ? " needs-attention" : ""}`}>{status}</span></div>
         <h2>{label}</h2>
-        {!available && <p className="banner banner-info">{label} is temporarily unavailable. Your existing connection remains listed here.</p>}
+        <p className="ws-provider-description">{catalog?.capabilities.transactions || connections.length ? "Bring synchronized orders into your packing queue." : "Link account records with your PackProof workspace."}</p>
+        {!available && (accounts.length > 0 || connections.length > 0) && <p className="banner banner-info">{label} is temporarily unavailable. Your existing connection remains listed here.</p>}
         {accounts.map(account => <div className="stack channel-account" key={account.id}>
           <p className="card-title">{account.externalAccountName || "Selling account"}</p>
           <p className="meta">{connectedAccountStatusLabel(account.status)}</p>
@@ -82,16 +89,21 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
           </div>;
         })}
         {currentAccounts.some(account => account.capabilities.transactions) && connections.length === 0 && <p className="note">The account is linked, but order access is not ready yet. Refresh this page to check again. Recording a shipment remains available in Orders.</p>}
-        {canConnect && <div className="stack">
-          {catalog.requiresShop && <label className="field" htmlFor={`connected-shop-${provider}`}><span>Shopify shop</span><input id={`connected-shop-${provider}`} value={shop} onChange={event => setShops(previous => ({...previous, [provider]: event.target.value}))} placeholder="your-store.myshopify.com" autoComplete="off" /></label>}
+        {catalog && <details className="settings-detail ws-provider-details"><summary>Connection details</summary><div className="stack"><p className="note">{!available ? `${label} is temporarily unavailable for new connections.` : catalog.capabilities.transactions ? "Eligible orders from this selling account can be added to your packing queue. You choose whether to add them automatically." : "This provider supports account records only. It does not supply orders to PackProof; connecting it as a sales channel is unavailable."}</p>{catalog.limitations.map((limitation, index) => <p key={`${index}-${limitation}`} className="note">{limitation}</p>)}</div></details>}
+        {!canConnect && currentAccounts.length === 0 && connections.length === 0 && <button className="btn ws-provider-unavailable" type="button" disabled aria-describedby={`provider-unavailable-${provider}`}>Connect {label}<span aria-hidden="true"> →</span></button>}
+        {!canConnect && currentAccounts.length === 0 && connections.length === 0 && <span id={`provider-unavailable-${provider}`} className="visually-hidden">{!available ? "New connections are unavailable." : "This provider does not supply orders to PackProof."}</span>}
+        {canConnect && <div className="stack ws-provider-connect">
+          {catalog.requiresShop && !connectionSetup[provider] ? <button id={`configure-provider-${provider}`} className="btn" type="button" disabled={props.busy} onClick={() => setConnectionSetup(previous => ({ ...previous, [provider]: true }))}>Connect {label}<span aria-hidden="true"> →</span></button> : <>
+          {catalog.requiresShop && <label className="field" htmlFor={`connected-shop-${provider}`}><span>Shopify shop</span><input id={`connected-shop-${provider}`} value={shop} disabled={props.busy} onChange={event => setShops(previous => ({...previous, [provider]: event.target.value}))} placeholder="your-store.myshopify.com" autoComplete="off" autoFocus /></label>}
           {provider === "shopify" && <>
             <label className="channel-toggle"><input type="checkbox" checked={shopifyAutomaticProofs} disabled={props.busy} aria-describedby="shopify-automatic-proofs-explanation" onChange={event => setShopifyAutomaticProofs(event.target.checked)} /> <span>{SHOPIFY_AUTOMATIC_PROOFS_LABEL}</span></label>
             <p className="note" id="shopify-automatic-proofs-explanation">{orderIntakeExplanation(provider)}</p>
           </>}
-          <button className="btn btn-secondary" type="button" disabled={props.busy || (catalog.requiresShop && !shop.trim())} onClick={() => props.onConnect(provider, provider === "shopify" ? { shop: shop.trim(), autoSyncEnabled: shopifyAutomaticProofs } : catalog.requiresShop ? { shop: shop.trim() } : undefined)}>Connect {label}</button>
+          <div className="btn-row"><button className="btn" type="button" disabled={props.busy || (catalog.requiresShop && !shop.trim())} onClick={() => props.onConnect(provider, provider === "shopify" ? { shop: shop.trim(), autoSyncEnabled: shopifyAutomaticProofs } : catalog.requiresShop ? { shop: shop.trim() } : undefined)}>{catalog.requiresShop ? "Continue to" : "Connect"} {label}<span aria-hidden="true"> →</span></button>{catalog.requiresShop && <button type="button" className="btn btn-tertiary" disabled={props.busy} onClick={() => { setConnectionSetup(previous => ({ ...previous, [provider]: false })); requestAnimationFrame(() => document.getElementById(`configure-provider-${provider}`)?.focus()); }}>Cancel</button>}</div>
+          </>}
         </div>}
       </article>;
-    })}
+    })}</div>
     {providers.includes("etsy") && <p className="meta">{ETSY_ATTRIBUTION}</p>}
   </section>;
 }

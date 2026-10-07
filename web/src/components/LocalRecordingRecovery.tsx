@@ -3,7 +3,7 @@ import {flushStudyTimings} from '../analytics/study-capture';
 import type { PackProofApi } from "../api/client";
 import { listRecoverableRecordings, removePreservedLocalRecording, resumeLocalRecordings } from "../capture-queue";
 
-export function LocalRecordingRecovery({api, userId, onOpen, visible = true}: {api:PackProofApi;userId:string;onOpen:(id:string)=>void;visible?:boolean}) {
+export function LocalRecordingRecovery({api, userId, onOpen, onRecordingsChange, visible = true}: {api:PackProofApi;userId:string;onOpen:(id:string)=>void;onRecordingsChange?:(items:Awaited<ReturnType<typeof listRecoverableRecordings>>)=>void;visible?:boolean}) {
   const [items,setItems] = useState<Awaited<ReturnType<typeof listRecoverableRecordings>>>([]);
   const [error,setError] = useState<string|null>(null);
   useEffect(() => {
@@ -17,7 +17,7 @@ export function LocalRecordingRecovery({api, userId, onOpen, visible = true}: {a
         if (active) setItems(before);
         if (navigator.onLine !== false) await resumeLocalRecordings(api, userId, () => active, event?.type === "online");
         const after = await listRecoverableRecordings(userId,api);
-        if (active) { setItems(after); if (JSON.stringify(before.map(item => [item.proofId,item.committed,item.preserved,item.finalized,item.submitted])) !== JSON.stringify(after.map(item => [item.proofId,item.committed,item.preserved,item.finalized,item.submitted]))) window.dispatchEvent(new Event("packproof:records-updated")); }
+        if (active) { setItems(after); onRecordingsChange?.(after); if (JSON.stringify(before.map(item => [item.proofId,item.committed,item.preserved,item.finalized,item.submitted])) !== JSON.stringify(after.map(item => [item.proofId,item.committed,item.preserved,item.finalized,item.submitted]))) window.dispatchEvent(new Event("packproof:records-updated")); }
       } catch { /* Capture reports unavailable IndexedDB before accepting local bytes. */ }
       finally { running = false; }
     };
@@ -26,7 +26,7 @@ export function LocalRecordingRecovery({api, userId, onOpen, visible = true}: {a
     window.addEventListener("online",update);
     window.addEventListener("focus",update);
     return () => { active=false; clearInterval(timer); window.removeEventListener("online",update); window.removeEventListener("focus",update); };
-  },[api,userId]);
+  },[api,userId,onRecordingsChange]);
   if (!visible || !items.length) return null;
   return <aside className="local-recovery-panel" aria-label="Saved recordings">
     <details>
@@ -43,7 +43,7 @@ export function LocalRecordingRecovery({api, userId, onOpen, visible = true}: {a
           window.setTimeout(()=>URL.revokeObjectURL(url),1000);
         }}>Export local original</button>
         {item.preserved && item.finalized && <button className="btn btn-secondary" onClick={async()=>{
-          try { await removePreservedLocalRecording(userId,item.key,api); setItems(await listRecoverableRecordings(userId,api)); }
+          try { await removePreservedLocalRecording(userId,item.key,api); const remaining = await listRecoverableRecordings(userId,api); setItems(remaining); onRecordingsChange?.(remaining); }
           catch(e) { setError(e instanceof Error?e.message:"Local copy could not be removed."); }
         }}>Remove completed local copy</button>}
       </li>)}</ul>

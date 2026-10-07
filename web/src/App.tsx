@@ -14,6 +14,12 @@ import { clearViewState, saveNavigationContext, setNavigationScope } from "./nav
 import { ConnectedAccountsPanel } from "./screens/ConnectedAccountsPanel";
 import { preserveCapture, recoverCapture, captureQueueKey } from "./capture-queue";
 import { ProofsScreen } from "./screens/ProofsScreen";
+import { HomeScreen } from "./screens/HomeScreen";
+import { OrdersScreen } from "./screens/OrdersScreen";
+import { UploadsScreen } from "./screens/UploadsScreen";
+import { NotificationsScreen } from "./screens/NotificationsScreen";
+import { WorkstationHeader } from "./components/WorkstationHeader";
+import type { LocalRecordingSummary } from "./capture-queue";
 import { canonicalWorkspacePath, readProofListState, rememberProofListState } from "./proof-list-state";
 import { ReceiptScreen } from "./screens/ReceiptScreen";
 import { DeveloperScreen } from "./screens/DeveloperScreen";
@@ -71,6 +77,10 @@ import { SignInScreen } from "./screens/SignInScreen";
 import { AuthFrame } from "./site/PublicSite";
 
 type Route =
+  | { name: "home" }
+  | { name: "fulfillment" }
+  | { name: "uploads" }
+  | { name: "activity" }
   | { name: "admin" }
   | { name: "proofs"; view: "all" | "attention" | "completed"; query: string }
   | { name: "capture-launch" }
@@ -95,6 +105,11 @@ type Route =
 function parseHref(href: string): Route {
   const url = new URL(canonicalWorkspacePath(href), "http://packproof.local");
   const pathname = url.pathname.replace(/\/$/, "") || "/";
+  if (pathname === "/app") return { name: "home" };
+  if (pathname === "/fulfillment") return { name: "fulfillment" };
+  if (pathname === "/uploads") return { name: "uploads" };
+  if (pathname === "/activity") return { name: "activity" };
+  if (pathname === "/station") return { name: "station", reference: url.searchParams.get("reference") || undefined };
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return {name:"admin"};
   if (pathname === "/new/delete-account") return { name: "delete-account" };
   if (pathname === "/new/privacy") {
@@ -257,6 +272,7 @@ function isPublicRoute(route: Route): route is { name: "public"; token: string }
 
 function needsWorkspace(name: Route["name"]): boolean {
   return (
+    name === "home" || name === "fulfillment" || name === "uploads" || name === "activity" ||
     name === "proofs" ||
     name === "account" ||
     name === "proof" ||
@@ -281,7 +297,7 @@ function needsProof(name: Route["name"]): boolean {
 
 function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "create-account" }) {
   const [enteredFromIntakeLink] = useState(() => window.location.pathname.startsWith("/app/"));
-  const adminLanding = useRef(["/login", "/app", "/overview"].includes(window.location.pathname));
+  const adminLanding = useRef(window.location.pathname === "/login");
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -301,6 +317,9 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     oauthReturnNotice(window.location.href),
   );
   const [queue, setQueue] = useState<FulfillmentQueueItem[]>([]);
+  const [recordings, setRecordings] = useState<LocalRecordingSummary[]>([]);
+  const [recordingsLoaded, setRecordingsLoaded] = useState(false);
+  const onRecordingsChange = useCallback((items: LocalRecordingSummary[]) => { setRecordings(items); setRecordingsLoaded(true); }, []);
   const [connections, setConnections] = useState<CommerceConnectionView[]>([]);
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountView[]>([]);
   const [connectedProviders, setConnectedProviders] = useState<
@@ -389,6 +408,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     setSession(null);
     setProofs([]);
     setQueue([]);
+    setRecordings([]);
+    setRecordingsLoaded(false);
     setInvitations([]);
     setProof(null);
     setShipmentIntegrity(null);
@@ -403,7 +424,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   }
 
   function go(path: string) {
-    if (path === "/" && !isLegalRoute(route)) path = "/proofs";
+    if (path === "/" && !isLegalRoute(route)) path = "/app";
     path = canonicalWorkspacePath(path, session ? `${session.apiBaseUrl}.${session.userId}` : undefined);
     const next = parseHref(path);
     setError(null);
@@ -521,6 +542,41 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     const finished = () => {
       if (!cancelled) setLoading(false);
     };
+    if (route.name === "home") {
+      setLoading(true);
+      setError(null);
+      setRecordingsLoaded(false);
+      void Promise.all([api.listProofs({ view: "all" }), api.listFulfillmentQueue(), api.listCommerceConnections(), api.listInvitations(), listRecoverableRecordings(session.userId, api).catch(() => null)])
+        .then(([listed, orders, commerce, inbox, local]) => {
+          if (cancelled) return;
+          setProofs(listed.proofs.map(item => applyLocalWork(item, local?.find(recording => recording.proofId === item.proofId))));
+          setQueue(orders.items);
+          setConnections(commerce.connections);
+          setInvitations(inbox.invitations);
+          setRecordings(local ?? []);
+          setRecordingsLoaded(local !== null);
+        }).catch(fail).finally(finished);
+    }
+    if (route.name === "fulfillment") {
+      setLoading(true);
+      setError(null);
+      void Promise.all([api.listFulfillmentQueue("all"), api.listCommerceConnections()])
+        .then(([orders, commerce]) => { if (!cancelled) { setQueue(orders.items); setConnections(commerce.connections); } })
+        .catch(fail).finally(finished);
+    }
+    if (route.name === "uploads") {
+      setLoading(true);
+      setError(null);
+      setRecordingsLoaded(false);
+      void listRecoverableRecordings(session.userId, api)
+        .then(local => { if (!cancelled) { setRecordings(local); setRecordingsLoaded(true); } })
+        .catch(fail).finally(finished);
+    }
+    if (route.name === "activity") {
+      setLoading(true);
+      setError(null);
+      void api.listInvitations().then(inbox => { if (!cancelled) setInvitations(inbox.invitations); }).catch(fail).finally(finished);
+    }
     if (route.name === "proofs") {
       setLoading(true);
       setError(null);
@@ -592,8 +648,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         .finally(finished);
     }
     if (route.name === "station") {
-      setLoading(false);
-      setQueue([]);
+      setLoading(true);
+      void api.listFulfillmentQueue().then(orders => { if (!cancelled) setQueue(orders.items); }).catch(fail).finally(finished);
     }
     if (route.name === "stores") {
       setLoading(true);
@@ -616,6 +672,13 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     }
     return () => { cancelled = true; };
   }, [api, route, session?.userId, session?.username, session?.displayName, listRetry]);
+
+  useEffect(() => {
+    if (route.name !== "home" || !session) return;
+    const refresh = () => setListRetry(value => value + 1);
+    window.addEventListener("packproof:records-updated", refresh);
+    return () => window.removeEventListener("packproof:records-updated", refresh);
+  }, [route.name, session?.userId]);
 
   if (route.name === "delete-account") {
     return <AccountDeletionScreen api={session ? api : undefined} accountKey={session?.userId}
@@ -662,7 +725,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             const authReturn = sessionStorage.getItem("packproof.auth-return");
             sessionStorage.removeItem("packproof.auth-return");
             if (authReturn === "/new/delete-account") go(authReturn);
-            else if (["/login", "/signup", "/"].includes(window.location.pathname)) go("/proofs");
+            else if (["/login", "/signup", "/"].includes(window.location.pathname)) go("/app");
             // Keep the requested Proof or receiver invitation through sign-in.
             // The current route is already guarded until the session/profile is ready.
             setError(null);
@@ -701,7 +764,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       if (query) parameters.set("q", query);
       go(`/proofs${parameters.size ? `?${parameters}` : ""}`);
     },
-    onRetry: () => setListRetry(value => value + 1),
+    onRetry: () => { setError(null); setListRetry(value => value + 1); },
     onOpenProof: (proofId: string) => go(`/proofs/${encodeURIComponent(proofId)}`),
     onCreate: () => go("/new"),
     onOpenReceiver: (proofId: string) => go(`/receipt/${encodeURIComponent(proofId)}`),
@@ -723,9 +786,20 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           onGo={go}
           onGoHome={() => go("/")}
           onOpenAccount={() => go("/account")}
+          onSignOut={signOut}
         />
+      <WorkstationHeader route={route.name} refreshing={loading || busy} onRefresh={libraryProps.onRetry} />
 
-      <LocalRecordingRecovery visible={route.name === "account"} key={session.userId} api={api} userId={session.userId} onOpen={id => go(`/proofs/${encodeURIComponent(id)}`)} />
+      {route.name === "home" && <HomeScreen api={api} proofs={proofs} queue={queue} connections={connections} loading={loading} error={error} pendingUploadCount={recordingsLoaded ? recordings.filter(item => !(item.finalized && item.preserved)).length : undefined} onRetry={libraryProps.onRetry} onGo={go} onOpenProof={libraryProps.onOpenProof} onOpenInvitation={libraryProps.onOpenInvitation} onOpenReceiver={libraryProps.onOpenReceiver} />}
+      {route.name === "fulfillment" && <OrdersScreen orders={queue} loading={loading} error={error} syncBusy={busy} syncAvailable={connections.some(item => item.status === "ACTIVE")} onRetry={libraryProps.onRetry} onOpenProof={libraryProps.onOpenProof} onOpenStation={id => go(`/proofs/${encodeURIComponent(id)}/capture`)} onOpenIntegrations={() => go("/stores")} onCreate={libraryProps.onCreate} onSync={async () => {
+        setBusy(true); setError(null);
+        try { for (const connection of connections.filter(item => item.status === "ACTIVE")) setLastSync(await api.syncCommerceConnection(connection.connectionId)); setListRetry(value => value + 1); }
+        catch (caught) { setError(handleError(caught)); }
+        finally { setBusy(false); }
+      }} />}
+      {route.name === "uploads" && <UploadsScreen recordings={recordings} loading={loading} error={error} onRefresh={libraryProps.onRetry} onOpenStation={() => go("/station")} />}
+      {route.name === "activity" && <NotificationsScreen invitations={invitations} loading={loading} error={error} onRetry={libraryProps.onRetry} onOpenInvitation={libraryProps.onOpenInvitation} />}
+      <LocalRecordingRecovery visible={route.name === "account" || route.name === "uploads"} key={session.userId} api={api} userId={session.userId} onRecordingsChange={onRecordingsChange} onOpen={id => go(`/proofs/${encodeURIComponent(id)}`)} />
 
       {route.name === "proofs" ? <ProofsScreen api={api} {...libraryProps} readyOrders={<ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />} /> : null}
 
@@ -991,6 +1065,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "stores" ? (
         <ConnectedStoresScreen
+          onCreate={libraryProps.onCreate}
           intakeSettings={<IntakeSettingsPanel api={api} userId={session.userId} connections={connections} />}
           connectionPanel={<ConnectedAccountsPanel accounts={connectedAccounts} providers={connectedProviders} notice={connectedNotice} busy={busy}
             onConnect={(provider, extra) => { setBusy(true); void api.startConnectedAccountConnect(provider, extra).then(result => window.location.assign(result.authorizationUrl)).catch(caught => { setError(handleError(caught)); setBusy(false); }); }}
@@ -1246,6 +1321,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           onBack={() => goBack(`/proofs/${encodeURIComponent(route.proofId)}`)}
         />
       ) : null}
+      <footer className="workstation-footer"><span>PackProof Web</span><span>Neutral evidence. Source-linked records.</span></footer>
     </div>
   );
 }

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "review": "vite --config review.vite.config.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "npm run test:links && vitest run",

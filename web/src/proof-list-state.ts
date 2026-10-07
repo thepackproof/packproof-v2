@@ -8,7 +8,7 @@ export function readProofListState(url: URL): ProofListState {
 export function rememberProofListState(scope: string, state: ProofListState) {
   try { sessionStorage.setItem(key(scope), JSON.stringify(state)); } catch { /* Navigation works without storage. */ }
 }
-/** Replace retired destinations without inserting a second browser-history entry. */
+/** Normalize workspace aliases while preserving owned app-link boundaries. */
 export function canonicalWorkspacePath(href: string, scope?: string): string {
   const url = new URL(href, "https://packproof.local");
   const path = url.pathname.replace(/\/$/, "") || "/";
@@ -34,13 +34,11 @@ export function canonicalWorkspacePath(href: string, scope?: string): string {
   if (legacyRecord || completed) url.pathname = `/proofs/${(legacyRecord || completed)![1]}`;
   else if (path === "/station") {
     const id = url.searchParams.get("proof");
-    url.pathname = id ? `/proofs/${encodeURIComponent(id)}` : "/proofs";
+    url.pathname = id ? `/proofs/${encodeURIComponent(id)}/capture` : "/station";
     url.searchParams.delete("proof");
-    if (!id) url.searchParams.set("filter", "attention");
-  } else if (["/app", "/home", "/overview", "/activity", "/fulfillment", "/orders"].includes(path)) {
-    url.pathname = "/proofs";
-    if (["/fulfillment", "/orders"].includes(path) && !url.searchParams.has("filter")) url.searchParams.set("filter", "attention");
-  }
+  } else if (["/home", "/overview"].includes(path)) url.pathname = "/app";
+  else if (path === "/orders") url.pathname = "/fulfillment";
+  else if (path === "/notifications") url.pathname = "/activity";
   if (url.pathname === "/proofs" && scope && !url.search && href !== "/proofs?filter=all") {
     try {
       const saved = JSON.parse(sessionStorage.getItem(key(scope)) || "null") as ProofListState | null;

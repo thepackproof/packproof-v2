@@ -41,6 +41,8 @@ async function open(client=api()){
 it("opens a preview without recording and stops once into an unsubmitted review",async()=>{
  const {client,start}=await open();expect(client.createCaptureSession).not.toHaveBeenCalled();
  fireEvent.click(start);await screen.findByRole("button",{name:"Finish recording"});
+ expect(screen.getByRole("textbox",{name:"Order or tracking reference"})).toBeDisabled();
+ expect(screen.getByRole("button",{name:"Find shipment"})).toBeDisabled();
  await userEvent.dblClick(screen.getByRole("button",{name:"Finish recording"}));
  expect(await screen.findByLabelText("Recorded packing video")).toBeInTheDocument();expect(recorder.stop).toHaveBeenCalledTimes(1);
  expect(vi.mocked(saveStationCapture).mock.calls.at(-1)![0].finishConfirmed).toBe(false);
@@ -48,6 +50,20 @@ it("opens a preview without recording and stops once into an unsubmitted review"
  await userEvent.click(screen.getByRole("checkbox"));await waitFor(()=>expect(screen.getByRole("button",{name:"Confirm and submit"})).toBeEnabled());
  await userEvent.click(screen.getByRole("button",{name:"Confirm and submit"}));expect(await screen.findByRole("heading",{name:"Proof saved"})).toBeInTheDocument();
  expect(resumeStationRecording).toHaveBeenCalledTimes(1);
+});
+it("resolves a shipment reference through the server before opening its camera",async()=>{
+ const client={...api(),resolvePackingStation:vi.fn(async()=>({transactionId:canonicalProof.transactionId,orderLabel:"Order 42",itemSummary:"Camera shipment"})),createOrGetProof:vi.fn(async()=>({...canonicalProof,status:"READY_FOR_EVIDENCE",evidence:[],attestations:[],participationPolicy:"COUNTERPARTY_OPTIONAL"}))};
+ render(<PackingStationScreen api={client as unknown as PackProofApi} userId="user_seller" queue={[]} error={null} onAuthExpired={()=>{}}/>);
+ const reference=screen.getByRole("textbox",{name:"Order or tracking reference"});
+ await waitFor(()=>expect(reference).toBeEnabled());
+ expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+ await userEvent.type(reference,"  Order 42  ");
+ await userEvent.click(screen.getByRole("button",{name:"Find shipment"}));
+ await waitFor(()=>expect(screen.getByRole("button",{name:"Record packing"})).toBeEnabled());
+ expect(client.resolvePackingStation).toHaveBeenCalledExactlyOnceWith("Order 42");
+ expect(client.createOrGetProof).toHaveBeenCalledExactlyOnceWith(canonicalProof.transactionId);
+ expect(client.createCaptureSession).not.toHaveBeenCalled();
+ expect(reference).toBeDisabled();
 });
 it("preserves and reviews final bytes while a barcode request remains in flight",async()=>{
  const client=api();let resolve!:(value:{status:string;trackingNumber:string})=>void;

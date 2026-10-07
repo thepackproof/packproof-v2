@@ -1,37 +1,28 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeProvider";
 import type { WebSession } from "../auth/session";
-import { Brand, Glyph } from "../site/Brand";
+import { WorkstationIcon, useBrowserOnline } from "./WorkstationHeader";
 
-export type AppRouteName =
-  | "home"
-  | "proofs"
-  | "create"
-  | "activity"
-  | "account"
-  | "proof"
-  | "fulfillment"
-  | "fulfillment-detail"
-  | "station"
-  | "stores";
+export type AppRouteName = "home" | "proofs" | "create" | "activity" | "account" | "proof" | "fulfillment" | "fulfillment-detail" | "station" | "stores" | "uploads";
 
 export function AppNav(props: {
-  session: WebSession;
-  adminAllowed?: boolean;
-  invitationCount: number;
-  onGoHome: () => void;
-  onOpenAccount: () => void;
-  currentRoute?: string;
-  onGo?: (path: string) => void;
+  session: WebSession; adminAllowed?: boolean; invitationCount: number;
+  onGoHome: () => void; onOpenAccount: () => void; onSignOut?: () => void;
+  currentRoute?: string; onGo?: (path: string) => void;
 }) {
-  const mobileTrigger = useRef<HTMLButtonElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLElement>(null);
   const { scheme, setPreference } = useTheme();
-  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("packproof.sidebar.collapsed") === "true"; } catch { return false; } });
+  const online = useBrowserOnline();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const toggleCollapsed = () => setCollapsed(previous => {
-    try { localStorage.setItem("packproof.sidebar.collapsed", String(!previous)); } catch { /* Usable without storage. */ }
-    return !previous;
-  });
+  const close = () => { setMobileOpen(false); trigger.current?.focus(); };
+  useEffect(() => {
+    if (!mobileOpen) return;
+    drawer.current?.querySelector<HTMLAnchorElement>(".workstation-links a")?.focus();
+    const onResize = () => { if (window.innerWidth > 760) setMobileOpen(false); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [mobileOpen]);
   const navigate = (path: string) => {
     setMobileOpen(false);
     if (props.onGo) props.onGo(path);
@@ -39,22 +30,37 @@ export function AppNav(props: {
     else props.onOpenAccount();
   };
   const links = [
-    { label: "Proofs", href: "/proofs", icon: "shield", active: ["proofs", "proof", "receipt", "event", "invite", "finalize", "complete", "create", "scan", "station"] },
-    { label: "Connections", href: "/stores", icon: "store", active: ["stores"] },
-    ...(props.adminAllowed ? [{label:"Admin",href:"/admin",icon:"grid",active:["admin"]}] : []),
+    { label: "Home", href: "/app", icon: "home", active: ["home"] },
+    { label: "Proofs", href: "/proofs", icon: "file", active: ["proofs", "proof", "receipt", "event", "invite", "finalize", "complete", "create", "scan"] },
+    { label: "Packing Station", href: "/station", icon: "camera", active: ["station"] },
+    { label: "Orders", href: "/fulfillment", icon: "box", active: ["fulfillment", "fulfillment-detail"] },
+    { label: "Integrations", href: "/stores", icon: "plug", active: ["stores"] },
+    { label: "Uploads", href: "/uploads", icon: "upload", active: ["uploads"] },
+    { label: "Notifications", href: "/activity", icon: "bell", active: ["activity", "invitation"] },
+    { label: "Settings", href: "/account", icon: "settings", active: ["account", "developer"] },
+    ...(props.adminAllowed ? [{ label: "Admin", href: "/admin", icon: "grid", active: ["admin"] }] : []),
   ];
-  return (
-    <><header className="workspace-mobile-top" onKeyDown={event => { if (event.key === "Escape") setMobileOpen(false); }}><button ref={mobileTrigger} className="icon-button" aria-label={mobileOpen ? "Close workspace menu" : "Open workspace menu"} aria-expanded={mobileOpen} aria-controls="workspace-navigation" onClick={() => setMobileOpen(!mobileOpen)}><Glyph name={mobileOpen ? "close" : "menu"} /></button><Brand /></header><aside id="workspace-navigation" className={`workspace-nav ${collapsed ? "is-collapsed" : ""} ${mobileOpen ? "mobile-expanded" : ""}`} onKeyDown={event => { if (event.key === "Escape") { setMobileOpen(false); mobileTrigger.current?.focus(); } }}><Brand />
-      <div className="workspace-switcher"><span>{(props.session.displayName || "P").slice(0,1).toUpperCase()}</span><div><strong>Personal workspace</strong><small>Your shipment records</small></div></div>
-      <span className="workspace-label">Workspace</span>
-      <nav className="workspace-links" aria-label="Workspace">{links.map(link => <a key={link.href} href={link.href} title={link.label} aria-current={link.active.includes(props.currentRoute || "home") ? "page" : undefined} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigate(link.href); } }}><Glyph name={link.icon} size={18} /><span className="workspace-link-label">{link.label}</span>{link.href === "/activity" && props.invitationCount > 0 ? <span className="nav-count">{props.invitationCount}</span> : null}</a>)}</nav>
-      <details className="account-menu"><summary aria-label="Account menu"><span className="account-menu-label" hidden={collapsed}>{props.session.displayName || "Your account"}</span><Glyph name="settings" size={17} /></summary><nav className="account-menu-items" aria-label="Account">
-        <a href="/account" onClick={e => { e.preventDefault(); navigate("/account"); }}>Account settings</a>
-        <a href="/developer" onClick={e => { e.preventDefault(); navigate("/developer"); }}>Developer tools</a>
-        <a href="/contact">Help &amp; feedback</a>
-      </nav></details>
-      <div className="sidebar-tools"><button type="button" className="sidebar-theme" onClick={() => setPreference(scheme === "dark" ? "light" : "dark")} aria-label={`Switch to ${scheme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${scheme === "dark" ? "light" : "dark"} theme`}><Glyph name={scheme === "dark" ? "sun" : "moon"} size={18} /><span>{scheme === "dark" ? "Light appearance" : "Dark appearance"}</span></button><button className="sidebar-collapse icon-button" onClick={toggleCollapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}><Glyph name="panel" size={18} /></button></div>
-
-    </aside></>
-  );
+  const brand = <><span className="workstation-brand-symbol"><WorkstationIcon name="shield" size={28} /><i /></span><span>PackProof<small>WEB WORKSPACE</small></span></>;
+  return <>
+    <header className="workstation-mobile-top"><button ref={trigger} type="button" className="workstation-icon-button" aria-label={mobileOpen ? "Close workspace menu" : "Open workspace menu"} aria-expanded={mobileOpen} aria-controls="workspace-navigation" onClick={() => mobileOpen ? close() : setMobileOpen(true)}><WorkstationIcon name={mobileOpen ? "close" : "menu"} /></button><a href="/app" className="workstation-brand" onClick={e => { e.preventDefault(); navigate("/app"); }}>{brand}</a></header>
+    {mobileOpen && <button className="workstation-nav-backdrop" aria-label="Close workspace menu" onClick={close} tabIndex={-1} />}
+    <aside ref={drawer} id="workspace-navigation" className={`workstation-nav ${mobileOpen ? "is-open" : ""}`} aria-label="Workspace navigation" onKeyDown={event => {
+      if (event.key === "Escape" && mobileOpen) { event.preventDefault(); close(); }
+      if (event.key === "Tab" && mobileOpen) {
+        const nodes = drawer.current?.querySelectorAll<HTMLElement>(".workstation-links a, .workstation-nav-bottom button:not(:disabled)");
+        if (!nodes?.length) return;
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }}>
+      <a href="/app" className="workstation-brand" onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigate("/app"); } }}>{brand}</a>
+      <nav aria-label="Workspace" className="workstation-links">{links.map(link => <a key={link.href} href={link.href} aria-current={link.active.includes(props.currentRoute || "home") ? "page" : undefined} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigate(link.href); } }}><WorkstationIcon name={link.icon} size={18} /><span>{link.label}</span>{link.href === "/activity" && props.invitationCount > 0 && <small className="workstation-nav-count">{props.invitationCount}</small>}</a>)}</nav>
+      <div className="workstation-nav-bottom">
+        <button type="button" className="workstation-appearance" onClick={() => setPreference(scheme === "dark" ? "light" : "dark")} aria-label={`Switch to ${scheme === "dark" ? "light" : "dark"} theme`}><WorkstationIcon name={scheme === "dark" ? "sun" : "moon"} size={16} /><span>{scheme === "dark" ? "Light appearance" : "Dark appearance"}</span></button>
+        <div className="workstation-connectivity"><i className={online ? "online" : "offline"} />Browser {online ? "online" : "offline"}</div>
+        <div className="workstation-profile"><button type="button" className="workstation-profile-open" onClick={() => { setMobileOpen(false); props.onOpenAccount(); }} aria-label="Open account settings"><span className="workstation-avatar">{(props.session.displayName || props.session.username || "P").slice(0, 1).toUpperCase()}</span><span><strong>{props.session.displayName || "Your account"}</strong><small>@{props.session.username || "packproof"}</small></span></button>{props.onSignOut && <button type="button" className="workstation-icon-button" onClick={props.onSignOut} aria-label="Sign out" title="Sign out"><WorkstationIcon name="logout" size={17} /></button>}</div>
+      </div>
+    </aside>
+  </>;
 }

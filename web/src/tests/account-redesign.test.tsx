@@ -36,7 +36,7 @@ describe("consolidated sales channels", () => {
   it("retains an unhealthy existing provider and does not claim a failed sync is an empty account", () => {
     render(<ConnectedAccountsPanel accounts={[{ ...account, status: "NEEDS_REAUTH" }]} providers={[{ ...provider, enabled: false }]} connections={[{ ...connection, lastErrorCode: "UPSTREAM_UNAVAILABLE" }]} notice={null} busy={false} onConnect={vi.fn()} onReauthorize={vi.fn()} onDisconnect={vi.fn()} onAutomation={vi.fn()} onSync={vi.fn()} />);
     expect(screen.getByRole("article", { name: "Etsy" })).toBeInTheDocument();
-    expect(screen.getByText(/temporarily unavailable/)).toBeInTheDocument();
+    expect(screen.getByText("Etsy is temporarily unavailable. Your existing connection remains listed here.")).toBeVisible();
     expect(screen.getByText(/latest order check could not finish/)).toBeInTheDocument();
     expect(screen.getByRole("checkbox")).toBeDisabled();
     expect(screen.queryByText(/UPSTREAM_UNAVAILABLE|No commerce connections/)).not.toBeInTheDocument();

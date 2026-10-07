@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../App";
 import { PackProofApi } from "../api/client";
@@ -18,9 +18,13 @@ const json = (value: unknown) => new Response(JSON.stringify(value), { headers: 
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, "", "/proofs"); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it("replaces legacy routes while preserving canonical identities and list parameters", () => {
-  for (const path of ["/app", "/home", "/overview", "/activity"]) expect(canonicalWorkspacePath(path)).toBe("/proofs");
+  for (const path of ["/app", "/home", "/overview"]) expect(canonicalWorkspacePath(path)).toBe("/app");
+  expect(canonicalWorkspacePath("/activity")).toBe("/activity");
+  expect(canonicalWorkspacePath("/orders?q=camera")).toBe("/fulfillment?q=camera");
+  expect(canonicalWorkspacePath("/notifications")).toBe("/activity");
+  expect(canonicalWorkspacePath("/station")).toBe("/station");
   expect(canonicalWorkspacePath("/fulfillment/proof-7?q=camera")).toBe("/proofs/proof-7?q=camera");
-  expect(canonicalWorkspacePath("/station?proof=proof-7&reference=ORD-8")).toBe("/proofs/proof-7?reference=ORD-8");
+  expect(canonicalWorkspacePath("/station?proof=proof-7&reference=ORD-8")).toBe("/proofs/proof-7/capture?reference=ORD-8");
   expect(canonicalWorkspacePath("/proofs/proof-7/complete")).toBe("/proofs/proof-7");
   expect(canonicalWorkspacePath("/p/existing-share-token")).toBe("/p/existing-share-token");
   rememberProofListState("account-a", { view: "attention", query: "private title" });
@@ -43,16 +47,29 @@ it("loads search matches beyond the first server page and rejects a broken pagin
   fetchMock.mockImplementation(async () => json({ proofs: [summary], nextOffset: 0 }));
   await expect(api.listProofs({ view: "all", q: "camera" })).rejects.toThrow("could not be loaded completely");
 });
-it("opens Proofs directly with one creation action and only Proofs and Connections in primary navigation", async () => {
+it("opens the workspace Home with one creation action and the desktop navigation", async () => {
   saveSession({ apiBaseUrl: "", authMode: "dev", userId: "navigation-test", username: "seller", displayName: "Seller", token: "test-token", refreshToken: null, accessExpiresAt: null, subject: "seller" });
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).includes("/me/proofs?") ? json({ proofs: [summary], nextOffset: null }) : json({ proofs: [], invitations: [] })));
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/me/proofs?")) return json({ proofs: [summary], nextOffset: null });
+    if (url.includes("/me/fulfillment-queue")) return json({ items: [] });
+    if (url.includes("/me/integration-connections")) return json({ connections: [] });
+    return json({ invitations: [] });
+  }));
   window.history.replaceState({}, "", "/app");
   render(<App />);
   expect(await screen.findByRole("button", { name: /Vintage camera. Recording needed. Record packing/ })).toBeVisible();
+  expect(window.location.pathname).toBe("/app");
+  expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "New Proof" })).toHaveLength(1);
+  const navigation = within(screen.getByRole("navigation", { name: "Workspace" }));
+  expect(navigation.getAllByRole("link").map(link => link.textContent)).toEqual(["Home", "Proofs", "Packing Station", "Orders", "Integrations", "Uploads", "Notifications", "Settings"]);
+  expect(navigation.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
+  await userEvent.click(navigation.getByRole("link", { name: "Proofs" }));
+  expect(await screen.findByRole("button", { name: /Vintage camera. Recording needed. Record packing/ })).toBeVisible();
   expect(window.location.pathname).toBe("/proofs");
   expect(screen.getAllByRole("button", { name: "New Proof" })).toHaveLength(1);
-  expect(screen.getByRole("link", { name: "Connections" })).toBeInTheDocument();
-  expect(screen.queryByRole("link", { name: "Orders" })).not.toBeInTheDocument();
+  expect(navigation.getByRole("link", { name: "Proofs" })).toHaveAttribute("aria-current", "page");
   expect(screen.queryByRole("link", { name: "Overview" })).not.toBeInTheDocument();
 });
 const listProps = { proofs: [], view: "all" as const, query: "", loading: false, error: null, onChange: vi.fn(), onRetry: vi.fn(), onOpenProof: vi.fn(), onOpenInvitation: vi.fn(), onOpenReceiver: vi.fn(), onCreate: vi.fn() };

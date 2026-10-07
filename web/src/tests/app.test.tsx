@@ -334,7 +334,7 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByRole("heading", { name: "Proofs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Vintage camera")).length).toBeGreaterThan(0);
     expect(screen.getByText("Recording needed")).toBeInTheDocument();
-    expect(screen.getByText("Order ORD-48392")).toBeInTheDocument();
+    expect(screen.getByText("ORD-48392")).toBeInTheDocument();
     expect(screen.queryByText("PackProof fact")).not.toBeInTheDocument();
   });
 
@@ -600,11 +600,12 @@ describe("PackProof web reference client", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.split("?")[0].endsWith("/me/proofs")) return json({ proofs: [{ ...summary, proofId: item.proofId, transaction: { ...summary.transaction, itemTitle: "Nikon F3 Camera", externalReference: item.externalReference } }] });
+      if (url.split("?")[0].endsWith("/me/fulfillment-queue")) return json({ items: [item] });
       if (url.endsWith(`/proofs/${item.proofId}`)) return json(proof);
       return originalFetch(input, init);
     }));
     window.history.replaceState(null, "", "/app"); render(<App />);
-    await userEvent.click(await screen.findByRole("button", { name: /Nikon F3 Camera/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Nikon F3 Camera. Recording needed. Record packing" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Nikon F3 Camera" })).toBeInTheDocument();
     expect(window.location.pathname).toBe(`/proofs/${item.proofId}`);
@@ -906,8 +907,8 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Connections" }));
-    expect(await screen.findByRole("heading", { name: "Connections" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("link", { name: "Integrations" }));
+    expect(await screen.findByRole("heading", { name: "Integrations" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Demo Storefront" })).toBeInTheDocument();
     expect(screen.getByText(/6 orders ready/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check for orders now" }));
@@ -915,7 +916,7 @@ describe("PackProof web reference client", () => {
     expect(screen.queryByText(/icn_/)).not.toBeInTheDocument();
   });
 
-  it("connects an eBay sales channel without exposing secrets or offering identity-only accounts", async () => {
+  it("connects an eBay sales channel without exposing secrets and keeps identity-only sales-channel actions disabled", async () => {
     signInSession();
     const assign = vi.fn();
     vi.stubGlobal("location", {
@@ -969,11 +970,12 @@ describe("PackProof web reference client", () => {
     );
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("link", { name: "Connections" }));
-    expect(await screen.findByRole("heading", { name: "Connections" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Connect Google" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Connect Meta" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect Shopify" })).toBeDisabled();
+    await user.click(await screen.findByRole("link", { name: "Integrations" }));
+    expect(await screen.findByRole("heading", { name: "Integrations" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect Google" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Connect Meta" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Connect Shopify" }));
+    expect(screen.getByRole("button", { name: "Continue to Shopify" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Connect eBay" }));
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(

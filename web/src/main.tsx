@@ -37,3 +37,4 @@ if (canonicalPath === "/delete-account") {
     </StrictMode>,
   );
 }
+import "./workspace/workstation.css";

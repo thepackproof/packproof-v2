@@ -25,6 +25,8 @@ import {
 import { normalizeStationReference } from "../../../mobile/src/packing-station/scan";
 import type { StationCandidate, StationEvent, StationState } from "../../../mobile/src/packing-station/types";
 import { recoverStationCapture, saveStationCapture, updateStationCaptureScans, stationCaptureKey, type PendingStationCapture } from "../capture-queue";
+import { IconChevron, IconCube } from "../components/Icons";
+import "./workstation-tools.css";
 
 
 export function PackingStationScreen(props: {
@@ -53,6 +55,7 @@ export function PackingStationScreen(props: {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [shipmentReference, setShipmentReference] = useState("");
   const engineRef = useRef<EngineSession|null>(null);
   const engineJournalRef = useRef<BrowserCaptureJournal|null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -703,19 +706,23 @@ export function PackingStationScreen(props: {
     await processVideo(heldBlob, heldBlob.type || "video/webm", previewUrl ?? "blob:held");
   }
 
-  return <main className="page packing-page">
-    <div className="section-head"><h1 className="page-title">{heldBlob ? "Review recording" : state.order ? state.order.itemSummary : "Pack multiple orders"}</h1></div>
-    {state.order ? <p className="meta">{state.order.orderLabel}</p> : <p>Finish one package, then move to the next.</p>}
-    {state.order && <RemainingShipmentNotice value={state.order.fulfillmentScope ? state.order : intakeSnapshot.current?.proofId === state.order.proofId ? intakeSnapshot.current : state.order} />}
+  const canSelectShipment = !busy && (state.phase === "READY" || state.phase === "RECOVERY" && !state.capture);
+  const stationStep = heldBlob || state.phase === "PROCESSING" || state.phase === "PROOF_CREATED" ? 3 : state.order ? 2 : 1;
+  return <main className="page packing-page ws-station-page">
+    <header className="ws-tools-heading"><p className="ws-tools-eyebrow">Fulfillment capture</p><h1 className="page-title">Packing Station</h1><p className="ws-tools-subtitle">One continuous recording. From item to sealed shipment.</p></header>
     {props.error || localError || state.error ? <p role="alert" className="banner banner-error">{state.error?.message || localError || props.error}</p> : null}
-    {(state.phase === "READY" || state.phase === "RECOVERY" && !state.capture) ? <div className="order-list">
-      {candidates.map(item => <button type="button" className="order-row" key={item.proofId} disabled={busy} onClick={() => void identify("QUEUE_SELECT",item.orderLabel,item.transactionId)}><span className="order-row-copy"><strong>{item.itemSummary}</strong><span>{item.orderLabel}</span></span><span>Ready to pack</span></button>)}
-      {!candidates.length ? <p>{savedIds.size ? "You’re caught up" : "No orders ready to pack"}</p> : null}
-    </div> : null}
+    <div className="ws-station-layout">
+    <section className="ws-station-main" aria-label="Packing capture">
+    <ol className="ws-station-steps" aria-label="Packing progress">{["Select shipment", "Record packing", "Confirm & submit"].map((step, index) => <li key={step} aria-current={stationStep === index + 1 ? "step" : undefined}><span>0{index + 1}</span><strong>{step}</strong></li>)}</ol>
+    <div className={`ws-camera-surface${state.phase === "RECORDING" ? " is-recording" : ""}`} hidden={!!heldBlob || state.phase === "PROCESSING" || state.phase === "PROOF_CREATED"}>
     <video ref={videoRef} className={state.phase === "READY_TO_RECORD" || state.phase === "RECORDING" ? "packing-preview" : "visually-hidden"} muted playsInline autoPlay aria-label="Packing camera preview" />
-    {state.phase === "READY_TO_RECORD" ? <><p>Keep the item and package in view as you pack and seal it. Show the shipping label during the recording.</p><button className="btn" type="button" disabled={busy || !cameraReady} onClick={() => void startPacking()}>{busy ? "Preparing…" : "Record packing"}</button>{!cameraReady && localError ? <button className="btn btn-secondary" onClick={() => void prepareCamera()}>Try camera again</button> : null}</> : null}
-    {state.phase === "RECORDING" ? <><p role="status">● Recording · {Math.floor(elapsed/60)}:{String(elapsed%60).padStart(2,"0")}</p>{labelNotice ? <p aria-live="polite">{labelNotice}</p> : null}<button className="btn" type="button" disabled={busy} onClick={() => { void finishPacking(); }}>Finish recording</button></> : null}
-    {previewUrl && heldBlob ? <div className="stack"><video src={previewUrl} controls playsInline className="packing-preview" aria-label="Recorded packing video" />
+    {!cameraReady && <div className="ws-camera-placeholder"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="m15 10 6-3v10l-6-3" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg><h2>{state.order ? "Prepare your packing camera" : "Ready for your next shipment"}</h2><p>{state.order ? "Allow camera access in your browser to see the live preview." : "Select an order or find your shipment to open the camera preview."}</p></div>}
+    <div className="ws-camera-overlay"><span>{state.phase === "RECORDING" ? "● Recording" : cameraReady ? "Live preview" : "Camera preview"}</span><span>{Math.floor(elapsed/60)}:{String(elapsed%60).padStart(2,"0")}</span></div>
+    </div>
+    {state.phase === "READY_TO_RECORD" ? <div className="ws-camera-actions"><div><strong>{cameraReady ? "Camera ready" : "Waiting for camera"}</strong><p>Keep the item and package in view as you pack and seal it. Show the shipping label during the recording.</p></div><div className="ws-camera-buttons"><button className="btn" type="button" disabled={busy || !cameraReady} onClick={() => void startPacking()}>{busy ? "Preparing…" : "Record packing"}</button>{!cameraReady && localError ? <button type="button" className="btn btn-secondary" onClick={() => void prepareCamera()}>Try camera again</button> : null}</div></div> : null}
+    {state.phase === "RECORDING" ? <div className="ws-camera-actions"><div><p role="status">● Recording · {Math.floor(elapsed/60)}:{String(elapsed%60).padStart(2,"0")}</p>{labelNotice ? <p aria-live="polite">{labelNotice}</p> : null}</div><button className="btn" type="button" disabled={busy} onClick={() => { void finishPacking(); }}>Finish recording</button></div> : null}
+    {stationStep === 1 ? <div className="ws-camera-actions"><div><strong>Select a shipment to begin</strong><p>Finish one package, then move to the next.</p></div></div> : null}
+    {previewUrl && heldBlob ? <div className="stack ws-station-review"><h2>Review recording</h2><video src={previewUrl} controls playsInline className="packing-preview" aria-label="Recorded packing video" />
       {interruptedRef.current ? <p className="banner">This recording was interrupted. Review what was recorded; missing footage remains missing.</p> : null}
       <p>Recording saved in this browser. Keep this browser’s data until your Proof is saved.</p>
       <p>{scanResults.length ? "Label readings come from the camera preview. Check that the label is visible in the saved recording." : "We couldn’t read a shipping label automatically. Your video has been kept."}</p>
@@ -736,8 +743,17 @@ export function PackingStationScreen(props: {
     </div> : null}
     {state.phase === "PROCESSING" ? <p role="status">Finishing your Proof…{state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}</p> : null}
     {state.phase === "PROOF_CREATED" ? <section className="section stack"><h2>{state.completion === "FINALIZED" ? "Proof saved" : "Recording received"}</h2><p>{state.completion === "FINALIZED" ? "Packing record locked" : "Your Proof still needs attention before it can be locked."}</p><a className="btn" href={`/proofs/${encodeURIComponent(state.order?.proofId || "")}`}>View Proof</a>{state.completion === "FINALIZED" ? <button className="btn btn-secondary" onClick={() => dispatch({type:"RESET"})}>Pack next order</button> : null}</section> : null}
-    <details><summary>Remote camera controls</summary><RelayStationPanel api={props.api} userId={props.userId} queue={props.queue} localProofId={state.order?.proofId} localPhase={state.phase} onRole={setRelayRole} start={startPacking} finish={async()=>{await finishPacking();}} selectProof={async(id)=>{if(stateRef.current.phase==="RECORDING"||pendingRef.current)throw new Error("Finish saving the current recording before selecting another order.");(await beginStudy())?.event('order_selected');const proof=await props.api.getProof(id);const context=stationContextFromProof(proof);orderRef.current=context;dispatch({type:"RESTORE_LOCAL",state:{...initialStationState(),phase:"READY_TO_RECORD",order:context}});}}/>{relayRole === "CONTROLLER" ? <p>Recording is controlled on the connected camera.</p> : null}</details>
+    <details className="ws-remote-controls"><summary>Remote camera controls</summary><RelayStationPanel api={props.api} userId={props.userId} queue={props.queue} localProofId={state.order?.proofId} localPhase={state.phase} onRole={setRelayRole} start={startPacking} finish={async()=>{await finishPacking();}} selectProof={async(id)=>{if(stateRef.current.phase==="RECORDING"||pendingRef.current)throw new Error("Finish saving the current recording before selecting another order.");(await beginStudy())?.event('order_selected');const proof=await props.api.getProof(id);const context=stationContextFromProof(proof);orderRef.current=context;dispatch({type:"RESTORE_LOCAL",state:{...initialStationState(),phase:"READY_TO_RECORD",order:context}});}}/>{relayRole === "CONTROLLER" ? <p>Recording is controlled on the connected camera.</p> : null}</details>
     {props.onLeave ? <button className="btn btn-tertiary" disabled={busy || state.phase === "RECORDING"} onClick={props.onLeave}>Back to Proof</button> : null}
+    </section>
+    <aside className="ws-station-sidebar" aria-label="Shipment selection">
+      <section className="section ws-station-panel"><h2>Find your shipment</h2><form onSubmit={event => { event.preventDefault(); const reference = normalizeStationReference(shipmentReference); if (canSelectShipment && reference) void identify("REFERENCE", reference); }}><label className="visually-hidden" htmlFor="station-shipment-reference">Order or tracking reference</label><div className="ws-shipment-search"><input id="station-shipment-reference" placeholder="Scan or enter order / tracking" value={shipmentReference} onChange={event => setShipmentReference(event.target.value)} disabled={!canSelectShipment} /><button type="submit" aria-label="Find shipment" disabled={!canSelectShipment || !shipmentReference.trim()}><IconChevron /></button></div><p className="ws-station-help">Enter a reference or use a keyboard scanner.</p></form>
+      {state.order ? <div className="ws-selected-shipment"><p className="ws-tools-eyebrow">Selected shipment</p><h3>{state.order.itemSummary}</h3><p>{state.order.orderLabel}</p><dl><dt>Tracking</dt><dd>{state.order.trackingHint || "Not assigned"}</dd></dl><RemainingShipmentNotice value={state.order.fulfillmentScope ? state.order : intakeSnapshot.current?.proofId === state.order.proofId ? intakeSnapshot.current : state.order} /></div> : <p className="ws-station-help">Select a synchronized order or open a Proof to begin.</p>}
+      </section>
+      <section className="section ws-station-panel"><div className="ws-station-panel-heading"><h2>Next in queue</h2><span className="ws-provider-status">{candidates.length}</span></div><div className="ws-station-queue">{candidates.map(item => <button type="button" className="ws-station-order" key={item.proofId} disabled={!canSelectShipment} onClick={() => void identify("QUEUE_SELECT",item.orderLabel,item.transactionId)}><span><strong>{item.itemSummary}</strong><small>{item.orderLabel}</small></span><IconChevron /></button>)}{!candidates.length ? <div className="ws-station-empty"><IconCube /><strong>{savedIds.size ? "You’re caught up" : "No orders ready to pack"}</strong><p>Connect a marketplace or start a manual Proof.</p></div> : null}</div></section>
+      <p className="ws-station-preservation"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 7 3v6c0 4-7 9-7 9s-7-5-7-9V6l7-3Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg><span>Keep this browser’s data until your Proof is saved. PackProof confirms when submitted evidence has been received.</span></p>
+    </aside>
+    </div>
   </main>;
 
 }

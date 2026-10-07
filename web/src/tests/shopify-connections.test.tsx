@@ -33,22 +33,43 @@ describe("Shopify automatic Proof setup", () => {
   it("shows an enabled option and its scope before sending the seller's connection choice", async () => {
     const input = props();
     render(<ConnectedAccountsPanel {...input} />);
+    expect(screen.queryByRole("textbox", { name: "Shopify shop" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Connect Shopify" }));
     expect(screen.getByRole("checkbox", { name: SHOPIFY_AUTOMATIC_PROOFS_LABEL })).toBeChecked();
+    expect(screen.getByText(/Checks existing orders first/)).toBeVisible();
     expect(screen.getByText(/Checks existing orders first/)).toHaveTextContent(/one Proof per order/);
     expect(screen.getByText(/normally the last 60 days/)).toHaveTextContent(/record the packing and submit your attestation/);
     expect(input.onConnect).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Connect Shopify" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Continue to Shopify" })).toBeDisabled();
     await userEvent.type(screen.getByRole("textbox", { name: "Shopify shop" }), "collectibles.myshopify.com");
-    await userEvent.click(screen.getByRole("button", { name: "Connect Shopify" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue to Shopify" }));
     expect(input.onConnect).toHaveBeenCalledExactlyOnceWith("shopify", { shop: "collectibles.myshopify.com", autoSyncEnabled: true });
   });
 
   it("keeps an explicit opt-out when connecting", async () => {
     const input = props();
     render(<ConnectedAccountsPanel {...input} />);
+    await userEvent.click(screen.getByRole("button", { name: "Connect Shopify" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Shopify shop" }), "collectibles.myshopify.com");
     await userEvent.click(screen.getByRole("checkbox", { name: SHOPIFY_AUTOMATIC_PROOFS_LABEL }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue to Shopify" }));
+    expect(input.onConnect).toHaveBeenCalledExactlyOnceWith("shopify", { shop: "collectibles.myshopify.com", autoSyncEnabled: false });
+  });
+
+  it("cancels setup without authorization and preserves the entered store and opt-out", async () => {
+    const input = props();
+    render(<ConnectedAccountsPanel {...input} />);
     await userEvent.click(screen.getByRole("button", { name: "Connect Shopify" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Shopify shop" }), "collectibles.myshopify.com");
+    await userEvent.click(screen.getByRole("checkbox", { name: SHOPIFY_AUTOMATIC_PROOFS_LABEL }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("textbox", { name: "Shopify shop" })).not.toBeInTheDocument();
+    expect(input.onConnect).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Connect Shopify" }));
+    expect(screen.getByRole("textbox", { name: "Shopify shop" })).toHaveValue("collectibles.myshopify.com");
+    expect(screen.getByRole("checkbox", { name: SHOPIFY_AUTOMATIC_PROOFS_LABEL })).not.toBeChecked();
+    expect(screen.getByText(/Checks existing orders first/)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Continue to Shopify" }));
     expect(input.onConnect).toHaveBeenCalledExactlyOnceWith("shopify", { shop: "collectibles.myshopify.com", autoSyncEnabled: false });
   });
 
