@@ -131,3 +131,43 @@ regexes = [
   '''^cca65242\-3562\-4efb\-95dc\-7b69076eec54$''',
   '''^0d6aecc1\-c010\-48b3\-9333\-b5c015b66812$''',
 ]
+
+# Reviewed CI run 37779328754 / Source secrets job 113318132705.
+# These historical R&D files were removed before the UI candidate. Recomputed
+# all three digests from commit 08892e1: the schema digest covers its 17 input
+# files and generator; the other two hash exported public verification keys.
+# Require the exact source line as well as the exact path and named rule.
+# Gitleaks includes the preceding newline in its line target when present.
+[[allowlists]]
+description = "Recomputed historical generated R&D schema digest; no authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^packages/evidence\-contracts/generated\-client\.mjs$''']
+regexes = ['''^\n?export const RND_API_SCHEMA_DIGEST = "68e53c5043dbf4954572922dfba9235baf8d8060d5faf7e4682945cdd69e2d81";\r?$''']
+
+[[allowlists]]
+description = "Recomputed SHA-256 of the historical synthetic mTLS report's exported public verification key."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^research/federated/reports/2026\-10\-02\-mtls/SHA256SUMS\.json$''']
+regexes = ['''^\n?  "trust-key\.hex": "27c17660934a02f70366afe5db3caab2bf52ab11b743e81e796062a18663f20a"\r?$''']
+
+[[allowlists]]
+description = "Recomputed SHA-256 of the historical synthetic report's exported public verification key."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^research/federated/reports/2026\-10\-02/SHA256SUMS\.json$''']
+regexes = ['''^\n?  "trust-key\.hex": "482b76c2073bdc4dfdf3bd273127ae693bf1886f9ffb4a9c009f3d8a82674cdc"\r?$''']
+
+# Commit 3637c50 uses this literal UUID only to validate a fixture request's
+# idempotency-key schema. It is neither an access token nor a signing key.
+[[allowlists]]
+description = "Exact historical desktop schema-test fixture with a non-authenticating idempotency UUID."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^desktop/tests/surface\-research\.test\.ts$''']
+regexes = ['''^\n?    const input = \{enrollmentId: 'e', observationId: 'o', requestedScope: 'label', idempotencyKey: 'e6da15d0-bc76-43cb-aac2-d923af3235a8'\};\r?$''']
