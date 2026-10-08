@@ -34,10 +34,10 @@ export function WorkspaceHeader({ section }: { section: string }) {
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
       <View style={styles.top}>
         <IconButton label="Open workspace menu" onPress={() => setMenuOpen(true)}><Ionicons name="menu-outline" size={24} color={colors.textPrimary} /></IconButton>
-        <PressableScale accessibilityRole="button" accessibilityLabel="PackProof Home" onPress={() => app.go("home")} style={styles.brand}>
+        <View style={styles.brandSlot}><PressableScale accessibilityRole="button" accessibilityLabel="PackProof Home" onPress={() => app.go("home")} style={styles.brand}>
           <View style={styles.mark}><Ionicons name="shield-outline" size={26} color={colors.logoBlue} /><View style={[styles.markDot, { backgroundColor: colors.logoGreen, borderColor: colors.background }]} /></View>
           <Text style={[styles.wordmark, { color: colors.textPrimary }]}>PackProof</Text>
-        </PressableScale>
+        </PressableScale></View>
         <IconButton label="Open settings" onPress={() => app.go("account")}><Ionicons name="person-circle-outline" size={28} color={colors.textSecondary} /></IconButton>
       </View>
       <View style={styles.breadcrumb}><Text style={[styles.eyebrow, { color: colors.textSecondary }]}>WORKSPACE</Text><Text style={[styles.section, { color: colors.textSecondary }]}>/  {section}</Text></View>
@@ -65,7 +65,8 @@ export function WorkspaceHeader({ section }: { section: string }) {
 const styles = StyleSheet.create({
   header: { gap: 12, paddingBottom: 14, borderBottomWidth: 1 },
   top: { flexDirection: "row", alignItems: "center", gap: 4 },
-  brand: { flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9 },
+  brandSlot: { flex: 1 },
+  brand: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9 },
   mark: { width: 28, height: 28 },
   markDot: { position: "absolute", width: 7, height: 7, borderRadius: 4, borderWidth: 2, right: 1, bottom: 3 },
   wordmark: { ...typography.sectionTitle, fontSize: 21, lineHeight: 28 },

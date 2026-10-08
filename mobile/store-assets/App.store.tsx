@@ -118,9 +118,9 @@ function Screens(){
   readOrdersView:()=>({query:'',offsetY:0}),saveOrdersView:noop,openOrder:resolved,setError:noop,loadConnections:resolved,loadConnectedAccounts:resolved,displayNameInput:'Alex Morgan',usernameInput:'alexmorgan',connectConnectedAccount:resolved,
   }),[scene,form,library]);
   if(!theme.hydrated)return null;
-  return <PackProofContext.Provider value={value}><View style={{flex:1,backgroundColor:theme.colors.background}}><StatusBar style={theme.scheme==='dark'?'light':'dark'}/><SceneBoundary key={`${scene}:${theme.scheme}`}>
+  return <PackProofContext.Provider value={value}><View style={{flex:1,backgroundColor:theme.colors.background}}><StatusBar style={theme.scheme==='dark'?'light':'dark'}/><View style={styles.scene}><SceneBoundary key={`${scene}:${theme.scheme}`}>
     {scene==='home'?<WorkspaceHomeScreen/>:scene==='orders'?<WorkspaceOrdersScreen/>:scene==='station'?<WorkspaceOrdersScreen station/>:scene==='integrations'?<AccountScreen initialSection="channels"/>:scene==='library'?<MyProofsScreen/>:scene==='create'?<ManualCreateScreen/>:<ProofDetailScreen key={scene}/>}
-    </SceneBoundary><View pointerEvents="none" style={[styles.sampleLabel,{bottom:Math.max(insets.bottom,8),backgroundColor:theme.colors.surfaceElevated,borderColor:theme.colors.border}]}><Text style={[styles.sampleText,{color:theme.colors.textSecondary}]}>DESIGN REVIEW · SAMPLE DATA</Text></View></View></PackProofContext.Provider>;
+    </SceneBoundary></View><View pointerEvents="none" style={[styles.sampleFooter,{paddingBottom:Math.max(insets.bottom,8)}]}><View style={[styles.sampleLabel,{backgroundColor:theme.colors.surfaceElevated,borderColor:theme.colors.border}]}><Text style={[styles.sampleText,{color:theme.colors.textSecondary}]}>DESIGN REVIEW · SAMPLE DATA</Text></View></View></View></PackProofContext.Provider>;
 }
 export default function StoreScreenshots(){return <SafeAreaProvider><ThemeProvider><Screens/></ThemeProvider></SafeAreaProvider>;}
-const styles=StyleSheet.create({sampleLabel:{position:'absolute',alignSelf:'center',paddingVertical:5,paddingHorizontal:10,borderWidth:1,borderRadius:6},sampleText:{fontFamily:'Inter-SemiBold',fontSize:9,lineHeight:13,letterSpacing:.8}});
+const styles=StyleSheet.create({scene:{flex:1,minHeight:0},sampleFooter:{alignItems:'center',paddingTop:5,paddingHorizontal:12},sampleLabel:{paddingVertical:5,paddingHorizontal:10,borderWidth:1,borderRadius:6},sampleText:{fontFamily:'Inter-SemiBold',fontSize:9,lineHeight:13,letterSpacing:.8}});

@@ -73,6 +73,7 @@ jobs:
       - run: npm run test:ios
       - run: npm run test:proof-record
       - run: npm run test:recovery
+      - run: node --test tests/font-assets.test.cjs
       - name: Prepare isolated screenshot entry point
         env:
           PACKPROOF_STORE_SCREENSHOTS: '1'
@@ -80,7 +81,11 @@ jobs:
       - name: Verify cached simulator native sources
         run: |
           git fetch origin b3553f740034190e27c31588c2a57e8bdad2ebd1
-          git diff --exit-code b3553f740034190e27c31588c2a57e8bdad2ebd1 HEAD -- package.json package-lock.json app.config.js plugins modules assets
+          # These three faces are loaded by ThemeProvider.useFonts and copied by
+          # export:embed below. The bare expo-font plugin embeds no native fonts.
+          # Keep the native configuration, dependencies, modules, icons, and all
+          # other assets pinned; this exception is only for runtime font bytes.
+          git diff --exit-code b3553f740034190e27c31588c2a57e8bdad2ebd1 HEAD -- package.json package-lock.json app.config.js plugins modules assets ':(exclude)assets/fonts/Inter-Regular.ttf' ':(exclude)assets/fonts/Inter-SemiBold.ttf' ':(exclude)assets/fonts/Inter-Bold.ttf'
       - uses: actions/download-artifact@v4
         with:
           name: packproof-ios-simulator-b3553f740034190e27c31588c2a57e8bdad2ebd1
