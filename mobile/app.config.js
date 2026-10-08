@@ -26,9 +26,9 @@ const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
 const iosBuildNumber = env("PACKPROOF_IOS_BUILD_NUMBER", "1");
 if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUMBER must be a positive integer");
-const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "55"));
-if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 52 || androidVersionCode > 2100000000)
-  throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 51");
+const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "56"));
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 53 || androidVersionCode > 2100000000)
+  throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 52");
 
 if (isRelease) {
   if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");

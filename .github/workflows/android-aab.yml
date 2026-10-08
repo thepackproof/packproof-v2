@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   build:
-    name: Signed internal AAB
+    name: Signed Android release AAB
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -57,6 +57,9 @@ jobs:
           npm run test:recovery
           npm run test:intake
           npm run test:build-security
+          npm run test:redesign
+          node --test tests/font-assets.test.cjs
+          node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/workspace-summary.test.ts
           node <<'NODE'
           const fs = require('fs');
           const { expo } = require('./app.config.js');

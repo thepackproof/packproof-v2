@@ -24,7 +24,7 @@
       "extends": "internal-staging",
       "env": {
         "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true",
-        "PACKPROOF_ANDROID_VERSION_CODE": "55"
+        "PACKPROOF_ANDROID_VERSION_CODE": "56"
       }
     },
     "ios-testflight": {

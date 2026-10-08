@@ -8,4 +8,4 @@ Keep the existing EAS project and remote signing credentials. Do not create a re
 
 Validate authentication through the release workflow or the existing authorized CodeBuild secret injection. A failure at Expo sign-in is distinct from signing-credential availability, artifact validation, or store review.
 
-The onboarding candidate uses Android version code 55. EAS history confirmed successful codes 52, 53, and 54; the previous repository default of 52 must not be reused. The shipping profile pins 55 on the remote builder as well as the local configuration.
+The workstation UI Android candidate uses version code 56. On October 8, 2026, the authenticated Play Console showed production version 1.0.1 (52) available at full rollout, with 52 also the latest uploaded app bundle. EAS build history previously used codes 52 through 55; build history does not establish Play publication. The shipping profile pins 56 on the remote builder as well as the local configuration. The user authorized Android production publication while explicitly holding iOS until Apple's current review completes; do not dispatch an iOS build or submission for this release.
