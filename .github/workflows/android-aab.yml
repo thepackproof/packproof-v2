@@ -86,6 +86,9 @@ jobs:
             console.error('EAS did not finish a signed Android App Bundle.');
             process.exit(1);
           }
+          if (build.gitCommitHash !== process.env.GITHUB_SHA) {
+            throw new Error('EAS build source revision does not match the requested GitHub commit.');
+          }
           fs.writeFileSync('dist/aab-url.txt', url + '\n');
           NODE
           curl --fail --location "$(cat dist/aab-url.txt)" --output "dist/${{ steps.release.outputs.artifact }}.aab"
