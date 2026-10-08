@@ -23,7 +23,7 @@ export function visibleLocalOrders(rows: SharedOrderReceipt[], accountId: string
 }
 /** Capture/attestation/review stay in control even if a share or link arrives mid-render. */
 export function canNavigateForIntake(input: { ready: boolean; accountId: string | null; route: AppRouteName; busy: boolean; captureStatus: string }): boolean {
-  return input.ready && !!input.accountId && !input.busy && !['capturing', 'preparing'].includes(input.captureStatus) && ['home', 'orders', 'create', 'intake'].includes(input.route);
+  return input.ready && !!input.accountId && !input.busy && !['capturing', 'preparing'].includes(input.captureStatus) && ['home', 'proofs', 'orders', 'create', 'intake'].includes(input.route);
 }
 export function maySubmitLocalOrder(order: SharedOrderReceipt, accountId: string | null): boolean {
   return !!accountId && order.accountId === accountId && order.deliveryState === 'LOCAL_PENDING' && !order.errorCode;

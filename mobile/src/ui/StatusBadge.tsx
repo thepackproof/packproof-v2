@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ComponentProps } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { radii, spacing, typography } from "../theme/tokens";
+import { spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { motion } from "../theme/motion";
 import { statusTone, type StatusTone } from "../copy/status-tone";
@@ -119,9 +119,9 @@ export function IntegrityMark(props: { state: IntegrityState; label?: string }) 
 const styles = StyleSheet.create({
   badge: {
     flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", maxWidth: "100%",
-    borderRadius: radii.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, borderWidth: 1,
+    borderRadius: 6, paddingHorizontal: spacing.sm, paddingVertical: 5, borderWidth: 0,
   },
-  label: { ...typography.caption, flexShrink: 1 },
+  label: { ...typography.finePrint, fontFamily: "Inter-SemiBold", fontWeight: "600", flexShrink: 1 },
   integrity: { width: 24, height: 24, alignItems: "center", justifyContent: "center" },
   halo: { ...StyleSheet.absoluteFillObject, borderWidth: 1, borderRadius: 999 },
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { radii, spacing, typography } from "../theme/tokens";
+import { radii, sizes, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { motion, shouldUseLargeMotion } from "../theme/motion";
 import { haptic } from "../theme/haptics";
@@ -42,7 +42,7 @@ export function SegmentedTabs<T extends string>(props: {
 
   return (
     <View
-      style={[styles.track, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      style={styles.track}
       accessibilityRole="tablist"
       onLayout={onLayout}
     >
@@ -53,8 +53,7 @@ export function SegmentedTabs<T extends string>(props: {
             styles.pill,
             {
               width: segmentWidth,
-              backgroundColor: colors.surfaceElevated,
-              borderBottomColor: colors.accent,
+              backgroundColor: colors.accentSoft,
               transform: [{ translateX: translate }],
             },
           ]}
@@ -75,8 +74,8 @@ export function SegmentedTabs<T extends string>(props: {
             accessibilityState={{ selected }}
             style={styles.tab}
           >
-            {fontScale < 1.4 ? <Ionicons name={option.icon} size={16} color={selected ? colors.textPrimary : colors.textSecondary} /> : null}
-            <Text style={[styles.label, { color: selected ? colors.textPrimary : colors.textSecondary }]}>
+            {fontScale < 1.4 ? <Ionicons name={option.icon} size={16} color={selected ? colors.accentText : colors.textSecondary} /> : null}
+            <Text style={[styles.label, { color: selected ? colors.accentText : colors.textSecondary }]}>
               {option.label}
             </Text>
           </Pressable>
@@ -93,7 +92,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     overflow: "hidden",
     position: "relative",
-    minHeight: 48,
+    minHeight: sizes.touch,
   },
   pill: {
     position: "absolute",
@@ -105,7 +104,7 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    minHeight: 48,
+    minHeight: sizes.touch,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

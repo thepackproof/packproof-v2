@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from "react-native";
-import { radii, spacing, typography } from "../theme/tokens";
+import { radii, sizes, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 
 export function FormField(props: {
@@ -28,6 +28,7 @@ export function FormField(props: {
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
         placeholderTextColor={colors.textMuted}
+        selectionColor={colors.accent}
         secureTextEntry={props.secureTextEntry}
         autoCapitalize={props.autoCapitalize ?? "none"}
         autoCorrect={false}
@@ -55,7 +56,7 @@ const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
   label: { ...typography.secondaryStrong },
   input: {
-    minHeight: 48,
+    minHeight: sizes.touch,
     borderWidth: 1,
     borderRadius: radii.md,
     paddingHorizontal: spacing.lg,

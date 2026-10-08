@@ -17,8 +17,8 @@ export function AvatarButton(props: {
       accessibilityLabel={props.notify ? "Account, pending invitations" : "Account"}
       style={styles.wrap}
     >
-      <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-        <Text style={[styles.initials, { color: colors.textOnPrimary }]}>
+      <View style={[styles.avatar, { backgroundColor: colors.accentSoft }]}>
+        <Text style={[styles.initials, { color: colors.accentText }]}>
           {profileInitials(props.displayName, props.username)}
         </Text>
       </View>

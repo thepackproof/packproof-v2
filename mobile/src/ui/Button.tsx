@@ -63,13 +63,16 @@ export function IconButton(props: {
   disabled?: boolean;
   children: ReactNode;
 }) {
+  const { colors } = useTheme();
   return (
     <PressableScale
       onPress={props.onPress}
       disabled={props.disabled}
       accessibilityRole="button"
       accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
       hitSlop={8}
+      pressedStyle={{ backgroundColor: colors.surfacePressed, opacity: 1 }}
       style={[styles.icon, props.disabled ? { opacity: 0.45 } : null]}
     >
       <View>{props.children}</View>
@@ -83,9 +86,9 @@ function buttonPalette(
 ): { background: string; foreground: string; border: string; borderWidth: number } {
   switch (variant) {
     case "secondary":
-      return { background: colors.surfaceElevated, foreground: colors.textPrimary, border: colors.surfaceElevated, borderWidth: 0 };
+      return { background: colors.surface, foreground: colors.textPrimary, border: colors.controlBorder, borderWidth: 1 };
     case "tertiary":
-      return { background: "transparent", foreground: colors.textPrimary, border: "transparent", borderWidth: 0 };
+      return { background: "transparent", foreground: colors.accentText, border: "transparent", borderWidth: 0 };
     case "success":
       return { background: colors.primary, foreground: colors.textOnPrimary, border: colors.primary, borderWidth: 0 };
     case "destructive":

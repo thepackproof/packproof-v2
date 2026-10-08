@@ -18,9 +18,15 @@ import {
   systemBarContent,
 } from "../../mobile/src/theme/appearance.ts";
 import { APPEARANCE_STORAGE_KEY } from "../../mobile/src/theme/appearance.ts";
-import { colorsForScheme, darkColors, lightColors } from "../../mobile/src/theme/tokens.ts";
+import { colorsForScheme, darkColors, lightColors, sizes, typography } from "../../mobile/src/theme/tokens.ts";
 import { motionDuration, shouldUseLargeMotion } from "../../mobile/src/theme/motion.ts";
 import { shouldRestoreCachedSession } from "../../mobile/src/runtime-config.ts";
+
+const luminance = (hex: string) => {
+  const channels = hex.slice(1).match(/.{2}/g)!.map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+};
+const contrast = (a: string, b: string) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
 
 describe("mobile appearance and theme tokens", () => {
   it("defaults unselected or invalid appearance to light and preserves explicit choices", () => {
@@ -40,45 +46,54 @@ describe("mobile appearance and theme tokens", () => {
     expect(resolveColorScheme("dark", "light")).toBe("dark");
   });
 
-  it("uses the approved cool surfaces with distinct blue actions and green success", () => {
+  it("keeps light cards above the canvas and separates actions from success", () => {
     const colors = colorsForScheme("light");
-    expect(colors.background).toBe("#E9EEF4");
-    expect(colors.surface).toBe("#F7F9FC");
-    expect(colors.textPrimary).toBe("#23262D");
-    expect(colors.primary).toBe("#1769D2");
-    expect(colors.accent).toBe("#1769D2");
-    expect(colors.success).toBe("#14805E");
+    expect(luminance(colors.surface)).toBeGreaterThan(luminance(colors.background));
+    expect(luminance(colors.background)).toBeGreaterThan(0.8);
     expect(colors.primary).not.toBe(colors.success);
     expect(colors.accentText).not.toBe(colors.successText);
     expect(colors).toEqual(lightColors);
   });
 
-  it("offers a neutral charcoal dark palette", () => {
+  it("keeps dark cards above the navy canvas and separates actions from success", () => {
     const colors = colorsForScheme("dark");
-    expect(colors.background).toBe("#14181C");
-    expect(colors.surface).toBe("#1E2429");
-    expect(colors.textPrimary).toBe("#F7F9FC");
-    expect(colors.primary).toBe("#1769D2");
-    expect(colors.accent).toBe("#1769D2");
-    expect(colors.success).toBe("#14805E");
+    expect(luminance(colors.surface)).toBeGreaterThan(luminance(colors.background));
+    expect(luminance(colors.background)).toBeLessThan(0.05);
     expect(colors.primary).not.toBe(colors.success);
     expect(colors.accentText).not.toBe(colors.successText);
     expect(colors).toEqual(darkColors);
   });
 
   it("keeps body text and primary button labels readable in both appearances", () => {
-    const luminance = (hex: string) => {
-      const channels = hex.slice(1).match(/.{2}/g)!.map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
-      return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
-    };
-    const contrast = (a: string, b: string) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
     for (const colors of [lightColors, darkColors]) {
-      for (const surface of [colors.background, colors.surface, colors.surfaceElevated]) {
+      for (const surface of [colors.background, colors.surface, colors.surfaceElevated, colors.surfacePressed]) {
         expect(contrast(colors.textPrimary, surface)).toBeGreaterThanOrEqual(4.5);
         expect(contrast(colors.textSecondary, surface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5);
       }
       expect(contrast(colors.textOnPrimary, colors.primary)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colors.textOnPrimary, colors.primaryPressed)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colors.controlBorder, colors.inputBackground)).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it("keeps selected tabs, badges, and source labels readable", () => {
+    for (const colors of [lightColors, darkColors]) {
+      for (const [foreground, background] of [
+        [colors.accentText, colors.accentSoft],
+        [colors.successText, colors.successSoft],
+        [colors.warningText, colors.warningSoft],
+        [colors.error, colors.errorSoft],
+        [colors.shipmentText, colors.shipmentSoft],
+        [colors.integrityText, colors.integritySoft],
+      ]) expect(contrast(foreground!, background!)).toBeGreaterThanOrEqual(4.5);
+      for (const source of [colors.proof, colors.commerce, colors.shipment, colors.evidence, colors.integrity]) {
+        expect(contrast(source, colors.surface)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    expect(sizes.touch).toBeGreaterThanOrEqual(48);
+    expect(typography.body.fontSize).toBeGreaterThanOrEqual(16);
+    expect(typography.secondary.fontSize).toBeGreaterThanOrEqual(14);
   });
 
   it("stores appearance separately from the authenticated session", () => {
@@ -87,9 +102,9 @@ describe("mobile appearance and theme tokens", () => {
   });
 
   it("uses matching system-bar colors and inverted icons for each scheme", () => {
-    expect(systemBarBackground(lightColors, false)).toBe("#E9EEF4");
+    expect(systemBarBackground(lightColors, false)).toBe(lightColors.background);
     expect(systemBarContent("light", false)).toBe("dark");
-    expect(systemBarBackground(darkColors, false)).toBe("#14181C");
+    expect(systemBarBackground(darkColors, false)).toBe(darkColors.background);
     expect(systemBarContent("dark", false)).toBe("light");
     expect(systemBarBackground(lightColors, true)).toBe(lightColors.scanBackground);
     expect(systemBarContent("light", true)).toBe("light");

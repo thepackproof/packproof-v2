@@ -8,7 +8,7 @@ import { IntakeSettings } from "../intake/IntakeSettings";
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, BackHandler, Keyboard, Linking, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, BackHandler, Keyboard, Linking, StyleSheet, Switch, Text, View, useWindowDimensions } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { formatBytes, type LocalCapture } from "../capture";
 import { captureRecoveryLabel, mayCleanUpCapture } from "../capture/recovery-model";
@@ -16,11 +16,12 @@ import { ETSY_ATTRIBUTION, SHOPIFY_AUTOMATIC_PROOFS_LABEL, automaticIntakeStatus
 import { formatUserFacingError } from "../copy/errors";
 import { displayName, formatDate, formatDateTime } from "../copy/format";
 import { PACKPROOF_WEB_ORIGIN, PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from "../copy/legal";
-import { salesChannelCanConnect, salesChannels, type SalesChannelAccount } from "../copy/sales-channels";
+import { salesChannelCanConnect, salesChannels, type SalesChannel, type SalesChannelAccount } from "../copy/sales-channels";
 import { connectedAccountStatusLabel } from "../copy/status";
 import { useTheme } from "../theme/ThemeProvider";
 import { radii, spacing, typography, type AppearancePreference } from "../theme/tokens";
-import { AppHeader, SectionHeader } from "../ui/AppHeader";
+import { SectionHeader } from "../ui/AppHeader";
+import { WorkspaceHeader } from "../ui/WorkspaceHeader";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { ErrorBanner, OfflineBanner } from "../ui/EmptyState";
@@ -33,7 +34,7 @@ import type { AccountSection } from "../app/navigation";
 type DeletionRequest = { requestId: string; state: string; requestedAt: string; updatedAt: string };
 const SECTION_TITLES: Record<AccountSection, string> = {
   developer: "Developer access",
-  billing: "Plan and billing", notifications: "Notifications", profile: "Profile", channels: "Connections", recordings: "Recordings on this device",
+  billing: "Plan and billing", notifications: "Notifications", profile: "Profile", channels: "Integrations", recordings: "Uploads",
   appearance: "Appearance", help: "Help & support", privacy: "Privacy & account",
 };
 const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
@@ -51,18 +52,25 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   const { colors } = theme;
   const session = app.session;
   const developerAllowed = useDeveloperAccess(app.client, session?.userId ?? "", app.ensureAuth);
-  const [section, setSection] = useState<AccountSection | null>(initialSection ?? null);
+  const section = initialSection ?? null;
   const accountRef = useRef(session?.userId);
   accountRef.current = session?.userId;
   const [signingOut, setSigningOut] = useState(false);
   const [shop, setShop] = useState("");
   const [shopifyAutomaticProofs, setShopifyAutomaticProofs] = useState(true);
+  const [connectionSetup, setConnectionSetup] = useState<Record<string, boolean>>({});
+  const [connectionDetails, setConnectionDetails] = useState<Record<string, boolean>>({});
+  const wide = useWindowDimensions().width >= 760;
   const [showInvitation, setShowInvitation] = useState(false);
   const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
   const [retentionNotice, setRetentionNotice] = useState("");
   const [deletionBusy, setDeletionBusy] = useState(false);
   const [deletionError, setDeletionError] = useState<string | null>(null);
-  const channels = useMemo(() => salesChannels(app.connectedAccounts, app.connections, app.connectedProviders), [app.connectedAccounts, app.connections, app.connectedProviders]);
+  const channels = useMemo(() => {
+    const linked = salesChannels(app.connectedAccounts, app.connections, app.connectedProviders);
+    const catalog = app.connectedProviders.map(definition => linked.find(channel => channel.provider === definition.provider) ?? { provider: definition.provider, providerDisplay: definition.providerDisplay, catalog: definition, accounts: [] } satisfies SalesChannel);
+    return [...catalog, ...linked.filter(channel => !app.connectedProviders.some(definition => definition.provider === channel.provider))];
+  }, [app.connectedAccounts, app.connections, app.connectedProviders]);
   const unfinished = app.savedRecordings.filter(capture => capture.recovery?.phase !== "FINALIZED");
   const retained = app.savedRecordings.filter(capture => capture.recovery?.phase === "FINALIZED");
   const waiting = unfinished.filter(capture => ["LOCAL_ONLY", "UPLOAD_QUEUED"].includes(capture.recovery?.phase ?? "")).length;
@@ -72,9 +80,9 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
     void app.loadConnectedAccounts().catch(() => undefined);
   }, []);
   useEffect(() => {
-    const listener = BackHandler.addEventListener("hardwareBackPress", () => { if(Keyboard.isVisible()) { Keyboard.dismiss(); return true; } if(section) setSection(null); else app.goBack(); return true; });
+    const listener = BackHandler.addEventListener("hardwareBackPress", () => { if(Keyboard.isVisible()) { Keyboard.dismiss(); return true; } if(section) app.go("account"); else app.goBack(); return true; });
     return () => listener.remove();
-  }, [section, app.goBack]);
+  }, [section, app.go, app.goBack]);
   useEffect(() => {
     if (section !== "privacy" || !session) return;
     let active = true;
@@ -93,7 +101,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   if (!session) return null;
   const profileChanged = app.displayNameInput.trim() !== (session.displayName ?? "")
     || (!session.username && Boolean(app.usernameInput.trim()));
-  const openSection = (next: AccountSection) => { app.setError(null); setSection(next); };
+  const openSection = (next: AccountSection) => app.go("account", { accountSection: next });
   const requestDeletion = () => Alert.alert(
     "Request account deletion?",
     "This sends a deletion request for this PackProof account. You can check its status here. Local-only recordings may be lost if you later remove the app.",
@@ -114,19 +122,22 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
 
   return (
     <AppScreen key={section ?? "account"} extraBottom={24}>
-      <AppHeader title={section ? SECTION_TITLES[section] : "Account"} onBack={() => section ? setSection(null) : app.goBack()} />
+      <WorkspaceHeader section={section ? SECTION_TITLES[section] : "Settings"} />
+      <View style={styles.heading}><Text style={[styles.eyebrow, { color: colors.textMuted }]}>Your workspace</Text><Text accessibilityRole="header" style={[styles.pageTitle, { color: colors.textPrimary }]}>{section ? SECTION_TITLES[section] : "Settings"}</Text><Text style={[styles.body, { color: colors.textSecondary }]}>{section === "channels" ? "Connect your orders and their source records." : section === "recordings" ? "Recordings, upload progress, and retained local copies." : section ? "Manage your PackProof preferences." : "Your account, connections, and workspace preferences."}</Text></View>
+      {section ? <Button label="Back to settings" variant="tertiary" icon="chevron-back" onPress={() => app.go("account")} /> : null}
       <OfflineBanner visible={app.offline} />
       <ErrorBanner message={app.error} />
 
       {!section ? <>
-        <View style={styles.identity}>
-          <Text style={[styles.name, { color: colors.textPrimary }]}>{displayName({ displayName: session.displayName, username: session.username, email: session.email })}</Text>
-          {session.username ? <Text style={[styles.meta, { color: colors.textSecondary }]}>@{session.username}</Text> : null}
+        <View style={[styles.identity, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.accentSoft }]}><Text style={[styles.avatarText, { color: colors.accentText }]}>{(session.displayName || session.username || "P").slice(0, 1).toUpperCase()}</Text></View>
+          <View style={styles.rowCopy}><Text style={[styles.name, { color: colors.textPrimary }]}>{displayName({ displayName: session.displayName, username: session.username, email: session.email })}</Text>
+          {session.username ? <Text style={[styles.meta, { color: colors.textSecondary }]}>@{session.username}</Text> : null}</View>
         </View>
         <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
-          <AccountRow title="Connections" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
-          <AccountRow title="Recordings on this device" detail={unfinished.length ? `${unfinished.length} ${unfinished.length === 1 ? "recording needs" : "recordings need"} attention` : retained.length ? `${retained.length} completed ${retained.length === 1 ? "copy" : "copies"} retained` : "No recordings stored here"} icon="videocam-outline" onPress={() => openSection("recordings")} />
+          <AccountRow title="Integrations" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
+          <AccountRow title="Uploads" detail={unfinished.length ? `${unfinished.length} ${unfinished.length === 1 ? "recording needs" : "recordings need"} attention` : retained.length ? `${retained.length} completed ${retained.length === 1 ? "copy" : "copies"} retained` : "No recordings stored here"} icon="cloud-upload-outline" onPress={() => openSection("recordings")} />
           <AccountRow title="Plan and billing" detail="Your plan, Proof allowance, and invoices" icon="card-outline" onPress={() => openSection("billing")} />
           <AccountRow title="Notifications" detail="Proof updates, delivery preferences and history" icon="notifications-outline" onPress={() => openSection("notifications")} />
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
@@ -149,13 +160,23 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       </> : null}
 
       {section === "channels" ? <>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Connect where you sell. Choose which channels automatically prepare eligible orders in Proofs.</Text>
+        <View style={[styles.integrationNotice, { backgroundColor: colors.accentSoft }]}><Ionicons name="link-outline" size={20} color={colors.accentText} /><Text style={[styles.noticeCopy, { color: colors.textPrimary }]}>Marketplace authorization is separate from PackProof sign-in. Choose which selling accounts prepare orders automatically.</Text></View>
         {!channels.length && !app.busy ? <Text style={[styles.meta, { color: colors.textSecondary }]}>No sales channels are available right now. You can still record a shipment from Proofs.</Text> : null}
-        {channels.map(channel => <InfoCard key={channel.provider}>
+        <View style={styles.channelGrid}>{channels.map(channel => {
+          const canConnect = salesChannelCanConnect(channel) && Boolean(channel.catalog?.capabilities.transactions || channel.catalog?.capabilities.fulfillment);
+          const unavailable = channel.catalog?.enabled === false;
+          const attention = channel.accounts.some(({ account, connection }) => account?.status === "NEEDS_REAUTH" || account?.status === "ERROR" || connection?.status === "NEEDS_REAUTH");
+          const connected = channel.accounts.some(({ account, connection }) => account ? ["CONNECTED", "ACTIVE"].includes(account.status) : connection?.status === "ACTIVE");
+          const status = unavailable ? "Unavailable" : attention ? "Needs attention" : connected ? "Connected" : "Not connected";
+          return <View key={channel.provider} style={[styles.channelCard, { width: wide ? "48.5%" : "100%", backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.providerHeading}><View style={[styles.providerMark, { backgroundColor: colors.accentSoft }]}><Text style={[styles.providerInitial, { color: colors.accentText }]}>{channel.provider === "ebay" ? "e" : channel.providerDisplay.charAt(0)}</Text></View><View style={[styles.providerBadge, { backgroundColor: unavailable ? colors.surfaceElevated : attention ? colors.warningSoft : connected ? colors.successSoft : colors.surfaceElevated }]}><Text style={[styles.badgeLabel, { color: unavailable ? colors.textSecondary : attention ? colors.warningText : connected ? colors.successText : colors.textSecondary }]}>{status}</Text></View></View>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{channel.providerDisplay}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{channel.catalog?.capabilities.transactions || channel.catalog?.capabilities.fulfillment ? "Bring synchronized orders into your packing queue." : "Account records connected to your PackProof workspace."}</Text>
           {channel.accounts.map((entry, index) => <ChannelAccount key={entry.account?.id ?? entry.connection?.connectionId ?? index} entry={entry} providerDisplay={channel.providerDisplay} />)}
-          {!channel.accounts.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Not connected</Text> : null}
-          {salesChannelCanConnect(channel) ? <>
+          <PressableScale accessibilityRole="button" accessibilityLabel={`${connectionDetails[channel.provider] ? "Hide" : "Show"} ${channel.providerDisplay} connection details`} accessibilityState={{ expanded: Boolean(connectionDetails[channel.provider]) }} onPress={() => setConnectionDetails(previous => ({ ...previous, [channel.provider]: !previous[channel.provider] }))} style={styles.detailsToggle}><Ionicons name={connectionDetails[channel.provider] ? "chevron-down" : "chevron-forward"} size={14} color={colors.textSecondary} /><Text style={[styles.meta, { color: colors.textSecondary }]}>Connection details</Text></PressableScale>
+          {connectionDetails[channel.provider] ? <View style={styles.channelAccount}><Text style={[styles.meta, { color: colors.textSecondary }]}>{unavailable ? "New connections are temporarily unavailable." : channel.catalog?.capabilities.transactions || channel.catalog?.capabilities.fulfillment ? "Your saved automation choice controls which eligible orders are added. Connecting never completes a Proof." : "This provider does not supply orders to PackProof. Sales-channel authorization is unavailable."}</Text>{channel.catalog?.limitations.map((limitation, index) => <Text key={`${index}-${limitation}`} style={[styles.meta, { color: colors.textSecondary }]}>{limitation}</Text>)}</View> : null}
+          {canConnect ? <>
+            {channel.catalog?.requiresShop && !connectionSetup[channel.provider] ? <Button label={`Connect ${channel.providerDisplay}`} disabled={app.busy} icon="arrow-forward" onPress={() => setConnectionSetup(previous => ({ ...previous, [channel.provider]: true }))} /> : <>
             {channel.catalog?.requiresShop ? <FormField label="Shopify shop" value={shop} onChangeText={setShop} placeholder="your-store.myshopify.com" autoCapitalize="none" /> : null}
             {channel.provider === "shopify" ? <>
               <View style={styles.automationRow}>
@@ -164,10 +185,12 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
               </View>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>{orderIntakeExplanation(channel.provider)}</Text>
             </> : null}
-            <Button label={`Connect ${channel.providerDisplay}`} variant="secondary" loading={app.busy} disabled={channel.catalog?.requiresShop && !shop.trim()} onPress={() => void app.connectConnectedAccount(channel.provider, channel.provider === "shopify" ? { shop: shop.trim(), autoSyncEnabled: shopifyAutomaticProofs } : channel.catalog?.requiresShop ? { shop: shop.trim() } : undefined)} />
-          </> : null}
+            <Button label={`${channel.catalog?.requiresShop ? "Continue to" : "Connect"} ${channel.providerDisplay}`} loading={app.busy} disabled={channel.catalog?.requiresShop && !shop.trim()} onPress={() => void app.connectConnectedAccount(channel.provider, channel.provider === "shopify" ? { shop: shop.trim(), autoSyncEnabled: shopifyAutomaticProofs } : channel.catalog?.requiresShop ? { shop: shop.trim() } : undefined)} />
+            {channel.catalog?.requiresShop ? <Button label="Cancel setup" variant="tertiary" disabled={app.busy} onPress={() => setConnectionSetup(previous => ({ ...previous, [channel.provider]: false }))} /> : null}
+            </>}
+          </> : !channel.accounts.length ? <Button label={`Connect ${channel.providerDisplay}`} disabled onPress={() => {}} /> : null}
           {!channel.catalog?.enabled && channel.accounts.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>New connections are temporarily unavailable. Existing connection and order status are shown above.</Text> : null}
-        </InfoCard>)}
+        </View>; })}</View>
         <IntakeSettings />
         <Text style={[styles.meta, { color: colors.textSecondary }]}>Marketplace authorization is separate from PackProof sign-in. Recording a Proof does not mark an order shipped.</Text>
         {channels.some(channel => channel.provider === "etsy") ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{ETSY_ATTRIBUTION}</Text> : null}
@@ -197,8 +220,8 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
         <SectionHeader title="Make a recording" />
         <Text style={[styles.body, { color: colors.textSecondary }]}>Choose an order, then record the item and package as you pack and seal it. Show the shipping label during that same recording. Review your video and confirm the shipping statement.</Text>
         <SectionHeader title="Find unfinished work" />
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Open Recordings on this device to review or finish saving a recording. A saved local video is different from a completed Proof; the app shows the current state.</Text>
-        <Button label="Open recordings on this device" variant="secondary" onPress={() => openSection("recordings")} />
+        <Text style={[styles.body, { color: colors.textSecondary }]}>Open Uploads to review or finish saving a recording on this device. A saved local video is different from a completed Proof; the app shows the current state.</Text>
+        <Button label="Open uploads" variant="secondary" onPress={() => openSection("recordings")} />
         <SectionHeader title="Open an invitation" />
         <Text style={[styles.body, { color: colors.textSecondary }]}>Invitations appear in Proofs. If you were given an invitation ID, you can enter it here.</Text>
         <Button label={showInvitation ? "Hide invitation entry" : "Enter invitation ID"} variant="tertiary" onPress={() => setShowInvitation(!showInvitation)} />
@@ -275,18 +298,33 @@ function AccountRow({ title, detail, icon, onPress, last }: { title: string; det
 }
 
 const styles = StyleSheet.create({
-  identity: { gap: spacing.xs, paddingVertical: spacing.sm },
+  heading: { gap: 8 },
+  eyebrow: { fontSize: 10, lineHeight: 15, letterSpacing: 1.5, fontWeight: "700", textTransform: "uppercase" },
+  pageTitle: { ...typography.pageTitle },
+  identity: { gap: spacing.md, padding: spacing.lg, borderWidth: 1, borderRadius: 10, flexDirection: "row", alignItems: "center" },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 17, fontWeight: "700" },
   name: { ...typography.sectionTitle },
   cardTitle: { ...typography.cardTitle },
   meta: { ...typography.secondary },
   body: { ...typography.body },
   bodyStrong: { ...typography.bodyStrong },
-  menu: { borderRadius: radii.lg, borderWidth: 1, overflow: "hidden" },
-  menuRow: { minHeight: 72, padding: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md },
+  menu: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
+  menuRow: { minHeight: 64, padding: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md },
   rowCopy: { flex: 1, gap: spacing.xs },
   appearance: { gap: spacing.sm },
   appearanceRow: { minHeight: 64, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md },
   channelAccount: { gap: spacing.sm, paddingVertical: spacing.sm },
   automationRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   automationLabel: { ...typography.body, flex: 1 },
+  integrationNotice: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 16, borderRadius: 8 },
+  noticeCopy: { ...typography.secondary, flex: 1 },
+  channelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 16, alignItems: "flex-start" },
+  channelCard: { borderWidth: 1, borderRadius: 10, padding: 20, gap: 14 },
+  providerHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  providerMark: { width: 42, height: 42, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  providerInitial: { fontSize: 24, lineHeight: 30, fontWeight: "700" },
+  providerBadge: { paddingVertical: 5, paddingHorizontal: 8, borderRadius: 5 },
+  badgeLabel: { fontSize: 11, lineHeight: 16, fontWeight: "600" },
+  detailsToggle: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 48 },
 });

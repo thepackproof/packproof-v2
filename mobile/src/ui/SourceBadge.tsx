@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { radii, spacing, typography } from "../theme/tokens";
+import { spacing, typography } from "../theme/tokens";
 import { sourceColor } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import type { ChronologyCategory } from "../copy/chronology";
@@ -21,7 +21,7 @@ export function SourceBadge(props: {
             ? sourceColor(colors, "SHIPMENT")
             : sourceColor(colors, "PROOF");
   return (
-    <View style={[styles.badge, { borderColor: color, backgroundColor: colors.surface }]}>
+    <View style={[styles.badge, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       <View style={[styles.dot, { backgroundColor: color }]} />
       <Text style={[styles.label, { color }]}>{props.label}</Text>
     </View>
@@ -35,10 +35,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
-    borderRadius: radii.pill,
+    borderRadius: 6,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  label: { ...typography.caption },
+  label: { ...typography.finePrint },
 });

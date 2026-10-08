@@ -27,8 +27,8 @@ test('invitation merges by canonical ID and cannot become participant work befor
   const item = mergeProofInvitations([], [invitation])[0]; const view = presentationForProof(item,'BUYER',{state:'UPLOADING'});
   assert.equal(view.nextAction.type,'ACCEPT_INVITATION');assert.equal(view.share.available,false);
 });
-test('participant deep links return to Proofs and never absorb public share or arbitrary external URLs', () => {
-  assert.equal(DEFAULT_PROOFS_LIBRARY.view,'attention');assert.equal(normalizeRouteName('orders'),'home');assert.equal(resolveBackRoute('proof','orders'),'home');assert.equal(resolveBackRoute('capture','station'),'proof');
+test('participant deep links preserve workspace return paths and never absorb public share or arbitrary external URLs', () => {
+  assert.equal(DEFAULT_PROOFS_LIBRARY.view,'attention');assert.equal(normalizeRouteName('orders'),'orders');assert.equal(resolveBackRoute('proof','orders'),'orders');assert.equal(resolveBackRoute('proof','proofs'),'proofs');assert.equal(resolveBackRoute('capture','station'),'proof');
   assert.equal(proofIdFromLink('packproof://proof/abc-123'),'abc-123');assert.equal(proofIdFromLink('https://thepackproof.com/app/proofs/abc'),'abc');
   assert.equal(proofIdFromLink('packproof-v2://proof/abc-123'),'abc-123');
   assert.equal(proofIdFromLink('packproof-v2://connections/ebay'),null);

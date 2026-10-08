@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePackProof } from '../app/PackProofProvider';
 import { useTheme } from '../theme/ThemeProvider';
-import { typography } from '../theme/tokens';
+import { radii, typography } from '../theme/tokens';
 import { trackingConnectionLabel, TRACKING_CARRIERS } from '../copy/tracking-connection';
 import { Button } from './Button';
 import { FormField } from './FormField';
@@ -33,13 +33,13 @@ export function TrackingIntake() {
       <View style={styles.carriers} accessibilityRole="radiogroup" accessibilityLabel="Carrier">
         {TRACKING_CARRIERS.map(([key, label]) => {
           const selected = carrier === key;
-          return <PressableScale key={key} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected }} onPress={() => setCarrier(key)} style={[styles.carrier, { backgroundColor: selected ? colors.successSoft : colors.surfaceElevated }]}>
-            <Text style={[typography.bodyStrong, { color: colors.textPrimary, flexShrink: 1 }]}>{label}</Text>
-            <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.logoGreen : colors.textSecondary} />
+          return <PressableScale key={key} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected }} onPress={() => setCarrier(key)} style={[styles.carrier, { backgroundColor: selected ? colors.accentSoft : colors.surfaceElevated }]}>
+            <Text style={[typography.bodyStrong, { color: selected ? colors.accentText : colors.textPrimary, flexShrink: 1 }]}>{label}</Text>
+            <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.accentText : colors.textSecondary} />
           </PressableScale>;
         })}
         <PressableScale accessibilityRole="radio" accessibilityLabel="Detect automatically" accessibilityState={{ checked: carrier === '' }} onPress={() => setCarrier('')} style={styles.automatic}>
-          <Ionicons name={carrier === '' ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={carrier === '' ? colors.logoGreen : colors.textSecondary} />
+          <Ionicons name={carrier === '' ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={carrier === '' ? colors.accentText : colors.textSecondary} />
           <Text style={[typography.secondary, { color: colors.textSecondary }]}>Detect automatically</Text>
         </PressableScale>
       </View>
@@ -52,7 +52,7 @@ export function TrackingIntake() {
   </View>;
 }
 const styles = StyleSheet.create({
-  stack: { gap: 12 }, form: { gap: 12, padding: 16, borderRadius: 16 },
+  stack: { gap: 12 }, form: { gap: 12, padding: 16, borderRadius: radii.lg },
   carriers: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   carrier: { flexBasis: '45%', flexGrow: 1, minHeight: 48, padding: 12, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   automatic: { width: '100%', minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 },

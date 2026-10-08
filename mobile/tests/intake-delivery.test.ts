@@ -47,6 +47,9 @@ test('queue/proof/capture locators defer throughout recording, attestation and r
   const base = { ready: true, accountId: 'seller-a', busy: false, captureStatus: 'idle' };
   for (const route of ['capture', 'station', 'finalize', 'review', 'scan', 'auth', 'proof'] as const) assert.equal(canNavigateForIntake({ ...base, route }), false);
   assert.equal(canNavigateForIntake({ ...base, route: 'home' }), true);
+  assert.equal(canNavigateForIntake({ ...base, route: 'proofs' }), true);
+  assert.equal(canNavigateForIntake({ ...base, route: 'proofs', captureStatus: 'capturing' }), false);
+  assert.equal(canNavigateForIntake({ ...base, route: 'proofs', busy: true }), false);
   assert.equal(canNavigateForIntake({ ...base, route: 'home', captureStatus: 'capturing' }), false);
   assert.equal(canNavigateForIntake({ ...base, route: 'home', busy: true }), false);
   assert.equal(canNavigateForIntake({ ...base, route: 'home', accountId: null }), false);

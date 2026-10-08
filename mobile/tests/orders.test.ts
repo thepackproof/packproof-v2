@@ -53,21 +53,24 @@ test("successful queue reads do not hide failed or pending ingestion", () => {
 
 import { normalizeRouteName, resolveBackRoute } from "../src/app/navigation.ts";
 
-test("packing returns to its canonical Proof before the unified Proofs list, including retired queue origins", () => {
-  for (const origin of ["home", "orders", "station"] as const) {
+test("packing returns to its canonical Proof and then the originating workspace", () => {
+  for (const origin of ["home", "proofs", "orders", "station"] as const) {
     assert.equal(resolveBackRoute("capture", origin), "proof");
-    assert.equal(resolveBackRoute("proof", origin), "home");
-    assert.equal(resolveBackRoute("create", origin), "home");
-    assert.equal(resolveBackRoute("manual", origin), "home");
+    assert.equal(resolveBackRoute("proof", origin), origin);
+    assert.equal(resolveBackRoute("create", origin), origin);
+    assert.equal(resolveBackRoute("manual", origin), origin);
   }
 });
 
-test("retired batch and account destinations return to Proofs without a queue redirect loop", () => {
+test("workspace destinations remain distinct and back navigation leaves a queue without a redirect loop", () => {
   assert.equal(resolveBackRoute("station", "station"), "home");
-  for (const origin of ["home", "orders", "station"] as const) {
-    assert.equal(resolveBackRoute("account", origin), "home");
+  assert.equal(resolveBackRoute("orders", "orders"), "home");
+  assert.equal(resolveBackRoute("proofs", "proofs"), "home");
+  for (const origin of ["home", "proofs", "orders", "station"] as const) {
+    assert.equal(resolveBackRoute("account", origin), origin);
+    assert.equal(normalizeRouteName(origin), origin);
   }
-  for (const retired of ["tabs", "overview", "orders", "activity", "station"]) {
+  for (const retired of ["tabs", "overview", "activity"]) {
     assert.equal(normalizeRouteName(retired), "home");
     assert.equal(normalizeRouteName(normalizeRouteName(retired)), "home");
   }
@@ -80,8 +83,8 @@ test("Proof disclosure and legacy routes preserve destinations while saved intak
   assert.equal(resolveBackRoute("scan", "orders"), "create");
   // Intake is now a durable queue workflow. Leaving it must not open a second
   // manual-create flow while its original submission is still being resolved.
-  for (const origin of ["home", "orders", "station"] as const) {
-    assert.equal(resolveBackRoute("intake", origin), "home");
+  for (const origin of ["home", "proofs", "orders", "station"] as const) {
+    assert.equal(resolveBackRoute("intake", origin), origin);
   }
   assert.equal(normalizeRouteName("tabs"), "home");
 });

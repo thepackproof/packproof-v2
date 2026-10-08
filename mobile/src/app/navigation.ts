@@ -10,6 +10,7 @@ export type AppRouteName =
   | "boot"
   | "auth"
   | "home"
+  | "proofs"
   | "orders"
   | "create"
   | "account"
@@ -33,7 +34,7 @@ export type AppRouteName =
   | "editShipping"
   | "event";
 
-export type WorkspaceOrigin = "home" | "orders" | "station";
+export type WorkspaceOrigin = "home" | "proofs" | "orders" | "station";
 export type AccountSection = "developer" | "billing" | "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
 export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
@@ -59,15 +60,15 @@ export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
   carrier: null,
 };
 
-/** @deprecated Use home. Kept so older session restore paths can be remapped. */
+/** Preserve workspace destinations while remapping retired session routes. */
 export function normalizeRouteName(name: string): AppRouteName {
-  if (["tabs", "overview", "orders", "activity", "proofs", "station"].includes(name)) {
+  if (["tabs", "overview", "activity"].includes(name)) {
     return "home";
   }
   return name as AppRouteName;
 }
 
-export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrigin = "home"): AppRouteName {
+export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigin = "home"): AppRouteName {
   switch (routeName) {
     case "dev": return "account";
     case "sharing":
@@ -84,13 +85,15 @@ export function resolveBackRoute(routeName: AppRouteName, _origin: WorkspaceOrig
     case "capture":
       return "proof";
     case "station":
+    case "orders":
+    case "proofs":
       return "home";
     case "proof":
     case "account":
     case "create":
     case "manual":
     case "intake":
-      return "home";
+      return origin;
     case "scan":
     case "review":
       return "create";

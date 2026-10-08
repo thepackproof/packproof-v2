@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { ProofCardModel } from "../copy/presentation";
-import { radii, spacing, typography } from "../theme/tokens";
+import { radii, sizes, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { StatusBadge, statusTone } from "./StatusBadge";
 import { PressableScale } from "./motion";
@@ -18,6 +18,8 @@ export function ProofCard(props: {
       onPress={props.onPress}
       accessibilityRole="button"
       accessibilityLabel={`${props.model.title}. ${props.model.statusLabel}`}
+      accessibilityHint={props.cta}
+      pressedStyle={{ backgroundColor: colors.surfaceElevated, opacity: 1 }}
       style={[
         styles.card,
         {
@@ -31,7 +33,7 @@ export function ProofCard(props: {
         <Image source={{ uri: props.model.thumbnailUri }} style={[styles.thumb, { backgroundColor: colors.background }]} />
       ) : (
         <View
-          style={[styles.thumbFallback, { backgroundColor: colors.background }]}
+          style={[styles.thumbFallback, { backgroundColor: colors.surfaceElevated }]}
           accessibilityElementsHidden
         >
           <Ionicons name="cube-outline" size={22} color={colors.textSecondary} />
@@ -61,7 +63,7 @@ export function ProofCard(props: {
           ) : null}
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <Ionicons name="arrow-forward" size={18} color={colors.textMuted} />
     </PressableScale>
   );
 }
@@ -74,7 +76,7 @@ export function InfoCard(props: { children: ReactNode; onPress?: () => void }) {
   ];
   if (props.onPress) {
     return (
-      <PressableScale onPress={props.onPress} style={cardStyle}>
+      <PressableScale onPress={props.onPress} accessibilityRole="button" pressedStyle={{ backgroundColor: colors.surfaceElevated, opacity: 1 }} style={cardStyle}>
         {props.children}
       </PressableScale>
     );
@@ -92,6 +94,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   info: {
+    minHeight: sizes.touch,
     borderWidth: 1,
     borderRadius: radii.lg,
     padding: spacing.lg,
@@ -105,9 +108,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  copy: { flex: 1, gap: 6 },
+  copy: { flex: 1, minWidth: 0, gap: 6 },
   title: { ...typography.cardTitle },
   price: { ...typography.bodyStrong },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" },
-  meta: { ...typography.caption },
+  meta: { ...typography.finePrint },
 });

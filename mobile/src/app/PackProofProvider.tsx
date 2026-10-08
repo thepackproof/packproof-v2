@@ -446,7 +446,6 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => {
     if (name === "scan") name = "create";
     if (name === "complete") name = "proof";
-    if (name === "orders" || (name === "station" && !sessionRef.current?.stationActive)) name = "home";
     if (name === "station" && sessionRef.current?.captureUri && !sessionRef.current.stationActive && workspaceOrigin.current !== "station") {
       setError("Finish or discard your saved recording before opening the packing station.");
       return;
@@ -460,7 +459,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setTechnicalOpen(false);
       setConfirmFinalize(false);
     }
-    if (name === "home" || name === "station") {
+    if (name === "home" || name === "proofs" || name === "orders" || name === "station") {
       workspaceOrigin.current = name;
       setBatchPacking(name === "station");
     }
@@ -1092,7 +1091,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     return () => listener.remove();
   }, []);
   useEffect(() => {
-    if (!connectionReturn || !hydrated || !session?.userId || busy || route.name === "capture" || route.name === "station") return;
+    if (!connectionReturn || !hydrated || !session?.userId || busy || route.name === "capture" || (route.name === "station" && session.stationActive)) return;
     const connection = connectionReturnFromLink(connectionReturn);
     setConnectionReturn(null);
     void run(async () => {
@@ -1103,7 +1102,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         Alert.alert(issue.title, issue.message);
       }
     });
-  }, [connectionReturn, hydrated, session?.userId, busy, route.name]);
+  }, [connectionReturn, hydrated, session?.userId, session?.stationActive, busy, route.name]);
 
   const pendingNotificationProof = useRef<string | null>(null);
   const [notificationTap, setNotificationTap] = useState(0);
@@ -1117,10 +1116,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     return () => listener.remove();
   }, []);
   useEffect(() => {
-    if (!hydrated || !session?.userId || busy || !['home','proof'].includes(route.name) || session.captureUri) return;
+    const idleWorkspace = ['home','proofs','orders','proof'].includes(route.name) || (route.name === 'station' && !session?.stationActive);
+    if (!hydrated || !session?.userId || busy || !idleWorkspace || session.captureUri) return;
     const proofId = pendingNotificationProof.current;
     if (proofId) { pendingNotificationProof.current = null; void run(() => openProof(proofId)); }
-  }, [hydrated, session?.userId, session?.captureUri, busy, route.name, notificationTap]);
+  }, [hydrated, session?.userId, session?.captureUri, session?.stationActive, busy, route.name, notificationTap]);
 
   // The retry owner lives above screens. Foreground wake and a bounded timer resume saved work
   // wherever the user navigates; The operating system may suspend JavaScript while the app is backgrounded.
@@ -1831,7 +1831,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           const sourceKey = input.handoffId ? `handoff:${input.handoffId}` : `snapshot:${input.snapshotId}`;
           const key = await intakeRequestKey(client, account.userId, sourceKey);
           const device = input.handoffId ? await readIntakeDevice(client, account.userId) : null;
-          if (input.handoffId && !device) throw new Error("Pair this phone in Account → Connections before accepting this order.");
+          if (input.handoffId && !device) throw new Error("Pair this phone in Settings → Integrations before accepting this order.");
           const accepted = input.handoffId
             ? await api.claim(input.handoffId, device!, key)
             : await api.capture(input.snapshotId, key);

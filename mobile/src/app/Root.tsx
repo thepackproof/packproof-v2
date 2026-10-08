@@ -21,6 +21,8 @@ import { applySystemBars } from "../theme/system-bars";
 import { Logo } from "../ui/Logo";
 import { AuthScreen } from "../screens/AuthScreen";
 import { MyProofsScreen } from "../screens/MyProofsScreen";
+import { WorkspaceHomeScreen } from "../screens/WorkspaceHomeScreen";
+import { WorkspaceOrdersScreen } from "../screens/WorkspaceOrdersScreen";
 import { CreateScreen } from "../screens/CreateScreen";
 import { AccountScreen } from "../screens/AccountScreen";
 import { ProofDetailScreen } from "../screens/ProofDetailScreen";
@@ -59,7 +61,7 @@ function RootContent() {
   const previousRoute = useRef(app.route.name);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
   const nativeShare = useSharedOrder(ready);
-  const intakeNavigationReady = canNavigateForIntake({ ready, accountId: app.session?.userId ?? null, route: app.route.name, busy: app.busy, captureStatus: app.captureStatus });
+  const intakeNavigationReady = canNavigateForIntake({ ready, accountId: app.session?.userId ?? null, route: app.route.name === "station" && !app.session?.stationActive ? "orders" : app.route.name, busy: app.busy, captureStatus: app.captureStatus });
   const notifiedShare = useRef<string | null>(null);
   useEffect(() => { if (app.route.name === "intake") nativeShare.resume(); }, [app.route.name]);
   useEffect(() => {
@@ -144,7 +146,7 @@ function RootContent() {
   }, []);
   useEffect(() => {
     if (!linkedQueue || !intakeNavigationReady || !app.session) return;
-    setLinkedQueue(false); app.go('home');
+    setLinkedQueue(false); app.go('orders');
     void app.run(app.syncWorkspace);
   }, [linkedQueue, intakeNavigationReady]);
 
@@ -225,7 +227,9 @@ function RootContent() {
   }
 
   let body = null;
-  if (["home", "orders", "station"].includes(app.route.name)) body = <MyProofsScreen />;
+  if (app.route.name === "home") body = <WorkspaceHomeScreen />;
+  else if (app.route.name === "proofs") body = <MyProofsScreen />;
+  else if (app.route.name === "orders" || app.route.name === "station") body = <WorkspaceOrdersScreen key={app.route.name} station={app.route.name === "station"} />;
   else if (app.route.name === "create") body = <CreateScreen />;
   else if (app.route.name === "account") body = <AccountScreen key={app.route.accountSection ?? "account"} initialSection={app.route.accountSection} />;
   else if (app.route.name === "sharing") body = <SharingScreen key={app.proof?.proofId} />;

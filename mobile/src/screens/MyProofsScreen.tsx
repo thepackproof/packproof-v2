@@ -9,11 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePackProof } from '../app/PackProofProvider';
 import { localProofWork, mergeProofInvitations, presentationForProof, selectProofRows, type PresentedProof } from '../copy/proof-list';
 import { formatDate } from '../copy/format';
-import { Logo } from '../ui/Logo';
-import { spacing, typography } from '../theme/tokens';
+import { typography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { AppScreen } from '../ui/AppScreen';
-import { AvatarButton } from '../ui/AvatarButton';
+import { WorkspaceHeader } from '../ui/WorkspaceHeader';
 import { BottomSheet } from '../ui/Sheets';
 import { EmptyState, ErrorBanner, OfflineBanner } from '../ui/EmptyState';
 import { ProofCardSkeleton } from '../ui/Skeleton';
@@ -54,6 +53,10 @@ export function MyProofsScreen() {
   const filterKey = JSON.stringify(library);
   if (!order.current || order.current.snapshot !== snapshot || order.current.filters !== filterKey) order.current = {snapshot,filters:filterKey,ids:sortedRows.map(row => row.proofId)};
   const rows = order.current.ids.map(id => presentedRows.find(row => row.proofId === id)).filter((row):row is PresentedProof => Boolean(row));
+  const showPrepared = library.view !== 'completed' && !library.query.trim();
+  const visiblePreparedIds = new Set(showPrepared ? preparedProofIds : []);
+  const libraryRows = rows.filter(item => !visiblePreparedIds.has(item.proofId));
+  const visibleCount = new Set([...visiblePreparedIds, ...libraryRows.map(item => item.proofId)]).size;
   const changed = sortedRows.map(row=>row.proofId).join("|") !== order.current.ids.join("|") || app.proofCollection.map(row => `${row.proofId}:${row.updatedAt}:${row.presentation?.displayStatus}`).join('|') !== snapshot.rows.map(row => `${row.proofId}:${row.updatedAt}:${row.presentation?.displayStatus}`).join('|');
   async function refresh() { await app.run(app.syncWorkspace); setRequestedRefresh(true); }
   async function open(item: PresentedProof, act = false) {
@@ -80,29 +83,32 @@ export function MyProofsScreen() {
   const noMatches = Boolean(library.query.trim() || library.role !== 'all' || library.carrier);
   const emptyTitle = noMatches ? 'No search matches' : library.view === 'attention' ? 'Nothing needs your attention' : library.view === 'completed' ? 'No completed Proofs yet' : 'No Proofs yet';
   return <AppScreen key={app.session?.userId} restorationReady={!loading} resetScrollKey={filterKey} onRefresh={() => void refresh()} refreshing={app.busy} initialOffsetY={app.readProofsScrollOffset()} onScrollOffset={app.setProofsScrollOffset}>
-    <View style={styles.topBar}>
-      <View style={styles.brand} accessibilityLabel="PackProof"><Logo size={32} /><Text style={[styles.brandText,{color:colors.textPrimary}]}>Pack<Text style={{color:colors.logoGreen}}>Proof</Text></Text></View>
-      <AvatarButton displayName={app.session?.displayName} username={app.session?.username} onPress={() => app.go('account')} />
-    </View>
-    <View style={styles.heading}><Text style={[styles.pageTitle, { color:colors.textPrimary }]}>Proofs</Text><TutorialTarget name="create capture"><Button label="New Proof" icon="add-outline" onPress={() => app.go('create')} /></TutorialTarget></View>
-    <View style={[styles.tabs, { borderBottomColor:colors.divider }]} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
-      {([{id:'attention',label:'Needs attention'},{id:'all',label:'All'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} flex={1} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.surfaceElevated : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.textPrimary : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
+    <WorkspaceHeader section="Proofs" />
+    <View style={styles.heading}><View style={styles.headingCopy}><Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text><Text style={[styles.pageTitle, { color:colors.textPrimary }]}>Proofs</Text></View><TutorialTarget name="create capture"><Button label="New Proof" icon="add-outline" onPress={() => app.go('create')} /></TutorialTarget></View>
+    <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Shipment evidence, organized and ready to review.</Text>
+    <View style={[styles.libraryPanel,{backgroundColor:colors.surface,borderColor:colors.border}]}>
+    <View style={styles.toolbar}>
+    <View style={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
+      {([{id:'all',label:'All'},{id:'attention',label:'Needs attention'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.accentSoft : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
     </View>
     <View style={styles.searchRow}>
-      <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.surface}]}><Ionicons name="search-outline" size={20} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search Proofs" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
+      <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.inputBackground}]}><Ionicons name="search-outline" size={18} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search order, item, tracking…" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
       <PressableScale onPress={() => setFilterOpen(true)} accessibilityRole="button" accessibilityLabel="Filters" style={[styles.filter,{borderColor:colors.controlBorder}]}><Ionicons name="options-outline" size={22} color={colors.textPrimary}/></PressableScale>
     </View>
+    </View>
+    <View style={[styles.tableHeading,{backgroundColor:colors.surfaceElevated,borderColor:colors.border}]}><Text style={[styles.columnLabel,{color:colors.textMuted}]}>SHIPMENT RECORDS</Text><Text style={[styles.columnLabel,{color:colors.textMuted}]}>{loading ? 'LOADING' : `${visibleCount} IN VIEW`}</Text></View>
+    <View style={styles.listBody}>
     <OfflineBanner visible={app.offline} />
     <ErrorBanner message={app.error || (app.offline && !snapshot.rows.length ? "Proofs could not be loaded while offline. Reconnect and try again." : null)}/>
     {app.error || (app.offline && !snapshot.rows.length) ? <Button label="Try loading Proofs again" variant="tertiary" onPress={() => void refresh()} /> : null}
-    {library.view !== "completed" && !library.query.trim() ? <ReadyOrders onPreparedProofsChange={setPreparedProofIds} /> : null}
+    {showPrepared ? <ReadyOrders onPreparedProofsChange={setPreparedProofIds} /> : null}
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
-    {rows.filter(item => !preparedProofIds.includes(item.proofId)).map((item, index) => {
+    {libraryRows.map((item, index) => {
       return <TutorialTarget key={item.proofId} name={index===0?"proofs":""}><FadeSlideIn index={index}>
         <View style={[styles.row,{backgroundColor:colors.surface,borderColor:colors.border}]}>
           <LiftPressable onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
-            <View style={styles.recordHeading}><RecordThumbnail key={`${app.session?.userId}:${item.proofId}:${item.thumbnailDerivativeId}`} proofId={item.proofId} derivativeId={item.thumbnailDerivativeId} /><View style={{flex:1,gap:6}}>
+            <View style={styles.recordHeading}>{item.thumbnailDerivativeId ? <RecordThumbnail key={`${app.session?.userId}:${item.proofId}:${item.thumbnailDerivativeId}`} proofId={item.proofId} derivativeId={item.thumbnailDerivativeId} /> : null}<View style={{flex:1,gap:5}}>
             <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>{item.transaction.itemTitle || 'Shipment Proof'}</Text>
             <Text style={[styles.meta,{color:colors.textSecondary}]}>{proofReference(item.proofId,item.transaction.externalReference)}</Text>
             </View><Ionicons name="chevron-forward" size={18} color={colors.textSecondary}/></View>
@@ -119,7 +125,9 @@ export function MyProofsScreen() {
         </View>
       </FadeSlideIn></TutorialTarget>;
     })}
-    {!loading && !app.error && !app.offline && !rows.length && !preparedProofIds.length ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /></TutorialTarget> : null}
+    {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /></TutorialTarget> : null}
+    </View>
+    </View>
     <BottomSheet visible={filterOpen} title="Filters" onClose={() => setFilterOpen(false)}>
       <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>Your role</Text>
       {(['all','seller','buyer'] as const).map(role => <Button key={role} label={`${library.role === role ? '✓ ' : ''}${role === 'all' ? 'All roles' : role === 'seller' ? 'Seller' : 'Buyer'}`} variant="tertiary" onPress={() => app.setProofsRoleFilter(role)} />)}
@@ -128,10 +136,12 @@ export function MyProofsScreen() {
   </AppScreen>;
 }
 const styles = StyleSheet.create({
-  recordHeading:{flexDirection:'row',gap:14,alignItems:'center'},shipmentLine:{flexDirection:'row',gap:7,alignItems:'center'},
-  topBar:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:16},brand:{flexDirection:'row',alignItems:'center',gap:8},brandText:{...typography.sectionTitle,fontSize:22,lineHeight:30},
-  heading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12},pageTitle:{...typography.pageTitle},
-  tabs:{flexDirection:'row',flexWrap:'wrap',gap:4},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:12,justifyContent:'center'},tabText:{...typography.secondaryStrong},
-  searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:48,flexDirection:'row',alignItems:'center',paddingHorizontal:12,borderWidth:1,borderRadius:8,gap:8},input:{flex:1,...typography.body,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:8},
-  row:{marginBottom:4,padding:16,borderWidth:0,borderRadius:16,gap:8},rowCopy:{gap:6,minHeight:48},rowTitle:{...typography.bodyStrong,fontSize:18,lineHeight:25},meta:{...typography.secondary},status:{...typography.secondaryStrong},
+  recordHeading:{flexDirection:'row',gap:12,alignItems:'center'},shipmentLine:{flexDirection:'row',gap:7,alignItems:'center'},
+  heading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12},headingCopy:{gap:5},pageTitle:{...typography.pageTitle,fontSize:29,lineHeight:36},
+  eyebrow:{...typography.finePrint,fontFamily:'Inter-SemiBold',fontSize:10,lineHeight:15,letterSpacing:1.15},subtitle:{...typography.secondary,fontSize:14,marginTop:-8},
+  libraryPanel:{borderWidth:1,borderRadius:10,overflow:'hidden'},toolbar:{padding:14,gap:12},
+  tabs:{flexDirection:'row',flexWrap:'wrap',gap:3},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:6,justifyContent:'center'},tabText:{...typography.secondaryStrong,fontSize:13,lineHeight:19},
+  searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:48,flexDirection:'row',alignItems:'center',paddingHorizontal:10,borderWidth:1,borderRadius:6,gap:8},input:{flex:1,...typography.secondary,fontSize:14,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:6},
+  tableHeading:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,paddingHorizontal:16,paddingVertical:10,borderTopWidth:1,borderBottomWidth:1},columnLabel:{...typography.finePrint,fontSize:12,lineHeight:18,letterSpacing:.35},listBody:{gap:0},
+  row:{padding:16,borderBottomWidth:1,gap:9},rowCopy:{gap:9,minHeight:48},rowTitle:{...typography.bodyStrong,fontSize:15,lineHeight:22},meta:{...typography.secondary,fontSize:12,lineHeight:18},status:{...typography.secondaryStrong},
 });

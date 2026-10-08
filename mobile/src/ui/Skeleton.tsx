@@ -43,7 +43,7 @@ export function ProofCardSkeleton() {
   const { colors } = useTheme();
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityLabel="Loading Proofs">
-      <SkeletonBlock height={56} width={56} radius={12} />
+      <SkeletonBlock height={56} width={56} radius={radii.md} />
       <View style={styles.copy}>
         <SkeletonBlock height={16} width="70%" />
         <SkeletonBlock height={14} width="40%" />
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   block: { overflow: "hidden" },
   card: {
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: radii.lg,
     padding: 16,
     flexDirection: "row",
     gap: 12,

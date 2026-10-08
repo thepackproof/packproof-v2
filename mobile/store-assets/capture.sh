@@ -22,18 +22,42 @@ xcrun simctl launch "$DEVICE_ID" com.packproof.mobile
 APP_DATA=$(xcrun simctl get_app_container "$DEVICE_ID" com.packproof.mobile data)
 mkdir -p "$APP_DATA/Documents"
 sleep 5
-for specification in '01-proof-library:library:light' '02-new-proof:create:light' '03-shipment-tracking:tracking:light' '04-proof-activity:activity:light' '05-proof-library-dark:library:dark'; do
+specifications=(
+ '01-proof-library:library:light'
+ '02-new-proof:create:light'
+ '03-shipment-tracking:tracking:light'
+ '04-proof-activity:activity:light'
+ '05-proof-library-dark:library:dark'
+ '06-workspace-home:home:light'
+ '07-workspace-home-dark:home:dark'
+ '08-workspace-orders:orders:light'
+ '09-workspace-orders-dark:orders:dark'
+ '10-packing-station:station:light'
+ '11-packing-station-dark:station:dark'
+ '12-integrations:integrations:light'
+ '13-integrations-dark:integrations:dark'
+)
+printf 'file\tscene\tappearance\n' > dist/store-screenshots/scene-manifest.tsv
+for specification in "${specifications[@]}"; do
  IFS=: read -r name scene theme <<< "$specification"
+ rm -f "$APP_DATA/Documents/store-scene-ready.txt" "$APP_DATA/Documents/store-scene-error.txt"
  printf '{"scene":"%s","theme":"%s"}' "$scene" "$theme" > "$APP_DATA/Documents/store-scene.tmp"
  mv "$APP_DATA/Documents/store-scene.tmp" "$APP_DATA/Documents/store-scene.json"
  ready=0
  for attempt in $(seq 1 40); do
+  if [ -f "$APP_DATA/Documents/store-scene-error.txt" ]; then
+   cp "$APP_DATA/Documents/store-scene-error.txt" "dist/store-screenshots/$name-error.txt"
+   echo "Screenshot scene failed to render: $scene"
+   cat "dist/store-screenshots/$name-error.txt"
+   exit 1
+  fi
   if [ -f "$APP_DATA/Documents/store-scene-ready.txt" ] && [ "$(cat "$APP_DATA/Documents/store-scene-ready.txt")" = "$scene:$theme" ]; then ready=1; break; fi
   sleep 1
  done
  test "$ready" = 1 || { echo "Screenshot scene did not become ready: $scene"; exit 1; }
  xcrun simctl io "$DEVICE_ID" screenshot --type=jpeg "dist/store-screenshots/$name.jpg"
  sips -g pixelWidth -g pixelHeight "dist/store-screenshots/$name.jpg"
+ printf '%s.jpg\t%s\t%s\n' "$name" "$scene" "$theme" >> dist/store-screenshots/scene-manifest.tsv
 done
 printf '%s\n' "$GITHUB_SHA" > dist/store-screenshots/source-commit.txt
 xcrun simctl spawn "$DEVICE_ID" log show --last 3m --predicate 'process == "PackProof"' --style compact > dist/store-screenshots/simulator.log || true
@@ -41,7 +65,12 @@ xcrun simctl spawn "$DEVICE_ID" log show --last 3m --predicate 'process == "Pack
 python3 - <<'PYVERIFY'
 from pathlib import Path
 import hashlib
-files=list(Path('dist/store-screenshots').glob('*.jpg'))
-assert len(files)==5
-assert len({hashlib.sha256(p.read_bytes()).hexdigest() for p in files})==5, 'Capture did not move through five different native screens'
+import csv
+root=Path('dist/store-screenshots')
+with (root/'scene-manifest.tsv').open() as manifest:
+ scenes=list(csv.DictReader(manifest, delimiter='\t'))
+assert len(scenes)==13, 'Expected all 13 native review scenes'
+files=[root/scene['file'] for scene in scenes]
+assert all(path.is_file() for path in files), 'A native review screenshot is missing'
+assert len({hashlib.sha256(p.read_bytes()).hexdigest() for p in files})==len(files), 'Capture did not move through distinct native review scenes'
 PYVERIFY

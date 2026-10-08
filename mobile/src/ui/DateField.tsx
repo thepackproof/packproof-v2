@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { radii, spacing, typography } from "../theme/tokens";
+import { radii, sizes, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 
 function parseIso(value: string): Date | null {
@@ -72,7 +72,7 @@ export function DateField(props: {
         style={({ pressed }) => [
           styles.field,
           {
-            borderColor: colors.border,
+            borderColor: colors.controlBorder,
             backgroundColor: colors.inputBackground,
             opacity: pressed ? 0.82 : 1,
           },
@@ -83,7 +83,7 @@ export function DateField(props: {
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+        <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={() => setOpen(false)}>
           <Pressable
             accessibilityViewIsModal
             onPress={(event) => event.stopPropagation()}
@@ -129,11 +129,11 @@ export function DateField(props: {
                     onPress={() => choose(day)}
                     style={[
                       styles.dayCell,
-                      isSelected ? { backgroundColor: colors.accent } : null,
+                      isSelected ? { backgroundColor: colors.accentSoft } : null,
                       isToday && !isSelected ? { borderColor: colors.accent, borderWidth: 1 } : null,
                     ]}
                   >
-                    <Text style={[styles.dayText, { color: isSelected ? "#FFFFFF" : colors.textPrimary }]}>{day}</Text>
+                    <Text style={[styles.dayText, { color: isSelected ? colors.accentText : colors.textPrimary }]}>{day}</Text>
                   </Pressable>
                 );
               })}
@@ -158,19 +158,19 @@ export function DateField(props: {
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
   label: { ...typography.secondaryStrong },
-  field: { minHeight: 48, borderWidth: 1, borderRadius: radii.md, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
+  field: { minHeight: sizes.touch, borderWidth: 1, borderRadius: radii.md, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
   value: { ...typography.body },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: spacing.lg },
+  backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg },
   modal: { width: "100%", maxWidth: 420, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.md },
   monthHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   monthTitle: { ...typography.cardTitle },
-  iconButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  iconButton: { width: sizes.touch, height: sizes.touch, alignItems: "center", justifyContent: "center" },
   weekRow: { flexDirection: "row" },
   weekday: { width: "14.2857%", textAlign: "center", ...typography.caption },
   grid: { flexDirection: "row", flexWrap: "wrap" },
-  dayCell: { width: "14.2857%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 999 },
+  dayCell: { width: "14.2857%", minHeight: sizes.touch, aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: radii.md },
   dayText: { ...typography.secondaryStrong },
   actions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: spacing.sm },
-  actionButton: { minHeight: 44, minWidth: 72, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md },
+  actionButton: { minHeight: sizes.touch, minWidth: 72, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md },
   actionText: { ...typography.secondaryStrong },
 });

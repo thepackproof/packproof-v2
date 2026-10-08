@@ -1,10 +1,11 @@
-import { lightColors, type ThemeColors } from "../theme/tokens";
+import { lightColors, typography, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { Button } from "../ui/Button";
 import { RemainingShipmentNotice } from "../ui/RemainingShipmentNotice";
 import { completeSavedCapture } from "../capture/completion";
 import { captureRecoveryLabel } from "../capture/recovery-model";
 import { PressableScale } from "../ui/motion";
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { BackHandler, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { isAuthenticationFailure } from "../copy/errors";
@@ -446,9 +447,10 @@ export function PackingStationScreen(props: {
     (state.phase === "PROCESSING" && state.submitStep === null)
   );
   const insets = useSafeAreaInsets();
+  const activeStep = state.capture || state.phase === "PROCESSING" || state.phase === "PROOF_CREATED" ? 3 : state.order ? 2 : 1;
 
   return (
-    <View style={[styles.root, { backgroundColor: tone.background }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -459,11 +461,16 @@ export function PackingStationScreen(props: {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.phase, { color: tone.ink }]}>
+        <View style={styles.heading}><Text style={[styles.eyebrow, { color: colors.textMuted }]}>Fulfillment capture</Text><Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Packing Station</Text><Text style={[styles.hint, { color: colors.textSecondary }]}>One recording, from item to sealed shipment.</Text></View>
+        <View style={[styles.steps, { borderColor: colors.border }]} accessibilityLabel={`Step ${activeStep} of 3`}>
+          {["Select shipment", "Record packing", "Confirm"].map((label, index) => <View key={label} style={[styles.step, { borderBottomColor: activeStep === index + 1 ? colors.accent : "transparent" }]}><Text style={[styles.stepNumber, { color: activeStep === index + 1 ? colors.accentText : colors.textMuted }]}>0{index + 1}</Text><Text style={[styles.stepLabel, { color: activeStep === index + 1 ? colors.accentText : colors.textSecondary }]}>{label}</Text></View>)}
+        </View>
+        <Text accessibilityRole="header" style={[styles.phase, { color: tone.ink, backgroundColor: state.phase === "RECOVERY" ? colors.warningSoft : state.phase === "PROOF_CREATED" ? colors.successSoft : colors.surfaceElevated }]}>
           {biometricAttestation && awaitingAttestation ? "CONFIRM SHIPMENT" : stationPhaseLabel(state)}
         </Text>
         {state.order ? (
-          <View style={styles.identity}>
+          <View style={[styles.identity, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Selected shipment</Text>
             <Text style={[styles.order, { color: tone.ink }]}>{state.order.orderLabel}</Text>
             <Text style={[styles.item, { color: tone.muted }]}>{state.order.itemSummary}</Text>
             <RemainingShipmentNotice value={state.order} />
@@ -472,12 +479,10 @@ export function PackingStationScreen(props: {
             ) : null}
           </View>
         ) : (
-          <Text style={[styles.hint, { color: tone.muted }]}>
-            Scan a label, record packing, then confirm what you are shipping.
-          </Text>
+          <View style={[styles.stationIntro, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[styles.stationIcon, { backgroundColor: colors.accentSoft }]}><Ionicons name="videocam-outline" size={28} color={colors.accentText} /></View><Text style={[styles.order, { color: colors.textPrimary }]}>Find your shipment</Text><Text style={[styles.hint, { color: tone.muted }]}>Scan a label or select an order, then open the packing camera.</Text></View>
         )}
 
-        {state.error ? <Text style={[styles.error, { color: colors.error, backgroundColor: colors.errorSoft }]}>{state.error.message}</Text> : null}
+        {state.error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.error, backgroundColor: colors.errorSoft }]}>{state.error.message}</Text> : null}
         {state.phase === "PROOF_CREATED" && completionNotice ? <Text style={[styles.hint, { color: tone.muted }]}>{completionNotice}</Text> : null}
         {localBusy && state.phase !== "RECORDING" && state.phase !== "PROCESSING" ? (
           <Text style={[styles.hint, { color: tone.muted }]}>Working…</Text>
@@ -520,7 +525,7 @@ export function PackingStationScreen(props: {
         ) : null}
 
         {state.phase === "READY" || (state.phase === "RECOVERY" && !state.capture) ? (
-          <View style={styles.block}>
+          <View style={[styles.block, styles.selectionPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <StationButton
               label="Scan Order / Label"
               disabled={localBusy}
@@ -531,6 +536,7 @@ export function PackingStationScreen(props: {
               value={state.referenceInput}
               onChangeText={(value) => dispatch({ type: "SET_REFERENCE", reference: value })}
               placeholder="Enter reference"
+              accessibilityLabel="Shipment reference"
               placeholderTextColor={colors.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -549,7 +555,7 @@ export function PackingStationScreen(props: {
             />
             {candidates.length > 0 ? (
               <View style={styles.fallback}>
-                <Text style={[styles.fallbackLabel, { color: tone.muted }]}>Imported orders</Text>
+                <Text style={[styles.fallbackLabel, { color: tone.muted }]}>Next in queue</Text>
                 {candidates.map((item) => (
                   <StationButton
                     key={item.proofId}
@@ -736,29 +742,48 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   content: {
     flexGrow: 1,
-    justifyContent: "center",
+    justifyContent: "flex-start",
     padding: 24,
     gap: 18,
   },
+  heading: { gap: 8 },
+  eyebrow: { ...typography.secondaryStrong, fontSize: 10, lineHeight: 15, letterSpacing: 1.5, textTransform: "uppercase" },
+  title: { ...typography.pageTitle, letterSpacing: -.6 },
+  steps: { flexDirection: "row", borderBottomWidth: 1, gap: 10 },
+  step: { flex: 1, borderBottomWidth: 2, paddingVertical: 10, gap: 4 },
+  stepNumber: { ...typography.secondaryStrong, fontSize: 10, lineHeight: 14 },
+  stepLabel: { ...typography.secondaryStrong, fontSize: 12, lineHeight: 17 },
   phase: {
-    fontSize: 42,
-    fontWeight: "800",
-    letterSpacing: 1,
+    ...typography.secondaryStrong,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
+    letterSpacing: .6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+    alignSelf: "flex-start",
   },
-  identity: { gap: 6 },
-  order: { fontSize: 28, fontWeight: "700" },
-  item: { fontSize: 22, fontWeight: "600" },
-  hint: { fontSize: 18, lineHeight: 26 },
-  error: { color: lightColors.error, fontSize: 16 },
+  identity: { gap: 8, padding: 20, borderWidth: 1, borderRadius: 10 },
+  order: { ...typography.sectionTitle, lineHeight: 25 },
+  item: { ...typography.secondaryStrong, lineHeight: 21 },
+  hint: { ...typography.secondary, lineHeight: 22 },
+  error: { ...typography.secondary, color: lightColors.error, lineHeight: 21, padding: 14, borderRadius: 8 },
+  stationIntro: { padding: 24, borderWidth: 1, borderRadius: 10, gap: 12 },
+  stationIcon: { width: 52, height: 52, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  selectionPanel: { padding: 18, borderWidth: 1, borderRadius: 10 },
   block: { gap: 12 },
   fallback: { gap: 8, marginTop: 8 },
-  fallbackLabel: { fontSize: 14, fontWeight: "700", letterSpacing: 0.6 },
+  fallbackLabel: { ...typography.secondaryStrong, letterSpacing: 0.6 },
   input: {
-    borderWidth: 2,
+    ...typography.body,
+    borderWidth: 1,
+    borderRadius: 8,
     borderColor: lightColors.border,
     backgroundColor: lightColors.surface,
     color: lightColors.textPrimary,
-    padding: 16,
-    fontSize: 20,
+    padding: 14,
+    minHeight: 48,
+    fontSize: 15,
   },
 });

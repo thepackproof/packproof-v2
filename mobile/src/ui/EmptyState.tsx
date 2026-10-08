@@ -13,8 +13,10 @@ export function EmptyState(props: {
 }) {
   const { colors } = useTheme();
   return (
-    <View style={styles.wrap} accessibilityRole="summary">
-      <Ionicons name={props.icon ?? "cube-outline"} size={36} color={colors.textSecondary} />
+    <View style={[styles.wrap, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityRole="summary">
+      <View style={[styles.icon, { backgroundColor: colors.surfaceElevated }]} accessibilityElementsHidden>
+        <Ionicons name={props.icon ?? "cube-outline"} size={26} color={colors.textSecondary} />
+      </View>
       <Text style={[styles.title, { color: colors.textPrimary }]}>{props.title}</Text>
       <Text style={[styles.body, { color: colors.textSecondary }]}>{props.body}</Text>
       {props.onAction && props.actionLabel ? <Button label={props.actionLabel} onPress={props.onAction} /> : null}
@@ -62,15 +64,16 @@ export function ErrorBanner(props: { message: string | null; technical?: string 
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: "center", gap: spacing.md, paddingVertical: spacing.xxxl },
-  title: { ...typography.sectionTitle, textAlign: "center" },
-  body: { ...typography.secondary, textAlign: "center" },
+  wrap: { alignItems: "center", gap: spacing.md, paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl, borderWidth: 1, borderRadius: radii.lg },
+  icon: { alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: radii.lg, marginBottom: spacing.xs },
+  title: { ...typography.cardTitle, textAlign: "center" },
+  body: { ...typography.secondary, textAlign: "center", maxWidth: 360 },
   banner: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },

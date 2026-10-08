@@ -16,9 +16,12 @@ function Provider({children}:{children:ReactNode}){
  const [targets]=useState(()=>new Map<string,View>());const [,render]=useState(0);
  useEffect(()=>{const off=controller.subscribe(()=>render(n=>n+1));void controller.load();const sub=AppState.addEventListener('change',s=>{if(s==='active')void controller.refresh();});const timer=setInterval(()=>{if(AppState.currentState==='active')void controller.refresh();},15000);return()=>{off();sub.remove();clearInterval(timer);controller.stop();};},[controller]);
  const snapshot=controller.snapshot;
- useEffect(()=>{if(app.route.name==='home'&&!app.busy&&!snapshot.open)controller.start();},[app.route.name,app.busy,snapshot.state?.onboarding_completed,snapshot.open]);
- const replay=()=>{app.go('home');controller.start(true);};
- return <Context.Provider value={{controller,targets,replay}}>{children}{snapshot.open&&app.route.name==='home'&&<Overlay/>}{!snapshot.open&&snapshot.state?.first_proof_completed&&!snapshot.state.first_proof_coaching_completed&&app.route.name==='home'&&<View style={{position:'absolute',bottom:90,left:16,right:16}}><Coaching kind="complete"/></View>}</Context.Provider>;
+ useEffect(()=>{if(['home','proofs'].includes(app.route.name)&&!app.busy&&!snapshot.open)controller.start();},[app.route.name,app.busy,snapshot.state?.onboarding_completed,snapshot.open]);
+ // The guided targets belong to the library. Preserve enrollment and the saved
+ // step when the new Home dashboard is the initial destination.
+ useEffect(()=>{if(snapshot.open&&app.route.name==='home')app.go('proofs');},[snapshot.open,app.route.name]);
+ const replay=()=>{app.go('proofs');controller.start(true);};
+ return <Context.Provider value={{controller,targets,replay}}>{children}{snapshot.open&&app.route.name==='proofs'&&<Overlay/>}{!snapshot.open&&snapshot.state?.first_proof_completed&&!snapshot.state.first_proof_coaching_completed&&['home','proofs'].includes(app.route.name)&&<View style={{position:'absolute',bottom:90,left:16,right:16}}><Coaching kind="complete"/></View>}</Context.Provider>;
 }
 export function TutorialTarget({name,children,flex}:{name:string;children:ReactNode;flex?:number}){const context=useContext(Context);return <View collapsable={false} style={flex?{flex}:undefined} ref={node=>{for(const key of name.split(' ').filter(Boolean)){if(node)context?.targets.set(key,node);else context?.targets.delete(key);}}}>{children}</View>;}
 export function ReplayTutorial(){const context=useContext(Context);const {colors}=useTheme();return <Pressable accessibilityRole="button" onPress={()=>context?.replay()} style={{padding:14,borderWidth:1,borderColor:colors.primary,borderRadius:10}}><Text style={{color:colors.primary,fontSize:16}}>Replay Tutorial</Text></Pressable>;}

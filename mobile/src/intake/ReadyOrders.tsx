@@ -91,7 +91,7 @@ export function ReadyOrders({ onPreparedProofsChange }: { onPreparedProofsChange
       } catch (reason) {
         if (!alive) return;
         failures += 1;
-        if (reason instanceof ApiError && [401, 403, 404, 410].includes(reason.status)) { setError('Reconnect this recording phone in Account → Connections.'); return; }
+        if (reason instanceof ApiError && [401, 403, 404, 410].includes(reason.status)) { setError('Reconnect this recording phone in Settings → Integrations.'); return; }
         setError('The phone is waiting to reconnect. Prepared orders stay available.');
       } finally { inFlight.current = false; }
       if (alive) timer = setTimeout(() => void tick(), handoffPollDelay(failures));

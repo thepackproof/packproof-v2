@@ -10,7 +10,7 @@ import { usePackProof } from "../app/PackProofProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { motion } from "../theme/motion";
 import { localProofWork, presentationForProof } from "../copy/proof-list";
-import { typography } from "../theme/tokens";
+import { radii, typography } from "../theme/tokens";
 import { formatDateTime } from "../copy/format";
 import { committedRecordEvidence, originalBookmarks, recordEvidenceKey, recordEvidenceLabel, type ProofRecordTab, type RecordEvidence } from "../copy/proof-record";
 import { type EvidenceAnchor, type SignatureView } from "../signature";
@@ -158,9 +158,9 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     <View style={[styles.tabBorder, { backgroundColor: colors.surface }]}>
       <ScrollView ref={tabScroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Proof record views">
         {tabs.map(({ key, label }) => <View key={key} style={styles.tabSlot} onLayout={event => { tabPositions.current[key] = { x: event.nativeEvent.layout.x, width: event.nativeEvent.layout.width }; if (tab === key) { positionIndicator(key, false); tabScroll.current?.scrollTo({ x: Math.max(0, event.nativeEvent.layout.x - 12), animated: false }); } }}><PressableScale accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === key }} onPress={() => selectTab(key)} style={[styles.tab, { backgroundColor: 'transparent' }]}>
-          <Text style={[styles.tabLabel, { color: tab === key ? colors.textPrimary : colors.textSecondary }]}>{label}</Text>
+          <Text style={[styles.tabLabel, { color: tab === key ? colors.accentText : colors.textSecondary }]}>{label}</Text>
         </PressableScale></View>)}
-        <Animated.View pointerEvents="none" accessible={false} style={[styles.tabIndicator, { backgroundColor: colors.surfaceElevated, opacity: indicatorVisible, transform: [{ translateX: indicatorX }, { scaleX: indicatorScale }] }]} />
+        <Animated.View pointerEvents="none" accessible={false} style={[styles.tabIndicator, { backgroundColor: colors.accentSoft, opacity: indicatorVisible, transform: [{ translateX: indicatorX }, { scaleX: indicatorScale }] }]} />
       </ScrollView>
     </View>
     <Animated.View style={[styles.panel, { opacity: fade }]}>
@@ -227,15 +227,15 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
 }
 
 const styles = StyleSheet.create({
-  record: { flex: 1, minHeight: 0, padding: 12, borderRadius: 18 },
+  record: { flex: 1, minHeight: 0, padding: 12, borderRadius: radii.lg },
   top: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 12, gap: 6, borderBottomWidth: 1 }, title: { ...typography.pageTitle, fontSize: 25, lineHeight: 34 },
-  subtitle: { ...typography.secondary }, tabBorder: { borderRadius: 18, overflow: "hidden" }, tabs: { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 4, gap: 4, flexGrow: 1 }, tabSlot: { flex: 1, zIndex: 1 },
+  subtitle: { ...typography.secondary }, tabBorder: { borderRadius: radii.md, overflow: "hidden" }, tabs: { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 4, gap: 4, flexGrow: 1 }, tabSlot: { flex: 1, zIndex: 1 },
   tab: { minWidth: 74, minHeight: 48, paddingHorizontal: 8, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" }, tabLabel: { ...typography.secondary, fontSize: 15 },
   tabIndicator: { position: "absolute", left: 0, top: 4, bottom: 4, width: 100, borderRadius: 10 },
   panel: { flex: 1, minHeight: 0 }, body: { paddingVertical: 20, paddingBottom: 24, gap: 20 },
   text: { ...typography.body }, note: { ...typography.secondary }, heading: { ...typography.sectionTitle },
-  empty: { gap: 12, padding: 16, borderRadius: 18 }, emptyIcon: { width: 58, height: 58, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  selectors: { gap: 8 }, selector: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  empty: { gap: 12, padding: 16, borderRadius: radii.lg }, emptyIcon: { width: 58, height: 58, borderRadius: radii.lg, alignItems: "center", justifyContent: "center" },
+  selectors: { gap: 8 }, selector: { minHeight: 48, borderWidth: 1, borderRadius: radii.md, paddingHorizontal: 12, paddingVertical: 10 },
   info: { gap: 12, paddingVertical: 4 }, eyebrow: { ...typography.caption, letterSpacing: 1.3, fontWeight: "700" },
   attestationStatement: { ...typography.bodyStrong, fontSize: 18, lineHeight: 26 }, finePrint: { ...typography.finePrint },
   headerMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
