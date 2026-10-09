@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { selectTaskHome, stableRecommendation, type HomeInput, type HomeProof, type HomeCapture, type HomeJob } from '../src/experience/task-home.ts';
 import { nativeHomeInput } from '../src/experience/home-adapter.ts';
 import type { LocalCapture } from '../src/capture';
-import { freshProofDestination } from '../src/experience/action-routing.ts';
+import { freshProofDestination, savedCaptureDestination } from '../src/experience/action-routing.ts';
 import type { ProofView } from '../src/v2-api';
 const proof=(id:string,overrides:Partial<HomeProof>={}):HomeProof=>({id,title:id,status:'READY_FOR_EVIDENCE',authorized:true,action:'capture',createdAt:'2026-01-01',updatedAt:'2026-01-01',completed:false,...overrides});
 const input=(overrides:Partial<HomeInput>={}):HomeInput=>({proofs:[],captures:[],jobs:[],orders:[],online:true,reconciled:true,...overrides});
@@ -99,4 +99,29 @@ test('tap-time routing uses refreshed permissions/state and never stale capture 
   assert.equal(freshProofDestination(stage,'seller').route,'receipt');
   const state=input({proofs:[proof('p',{status:'FINALIZED',completed:true,action:'continue',continuationAfterFinalization:true})],captures:[capture('old-root','p')]});
   const model=selectTaskHome(state);assert.equal(model.recommendation.kind,'continue_proof');assert.equal(model.counts.attention,1);assert.equal(model.counts.completed,1);
+});
+
+test('saved capture resume requires fresh capture permission; offline permits playback only',()=>{
+  const current={proofId:'p',status:'READY_FOR_EVIDENCE',workflowType:'COMMERCE_SALE',finalizedAt:null,participants:[{userId:'seller',role:'SELLER'}],evidence:[]} as unknown as ProofView;
+  assert.deepEqual(savedCaptureDestination(current,'seller'),{route:'capture',allowResume:true,reviewOnly:false,notice:null});
+  const offline=savedCaptureDestination(null,'seller');
+  assert.equal(offline.route,'capture');assert.equal(offline.reviewOnly,true);assert.equal(offline.allowResume,false);assert.match(offline.notice!,/Offline review only/);
+  for(const fresh of [
+    {...current,participants:[]},
+    {...current,status:'UNKNOWN'},
+    {...current,presentation:{canContribute:false,nextAction:{type:'RECORD_PACKING'},diagnostic:null}},
+    {...current,presentation:{canContribute:true,nextAction:{type:'RECORD_PACKING'},diagnostic:'unrecognized'}},
+  ] as ProofView[]) {
+    const result=savedCaptureDestination(fresh,'seller');
+    assert.equal(result.route,'proof');assert.equal(result.allowResume,false);assert.equal(result.reviewOnly,false);assert.match(result.notice!,/local recording is retained/);
+  }
+  const committed={...current,status:'EVIDENCE_COMMITTED',evidence:[{validationStatus:'COMMITTED',evidenceType:'FULFILLMENT_CAPTURE'}]} as ProofView;
+  assert.equal(savedCaptureDestination(committed,'seller').route,'finalize');assert.equal(savedCaptureDestination(committed,'seller').allowResume,false);
+  const finalized={...current,status:'FINALIZED',finalizedAt:'2026-10-09'} as ProofView;
+  assert.equal(savedCaptureDestination(finalized,'seller').route,'proof');assert.equal(savedCaptureDestination(finalized,'seller').allowResume,false);
+  const receipt={...finalized,presentation:{proofId:'p',displayStatus:'Receipt recording needed',completed:true,canContribute:true,diagnostic:null,needsAttention:true,nextAction:{type:'WORKFLOW_ACTION',label:'Record receipt'},shipmentStatus:null,share:{available:true,reason:null}}} as ProofView;
+  assert.equal(savedCaptureDestination(receipt,'seller').route,'receipt');assert.equal(savedCaptureDestination(receipt,'seller').allowResume,false);
+  const grading={...current,workflowType:'GRADING_SUBMISSION',nextAction:{type:'PACK_ITEMS'},presentation:{...receipt.presentation,completed:false,nextAction:{type:'WORKFLOW_ACTION',label:'Pack items'}}} as ProofView;
+  assert.equal(savedCaptureDestination(grading,'seller').allowResume,true);
+  assert.equal(savedCaptureDestination({...grading,nextAction:{type:'HAND_OFF'}} as ProofView,'seller').allowResume,false);
 });

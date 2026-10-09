@@ -1,6 +1,6 @@
-import { freshProofDestination } from "../experience/action-routing";
+import { freshProofDestination, savedCaptureDestination } from "../experience/action-routing";
 import { presentationForProof } from "../copy/proof-list";
-import { clearMobileUxMetrics, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
+import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
 import { orderShare } from '../../modules/packproof-order-share';
 import { clearNativeIntakeSession, stopNativeIntakeSession } from '../intake/native-session';
@@ -202,6 +202,7 @@ export interface PackProofContextValue {
   captureStatus: LocalCaptureStatus;
   uploadProgressByProof: Record<string, number | null>;
   savedRecordings: LocalCapture[];
+  captureReviewOnlyReason: string | null;
   resumeSavedCapture: (capture: LocalCapture) => Promise<void>;
   cleanUpSavedCapture: (capture: LocalCapture) => Promise<void>;
   discardSavedCapture: (capture: LocalCapture) => Promise<void>;
@@ -409,6 +410,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [proofCollection, setProofCollection] = useState<ProofCollectionItem[]>([]);
   const [invitationInput, setInvitationInput] = useState("");
   const [session, setSession] = useState<CachedClientState | null>(null);
+  useEffect(()=>{
+    if(session && MOBILE_TASK_UX_ENABLED)observeMobileDraftRoute(['create','manual','intake','scan','review'].includes(route.name)?'draft':['capture','station'].includes(route.name)?'capture':'other');
+  },[route.name,session?.userId,session?.apiBaseUrl]);
   const [proof, setProof] = useState<ProofView | null>(null);
   const [transactionDetail, setTransactionDetail] = useState<TransactionView | null>(null);
   const [intakeReview, setIntakeReview] = useState<IntakePreview | null>(null);
@@ -429,6 +433,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [manifest, setManifest] = useState<ManifestView | null>(null);
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [savedRecordings, setSavedRecordings] = useState<LocalCapture[]>([]);
+  const [captureReviewOnlyReason,setCaptureReviewOnlyReason] = useState<string|null>(null);
   const recoveryConnection = useRef<boolean | null>(null);
   const retryOnConnection = useRef(false);
   const recoveryTickRef = useRef<() => Promise<void>>(async () => {});
@@ -593,7 +598,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     proofRecordViews.current.clear();
     workspaceOffsets.current={home:0,activity:0};activityFilterMemory.current="all"; setWorkspaceFreshAt(null); setWorkspaceReconciled(false); setSelectedTask(null); taskInteractions.current={}; clearMobileUxMetrics(); setScanResult(null);setScanCandidates([]);setScanInput("");setScanPhase("camera");
     setProofsLibrary({...DEFAULT_PROOFS_LIBRARY}); proofsScrollOffset.current = 0;
-    setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]);
+    setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]); setCaptureReviewOnlyReason(null);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
       await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
@@ -788,6 +793,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (next && (next.captureUserId !== current.userId || (next.recovery && next.recovery.apiBaseUrl !== client.apiBaseUrl)))
       throw Object.assign(new Error("The recording belongs to another account. Sign in to its original account to resume."), { code: "ACCOUNT_CHANGED" });
     setLocalCapture(next);
+    if(!next)setCaptureReviewOnlyReason(null);
     await persist({
       ...current,
       captureUri: next?.uri ?? null,
@@ -993,13 +999,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
     go("proof");
   }
 
-  async function run(action: () => Promise<void>): Promise<void> {
+  async function run(action: () => Promise<void>, options?: { localReview?: boolean }): Promise<void> {
     const actionAccount=sessionRef.current;
     setBusy(true);
     setError(null);
     setErrorDetail(null);
     try {
-      if (route.name !== "auth") await ensureFreshCognitoToken();
+      if (route.name !== "auth" && !options?.localReview) await ensureFreshCognitoToken();
       await action();
     } catch (err) {
       if(actionAccount && (sessionRef.current?.userId!==actionAccount.userId || sessionRef.current.apiBaseUrl!==actionAccount.apiBaseUrl))return;
@@ -1357,21 +1363,47 @@ export function PackProofProvider(props: { children: ReactNode }) {
     captureStatus,
     uploadProgressByProof,
     savedRecordings,
+    captureReviewOnlyReason,
     resumeSavedCapture: async capture => run(async () => {
       const current = sessionRef.current;
       if (!current || capture.captureUserId !== current.userId || capture.recovery?.apiBaseUrl !== client.apiBaseUrl)
         throw new Error("Sign in to the original account to open this recording.");
+      const assertOriginalAccount=()=>{
+        if(sessionRef.current?.userId!==current.userId || sessionRef.current.apiBaseUrl!==current.apiBaseUrl)
+          throw Object.assign(new Error("Sign in to the original account to resume."),{code:"ACCOUNT_CHANGED"});
+      };
       if (current.stationActive && current.captureUri && current.captureUri !== capture.uri)
         throw new Error("Finish saving the recording already open in batch packing before opening another. Both recordings remain on this device.");
       if (current.stationActive && !current.captureUri) await persist({ ...current, stationActive:false, stationPhase:null, stationProofId:null, stationTransactionId:null, stationOrderLabel:null, stationItemSummary:null });
+      assertOriginalAccount();
       if (capture.captureStageId) { value.openReceipt(capture.captureProofId!); return; }
       if (capture.recovery?.phase === "RECORDING") throw new Error("This interrupted recording did not finish saving a playable video. Its bytes remain on this device for inspection.");
       if(!await localCaptureExists(capture.uri))throw new Error("The completed original is unavailable. Review recovery options in Activity.");
-      await openProof(capture.captureProofId!);
-      if(cacheRef.current.records[capture.captureProofId!]?.status==="FINALIZED") {setError("This Proof has already been finalized. Your local recording is retained; review it in Activity.");return;}
-      if (sessionRef.current?.userId !== current.userId) throw Object.assign(new Error("Sign in to the original account to resume."), { code: "ACCOUNT_CHANGED" });
+      if(capture.encodedInspection?.playable===false || !(Number(capture.byteSize)>0 && Number(capture.durationMs)>0))
+        throw new Error("A playable completed recording has not been confirmed. Review recovery options in Activity.");
+      let fresh:ProofView|null=null;
+      if(!offline) {
+        try {await ensureFreshCognitoToken();assertOriginalAccount();fresh=await refreshProof(capture.captureProofId!);}
+        catch(error) {assertOriginalAccount();if(!isNetworkFailure(error))throw error;setOffline(true);}
+      }
+      assertOriginalAccount();
+      const destination=savedCaptureDestination(fresh,current.userId);
+      if(!destination.allowResume && !destination.reviewOnly) {
+        if(destination.route==='receipt')value.openReceipt(capture.captureProofId!);else go(destination.route);
+        setError(destination.notice);return;
+      }
+      if(destination.reviewOnly) {
+        const cached=cacheRef.current.records[capture.captureProofId!];
+        setProof(cached??null);setTransactionDetail(cached?.transaction??null);
+        await persist({...sessionRef.current!,proofId:capture.captureProofId!,transactionId:cached?.transactionId??null});
+        assertOriginalAccount();
+      }
       await persistCapture(capture, capture.recovery.evidenceIdempotencyKey);
+      assertOriginalAccount();
+      setCaptureReviewOnlyReason(destination.reviewOnly?destination.notice:null);
+      if(destination.reviewOnly){setCaptureStatus('retry');go('capture');return;}
       (await nativeStudyForCapture(client,current.userId,capture.studyTimingRef))?.event("recovery_started");
+      assertOriginalAccount();
       setCaptureStatus("retry");
       if (!capture.recovery.submitRequested) { go("capture"); return; }
       if (capture.recovery.needsSellerAttestation && (!capture.recovery.authorization || Date.parse(capture.recovery.authorization.expiresAt) <= Date.now())) {
@@ -1382,10 +1414,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
       capture.recovery.completionNotificationRequested = true;
       if (!['PRESERVATION_PENDING','FINALIZATION_PENDING','SUBMITTED'].includes(capture.recovery.phase)) capture.recovery.phase = 'UPLOAD_QUEUED';
       await persistCaptureMetadata(capture);
+      assertOriginalAccount();
       await persistCapture(null, null);
       setCaptureStatus("idle"); setUploadPercent(null); go("home");
       void recoveryTickRef.current();
-    }),
+    },{localReview:true}),
     discardSavedCapture: async capture => run(() => discardSavedRecording(capture)),
     discardIncompleteEvidence: async evidenceId => run(async () => {
       const current = sessionRef.current;
@@ -1599,6 +1632,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setConnectedProviders([]);
         setTransactionDetail(null);
         setLocalCapture(null);
+        setCaptureReviewOnlyReason(null);
         setCaptureStatus("idle");
         setUploadPercent(null);
         setCreateForm(EMPTY_FORM);
@@ -1958,6 +1992,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     },
     startCapture: async () =>
       run(async () => {
+        if(captureReviewOnlyReason)throw new Error("Reconnect and check this saved recording's current Proof before recording again.");
         if (!proof) {
           return;
         }
@@ -1995,6 +2030,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       captureSubmitLock.current = true;
       try {
         await run(async () => {
+          if(captureReviewOnlyReason)throw new Error("Reconnect and check this saved recording's current Proof before submitting.");
           if (!localCapture || !proof || !sessionRef.current) {
             return;
           }
