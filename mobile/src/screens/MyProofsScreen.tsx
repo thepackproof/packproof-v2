@@ -58,10 +58,13 @@ export function MyProofsScreen() {
     const presentation = { ...presentationForProof(item, item.role, localProofWork(capture, uploading ? 'uploading' : app.session?.captureProofId === item.proofId ? app.captureStatus : undefined, uploading ? app.uploadProgressByProof[item.proofId] : undefined)) };
     if (actionable) {
       const action = actionable.get(item.proofId);
-      presentation.needsAttention = Boolean(action);
-      if (action) presentation.nextAction = { type: presentation.nextAction.type, label: action.buttonLabel };
+      // A frozen root can still have a separately authorized receipt/return stage.
+      const laterStage = item.status === 'FINALIZED' && item.presentation?.canContribute === true && item.presentation.nextAction.type === 'WORKFLOW_ACTION';
+      presentation.needsAttention = Boolean(action) || laterStage;
+      if (laterStage) presentation.nextAction = { ...item.presentation!.nextAction };
+      else if (action) presentation.nextAction = { type: presentation.nextAction.type, label: action.buttonLabel };
       if (action?.kind === 'reconcile') presentation.displayStatus = 'Status needs refresh';
-      if (!action && capture?.recovery && !['FINALIZED', 'SUBMITTED'].includes(capture.recovery.phase)) {
+      if (!action && !laterStage && capture?.recovery && !['FINALIZED', 'SUBMITTED'].includes(capture.recovery.phase)) {
         presentation.displayStatus = app.offline && ['LOCAL_ONLY', 'UPLOAD_QUEUED'].includes(capture.recovery.phase) ? 'Waiting for connection' : captureRecoveryLabel(capture.recovery.phase);
       }
     }
