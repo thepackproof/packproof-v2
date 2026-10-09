@@ -49,10 +49,11 @@ export function selectTaskHome(input:HomeInput) {
   actions.sort((a,b)=>a.rank-b.rank || Number(b.targetId===input.selection)-Number(a.targetId===input.selection) || (input.interactions?.[b.targetId!] ?? 0)-(input.interactions?.[a.targetId!] ?? 0) || time(proofs.get(a.targetId!)!.createdAt)-time(proofs.get(b.targetId!)!.createdAt) || a.targetId!.localeCompare(b.targetId!) || (a.sessionId??'').localeCompare(b.sessionId??''));
   for (const action of actions) action.count=actions.filter(other=>other.kind===action.kind).length;
   const create:HomeAction={kind:'create_proof',targetId:null,rank:6,title:!proofs.size && input.reconciled?'Create your first Proof':'Create a Proof',reason:input.online?'Record the item, packing, seal, and label in one continuous video.':'Connect before creating a Proof. Your saved work remains available.',buttonLabel:'Create Proof',count:1,sourceFreshness:input.reconciled?'server':'unknown'};
-  return {recommendation:actions.find(a=>a.rank<6) ?? (actions.find(a=>a.kind==='reconcile') || create), actions, counts:{attention:attentionIds.size,uploading:jobs.filter(j=>j.active).length,waiting:jobs.filter(j=>j.waiting&&!j.active).length,completed:[...proofs.values()].filter(p=>p.status==='FINALIZED'&&p.completed).length}};
+  return {creation:create,recommendation:actions.find(a=>a.rank<6) ?? (actions.find(a=>a.kind==='reconcile') || create), actions, counts:{attention:attentionIds.size,uploading:jobs.filter(j=>j.active).length,waiting:jobs.filter(j=>j.waiting&&!j.active).length,completed:[...proofs.values()].filter(p=>p.status==='FINALIZED'&&p.completed).length}};
 }
 
 /** Pin a still-valid target during focus/press; never retain a target which became invalid. */
 export function stableRecommendation(previous:HomeAction|null,next:ReturnType<typeof selectTaskHome>,interacting:boolean):HomeAction {
+  if(interacting && previous?.kind==='create_proof')return next.creation;
   return interacting && previous ? next.actions.find(a=>actionIdentity(a)===actionIdentity(previous)) ?? next.recommendation : next.recommendation;
 }

@@ -69,6 +69,15 @@ test('tie ordering is explicit selection, last interaction, oldest actionable, s
   state.selection='z';assert.equal(selectTaskHome(state).recommendation.targetId,'z');
   assert.deepEqual(selectTaskHome({...state,proofs:[...state.proofs].reverse()}).actions,selectTaskHome(state).actions);
 });
+test('focused manual creation survives newly actionable work and refreshes offline explanation',()=>{
+  const previous=selectTaskHome(input()).recommendation;
+  const changed=input({proofs:[proof('new')],captures:[capture('saved','new')]});
+  assert.equal(stableRecommendation(previous,selectTaskHome(changed),true).kind,'create_proof');
+  assert.equal(stableRecommendation(previous,selectTaskHome(changed),false).kind,'review_evidence');
+  changed.online=false;changed.reconciled=false;
+  assert.match(stableRecommendation(previous,selectTaskHome(changed),true).reason,/Connect/);
+});
+
 test('focused recommendation stays stable only while valid; another device completion invalidates it',()=>{
   const state=input({proofs:[proof('a'),proof('b')]});const first=selectTaskHome(state).recommendation;
   state.selection='b';assert.equal(stableRecommendation(first,selectTaskHome(state),true).targetId,'a');
