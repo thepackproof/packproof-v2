@@ -20,12 +20,14 @@ function isReleaseSafeApiUrl(url) {
 const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
 const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
+const isMobileUxReview = easProfile === "mobile-ux-review";
+const isAndroidRelease = isPlayRelease || isMobileUxReview;
 const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
-const isRelease = isPlayRelease || isIosRelease;
+const isRelease = isAndroidRelease || isIosRelease;
 // expo-constants packages this public config as Android assets/app.config.
 // Use worker source metadata, never a persistent public environment value.
-const androidBuildSha = isPlayRelease ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
-if (isPlayRelease && (env("EAS_BUILD") === "true" || androidBuildSha) && !/^[a-f0-9]{40}$/.test(androidBuildSha)) {
+const androidBuildSha = isAndroidRelease ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
+if (isAndroidRelease && (env("EAS_BUILD") === "true" || androidBuildSha) && !/^[a-f0-9]{40}$/.test(androidBuildSha)) {
   throw new Error("Android store build requires a valid EAS source commit for its packaged config");
 }
 const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
@@ -90,7 +92,7 @@ module.exports = {
       package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
       versionCode: androidVersionCode,
       allowBackup: false,
-      usesCleartextTraffic: !isPlayRelease,
+      usesCleartextTraffic: !isAndroidRelease,
       ...(process.env.GOOGLE_SERVICES_JSON ? {googleServicesFile:process.env.GOOGLE_SERVICES_JSON} : {}),
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
@@ -154,6 +156,7 @@ module.exports = {
       },
       packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
       ...(androidBuildSha ? { packproofBuildSha: androidBuildSha } : {}),
+      ...(isMobileUxReview ? { packproofInternalReview: true, packproofMobileTaskUx: env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX") === "true" } : {}),
     },
   },
 };

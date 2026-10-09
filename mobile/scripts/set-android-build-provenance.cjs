@@ -1,8 +1,8 @@
 // EAS does not forward arbitrary variables from the machine submitting a build.
-// Bind Android store bundles to the worker's source revision before Metro runs,
+// Bind Android store bundles and internal review APKs to the worker revision before Metro runs,
 // overriding any older public revision retained in the shared EAS environment.
 const { spawnSync } = require('node:child_process');
-const releaseProfiles = new Set(['internal-staging', 'shipping-integration', 'production']);
+const releaseProfiles = new Set(['internal-staging', 'shipping-integration', 'production', 'mobile-ux-review']);
 
 function setAndroidBuildProvenance(env = process.env, run = spawnSync) {
   if (env.EAS_BUILD !== 'true' || env.EAS_BUILD_PLATFORM !== 'android' || !releaseProfiles.has(env.EAS_BUILD_PROFILE)) {
