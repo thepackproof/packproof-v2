@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePackProof } from "../app/PackProofProvider";
 import { spacing, typography } from "../theme/tokens";
@@ -16,7 +16,7 @@ export function ScanScreen() {
   const result = app.scanResult;
 
   return (
-    <View
+    <ScrollView contentContainerStyle={{flexGrow:1}}
       style={[
         styles.root,
         {
@@ -65,6 +65,7 @@ export function ScanScreen() {
         </>
       ) : null}
 
+      {app.scanPhase === "ambiguous" ? <View style={styles.found}><Text style={[styles.prompt,{color:colors.scanMuted}]}>More than one shipment matches. Select the shipment before continuing.</Text>{app.scanCandidates.map(row=><Button key={row.proofId} label={row.transaction.itemTitle || row.transaction.externalReference || "Shipment Proof"} onPress={()=>void app.openProofAction(row.proofId)} loading={app.busy} />)}<Button label="View all orders" variant="secondary" onPress={()=>app.go("orders")}/><Button label="Try another reference" variant="tertiary" onPress={()=>app.setScanPhase("reference")}/></View> : null}
       {app.scanPhase === "found" && result ? (
         <View style={[styles.found, { backgroundColor: colors.surfaceElevated }]}>
           <Text style={[styles.item, { color: colors.scanText }]}>{result.itemSummary}</Text>
@@ -78,14 +79,14 @@ export function ScanScreen() {
       {app.scanPhase === "missing" ? (
         <View style={[styles.found, { backgroundColor: colors.surfaceElevated }]}>
           <Text style={[styles.prompt, { color: colors.scanMuted }]}>We couldn’t find a matching order.</Text>
-          <Button label="Import purchase" onPress={() => void app.importPurchase()} />
-          <Button label="Enter manually" onPress={() => app.go("manual")} variant="secondary" />
+          <Text style={[styles.meta,{color:colors.scanMuted}]}>Reference: {app.scanInput}. Confirm this reference in the new Proof before associating it. A barcode is not evidence capture.</Text>
+          <Button label="Create Proof with this reference" onPress={() => app.go("manual")} />
           <Button label="Scan again" onPress={() => app.setScanPhase("camera")} variant="tertiary" />
         </View>
       ) : null}
 
       {app.scanPhase === "camera" ? null : <Button label="Cancel" onPress={app.goBack} variant="tertiary" />}
-    </View>
+    </ScrollView>
   );
 }
 
