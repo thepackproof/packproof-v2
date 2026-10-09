@@ -40,7 +40,7 @@ describe("Android 16 system Back compatibility", () => {
     expect(resolveBackRoute(route)).toBe(parent);
   });
 
-  it.each(["orders", "station"] as const)("returns minimal manual creation from retired %s origins to Proofs", (origin) => {
-    expect(resolveBackRoute("manual", origin)).toBe("home");
+  it.each(["orders", "station", "activity"] as const)("returns manual creation to its selected %s source", (origin) => {
+    expect(resolveBackRoute("manual", origin)).toBe(origin);
   });
 });
