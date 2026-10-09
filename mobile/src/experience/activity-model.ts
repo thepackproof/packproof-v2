@@ -4,6 +4,7 @@ export interface ActivityCaptureState {
   interrupted?: boolean;
   byteSize?: number | null;
   durationMs?: number | null;
+  encodedInspection?: { playable: boolean };
   localFileAvailable?: boolean;
   recovery?: Pick<CaptureRecoveryState, "phase" | "submitRequested" | "lastError">;
 }
@@ -20,5 +21,5 @@ export function activityGroup(capture: ActivityCaptureState): "attention" | "upl
 
 /** Unexpected stop is reviewable only after a completed native recording was validated. */
 export function activityRecordingUsable(capture: ActivityCaptureState): boolean {
-  return Boolean(capture.recovery && capture.recovery.phase !== "RECORDING" && capture.localFileAvailable !== false && Number(capture.byteSize) > 0 && Number(capture.durationMs) > 0);
+  return Boolean(capture.recovery && capture.recovery.phase !== "RECORDING" && capture.localFileAvailable !== false && capture.encodedInspection?.playable !== false && Number(capture.byteSize) > 0 && Number(capture.durationMs) > 0);
 }

@@ -35,6 +35,13 @@ test("validated completed media remains reviewable after an unexpected stop", ()
   assert.equal(activityRecordingUsable({ ...recovered, recovery: { phase: "RECORDING", submitRequested: false } }), false);
 });
 
+test("a known unplayable completed file cannot be offered for evidence review", () => {
+  const corrupted = { ...capture("LOCAL_ONLY", false), encodedInspection: { playable: false } };
+  assert.equal(activityRecordingUsable(corrupted), false);
+  assert.equal(activityGroup(corrupted), "attention");
+  assert.equal(activityRecordingUsable({ ...corrupted, encodedInspection: { playable: true } }), true);
+});
+
 test("submission and finalization are separate milestones", () => {
   assert.equal(activityGroup(capture("SUBMITTED")), "uploading");
   assert.equal(activityGroup(capture("FINALIZATION_PENDING")), "uploading");
