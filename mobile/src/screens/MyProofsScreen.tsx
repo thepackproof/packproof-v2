@@ -55,7 +55,7 @@ export function MyProofsScreen() {
     const capture = app.savedRecordings.find(row => row.captureProofId === item.proofId && row.recovery?.phase !== 'FINALIZED')
       ?? (app.session?.captureProofId === item.proofId ? app.localCapture : null);
     const uploading = Object.prototype.hasOwnProperty.call(app.uploadProgressByProof, item.proofId);
-    const presentation = presentationForProof(item, item.role, localProofWork(capture, uploading ? 'uploading' : app.session?.captureProofId === item.proofId ? app.captureStatus : undefined, uploading ? app.uploadProgressByProof[item.proofId] : undefined));
+    const presentation = { ...presentationForProof(item, item.role, localProofWork(capture, uploading ? 'uploading' : app.session?.captureProofId === item.proofId ? app.captureStatus : undefined, uploading ? app.uploadProgressByProof[item.proofId] : undefined)) };
     if (actionable) {
       const action = actionable.get(item.proofId);
       presentation.needsAttention = Boolean(action);
