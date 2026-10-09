@@ -67,6 +67,9 @@
     "ios-simulator": {
       "extends": "ios-testflight",
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true"
+      },
       "ios": {
         "simulator": true,
         "autoIncrement": false

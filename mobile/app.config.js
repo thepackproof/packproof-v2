@@ -21,6 +21,7 @@ const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
 const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
 const isMobileUxReview = easProfile === "mobile-ux-review";
+const isIosSimulatorReview = easProfile === "ios-simulator";
 const isAndroidRelease = isPlayRelease || isMobileUxReview;
 const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
 const isRelease = isAndroidRelease || isIosRelease;
@@ -28,9 +29,10 @@ const isRelease = isAndroidRelease || isIosRelease;
 const mobileTaskUxEnabled = env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX", "true") !== "false";
 // expo-constants packages this public config as Android assets/app.config.
 // Use worker source metadata, never a persistent public environment value.
-const androidBuildSha = isAndroidRelease ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
-if (isAndroidRelease && (env("EAS_BUILD") === "true" || androidBuildSha) && !/^[a-f0-9]{40}$/.test(androidBuildSha)) {
-  throw new Error("Android store build requires a valid EAS source commit for its packaged config");
+const sourceBoundProfile = isAndroidRelease || isIosSimulatorReview;
+const buildSourceSha = sourceBoundProfile ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
+if (sourceBoundProfile && (env("EAS_BUILD") === "true" || buildSourceSha) && !/^[a-f0-9]{40}$/.test(buildSourceSha)) {
+  throw new Error("Source-bound build requires a valid EAS source commit for its packaged config");
 }
 const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
@@ -157,8 +159,8 @@ module.exports = {
         projectId: "0196c3f7-cb3a-472c-99be-825558f227e8",
       },
       packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
-      ...(androidBuildSha ? { packproofBuildSha: androidBuildSha } : {}),
-      ...(isMobileUxReview ? { packproofInternalReview: true, packproofMobileTaskUx: env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX") === "true" } : {}),
+      ...(buildSourceSha ? { packproofBuildSha: buildSourceSha } : {}),
+      ...(isMobileUxReview || isIosSimulatorReview ? { packproofInternalReview: true, packproofMobileTaskUx: env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX") === "true" } : {}),
     },
   },
 };

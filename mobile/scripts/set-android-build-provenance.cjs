@@ -23,13 +23,33 @@ function setAndroidBuildProvenance(env = process.env, run = spawnSync) {
   return true;
 }
 
+// Simulator review builds use the same worker-only binding. Deliberately leave
+// signed device and TestFlight build behavior unchanged.
+function setIosSimulatorBuildProvenance(env = process.env, run = spawnSync) {
+  if (env.EAS_BUILD !== 'true' || env.EAS_BUILD_PLATFORM !== 'ios' || env.EAS_BUILD_PROFILE !== 'ios-simulator') {
+    return false;
+  }
+  const sourceSha = env.EAS_BUILD_GIT_COMMIT_HASH;
+  if (typeof sourceSha !== 'string' || !/^[a-f0-9]{40}$/.test(sourceSha)) {
+    throw new Error('iOS simulator review build requires a valid EAS source commit.');
+  }
+  const result = run('set-env', ['EXPO_PUBLIC_PACKPROOF_BUILD_SHA', sourceSha], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error('Could not bind iOS simulator build provenance for subsequent build phases.');
+  }
+  return true;
+}
+
 if (require.main === module) {
   try {
     if (setAndroidBuildProvenance()) console.log('Android bundle source revision bound to EAS build metadata.');
+    if (setIosSimulatorBuildProvenance()) console.log('iOS simulator bundle source revision bound to EAS build metadata.');
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
   }
 }
 
-module.exports = { setAndroidBuildProvenance };
+module.exports = { setAndroidBuildProvenance, setIosSimulatorBuildProvenance };

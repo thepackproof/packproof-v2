@@ -76,8 +76,8 @@ test('Android worker config fails closed without source metadata while pre-submi
   assert.equal(Object.hasOwn(JSON.parse(local.stdout).extra, 'packproofBuildSha'), false);
 });
 
-test('provenance metadata cannot alter any iOS config field', () => {
-  for (const profile of ['ios-simulator', 'ios-device', 'ios-testflight']) {
+test('provenance metadata cannot alter any signed iOS config field', () => {
+  for (const profile of ['ios-device', 'ios-testflight']) {
     const base = { EAS_BUILD_PLATFORM: 'ios', EAS_BUILD_PROFILE: profile };
     const previous = resolveConfig({ ...base, EAS_BUILD_GIT_COMMIT_HASH: '', EXPO_PUBLIC_PACKPROOF_BUILD_SHA: '' });
     const current = resolveConfig(base);
