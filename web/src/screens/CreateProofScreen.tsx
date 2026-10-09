@@ -3,7 +3,9 @@ import type { IntakePreview } from "@packproof/copy/order-intake";
 import { IntakePanel } from "../components/IntakePanel";
 import type { EbaySellerOrderView, TransactionImportView, TransactionWriteInput } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
+import { useBrowserOnline } from "../components/WorkstationHeader";
 export function CreateProofScreen(props: {
+  initialReference?: string;
   readyOrders?: ReactNode;
   busy: boolean;
   error: string | null;
@@ -26,7 +28,8 @@ export function CreateProofScreen(props: {
   onConfirmImport: (transactionId: string) => void;
 }) {
   const [title, setTitle] = useState("");
-  const [reference, setReference] = useState("");
+  const [reference, setReference] = useState(props.initialReference || "");
+  const online = useBrowserOnline();
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [quantity, setQuantity] = useState("1");
@@ -39,6 +42,8 @@ export function CreateProofScreen(props: {
   function reviewIntake(result: IntakePreview) { setIntake(result); setTitle(result.draft.itemTitle || ""); setReference(result.draft.externalReference || ""); setCurrency(result.draft.currency || "USD"); setQuantity(result.draft.quantity == null ? "1" : String(result.draft.quantity)); setAmount(result.draft.transactionValue == null ? "" : String(result.draft.transactionValue)); setCarrier(result.draft.shipping.carrier || ""); setTracking(result.draft.shipping.trackingNumber || ""); setPaste(false); }
   const quantityNumber = Math.max(1, Number.parseInt(quantity,10) || 1);
   return <main className="page narrow-page"><PageHeader title="Record shipment" onBack={props.onCancel} />
+    {!online && <p className="banner" role="status">A connection is needed to create this Proof before capture. Your entered details stay in this form while it is open.</p>}
+    {props.initialReference && <p className="note">Shipment reference: {props.initialReference}. Check the optional details before opening the camera.</p>}
     {props.readyOrders}
     {props.error ? <p role="alert" className="banner banner-error">{props.error}</p> : null}
     {paste && props.onPreviewIntake ? (props.renderIntakePanel ? props.renderIntakePanel(reviewIntake) : <IntakePanel onPreview={props.onPreviewIntake} onReview={reviewIntake} />) : null}
@@ -56,7 +61,7 @@ export function CreateProofScreen(props: {
         <label className="field"><span>Carrier</span><input placeholder="USPS, UPS, FedEx…" value={carrier} onChange={e=>setCarrier(e.target.value)} /></label>
         <label className="field"><span>Tracking number</span><input value={tracking} onChange={e=>setTracking(e.target.value)} /></label>
       </div></details>
-      <button className="btn" disabled={props.busy || !title.trim()} type="submit">{props.busy ? "Opening…" : "Open camera"}</button>
+      <button className="btn" disabled={props.busy || !title.trim() || !online} type="submit">{props.busy ? "Opening…" : "Open camera"}</button>
     </form>
     <details><summary>Document a grading submission</summary>
       <label className="field"><span>Number of items</span><input value={gradingCount} onChange={e => setGradingCount(e.target.value)} type="number" min={1} max={50} step={1} /></label>

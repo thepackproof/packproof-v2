@@ -1,3 +1,4 @@
+import { recordMobileUxEvent } from "../../mobile/src/analytics/mobile-ux-events";
 import type { CaptureContext } from "../../backend/src/capture/core";
 import { sealBrowserEngine, recoverBrowserEngine, forgetBrowserEngine } from "./capture/engine";
 import { randomId } from "./random-id";
@@ -219,7 +220,7 @@ async function preserveCaptureUnlocked(
       await queue("readwrite",store=>store.put(pending!));
     }
     if (!pending.uploadReceived) await trackTransfer(api, key, () => api.uploadResumable(proofId, evidenceId, pending.file, progress));
-    await api.commitEvidence(proofId, evidenceId);
+    await api.commitEvidence(proofId, evidenceId); recordMobileUxEvent("commitment");
   }
   pending.committed = true;
   pending.retryStopped = false;
@@ -415,9 +416,9 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
           api:{
             getProof:async id=>{assertCurrent(active);const value=await api.getProof(id);assertCurrent(active);return value;},
             initializeEvidenceUpload:async(id,input)=>{assertCurrent(active);const value=await api.initializeEvidenceUpload(id,{...input,byteSize:pending.file.size});assertCurrent(active);return value;},
-            commitEvidence:async(id,evidenceId)=>{assertCurrent(active);const value=await api.commitEvidence(id,evidenceId);assertCurrent(active);return value;},
+            commitEvidence:async(id,evidenceId)=>{assertCurrent(active);const value=await api.commitEvidence(id,evidenceId);assertCurrent(active);recordMobileUxEvent("commitment");return value;},
             createAttestation:async(id,input)=>{assertCurrent(active);const value=await api.createAttestation(id,input);assertCurrent(active);return value;},
-            finalizeProof:async id=>{assertCurrent(active);const value=await api.finalizeProof(id);assertCurrent(active);return value;},
+            finalizeProof:async id=>{assertCurrent(active);const value=await api.finalizeProof(id);assertCurrent(active);if(value.proof.status==="FINALIZED"&&value.proof.finalizedAt)recordMobileUxEvent("finalization");return value;},
           },
           upload:async(target,_capture,progress)=>{
             assertCurrent(active); if ((target as typeof target & {received?:boolean}).received) {progress(100);return;}
@@ -490,14 +491,14 @@ export function resumeStageRecording(api:PackProofApi,userId:string,key:string,a
   }).finally(()=>{stageJobs.delete(jobKey);});stageJobs.set(jobKey,job);return job;
 }
 
-export type LocalRecordingSummary={evidenceId?:string;available?:boolean;active?:boolean;discardRequested?:boolean;key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;submitted?:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
+export type LocalRecordingSummary={retryScheduled?:boolean;interrupted?:boolean;evidenceId?:string;available?:boolean;active?:boolean;discardRequested?:boolean;key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;submitted?:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
 export async function listRecoverableRecordings(userId:string,api?:PackProofApi):Promise<LocalRecordingSummary[]>{
   const ordinary=(await listLocalRecordings(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
-  const station=await recoverStationCapture(userId);
+  const station=await recoverStationCapture(userId,api?.recoveryScope);
   const stages=(await listStageCaptures(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
   return [
     ...ordinary.map(item=>({...recordingRecoveryFields(item,api),key:item.key,kind:"ordinary" as const,file:item.file,proofId:item.proofId!,preserved:!!item.preserved,finalized:!!item.finalized,submitted:!!item.submitted,committed:!!item.committed,accepted:true,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
-    ...(station&&(!api||scopeMatches(station.apiScope,api))?[{...recordingRecoveryFields(station,api),key:station.key,kind:"station" as const,file:station.file,proofId:station.order.proofId,preserved:!!station.preserved,finalized:false,committed:!!station.committed,accepted:station.finishConfirmed,errorMessage:station.errorMessage,retryStopped:station.retryStopped}]:[]),
+    ...(station&&(!api||scopeMatches(station.apiScope,api))?[{...recordingRecoveryFields(station,api),key:station.key,kind:"station" as const,interrupted:station.interrupted,file:station.file,proofId:station.order.proofId,preserved:!!station.preserved,finalized:false,committed:!!station.committed,accepted:station.finishConfirmed,errorMessage:station.errorMessage,retryStopped:station.retryStopped}]:[]),
     ...stages.map(item=>({...recordingRecoveryFields(item,api),key:item.key,kind:"stage" as const,file:item.file,proofId:item.proofId??item.key.slice(userId.length+1,item.key.lastIndexOf(":stage:")),preserved:false,finalized:false,committed:false,accepted:!!item.submitRequested,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
   ];
 }
@@ -509,8 +510,8 @@ async function trackTransfer<T>(api:PackProofApi,key:string,run:()=>Promise<T>):
   transfers.add(identity); notifyUploadChange();
   try { return await run(); } finally { transfers.delete(identity); notifyUploadChange(); }
 }
-function recordingRecoveryFields(item: {key:string;file?:Blob;evidenceId?:string;discardRequested?:boolean}, api?:PackProofApi) {
-  return {evidenceId:item.evidenceId,available:!!item.file?.size,active:transfers.has(`${api?.recoveryScope || ""}:${item.key}`),discardRequested:item.discardRequested};
+function recordingRecoveryFields(item: {key:string;file?:Blob;evidenceId?:string;discardRequested?:boolean;nextAttemptAt?:number;retryStopped?:boolean}, api?:PackProofApi) {
+  return {retryScheduled:!!item.nextAttemptAt && !item.retryStopped,evidenceId:item.evidenceId,available:!!item.file?.size,active:transfers.has(`${api?.recoveryScope || ""}:${item.key}`),discardRequested:item.discardRequested};
 }
 function missingRecording():Error { return Object.assign(new Error("The original recording is no longer available on this device."),{code:"CAPTURE_LOCAL_FILE_MISSING",status:422}); }
 function discardPending():Error { return Object.assign(new Error("This incomplete recording is queued for discard."),{code:"CAPTURE_DISCARD_PENDING",status:409}); }

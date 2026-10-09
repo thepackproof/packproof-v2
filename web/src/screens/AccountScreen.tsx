@@ -15,6 +15,7 @@ import { PlanBillingPanel } from "../components/PlanBillingPanel";
 import { AccountDeletionRequestPanel } from "./AccountDeletionScreen";
 import { RecordingsSettingsPanel } from "./RecordingsSettingsPanel";
 import "./account-settings.css";
+import { useMobileTaskExperience } from "../mobile-task/useMobileTaskExperience";
 
 const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
   { id: "system", label: "System", hint: "Match this device" },
@@ -22,9 +23,9 @@ const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint:
   { id: "dark", label: "Dark", hint: "Always use dark PackProof" },
 ];
 
-function SettingsDisclosure({ title, children }: { title: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return <details className="settings-detail" onToggle={event => setOpen(event.currentTarget.open)}>
+function SettingsDisclosure({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
+  const [open, setOpen] = useState(Boolean(id && window.location.hash === `#${id}`));
+  return <details id={id} open={open} className="settings-detail" onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>{title}</summary>{open && <div className="stack">{children}</div>}
   </details>;
 }
@@ -59,6 +60,7 @@ export function AccountScreen(props: {
   onBack: () => void;
   onSignOut: () => void;
 }) {
+  const mobileTask = useMobileTaskExperience();
   const theme = useTheme();
   const name = displayName({ displayName: props.displayName, username: props.username, fallback: "Your account" });
   const profileChanged = props.displayNameInput.trim() !== (props.displayName ?? "").trim()
@@ -86,13 +88,14 @@ export function AccountScreen(props: {
           <input type="radio" name="packproof-appearance" value={option.id} checked={theme.preference === option.id} onChange={() => theme.setPreference(option.id)} />
         </label>)}</fieldset>
       </SettingsDisclosure>
-      <SettingsDisclosure title="Help & support"><button className="btn btn-secondary" onClick={replayTutorial}>Replay Tutorial</button>
+      <SettingsDisclosure title="Help & support" id="support"><button className="btn btn-secondary" onClick={replayTutorial}>Replay Tutorial</button>
         <p className="note">Choose an order, record the item being packed and sealed, then review the recording and confirm what you are shipping. PackProof shows when saving is complete.</p>
         <p className="note">If saving is interrupted, return to that Proof to continue. Keep your local recording until PackProof confirms it is preserved.</p>
         <p className="note">For account or privacy support, use the contact information in the Privacy Policy.</p>
         <button className="btn btn-tertiary" type="button" onClick={props.onOpenPrivacy}>Support contact information</button>
-        {props.onOpenDeveloper && <SettingsDisclosure title="Developer tools"><button className="btn btn-secondary" type="button" onClick={props.onOpenDeveloper}>Developer access</button></SettingsDisclosure>}
+        {!mobileTask && props.onOpenDeveloper && <SettingsDisclosure title="Developer tools"><button className="btn btn-secondary" type="button" onClick={props.onOpenDeveloper}>Developer access</button></SettingsDisclosure>}
       </SettingsDisclosure>
+      {mobileTask && <SettingsDisclosure title="Advanced" id="advanced">{props.onOpenDeveloper && <button className="btn btn-secondary" type="button" onClick={props.onOpenDeveloper}>Developer access</button>}<button className="btn btn-secondary" type="button" onClick={props.onOpenStation}>Remote station tools</button></SettingsDisclosure>}
       <SettingsDisclosure title="Privacy & account">
         {props.api && props.userId && <SettingsDisclosure title="Optional research participation"><StudyConsentPanel api={props.api} userId={props.userId} /></SettingsDisclosure>}
         <p className="note">PackProof records what was submitted, when, and by whom. It does not decide who is right.</p>

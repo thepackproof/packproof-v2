@@ -23,5 +23,5 @@ it('a pending server row without local bytes never claims an active upload',asyn
 it('committed evidence never offers discard even with missing bytes',async()=>{
   mocks.list.mockResolvedValue([{key:'saved',proofId:proof.proofId,evidenceId:'original',available:false,kind:'ordinary',accepted:true}]);
   render(<UploadRecoveryCards api={api} userId="seller" proof={{...proof,evidence:[{...proof.evidence[0],validationStatus:'COMMITTED'}]}}/>);
-  expect(await screen.findByText('Recording received')).toBeTruthy();expect(screen.queryByRole('button',{name:/Discard/})).toBeNull();
+  expect(await screen.findByText('Evidence committed')).toBeTruthy();expect(screen.queryByRole('button',{name:/Discard/})).toBeNull();
 });
