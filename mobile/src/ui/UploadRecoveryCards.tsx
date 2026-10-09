@@ -31,6 +31,7 @@ export function UploadRecoveryCards() {
     const view = uploadRecoveryPresentation({ available: capture ? capture.localFileAvailable ?? null : false, active: live, offline: app.offline,
       queued: state?.phase === 'UPLOAD_QUEUED' && state.completionNotificationRequested && !state.lastError,
       saving,
+      incomplete: state?.phase === 'RECORDING',
       committed, accepted: state?.submitRequested, failed: state?.lastError?.retryable === false, discarding: state?.discardRequested });
     const discard = () => Alert.alert(view.discard!, "Close this incomplete upload and remove its local recording? Committed evidence is protected.", [
       { text: "Keep recording", style: "cancel" },
@@ -43,7 +44,7 @@ export function UploadRecoveryCards() {
       <Text style={[styles.message, {color: colors.textSecondary}]}>{view.message}</Text>
       {live ? <ProgressState label="Recording upload" showLabel={false} percent={app.uploadProgressByProof[proof.proofId]} /> : null}
       {live || saving ? <Text style={[styles.detail, {color: colors.textSecondary}]}>You can leave this screen and start another Proof.</Text> : null}
-      {view.resume && capture ? <Button label={view.resume} disabled={app.busy || app.offline} onPress={() => { void app.resumeSavedCapture(capture); }} /> : null}
+      {view.resume && capture ? <Button label={view.resume} disabled={app.busy || (app.offline && state?.submitRequested !== false)} onPress={() => { void app.resumeSavedCapture(capture); }} /> : null}
       {view.discard ? <Button label={view.discard} variant="destructive" disabled={app.busy} onPress={discard} /> : null}
     </View>;
   })}</>;
