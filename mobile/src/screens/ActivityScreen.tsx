@@ -21,6 +21,7 @@ import { activityGroup, activityRecordingUsable } from "../experience/activity-m
 export function ActivityScreen() {
   const app = usePackProof(), { colors } = useTheme();
   const filter = app.route.activityFilter ?? "all";
+  const selectedSessionId = app.route.activitySessionId;
   const [notifications, setNotifications] = useState<ProofNotification[]>([]);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
@@ -36,25 +37,30 @@ export function ActivityScreen() {
     return () => { active = false; };
   }, [scope, generation]);
   const recordings = useMemo(() => workspaceRecordings(app.savedRecordings, app.localCapture).filter(capture => capture.captureUserId === app.session?.userId && capture.recovery?.apiBaseUrl.replace(/\/+$/, "") === app.apiBaseUrl.replace(/\/+$/, "")), [app.savedRecordings, app.localCapture, scope]);
+  const selectedRecording = selectedSessionId ? recordings.find(capture => (capture.captureSessionId || capture.uri) === selectedSessionId || capture.recovery?.operationId === selectedSessionId) : undefined;
   const groups = [
     { id: "attention", title: "Needs your attention" },
     { id: "uploading", title: "In progress" },
     { id: "completed", title: "Completed recordings" },
   ] as const;
-  return <AppScreen bottomInset={false} initialOffsetY={app.readWorkspaceOffset("activity")} onScrollOffset={offset => app.setWorkspaceOffset("activity", offset)} resetScrollKey={filter} onRefresh={() => { setGeneration(value => value + 1); void app.run(app.syncWorkspace); }} refreshing={app.busy}>
+  return <AppScreen bottomInset={false} initialOffsetY={selectedSessionId ? 0 : app.readWorkspaceOffset("activity")} onScrollOffset={offset => { if (!selectedSessionId) app.setWorkspaceOffset("activity", offset); }} resetScrollKey={`${filter}:${selectedSessionId ?? ""}`} onRefresh={() => { setGeneration(value => value + 1); void app.run(app.syncWorkspace); }} refreshing={app.busy}>
     <WorkspaceHeader section="Activity" />
     <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Activity</Text>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} accessibilityRole="tablist" accessibilityLabel="Activity filters">
+    {!selectedSessionId ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} accessibilityRole="tablist" accessibilityLabel="Activity filters">
       {([["all", "All"], ["attention", "Needs attention"], ["uploading", "In progress"], ["completed", "Completed"]] as const).map(([id, label]) => <PressableScale key={id} accessibilityRole="tab" accessibilityState={{ selected: filter === id }} onPress={() => app.go("activity", { activityFilter: id })} style={[styles.filter, { backgroundColor: filter === id ? colors.accentSoft : colors.surface }]}><Text style={[styles.text, { color: filter === id ? colors.accentText : colors.textSecondary }]}>{label}</Text></PressableScale>)}
-    </ScrollView>
+    </ScrollView> : null}
     <OfflineBanner visible={app.offline} /><ErrorBanner message={app.error} />
-    {groups.filter(section => filter === "all" || filter === section.id).map(section => {
+    {selectedSessionId ? <View style={styles.group}>
+      <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Selected recording</Text>
+      {selectedRecording ? <View style={{ borderWidth: 2, borderColor: colors.accent, borderRadius: 14, padding: 2 }}><ActivityRecordingRow key={selectedSessionId} capture={selectedRecording} /></View> : <Text accessibilityLiveRegion="polite" style={[styles.text, { color: colors.textSecondary }]}>This recording is no longer available in the current account's local Activity. View all Activity to check its latest state.</Text>}
+      <Button label="View all Activity" variant="secondary" onPress={() => app.go("activity", { activityFilter: "all" })} />
+    </View> : groups.filter(section => filter === "all" || filter === section.id).map(section => {
       const rows = recordings.filter(capture => activityGroup(capture) === section.id);
       return <View key={section.id} style={styles.group}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{section.title}</Text>
         {rows.length ? rows.map(capture => <ActivityRecordingRow key={capture.recovery?.operationId ?? capture.uri} capture={capture} />) : <Text style={[styles.text, { color: colors.textSecondary }]}>{section.id === "attention" ? "No recordings need your action." : section.id === "uploading" ? "No uploads in progress." : "Finalized recordings will appear here."}</Text>}
       </View>;
     })}
-    {filter === "all" || filter === "completed" ? <View style={styles.group}>
+    {!selectedSessionId && (filter === "all" || filter === "completed") ? <View style={styles.group}>
       <View style={styles.headingRow}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Notifications</Text><Button label="Preferences" variant="tertiary" onPress={() => app.go("account", { accountSection: "notifications" })} /></View>
       {notificationError ? <><Text style={[styles.text, { color: colors.textSecondary }]}>{notificationError}</Text><Button label="Retry notifications" variant="tertiary" onPress={() => setGeneration(value => value + 1)} /></> : null}
       {!notificationError && !notifications.length ? <Text style={[styles.text, { color: colors.textSecondary }]}>Proof updates will appear here.</Text> : null}

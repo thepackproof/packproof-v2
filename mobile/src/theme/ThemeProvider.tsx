@@ -4,6 +4,7 @@ import { AccessibilityInfo, Appearance, type ColorSchemeName } from "react-nativ
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { parseAppearancePreference, resolveColorScheme } from "./appearance";
 import { APPEARANCE_STORAGE_KEY } from "./appearance";
+import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
 import {
   colorsForScheme,
   shadowsFor,
@@ -24,6 +25,7 @@ export interface Theme {
 }
 
 const ThemeContext = createContext<Theme | null>(null);
+const defaultNativePreference = MOBILE_TASK_UX_ENABLED ? "dark" : "light";
 
 function schemeFromSystem(value: ColorSchemeName): ColorScheme {
   return value === "dark" ? "dark" : "light";
@@ -35,7 +37,7 @@ export function ThemeProvider(props: { children: ReactNode }) {
     "Inter-SemiBold": require("../../assets/fonts/Inter-SemiBold.ttf"),
     "Inter-Bold": require("../../assets/fonts/Inter-Bold.ttf"),
   });
-  const [preference, setPreferenceState] = useState<AppearancePreference>("light");
+  const [preference, setPreferenceState] = useState<AppearancePreference>(defaultNativePreference);
   const [systemScheme, setSystemScheme] = useState<ColorScheme>(() => schemeFromSystem(Appearance.getColorScheme()));
   const [reducedMotion, setReducedMotion] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -46,13 +48,13 @@ export function ThemeProvider(props: { children: ReactNode }) {
       try {
         const stored = await AsyncStorage.getItem(APPEARANCE_STORAGE_KEY);
         if (!cancelled) {
-          const next = parseAppearancePreference(stored);
+          const next = stored === "light" || stored === "dark" || stored === "system" ? parseAppearancePreference(stored) : defaultNativePreference;
           setPreferenceState(next);
           Appearance.setColorScheme(next === "system" ? null : next);
         }
       } catch {
-        // A storage failure still leaves the app in its light default.
-        if (!cancelled) Appearance.setColorScheme("light");
+        // Preserve a deterministic native theme even if preferences cannot be read.
+        if (!cancelled) Appearance.setColorScheme(defaultNativePreference);
       } finally {
         if (!cancelled) {
           setHydrated(true);

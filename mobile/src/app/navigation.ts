@@ -45,6 +45,7 @@ export interface AppRoute {
   supportingSection?: "responses" | "retention" | "privacy";
   historyShareId?: string;
   activityFilter?: ActivityFilter;
+  activitySessionId?: string;
 }
 
 export interface ProofsLibraryState {
