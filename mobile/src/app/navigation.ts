@@ -12,6 +12,7 @@ export type AppRouteName =
   | "home"
   | "proofs"
   | "orders"
+  | "activity"
   | "create"
   | "account"
   | "sharing"
@@ -34,14 +35,16 @@ export type AppRouteName =
   | "editShipping"
   | "event";
 
-export type WorkspaceOrigin = "home" | "proofs" | "orders" | "station";
-export type AccountSection = "developer" | "billing" | "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy";
+export type WorkspaceOrigin = "home" | "proofs" | "orders" | "station" | "activity";
+export type AccountSection = "developer" | "billing" | "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy" | "advanced";
+export type ActivityFilter = "all" | "attention" | "uploading" | "completed";
 export interface OrdersViewState { offsetY: number; query: string; }
 export interface AppRoute {
   name: AppRouteName;
   accountSection?: AccountSection;
   supportingSection?: "responses" | "retention" | "privacy";
   historyShareId?: string;
+  activityFilter?: ActivityFilter;
 }
 
 export interface ProofsLibraryState {
@@ -62,7 +65,7 @@ export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
 
 /** Preserve workspace destinations while remapping retired session routes. */
 export function normalizeRouteName(name: string): AppRouteName {
-  if (["tabs", "overview", "activity"].includes(name)) {
+  if (["tabs", "overview"].includes(name)) {
     return "home";
   }
   return name as AppRouteName;
@@ -87,6 +90,7 @@ export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigi
     case "station":
     case "orders":
     case "proofs":
+    case "activity":
       return "home";
     case "proof":
     case "account":
@@ -95,6 +99,7 @@ export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigi
     case "intake":
       return origin;
     case "scan":
+      return origin === "station" ? "station" : "create";
     case "review":
       return "create";
     default:
@@ -102,8 +107,8 @@ export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigi
   }
 }
 
-export function showsTabBar(): boolean {
-  return false;
+export function showsTabBar(route?: AppRoute, captureActive = false): boolean {
+  return Boolean(route && !captureActive && ["home", "proofs", "station", "activity", "orders", "account"].includes(route.name));
 }
 
 export function isImmersiveRoute(route: AppRoute): boolean {

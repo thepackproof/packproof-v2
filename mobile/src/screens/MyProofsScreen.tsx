@@ -4,7 +4,7 @@ import { RecordThumbnail } from "../ui/RecordThumbnail";
 import { RecordSeal } from "../ui/RecordSeal";
 import { ReadyOrders } from "../intake/ReadyOrders";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePackProof } from '../app/PackProofProvider';
 import { localProofWork, mergeProofInvitations, presentationForProof, selectProofRows, type PresentedProof } from '../copy/proof-list';
@@ -21,6 +21,7 @@ import { StatusBadge } from '../ui/StatusBadge';
 import { ProgressState } from '../ui/EvidenceCard';
 import { FadeSlideIn, LiftPressable, PressableScale } from '../ui/motion';
 import type { ProofCollectionItem, InvitationInboxView } from '../v2-api';
+import { MOBILE_TASK_UX_ENABLED } from '../experience/mobile-ux';
 
 export function MyProofsScreen() {
   const app = usePackProof();
@@ -53,13 +54,14 @@ export function MyProofsScreen() {
   const filterKey = JSON.stringify(library);
   if (!order.current || order.current.snapshot !== snapshot || order.current.filters !== filterKey) order.current = {snapshot,filters:filterKey,ids:sortedRows.map(row => row.proofId)};
   const rows = order.current.ids.map(id => presentedRows.find(row => row.proofId === id)).filter((row):row is PresentedProof => Boolean(row));
-  const showPrepared = library.view !== 'completed' && !library.query.trim();
+  const showPrepared = !MOBILE_TASK_UX_ENABLED && library.view !== 'completed' && !library.query.trim();
   const visiblePreparedIds = new Set(showPrepared ? preparedProofIds : []);
   const libraryRows = rows.filter(item => !visiblePreparedIds.has(item.proofId));
   const visibleCount = new Set([...visiblePreparedIds, ...libraryRows.map(item => item.proofId)]).size;
   const changed = sortedRows.map(row=>row.proofId).join("|") !== order.current.ids.join("|") || app.proofCollection.map(row => `${row.proofId}:${row.updatedAt}:${row.presentation?.displayStatus}`).join('|') !== snapshot.rows.map(row => `${row.proofId}:${row.updatedAt}:${row.presentation?.displayStatus}`).join('|');
   async function refresh() { await app.run(app.syncWorkspace); setRequestedRefresh(true); }
   async function open(item: PresentedProof, act = false) {
+    if (MOBILE_TASK_UX_ENABLED && act) { await app.openProofAction(item.proofId); return; }
     if (item.accessKind === "RECEIVER") { app.openReceipt(item.proofId); return; }
     if (item.invitationId) {
       const invitation = app.pendingInvites.find(row => row.invitationId === item.invitationId);
@@ -82,21 +84,21 @@ export function MyProofsScreen() {
   }
   const noMatches = Boolean(library.query.trim() || library.role !== 'all' || library.carrier);
   const emptyTitle = noMatches ? 'No search matches' : library.view === 'attention' ? 'Nothing needs your attention' : library.view === 'completed' ? 'No completed Proofs yet' : 'No Proofs yet';
-  return <AppScreen key={app.session?.userId} restorationReady={!loading} resetScrollKey={filterKey} onRefresh={() => void refresh()} refreshing={app.busy} initialOffsetY={app.readProofsScrollOffset()} onScrollOffset={app.setProofsScrollOffset}>
+  return <AppScreen key={app.session?.userId} bottomInset={!MOBILE_TASK_UX_ENABLED} restorationReady={!loading} resetScrollKey={filterKey} onRefresh={() => void refresh()} refreshing={app.busy} initialOffsetY={app.readProofsScrollOffset()} onScrollOffset={app.setProofsScrollOffset}>
     <WorkspaceHeader section="Proofs" />
-    <View style={styles.heading}><View style={styles.headingCopy}><Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text><Text style={[styles.pageTitle, { color:colors.textPrimary }]}>Proofs</Text></View><TutorialTarget name="create capture"><Button label="New Proof" icon="add-outline" onPress={() => app.go('create')} /></TutorialTarget></View>
-    <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Shipment evidence, organized and ready to review.</Text>
+    <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, { color:colors.textPrimary }]}>Proofs</Text></View><TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.go('create')} /></TutorialTarget></View>
+    {!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Shipment evidence, organized and ready to review.</Text> : null}
     <View style={[styles.libraryPanel,{backgroundColor:colors.surface,borderColor:colors.border}]}>
     <View style={styles.toolbar}>
-    <View style={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
       {([{id:'all',label:'All'},{id:'attention',label:'Needs attention'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.accentSoft : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
-    </View>
+    </ScrollView>
     <View style={styles.searchRow}>
       <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.inputBackground}]}><Ionicons name="search-outline" size={18} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search order, item, tracking…" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
       <PressableScale onPress={() => setFilterOpen(true)} accessibilityRole="button" accessibilityLabel="Filters" style={[styles.filter,{borderColor:colors.controlBorder}]}><Ionicons name="options-outline" size={22} color={colors.textPrimary}/></PressableScale>
     </View>
     </View>
-    <View style={[styles.tableHeading,{backgroundColor:colors.surfaceElevated,borderColor:colors.border}]}><Text style={[styles.columnLabel,{color:colors.textMuted}]}>SHIPMENT RECORDS</Text><Text style={[styles.columnLabel,{color:colors.textMuted}]}>{loading ? 'LOADING' : `${visibleCount} IN VIEW`}</Text></View>
+    {!MOBILE_TASK_UX_ENABLED ? <View style={[styles.tableHeading,{backgroundColor:colors.surfaceElevated,borderColor:colors.border}]}><Text style={[styles.columnLabel,{color:colors.textMuted}]}>SHIPMENT RECORDS</Text><Text style={[styles.columnLabel,{color:colors.textMuted}]}>{loading ? 'LOADING' : `${visibleCount} IN VIEW`}</Text></View> : null}
     <View style={styles.listBody}>
     <OfflineBanner visible={app.offline} />
     <ErrorBanner message={app.error || (app.offline && !snapshot.rows.length ? "Proofs could not be loaded while offline. Reconnect and try again." : null)}/>
@@ -110,14 +112,13 @@ export function MyProofsScreen() {
           <LiftPressable onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
             <View style={styles.recordHeading}>{item.thumbnailDerivativeId ? <RecordThumbnail key={`${app.session?.userId}:${item.proofId}:${item.thumbnailDerivativeId}`} proofId={item.proofId} derivativeId={item.thumbnailDerivativeId} /> : null}<View style={{flex:1,gap:5}}>
             <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>{item.transaction.itemTitle || 'Shipment Proof'}</Text>
-            <Text style={[styles.meta,{color:colors.textSecondary}]}>{proofReference(item.proofId,item.transaction.externalReference)}</Text>
+            {!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.meta,{color:colors.textSecondary}]}>{proofReference(item.proofId,item.transaction.externalReference)}</Text> : null}
             </View><Ionicons name="chevron-forward" size={18} color={colors.textSecondary}/></View>
-            <RecordSeal status={item.status}/>
-            <View style={styles.shipmentLine}><Ionicons name="navigate-outline" size={15} color={colors.textSecondary}/><Text style={[styles.meta,{color:colors.textSecondary,flexShrink:1}]}>Shipment: {shipmentRecordLabel(item.transaction.trackingNumber,item.presentation.shipmentStatus)}</Text></View>
-            {item.presentation.needsAttention ? <StatusBadge label={item.presentation.displayStatus}/> : null}
+            {!MOBILE_TASK_UX_ENABLED ? <><RecordSeal status={item.status}/><View style={styles.shipmentLine}><Ionicons name="navigate-outline" size={15} color={colors.textSecondary}/><Text style={[styles.meta,{color:colors.textSecondary,flexShrink:1}]}>Shipment: {shipmentRecordLabel(item.transaction.trackingNumber,item.presentation.shipmentStatus)}</Text></View></> : null}
+            {MOBILE_TASK_UX_ENABLED || item.presentation.needsAttention ? <StatusBadge label={item.presentation.displayStatus}/> : null}
             {Object.prototype.hasOwnProperty.call(app.uploadProgressByProof, item.proofId) ? <View style={{ gap: 8 }}>
               <ProgressState label="Recording upload" showLabel={false} percent={app.uploadProgressByProof[item.proofId]} />
-              <Text style={[typography.finePrint, { color: colors.textSecondary }]}>Upload continues while you work on the next Proof.</Text>
+              {!MOBILE_TASK_UX_ENABLED ? <Text style={[typography.finePrint, { color: colors.textSecondary }]}>Upload continues while you work on the next Proof.</Text> : null}
             </View> : null}
             <Text style={[styles.meta,{color:colors.textSecondary}]}>{[item.transaction.provider, `Updated ${formatDate(item.updatedAt)}`].filter(Boolean).join(' · ')}</Text>
           </LiftPressable>
@@ -138,9 +139,10 @@ export function MyProofsScreen() {
 const styles = StyleSheet.create({
   recordHeading:{flexDirection:'row',gap:12,alignItems:'center'},shipmentLine:{flexDirection:'row',gap:7,alignItems:'center'},
   heading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12},headingCopy:{gap:5},pageTitle:{...typography.pageTitle,fontSize:29,lineHeight:36},
+  mobileTitle:{fontSize:24,lineHeight:31},
   eyebrow:{...typography.finePrint,fontFamily:'Inter-SemiBold',fontSize:10,lineHeight:15,letterSpacing:1.15},subtitle:{...typography.secondary,fontSize:14,marginTop:-8},
   libraryPanel:{borderWidth:1,borderRadius:10,overflow:'hidden'},toolbar:{padding:14,gap:12},
-  tabs:{flexDirection:'row',flexWrap:'wrap',gap:3},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:6,justifyContent:'center'},tabText:{...typography.secondaryStrong,fontSize:13,lineHeight:19},
+  tabs:{flexDirection:'row',gap:3},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:6,justifyContent:'center'},tabText:{...typography.secondaryStrong,fontSize:13,lineHeight:19},
   searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:48,flexDirection:'row',alignItems:'center',paddingHorizontal:10,borderWidth:1,borderRadius:6,gap:8},input:{flex:1,...typography.secondary,fontSize:14,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:6},
   tableHeading:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,paddingHorizontal:16,paddingVertical:10,borderTopWidth:1,borderBottomWidth:1},columnLabel:{...typography.finePrint,fontSize:12,lineHeight:18,letterSpacing:.35},listBody:{gap:0},
   row:{padding:16,borderBottomWidth:1,gap:9},rowCopy:{gap:9,minHeight:48},rowTitle:{...typography.bodyStrong,fontSize:15,lineHeight:22},meta:{...typography.secondary,fontSize:12,lineHeight:18},status:{...typography.secondaryStrong},

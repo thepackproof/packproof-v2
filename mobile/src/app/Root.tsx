@@ -14,7 +14,10 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, BackHandler, StyleSheet, Text, View, Linking, Keyboard } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
-import { isImmersiveRoute } from "./navigation";
+import { isImmersiveRoute, showsTabBar } from "./navigation";
+import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
+import { MobileTabBar } from "../ui/MobileTabBar";
+import { ActivityScreen } from "../screens/ActivityScreen";
 import { typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { applySystemBars } from "../theme/system-bars";
@@ -58,11 +61,17 @@ function RootContent() {
   const [linkedHistoryShareId, setLinkedHistoryShareId] = useState<string | null>(null);
   const [linkedQueue, setLinkedQueue] = useState(false);
   const [completionVisible, setCompletionVisible] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const previousRoute = useRef(app.route.name);
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
   const nativeShare = useSharedOrder(ready);
   const intakeNavigationReady = canNavigateForIntake({ ready, accountId: app.session?.userId ?? null, route: app.route.name === "station" && !app.session?.stationActive ? "orders" : app.route.name, busy: app.busy, captureStatus: app.captureStatus });
   const notifiedShare = useRef<string | null>(null);
+  useEffect(() => {
+    const shown = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hidden = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
   useEffect(() => { if (app.route.name === "intake") nativeShare.resume(); }, [app.route.name]);
   useEffect(() => {
     if (!nativeShare.sharedOrder || !intakeNavigationReady || app.route.name === "intake") return;
@@ -229,6 +238,7 @@ function RootContent() {
   let body = null;
   if (app.route.name === "home") body = <WorkspaceHomeScreen />;
   else if (app.route.name === "proofs") body = <MyProofsScreen />;
+  else if (app.route.name === "activity") body = <ActivityScreen />;
   else if (app.route.name === "orders" || app.route.name === "station") body = <WorkspaceOrdersScreen key={app.route.name} station={app.route.name === "station"} />;
   else if (app.route.name === "create") body = <CreateScreen />;
   else if (app.route.name === "account") body = <AccountScreen key={app.route.accountSection ?? "account"} initialSection={app.route.accountSection} />;
@@ -261,6 +271,7 @@ function RootContent() {
       <StatusBar style={statusStyle} />
       <NativeCaptureHost />
       <RouteReveal routeKey={routeKey}>{body}</RouteReveal>
+      {MOBILE_TASK_UX_ENABLED && !keyboardVisible && showsTabBar(app.route, app.captureStatus === "capturing") ? <MobileTabBar /> : null}
       <CinematicCompletion visible={completionVisible} />
     </>
   );
