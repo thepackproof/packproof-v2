@@ -24,6 +24,8 @@ const isMobileUxReview = easProfile === "mobile-ux-review";
 const isAndroidRelease = isPlayRelease || isMobileUxReview;
 const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
 const isRelease = isAndroidRelease || isIosRelease;
+// Match the native default theme before JavaScript restores a saved preference.
+const mobileTaskUxEnabled = env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX", "true") !== "false";
 // expo-constants packages this public config as Android assets/app.config.
 // Use worker source metadata, never a persistent public environment value.
 const androidBuildSha = isAndroidRelease ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
@@ -61,13 +63,13 @@ module.exports = {
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
-      backgroundColor: "#E9EEF4",
-      barStyle: "dark-content",
+      backgroundColor: mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
+      barStyle: mobileTaskUxEnabled ? "light-content" : "dark-content",
       translucent: false,
     },
     androidNavigationBar: {
-      backgroundColor: "#E9EEF4",
-      barStyle: "dark-content",
+      backgroundColor: mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
+      barStyle: mobileTaskUxEnabled ? "light-content" : "dark-content",
     },
     icon: "./assets/icon.png",
     scheme: isCameraSpike ? "packproof-camera-test" : ["packproof-v2", "packproof"],

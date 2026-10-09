@@ -39,3 +39,13 @@ test('review worker binds Metro to its source and uses APK validation without ch
   for(const profile of ['internal-staging','shipping-integration','production']) assert.match(artifactValidationCommand({EAS_BUILD_PLATFORM:'android',EAS_BUILD_PROFILE:profile})[1],/app-release\.aab$/);
   assert.equal(artifactValidationCommand({EAS_BUILD_PLATFORM:'ios',EAS_BUILD_PROFILE:'ios-simulator'}),null);
 });
+test('native startup bars match dark task UX and retain the light rollback composition',()=>{
+  const enabled=JSON.parse(config().stdout);
+  const disabled=JSON.parse(config({EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX:'false'}).stdout);
+  for(const key of ['androidStatusBar','androidNavigationBar']) {
+    assert.equal(enabled[key].backgroundColor,'#141D2A');assert.equal(enabled[key].barStyle,'light-content');
+    assert.equal(disabled[key].backgroundColor,'#E9EEF4');assert.equal(disabled[key].barStyle,'dark-content');
+  }
+  assert.deepEqual(enabled.android,disabled.android);
+  assert.deepEqual(enabled.ios,disabled.ios);
+});
