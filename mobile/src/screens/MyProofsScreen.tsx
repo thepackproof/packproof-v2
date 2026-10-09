@@ -22,6 +22,10 @@ import { ProgressState } from '../ui/EvidenceCard';
 import { FadeSlideIn, LiftPressable, PressableScale } from '../ui/motion';
 import type { ProofCollectionItem, InvitationInboxView } from '../v2-api';
 import { MOBILE_TASK_UX_ENABLED } from '../experience/mobile-ux';
+import { nativeHomeInput } from '../experience/home-adapter';
+import { selectTaskHome } from '../experience/task-home';
+import { workspaceRecordings } from '../copy/workspace-summary';
+import { captureRecoveryLabel } from '../capture/recovery-model';
 
 export function MyProofsScreen() {
   const app = usePackProof();
@@ -43,12 +47,26 @@ export function MyProofsScreen() {
       setRequestedRefresh(false);
     }
   }, [app.proofCollection, app.pendingInvites, requestedRefresh, loading]);
-  const presentedRows = useMemo(() => mergeProofInvitations(snapshot.rows.map(row => app.proofCollection.find(current => current.proofId === row.proofId) ?? row), snapshot.invites).map(item => {
+  const presentedRows = useMemo(() => {
+    const proofs = snapshot.rows.map(row => app.proofCollection.find(current => current.proofId === row.proofId) ?? row);
+    // Classify the last known snapshot consistently with Home; the action router still reconciles on tap.
+    const actionable = MOBILE_TASK_UX_ENABLED ? new Map(selectTaskHome(nativeHomeInput({ proofs, invitations: snapshot.invites, captures: workspaceRecordings(app.savedRecordings, app.localCapture), orders: [], progress: app.uploadProgressByProof, userId: app.session?.userId ?? '', apiBaseUrl: app.apiBaseUrl, online: true, reconciled: true })).actions.map(action => [action.targetId, action])) : null;
+    return mergeProofInvitations(proofs, snapshot.invites).map(item => {
     const capture = app.savedRecordings.find(row => row.captureProofId === item.proofId && row.recovery?.phase !== 'FINALIZED')
       ?? (app.session?.captureProofId === item.proofId ? app.localCapture : null);
     const uploading = Object.prototype.hasOwnProperty.call(app.uploadProgressByProof, item.proofId);
-    return { ...item, presentation:presentationForProof(item, item.role, localProofWork(capture, uploading ? 'uploading' : app.session?.captureProofId === item.proofId ? app.captureStatus : undefined, uploading ? app.uploadProgressByProof[item.proofId] : undefined)) };
-  }), [snapshot, library, app.proofCollection, app.savedRecordings, app.localCapture, app.captureStatus, app.uploadPercent, app.uploadProgressByProof]);
+    const presentation = presentationForProof(item, item.role, localProofWork(capture, uploading ? 'uploading' : app.session?.captureProofId === item.proofId ? app.captureStatus : undefined, uploading ? app.uploadProgressByProof[item.proofId] : undefined));
+    if (actionable) {
+      const action = actionable.get(item.proofId);
+      presentation.needsAttention = Boolean(action);
+      if (action) presentation.nextAction = { type: presentation.nextAction.type, label: action.buttonLabel };
+      if (action?.kind === 'reconcile') presentation.displayStatus = 'Status needs refresh';
+      if (!action && capture?.recovery && !['FINALIZED', 'SUBMITTED'].includes(capture.recovery.phase)) {
+        presentation.displayStatus = app.offline && ['LOCAL_ONLY', 'UPLOAD_QUEUED'].includes(capture.recovery.phase) ? 'Waiting for connection' : captureRecoveryLabel(capture.recovery.phase);
+      }
+    }
+    return { ...item, presentation };
+  }); }, [snapshot, library, app.proofCollection, app.savedRecordings, app.localCapture, app.captureStatus, app.uploadPercent, app.uploadProgressByProof, app.offline, app.session?.userId, app.apiBaseUrl]);
   const sortedRows = selectProofRows(presentedRows,library);
   const order = useRef<{ snapshot:typeof snapshot; filters:string; ids:string[] } | null>(null);
   const filterKey = JSON.stringify(library);
