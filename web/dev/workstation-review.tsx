@@ -49,7 +49,7 @@ if (reviewScenario === "large-text") {
   scale.textContent = ".workspace-shell.mobile-task-shell :is(p,button,a,span,input,summary,time) { font-size: 24px!important; } .workspace-shell.mobile-task-shell :is(h1,h2,h3) { font-size: 30px!important; }";
   document.head.appendChild(scale);
 }
-let proofReads = 0;
+let staleRefresh = false;
 const providers: ConnectedAccountProviderCatalogView[] = [
   ["ebay", "eBay", false, true], ["etsy", "Etsy", false, true], ["shopify", "Shopify", true, true], ["google", "Google", false, false], ["facebook", "Meta", false, false],
 ].map(([provider, providerDisplay, enabled, transactions]) => ({
@@ -102,7 +102,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (path === "/me/developer-access") return json({ allowed: false });
   if (path === "/me/onboarding") return json(onboarding);
   if (path === "/me/proofs") {
-    if (reviewScenario === "error" || reviewScenario === "stale" && proofReads++ > 0) return json({ error: { code: "REVIEW_NETWORK_UNAVAILABLE", message: "Sample refresh failure. Cached records are retained." } }, 503);
+    if (reviewScenario === "error" || reviewScenario === "stale" && staleRefresh) return json({ error: { code: "REVIEW_NETWORK_UNAVAILABLE", message: "Sample refresh failure. Cached records are retained." } }, 503);
     const query = (url.searchParams.get("q") || "").toLowerCase();
     const view = url.searchParams.get("view");
     return json({ proofs: proofs.filter(proof => `${proof.transaction.itemTitle} ${proof.transaction.externalReference}`.toLowerCase().includes(query) && (view === "attention" ? proof.presentation?.needsAttention : view === "completed" ? proof.presentation?.completed : true)), nextOffset: null });
@@ -150,4 +150,4 @@ const root = document.getElementById("root");
 if (!root) throw new Error("Missing local review root.");
 createRoot(root).render(<StrictMode><App /><aside className="local-design-review-label" aria-label="Local review environment">LOCAL DESIGN REVIEW · SAMPLE DATA<a href="/app" title="Reload the local sample workspace">Reset review</a></aside></StrictMode>);
 
-if (reviewScenario === "stale") window.setTimeout(() => window.dispatchEvent(new Event("packproof:records-updated")), 1500);
+if (reviewScenario === "stale") window.setTimeout(() => { staleRefresh = true; window.dispatchEvent(new Event("packproof:records-updated")); }, 1500);

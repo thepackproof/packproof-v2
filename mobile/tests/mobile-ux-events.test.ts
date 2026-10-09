@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearMobileUxMetrics, mobileUxEvents, readMobileUxMetrics, recordMobileUxEvent, startMobileCaptureEntry, type MobileUxEvent } from '../src/analytics/mobile-ux-events';
+import { clearMobileUxMetrics, mobileUxEvents, readMobileUxMetrics, readMobileUxIndicators, observeMobileDraftRoute, recordMobileUxEvent, startMobileCaptureEntry, type MobileUxEvent } from '../src/analytics/mobile-ux-events';
 
 test('UX metrics retain only bounded named aggregates and approved numeric durations',()=>{
   clearMobileUxMetrics();
@@ -33,4 +33,19 @@ test('invalid durations cannot corrupt aggregates and account reset clears all c
   assert.deepEqual(readMobileUxMetrics().events.review_completed,{count:4,totalDurationMs:0,durationSamples:0,maxDurationMs:0});
   clearMobileUxMetrics();
   assert.ok(Object.values(readMobileUxMetrics().events).every(value=>value.count===0&&value.totalDurationMs===0));
+});
+
+test('draft exits are observed once across preparation routes and never inferred at account reset',()=>{
+  clearMobileUxMetrics();
+  observeMobileDraftRoute('draft'); observeMobileDraftRoute('draft');
+  observeMobileDraftRoute('other'); observeMobileDraftRoute('other');
+  observeMobileDraftRoute('draft'); observeMobileDraftRoute('capture');
+  recordMobileUxEvent('capture_entered',{durationMs:100}); observeMobileDraftRoute('other');
+  recordMobileUxEvent('review_completed'); recordMobileUxEvent('upload_intervention'); recordMobileUxEvent('finalization');
+  assert.equal(readMobileUxMetrics().events.draft_started.count,2);
+  assert.equal(readMobileUxMetrics().events.draft_left_before_capture.count,1);
+  assert.deepEqual(readMobileUxIndicators(),{meanTimeToCaptureEntryMs:100,observedDraftExitRate:0.5,uploadInterventionsPerReview:1,completedFinalizations:1});
+  observeMobileDraftRoute('draft'); clearMobileUxMetrics(); observeMobileDraftRoute('other');
+  assert.equal(readMobileUxMetrics().events.draft_left_before_capture.count,0);
+  assert.equal(readMobileUxIndicators().observedDraftExitRate,null);
 });

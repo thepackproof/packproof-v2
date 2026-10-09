@@ -6,7 +6,7 @@ import { MobilePackScreen } from "./mobile-task/MobilePackScreen";
 import { MobileActivityScreen } from "./mobile-task/MobileActivityScreen";
 import { mobileProofDestination, usableSavedRecording } from "./mobile-task/task-state";
 import type { HomeAction } from "../../mobile/src/experience/task-home";
-import { clearMobileUxMetrics, startMobileCaptureEntry } from "../../mobile/src/analytics/mobile-ux-events";
+import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../../mobile/src/analytics/mobile-ux-events";
 import "./mobile-task/mobile-task.css";
 import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchScreen";
 import { lazy, Suspense } from "react";
@@ -378,6 +378,11 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     try { setTaskInteractions(session ? JSON.parse(sessionStorage.getItem(`packproof.view.${session.apiBaseUrl}.${session.userId}.task-interactions`) || "{}") : {}); }
     catch { setTaskInteractions({}); }
   }, [session?.userId, session?.apiBaseUrl]);
+
+  useEffect(() => {
+    if (!mobileTask || !session) return;
+    observeMobileDraftRoute(["create", "scan", "intake-handoff"].includes(route.name) ? "draft" : ["station", "capture-launch"].includes(route.name) ? "capture" : "other");
+  }, [mobileTask, route.name, session?.userId, session?.apiBaseUrl]);
 
   useEffect(() => {
     if (!mobileTask || !captureActive) return;
