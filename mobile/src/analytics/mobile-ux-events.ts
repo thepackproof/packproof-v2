@@ -1,0 +1,37 @@
+/** Session-only UX aggregates. No record identifiers, payloads, persistence or transport. */
+export const mobileUxEvents = [
+  "recommendation_displayed", "recommendation_selected", "capture_entered",
+  "capture_durably_saved", "review_completed", "upload_recovery", "upload_intervention", "commitment", "finalization",
+] as const;
+export type MobileUxEvent = typeof mobileUxEvents[number];
+export interface MobileUxMetric { count: number; totalDurationMs: number; durationSamples: number; maxDurationMs: number; }
+let startedAt = Date.now();
+const metrics = new Map<MobileUxEvent, MobileUxMetric>();
+let captureEntryStartedAt: number | null = null;
+
+/** Begin a deliberate creation/packing action; consumed when the camera surface opens. */
+export function startMobileCaptureEntry(): void { captureEntryStartedAt = Date.now(); }
+
+export function recordMobileUxEvent(name: MobileUxEvent, input?: { durationMs?: number }): void {
+  // Runtime validation also excludes unexpected event strings supplied by external input.
+  if (!mobileUxEvents.includes(name)) return;
+  const previous = metrics.get(name) ?? { count: 0, totalDurationMs: 0, durationSamples: 0, maxDurationMs: 0 };
+  const duration = input?.durationMs ?? (name === "capture_entered" && captureEntryStartedAt != null ? Date.now() - captureEntryStartedAt : undefined);
+  if (name === "capture_entered") captureEntryStartedAt = null;
+  const valid = typeof duration === "number" && Number.isFinite(duration) && duration >= 0 && duration <= 86_400_000;
+  metrics.set(name, {
+    count: Math.min(Number.MAX_SAFE_INTEGER, previous.count + 1),
+    totalDurationMs: valid ? Math.min(Number.MAX_SAFE_INTEGER, previous.totalDurationMs + duration) : previous.totalDurationMs,
+    durationSamples: valid ? Math.min(Number.MAX_SAFE_INTEGER, previous.durationSamples + 1) : previous.durationSamples,
+    maxDurationMs: valid ? Math.max(previous.maxDurationMs, duration) : previous.maxDurationMs,
+  });
+}
+
+export function readMobileUxMetrics(): { startedAt: number; events: Record<MobileUxEvent, MobileUxMetric> } {
+  return { startedAt, events: Object.fromEntries(mobileUxEvents.map(name => [name,
+    { ...(metrics.get(name) ?? { count: 0, totalDurationMs: 0, durationSamples: 0, maxDurationMs: 0 }) },
+  ])) as Record<MobileUxEvent, MobileUxMetric> };
+}
+
+/** Call when signing out or changing the active server/account. */
+export function clearMobileUxMetrics(): void { metrics.clear(); captureEntryStartedAt = null; startedAt = Date.now(); }

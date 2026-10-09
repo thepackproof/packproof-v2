@@ -1,6 +1,7 @@
 import { requireCaptureCapabilities, requiresDurableCaptureReceipts } from "../src/capture/capabilities";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { clearMobileUxMetrics, readMobileUxMetrics } from "../src/analytics/mobile-ux-events";
 import { recoverCaptureCompletion, type CompletionCapture, type CompletionDeps, type CompletionProof } from "../src/capture/recover-completion";
 import { captureRecoveryLabel, mayCleanUpCapture, recoveryRetry, sameCaptureAccount, type ProofRecovery, type DurableReceipt } from "../src/capture/recovery-model";
 function fixture() {
@@ -27,6 +28,20 @@ test("write intents precede effects; cleanup requires both authoritative receipt
   assert.deepEqual(f.calls.slice(0, 2), ["read-proof", "read-recovery"]);
   assert.equal(f.capture.recovery.phase, "FINALIZED"); assert.equal(mayCleanUpCapture(f.capture.recovery), true);
   f.capture.recovery.lastServerResult!.finalization.receipt = null; assert.equal(mayCleanUpCapture(f.capture.recovery), false);
+});
+test("UX commitment and finalization count observed successful transitions without repeat counts", async () => {
+  clearMobileUxMetrics();
+  const f=fixture();
+  const finalize=f.deps.finalize;
+  f.deps.finalize=async()=>{throw Object.assign(new Error("Server rejected finalization"),{code:"PROOF_NOT_READY_FOR_FINALIZATION",status:409});};
+  await assert.rejects(recoverCaptureCompletion(f.capture,f.deps));
+  assert.equal(readMobileUxMetrics().events.commitment.count,1);
+  assert.equal(readMobileUxMetrics().events.finalization.count,0);
+  f.deps.finalize=finalize;
+  await recoverCaptureCompletion(f.capture,f.deps);
+  await recoverCaptureCompletion(f.capture,f.deps);
+  assert.equal(readMobileUxMetrics().events.commitment.count,1);
+  assert.equal(readMobileUxMetrics().events.finalization.count,1);
 });
 test("lost commit response resumes exact evidence without another upload", async () => {
   const f = fixture(); const commit = f.deps.commit;
