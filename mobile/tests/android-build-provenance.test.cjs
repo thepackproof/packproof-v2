@@ -60,8 +60,8 @@ function resolveConfig(overrides = {}) {
 }
 
 test('Android packaged config records trusted worker source even when a public SHA is stale', () => {
-  for (const profile of ['shipping-integration', 'internal-staging']) {
-    const result = resolveConfig({ EAS_BUILD_PROFILE: profile });
+  for (const profile of ['shipping-integration', 'internal-staging', 'production']) {
+    const result = resolveConfig({ EAS_BUILD_PROFILE: profile, ...(profile === 'production' ? {PACKPROOF_ANDROID_VERSION_CODE: '58'} : {}) });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).extra.packproofBuildSha, sourceSha);
   }

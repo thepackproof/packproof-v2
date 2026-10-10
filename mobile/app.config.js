@@ -19,7 +19,8 @@ function isReleaseSafeApiUrl(url) {
 
 const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
-const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
+const isProductionRelease = easProfile === "production";
+const isPlayRelease = ["internal-staging", "shipping-integration", "production"].includes(easProfile);
 const isMobileUxReview = easProfile === "mobile-ux-review";
 const isIosSimulatorReview = easProfile === "ios-simulator";
 const isAndroidRelease = isPlayRelease || isMobileUxReview;
@@ -41,6 +42,13 @@ if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUM
 const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "56"));
 if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 53 || androidVersionCode > 2100000000)
   throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 52");
+if (isProductionRelease) {
+  // Build 56 is the verified Play baseline; 57 identifies the internal APK.
+  if (androidVersionCode < 58) throw new Error("Production Android versionCode must be at least 58");
+  if (env("EAS_BUILD_PLATFORM") && env("EAS_BUILD_PLATFORM") !== "android") {
+    throw new Error("The production profile is for Android only");
+  }
+}
 
 if (isRelease) {
   if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");
@@ -160,6 +168,7 @@ module.exports = {
       },
       packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
       ...(buildSourceSha ? { packproofBuildSha: buildSourceSha } : {}),
+      ...(isProductionRelease ? { packproofMobileTaskUx: mobileTaskUxEnabled } : {}),
       ...(isMobileUxReview || isIosSimulatorReview ? { packproofInternalReview: true, packproofMobileTaskUx: env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX") === "true" } : {}),
     },
   },
