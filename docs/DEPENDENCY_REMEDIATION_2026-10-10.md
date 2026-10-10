@@ -61,6 +61,13 @@ unexpected files. Exact vendor bytes are preserved across Git checkouts. Review
 these forks when upstream patches become available, replace them with supported
 upstream releases when compatible, and retain the defect regressions.
 
+The source secret scanner retains all default rules and full history. Two
+reviewed upstream false positives have exceptions requiring the exact file path,
+full source line, and `generic-api-key` rule: the public Forge README seed example
+and the PKCS12 function alias assignment. Vendor directories are not excluded.
+Negative controls confirm the example is still detected at a different path or
+when its source line changes.
+
 ## Required verification
 
 - Clean `npm ci` and full `npm audit --json` for backend, web, and mobile. CI's
