@@ -99,6 +99,8 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: false
       - run: npm ci
+      - name: Audit all desktop dependencies
+        run: npm audit --audit-level=low
       - run: npm run typecheck
       - run: npm test
       - run: node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs
