@@ -171,3 +171,23 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^desktop/tests/surface\-research\.test\.ts$''']
 regexes = ['''^\n?    const input = \{enrollmentId: 'e', observationId: 'o', requestedScope: 'label', idempotencyKey: 'e6da15d0-bc76-43cb-aac2-d923af3235a8'\};\r?$''']
+
+# Reviewed CI run 38043083073 / Source secrets job 114187068241.
+# These exact lines are preserved from the published node-forge 1.4.0 tarball;
+# provenance and file integrity are recorded under mobile/vendor/node-forge.
+# Preserve all scanner rules and history, requiring the exact path and line.
+[[allowlists]]
+description = "Public upstream Ed25519 README seed example; never a PackProof credential."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^mobile/vendor/node\-forge/README\.md$''']
+regexes = ['''^\n?var password = 'Mai9ohgh6ahxee0jutheew0pungoozil';\r?$''']
+
+[[allowlists]]
+description = "Upstream PKCS12 function alias assignment; no key bytes or credential."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^mobile/vendor/node\-forge/lib/pkcs12\.js$''']
+regexes = ['''^\n?p12\.generateKey = forge\.pbe\.generatePkcs12Key;\r?$''']

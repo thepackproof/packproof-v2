@@ -18,7 +18,7 @@ export function ManualCreateScreen() {
   const { colors } = useTheme();
   const form = app.createForm;
   const setForm = app.setCreateForm;
-  const [showDetails, setShowDetails] = useState(Boolean(app.intakeReview));
+  const [showDetails, setShowDetails] = useState(Boolean(app.intakeReview || app.createForm.externalReference));
 
   useEffect(() => {
     setForm((current) => {
@@ -43,7 +43,8 @@ export function ManualCreateScreen() {
     <AppScreen extraBottom={24}>
       <AppHeader title="New Proof" onBack={app.goBack} right={<IconButton label="Share Proof" onPress={() => Alert.alert("Share Proof", app.offline ? "Connect to create a share link. Your draft is kept." : "Create this Proof to get a share link. Your draft is kept.")}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton>} />
       <ErrorBanner message={app.error} />
-      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Connected-store orders appear automatically in Proofs. Add another shipment here.</Text>
+      {app.offline ? <Text accessibilityLiveRegion="polite" style={{color:colors.textSecondary}}>Connect before creating this Proof or starting capture. Your form stays open.</Text> : null}
+      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Record shipment evidence without connecting a store.</Text>
       {app.intakeReview ? (
         <>
           <SectionHeader title="Review your order" />
@@ -159,7 +160,7 @@ export function ManualCreateScreen() {
         </>
       ) : null}
       <Button
-        disabled={!form.itemTitle.trim()}
+        disabled={!form.itemTitle.trim() || app.offline}
         label="Open camera"
         onPress={() => void app.createManualProof()}
         loading={app.busy}

@@ -19,14 +19,21 @@ function isReleaseSafeApiUrl(url) {
 
 const easProfile = env("EAS_BUILD_PROFILE");
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
-const isPlayRelease = ["internal-staging", "shipping-integration"].includes(easProfile);
+const isProductionRelease = easProfile === "production";
+const isPlayRelease = ["internal-staging", "shipping-integration", "production"].includes(easProfile);
+const isMobileUxReview = easProfile === "mobile-ux-review";
+const isIosSimulatorReview = easProfile === "ios-simulator";
+const isAndroidRelease = isPlayRelease || isMobileUxReview;
 const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
-const isRelease = isPlayRelease || isIosRelease;
+const isRelease = isAndroidRelease || isIosRelease;
+// Match the native default theme before JavaScript restores a saved preference.
+const mobileTaskUxEnabled = env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX", "true") !== "false";
 // expo-constants packages this public config as Android assets/app.config.
 // Use worker source metadata, never a persistent public environment value.
-const androidBuildSha = isPlayRelease ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
-if (isPlayRelease && (env("EAS_BUILD") === "true" || androidBuildSha) && !/^[a-f0-9]{40}$/.test(androidBuildSha)) {
-  throw new Error("Android store build requires a valid EAS source commit for its packaged config");
+const sourceBoundProfile = isAndroidRelease || isIosSimulatorReview;
+const buildSourceSha = sourceBoundProfile ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
+if (sourceBoundProfile && (env("EAS_BUILD") === "true" || buildSourceSha) && !/^[a-f0-9]{40}$/.test(buildSourceSha)) {
+  throw new Error("Source-bound build requires a valid EAS source commit for its packaged config");
 }
 const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
@@ -35,6 +42,13 @@ if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUM
 const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "56"));
 if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 53 || androidVersionCode > 2100000000)
   throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 52");
+if (isProductionRelease) {
+  // Build 56 is the verified Play baseline; 57 identifies the internal APK.
+  if (androidVersionCode < 58) throw new Error("Production Android versionCode must be at least 58");
+  if (env("EAS_BUILD_PLATFORM") && env("EAS_BUILD_PLATFORM") !== "android") {
+    throw new Error("The production profile is for Android only");
+  }
+}
 
 if (isRelease) {
   if (isCameraSpike) throw new Error("Camera spike builds cannot use a release profile");
@@ -59,13 +73,13 @@ module.exports = {
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
-      backgroundColor: "#E9EEF4",
-      barStyle: "dark-content",
+      backgroundColor: mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
+      barStyle: mobileTaskUxEnabled ? "light-content" : "dark-content",
       translucent: false,
     },
     androidNavigationBar: {
-      backgroundColor: "#E9EEF4",
-      barStyle: "dark-content",
+      backgroundColor: mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
+      barStyle: mobileTaskUxEnabled ? "light-content" : "dark-content",
     },
     icon: "./assets/icon.png",
     scheme: isCameraSpike ? "packproof-camera-test" : ["packproof-v2", "packproof"],
@@ -90,7 +104,7 @@ module.exports = {
       package: isCameraSpike ? "com.packproof.mobile.cameraspike" : "com.packproof.mobile",
       versionCode: androidVersionCode,
       allowBackup: false,
-      usesCleartextTraffic: !isPlayRelease,
+      usesCleartextTraffic: !isAndroidRelease,
       ...(process.env.GOOGLE_SERVICES_JSON ? {googleServicesFile:process.env.GOOGLE_SERVICES_JSON} : {}),
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
@@ -153,7 +167,9 @@ module.exports = {
         projectId: "0196c3f7-cb3a-472c-99be-825558f227e8",
       },
       packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
-      ...(androidBuildSha ? { packproofBuildSha: androidBuildSha } : {}),
+      ...(buildSourceSha ? { packproofBuildSha: buildSourceSha } : {}),
+      ...(isProductionRelease ? { packproofMobileTaskUx: mobileTaskUxEnabled } : {}),
+      ...(isMobileUxReview || isIosSimulatorReview ? { packproofInternalReview: true, packproofMobileTaskUx: env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX") === "true" } : {}),
     },
   },
 };

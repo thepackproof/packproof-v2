@@ -33,6 +33,7 @@ function harness() {
     './recover-completion': {recoverCaptureCompletion},
     './recovery-model': {sameCaptureAccount},
     '../analytics/native-study': {async nativeStudyForCapture() {return null;}},
+    '../analytics/mobile-ux-events': {recordMobileUxEvent() {}},
     './identifier-observation': {identifierCaptureEnabled:()=>false},
     './identifier-storage': {async prepareIdentifierCheckpoint() {}},
     './upload-transport': {useDirectUpload},

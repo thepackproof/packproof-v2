@@ -13,7 +13,7 @@ import {AuthService} from './auth';
 import {DesktopApi} from './api';
 import {EvidenceEngine} from './evidence/engine';
 import {DesktopEvidenceTransport} from './evidence-api';
-import {APP_ORIGIN,isTrustedRenderer,isAllowedExternal,parseDeepLink,schemas,settingsSchema} from './security';
+import {APP_ORIGIN,isTrustedRenderer,isAllowedExternal,integrationManagementUrl,parseDeepLink,schemas,settingsSchema} from './security';
 import {Diagnostics} from './diagnostics';
 import {Updates} from './updates';
 import {ErrorReporting} from './error-reporting';
@@ -109,7 +109,7 @@ function setupIpc(){
   }
   if(current())notify('Marketplace synchronization complete','Your fulfillment queue is ready to refresh.');
  });
- handle('integrations.list',schemas.empty,()=>requireApi().listConnectedAccounts());handle('integrations.connect',schemas.resolve,async()=>{await external(`${config?.webBaseUrl??'https://thepackproof.com'}/app/integrations`);});
+ handle('integrations.list',schemas.empty,()=>requireApi().listConnectedAccounts());handle('integrations.connect',schemas.resolve,async()=>{await external(integrationManagementUrl(config?.webBaseUrl??'https://thepackproof.com'));});
  handle('capture.begin',schemas.capture,async i=>{const captureAccount=auth?.getAccountId();const captureEpoch=sessionEpoch;const proof=await cached('proof-'+i.proofId,()=>requireApi().getProof(i.proofId));if(captureEpoch!==sessionEpoch||captureAccount!==auth?.getAccountId())throw new Error('Your account changed. Select the shipment again.');if(proof.status==='FINALIZED')throw new Error('This Proof is finalized. Its evidence cannot be changed.');const job=await requireEngine().beginCapture({...i,offline:!online,appVersion:app.getVersion(),installationId});if(blocker===null)blocker=powerSaveBlocker.start('prevent-app-suspension');return {id:job.id,maxRecordingBytes:job.maxRecordingBytes,maxRecordingSeconds:job.maxRecordingSeconds};});
  const releaseBlocker=()=>{if(blocker!==null){powerSaveBlocker.stop(blocker);blocker=null;}};
  handle('capture.append',schemas.chunk,async(id,seq,b)=>{await requireEngine().appendChunk(id,seq,new Uint8Array(b));});

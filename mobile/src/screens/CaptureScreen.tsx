@@ -1,4 +1,3 @@
-import { Coaching } from "../onboarding/Onboarding";
 import { nativeStudyForCapture } from "../analytics/native-study";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -12,6 +11,7 @@ import { usePackProof } from "../app/PackProofProvider";
 import { OFFLINE_CAPTURE_MESSAGE } from "../copy/errors";
 import { confirmCaptureShipping, formatDuration, inspectCaptureShipping, persistCaptureMetadata } from "../capture";
 import { captureRecoveryLabel } from "../capture/recovery-model";
+import { captureProgressLabel } from "../capture/upload-recovery";
 import { labelNeedsReview, shortenedTracking, type CaptureShippingReview } from "../capture/shipping-scan-queue";
 import type { EncodedVideoInspection } from "../../modules/packproof-unified-camera";
 import { spacing, typography } from "../theme/tokens";
@@ -42,21 +42,23 @@ export function CaptureScreen() {
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const openedPreview = useRef<string | null>(null);
   const capture = app.localCapture;
-  const belongs = app.session?.captureProofId === app.proof?.proofId;
+  const reviewOnly=Boolean(app.captureReviewOnlyReason);
+  const belongs = app.session?.captureProofId === (app.proof?.proofId??capture?.captureProofId);
   const inFlight = ["preparing", "uploading", "uploaded", "committed"].includes(app.captureStatus);
-  const reviewing = Boolean(capture) && belongs && !inFlight;
+  const incomplete = capture?.recovery?.phase === "RECORDING" || capture?.localFileAvailable === false;
+  const reviewing = Boolean(capture) && belongs && !inFlight && !incomplete;
   const sellerAttestation = (Platform.OS === "android" || Platform.OS === "ios") && app.role === "SELLER" && !isGradingWorkflow(app.proof?.workflowType);
   const ordinaryCapture = Boolean(capture?.captureSessionId) && !capture?.captureStageId && !isGradingWorkflow(app.proof?.workflowType);
 
   useEffect(() => {
-    if (!app.proof || capture || inFlight || app.busy || openedPreview.current === app.proof.proofId) return;
+    if (reviewOnly || !app.proof || capture || inFlight || app.busy || openedPreview.current === app.proof.proofId) return;
     openedPreview.current = app.proof.proofId;
     // Selection opens the preview only. Native Record packing remains intentional.
     void app.startCapture();
   }, [app.proof?.proofId, Boolean(capture), inFlight, app.busy]);
 
   useEffect(() => {
-    if (!capture || !belongs || !ordinaryCapture || !app.proof || !capture.captureSessionId) return;
+    if (reviewOnly || !capture || !belongs || incomplete || !ordinaryCapture || !app.proof || !capture.captureSessionId) return;
     let disposed = false;
     const selectedCapture = capture;
     const proofId = app.proof.proofId;
@@ -72,11 +74,11 @@ export function CaptureScreen() {
       if (!disposed) setLabelError("Your recording is kept. Reconnect to check its label before confirming.");
     }).finally(() => { if (!disposed) setCheckingLabel(false); });
     return () => { disposed = true; };
-  }, [capture?.captureSessionId, belongs, ordinaryCapture, app.client, reviewVersion]);
+  }, [capture?.captureSessionId, belongs, incomplete, ordinaryCapture, app.client, reviewVersion,reviewOnly]);
 
   useEffect(() => {
     setIdentifiers(null); setIdentifierError(null); setIdentifierBlocked(false); setReviewReasons({});
-    if (!capture || !belongs || !identifierCaptureEnabled(capture.identifierPolicy)) return;
+    if (reviewOnly || !capture || !belongs || incomplete || !identifierCaptureEnabled(capture.identifierPolicy)) return;
     let disposed = false;
     void (async () => {
       // Share the already-running local inspection; no second video pass.
@@ -90,14 +92,14 @@ export function CaptureScreen() {
       setIdentifierError(blocked ? 'Reconnect in this recording’s original account to check its saved code review.' : 'Code details are unavailable. Your recording can still be submitted.');
     });
     return () => { disposed = true; };
-  }, [capture?.captureSessionId, belongs, app.client, reviewVersion]);
+  }, [capture?.captureSessionId, belongs, incomplete, app.client, reviewVersion,reviewOnly]);
 
   useEffect(() => {
-    if (!capture || !belongs || !ordinaryCapture || !capture.captureUserId) return;
+    if (reviewOnly || !capture || !belongs || !ordinaryCapture || !capture.captureUserId) return;
     let active=true;
     void nativeStudyForCapture(app.client,capture.captureUserId,capture.studyTimingRef).then(study=>{if(active)study?.event('review_opened');});
     return()=>{active=false;};
-  }, [capture?.captureSessionId, belongs, ordinaryCapture, app.client]);
+  }, [capture?.captureSessionId, belongs, ordinaryCapture, app.client,reviewOnly]);
 
   async function resolveOtherLabel(observationId: string) {
     if (!capture?.captureSessionId || !app.proof) return;
@@ -130,26 +132,19 @@ export function CaptureScreen() {
 
   const unresolved = labels?.observations.filter(labelNeedsReview) ?? [];
   const labelBlocked = (ordinaryCapture && (checkingLabel || Boolean(labelError) || !labels || labels.reviewRequired || inspection?.playable === false)) || identifierBlocked || identifiers?.reviewRequired === true;
-  const progressLabel = app.captureStatus === "uploading"
-    ? app.uploadPercent != null && app.uploadPercent >= 100
-      ? "Upload complete · sealing Proof…"
-      : `Uploading${app.uploadPercent != null ? ` · ${app.uploadPercent}%` : ""}`
-    : app.captureStatus === "uploaded" || app.captureStatus === "committed"
-      ? "Upload complete · sealing Proof…"
-      : app.captureStatus === "preparing"
-        ? "Preparing your saved recording…"
-        : capture?.recovery
-          ? captureRecoveryLabel(capture.recovery.phase)
-          : "Finishing your Proof…";
+  const progressLabel = captureProgressLabel(app.captureStatus, app.uploadPercent);
+  const title = incomplete ? "Interrupted recording" : inFlight ? "Saving your evidence" : reviewing ? "Review recording" : "Ready to pack";
+  function discardRecording() {
+    Alert.alert("Discard this local recording?", "This removes this take from this device after PackProof closes its incomplete upload. It cannot be recovered. Existing committed server evidence stays in the Proof.", [
+      { text: "Keep recording", style: "cancel" }, { text: "Discard local copy", style: "destructive", onPress: () => void app.discardCapture() },
+    ]);
+  }
 
 
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={[
-    styles.root, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 20) },
+  return <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={[
+    styles.root, { paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 16) },
   ]}>
-    {inFlight && <Coaching kind="secured"/>}
-    <Coaching kind="complete"/>
-    <AppHeader title="Proof" onBack={app.goBack} right={app.role === "SELLER" && app.proof?.proofId ? <IconButton label="Share Proof" onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : undefined} />
-    <Text style={[styles.title, { color: colors.textPrimary }]}>{inFlight ? "Finishing your Proof" : reviewing ? "Review your recording" : "Ready to pack"}</Text>
+    <AppHeader title={title} onBack={() => { if (!app.busy) app.goBack(); }} right={!reviewOnly && app.role === "SELLER" && app.proof?.proofId ? <IconButton label="Share Proof" disabled={app.busy} onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : undefined} />
     {txn ? <View style={{ gap: spacing.xs }}>
       <Text style={[styles.item, { color: colors.textPrimary }]}>{txn.itemTitle || "Your shipment"}</Text>
       {txn.externalReference ? <Text style={[styles.note, { color: colors.textSecondary }]}>Order {txn.externalReference}</Text> : null}
@@ -161,15 +156,28 @@ export function CaptureScreen() {
     }} /> : null}
     {app.offline && capture ? <Text style={[styles.note, { color: colors.textSecondary }]}>{OFFLINE_CAPTURE_MESSAGE}</Text> : null}
     {inFlight ? <ProgressState label={progressLabel} percent={app.captureStatus === "uploading" && (app.uploadPercent ?? 0) < 100 ? app.uploadPercent : null} /> : null}
+    {incomplete && capture && belongs ? <View style={styles.preview}>
+      <Text accessibilityRole="alert" style={[styles.note, { color: colors.textSecondary }]}>{capture.localFileAvailable === false
+        ? "The original recording is not available on this device. Check the device used to record, or discard the incomplete upload before recording again."
+        : "This recording was interrupted before a playable video was confirmed. Any surviving bytes stay on this device. This take cannot be submitted as a completed continuous recording."}</Text>
+      <Button label="Discard incomplete recording" onPress={discardRecording} disabled={app.busy} variant="destructive" />
+      <Text style={[styles.note, { color: colors.textSecondary }]}>After discarding, open the camera to record a new continuous take. Saved segments are never joined together.</Text>
+    </View> : null}
     {reviewing && capture ? <View style={styles.preview}>
-      <VideoReview key={capture.uri} uri={capture.uri} />
+      <VideoReview key={capture.uri} uri={capture.uri} compact />
+      {reviewOnly ? <><Text accessibilityRole="alert" style={[styles.note,{color:colors.textSecondary}]}>{app.captureReviewOnlyReason}</Text><Button label="Check current Proof" onPress={()=>void app.resumeSavedCapture(capture)} disabled={app.busy||app.offline} variant="secondary" /></> : null}
+      {!reviewOnly && labelBlocked ? <Text accessibilityLiveRegion="polite" style={[styles.note, { color: colors.textSecondary }]}>{checkingLabel
+        ? "Checking required recording details before confirmation…"
+        : "Resolve the recording checks below before confirming. Your local original is kept."}</Text> : null}
+      {!reviewOnly ? (sellerAttestation ? <SellerAttestation compact onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} />
+        : <Button label={app.captureStatus === "retry" ? "Try again" : "Use recording"} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} haptic="medium" />) : null}
       <Text style={[styles.note, { color: colors.textSecondary }]}>
         {formatDuration(capture.durationMs)} recording{capture.interrupted ? " · interrupted recording" : ""}
       </Text>
       {capture.interrupted ? <Text accessibilityRole="alert" style={[styles.note, { color: colors.textSecondary }]}>
         Recording was interrupted. Review the saved video; it is preserved as this take and is never joined to another recording.
       </Text> : null}
-      {ordinaryCapture ? <View style={styles.labelReview} accessibilityLiveRegion="polite">
+      {!reviewOnly && ordinaryCapture ? <View style={styles.labelReview} accessibilityLiveRegion="polite">
         <Text style={[styles.item, { color: colors.textPrimary }]}>Shipping label</Text>
         <Text style={[styles.note, { color: colors.textSecondary }]}>{checkingLabel ? "Checking the label in your saved video…"
           : labelError ?? (inspection?.playable === false ? "This recording could not be played. Its bytes are kept for review."
@@ -198,7 +206,7 @@ export function CaptureScreen() {
           </View>)}
         </ScrollView> : null}
       </View> : null}
-      {identifierCaptureEnabled(capture.identifierPolicy) ? <View style={styles.labelReview}>
+      {!reviewOnly && identifierCaptureEnabled(capture.identifierPolicy) ? <View style={styles.labelReview}>
         {identifierError ? <Text style={[styles.note, { color: colors.textSecondary }]}>{identifierError}</Text> : null}
         {identifierError ? <Button label="Check codes again" variant="tertiary" onPress={() => setReviewVersion(version => version + 1)} /> : null}
         {(identifiers?.observations ?? []).filter(row => row.reviewRequired && !row.decision).map(row => <View key={row.observationId} style={[styles.observation, { borderColor: colors.border }]}>
@@ -214,24 +222,21 @@ export function CaptureScreen() {
         </View>)}
         <IdentifierDetails value={identifiers} />
       </View> : null}
-      {sellerAttestation ? <SellerAttestation onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} />
-        : <Button label={app.captureStatus === "retry" ? "Try again" : "Use recording"} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} haptic="medium" />}
       <Text style={[styles.note, { color: colors.textSecondary }]}>{capture.recovery ? captureRecoveryLabel(capture.recovery.phase) : "Saved on this device. Upload pending."}</Text>
-      <Button label="Retake recording" onPress={() => Alert.alert("Record a new take?", "Keep the item and package in view for the entire new recording.", [
+      {!reviewOnly ? <Button label="Retake recording" onPress={() => Alert.alert("Replace this local take?", "The current take stays on this device until the new recording is saved. Then the new take replaces it and the previous unsubmitted local take is removed. Record the entire sequence again; segments are never joined.", [
         { text: "Keep this recording", style: "cancel" }, { text: "Open camera", onPress: () => void app.startCapture() },
-      ])} variant="secondary" disabled={app.busy || Boolean(capture.uploadEvidenceId)} />
+      ])} variant="secondary" disabled={app.busy || Boolean(capture.uploadEvidenceId)} /> : null}
       {sellerAttestation && /biometric|fingerprint|enroll|lock/i.test(app.error ?? "") ? <Button label="Open biometric settings"
         onPress={() => void (Platform.OS === "android" ? Linking.sendIntent("android.settings.BIOMETRIC_ENROLL").catch(() => Linking.openSettings()) : Linking.openSettings())} variant="tertiary" disabled={app.busy} /> : null}
-      <Button label="Discard recording" onPress={() => Alert.alert("Discard this local recording?", "This removes the recording from this device. An unpreserved recording cannot be recovered. Existing committed server evidence stays in the Proof.", [
-        { text: "Keep recording", style: "cancel" }, { text: "Discard local copy", style: "destructive", onPress: () => void app.discardCapture() },
-      ])} variant="tertiary" disabled={app.busy} />
+      {!reviewOnly ? <Button label="Discard recording" onPress={discardRecording} variant="tertiary" disabled={app.busy} /> : null}
     </View> : null}
     {!capture && !inFlight ? <Button label="Open camera" onPress={() => void app.startCapture()} loading={app.busy} /> : null}
+    {!capture && /camera permission|permission denied/i.test(app.error ?? "") ? <Button label="Open camera settings" variant="secondary" disabled={app.busy} onPress={() => void Linking.openSettings()} /> : null}
     <Button label="Back" onPress={app.goBack} variant="tertiary" disabled={app.busy} />
   </ScrollView>;
 }
 const styles = StyleSheet.create({
-  root: { flexGrow: 1, paddingHorizontal: spacing.lg, gap: spacing.md },
+  root: { flexGrow: 1, paddingHorizontal: 16, gap: 12 },
   title: { ...typography.pageTitle }, item: { ...typography.cardTitle }, note: { ...typography.secondary },
   preview: { gap: spacing.md }, labelReview: { gap: spacing.sm },
   observation: { borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: spacing.sm },

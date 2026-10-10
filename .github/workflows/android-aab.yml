@@ -62,10 +62,18 @@ jobs:
           node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/workspace-summary.test.ts
           node <<'NODE'
           const fs = require('fs');
+          const profiles = require('./eas.json').build;
+          const environmentLayers = [];
+          for (let name = 'production'; name; name = profiles[name].extends) {
+            environmentLayers.unshift(profiles[name].env || {});
+          }
+          Object.assign(process.env, ...environmentLayers, { EAS_BUILD_PROFILE: 'production' });
           const { expo } = require('./app.config.js');
           if (expo.android.package !== 'com.packproof.mobile') throw new Error('Unexpected Android package');
           if (!/^\d+\.\d+(?:\.\d+)?$/.test(expo.version) || !Number.isSafeInteger(expo.android.versionCode)) throw new Error('Invalid release identity');
+          if (expo.extra.packproofMobileTaskUx !== true || expo.extra.packproofInternalReview) throw new Error('Production UX configuration is incorrect');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact=packproof-${expo.version}-${expo.android.versionCode}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${expo.version}\nversionCode=${expo.android.versionCode}\n`);
           NODE
 
       - name: Authenticate with existing Expo credential
@@ -73,10 +81,14 @@ jobs:
 
       - name: Build signed Android App Bundle
         working-directory: mobile
+        env:
+          EAS_BUILD_PROFILE: production
+          PACKPROOF_EXPECTED_VERSION: ${{ steps.release.outputs.version }}
+          PACKPROOF_EXPECTED_VERSION_CODE: ${{ steps.release.outputs.versionCode }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          eas build --platform android --profile shipping-integration --non-interactive --wait --json > dist/eas-build.json
+          eas build --platform android --profile production --non-interactive --freeze-credentials --wait --json > dist/eas-build.json
           node <<'NODE'
           const fs = require('fs');
           const payload = JSON.parse(fs.readFileSync('dist/eas-build.json', 'utf8'));
@@ -88,6 +100,11 @@ jobs:
           }
           if (build.gitCommitHash !== process.env.GITHUB_SHA) {
             throw new Error('EAS build source revision does not match the requested GitHub commit.');
+          }
+          if (build.platform !== 'ANDROID' || build.distribution !== 'STORE' || build.buildProfile !== 'production'
+            || build.appIdentifier !== 'com.packproof.mobile' || build.appVersion !== process.env.PACKPROOF_EXPECTED_VERSION
+            || String(build.appBuildVersion) !== process.env.PACKPROOF_EXPECTED_VERSION_CODE) {
+            throw new Error('EAS artifact identity does not match the production release configuration.');
           }
           fs.writeFileSync('dist/aab-url.txt', url + '\n');
           NODE

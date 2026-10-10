@@ -7,6 +7,7 @@ import { captureIdentifiers, identifierFailureBlocks, type IdentifierCapture } f
 import { identifierCaptureEnabled, mayRetainIdentifier } from './capture/identifier-observation';
 import { capturePreflight } from "./capture/preflight";
 import {startNativeStudy,nativeStudyForCapture,type NativeStudyTimer} from './analytics/native-study';
+import { recordMobileUxEvent } from './analytics/mobile-ux-events';
 import type { CaptureRecoveryState } from "./capture/recovery-model";
 import { resolveSavedCaptureUri } from "./capture/upload-recovery";
 import { shippingQueue, readShippingJournal, releaseShippingQueue } from "./capture/shipping-scan-storage";
@@ -347,7 +348,7 @@ export async function persistLocalCapture(capture: LocalCapture): Promise<LocalC
     await FileSystem.copyAsync({ from: capture.uri, to: dest });
   }
   const info = await FileSystem.getInfoAsync(dest);
-  if (!info.exists || info.isDirectory) {
+  if (!info.exists || info.isDirectory || !("size" in info) || info.size <= 0) {
     throw new Error("Captured video could not be saved locally.");
   }
   const durable: LocalCapture = {
@@ -358,6 +359,7 @@ export async function persistLocalCapture(capture: LocalCapture): Promise<LocalC
     durationMs: capture.durationMs,
   };
   await persistCaptureMetadata(durable);
+  recordMobileUxEvent("capture_durably_saved");
   return durable;
 }
 

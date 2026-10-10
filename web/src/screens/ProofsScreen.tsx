@@ -7,8 +7,12 @@ import { Notice } from "../components/Notice";
 import { WorkstationProofTable } from "../components/WorkstationProofTable";
 import { Glyph } from "../site/Brand";
 import "./workstation-home.css";
+import { MobileProofRows } from "../mobile-task/MobileProofRows";
 
 export function ProofsScreen(props: {
+  mobileTask?: boolean;
+  taskBusy?: boolean;
+  onNextTask?: (proof: ProofCollectionItem) => void;
   api?: PackProofApi;
   proofs: ProofCollectionItem[];
   readyOrders?: ReactNode;
@@ -62,7 +66,7 @@ export function ProofsScreen(props: {
       {refreshAvailable && !props.loading && <p className="workstation-list-notice" role="status">Your records may have updates. <button className="text-link" onClick={props.onRetry}>Refresh Proofs</button></p>}
       {props.error && <div className="workstation-list-message"><Notice title="We couldn’t load your Proofs" kind="error"><p>{props.error}</p><button className="btn btn-secondary" onClick={props.onRetry}>Try again</button></Notice></div>}
       {props.loading && <p className="workstation-list-message" role="status">Loading Proofs…</p>}
-      {!props.loading && !props.error && rows.length > 0 && <div data-onboarding="proofs"><WorkstationProofTable api={props.api} proofs={rows} onOpenProof={props.onOpenProof} onOpenInvitation={props.onOpenInvitation} onOpenReceiver={props.onOpenReceiver} /></div>}
+      {!props.loading && !props.error && rows.length > 0 && <div data-onboarding="proofs">{props.mobileTask && props.onNextTask ? <MobileProofRows proofs={rows} busy={props.taskBusy} onOpen={props.onNextTask} /> : <WorkstationProofTable api={props.api} proofs={rows} onOpenProof={props.onOpenProof} onOpenInvitation={props.onOpenInvitation} onOpenReceiver={props.onOpenReceiver} />}</div>}
       {empty && <section data-onboarding="proofs" className="workstation-empty" role="status"><span className="workstation-empty-icon"><Glyph name="file" size={25} /></span><h2>{props.query ? "No search matches" : props.view === "attention" ? "Nothing needs your attention" : props.view === "completed" ? "No completed Proofs yet" : "No Proofs yet"}</h2><p>{props.query ? "Try another item, order reference or tracking number." : props.view === "attention" ? "You’re up to date. Waiting and uploading records are available in All." : props.view === "completed" ? "Proofs appear here after their evidence is finalized. Delivery status is tracked separately." : "Use New Proof to record a shipment, or connect a store to bring in eligible orders automatically."}</p>{props.query ? <button className="btn btn-secondary" onClick={() => props.onChange(props.view, "")}>Clear search</button> : props.view !== "all" ? <button className="btn btn-secondary" onClick={() => props.onChange("all", "")}>View all Proofs</button> : <a className="text-link" href="/stores">Open Integrations</a>}</section>}
     </section>
   </main>;

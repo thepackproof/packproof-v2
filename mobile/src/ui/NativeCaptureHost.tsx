@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { newIdempotencyKey } from "../v2-api";
 import { shortenedTracking, type ShippingScanResult } from "../capture/shipping-scan-queue";
 import { useEffect, useRef, useState } from "react";
+import { recordMobileUxEvent } from "../analytics/mobile-ux-events";
 import {
   AppState,
   Animated,
@@ -21,6 +22,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { CameraView } from "expo-camera";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -213,14 +215,17 @@ function CameraSession({
   const { colors, scheme, reducedMotion } = useTheme();
   const accents = cinematicForScheme(scheme);
   const insets = useSafeAreaInsets();
+  const viewport = useWindowDimensions();
+  useEffect(() => { recordMobileUxEvent("capture_entered"); }, []);
   const [ready, setReady] = useState(false),
     [recording, setRecording] = useState(false),
     [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null),
-    [coach, setCoach] = useState(true),
+    [coach, setCoach] = useState(false),
     [elapsed, setElapsed] = useState(0);
   const started = useRef(0),
     recordingRef = useRef(false),
+    stopRequested = useRef(false),
     interrupted = useRef(false),
     bookmarks = useRef<CaptureBookmark[]>([]);
   useEffect(() => {
@@ -252,6 +257,7 @@ function CameraSession({
     setError(null);
     bookmarks.current = [];
     interrupted.current = false;
+    stopRequested.current = false;
     started.current = Date.now();
     recordingRef.current = true;
     setRecording(true);
@@ -301,9 +307,13 @@ function CameraSession({
     }
   }, [ready, request.autoStart]);
   const stop = () => {
-    if (recordingRef.current) {
+    if (recordingRef.current && !stopRequested.current) {
+      stopRequested.current = true;
       setSaving(true);
-      if (useUnified) void unifiedCamera.current?.stopRecording().catch(()=>setError("Could not request camera stop. Close the camera to preserve the recording."));
+      if (useUnified) void unifiedCamera.current?.stopRecording().catch(()=>{
+        stopRequested.current = false; setSaving(false);
+        setError("Could not request camera stop. Try Finish recording again. Keep PackProof open while the video is saving.");
+      });
       else camera.current?.stopRecording();
     }
   };
@@ -317,8 +327,9 @@ function CameraSession({
       animationType={reducedMotion ? "none" : "slide"}
       onRequestClose={() => recordingRef.current ? Alert.alert("Finish this recording?", "Keep recording or finish and review what you recorded.", [{text:"Keep recording",style:"cancel"},{text:"Finish recording",onPress:stop}]) : saving ? undefined : onFinish(null)}
     >
-      <View
-        style={[
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={[
           styles.root,
           {
             backgroundColor: colors.background,
@@ -327,8 +338,8 @@ function CameraSession({
           },
         ]}
       >
-        <Coaching kind="camera"/><View style={styles.heading}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
+        <View style={styles.heading}>
+          <Text accessibilityLiveRegion="polite" style={[styles.title, { color: colors.textPrimary }]}>
             {recording
               ? request.stageType
                 ? "Recording receipt / return"
@@ -342,15 +353,15 @@ function CameraSession({
             Grading workflow recording · the existing grading recipe and participant checks apply.
           </Text> : null}
           <Text
-            accessibilityLiveRegion="polite"
+            accessibilityLiveRegion="none"
             style={{ color: colors.textSecondary }}
           >
             {recording
               ? `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= 270000 ? " · under 30 seconds left" : ""}`
-              : "Camera recording · up to 5 minutes · audio is not required"}
+              : !ready ? "Opening camera…" : "Camera recording · up to 5 minutes · audio is not required"}
           </Text>
         </View>
-        <View style={styles.camera}>
+        <View style={[styles.camera, { height: Math.max(160, Math.min(300, viewport.height * 0.38)) }]}>
           {useUnified ? <UnifiedCameraView
             ref={unifiedCamera}
             style={StyleSheet.absoluteFill}
@@ -399,7 +410,15 @@ function CameraSession({
             </View>
           </Animated.View> : null}
         </View>
-        <ScrollView contentContainerStyle={styles.controls}>
+        <View style={styles.controls}>
+          {recording ? (
+            <Button label="Finish recording" loading={saving} onPress={stop}
+              accessibilityHint="Finish this continuous recording and review the saved video." />
+          ) : (
+            <Button label={request.stageType ? "Record this stage" : "Record packing"}
+              disabled={!ready || saving} onPress={() => void start()} />
+          )}
+          {saving ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>Finishing the recording. Keep PackProof open until saving is confirmed.</Text> : null}
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
             <Text style={{color:shipping?.status==='BOUND'?colors.accentText:colors.textSecondary}}>
               {identifiersEnabled ? (codeStatus ?? 'Pack normally. Item and shipping codes are read during recording.') : request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'
@@ -429,15 +448,7 @@ function CameraSession({
               ? "Keep the unopened package in view as you open it. Show the contents and their visible condition."
               : "Keep the item and package in view as you pack and seal it. Show the shipping label during the recording."}
           </Text> : null}
-          {recording ? (
-            <Button label="Finish recording" loading={saving} onPress={stop} />
-          ) : (
-            <Button
-              label={request.stageType ? "Record this stage" : "Record packing"}
-              disabled={!ready || saving}
-              onPress={() => void start()}
-            />
-          )}
+          {coach ? <Coaching kind="camera"/> : null}
           <Button
             label={coach ? "Hide guidance" : "Show guidance"}
             variant="tertiary"
@@ -447,19 +458,20 @@ function CameraSession({
             <Button
               label="Cancel camera"
               variant="tertiary"
+              disabled={saving}
               onPress={() => onFinish(null)}
             />
           ) : null}
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
     </Modal>
   );
 }
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flexGrow: 1 },
   heading: { padding: 16, gap: 6 },
   title: { fontSize: 19, fontWeight: "600" },
-  camera: { flex: 1, minHeight: 200, backgroundColor: "#23262D", overflow: "hidden" },
+  camera: { minHeight: 160, backgroundColor: "#23262D", overflow: "hidden" },
   frame: {
     position: "absolute",
     top: "12%",

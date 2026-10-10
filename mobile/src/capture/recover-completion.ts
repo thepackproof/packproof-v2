@@ -1,6 +1,7 @@
 import { isNativeAttestationMethod } from "../attestation/authorization";
 import { hasDurableReceipt, recoveryRetry, type CaptureRecoveryState, type ProofRecovery } from "./recovery-model";
 import { requiresDurableCaptureReceipts } from "./capabilities";
+import { recordMobileUxEvent } from "../analytics/mobile-ux-events";
 
 export interface CompletionProof {
   proofId: string; status: string; participationPolicy?: string | null;
@@ -61,6 +62,7 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
       }
       await phase("BYTES_RECEIVED"); await deps.commit(evidenceId); deps.assertAccount();
       proof = await read(); server = await status();
+      if (proof.evidence.some(item => item.evidenceId === evidenceId && item.validationStatus === "COMMITTED")) recordMobileUxEvent("commitment");
     }
     if (!evidenceId) throw Object.assign(new Error("The server could not identify this recording. Your local original is retained."), { code: "CAPTURE_ORIGINAL_MISSING", status: 409 });
     // Commit receipt loss and pending durability are not a reason to resend the bytes.
@@ -83,6 +85,7 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
       throw new CompletionPending("Recording received. Preservation is still in progress. PackProof will safely retry.");
     }
     await phase("FINALIZATION_PENDING");
+    const wasFinalized = proof.status === "FINALIZED";
     if (proof.status !== "FINALIZED") { await deps.finalize(); deps.assertAccount(); }
     proof = await read(); server = await status();
     const finalEvidence = server.evidence.find(item => item.evidenceId === evidenceId);
@@ -95,6 +98,7 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
     // Canonical submission can finish on an explicitly compatible server. Local
     // cleanup remains impossible until both real durable receipts are confirmed.
     await phase(durablyFinalized ? "FINALIZED" : "SUBMITTED");
+    if (!wasFinalized) recordMobileUxEvent("finalization");
     return proof;
   } catch (error) {
     // A context-bound challenge can become stale after an allowed order correction.
@@ -103,6 +107,7 @@ export async function recoverCaptureCompletion(capture: CompletionCapture, deps:
     if ((error as { code?: string })?.code === "ATTESTATION_CONTEXT_CHANGED") state.authorization = undefined;
     // Preserve the originating journal even if authentication or account selection changed.
     const retry = recoveryRetry(error, state.attempt, now());
+    if (!retry.retryable && state.lastError?.code !== retry.code) recordMobileUxEvent("upload_intervention");
     state.attempt += 1; state.nextRetryAt = retry.nextRetryAt;
     state.lastError = { code: retry.code, message: retry.message, retryable: retry.retryable };
     // Preserve useful authoritative phases through a transient outage.

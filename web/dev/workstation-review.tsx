@@ -29,7 +29,7 @@ const userId = "user_local_design_review";
 let profile = { userId, username: "sample.workspace", displayName: "Sample workspace", status: "ACTIVE", createdAt: "2026-09-01T12:00:00Z", updatedAt: "2026-10-07T12:00:00Z" };
 const titles = ["Comic Book · Silver Horizon #1", "Trading Card · Forest Guardian", "Grading submission", "Comic Book Collection", "Packing demonstration"];
 const dates = ["2026-10-06T20:51:00Z", "2026-10-06T16:55:00Z", "2026-10-04T14:50:00Z", "2026-10-02T12:03:00Z", "2026-10-01T11:11:00Z"];
-const proofs: ProofCollectionItem[] = titles.map((title, index) => {
+let proofs: ProofCollectionItem[] = titles.map((title, index) => {
   const completed = index > 2;
   const proofId = `proof_review_${index + 1}`;
   const status = completed ? "FINALIZED" : "READY_FOR_EVIDENCE";
@@ -40,6 +40,16 @@ const proofs: ProofCollectionItem[] = titles.map((title, index) => {
     presentation: classifyProofPresentation({ proofId, status, role: "SELLER", finalizedAt: completed ? dates[index] : null, workflowType: "GRADING_SUBMISSION", workflowNextAction: { type: "DOCUMENT_ITEM", title: "Document item 1 of 1", actorRole: "SELLER" } }),
   };
 });
+const reviewScenario = new URLSearchParams(window.location.search).get("review-state");
+if (reviewScenario === "empty") proofs = [];
+if (reviewScenario === "completed") proofs = proofs.filter(proof => proof.status === "FINALIZED");
+if (reviewScenario === "offline") Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+if (reviewScenario === "large-text") {
+  const scale = document.createElement("style");
+  scale.textContent = ".workspace-shell.mobile-task-shell :is(p,button,a,span,input,summary,time) { font-size: 24px!important; } .workspace-shell.mobile-task-shell :is(h1,h2,h3) { font-size: 30px!important; }";
+  document.head.appendChild(scale);
+}
+let staleRefresh = false;
 const providers: ConnectedAccountProviderCatalogView[] = [
   ["ebay", "eBay", false, true], ["etsy", "Etsy", false, true], ["shopify", "Shopify", true, true], ["google", "Google", false, false], ["facebook", "Meta", false, false],
 ].map(([provider, providerDisplay, enabled, transactions]) => ({
@@ -92,6 +102,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (path === "/me/developer-access") return json({ allowed: false });
   if (path === "/me/onboarding") return json(onboarding);
   if (path === "/me/proofs") {
+    if (reviewScenario === "error" || reviewScenario === "stale" && staleRefresh) return json({ error: { code: "REVIEW_NETWORK_UNAVAILABLE", message: "Sample refresh failure. Cached records are retained." } }, 503);
     const query = (url.searchParams.get("q") || "").toLowerCase();
     const view = url.searchParams.get("view");
     return json({ proofs: proofs.filter(proof => `${proof.transaction.itemTitle} ${proof.transaction.externalReference}`.toLowerCase().includes(query) && (view === "attention" ? proof.presentation?.needsAttention : view === "completed" ? proof.presentation?.completed : true)), nextOffset: null });
@@ -133,8 +144,10 @@ if (["/", "/review.html"].includes(window.location.pathname)) window.history.rep
 if (!localStorage.getItem("packproof-v2.appearance")) localStorage.setItem("packproof-v2.appearance", "dark");
 
 const bannerStyle = document.createElement("style");
-bannerStyle.textContent = `.local-design-review-label { position:fixed; z-index:10000; right:18px; bottom:12px; display:flex; align-items:center; gap:12px; max-width:calc(100vw - 36px); padding:8px 11px; background:#18344d; color:#eaf4ff; border:1px solid #597a98; border-radius:6px; box-shadow:0 3px 14px #0002; font:600 9px/1.5 Inter,"Segoe UI",sans-serif; letter-spacing:.7px; } .local-design-review-label a { color:#bddbff; font-weight:500; text-decoration:underline; letter-spacing:0; } @media(max-width:600px) { .local-design-review-label { bottom:8px; right:8px; font-size:8px; } }`;
+bannerStyle.textContent = `.local-design-review-label { position:relative; z-index:1; margin:8px 16px 90px; display:flex; align-items:center; gap:12px; max-width:calc(100vw - 36px); padding:8px 11px; background:#18344d; color:#eaf4ff; border:1px solid #597a98; border-radius:6px; box-shadow:0 3px 14px #0002; font:600 9px/1.5 Inter,"Segoe UI",sans-serif; letter-spacing:.7px; } .local-design-review-label a { color:#bddbff; font-weight:500; text-decoration:underline; letter-spacing:0; } @media(max-width:600px) { .local-design-review-label { margin:8px 16px 90px; font-size:8px; } }`;
 document.head.appendChild(bannerStyle);
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing local review root.");
 createRoot(root).render(<StrictMode><App /><aside className="local-design-review-label" aria-label="Local review environment">LOCAL DESIGN REVIEW · SAMPLE DATA<a href="/app" title="Reload the local sample workspace">Reset review</a></aside></StrictMode>);
+
+if (reviewScenario === "stale") window.setTimeout(() => { staleRefresh = true; window.dispatchEvent(new Event("packproof:records-updated")); }, 1500);

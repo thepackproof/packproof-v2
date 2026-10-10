@@ -60,8 +60,8 @@ function resolveConfig(overrides = {}) {
 }
 
 test('Android packaged config records trusted worker source even when a public SHA is stale', () => {
-  for (const profile of ['shipping-integration', 'internal-staging']) {
-    const result = resolveConfig({ EAS_BUILD_PROFILE: profile });
+  for (const profile of ['shipping-integration', 'internal-staging', 'production']) {
+    const result = resolveConfig({ EAS_BUILD_PROFILE: profile, ...(profile === 'production' ? {PACKPROOF_ANDROID_VERSION_CODE: '58'} : {}) });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).extra.packproofBuildSha, sourceSha);
   }
@@ -76,8 +76,8 @@ test('Android worker config fails closed without source metadata while pre-submi
   assert.equal(Object.hasOwn(JSON.parse(local.stdout).extra, 'packproofBuildSha'), false);
 });
 
-test('provenance metadata cannot alter any iOS config field', () => {
-  for (const profile of ['ios-simulator', 'ios-device', 'ios-testflight']) {
+test('provenance metadata cannot alter any signed iOS config field', () => {
+  for (const profile of ['ios-device', 'ios-testflight']) {
     const base = { EAS_BUILD_PLATFORM: 'ios', EAS_BUILD_PROFILE: profile };
     const previous = resolveConfig({ ...base, EAS_BUILD_GIT_COMMIT_HASH: '', EXPO_PUBLIC_PACKPROOF_BUILD_SHA: '' });
     const current = resolveConfig(base);

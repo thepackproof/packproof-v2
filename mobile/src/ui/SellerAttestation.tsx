@@ -7,12 +7,25 @@ import { spacing, typography } from "../theme/tokens";
 import { FadeSlideIn, PressableScale, PulseScale, SuccessHalo } from "./motion";
 
 /** This is a generic icon. It never displays or receives a person's fingerprint. */
-export function SellerAttestation({ onPress, disabled = false, loading = false }: {
+export function SellerAttestation({ onPress, disabled = false, loading = false, compact = false }: {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
+  compact?: boolean;
 }) {
   const { colors } = useTheme();
+  if (compact) return <View style={[styles.compactCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Text style={[styles.compactStatement, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
+    <PressableScale accessibilityRole="button" accessibilityLabel={`Confirm and submit. ${SELLER_SHIPPING_STATEMENT}`}
+      accessibilityHint="Your device requests secure biometric authentication. PackProof never receives your fingerprint or face data."
+      accessibilityState={{ disabled: disabled || loading, busy: loading }} disabled={disabled || loading}
+      onPress={() => { void haptic("medium"); onPress(); }}
+      style={[styles.compactAction, { backgroundColor: disabled || loading ? colors.disabledBackground : colors.primary }]}>
+      {loading ? <ActivityIndicator color={colors.disabledText} /> : <Ionicons name="finger-print-outline" size={22} color={disabled ? colors.disabledText : colors.textOnPrimary} />}
+      <Text style={[styles.compactInstruction, { color: disabled || loading ? colors.disabledText : colors.textOnPrimary }]}>{loading ? "Preparing confirmation…" : "Confirm and submit"}</Text>
+    </PressableScale>
+    <Text style={[styles.privacy, { color: colors.textSecondary }]}>Confirm with your device’s biometric prompt. PackProof never receives your fingerprint or face data.</Text>
+  </View>;
   return <FadeSlideIn>
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View pointerEvents="none" style={[styles.accentRail, { backgroundColor: colors.integrityText }]} />
@@ -43,6 +56,10 @@ export function SellerAttestation({ onPress, disabled = false, loading = false }
 }
 
 const styles = StyleSheet.create({
+  compactCard: { padding: spacing.sm, borderWidth: 1, borderRadius: 12, gap: spacing.sm },
+  compactStatement: { ...typography.secondary, fontWeight: "600" },
+  compactAction: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, borderRadius: 10, padding: spacing.sm },
+  compactInstruction: { ...typography.secondaryStrong, flexShrink: 1 },
   card: { position: "relative", overflow: "hidden", padding: spacing.lg, borderRadius: 18, borderWidth: 1, gap: spacing.md },
   accentRail: { position: "absolute", left: 0, top: 16, bottom: 16, width: 3, borderRadius: 2 },
   action: { alignItems: "center", gap: spacing.md, minHeight: 64 },

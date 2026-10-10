@@ -14,7 +14,7 @@ export function localProofWork(capture: Pick<LocalCapture, 'interrupted' | 'reco
   if (['PRESERVATION_PENDING','FINALIZATION_PENDING'].includes(phase ?? '') && !capture.recovery?.lastError) return { state:'SAVING' };
   if (['UPLOAD_QUEUED','UPLOADING','DISCARD_PENDING'].includes(phase ?? '')) return { state:'UPLOAD_INTERRUPTED' };
   if (['BYTES_RECEIVED','PRESERVATION_PENDING','FINALIZATION_PENDING'].includes(phase ?? '')) return { state:'CONFIRMATION_NEEDED' };
-  if (capture.interrupted || phase === 'RECORDING') return { state:'CAPTURE_UNFINISHED', canResumeCapture:false };
+  if ((capture.interrupted && phase !== 'LOCAL_ONLY') || phase === 'RECORDING') return { state:'CAPTURE_UNFINISHED', canResumeCapture:false };
   return { state:'CONFIRMATION_NEEDED' };
 }
 

@@ -339,7 +339,7 @@ export function formatUserFacingError(error: unknown): string {
 }
 
 export const OFFLINE_CAPTURE_MESSAGE =
-  "Your recording is safely stored on this device. PackProof will upload it when your connection returns.";
+  "Your saved recording stays on this device. Reconnect for server checks, submission, and upload recovery.";
 
 export const MARKETPLACE_DISCLOSURE =
   "PackProof records information supplied by the marketplace. This information has not been independently verified by PackProof.";

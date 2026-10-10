@@ -15,8 +15,14 @@ import { WorkspaceHeader } from '../ui/WorkspaceHeader';
 import { Button } from '../ui/Button';
 import { ErrorBanner, OfflineBanner } from '../ui/EmptyState';
 import { PressableScale } from '../ui/motion';
+import { MOBILE_TASK_UX_ENABLED } from '../experience/mobile-ux';
+import { TaskHomeScreen } from './TaskHomeScreen';
 
 export function WorkspaceHomeScreen() {
+  return MOBILE_TASK_UX_ENABLED ? <TaskHomeScreen /> : <LegacyWorkspaceHomeScreen />;
+}
+
+function LegacyWorkspaceHomeScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
   const alive = useRef(false);

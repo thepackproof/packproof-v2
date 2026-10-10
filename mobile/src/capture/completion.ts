@@ -9,6 +9,7 @@ import { identifierCaptureEnabled } from './identifier-observation';
 import { prepareIdentifierCheckpoint } from './identifier-storage';
 import { beginUploadService, endUploadService, notifyUploadOutcome } from './upload-notifications';
 import { useDirectUpload } from './upload-transport';
+import { recordMobileUxEvent } from '../analytics/mobile-ux-events';
 
 const active = new Map<string, Promise<ProofView>>();
 export function captureCompletionActive(operationId?: string): boolean { return operationId ? active.has(operationId) : active.size > 0; }
@@ -34,6 +35,7 @@ function initializeRecovery(input: SavedCaptureInput) {
 export async function prepareSavedCapture(input: SavedCaptureInput): Promise<void> {
   const { capture, client, userId } = input;
   const state = initializeRecovery(input);
+  const wasSubmitted = state.submitRequested;
   const proofId = state.proofId;
   const study = await nativeStudyForCapture(client, userId, capture.studyTimingRef);
   const save = async () => { await persistCaptureMetadata(capture); input.onChange?.(capture); };
@@ -61,6 +63,7 @@ export async function prepareSavedCapture(input: SavedCaptureInput): Promise<voi
   state.nextRetryAt = null;
   if (!['PRESERVATION_PENDING', 'FINALIZATION_PENDING', 'SUBMITTED', 'FINALIZED'].includes(state.phase)) state.phase = 'UPLOAD_QUEUED';
   await save();
+  if (!wasSubmitted) recordMobileUxEvent("review_completed");
 }
 
 export function completeSavedCapture(input: SavedCaptureInput): Promise<ProofView> {
@@ -78,6 +81,7 @@ export function completeSavedCapture(input: SavedCaptureInput): Promise<ProofVie
     if(!input.interactive||(capture.recovery?.attempt??0)>0)study?.event('recovery_started');
     const save = async () => { await persistCaptureMetadata(capture); input.onChange?.(capture); };
     input.assertAccount();
+    if (state.attempt > 0) recordMobileUxEvent("upload_recovery");
     if (input.interactive) await prepareSavedCapture(input);
     await beginUploadService(operationId);
     let directTarget: UploadTarget | undefined;

@@ -1,18 +1,28 @@
 /** Shared card copy. A server PENDING row never proves an active transfer. */
 export function uploadRecoveryPresentation(input: {
   available: boolean | null; active: boolean; offline: boolean; queued?: boolean; saving?: boolean; committed?: boolean;
-  accepted?: boolean; failed?: boolean; discarding?: boolean;
+  accepted?: boolean; failed?: boolean; discarding?: boolean; incomplete?: boolean;
 }) {
   if (input.discarding) return { title: input.offline ? "Waiting for connection" : "Discarding recording", message: "The recording stays on this device until PackProof closes the incomplete upload.", resume: null, discard: null };
-  if (input.saving) return { title: "Saving Proof", message: "Your video has been received. PackProof is finishing the record; you can keep packing.", resume: null, discard: null };
-  if (input.committed) return { title: "Recording received", message: "Your recording is saved in this Proof. Finish any remaining confirmation.", resume: "Finish submission", discard: null };
+  if (input.saving) return { title: "Waiting for server confirmation", message: "Upload bytes were received. Commitment and finalization are still being checked; the local original is kept.", resume: null, discard: null };
+  if (input.committed) return { title: "Evidence committed", message: "The server accepted this recording. Complete any remaining confirmation and finalization.", resume: "Finish submission", discard: null };
   if (input.available === null) return { title: "Checking saved recording", message: "Checking this device for the original recording.", resume: null, discard: null };
   if (!input.available) return { title: "Upload could not be completed", message: "The original is not available on this device. Resume on the device used to record, or discard the incomplete evidence and record again.", resume: null, discard: "Discard incomplete evidence" };
+  if (input.incomplete) return { title: "Recording interrupted before saving completed", message: "The surviving bytes are kept, but a playable recording has not been confirmed. Discard this incomplete take before recording a new continuous video.", resume: null, discard: "Discard incomplete recording" };
+  if (input.accepted === false) return { title: "Evidence saved on device", message: input.offline ? "You can review the saved recording. Reconnect to complete the required checks and confirm submission." : "Review your saved recording and confirm submission before upload begins.", resume: "Review recording", discard: "Discard recording" };
   if (input.offline) return { title: "Waiting for connection", message: "Your recording is saved on this device. Upload will retry when the connection returns.", resume: "Resume upload", discard: "Discard recording" };
   if (input.active) return { title: "Uploading", message: "Uploading your saved recording. The original stays on this device.", resume: null, discard: null };
   if (input.queued) return { title: "Waiting to upload", message: "Your recording is queued. You can start another Proof.", resume: null, discard: "Discard recording" };
-  if (input.accepted === false) return { title: "Recording saved", message: "Review your saved recording before submitting it.", resume: "Review recording", discard: "Discard recording" };
   return { title: input.failed ? "Upload failed" : "Upload interrupted", message: "Your recording is saved on this device. Resume without recording it again.", resume: "Resume upload", discard: "Discard recording" };
+}
+
+/** A transferred byte count never confirms server commitment or finalization. */
+export function captureProgressLabel(status: string, percent: number | null): string {
+  if (status === "preparing") return "Preparing your saved recording";
+  if (status === "uploading") return percent != null && percent >= 100 ? "Bytes transferred · waiting for server commitment" : `Uploading${percent != null ? ` · ${Math.max(0, Math.floor(percent))}%` : ""}`;
+  if (status === "uploaded") return "Bytes transferred · waiting for server commitment";
+  if (status === "committed") return "Evidence committed · checking the next step";
+  return "Checking the saved recording";
 }
 
 /** Rebase only app-owned recording paths when an application container moves. */

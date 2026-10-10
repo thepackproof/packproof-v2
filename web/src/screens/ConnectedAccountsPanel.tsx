@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMobileTaskExperience } from "../mobile-task/useMobileTaskExperience";
 import { formatDateTime } from "@packproof/copy/format";
 import { connectedAccountStatusLabel, providerDisplay } from "@packproof/copy/status";
 import { ETSY_ATTRIBUTION, SHOPIFY_AUTOMATIC_PROOFS_LABEL, orderIntakeExplanation, orderReviewReason } from "@packproof/copy/commerce";
@@ -39,11 +40,14 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
     ...(props.connections ?? []).map(connection => connection.provider),
   ])];
 
-  return <section className="stack ws-integrations" aria-label="Sales channels">
-    <div className="ws-integration-notice"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg><p>Your marketplace sign-in is separate from PackProof sign-in. Connect a selling account, then choose whether to add its eligible orders automatically.</p></div>
-    {props.notice && <div className="banner banner-info" role="status">{props.notice}</div>}
-    {providers.length === 0 && <p className="note">No sales channels are available to connect right now. You can still record a shipment from Orders.</p>}
-    <div className="ws-integration-grid">{providers.map(provider => {
+  const mobileTask = useMobileTaskExperience();
+  const isUnavailable = (provider: string) => {
+    const catalog = props.providers.find(row => row.provider === provider);
+    return !(catalog?.enabled && catalog.capabilities.transactions) && !props.accounts.some(row => row.provider === provider) && !(props.connections ?? []).some(row => row.provider === provider);
+  };
+  const currentProviders = mobileTask ? providers.filter(provider => !isUnavailable(provider)) : providers;
+  const unavailableProviders = mobileTask ? providers.filter(isUnavailable) : [];
+  const renderProvider = (provider: string) => {
       const catalog = props.providers.find(row => row.provider === provider);
       const accounts = props.accounts.filter(row => row.provider === provider);
       const connections = (props.connections ?? []).filter(row => row.provider === provider);
@@ -103,7 +107,12 @@ export function ConnectedAccountsPanel(props: ConnectedAccountsPanelProps) {
           </>}
         </div>}
       </article>;
-    })}</div>
+  };  return <section className="stack ws-integrations" aria-label="Sales channels">
+    <div className="ws-integration-notice"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg><p>Your marketplace sign-in is separate from PackProof sign-in. Connect a selling account, then choose whether to add its eligible orders automatically.</p></div>
+    {props.notice && <div className="banner banner-info" role="status">{props.notice}</div>}
+    {providers.length === 0 && <p className="note">No sales channels are available to connect right now. You can still record a shipment from Orders.</p>}
+    <div className="ws-integration-grid">{currentProviders.map(renderProvider)}</div>
+    {unavailableProviders.length > 0 && <details className="settings-detail"><summary>Coming soon / unavailable channels ({unavailableProviders.length})</summary><p className="note">These channels cannot currently supply orders in this environment. Availability follows the service catalog; no release date is promised.</p><div className="ws-integration-grid">{unavailableProviders.map(renderProvider)}</div></details>}
     {providers.includes("etsy") && <p className="meta">{ETSY_ATTRIBUTION}</p>}
   </section>;
 }

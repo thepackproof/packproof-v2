@@ -60,6 +60,8 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
+      - name: Audit all desktop dependencies
+        run: npm audit --audit-level=low
       - run: npm run typecheck
       - run: npm test
       - run: node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs tests/native-launch-harness.test.cjs tests/acceptance-kit.test.cjs

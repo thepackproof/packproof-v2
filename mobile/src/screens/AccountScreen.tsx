@@ -29,10 +29,12 @@ import { FormField } from "../ui/FormField";
 import { InfoCard } from "../ui/ProofCard";
 import { PressableScale } from "../ui/motion";
 import { StudyConsentCard } from "../ui/StudyConsentCard";
+import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
 
 import type { AccountSection } from "../app/navigation";
 type DeletionRequest = { requestId: string; state: string; requestedAt: string; updatedAt: string };
 const SECTION_TITLES: Record<AccountSection, string> = {
+  advanced: "Advanced",
   developer: "Developer access",
   billing: "Plan and billing", notifications: "Notifications", profile: "Profile", channels: "Integrations", recordings: "Uploads",
   appearance: "Appearance", help: "Help & support", privacy: "Privacy & account",
@@ -60,6 +62,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   const [shopifyAutomaticProofs, setShopifyAutomaticProofs] = useState(true);
   const [connectionSetup, setConnectionSetup] = useState<Record<string, boolean>>({});
   const [connectionDetails, setConnectionDetails] = useState<Record<string, boolean>>({});
+  const [showUnavailable, setShowUnavailable] = useState(false);
   const wide = useWindowDimensions().width >= 760;
   const [showInvitation, setShowInvitation] = useState(false);
   const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
@@ -71,6 +74,9 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
     const catalog = app.connectedProviders.map(definition => linked.find(channel => channel.provider === definition.provider) ?? { provider: definition.provider, providerDisplay: definition.providerDisplay, catalog: definition, accounts: [] } satisfies SalesChannel);
     return [...catalog, ...linked.filter(channel => !app.connectedProviders.some(definition => definition.provider === channel.provider))];
   }, [app.connectedAccounts, app.connections, app.connectedProviders]);
+  const availableChannels = channels.filter(channel => channel.accounts.length > 0 || channel.catalog?.enabled && (channel.catalog.capabilities.transactions || channel.catalog.capabilities.fulfillment));
+  const unavailableChannels = channels.filter(channel => !availableChannels.includes(channel));
+  const displayedChannels = MOBILE_TASK_UX_ENABLED ? [...availableChannels, ...(showUnavailable ? unavailableChannels : [])] : channels;
   const unfinished = app.savedRecordings.filter(capture => capture.recovery?.phase !== "FINALIZED");
   const retained = app.savedRecordings.filter(capture => capture.recovery?.phase === "FINALIZED");
   const waiting = unfinished.filter(capture => ["LOCAL_ONLY", "UPLOAD_QUEUED"].includes(capture.recovery?.phase ?? "")).length;
@@ -121,9 +127,9 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   );
 
   return (
-    <AppScreen key={section ?? "account"} extraBottom={24}>
+    <AppScreen key={section ?? "account"} bottomInset={!MOBILE_TASK_UX_ENABLED} extraBottom={24}>
       <WorkspaceHeader section={section ? SECTION_TITLES[section] : "Settings"} />
-      <View style={styles.heading}><Text style={[styles.eyebrow, { color: colors.textMuted }]}>Your workspace</Text><Text accessibilityRole="header" style={[styles.pageTitle, { color: colors.textPrimary }]}>{section ? SECTION_TITLES[section] : "Settings"}</Text><Text style={[styles.body, { color: colors.textSecondary }]}>{section === "channels" ? "Connect your orders and their source records." : section === "recordings" ? "Recordings, upload progress, and retained local copies." : section ? "Manage your PackProof preferences." : "Your account, connections, and workspace preferences."}</Text></View>
+      <View style={styles.heading}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Your workspace</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, { color: colors.textPrimary }]}>{section ? SECTION_TITLES[section] : "Settings"}</Text>{!MOBILE_TASK_UX_ENABLED || section === "channels" ? <Text style={[styles.body, { color: colors.textSecondary }]}>{section === "channels" ? "Connect accounts to bring supported orders into Pack. Manual creation is always available." : section === "recordings" ? "Recordings, upload progress, and retained local copies." : section ? "Manage your PackProof preferences." : "Your account, connections, and workspace preferences."}</Text> : null}</View>
       {section ? <Button label="Back to settings" variant="tertiary" icon="chevron-back" onPress={() => app.go("account")} /> : null}
       <OfflineBanner visible={app.offline} />
       <ErrorBanner message={app.error} />
@@ -134,7 +140,25 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <View style={styles.rowCopy}><Text style={[styles.name, { color: colors.textPrimary }]}>{displayName({ displayName: session.displayName, username: session.username, email: session.email })}</Text>
           {session.username ? <Text style={[styles.meta, { color: colors.textSecondary }]}>@{session.username}</Text> : null}</View>
         </View>
-        <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {MOBILE_TASK_UX_ENABLED ? <>
+          <SectionHeader title="Account and billing" />
+          <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
+            <AccountRow title="Plan and billing" detail="Plan, allowance, and invoices" icon="card-outline" onPress={() => openSection("billing")} />
+            <AccountRow title="Privacy and account" detail="Privacy, terms, and account deletion" icon="shield-checkmark-outline" onPress={() => openSection("privacy")} last />
+          </View>
+          <SectionHeader title="Capture preferences" />
+          <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <AccountRow title="Notifications" detail="Upload completion and Proof updates" icon="notifications-outline" onPress={() => openSection("notifications")} />
+            <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "System"} icon="contrast-outline" onPress={() => openSection("appearance")} last />
+          </View>
+          <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <AccountRow title="Integrations" detail="Connected accounts and supported orders" icon="storefront-outline" onPress={() => openSection("channels")} />
+            <AccountRow title="Activity" detail="Uploads, recovery, and completion events" icon="pulse-outline" onPress={() => app.go("activity")} />
+            <AccountRow title="Support" detail="Capture guidance and account help" icon="help-circle-outline" onPress={() => openSection("help")} />
+            <AccountRow title="Advanced" detail="Developer access and remote station" icon="options-outline" onPress={() => openSection("advanced")} last />
+          </View>
+        </> : <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
           <AccountRow title="Integrations" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
           <AccountRow title="Uploads" detail={unfinished.length ? `${unfinished.length} ${unfinished.length === 1 ? "recording needs" : "recordings need"} attention` : retained.length ? `${retained.length} completed ${retained.length === 1 ? "copy" : "copies"} retained` : "No recordings stored here"} icon="cloud-upload-outline" onPress={() => openSection("recordings")} />
@@ -145,12 +169,16 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           {developerAllowed ? <AccountRow title="Developer access" detail="API workspaces, keys, and permissions" icon="code-slash-outline" onPress={() => openSection("developer")} /> : null}
           <AccountRow title="Remote packing station" detail="Pair a camera and control packing from another device" icon="videocam-outline" onPress={openRelayStation} />
           <AccountRow title="Privacy & account" detail="Privacy, terms, and account deletion" icon="shield-checkmark-outline" onPress={() => openSection("privacy")} last />
-        </View>
+        </View>}
         {unfinished.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Signing out pauses unfinished work. Sign in to this account to resume it.</Text> : null}
         <Button label="Sign out" variant="tertiary" loading={signingOut} disabled={app.busy || signingOut} onPress={() => { setSigningOut(true); void app.signOut().finally(() => setSigningOut(false)); }} />
       </> : null}
 
       {section === "billing" ? <BillingPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : null}
+      {section === "advanced" ? <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {developerAllowed ? <AccountRow title="Developer access" detail="API workspaces, keys, and permissions" icon="code-slash-outline" onPress={() => openSection("developer")} /> : null}
+        <AccountRow title="Remote packing station" detail="Pair a camera with another device" icon="videocam-outline" onPress={openRelayStation} last />
+      </View> : null}
       {section === "developer" ? developerAllowed ? <DeveloperAccessPanel key={`${app.apiBaseUrl}:${session.userId}`} /> : <Text style={[styles.body, { color: colors.textSecondary }]}>Developer access is unavailable for this account or could not be confirmed.</Text> : null}
       {section === "notifications" ? <NotificationCenter key={session.userId}/> : null}
       {section === "profile" ? <>
@@ -162,7 +190,8 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       {section === "channels" ? <>
         <View style={[styles.integrationNotice, { backgroundColor: colors.accentSoft }]}><Ionicons name="link-outline" size={20} color={colors.accentText} /><Text style={[styles.noticeCopy, { color: colors.textPrimary }]}>Marketplace authorization is separate from PackProof sign-in. Choose which selling accounts prepare orders automatically.</Text></View>
         {!channels.length && !app.busy ? <Text style={[styles.meta, { color: colors.textSecondary }]}>No sales channels are available right now. You can still record a shipment from Proofs.</Text> : null}
-        <View style={styles.channelGrid}>{channels.map(channel => {
+        {MOBILE_TASK_UX_ENABLED && unavailableChannels.length > 0 ? <Button label={`${showUnavailable ? "Hide" : "Show"} coming soon (${unavailableChannels.length})`} variant="tertiary" onPress={() => setShowUnavailable(value => !value)} /> : null}
+        <View style={styles.channelGrid}>{displayedChannels.map(channel => {
           const canConnect = salesChannelCanConnect(channel) && Boolean(channel.catalog?.capabilities.transactions || channel.catalog?.capabilities.fulfillment);
           const unavailable = channel.catalog?.enabled === false;
           const attention = channel.accounts.some(({ account, connection }) => account?.status === "NEEDS_REAUTH" || account?.status === "ERROR" || connection?.status === "NEEDS_REAUTH");
@@ -188,7 +217,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
             <Button label={`${channel.catalog?.requiresShop ? "Continue to" : "Connect"} ${channel.providerDisplay}`} loading={app.busy} disabled={channel.catalog?.requiresShop && !shop.trim()} onPress={() => void app.connectConnectedAccount(channel.provider, channel.provider === "shopify" ? { shop: shop.trim(), autoSyncEnabled: shopifyAutomaticProofs } : channel.catalog?.requiresShop ? { shop: shop.trim() } : undefined)} />
             {channel.catalog?.requiresShop ? <Button label="Cancel setup" variant="tertiary" disabled={app.busy} onPress={() => setConnectionSetup(previous => ({ ...previous, [channel.provider]: false }))} /> : null}
             </>}
-          </> : !channel.accounts.length ? <Button label={`Connect ${channel.providerDisplay}`} disabled onPress={() => {}} /> : null}
+          </> : !channel.accounts.length ? MOBILE_TASK_UX_ENABLED ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Order connections are not available in this environment.</Text> : <Button label={`Connect ${channel.providerDisplay}`} disabled onPress={() => {}} /> : null}
           {!channel.catalog?.enabled && channel.accounts.length ? <Text style={[styles.meta, { color: colors.textSecondary }]}>New connections are temporarily unavailable. Existing connection and order status are shown above.</Text> : null}
         </View>; })}</View>
         <IntakeSettings />
@@ -298,6 +327,7 @@ function AccountRow({ title, detail, icon, onPress, last }: { title: string; det
 }
 
 const styles = StyleSheet.create({
+  mobileTitle: { fontSize: 24, lineHeight: 31 },
   heading: { gap: 8 },
   eyebrow: { fontSize: 10, lineHeight: 15, letterSpacing: 1.5, fontWeight: "700", textTransform: "uppercase" },
   pageTitle: { ...typography.pageTitle },

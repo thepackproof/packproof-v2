@@ -1,3 +1,7 @@
+import { freshProofDestination, savedCaptureDestination } from "../experience/action-routing";
+import { presentationForProof } from "../copy/proof-list";
+import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
+import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
 import { orderShare } from '../../modules/packproof-order-share';
 import { clearNativeIntakeSession, stopNativeIntakeSession } from '../intake/native-session';
 import { clearIntakeQueueCache } from '../intake/queue-cache';
@@ -173,6 +177,14 @@ export interface PackProofContextValue {
   errorDetail: UserFacingError | null;
   route: AppRoute;
   proofsLibrary: ProofsLibraryState;
+  workspaceFreshAt: string | null;
+  workspaceReconciled: boolean;
+  readWorkspaceOffset: (name: "home" | "activity") => number;
+  setWorkspaceOffset: (name: "home" | "activity", offset: number) => void;
+  readTaskInteractions: () => Record<string, number>;
+  selectedTask: string | null;
+  rememberTaskInteraction: (proofId: string) => void;
+  openProofAction: (proofId: string) => Promise<void>;
   readProofsScrollOffset: () => number;
   readOrdersView: (batch: boolean) => OrdersViewState;
   saveOrdersView: (batch: boolean, value: Partial<OrdersViewState>) => void;
@@ -190,6 +202,7 @@ export interface PackProofContextValue {
   captureStatus: LocalCaptureStatus;
   uploadProgressByProof: Record<string, number | null>;
   savedRecordings: LocalCapture[];
+  captureReviewOnlyReason: string | null;
   resumeSavedCapture: (capture: LocalCapture) => Promise<void>;
   cleanUpSavedCapture: (capture: LocalCapture) => Promise<void>;
   discardSavedCapture: (capture: LocalCapture) => Promise<void>;
@@ -205,8 +218,9 @@ export interface PackProofContextValue {
   editForm: ContextForm;
   importReview: TransactionImportView | null;
   scanResult: PackingStationResolveView | null;
+  scanCandidates: ProofCollectionItem[];
   scanInput: string;
-  scanPhase: "camera" | "reference" | "found" | "missing";
+  scanPhase: "camera" | "reference" | "found" | "missing" | "ambiguous";
   connections: IntegrationConnectionView[];
   connectedAccounts: ConnectedAccountView[];
   connectedProviders: ConnectedAccountProviderCatalogView[];
@@ -234,7 +248,7 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => void;
+  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId">) => void;
   goBack: () => void;
   setProofsView: (view: ProofsLibraryView) => void;
   setProofsQuery: (query: string) => void;
@@ -262,7 +276,7 @@ export interface PackProofContextValue {
   setCreateForm: (form: ContextForm | ((current: ContextForm) => ContextForm)) => void;
   setEditForm: (form: ContextForm | ((current: ContextForm) => ContextForm)) => void;
   setScanInput: (value: string) => void;
-  setScanPhase: (phase: "camera" | "reference" | "found" | "missing") => void;
+  setScanPhase: (phase: "camera" | "reference" | "found" | "missing" | "ambiguous") => void;
   setTechnicalOpen: (value: boolean) => void;
   setConfirmFinalize: (value: boolean) => void;
   setSelectedEvent: (event: ChronologyEntry | null) => void;
@@ -331,10 +345,22 @@ const PackProofContext = createContext<PackProofContextValue | null>(null);
 
 export function PackProofProvider(props: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
+  const [workspaceFreshAt, setWorkspaceFreshAt] = useState<string | null>(null);
+  const [workspaceReconciled, setWorkspaceReconciled] = useState(false);
+  const workspaceOffsets = useRef({home:0,activity:0});
+  const taskInteractions = useRef<Record<string,number>>({});
+  const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const rememberTaskInteraction = (proofId:string) => {
+    setSelectedTask(proofId); taskInteractions.current[proofId]=Date.now();
+    cacheRef.current.interactions=taskInteractions.current;
+    const current=sessionRef.current;
+    if(current) void saveProofsCache(current.apiBaseUrl,current.userId,cacheRef.current).catch(()=>undefined);
+  };
   const [batchPacking, setBatchPacking] = useState(false);
   const [receiptProofId, setReceiptProofId] = useState<string | null>(null);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
   const workspaceOrigin = useRef<WorkspaceOrigin>("home");
+  const activityFilterMemory=useRef<AppRoute["activityFilter"]>("all");
   const ordersViews = useRef<Record<"orders" | "station", OrdersViewState>>({
     orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" },
   });
@@ -384,15 +410,30 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [proofCollection, setProofCollection] = useState<ProofCollectionItem[]>([]);
   const [invitationInput, setInvitationInput] = useState("");
   const [session, setSession] = useState<CachedClientState | null>(null);
+  useEffect(()=>{
+    if(session && MOBILE_TASK_UX_ENABLED)observeMobileDraftRoute(['create','manual','intake','scan','review'].includes(route.name)?'draft':['capture','station'].includes(route.name)?'capture':'other');
+  },[route.name,session?.userId,session?.apiBaseUrl]);
   const [proof, setProof] = useState<ProofView | null>(null);
   const [transactionDetail, setTransactionDetail] = useState<TransactionView | null>(null);
   const [intakeReview, setIntakeReview] = useState<IntakePreview | null>(null);
   const [createForm, setCreateForm] = useState<ContextForm>(EMPTY_FORM);
   const [importReview, setImportReview] = useState<TransactionImportView | null>(null);
+  useEffect(()=>{
+    const current=sessionRef.current;
+    if(!current || cacheScope.current!==`${current.apiBaseUrl}:${current.userId}`)return;
+    const timer=setTimeout(()=>{
+      if(sessionRef.current?.userId!==current.userId || sessionRef.current.apiBaseUrl!==current.apiBaseUrl)return;
+      cacheRef.current={...cacheRef.current,draft:createForm};
+      void saveProofsCache(current.apiBaseUrl,current.userId,cacheRef.current).catch(()=>undefined);
+    },200);
+    return ()=>clearTimeout(timer);
+  },[createForm]);
+
   const [editForm, setEditForm] = useState<ContextForm>(EMPTY_FORM);
   const [manifest, setManifest] = useState<ManifestView | null>(null);
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [savedRecordings, setSavedRecordings] = useState<LocalCapture[]>([]);
+  const [captureReviewOnlyReason,setCaptureReviewOnlyReason] = useState<string|null>(null);
   const recoveryConnection = useRef<boolean | null>(null);
   const retryOnConnection = useRef(false);
   const recoveryTickRef = useRef<() => Promise<void>>(async () => {});
@@ -403,7 +444,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [scanResult, setScanResult] = useState<PackingStationResolveView | null>(null);
   const [scanInput, setScanInput] = useState("");
-  const [scanPhase, setScanPhase] = useState<"camera" | "reference" | "found" | "missing">(
+  const [scanCandidates,setScanCandidates]=useState<ProofCollectionItem[]>([]);
+  const scanInFlight=useRef(false);
+  const manualInFlight=useRef(false);
+  const manualTransaction=useRef<{fingerprint:string;id:string}|null>(null);
+  const [scanPhase, setScanPhase] = useState<"camera" | "reference" | "found" | "missing" | "ambiguous">(
     "camera",
   );
   const [connections, setConnections] = useState<IntegrationConnectionView[]>([]);
@@ -443,9 +488,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (hydrated) versionReporter.update(session, client);
   }, [client, hydrated, session, versionReporter]);
 
-  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId">) => {
-    if (name === "scan") name = "create";
+  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId">) => {
+    if (name === "create" || name === "manual") startMobileCaptureEntry();
+    if (name === "scan" && !MOBILE_TASK_UX_ENABLED) name = "create";
+    if (name === "scan") { setScanPhase("camera"); setScanResult(null); setScanInput(""); }
     if (name === "complete") name = "proof";
+    if (MOBILE_TASK_UX_ENABLED && name === "account" && options?.accountSection === "recordings") {name="activity";options={activityFilter:"all"};}
     if (name === "station" && sessionRef.current?.captureUri && !sessionRef.current.stationActive && workspaceOrigin.current !== "station") {
       setError("Finish or discard your saved recording before opening the packing station.");
       return;
@@ -459,13 +507,15 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setTechnicalOpen(false);
       setConfirmFinalize(false);
     }
-    if (name === "home" || name === "proofs" || name === "orders" || name === "station") {
+    if (name === "home" || name === "proofs" || name === "orders" || name === "station" || name === "activity") {
       workspaceOrigin.current = name;
       setBatchPacking(name === "station");
     }
+    if(name==="activity"){activityFilterMemory.current=options?.activityFilter??activityFilterMemory.current;options={...options,activityFilter:activityFilterMemory.current};}
     const current = sessionRef.current;
     if (current) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
     setRoute({ name,
+      ...(name === "activity" ? {activityFilter: options?.activityFilter,activitySessionId:options?.activitySessionId} : {}),
       ...(name === "account" ? { accountSection: options?.accountSection } : {}),
       ...(name === "supporting" ? { supportingSection: options?.supportingSection } : {}),
       ...(name === "signature" ? { historyShareId: options?.historyShareId } : {}),
@@ -546,8 +596,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
     const key = `${current.apiBaseUrl}:${current.userId}`;
     if (cacheScope.current === key) return;
     proofRecordViews.current.clear();
+    workspaceOffsets.current={home:0,activity:0};activityFilterMemory.current="all"; setWorkspaceFreshAt(null); setWorkspaceReconciled(false); setSelectedTask(null); taskInteractions.current={}; clearMobileUxMetrics(); setScanResult(null);setScanCandidates([]);setScanInput("");setScanPhase("camera");
     setProofsLibrary({...DEFAULT_PROOFS_LIBRARY}); proofsScrollOffset.current = 0;
-    setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]);
+    setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]); setCaptureReviewOnlyReason(null);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
       await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
@@ -560,6 +611,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (cacheScope.current !== key) return;
     cacheRef.current = cached; setProofsLibrary(cached.library); proofsScrollOffset.current = cached.offsetY;
     setProofCollection(cached.rows);
+    setWorkspaceFreshAt(cached.fetchedAt ?? null); taskInteractions.current=cached.interactions ?? {}; setCreateForm(cached.draft ?? EMPTY_FORM);
   }
   async function persist(next: CachedClientState): Promise<void> {
     const runtime = currentRuntime(IS_RELEASE_CLIENT ? null : next);
@@ -741,6 +793,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (next && (next.captureUserId !== current.userId || (next.recovery && next.recovery.apiBaseUrl !== client.apiBaseUrl)))
       throw Object.assign(new Error("The recording belongs to another account. Sign in to its original account to resume."), { code: "ACCOUNT_CHANGED" });
     setLocalCapture(next);
+    if(!next)setCaptureReviewOnlyReason(null);
     await persist({
       ...current,
       captureUri: next?.uri ?? null,
@@ -868,73 +921,65 @@ export function PackProofProvider(props: { children: ReactNode }) {
   }
 
   async function refreshProofCollection(): Promise<void> {
-    const account = sessionRef.current?.userId;
+    const account = sessionRef.current;
+    if (!account) return;
     const collection = await client.listMyProofs();
-    if (sessionRef.current?.userId !== account) return;
+    client.assertCaptureAccount(account.userId, account.apiBaseUrl);
+    const fetchedAt=new Date().toISOString();
     setProofCollection(collection.proofs);
-    cacheRef.current = {...cacheRef.current,rows:collection.proofs};
-    if (sessionRef.current) void saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
+    setWorkspaceFreshAt(fetchedAt);
+    cacheRef.current = {...cacheRef.current, rows:collection.proofs, fetchedAt};
+    void saveProofsCache(account.apiBaseUrl,account.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
   }
 
   async function syncWorkspace(): Promise<void> {
+    const account=sessionRef.current;
+    if(!account) return;
     try {
       await ensureFreshCognitoToken();
-      await refreshProofCollection();
-      await refreshPendingInvites();
+      const [collection,inbox]=await Promise.all([client.listMyProofs(),client.listInvitations()]);
+      client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+      const fetchedAt=new Date().toISOString();
+      setProofCollection(collection.proofs); setPendingInvites(inbox.invitations);
+      setWorkspaceFreshAt(fetchedAt); setWorkspaceReconciled(true);
+      cacheRef.current={...cacheRef.current,rows:collection.proofs,fetchedAt};
+      void saveProofsCache(account.apiBaseUrl,account.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(()=>undefined);
       try {
-        const [connected, commerce] = await Promise.all([
-          client.listConnectedAccounts(), client.listIntegrationConnections("commerce"),
-        ]);
-        setConnectedAccounts(connected.accounts);
-        setConnectedProviders(connected.providers);
-        setConnections(commerce.connections);
-      } catch {
-        // Connected-account routes require the matching API image.
-      }
+        const [connected, commerce] = await Promise.all([client.listConnectedAccounts(),client.listIntegrationConnections("commerce")]);
+        client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+        setConnectedAccounts(connected.accounts); setConnectedProviders(connected.providers); setConnections(commerce.connections);
+      } catch { /* These optional capabilities do not invalidate the Proof snapshot. */ }
+      client.assertCaptureAccount(account.userId,account.apiBaseUrl);
       setOffline(false);
     } catch (err) {
-      if (isNetworkFailure(err)) {
-        setOffline(true);
-        return;
-      }
+      if(sessionRef.current?.userId!==account.userId || sessionRef.current.apiBaseUrl!==account.apiBaseUrl)return;
+      setWorkspaceReconciled(false);
+      if (isNetworkFailure(err)) { setOffline(true); return; }
       throw err;
     }
   }
 
   async function refreshProof(proofId: string): Promise<ProofView> {
-    const account = sessionRef.current?.userId;
-    const fresh = await client.getProof(proofId);
-    if (sessionRef.current?.userId !== account) throw new Error("Open the original account to view this Proof.");
-    setProof(fresh);
-    const currentAccount = sessionRef.current;
-    if (currentAccount) {
-      const records = {...cacheRef.current.records,[fresh.proofId]:fresh};
-      const keep = Object.entries(records).sort((a,b) => Date.parse(b[1].updatedAt)-Date.parse(a[1].updatedAt)).slice(0,30);
-      cacheRef.current = {...cacheRef.current,records:Object.fromEntries(keep)};
-      void saveProofsCache(currentAccount.apiBaseUrl,currentAccount.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
-    }
-    const txn = await client.getTransaction(fresh.transactionId);
-    setTransactionDetail(txn);
-    setEditForm(formFromTransaction(txn));
-    if (fresh.status === "FINALIZED") {
-      setManifest(await client.getManifest(proofId));
-    } else {
-      setManifest(null);
-    }
-    setShipmentIntegrity(await client.getShipmentIntegrity(proofId));
-    const current = sessionRef.current;
-    if (current) {
-      await persist({
-        ...current,
-        proofId: fresh.proofId,
-        transactionId: fresh.transactionId,
-      });
-    }
-    setOffline(false);
-    return fresh;
+    const account=sessionRef.current;
+    if(!account)throw new Error("Sign in to view this Proof.");
+    const fresh=await client.getProof(proofId);
+    client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+    const [txn,nextManifest,integrity]=await Promise.all([
+      client.getTransaction(fresh.transactionId),fresh.status==="FINALIZED"?client.getManifest(proofId):Promise.resolve(null),client.getShipmentIntegrity(proofId),
+    ]);
+    client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+    setProof(fresh);setTransactionDetail(txn);setEditForm(formFromTransaction(txn));setManifest(nextManifest);setShipmentIntegrity(integrity);
+    const records={...cacheRef.current.records,[fresh.proofId]:fresh};
+    const keep=Object.entries(records).sort((a,b)=>Date.parse(b[1].updatedAt)-Date.parse(a[1].updatedAt)).slice(0,30);
+    cacheRef.current={...cacheRef.current,records:Object.fromEntries(keep)};
+    void saveProofsCache(account.apiBaseUrl,account.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(()=>undefined);
+    await persist({...sessionRef.current!,proofId:fresh.proofId,transactionId:fresh.transactionId});
+    client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+    setOffline(false);return fresh;
   }
 
   async function openProof(proofId: string): Promise<void> {
+    rememberTaskInteraction(proofId);
     const current = sessionRef.current;
     if (current) {
       await persist({ ...current, proofId });
@@ -954,14 +999,16 @@ export function PackProofProvider(props: { children: ReactNode }) {
     go("proof");
   }
 
-  async function run(action: () => Promise<void>): Promise<void> {
+  async function run(action: () => Promise<void>, options?: { localReview?: boolean }): Promise<void> {
+    const actionAccount=sessionRef.current;
     setBusy(true);
     setError(null);
     setErrorDetail(null);
     try {
-      if (route.name !== "auth") await ensureFreshCognitoToken();
+      if (route.name !== "auth" && !options?.localReview) await ensureFreshCognitoToken();
       await action();
     } catch (err) {
+      if(actionAccount && (sessionRef.current?.userId!==actionAccount.userId || sessionRef.current.apiBaseUrl!==actionAccount.apiBaseUrl))return;
       if (isNetworkFailure(err)) {
         setOffline(true);
       }
@@ -1132,14 +1179,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
     try {
       void flushNativeStudyTimings(client,current.userId).catch(()=>{});
       const captures = await listAccountCaptures(current.apiBaseUrl, current.userId);
-      if (sessionRef.current?.userId !== current.userId) return;
+      if (sessionRef.current?.userId !== current.userId || sessionRef.current.apiBaseUrl !== current.apiBaseUrl) return;
       if (retryOnConnection.current) {
         retryOnConnection.current = false;
         for (const capture of captures) if (capture.recovery?.lastError?.retryable) capture.recovery.nextRetryAt = null;
       }
       for (const capture of captures.filter(item => route.name !== "receipt" && item.captureStageId && item.uploadEvidenceId && item.recovery?.phase !== "FINALIZED")) {
         const status = await client.getProofRecovery(capture.captureProofId!);
-        if (sessionRef.current?.userId !== current.userId) return;
+        if (sessionRef.current?.userId !== current.userId || sessionRef.current.apiBaseUrl !== current.apiBaseUrl) return;
         const evidence = status.evidence.find(item => item.evidenceId === capture.uploadEvidenceId);
         const finalized = status.stages?.find(item => item.stageId === capture.captureStageId);
         capture.recovery!.lastServerResult = status;
@@ -1153,7 +1200,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       // Recover a notification lost between server completion and app/process shutdown.
       for (const capture of captures.filter(item => item.recovery?.completionNotificationRequested && !item.recovery.completionNotificationHandled && ['FINALIZED','SUBMITTED'].includes(item.recovery.phase))) {
         const finalProof = await client.getProof(capture.captureProofId!);
-        if (sessionRef.current?.userId !== current.userId) return;
+        if (sessionRef.current?.userId !== current.userId || sessionRef.current.apiBaseUrl !== current.apiBaseUrl) return;
         await notifyUploadOutcome({...capture, recovery:capture.recovery!}, finalProof).then(() => persistCaptureMetadata(capture)).catch(() => undefined);
       }
       setSavedRecordings(captures);
@@ -1174,13 +1221,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setUploadProgressByProof(previous => ({...previous, [queued.captureProofId!]: null}));
       const result = await completeSavedCapture({ client, capture: queued, userId: current.userId, interactive: false,
         needsSellerAttestation: queued.recovery!.needsSellerAttestation, assertAccount,
-        onProgress: percent => { if (sessionRef.current?.userId === current.userId) {
+        onProgress: percent => { if (sessionRef.current?.userId === current.userId && sessionRef.current.apiBaseUrl === current.apiBaseUrl) {
           setUploadProgressByProof(previous => ({...previous, [queued.captureProofId!]: percent}));
           if (sessionRef.current.captureUri === queued.uri) setUploadPercent(percent);
         } },
         onChange: capture => {
+          if(sessionRef.current?.userId!==current.userId || sessionRef.current.apiBaseUrl!==current.apiBaseUrl)return;
           if (capture.recovery?.phase === "UPLOADING") setOffline(false);
-          if (sessionRef.current?.userId === current.userId)
+          if (sessionRef.current?.userId === current.userId && sessionRef.current.apiBaseUrl === current.apiBaseUrl)
             setSavedRecordings(previous => [...previous.filter(item => item.uri !== capture.uri), { ...capture }]);
           if (sessionRef.current?.userId === current.userId && sessionRef.current.captureUri === capture.uri) {
             setLocalCapture({ ...capture }); setCaptureStatus(captureStatusForJournal(capture));
@@ -1194,6 +1242,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if (sessionRef.current?.proofId === result.proofId) setProof(result);
       await refreshProofCollection();
     } catch (error) {
+      if(sessionRef.current?.userId!==current.userId || sessionRef.current.apiBaseUrl!==current.apiBaseUrl)return;
       if (isAuthenticationFailure(error)) await requireSignIn();
       if (isNetworkFailure(error)) setOffline(true);
       // The journal contains the retry classification and next action; no repeated modal errors.
@@ -1259,6 +1308,31 @@ export function PackProofProvider(props: { children: ReactNode }) {
 
   const value: PackProofContextValue = {
     hydrated,
+    workspaceFreshAt, workspaceReconciled, selectedTask, rememberTaskInteraction,
+    readTaskInteractions: () => taskInteractions.current,
+    readWorkspaceOffset: name => workspaceOffsets.current[name],
+    setWorkspaceOffset: (name,offset) => {workspaceOffsets.current[name]=Number.isFinite(offset)?Math.max(0,offset):0;},
+    openProofAction: async proofId => {
+      const invitation=pendingInvites.find(row=>row.proofId===proofId);
+      if(invitation) {value.openInvitation(invitation);return;}
+      const row=proofCollection.find(row=>row.proofId===proofId);
+      if(row?.accessKind==="RECEIVER") {value.openReceipt(proofId);return;}
+      rememberTaskInteraction(proofId); startMobileCaptureEntry();
+      const saved=savedRecordings.find(c=>c.captureProofId===proofId && !["FINALIZED","SUBMITTED"].includes(c.recovery?.phase??""));
+      if(saved) {
+        if(saved.recovery?.phase==="RECORDING") {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});return;}
+        if(!await localCaptureExists(saved.uri)) {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});setError("The original recording is not available. Review recovery options.");return;}
+        await value.resumeSavedCapture(saved);return;
+      }
+      await run(async()=>{
+        const current=sessionRef.current;if(!current)return;
+        const fresh=await refreshProof(proofId);
+        client.assertCaptureAccount(current.userId,current.apiBaseUrl);
+        const destination=freshProofDestination(fresh,current.userId);
+        if(destination.route==="receipt")value.openReceipt(fresh.proofId);else go(destination.route);
+        if(destination.notice)setError(destination.notice);
+      });
+    },
     busy,
     offline,
     error,
@@ -1289,19 +1363,47 @@ export function PackProofProvider(props: { children: ReactNode }) {
     captureStatus,
     uploadProgressByProof,
     savedRecordings,
+    captureReviewOnlyReason,
     resumeSavedCapture: async capture => run(async () => {
       const current = sessionRef.current;
       if (!current || capture.captureUserId !== current.userId || capture.recovery?.apiBaseUrl !== client.apiBaseUrl)
         throw new Error("Sign in to the original account to open this recording.");
+      const assertOriginalAccount=()=>{
+        if(sessionRef.current?.userId!==current.userId || sessionRef.current.apiBaseUrl!==current.apiBaseUrl)
+          throw Object.assign(new Error("Sign in to the original account to resume."),{code:"ACCOUNT_CHANGED"});
+      };
       if (current.stationActive && current.captureUri && current.captureUri !== capture.uri)
         throw new Error("Finish saving the recording already open in batch packing before opening another. Both recordings remain on this device.");
       if (current.stationActive && !current.captureUri) await persist({ ...current, stationActive:false, stationPhase:null, stationProofId:null, stationTransactionId:null, stationOrderLabel:null, stationItemSummary:null });
+      assertOriginalAccount();
       if (capture.captureStageId) { value.openReceipt(capture.captureProofId!); return; }
       if (capture.recovery?.phase === "RECORDING") throw new Error("This interrupted recording did not finish saving a playable video. Its bytes remain on this device for inspection.");
-      await openProof(capture.captureProofId!);
-      if (sessionRef.current?.userId !== current.userId) throw Object.assign(new Error("Sign in to the original account to resume."), { code: "ACCOUNT_CHANGED" });
+      if(!await localCaptureExists(capture.uri))throw new Error("The completed original is unavailable. Review recovery options in Activity.");
+      if(capture.encodedInspection?.playable===false || !(Number(capture.byteSize)>0 && Number(capture.durationMs)>0))
+        throw new Error("A playable completed recording has not been confirmed. Review recovery options in Activity.");
+      let fresh:ProofView|null=null;
+      if(!offline) {
+        try {await ensureFreshCognitoToken();assertOriginalAccount();fresh=await refreshProof(capture.captureProofId!);}
+        catch(error) {assertOriginalAccount();if(!isNetworkFailure(error))throw error;setOffline(true);}
+      }
+      assertOriginalAccount();
+      const destination=savedCaptureDestination(fresh,current.userId);
+      if(!destination.allowResume && !destination.reviewOnly) {
+        if(destination.route==='receipt')value.openReceipt(capture.captureProofId!);else go(destination.route);
+        setError(destination.notice);return;
+      }
+      if(destination.reviewOnly) {
+        const cached=cacheRef.current.records[capture.captureProofId!];
+        setProof(cached??null);setTransactionDetail(cached?.transaction??null);
+        await persist({...sessionRef.current!,proofId:capture.captureProofId!,transactionId:cached?.transactionId??null});
+        assertOriginalAccount();
+      }
       await persistCapture(capture, capture.recovery.evidenceIdempotencyKey);
+      assertOriginalAccount();
+      setCaptureReviewOnlyReason(destination.reviewOnly?destination.notice:null);
+      if(destination.reviewOnly){setCaptureStatus('retry');go('capture');return;}
       (await nativeStudyForCapture(client,current.userId,capture.studyTimingRef))?.event("recovery_started");
+      assertOriginalAccount();
       setCaptureStatus("retry");
       if (!capture.recovery.submitRequested) { go("capture"); return; }
       if (capture.recovery.needsSellerAttestation && (!capture.recovery.authorization || Date.parse(capture.recovery.authorization.expiresAt) <= Date.now())) {
@@ -1312,10 +1414,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
       capture.recovery.completionNotificationRequested = true;
       if (!['PRESERVATION_PENDING','FINALIZATION_PENDING','SUBMITTED'].includes(capture.recovery.phase)) capture.recovery.phase = 'UPLOAD_QUEUED';
       await persistCaptureMetadata(capture);
+      assertOriginalAccount();
       await persistCapture(null, null);
       setCaptureStatus("idle"); setUploadPercent(null); go("home");
       void recoveryTickRef.current();
-    }),
+    },{localReview:true}),
     discardSavedCapture: async capture => run(() => discardSavedRecording(capture)),
     discardIncompleteEvidence: async evidenceId => run(async () => {
       const current = sessionRef.current;
@@ -1359,6 +1462,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     editForm,
     importReview,
     scanResult,
+    scanCandidates,
     scanInput,
     scanPhase,
     connections,
@@ -1519,6 +1623,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         proofsScrollOffset.current = 0;
         ordersViews.current = { orders: { offsetY: 0, query: "" }, station: { offsetY: 0, query: "" } };
         workspaceOrigin.current = "home";
+        workspaceOffsets.current={home:0,activity:0};activityFilterMemory.current="all"; setWorkspaceFreshAt(null);setWorkspaceReconciled(false);setSelectedTask(null);taskInteractions.current={};clearMobileUxMetrics();
         setBatchPacking(false);
         setSession(null);
         setProof(null);
@@ -1527,6 +1632,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setConnectedProviders([]);
         setTransactionDetail(null);
         setLocalCapture(null);
+        setCaptureReviewOnlyReason(null);
         setCaptureStatus("idle");
         setUploadPercent(null);
         setCreateForm(EMPTY_FORM);
@@ -1560,6 +1666,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     batchPacking,
     setBatchPacking,
     openOrder: async (proofId, batch = false) => run(async () => {
+      rememberTaskInteraction(proofId);startMobileCaptureEntry();
       const current = sessionRef.current;
       if (!current) return;
       void recordNativeStudyInteraction(client,current.userId,'order_selected').catch(()=>undefined);
@@ -1603,19 +1710,25 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setImportReview(null);
         go("proof");
       }),
-    createManualProof: async () =>
-      run(async () => {
+    createManualProof: async () => {
+      if(manualInFlight.current)return;
+      manualInFlight.current=true;
+      try { await run(async () => {
         if (!sessionRef.current) {
           return;
         }
+        if(offline)throw new Error("Connect before creating a Proof. Your form is kept on this device.");
+        const owner=sessionRef.current;
+        const fingerprint=JSON.stringify([owner.userId,owner.apiBaseUrl,createForm]);
         const parsed = parseContextForm(createForm);
         try {
-          let transactionId = importReview?.transaction.transactionId ?? null;
+          let transactionId = importReview?.transaction.transactionId ?? (manualTransaction.current?.fingerprint===fingerprint?manualTransaction.current.id:null);
           if (transactionId) {
             await client.updateTransaction(transactionId, {
               ...parsed.transaction,
             });
             await client.updateShipping(transactionId, parsed.shipping);
+            client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
           } else {
             const txn = await client.createTransaction({
               ...parsed.transaction,
@@ -1631,9 +1744,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
                   }
                 : {}),
             });
+            client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
             transactionId = txn.transactionId;
+            manualTransaction.current={fingerprint,id:transactionId};
           }
           const created = await client.createOrGetProof(transactionId);
+          client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
           await persist({
             ...sessionRef.current,
             proofId: created.proofId,
@@ -1644,6 +1760,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           setCreateForm(EMPTY_FORM);
           setIntakeReview(null);
           setImportReview(null);
+          manualTransaction.current=null;
           go("capture");
         } catch (err) {
           const mapped = presentError(err);
@@ -1660,7 +1777,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
           }
           throw err;
         }
-      }),
+      }); } finally {manualInFlight.current=false;}
+    },
     createGradingProof: async (itemCount: number) =>
       run(async () => {
         if (!sessionRef.current) {
@@ -1738,42 +1856,53 @@ export function PackProofProvider(props: { children: ReactNode }) {
         void haptic("success");
         await refreshProof(proof.proofId);
       }),
-    identifyReference: async (reference: string) =>
-      run(async () => {
+    identifyReference: async (reference: string) => {
+      if(scanInFlight.current)return;
+      scanInFlight.current=true;
+      try { await run(async () => {
+        const owner=sessionRef.current;if(!owner)return;
+        if(!reference.trim() || reference.trim().length>200) {setScanPhase("reference");throw new Error("Enter a valid reference of 200 characters or fewer.");}
+        setScanCandidates([]);
         try {
           const resolved = await client.resolvePackingStation(reference);
-          setScanResult(resolved);
-          setScanPhase("found");
+          client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
+          setScanResult(resolved);setScanPhase("found");
         } catch (err) {
+          client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
           const mapped = presentError(err);
-          if (
-            mapped.code === "STATION_REFERENCE_NOT_FOUND" ||
-            mapped.code === "TRANSACTION_NOT_FOUND"
-          ) {
-            setScanResult(null);
-            setScanPhase("missing");
-            setError(mapped.title);
-            setErrorDetail(mapped);
-            return;
+          if(mapped.code==="STATION_REFERENCE_AMBIGUOUS") {
+            const current=sessionRef.current;if(!current)return;
+            const collection=await client.listMyProofs();client.assertCaptureAccount(current.userId,current.apiBaseUrl);
+            const ref=reference.trim().toLocaleLowerCase();
+            setScanCandidates(collection.proofs.filter(p=>[p.transaction.externalReference,p.transaction.trackingNumber,p.transactionId,p.proofId].some(value=>value?.trim().toLocaleLowerCase()===ref)));
+            setScanPhase("ambiguous");return;
           }
-          throw err;
+          if(mapped.code === "STATION_REFERENCE_NOT_FOUND" || mapped.code === "TRANSACTION_NOT_FOUND") {
+            setScanResult(null);setCreateForm(current=>({...current,externalReference:reference.trim()}));setScanPhase("missing");return;
+          }
+          setScanPhase("reference");throw err;
         }
-      }),
-    continueFromScan: async () =>
-      run(async () => {
-        if (!scanResult || !sessionRef.current) {
-          return;
-        }
-        const created = await client.createOrGetProof(scanResult.transactionId);
-        await persist({
-          ...sessionRef.current,
-          proofId: created.proofId,
-          transactionId: created.transactionId,
-        });
+      }); } finally {scanInFlight.current=false;}
+    },
+    continueFromScan: async () => {
+      if(scanInFlight.current)return;
+      scanInFlight.current=true;
+      try {await run(async () => {
+        const owner=sessionRef.current;
+        if(!scanResult || !owner)return;
+        // Resolve again at confirmation; neither an earlier barcode nor cached match authorizes a new action.
+        const target=await client.resolvePackingStation(scanResult.transactionId);
+        client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
+        const created=await client.createOrGetProof(target.transactionId);
+        client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
+        await persist({...sessionRef.current!,proofId:created.proofId,transactionId:created.transactionId});
         await refreshProofCollection();
-        await refreshProof(created.proofId);
-        go("proof");
-      }),
+        const fresh=await refreshProof(created.proofId);
+        client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
+        const destination=freshProofDestination(fresh,owner.userId);
+        if(destination.route==="receipt")value.openReceipt(fresh.proofId);else go(destination.route);if(destination.notice)setError(destination.notice);
+      });}finally{scanInFlight.current=false;}
+    },
     savePurchaseDetails: async () =>
       run(async () => {
         if (!proof) {
@@ -1863,6 +1992,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     },
     startCapture: async () =>
       run(async () => {
+        if(captureReviewOnlyReason)throw new Error("Reconnect and check this saved recording's current Proof before recording again.");
         if (!proof) {
           return;
         }
@@ -1900,6 +2030,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       captureSubmitLock.current = true;
       try {
         await run(async () => {
+          if(captureReviewOnlyReason)throw new Error("Reconnect and check this saved recording's current Proof before submitting.");
           if (!localCapture || !proof || !sessionRef.current) {
             return;
           }

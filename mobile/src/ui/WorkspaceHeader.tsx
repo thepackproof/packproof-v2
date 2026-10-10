@@ -8,6 +8,7 @@ import { typography } from "../theme/tokens";
 import { IconButton, Button } from "./Button";
 import { BottomSheet } from "./Sheets";
 import { PressableScale } from "./motion";
+import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
 
 type Destination = { label: string; icon: keyof typeof Ionicons.glyphMap; route: AppRouteName; section?: AccountSection };
 const destinations: Destination[] = [
@@ -20,6 +21,14 @@ const destinations: Destination[] = [
   { label: "Notifications", icon: "notifications-outline", route: "account", section: "notifications" },
   { label: "Settings", icon: "settings-outline", route: "account" },
 ];
+const profileDestinations: Destination[] = [
+  { label: "Account and billing", icon: "person-circle-outline", route: "account", section: "billing" },
+  { label: "Settings", icon: "settings-outline", route: "account" },
+  { label: "Integrations", icon: "extension-puzzle-outline", route: "account", section: "channels" },
+  { label: "Orders", icon: "cube-outline", route: "orders" },
+  { label: "Help and support", icon: "help-circle-outline", route: "account", section: "help" },
+  { label: "Advanced", icon: "options-outline", route: "account", section: "advanced" },
+];
 
 /** A phone-sized counterpart to the workstation sidebar. */
 export function WorkspaceHeader({ section }: { section: string }) {
@@ -31,20 +40,20 @@ export function WorkspaceHeader({ section }: { section: string }) {
     app.go(destination.route, destination.section ? { accountSection: destination.section } : undefined);
   }
   return <>
-    <View style={[styles.header, { borderBottomColor: colors.border }]}>
+    <View style={[styles.header, { borderBottomColor: colors.border }, MOBILE_TASK_UX_ENABLED && styles.compact]}>
       <View style={styles.top}>
-        <IconButton label="Open workspace menu" onPress={() => setMenuOpen(true)}><Ionicons name="menu-outline" size={24} color={colors.textPrimary} /></IconButton>
+        {!MOBILE_TASK_UX_ENABLED ? <IconButton label="Open workspace menu" onPress={() => setMenuOpen(true)}><Ionicons name="menu-outline" size={24} color={colors.textPrimary} /></IconButton> : null}
         <View style={styles.brandSlot}><PressableScale accessibilityRole="button" accessibilityLabel="PackProof Home" onPress={() => app.go("home")} style={styles.brand}>
           <View style={styles.mark}><Ionicons name="shield-outline" size={26} color={colors.logoBlue} /><View style={[styles.markDot, { backgroundColor: colors.logoGreen, borderColor: colors.background }]} /></View>
           <Text style={[styles.wordmark, { color: colors.textPrimary }]}>PackProof</Text>
         </PressableScale></View>
-        <IconButton label="Open settings" onPress={() => app.go("account")}><Ionicons name="person-circle-outline" size={28} color={colors.textSecondary} /></IconButton>
+        <IconButton label={MOBILE_TASK_UX_ENABLED ? "Open profile menu" : "Open settings"} onPress={() => MOBILE_TASK_UX_ENABLED ? setMenuOpen(true) : app.go("account")}><Ionicons name="person-circle-outline" size={28} color={colors.textSecondary} /></IconButton>
       </View>
-      <View style={styles.breadcrumb}><Text style={[styles.eyebrow, { color: colors.textSecondary }]}>WORKSPACE</Text><Text style={[styles.section, { color: colors.textSecondary }]}>/  {section}</Text></View>
+      {!MOBILE_TASK_UX_ENABLED ? <View style={styles.breadcrumb}><Text style={[styles.eyebrow, { color: colors.textSecondary }]}>WORKSPACE</Text><Text style={[styles.section, { color: colors.textSecondary }]}>/  {section}</Text></View> : null}
     </View>
-    <BottomSheet visible={menuOpen} title="Your workspace" onClose={() => setMenuOpen(false)}>
+    <BottomSheet visible={menuOpen} title={MOBILE_TASK_UX_ENABLED ? "Your profile" : "Your workspace"} onClose={() => setMenuOpen(false)}>
       <View style={styles.menu}>
-        {destinations.map(destination => {
+        {(MOBILE_TASK_UX_ENABLED ? profileDestinations : destinations).map(destination => {
           const selected = destination.label === section;
           return <PressableScale key={destination.label} accessibilityRole="button" accessibilityLabel={destination.label} accessibilityState={{ selected }} onPress={() => navigate(destination)} style={[styles.menuRow, { backgroundColor: selected ? colors.accentSoft : "transparent" }]}>
             <Ionicons name={destination.icon} size={21} color={selected ? colors.accentText : colors.textSecondary} />
@@ -64,6 +73,7 @@ export function WorkspaceHeader({ section }: { section: string }) {
 
 const styles = StyleSheet.create({
   header: { gap: 12, paddingBottom: 14, borderBottomWidth: 1 },
+  compact: { gap: 0, paddingBottom: 0, borderBottomWidth: 0 },
   top: { flexDirection: "row", alignItems: "center", gap: 4 },
   brandSlot: { flex: 1 },
   brand: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9 },

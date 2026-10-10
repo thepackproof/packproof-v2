@@ -16,6 +16,10 @@ export function parseDeepLink(value: string, scheme = 'packproof'): string | nul
 export function isAllowedExternal(value:string,webBaseUrl:string):boolean {
   try {const u=new URL(value), web=new URL(webBaseUrl); return value.length<4096 && u.protocol==='https:' && !u.username && !u.password && u.origin===web.origin;}catch{return false;}
 }
+/** Marketplace authorization is owned by the website's /stores route. */
+export function integrationManagementUrl(webBaseUrl:string):string {
+  return new URL('/stores',webBaseUrl).href;
+}
 export const idSchema=z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 const previewHash=z.string().regex(/^[a-f0-9]{64}$/);
 const email=z.string().trim().email().max(254), password=z.string().min(1).max(1024), code=z.string().trim().min(1).max(128);

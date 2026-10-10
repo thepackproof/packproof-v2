@@ -37,4 +37,13 @@ const guardedLookup = imageLookup + `    // PackProof build asset security guard
     }
 `;
 patch('image-size/dist/index.js', '28dbb0069d82ce0af3a94ad7ac7398f9d780943fab8817ff5388deec8d40c1ba', imageLookup, guardedLookup);
+
+// js-yaml 4's load() uses the safe default schema. Only these two legacy YAML
+// consumers are overridden; load-nyc-config already calls load(). Moving both
+// to 4.3.2 removes argparse 1 and the unpatched sprintf-js dependency entirely.
+patch('cosmiconfig/dist/loaders.js', '1661811bf1e485dc568033a332d8d100e546bec82c1089f7549fc6769237f1b8',
+  'return yaml.safeLoad(content, { filename: filepath });',
+  'return yaml.load(content, { filename: filepath });');
+
+require('./verify-vendored-dependencies.cjs').verifyVendoredDependencies();
 console.log('Verified and applied PackProof build dependency guards.');
