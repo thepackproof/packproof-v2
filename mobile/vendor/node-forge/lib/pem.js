@@ -95,20 +95,55 @@ pem.encode = function(msg, options) {
 pem.decode = function(str) {
   var rval = [];
 
-  // split string into PEM messages (be lenient w/EOF on BEGIN line)
-  var rMessage = /\s*-----BEGIN ([A-Z0-9- ]+)-----\r?\n?([\x21-\x7e\s]+?(?:\r?\n\r?\n))?([:A-Za-z0-9+\/=\s]+?)-----END \1-----/g;
-  var rHeader = /([\x21-\x7e]+):\s*([\x21-\x7e\s^:]+)/;
+  // PackProof: process disjoint BEGIN segments, never retry a backtracking
+  // whole-message expression at each input offset. Later boundaries start a
+  // line, so literal BEGIN text in ordinary or folded header values is retained.
+  // Preserve RegExp.exec's historical string coercion (including Buffer input)
+  // and its acceptance of text/whitespace before the first opening boundary.
+  str = String(str);
+  var firstBegin = str.indexOf('-----BEGIN ');
+  var segments = firstBegin === -1 ? [] :
+    str.slice(firstBegin).split(/(?:^|\n)-----BEGIN /);
   var rCRLF = /\r?\n/;
   var match;
-  while(true) {
-    match = rMessage.exec(str);
-    if(!match) {
-      break;
+  for(var mi = 1; mi < segments.length; ++mi) {
+    var segment = segments[mi];
+    var labelEnd = segment.indexOf('-----');
+    if(labelEnd < 1) {
+      continue;
+    }
+    var label = segment.slice(0, labelEnd);
+    if(/[^A-Z0-9- ]/.test(label)) {
+      continue;
+    }
+    var bodyStart = labelEnd + 5;
+    // Retain the historical optional newline after the opening boundary.
+    if(segment[bodyStart] === '\r') { ++bodyStart; }
+    if(segment[bodyStart] === '\n') { ++bodyStart; }
+    var end = segment.indexOf('-----END ' + label + '-----', bodyStart);
+    if(end === -1) {
+      continue;
+    }
+    var content = segment.slice(bodyStart, end);
+    var headers = null;
+    var body = content;
+    var separator = /\r?\n\r?\n/.exec(content);
+    var firstLineEnd = content.indexOf('\n');
+    var firstLine = firstLineEnd === -1 ? content : content.slice(0, firstLineEnd);
+    if(separator && firstLine.indexOf(':') !== -1) {
+      headers = content.slice(0, separator.index);
+      body = content.slice(separator.index + separator[0].length);
+      if(/[^\x21-\x7e\s]/.test(headers)) {
+        continue;
+      }
+    }
+    if(body.length === 0 || /[^:A-Za-z0-9+\/=\s]/.test(body)) {
+      continue;
     }
 
     // accept "NEW CERTIFICATE REQUEST" as "CERTIFICATE REQUEST"
     // https://datatracker.ietf.org/doc/html/rfc7468#section-7
-    var type = match[1];
+    var type = label;
     if(type === 'NEW CERTIFICATE REQUEST') {
       type = 'CERTIFICATE REQUEST';
     }
@@ -119,21 +154,21 @@ pem.decode = function(str) {
       contentDomain: null,
       dekInfo: null,
       headers: [],
-      body: forge.util.decode64(match[3])
+      body: forge.util.decode64(body)
     };
     rval.push(msg);
 
     // no headers
-    if(!match[2]) {
+    if(!headers) {
       continue;
     }
 
     // parse headers
-    var lines = match[2].split(rCRLF);
+    var lines = headers.split(rCRLF);
     var li = 0;
-    while(match && li < lines.length) {
+    while(li < lines.length) {
       // get line, trim any rhs whitespace
-      var line = lines[li].replace(/\s+$/, '');
+      var lineParts = [rtrim(lines[li])];
 
       // RFC2822 unfold any following folded lines
       for(var nl = li + 1; nl < lines.length; ++nl) {
@@ -141,12 +176,12 @@ pem.decode = function(str) {
         if(!/\s/.test(next[0])) {
           break;
         }
-        line += next;
+        lineParts.push(next);
         li = nl;
       }
 
       // parse header
-      match = line.match(rHeader);
+      match = parseHeader(lineParts.join(''));
       if(match) {
         var header = {name: match[1], values: []};
         var values = match[2].split(',');
@@ -177,6 +212,9 @@ pem.decode = function(str) {
         } else {
           msg.headers.push(header);
         }
+      } else {
+        // Retain upstream's stop-on-unrecognized-header behavior.
+        break;
       }
 
       ++li;
@@ -234,4 +272,24 @@ function foldHeader(header) {
 
 function ltrim(str) {
   return str.replace(/^\s+/, '');
+}
+
+// Single-character tests and monotonic indices avoid polynomial regex retries
+// on very long malformed or whitespace-heavy encapsulated headers.
+function rtrim(str) {
+  var end = str.length;
+  while(end > 0 && /\s/.test(str[end - 1])) { --end; }
+  return str.slice(0, end);
+}
+
+function parseHeader(line) {
+  var colon = line.indexOf(':');
+  if(colon < 1) { return null; }
+  var name = line.slice(0, colon);
+  var value = line.slice(colon + 1);
+  if(/[^\x21-\x7e]/.test(name) || value.length === 0 ||
+    /[^\x21-\x7e\s]/.test(value)) {
+    return null;
+  }
+  return [line, name, ltrim(value)];
 }

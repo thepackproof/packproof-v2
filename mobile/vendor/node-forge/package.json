@@ -1,6 +1,6 @@
 {
   "name": "@packproof/node-forge",
-  "version": "1.4.0-packproof.1",
+  "version": "1.4.0-packproof.2",
   "description": "PackProof-maintained security patch of node-forge@1.4.0; see PATCHES.md",
   "homepage": "https://github.com/digitalbazaar/forge",
   "author": {

@@ -28,7 +28,7 @@
       "lib/forge.js": "4300955cc75f3cb5b71287b0fa37ec07d3a6bb721a9f6f8b7db19328801046bf",
       "lib/form.js": "a2f6e0fbab87d5acb02e08c8f92ea8269445f9f35ee1706fb82246ba8f5aba12",
       "lib/hmac.js": "bab6d0f322458186f6d123cfdd208ab1298a64ab6925b478968a0dfb446a8fa9",
-      "lib/http.js": "3ad8ec7eb451c173b5980265f30f7b3d84268a1cc9b3e0e86337bc55facbc658",
+      "lib/http.js": "7fa5cf5e65b45dac518495dc6e9cd40903a4f0cfa6b5d34582e51f8a7ad562e2",
       "lib/index.all.js": "48fa7454923f3baa3dd5a5bf9475892aa5f272c4cc8b5a0ec4f3d6c2370ac631",
       "lib/index.js": "c231851a9d065df1fae045d6e6fb17cf5688b260f9ee0db4965fe1ef3c0607ab",
       "lib/jsbn.js": "9d2cd4ad90eadf84b0110d9e1fc02512fc89e7ad64d0fee2d578fa51af28e48d",
@@ -42,7 +42,7 @@
       "lib/oids.js": "13e31fe08ccb431fefe44f9d2285891b846e65b17b24329bf14eed04de584015",
       "lib/pbe.js": "2b5c931e1549f5b98478a5b7b014fd3b62260a20db0704f72612dbe64540e25c",
       "lib/pbkdf2.js": "1cd2f133c60cf860f23d05313a39a5dc060389adcca8423c2143ee904db9f627",
-      "lib/pem.js": "c6509f3aae5ad5e9286da727ea4cbf3b748ad7deff407e76b226f7a6a3b6a120",
+      "lib/pem.js": "66d115399bfb0c8a09f30035ef585061af354ff09daccf8089b8e9f138430684",
       "lib/pkcs1.js": "c43cf348520a3f6adc4769a3c3410cde502a6bc7a768d5a71a575fa72d19acc7",
       "lib/pkcs12.js": "d0f9693ff8b6e755031566139f0e23a762c9a7af6a1b08a27d522810019906d3",
       "lib/pkcs7.js": "f5cc5a89b093262cdcf8f7e01615dddcdb87907228a1c56b5fe73db8cc4160a2",
@@ -66,9 +66,9 @@
       "lib/x509.js": "cce5b00838c8c08486964c1f62cb8ae3491365509b26a27cfe1917f73dee3be9",
       "lib/xhr.js": "d9abf523180b6d03b2cc99909eef3488a6b4bc1f822d7fb9d1e945abf555cb42",
       "LICENSE": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
-      "package.json": "c30d0e1f8995787db51cba069c6de1e2af44ae5f8f5c71206106e05435026609",
-      "PATCHES.md": "8684c5a6f72597c868f67d21bdd45beb44617c3d0aa695c402fa872b660db834",
-      "provenance.json": "3aafaea7d9883b679de80bf91092b1ea6f11dd2612b412b2ed6b4e8d902bf57d",
+      "package.json": "95e3e0c0f4c3814523ae311bd604864334ea3a65044ab7bf4b75272e61271785",
+      "PATCHES.md": "74652d6e0bf1b6db328fe2d759414b721b2ce08e53f89e28dab09d4ad1530fd2",
+      "provenance.json": "e92afe3ca039c99d92077eb0337c18c9b4ec4a05a2542be8a7472d958f9bd4ae",
       "README.md": "4ea0e2db410fd5d87c3c9b21912b9ed3fe6c57b3107fa92e2c90b1e618121a49"
     }
   }

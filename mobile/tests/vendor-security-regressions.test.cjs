@@ -9,7 +9,7 @@ const braces = require('braces');
 // malformed DigestInfo objects, isolating the ASN.1 acceptance defect. They are
 // not a claim to reproduce a private-key-free signature-forgery exploit.
 const pem = crypto.generateKeyPairSync('rsa', {
-  modulusLength: 1024, publicExponent: 3,
+  modulusLength: 2048, publicExponent: 3,
   privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
   publicKeyEncoding: { type: 'spki', format: 'pem' },
 });

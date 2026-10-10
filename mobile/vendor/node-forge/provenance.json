@@ -7,7 +7,7 @@
     "sha256": "bf9d7ca0d774235354697bd4b5e642af6505e7ce2066762c3b855138cf870820"
   },
   "localPackage": "@packproof/node-forge",
-  "localVersion": "1.4.0-packproof.1",
+  "localVersion": "1.4.0-packproof.2",
   "advisory": "GHSA-86w9-cpqp-85rv",
   "upstreamFileSha256": {
     "LICENSE": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
@@ -71,5 +71,14 @@
     "dist/forge.min.js.map",
     "dist/prime.worker.min.js.map",
     "flash/swf/SocketPool.swf"
+  ],
+  "localPatchFiles": {
+    "lib/rsa.js": "Strict DigestAlgorithm child count and empty NULL",
+    "lib/pem.js": "Monotonic PEM framing and header parsing; no polynomial expressions",
+    "lib/http.js": "Own-key null-prototype cookie dictionaries and linear trimming"
+  },
+  "additionalCodeqlRules": [
+    "js/polynomial-redos",
+    "js/prototype-polluting-assignment"
   ]
 }

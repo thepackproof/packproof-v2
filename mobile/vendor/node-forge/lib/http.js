@@ -15,6 +15,35 @@ var http = module.exports = forge.http = forge.http || {};
 // logging category
 var cat = 'forge.http';
 
+var _hasOwn = function(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+};
+
+// Both cookie names and paths are untrusted dictionary keys. Rebuild both
+// levels after JSON storage loads, which otherwise restore Object.prototype.
+var _cookieJar = function(cookies) {
+  var jar = Object.create(null);
+  if(!cookies || typeof cookies !== 'object' || Array.isArray(cookies)) {
+    return jar;
+  }
+  Object.keys(cookies).forEach(function(name) {
+    var sourcePaths = cookies[name];
+    if(!sourcePaths || typeof sourcePaths !== 'object' ||
+      Array.isArray(sourcePaths)) {
+      return;
+    }
+    var paths = Object.create(null);
+    Object.keys(sourcePaths).forEach(function(path) {
+      var cookie = sourcePaths[path];
+      if(cookie && typeof cookie === 'object' && !Array.isArray(cookie)) {
+        paths[path] = cookie;
+      }
+    });
+    jar[name] = paths;
+  });
+  return jar;
+};
+
 // normalizes an http header field name
 var _normalize = function(name) {
   return name.toLowerCase().replace(/(^.)|(-.)/g,
@@ -49,7 +78,7 @@ var _loadCookies = function(client) {
       var cookies = forge.util.getItem(
         client.socketPool.flashApi,
         _getStorageId(client), 'cookies');
-      client.cookies = cookies || {};
+      client.cookies = _cookieJar(cookies);
     } catch(ex) {
       // no flash storage available, just silently fail
       // TODO: i assume we want this logged somewhere or
@@ -361,9 +390,15 @@ var _writeCookies = function(client, request) {
   var url = client.url;
   var cookies = client.cookies;
   for(var name in cookies) {
+    if(!_hasOwn(cookies, name)) {
+      continue;
+    }
     // get cookie paths
     var paths = cookies[name];
     for(var p in paths) {
+      if(!_hasOwn(paths, p)) {
+        continue;
+      }
       var cookie = paths[p];
       if(_hasCookieExpired(cookie)) {
         // store for clean up
@@ -474,7 +509,7 @@ http.createClient = function(options) {
     secure: (url.protocol === 'https:'),
     // cookie jar (key'd off of name and then path, there is only 1 domain
     // and one setting for secure per client so name+path is unique)
-    cookies: {},
+    cookies: _cookieJar(),
     // default to flash storage of cookies
     persistCookies: (typeof(options.persistCookies) === 'undefined') ?
       true : options.persistCookies
@@ -690,8 +725,8 @@ http.createClient = function(options) {
         }
 
         // add new cookie
-        if(!(cookie.name in client.cookies)) {
-          client.cookies[cookie.name] = {};
+        if(!_hasOwn(client.cookies, cookie.name)) {
+          client.cookies[cookie.name] = Object.create(null);
         }
         client.cookies[cookie.name][cookie.path] = cookie;
         rval = true;
@@ -715,17 +750,20 @@ http.createClient = function(options) {
    */
   client.getCookie = function(name, path) {
     var rval = null;
-    if(name in client.cookies) {
+    if(_hasOwn(client.cookies, name)) {
       var paths = client.cookies[name];
 
       // get path-specific cookie
       if(path) {
-        if(path in paths) {
+        if(_hasOwn(paths, path)) {
           rval = paths[path];
         }
       } else {
         // get first cookie
         for(var p in paths) {
+          if(!_hasOwn(paths, p)) {
+            continue;
+          }
           rval = paths[p];
           break;
         }
@@ -745,18 +783,20 @@ http.createClient = function(options) {
    */
   client.removeCookie = function(name, path) {
     var rval = false;
-    if(name in client.cookies) {
+    if(_hasOwn(client.cookies, name)) {
       // delete the specific path
       if(path) {
         var paths = client.cookies[name];
-        if(path in paths) {
+        if(_hasOwn(paths, path)) {
           rval = true;
           delete client.cookies[name][path];
           // clean up entry if empty
           var empty = true;
           for(var i in client.cookies[name]) {
-            empty = false;
-            break;
+            if(_hasOwn(client.cookies[name], i)) {
+              empty = false;
+              break;
+            }
           }
           if(empty) {
             delete client.cookies[name];
@@ -779,7 +819,7 @@ http.createClient = function(options) {
    * Clears all cookies stored in this client.
    */
   client.clearCookies = function() {
-    client.cookies = {};
+    client.cookies = _cookieJar();
     _clearCookies(client);
   };
 
@@ -798,7 +838,7 @@ http.createClient = function(options) {
  * @return the trimmed string.
  */
 var _trimString = function(str) {
-  return str.replace(/^\s*/, '').replace(/\s*$/, '');
+  return str.trim();
 };
 
 /**

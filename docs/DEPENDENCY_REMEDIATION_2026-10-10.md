@@ -46,6 +46,20 @@ and regression coverage:
   bundles are excluded, so the installed implementation is the patched source.
   Cryptographic algorithms and key generation are unchanged.
 
+The separate CodeQL analysis-result check also identified five library findings
+in the retained Forge source and a weak RSA test fixture. The fork therefore
+includes additional hardening: PEM decoding processes disjoint message segments
+and parses headers without polynomial backtracking; HTTP whitespace trimming uses
+the native string operation; and HTTP cookie dictionaries use null prototypes
+and own-key checks across creation, persistence, retrieval, removal, and clearing.
+The test fixture uses a 2048-bit RSA key. Regressions cover hostile input in bounded
+subprocesses, inherited-property pollution, normal cookie behavior, upstream PEM
+fixtures, and the actual Expo certificate/signing/CSR and encrypted-key APIs.
+These findings are repaired in source rather than excluded or dismissed in
+CodeQL. Workflow success alone does not establish a successful analysis result;
+the final handoff requires both the Actions workflow and the separate CodeQL
+security check to pass for the exact source.
+
 The remaining [sprintf-js advisory](https://github.com/advisories/GHSA-hp3w-g68c-fv3c)
 is addressed by removing that dependency path. The two legacy js-yaml consumers
 are scoped to official js-yaml 4.3.2. A hash-checked adapter changes cosmiconfig's
