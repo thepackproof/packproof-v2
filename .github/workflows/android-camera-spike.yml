@@ -77,7 +77,7 @@ jobs:
           fs.writeFileSync(apk + '.sha256', digest + '  app-release.apk\n');
           console.log('APK SHA-256: ' + digest);
           NODE
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packproof-camera-spike-android
           path: |
