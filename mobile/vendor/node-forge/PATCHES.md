@@ -1,0 +1,13 @@
+# PackProof-maintained node-forge patch
+
+This private local fork is owned and maintained by PackProof. It is not an upstream release. Its original BSD-3-Clause / GPL-2.0 license and attribution are retained in LICENSE. The retained upstream README documents the upstream API; this file describes the narrower distribution used here.
+
+The exact node-forge 1.4.0 npm tarball URL, SHA-512 SRI, SHA-256, and original retained-file SHA-256 values are recorded in provenance.json. Local file hashes are checked by ../integrity.json during postinstall and security tests. A change to either source or approved hashes requires code review. Git preserves vendor bytes without line-ending conversion.
+
+`lib/rsa.js` fixes [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv). After ASN.1 validation it requires exactly two outer DigestInfo children, exactly one AlgorithmIdentifier child without parameters or two with parameters, and empty content for a present NULL parameter. Unknown OIDs and required MD2/MD5 NULL checks remain. SHA algorithms may omit NULL as before. The exact child-count approach follows the unmerged [upstream proposal #1152](https://github.com/digitalbazaar/forge/pull/1152); the empty-NULL check is an additional PackProof constraint.
+
+Only patched `lib` JavaScript is shipped. All upstream `dist` bundles/maps and the obsolete Flash binary are omitted (listed in provenance.json). There is no stale prebuilt browser bundle or alternate unpatched RSA copy. CommonJS and browser module resolution use the patched lib implementation; the upstream browser mappings for Node built-ins remain. The package name/version explicitly identify this local fork. Development scripts/dependencies referencing absent upstream build/test assets are removed. No cryptographic algorithm, padding generation, certificate flow, or random source is replaced.
+
+`tests/vendor-security-regressions.test.cjs` tests malformed AlgorithmIdentifier children, substituted tags, nonempty NULL, normal SHA signatures with optional NULL, MD5 required NULL, tampering, and certificate/PEM compatibility. The malformed fixtures carry valid private-key signatures to test ASN.1 acceptance specifically; they are not a private-key-free forgery demonstration.
+
+The advisory had no patched official release when verified on 2026-10-10. Replace this fork when a reviewed upstream release includes the fix; retain the regressions and verify Expo certificate tooling before removing it. Registry audit does not inspect this local fork's code: zero registry findings must be read together with provenance, byte integrity, regression, and build evidence.

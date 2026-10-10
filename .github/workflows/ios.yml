@@ -76,6 +76,10 @@ jobs:
           npx expo prebuild --platform ios --no-install
           cd ios
           pod install
+      - name: Verify generated Share Extension project
+        run: |
+          test -s ios/PackProof.xcodeproj/project.pbxproj
+          node --test tests/order-share-plugin.test.cjs
       - name: Compile app, Swift modules, and Share Extension
         run: |
           set -euo pipefail

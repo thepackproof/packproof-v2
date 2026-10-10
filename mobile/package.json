@@ -18,7 +18,7 @@
     "postinstall": "node scripts/secure-build-dependencies.cjs",
     "eas-build-pre-install": "node scripts/set-android-build-provenance.cjs",
     "eas-build-on-success": "node scripts/verify-eas-android-release.cjs",
-    "test:build-security": "node --test tests/build-dependency-security.test.cjs tests/release-identity.test.cjs tests/android-build-provenance.test.cjs",
+    "test:build-security": "node --test tests/build-dependency-security.test.cjs tests/release-identity.test.cjs tests/android-build-provenance.test.cjs tests/vendor-security-regressions.test.cjs tests/vendor-integrity.test.cjs",
     "test:study-timing": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/study-timing.test.ts tests/native-study-timing.test.ts",
     "android:go": "expo start --android",
     "ios:go": "expo start --ios",
@@ -61,7 +61,9 @@
   "devDependencies": {
     "@types/react": "~19.0.10",
     "image-size": "npm:image-size-next@1.2.2",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "braces": "file:vendor/braces",
+    "node-forge": "file:vendor/node-forge"
   },
   "overrides": {
     "@expo/plist": {
@@ -84,6 +86,14 @@
     "shell-quote": "1.12.0",
     "source-map-js": "1.2.2",
     "tar": "7.5.22",
-    "image-size": "npm:image-size-next@1.2.2"
+    "image-size": "npm:image-size-next@1.2.2",
+    "braces": "$braces",
+    "node-forge": "$node-forge",
+    "cosmiconfig@5.2.1": {
+      "js-yaml": "4.3.2"
+    },
+    "@istanbuljs/load-nyc-config@1.1.0": {
+      "js-yaml": "4.3.2"
+    }
   }
 }
