@@ -55,7 +55,7 @@ class ReleaseVerification(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.verify_profile({**profile, "TeamIdentifier": ["OTHER"], "Entitlements": other_signed}, other_signed, release.APP_ID, now)
 
-    def archive(self, path, info_change=None, config_change=None, extra_path=None):
+    def archive(self, path, info_change=None, config_change=None, extra_path=None, extension_change=None):
         info = {"CFBundleIdentifier": release.APP_ID, "CFBundleShortVersionString": "1.0.1", "CFBundleVersion": "61", "CFBundleSupportedPlatforms": ["iPhoneOS"]}
         config = {"ios": {"bundleIdentifier": release.APP_ID}, "extra": {"packproofBuildSha": SHA, "packproofApiBaseUrl": release.API_URL,
                   "packproofFirstProofExperience": True, "eas": {"projectId": release.PROJECT_ID}}}
@@ -65,6 +65,7 @@ class ReleaseVerification(unittest.TestCase):
             archive.writestr("Payload/PackProof.app/Info.plist", plistlib.dumps(info))
             archive.writestr("Payload/PackProof.app/EXConstants.bundle/app.config", json.dumps(config))
             extension = {**info, "CFBundleIdentifier": release.APP_ID + ".OrderShare"}
+            if extension_change: extension.update(extension_change)
             archive.writestr("Payload/PackProof.app/PlugIns/PackProofOrderShare.appex/Info.plist", plistlib.dumps(extension))
             if extra_path: archive.writestr(extra_path, "unsafe")
 
@@ -92,6 +93,18 @@ class ReleaseVerification(unittest.TestCase):
             for extra in ["../escape", "/absolute/escape", "Payload/../escape", "C:/escape"]:
                 self.archive(path, extra_path=extra)
                 with self.subTest(path=extra), self.assertRaises(ValueError): release.verify_ipa(path, SHA, "61")
+
+    def test_remote_metadata_cannot_hide_reset_app_extension_or_absent_embedded_source(self):
+        # Regression: EAS metadata advertised the requested build while remote
+        # prebuild lost runner-only variables and produced build 1 without a SHA.
+        self.assertEqual(release.verify_build(EAS, SHA, BUILD, "61"), EAS)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "fixture.ipa"
+            for kwargs in [{"info_change": {"CFBundleVersion": "1"}},
+                           {"extension_change": {"CFBundleVersion": "1"}},
+                           {"config_change": {"packproofBuildSha": None}}]:
+                self.archive(path, **kwargs)
+                with self.subTest(kwargs=kwargs), self.assertRaises(ValueError): release.verify_ipa(path, SHA, "61")
 
     def test_signature_extraction_restores_original_executable_permissions(self):
         with tempfile.TemporaryDirectory() as folder:

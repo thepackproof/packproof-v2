@@ -70,6 +70,8 @@ jobs:
         working-directory: backend
       - run: npm run typecheck
       - run: npm run test:ios
+      - run: node --test tests/ios-store-build-provenance.test.cjs
+      - run: python3 -m unittest discover -s tests -p test_ios_release_verification.py
       - run: npm run test:proof-record
       - run: npm run test:recovery
       - name: Generate iOS native project and resolve Pods
@@ -131,7 +133,9 @@ jobs:
         uses: ./.github/actions/expo-auth
       - name: Build with existing remote Apple signing credentials
         run: |
+          set -euo pipefail
           mkdir -p dist
+          node scripts/configure-ios-store-build.cjs
           npx --yes eas-cli@24.4.2 build --platform ios --profile ios-testflight --freeze-credentials --non-interactive --wait --json > dist/eas-ios-build.json
           node <<'NODE'
           const fs = require('node:fs');
@@ -143,6 +147,19 @@ jobs:
           curl --fail --location "$(cat dist/ipa-url.txt)" --output dist/PackProof.ipa
           test -s dist/PackProof.ipa
           sha256sum dist/PackProof.ipa > dist/SHA256SUMS
+          python3 <<'PY'
+          import importlib.util, json, os
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location('release', 'scripts/verify-ios-release.py')
+          release = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(release)
+          value = json.loads(Path('dist/eas-ios-build.json').read_text())
+          build = value[0] if isinstance(value, list) and len(value) == 1 else value
+          source, number = os.environ['GITHUB_SHA'], os.environ['PACKPROOF_IOS_BUILD_NUMBER']
+          release.verify_build(value, source, build['id'], number)
+          result = release.verify_ipa(Path('dist/PackProof.ipa'), source, number)
+          Path('dist/ios-archive-verification.json').write_text(json.dumps({**result, 'easBuildId': build['id']}, indent=2))
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: packproof-ios-archive-${{ github.sha }}
@@ -150,3 +167,4 @@ jobs:
             mobile/dist/PackProof.ipa
             mobile/dist/eas-ios-build.json
             mobile/dist/SHA256SUMS
+            mobile/dist/ios-archive-verification.json
