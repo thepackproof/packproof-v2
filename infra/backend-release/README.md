@@ -20,6 +20,8 @@ Only whitelisted JSON receipts are uploaded. Full task configuration, input requ
 
 The migration inventory must match the current deployed source, and all 76 migration receipts must exist. Missing `075_onboarding` stops the release with `ONBOARDING_MIGRATION_REQUIRED` because first-proof activation depends on it. No migration is silently installed by this zero-DDL route.
 
+The primary release also provides a narrowly reviewed rollback compatibility boundary for the later optional study expansion: `076_first_experience_measurement` is accepted only with checksum `3b80452692918bb3589500d100b773deeb8cddf3c57b6882796e8cd1a13c1157`. It adds nullable study metadata and expands the existing event constraint without changing old writes. Every current migration remains required, unknown receipts and changed checksums fail, and this release does not install 076 or enable collection. The database verifier discloses any accepted forward-compatible receipt. Deploy and verify this primary image before applying 076; retain it as the compatible rollback target for the later measurement image.
+
 ## Rollback
 
 The offline planner produces an image-only rollback request from the immediate pre-release predecessor. Before using it, reread the service and confirm whether AWS has already rolled back. Restore only the pinned previous image and its release metadata while preserving current runtime settings and data. Do not use `deploy-staging.yml`, desired-count overrides, historical owner secrets, schema rollback or the legacy website deployment wrapper.

@@ -35,7 +35,8 @@ try {
     if(!authority||Object.values(authority).some(Boolean))throw Error('RUNTIME_AUTHORITY_WIDENED');
     const policy=(await db.query('SELECT durability_required FROM policy_recovery_fence WHERE singleton=1')).rows[0];
     if(!policy||policy.durability_required!==(config.requireDurableReceipts===true))throw Error('DURABILITY_CONFIGURATION_MISMATCH');
-    return {sourceSha,readOnly:true,identity,tls,sourceInventorySha256:digest(inventory),appliedInventorySha256:digest(applied),sourceMigrationCount:inventory.length,appliedMigrationCount:applied.length,pendingMigrations:pending,runtimeAuthorityUnchanged:true,durabilityPolicyMatches:true};
+    const verifiedForwardCompatibleMigrations=applied.filter(row=>!inventory.some(item=>item.id===row.id));
+    return {sourceSha,readOnly:true,identity,tls,sourceInventorySha256:digest(inventory),appliedInventorySha256:digest(applied),sourceMigrationCount:inventory.length,appliedMigrationCount:applied.length,pendingMigrations:pending,verifiedForwardCompatibleMigrations,runtimeAuthorityUnchanged:true,durabilityPolicyMatches:true};
   });
   console.log(JSON.stringify({event:'security_release_database_preflight',...receipt}));
 }catch(error){
