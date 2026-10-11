@@ -191,3 +191,15 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^mobile/vendor/node\-forge/lib/pkcs12\.js$''']
 regexes = ['''^\n?p12\.generateKey = forge\.pbe\.generatePkcs12Key;\r?$''']
+
+# Reviewed CI run 38174131634 / Source secrets job 114572776521.
+# This historical manual-operation fixture uses an inert request replay key.
+# It is compared only in local draft matching/serialization tests and cannot
+# authenticate. Keep the rule, exact test path and complete source line bound.
+[[allowlists]]
+description = "Exact historical manual-operation fixture; operation_123 is not an authentication credential."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^mobile/tests/manual\-operation\.test\.ts$''']
+regexes = ['''^\n?  const operation:ManualOperation=\{fingerprint:'original',key:'operation_123',form,request:\{itemTitle:'Ceramic mug',metadata:\{intake:\{source:'PROVIDED_TEXT'\}\}\}\};\r?$''']
