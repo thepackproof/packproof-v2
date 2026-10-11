@@ -17,7 +17,7 @@ phases:
     commands:
       - docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" .
       - docker run --rm --entrypoint node "$ECR:$IMAGE_TAG" --input-type=module -e 'import {readFile} from "node:fs/promises"; import {migrationInventory} from "./dist/db/migrate.js"; const rows=await migrationInventory(); if(process.getuid()===0||rows.length!==76)process.exit(1); await readFile("certs/rds-us-east-1-bundle.pem"); console.log(JSON.stringify({nonRoot:true,migrationFiles:rows.length}));'
-      - docker run --rm --entrypoint sh "$ECR:$IMAGE_TAG" -c 'command -v ffmpeg && command -v ffprobe && command -v prlimit && test -r /usr/share/fonts/ttf-dejavu/DejaVuSans.ttf'
+      - docker run --rm --entrypoint sh "$ECR:$IMAGE_TAG" -c 'command -v ffmpeg && command -v ffprobe && command -v prlimit && apk info --installed "zlib>=1.3.2-r1" && (test -r /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf || test -r /usr/share/fonts/dejavu/DejaVuSans.ttf || test -r /usr/share/fonts/ttf-dejavu/DejaVuSans.ttf)'
   post_build:
     on-failure: ABORT
     commands:

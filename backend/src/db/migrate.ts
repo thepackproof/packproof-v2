@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Database } from './database.js';
 import { splitSqlStatements } from './sql.js';
+import { isReviewedForwardCompatibleMigration } from './forward-compatible-migrations.js';
 const migrationsDir=path.join(path.dirname(fileURLToPath(import.meta.url)),'../../migrations');
 export async function migrationInventory(sourceDir=migrationsDir){
   const files=(await readdir(sourceDir)).filter(name=>name.endsWith('.sql')).sort();
@@ -13,7 +14,7 @@ export async function assertSchemaCurrent(db:Database,sourceDir=migrationsDir,al
   const inventory=await migrationInventory(sourceDir);
   const applied=(await db.query<{id:string;checksum:string|null}>('SELECT id,checksum FROM schema_migrations')).rows;
   const expectedIds=new Set(inventory.map(item=>item.id));
-  if(applied.some(row=>!expectedIds.has(row.id)))throw new Error('Database contains migrations outside this release compatibility envelope');
+  if(applied.some(row=>!expectedIds.has(row.id)&&!isReviewedForwardCompatibleMigration(row)))throw new Error('Database contains migrations outside this release compatibility envelope');
   for(const item of inventory){const row=applied.find(entry=>entry.id===item.id);if(!row&&allowPendingOnboarding&&item.id==='075_onboarding')continue;if(!row||row.checksum!==item.checksum)throw new Error(`Migration required or checksum mismatch: ${item.id}`);}
 }
 export async function migrate(db:Database,sourceDir=migrationsDir,options:{adoptLegacyChecksums?:boolean;expectedRole?:string}={}):Promise<void>{
