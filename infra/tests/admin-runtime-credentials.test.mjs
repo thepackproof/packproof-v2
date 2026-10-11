@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash,createHmac,pbkdf2Sync} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import {PGlite} from '../../backend/node_modules/@electric-sql/pglite/dist/index.js';
 import {migrate,migrationInventory} from '../../backend/dist/db/migrate.js';
 import {splitSqlStatements} from '../../backend/dist/db/sql.js';
@@ -83,6 +84,37 @@ test('database target requires the reviewed staging host, port and database befo
   for(const different of [pinned.replace(DATABASE_TARGET.host,'another-db.example'),pinned.replace(':5432/',':5433/'),
     pinned.replace('/packproof_v2?','/other_database?'),pinned.replace(`${OWNER_ROLE}:`,`${RUNTIME_ROLE}:`)])
     assert.throws(()=>assertDatabaseTarget(different),/DATABASE_TARGET_MISMATCH|INJECTED_DATABASE_CREDENTIALS_REQUIRED/);
+});
+
+test('session options retain reviewed timeout settings and reject every unreviewed token',()=>{
+  const withOptions=options=>{
+    const url=new URL(ownerUrl);url.searchParams.set('options',options);return url.toString();
+  };
+  for(const options of ['', '-c lock_timeout=0', ' \t-c statement_timeout=1500ms\n-c lock_timeout=2s -c idle_in_transaction_session_timeout=1min  ',
+    '-c lock_timeout=01-c statement_timeout=2']){
+    const runtime=runtimeDatabaseEnvironment(credentialEnv,withOptions(options));
+    assert.equal(new URL(runtime.DATABASE_URL).searchParams.get('options'),options);
+  }
+  for(const options of [' ', '-clock_timeout=1', '-c lock_timeout=', '-c lock_timeout=-1', '-c lock_timeout=1.5s',
+    '-c lock_timeout=1m', '-c lock_timeout=1mins', '-c lock_timeout=1;role=packproof', '-c role=packproof',
+    '-c lock_timeout=0 -c search_path=evil', '-c lock_timeout=0\0'])
+    assert.throws(()=>runtimeDatabaseEnvironment(credentialEnv,withOptions(options)),/UNREVIEWED_DATABASE_SESSION_OPTION/);
+});
+
+test('session options reject long near-matches without backtracking',()=>{
+  // A separate process makes a regression fail with a deadline instead of
+  // blocking the whole suite on the former exponential expression.
+  const moduleUrl=new URL('../admin-runtime-credentials.mjs',import.meta.url).href;
+  const result=spawnSync(process.execPath,['--input-type=module','-e',`
+    import assert from 'node:assert/strict';
+    import {assertDatabaseTarget,DATABASE_TARGET} from ${JSON.stringify(moduleUrl)};
+    const url=new URL('postgresql://packproof:fixture@'+DATABASE_TARGET.host+'/'+DATABASE_TARGET.database);
+    for(const options of ['-c lock_timeout=0'.repeat(10000)+'!', ('-c lock_timeout=0 ').repeat(10000)+'!', '-c lock_timeout=0'+' '.repeat(200000)+'!']){
+      url.searchParams.set('options',options);
+      assert.throws(()=>assertDatabaseTarget(url.toString()),/UNREVIEWED_DATABASE_SESSION_OPTION/);
+    }
+  `],{timeout:5000,encoding:'utf8'});
+  assert.ifError(result.error);assert.equal(result.status,0,result.stderr);
 });
 
 test('SCRAM verifier matches independently derived stored/server keys and never contains plaintext',()=>{

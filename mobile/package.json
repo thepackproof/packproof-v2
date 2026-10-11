@@ -13,7 +13,7 @@
     "test:client-version": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/client-version.test.ts",
     "test:camera-spike": "node --experimental-strip-types --test tests/camera-spike-model.test.ts",
     "test:proof-record": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts",
-    "test:recovery": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-recovery.test.ts",
+    "test:recovery": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-recovery.test.ts tests/upload-handoff.test.ts",
     "test:identifiers": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/identifier-capture.test.ts",
     "postinstall": "node scripts/secure-build-dependencies.cjs",
     "eas-build-pre-install": "node scripts/set-android-build-provenance.cjs",

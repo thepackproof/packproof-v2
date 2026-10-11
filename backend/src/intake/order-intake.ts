@@ -1,5 +1,32 @@
 import { DomainError } from "../domain/errors.js";
 import { sha256Hex } from "../hash.js";
+import { defaultTreeAdapter, parseFragment, type DefaultTreeAdapterTypes } from "parse5";
+
+/** Extract text once; this is not HTML serialization or a reusable sanitizer.
+ * The caller bounds source length before parsing. An explicit traversal stack
+ * also avoids call-stack growth for deeply nested, untrusted fragments. */
+function intakeText(source: string): string {
+  const pending: (DefaultTreeAdapterTypes.Node | string)[] = [parseFragment(source)];
+  const text: string[] = [];
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (typeof node === "string") {
+      text.push(node);
+    } else if (defaultTreeAdapter.isTextNode(node)) {
+      text.push(defaultTreeAdapter.getTextNodeContent(node));
+    } else if (defaultTreeAdapter.isElementNode(node) &&
+      ["script", "style", "template"].includes(defaultTreeAdapter.getTagName(node))) {
+      // Raw script/style content and inert templates are not order facts.
+      text.push("\n");
+    } else if ("childNodes" in node) {
+      text.push("\n");
+      pending.push("\n");
+      for (let index = node.childNodes.length - 1; index >= 0; index--)
+        pending.push(node.childNodes[index]);
+    }
+  }
+  return text.join("").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n");
+}
 
 export interface OrderDraft {
   externalReference: string | null;
@@ -31,13 +58,7 @@ export function previewOrderIntake(input: unknown): {
   const source = body.source ?? "paste";
   if (source !== "paste" && source !== "share" && source !== "email")
     throw new DomainError("INVALID_INTAKE", "Unsupported intake source", 400);
-  const text = body.text
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]*>/g, "\n")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/\r\n?/g, "\n");
+  const text = intakeText(body.text);
   const lines = text
     .split("\n")
     .map((s) => s.trim())

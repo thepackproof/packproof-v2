@@ -8,8 +8,9 @@ import { string, trackingIdentity } from '../integrations/shippo/normalize.js';
 import { DomainError } from './errors.js';
 
 /** Durable, rate-coalesced notification only. Event body/status is never evidence. */
-export async function queueShippoNotification(db:Database,clock:Clock,raw:Buffer) {
-  if(raw.length>256*1024)throw new DomainError('WEBHOOK_TOO_LARGE','Notification exceeds the accepted size',413);
+export async function queueShippoNotification(db:Database,clock:Clock,raw:unknown) {
+  if(!Buffer.isBuffer(raw))throw new DomainError('WEBHOOK_INVALID','Expected unmodified notification bytes',400);
+  if(raw.byteLength>256*1024)throw new DomainError('WEBHOOK_TOO_LARGE','Notification exceeds the accepted size',413);
   let event:Record<string,unknown>|null=null;
   try{event=object(JSON.parse(raw.toString('utf8')));}catch{throw new DomainError('WEBHOOK_INVALID','Expected a tracking notification',400);}
   const data=object(event?.data),tracking=trackingIdentity(string(data?.tracking_number));
