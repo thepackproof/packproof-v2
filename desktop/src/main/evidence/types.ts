@@ -29,7 +29,7 @@ export interface UploadIdentity extends UploadContext { evidenceId: string }
 export interface UploadReceipt { sha256: string; byteSize: number }
 export interface ServerPart extends UploadReceipt { partNumber: number }
 export interface EvidenceTransport {
-  authorizeCapture(input: UploadContext, signal: AbortSignal): Promise<CaptureAuthorization>;
+  authorizeCapture(input: UploadContext & {offline?:boolean}, signal: AbortSignal): Promise<CaptureAuthorization>;
   registerCapture(input: UploadContext & UploadReceipt & { captureSessionId?: string; mimeType: string; recordedDurationMs: number; metadata: CaptureMetadata }, signal: AbortSignal): Promise<CaptureAuthorization>;
   initializeUpload(input: UploadContext & UploadReceipt & { captureSessionId: string; mimeType: string }, signal: AbortSignal): Promise<{ evidenceId: string }>;
   inspectUpload(input: UploadIdentity, signal: AbortSignal): Promise<{ status: 'PENDING' | 'COMMITTED' | 'REJECTED'; sha256?: string; byteSize?: number; parts?: ServerPart[]; partSize?: number }>;

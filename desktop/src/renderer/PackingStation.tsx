@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserIdentifierDecoder } from '../../../web/src/capture/identifier-decoder';
-import type { CanonicalProof, DesktopSettings, Detection, FulfillmentQueueItem } from '../shared/contracts';
+import type { CanonicalProof, DesktopSettings, Detection, FulfillmentQueueItem, CaptureAllowanceView } from '../shared/contracts';
 import { Badge, Empty, ErrorNotice, Icon, Modal } from './components';
-import { appearsTracking, duration, errorMessage, trackingMatch } from './presentation';
+import { appearsTracking, bytes, duration, errorMessage, trackingMatch } from './presentation';
 import type {StudyApi,StationStudyTimer} from '../../../web/src/analytics/study-capture';
 import {selectDesktopStudy,desktopStudyEvent,bindDesktopStudyJob} from './study';
 
@@ -13,6 +13,9 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
   chooseProof:(id:string)=>void;onBusy:(busy:boolean)=>void;onSaved:()=>void;onSettings:(settings:DesktopSettings)=>void;
 }) {
   const [proof,setProof]=useState<CanonicalProof|null>(null);
+  const [allowance,setAllowance]=useState<CaptureAllowanceView|null>(null);
+  const [allowanceError,setAllowanceError]=useState('');
+  const [allowanceNonce,setAllowanceNonce]=useState(0);
   const [phase,setPhase]=useState<Phase>('ready');
   const [devices,setDevices]=useState<MediaDeviceInfo[]>([]);
   const [cameraReady,setCameraReady]=useState(false);
@@ -63,6 +66,14 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
     if(proofId) void window.packproof.proofs.detail(proofId).then(value=>{if(alive)setProof(value);}).catch(reason=>{if(alive)setError(errorMessage(reason));});
     return()=>{alive=false;};
   },[proofId]);
+  useEffect(()=>{
+    let alive=true;setAllowance(null);setAllowanceError('');
+    if(proof&&userId&&phase==='ready')void window.packproof.capture.preflight(proof.proofId,userId).then(value=>{
+      if(alive){if(value.proofId!==proof.proofId)throw new Error('The allowance belongs to a different shipment. Select this Proof again.');setAllowance(value);}
+    }).catch(reason=>{if(alive)setAllowanceError(errorMessage(reason));});
+    return()=>{alive=false;};
+  },[proof,userId,phase,allowanceNonce]);
+  useEffect(()=>window.packproof.events.subscribe(event=>{if(event.type==='system'&&phaseRef.current==='ready')setAllowanceNonce(value=>value+1);}),[]);
 
   const stop=useCallback((reason?:string)=>{
     if(reason && !interruption.current) interruption.current=reason;
@@ -160,7 +171,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
   },[phase]);
 
   async function begin() {
-    if(!proof||!stream.current||!cameraReady||phaseRef.current!=='ready')return;
+    if(!proof||allowance?.proofId!==proof.proofId||!stream.current||!cameraReady||phaseRef.current!=='ready')return;
     setError('');setSuccess('');setAttested(false);setConfirmedLabel('');setExcludeOtherLabels(false);setDetections([]);setMismatch('');
     detectionsRef.current=[];lastSeen.current.clear();interruption.current='';sequence.current=0;pendingBytes.current=0;totalBytes.current=0;writeChain.current=Promise.resolve();setElapsed(0);updatePhase('starting');
     try {
@@ -257,7 +268,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
 
   return <>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
-    {import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true'&&phase==='ready'&&<div className="notice warning" role="status"><Icon name="warning"/><span>Your allowance has not been confirmed. You can save a recording on this computer while offline; submission still depends on server eligibility. Check your current plan before you start packing.</span></div>}
+    {proof&&phase==='ready'&&<div className={`notice ${allowanceError||allowance?.reservation==='UNCONFIRMED'?'warning':''}`} role="status"><Icon name="shield"/><span>{allowanceError?allowanceError:!allowance?'Checking your recording allowance before packing…':allowance.reservation==='UNCONFIRMED'?'Offline local recording only. Your allowance has not been confirmed; submission still depends on server eligibility. Check your current plan before packing.':`${allowance.reservation==='RESERVED'?'One Proof allowance is reserved for this shipment; retakes reuse it.':'Your account can record this Proof without using a paid allowance.'} Record up to ${allowance.maxRecordingSeconds} seconds and ${bytes(allowance.maxRecordingBytes)}. This check does not create a payment.`}</span>{allowanceError&&<button className="text-button" onClick={()=>setAllowanceNonce(value=>value+1)}>Check allowance again</button>}</div>}
     {success&&<div className="notice success" role="status"><Icon name="check"/>{success}</div>}
     <div className="station-layout">
       <section className="station-main">
@@ -268,7 +279,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
           <div className="camera-top"><span className="camera-label">{phase==='recording'?<><span className="record-dot"/> RECORDING</>:cameraReady?'LIVE PREVIEW':'CAMERA UNAVAILABLE'}</span><span className="camera-timer">{duration(elapsed)}</span></div>
           {phase==='recording'&&<div className="camera-bottom">Keep the item, packing, seal, and label in view.</div>}
         </div>
-        <div className="capture-toolbar"><div><strong>{phase==='recording'?'One continuous recording':phase==='saving'?'Securing recording locally…':cameraReady?'Camera ready':'Camera needs attention'}</strong><span>{phase==='recording'?'Finish when the package is sealed and labeled.':'Original footage is staged on this workstation as you record.'}</span></div><button className={phase==='recording'?'danger':'primary'} onClick={()=>phase==='recording'?stop():void begin()} disabled={phase!=='recording'&&(!canCapture||!cameraReady||busy)}><Icon name={phase==='recording'?'check':'station'}/>{phase==='recording'?'Finished packing':phase==='starting'?'Preparing…':'Record packing'}</button></div>
+        <div className="capture-toolbar"><div><strong>{phase==='recording'?'One continuous recording':phase==='saving'?'Securing recording locally…':cameraReady?'Camera ready':'Camera needs attention'}</strong><span>{phase==='recording'?'Finish when the package is sealed and labeled.':'Original footage is staged on this workstation as you record.'}</span></div><button className={phase==='recording'?'danger':'primary'} onClick={()=>phase==='recording'?stop():void begin()} disabled={phase!=='recording'&&(!canCapture||allowance?.proofId!==proof?.proofId||!cameraReady||busy)}><Icon name={phase==='recording'?'check':'station'}/>{phase==='recording'?'Finished packing':phase==='starting'?'Preparing…':'Record packing'}</button></div>
         {recognitionError&&<div className="notice">{recognitionError}</div>}
         {mismatch&&<div className="notice warning" role="alert"><Icon name="warning"/><div><strong>This label does not match this shipment.</strong><p>Detected {mismatch}. Expected {expected}. Check the package before continuing. The shipment identity has not changed.</p></div></div>}
         <div className="camera-settings"><label>Camera<select disabled={busy} value={settings.cameraId} onChange={event=>void window.packproof.system.saveSettings({cameraId:event.target.value}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="">System default</option>{devices.filter(device=>device.kind==='videoinput').map((device,index)=><option key={device.deviceId||index} value={device.deviceId}>{device.label||`Camera ${index+1}`}</option>)}</select></label><label>Resolution<select disabled={busy} value={settings.resolution} onChange={event=>void window.packproof.system.saveSettings({resolution:event.target.value as DesktopSettings['resolution']}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="1080p">1080p · Recommended</option><option value="720p">720p</option></select></label><label>Audio<select disabled={busy} value={settings.audio?'on':'off'} onChange={event=>void window.packproof.system.saveSettings({audio:event.target.value==='on'}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="off">Off</option><option value="on">Microphone on</option></select></label>{settings.audio&&<label>Microphone<select disabled={busy} value={settings.microphoneId} onChange={event=>void window.packproof.system.saveSettings({microphoneId:event.target.value}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="">System default</option>{devices.filter(device=>device.kind==='audioinput').map((device,index)=><option key={device.deviceId||index} value={device.deviceId}>{device.label||`Microphone ${index+1}`}</option>)}</select></label>}</div>

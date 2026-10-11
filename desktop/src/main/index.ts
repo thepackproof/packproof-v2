@@ -1,4 +1,5 @@
 import { readCurrentProof } from './current-proof';
+import {desktopCaptureAllowance} from './capture-allowance';
 import {app,BrowserWindow,protocol,net,session,ipcMain,dialog,shell,Tray,Menu,nativeImage,Notification,powerSaveBlocker,powerMonitor} from 'electron';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {join,resolve,extname,sep} from 'node:path';
@@ -114,7 +115,10 @@ function setupIpc(){
   if(current())notify('Marketplace synchronization complete','Your fulfillment queue is ready to refresh.');
  });
  handle('integrations.list',schemas.empty,()=>requireApi().listConnectedAccounts());handle('integrations.connect',schemas.resolve,async()=>{await external(integrationManagementUrl(config?.webBaseUrl??'https://thepackproof.com'));});
- handle('capture.begin',schemas.capture,async i=>{const captureAccount=auth?.getAccountId();const captureEpoch=sessionEpoch;const proof=await cached('proof-'+i.proofId,()=>requireApi().getProof(i.proofId));if(captureEpoch!==sessionEpoch||captureAccount!==auth?.getAccountId())throw new Error('Your account changed. Select the shipment again.');if(proof.status==='FINALIZED')throw new Error('This Proof is finalized. Its evidence cannot be changed.');const job=await requireEngine().beginCapture({...i,offline:!online,appVersion:app.getVersion(),installationId});if(blocker===null)blocker=powerSaveBlocker.start('prevent-app-suspension');return {id:job.id,maxRecordingBytes:job.maxRecordingBytes,maxRecordingSeconds:job.maxRecordingSeconds};});
+ // Cached reads also tolerate service errors; only the OS network state can grant
+ // unconfirmed offline recording. HTTP failures never become allowance approval.
+ handle('capture.preflight',schemas.currentProof,(id,owner)=>desktopCaptureAllowance(requireApi(),id,owner,!net.isOnline()));
+ handle('capture.begin',schemas.capture,async i=>{const captureAccount=auth?.getAccountId();const captureEpoch=sessionEpoch;const proof=await cached('proof-'+i.proofId,()=>requireApi().getProof(i.proofId));if(captureEpoch!==sessionEpoch||captureAccount!==auth?.getAccountId())throw new Error('Your account changed. Select the shipment again.');if(proof.status==='FINALIZED')throw new Error('This Proof is finalized. Its evidence cannot be changed.');const job=await requireEngine().beginCapture({...i,offline:!net.isOnline(),appVersion:app.getVersion(),installationId});if(blocker===null)blocker=powerSaveBlocker.start('prevent-app-suspension');return {id:job.id,maxRecordingBytes:job.maxRecordingBytes,maxRecordingSeconds:job.maxRecordingSeconds};});
  const releaseBlocker=()=>{if(blocker!==null){powerSaveBlocker.stop(blocker);blocker=null;}};
  handle('capture.append',schemas.chunk,async(id,seq,b)=>{await requireEngine().appendChunk(id,seq,new Uint8Array(b));});
  handle('capture.finish',schemas.finish,async(id,i)=>{await requireEngine().finishCapture(id,{attestation:i.attestation,recordedDurationMs:i.durationMs,startedAt:i.startedAt,endedAt:i.endedAt,detections:i.detections.map((d:any)=>({value:d.rawValue,format:d.format,detectedAtMs:d.detectedAtMs,confirmed:d.confirmed,notThisPackage:d.notThisPackage}))});releaseBlocker();});

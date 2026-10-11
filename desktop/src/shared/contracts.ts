@@ -8,6 +8,7 @@ export interface DesktopSettings { cameraId: string; microphoneId: string; audio
 export interface SystemView { version: string; platform: string; environment: string; online: boolean; configured: boolean; secureStorage: boolean; pendingOtherAccounts: boolean; settings: DesktopSettings; reporting?:{enabled:boolean;configured:boolean;provider:string}; update: {state: string; version?: string; error?: string} }
 export interface CaptureInput { proofId: string; label: string; mimeType: string; camera: string; expectedTracking?: string }
 export interface CaptureView { id: string; maxRecordingBytes: number; maxRecordingSeconds: number }
+export interface CaptureAllowanceView { proofId:string; reservation:'RESERVED'|'NOT_REQUIRED'|'UNCONFIRMED'; maxRecordingBytes:number; maxRecordingSeconds:number }
 export type SharedProofPreview = Pick<PublicProofView,'proofId'|'status'|'evidence'|'evidenceState'|'statements'|'recordAsOf'|'fulfillmentScope'|'integrity'> & {
  disclosure:NonNullable<PublicProofView['disclosure']>;
  tracker?:{itemTitle:string|null;headline:string;shipment?:{carrier:string|null}|null;milestones:Array<{code:string;label:string;occurredAt:string|null;state?:string}>};
@@ -24,7 +25,7 @@ export interface PackProofDesktop {
  proofs: { scope(userId:string):Promise<string>; list():Promise<ProofCollectionItem[]>; detail(id:string):Promise<CanonicalProof>; current(id:string,expectedUserId:string):Promise<CanonicalProof>; create(input:TransactionWriteInput,expectedUserId?:string):Promise<CanonicalProof>; finalize(id:string):Promise<CanonicalProof>; sharePreview(id:string):Promise<SharedProofPreview>; share(id:string,input:SharedProofConsent):Promise<SharedProofLink>; export(id:string):Promise<{saved:boolean}>; evidenceUrl(proofId:string,evidenceId:string,previewHash?:string):Promise<string> };
  orders: { list():Promise<FulfillmentQueueItem[]>; resolve(code:string):Promise<{proofId:string}>; sync(connectionId:string):Promise<void> };
  integrations: { list():Promise<ConnectedAccountsListView>; connect(provider:string):Promise<void> };
- capture: { begin(input:CaptureInput):Promise<CaptureView>; append(id:string,sequence:number,bytes:ArrayBuffer):Promise<void>; finish(id:string,input:{detections:Detection[];attestation:boolean;durationMs:number;startedAt?:string;endedAt?:string}):Promise<void>; interrupt(id:string,reason:string):Promise<void> };
+ capture: { preflight(proofId:string,expectedUserId:string):Promise<CaptureAllowanceView>; begin(input:CaptureInput):Promise<CaptureView>; append(id:string,sequence:number,bytes:ArrayBuffer):Promise<void>; finish(id:string,input:{detections:Detection[];attestation:boolean;durationMs:number;startedAt?:string;endedAt?:string}):Promise<void>; interrupt(id:string,reason:string):Promise<void> };
  uploads: { list():Promise<UploadView[]>; retry(id:string):Promise<void>; discard(id:string):Promise<void>; pause():Promise<void>; resume():Promise<void> };
  system: { report(code:'CAMERA_PERMISSION_DENIED'|'CAMERA_DISCONNECTED'|'CAMERA_UNAVAILABLE'|'RECORDING_FAILED'):Promise<void>; state():Promise<SystemView>; settings():Promise<DesktopSettings>; saveSettings(value:Partial<DesktopSettings>):Promise<DesktopSettings>; openExternal(url:string):Promise<void>; exportDiagnostics():Promise<string> };
  updates: { check():Promise<void>; download():Promise<void>; install():Promise<void> };

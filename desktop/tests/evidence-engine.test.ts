@@ -64,6 +64,26 @@ afterEach(async () => {
 });
 
 describe('durable native evidence queue', () => {
+  it('enforces the admitted lower byte and duration caps before a saved capture can advance', async () => {
+    const {engine,remote,store}=await setup();
+    remote.api.authorizeCapture.mockResolvedValue({maxRecordingBytes:10,maxRecordingSeconds:2});
+    const capture=await engine.beginCapture({...input,offline:false});
+    expect(capture).toMatchObject({maxRecordingBytes:10,maxRecordingSeconds:2});
+    expect(remote.api.authorizeCapture).toHaveBeenCalledWith(expect.objectContaining({accountId:'user_A',proofId:input.proofId,offline:false}),expect.any(AbortSignal));
+    const original=Buffer.from('1234567890');await engine.appendChunk(capture.id,0,original);
+    await expect(engine.appendChunk(capture.id,1,Buffer.from('x'))).rejects.toMatchObject({code:'RECORDING_LIMIT'});
+    await expect(engine.finishCapture(capture.id,{attestation:true,recordedDurationMs:2001})).rejects.toMatchObject({code:'RECORDING_LIMIT'});
+    expect(await store.readChunk('user_A',capture.id,0)).toEqual(original);
+    expect(remote.api.registerCapture).not.toHaveBeenCalled();
+  });
+  it('leaves no recording or upload after an online allowance denial', async () => {
+    const {engine,remote}=await setup();
+    remote.api.authorizeCapture.mockRejectedValue(Object.assign(new Error('Allowance exhausted'),{code:'BILLING_CAPTURE_ALLOWANCE_EXHAUSTED'}));
+    await expect(engine.beginCapture({...input,offline:false})).rejects.toMatchObject({code:'BILLING_CAPTURE_ALLOWANCE_EXHAUSTED'});
+    expect(engine.activeCapture).toBe(false);
+    expect(engine.list()[0]).toMatchObject({state:'FAILED',byteSize:0,errorCode:'BILLING_CAPTURE_ALLOWANCE_EXHAUSTED'});
+    await engine.processQueue();expect(remote.api.registerCapture).not.toHaveBeenCalled();
+  });
   it('persists encrypted chunks during recording, encrypts metadata, and exposes no local paths', async () => {
     const { engine, rootDir } = await setup(); const original = Buffer.from('highly-private-video-original');
     const capture = await engine.beginCapture(input); await engine.appendChunk(capture.id, 0, original);

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { readFile } from 'node:fs/promises';
 import { auth, createHarness, createUser, type TestHarness } from './helpers.js';
-import { registerDesktopCapture, createCaptureSession, recoverCaptureSession, type DesktopCaptureContext } from '../src/domain/capture-sessions.js';
+import { registerDesktopCapture, createCaptureSession, recoverCaptureSession, admitDesktopCapture, type DesktopCaptureContext } from '../src/domain/capture-sessions.js';
 import { initializeEvidenceUpload, commitEvidence } from '../src/domain/evidence.js';
 import { commitAttestation } from '../src/domain/attestations.js';
 import { finalizeProof } from '../src/domain/finalize.js';
@@ -44,6 +44,8 @@ describe('post-capture desktop registration',()=>{
     expect(capture.assurance).toContain('not to the earlier recording');
     expect((await finalizeProof(h.db,clock,seller,id)).manifest.sha256).toBe(frozen.manifest.sha256);
     expect((await recoverCaptureSession(h.db,clock,seller,id,s.id)).state).toBe('COMMITTED');
+    await expect(admitDesktopCapture(h.db,clock,seller,id)).rejects.toMatchObject({code:'PROOF_ALREADY_FINALIZED'});
+    expect((await h.db.query('SELECT proof_id FROM billing_capture_reservations WHERE proof_id=$1',[id])).rows).toHaveLength(0);
   });
   it('binds the immutable retry identity to bytes, Proof, account, and desktop context',async()=>{
     const id=await proof(),s=await registerDesktopCapture(h.db,clock,seller,id,input());

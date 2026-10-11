@@ -95,7 +95,7 @@ describe('desktop API contract', () => {
   it('allows local offline capture without claiming server authorization', async () => {
     const fetcher = vi.fn<typeof fetch>();
     const adapter = new DesktopEvidenceTransport(new DesktopApi({ config, getAccountId: () => 'a', getToken: async () => 'token', fetch: fetcher }));
-    const authorization = await adapter.authorizeCapture({ accountId: 'a', jobId: 'j', proofId: 'p' }, new AbortController().signal);
+    const authorization = await adapter.authorizeCapture({ accountId: 'a', jobId: 'j', proofId: 'p',offline:true }, new AbortController().signal);
     expect(authorization.id).toBeUndefined(); expect(authorization.maxRecordingBytes).toBe(250_000_000); expect(fetcher).not.toHaveBeenCalled();
   });
   it('requires HTTPS outside local development and does not silently select production', () => {
