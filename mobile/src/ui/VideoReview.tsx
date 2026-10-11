@@ -1,6 +1,6 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 
-export function VideoReview({ uri, compact = false }: { uri: string; compact?: boolean }) {
+export function VideoReview({ uri, compact = false, accessibilityLabel = "Saved recording. Play to review before confirming submission." }: { uri: string | number; compact?: boolean; accessibilityLabel?: string }) {
   const player = useVideoPlayer(uri, (video) => {
     video.loop = false;
   });
@@ -11,7 +11,7 @@ export function VideoReview({ uri, compact = false }: { uri: string; compact?: b
       nativeControls
       allowsFullscreen
       contentFit="contain"
-      accessibilityLabel="Saved recording. Play to review before confirming submission."
+      accessibilityLabel={accessibilityLabel}
     />
   );
 }

@@ -1,10 +1,11 @@
 import { beginNativeEngine, captureEngineEnabled, sealNativeEngine } from "./capture/engine";
 import type { CaptureContext, CaptureManifest } from "../../backend/src/capture/core";
 import type { CaptureSessionGrant } from "./intake/model";
-import { inspectRecordedVideo, isIdentifierScannerAvailable, type EncodedVideoInspection, type UnifiedBarcodeDetection } from "../modules/packproof-unified-camera";
+import { inspectRecordedVideo, isIdentifierScannerAvailable, supportsRecordingLimits, type EncodedVideoInspection, type UnifiedBarcodeDetection } from "../modules/packproof-unified-camera";
 import type { IdentifierPolicy, IdentifierReview } from '../../backend/src/identifiers/types';
 import { captureIdentifiers, identifierFailureBlocks, type IdentifierCapture } from './capture/identifier-storage';
 import { identifierCaptureEnabled, mayRetainIdentifier } from './capture/identifier-observation';
+import { sessionRecordingLimits, requireNativeRecordingLimits, type RecordingLimits } from "./capture/limits";
 import { capturePreflight } from "./capture/preflight";
 import {startNativeStudy,nativeStudyForCapture,type NativeStudyTimer} from './analytics/native-study';
 import { recordMobileUxEvent } from './analytics/mobile-ux-events';
@@ -57,7 +58,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED" | "SCANNER_TRIGGERED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { recordingLimits?: RecordingLimits; remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -123,6 +124,15 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   const captureContext = "captureContext" in session ? session.captureContext as CaptureContext : undefined;
   if (session.proofId !== input.proofId || session.state !== "ISSUED" || Date.parse(session.expiresAt) <= Date.now())
     throw new Error("This camera authorization is no longer ready. Open the original order to recover or restart its recording.");
+  let recordingLimits: RecordingLimits;
+  try {
+    recordingLimits = sessionRecordingLimits(session);
+    requireNativeRecordingLimits(recordingLimits, supportsRecordingLimits());
+  } catch (error) {
+    // No frame has been acquired. Release only this unused session so intake can retry.
+    await input.client.cancelCaptureSession(input.proofId, session.id).catch(() => undefined);
+    throw error;
+  }
   const journal: ShippingScanJournal = {proofId:input.proofId,sessionId:session.id,userId:input.userId,entries:[]};
   const queue = shippingQueue(input.client,journal);
   await queue.flush();
@@ -145,7 +155,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
     identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
   if (input.relay) await input.relay.onSessionIssued(session.id);
-  const captured = await nativeRecorder({ remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
+  const captured = await nativeRecorder({ recordingLimits, remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
     ...(identifierCaptureEnabled(identifierPolicy) ? {
       onIdentifierBarcode: async (event: UnifiedBarcodeDetection) => {
         if (!identifiers) return null;

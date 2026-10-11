@@ -58,7 +58,7 @@ const providers: ConnectedAccountProviderCatalogView[] = [
   limitations: [enabled ? "Connections are simulated in this local design review." : "Unavailable in this sample environment."],
   multipleAccounts: false, requiresShop: provider === "shopify",
 }));
-const onboarding = { onboarding_completed: true, onboarding_version: 1, first_proof_coaching_completed: true, onboarding_last_step: 5, onboarding_enrolled: false, current_version: 1, first_proof_id: null, first_proof_completed: false };
+const onboarding = { first_experience_version:1, automatic_tour:false, activation_status:reviewScenario === 'empty' ? 'NOT_ACTIVATED' : 'ACTIVATED', first_finalized_packing_proof_id:reviewScenario === 'empty' ? null : 'proof_review_4', first_finalized_packing_at:reviewScenario === 'empty' ? null : dates[3], onboarding_completed: true, onboarding_version: 1, first_proof_coaching_completed: true, onboarding_last_step: 5, onboarding_enrolled: false, current_version: 1, first_proof_id: null, first_proof_completed: false };
 let notificationPreferences = { enabled: true, uploads: true, evidence: true, participants: true, shipments: true, returns: true };
 
 function canonicalProof(summary: ProofCollectionItem): CanonicalProof {

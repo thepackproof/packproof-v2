@@ -16,6 +16,7 @@ export function useTaskHome() {
   const [refreshing,setRefreshing]=useState(false);
   const [refreshError,setRefreshError]=useState<string|null>(null);
   const [orders,setOrders]=useState<FulfillmentQueueItem[]>([]);
+  const [queueReconciled,setQueueReconciled]=useState(false);
   const [interacting,setInteracting]=useState(false);
   const scope=`${app.apiBaseUrl}:${app.session?.userId}`;
   async function refresh() {
@@ -29,15 +30,15 @@ export function useTaskHome() {
       try {
         const result=await context.client.listFulfillmentQueue('ready');
         context.client.assertCaptureAccount(account.userId,account.apiBaseUrl);
-        if(alive.current && generation.current===token)setOrders(result.items);
-      } catch { /* Queue is optional; existing Proofs and device work remain available. */ }
+        if(alive.current && generation.current===token){setOrders(result.items);setQueueReconciled(true);}
+      } catch { if(alive.current && generation.current===token)setQueueReconciled(false); /* Available Proofs remain usable, but empty is not established. */ }
     } catch {
       if(alive.current&&generation.current===token)setRefreshError("Your records could not be refreshed. Saved work remains available. Try again.");
     }
     if(alive.current&&generation.current===token){setLoading(false);setRefreshing(false);refreshLock.current=false;}
   }
   useEffect(()=>{
-    alive.current=true;setOrders([]);refreshLock.current=false;setLoading(!latest.current.workspaceFreshAt);void refresh();
+    alive.current=true;setOrders([]);setQueueReconciled(false);refreshLock.current=false;setLoading(!latest.current.workspaceFreshAt);void refresh();
     const listener=AppState.addEventListener('change',state=>{if(state==='active')void refresh();});
     return ()=>{alive.current=false;generation.current++;refreshLock.current=false;listener.remove();};
   },[scope]);
@@ -77,5 +78,5 @@ export function useTaskHome() {
     } finally {actionBusy.current=false;setInteracting(false);}
   }
   const freshnessLabel=app.workspaceReconciled&&!app.offline ? (app.workspaceFreshAt?`Updated ${new Date(app.workspaceFreshAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`:'Current workspace') : app.workspaceFreshAt ? `Cached records · last updated ${new Date(app.workspaceFreshAt).toLocaleString()}` : 'Waiting for workspace reconciliation';
-  return {loading,refreshing,freshnessLabel,error:refreshError ?? app.error,recommendation,attention,recent,counts:model.counts,refresh,runAction,openProof,setInteracting};
+  return {loading,refreshing,empty:model.empty&&queueReconciled,freshnessLabel,error:refreshError ?? app.error,recommendation,attention,recent,counts:model.counts,refresh,runAction,openProof,setInteracting};
 }

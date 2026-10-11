@@ -2,6 +2,8 @@ import { assertTransactionCorrectionAllowed, hasBoundPackingCapture } from "./tr
 import type { Clock } from "../clock.js";
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
+import { canonicalize } from "../canonical.js";
+import { sha256Hex } from "../hash.js";
 import { appendAudit } from "./audit.js";
 import { DomainError, isUniqueViolation } from "./errors.js";
 import {
@@ -52,8 +54,23 @@ export async function createTransaction(
 ): Promise<TransactionView> {
   const parsed = parseTransactionCreate(input);
   const externalReference = parsed.externalReference;
+  const operationId = parsed.idempotencyKey
+    ? `txn_create_${sha256Hex(canonicalize({actorUserId,key:parsed.idempotencyKey}))}` : null;
+  const requestSha256 = operationId ? sha256Hex(canonicalize({...parsed,idempotencyKey:undefined})) : null;
 
   return db.transaction(async (tx) => {
+    if (operationId) {
+      // The existing account row provides a cross-process transaction lock; no
+      // client-owned identity, additional table or external reference is needed.
+      await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[actorUserId]);
+      const prior=(await tx.query<TransactionRow>('SELECT * FROM transactions WHERE id=$1',[operationId])).rows[0];
+      if (prior) {
+        const operation=asMetadataRecord(asMetadataRecord(prior.transaction_metadata)._packproofCreate);
+        if (prior.created_by!==actorUserId || operation.requestSha256!==requestSha256)
+          throw new DomainError('TRANSACTION_CREATE_CONFLICT','This creation key was already used with different details. Recover the original draft before creating another Proof.',409);
+        return loadTransactionView(tx,prior.id);
+      }
+    }
     if (externalReference) {
       const existing = await tx.query<TransactionRow>(
         `SELECT * FROM transactions WHERE external_reference = $1`,
@@ -67,11 +84,13 @@ export async function createTransaction(
             409,
           );
         }
+        if (operationId)
+          throw new DomainError('TRANSACTION_CREATE_CONFLICT','This order reference already has a transaction. Continue that transaction instead of creating it again.',409);
         return loadTransactionView(tx, existing.rows[0].id);
       }
     }
 
-    const id = newId("txn");
+    const id = operationId ?? newId("txn");
     const now = clock.now().toISOString();
     try {
       await tx.query(
@@ -85,7 +104,7 @@ export async function createTransaction(
           actorUserId,
           now,
           now,
-          JSON.stringify(parsed.metadata ?? {}),
+          JSON.stringify(operationId ? {...asMetadataRecord(parsed.metadata),_packproofCreate:{version:1,requestSha256}} : parsed.metadata ?? {}),
           parsed.transactionDate,
           parsed.itemTitle,
           parsed.itemDescription,

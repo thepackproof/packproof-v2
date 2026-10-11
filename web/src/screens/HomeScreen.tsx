@@ -8,6 +8,7 @@ import { Glyph } from "../site/Brand";
 import "./workstation-home.css";
 
 export interface HomeScreenProps extends WorkstationProofActions {
+  firstExperience?: boolean; firstProof?: boolean; reconciled?: boolean;
   api?: PackProofApi;
   proofs: ProofCollectionItem[];
   queue: FulfillmentQueueItem[];
@@ -33,6 +34,8 @@ export function HomeScreen(props: HomeScreenProps) {
   const count = (value: number) => props.loading || props.error ? "—" : value;
   const pending = props.pendingUploadCount;
   const connections = props.connections.filter(connection => ["ACTIVE", "CONNECTED"].includes(connection.status)).length;
+  const empty = props.firstExperience && props.reconciled && !props.loading && !props.error && online && !proofs.length && !props.queue.length && pending === 0;
+  if (empty) return <main className="page library-page workstation-home"><section className="workstation-hero"><div><span className="workstation-eyebrow">Ready when you are</span><h1>{props.firstProof ? 'Create your first Proof' : 'Create Proof'}</h1><p>Record your item as you pack and seal it, then keep the evidence together.</p><div className="first-proof-actions"><button className="btn" onClick={() => props.onGo('/new')}>Create Proof</button><button className="text-link" onClick={() => props.onGo('/sample-proof')}>See a sample Proof</button></div></div></section></main>;
   return <main className="page library-page workstation-home" aria-busy={props.loading}>
     <header className="workstation-page-heading"><div><span className="workstation-eyebrow">PackProof workspace</span><h1 className="page-title">Home</h1><p>Your fulfillment desk, at a glance.</p></div><button data-onboarding="create" className="btn" onClick={() => props.onGo("/new")}><Glyph name="plus" size={16} />New Proof</button></header>
     {props.error && <Notice title="We couldn’t refresh your workspace" kind="error"><p>{props.error}</p><button className="btn btn-secondary" onClick={props.onRetry}>Try again</button></Notice>}

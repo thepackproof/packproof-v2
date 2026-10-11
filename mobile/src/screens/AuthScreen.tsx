@@ -9,6 +9,7 @@ import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { Logo } from "../ui/Logo";
 import { ErrorBanner } from "../ui/EmptyState";
+import { FIRST_PROOF_EXPERIENCE_ENABLED } from "../experience/first-proof";
 
 export function AuthScreen() {
   const app = usePackProof();
@@ -16,7 +17,7 @@ export function AuthScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const passwordsMatch = confirmPassword === app.password;
-  const canCreate = acceptedLegal && app.email.trim().length > 0 && app.password.length > 0 && passwordsMatch;
+  const canCreate = acceptedLegal && app.email.trim().length > 0 && app.password.length > 0 && (FIRST_PROOF_EXPERIENCE_ENABLED || passwordsMatch);
 
   return (
     <AppScreen extraBottom={24}>
@@ -41,8 +42,10 @@ export function AuthScreen() {
                 onChangeText={app.setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoComplete="email"
+                textContentType="emailAddress"
               />
-              <FormField label="Password" value={app.password} onChangeText={app.setPassword} secureTextEntry />
+              <FormField label="Password" value={app.password} onChangeText={app.setPassword} secureTextEntry autoComplete="current-password" textContentType="password" />
             </>
           )}
           <Button label="Sign in" onPress={() => void app.signIn()} loading={app.busy} haptic="light" />
@@ -77,9 +80,10 @@ export function AuthScreen() {
           <Text style={[styles.body, { color: colors.textSecondary }]}>
             Create a PackProof account with email and password. This is the supported sign-in method.
           </Text>
-          <FormField label="Email" value={app.email} onChangeText={app.setEmail} keyboardType="email-address" />
-          <FormField label="Password" value={app.password} onChangeText={app.setPassword} secureTextEntry />
-          <FormField label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
+          <FormField label="Email" value={app.email} onChangeText={app.setEmail} keyboardType="email-address" autoComplete="email" textContentType="emailAddress" />
+          <FormField label="Password" value={app.password} onChangeText={app.setPassword} secureTextEntry autoComplete="new-password" textContentType="newPassword" />
+          {!FIRST_PROOF_EXPERIENCE_ENABLED && <>
+          <FormField label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry autoComplete="new-password" textContentType="newPassword" />
           <FormField label="Username" value={app.usernameInput} onChangeText={app.setUsernameInput} />
           <FormField
             label="Display name"
@@ -87,7 +91,9 @@ export function AuthScreen() {
             onChangeText={app.setDisplayNameInput}
             autoCapitalize="words"
           />
-          {!passwordsMatch && confirmPassword.length > 0 ? (
+          </>}
+          {FIRST_PROOF_EXPERIENCE_ENABLED ? <Text style={[styles.body, {color:colors.textSecondary}]}>You can add your name and username later in Profile.</Text> : null}
+          {!FIRST_PROOF_EXPERIENCE_ENABLED && !passwordsMatch && confirmPassword.length > 0 ? (
             <Text style={[styles.error, { color: colors.error }]}>Passwords do not match.</Text>
           ) : null}
           <Pressable
@@ -132,6 +138,8 @@ export function AuthScreen() {
             value={app.verificationCode}
             onChangeText={app.setVerificationCode}
             keyboardType="number-pad"
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
           />
           <Button label="Verify email" onPress={() => void app.verifyEmail()} loading={app.busy} />
           <Button
@@ -164,8 +172,10 @@ export function AuthScreen() {
             value={app.verificationCode}
             onChangeText={app.setVerificationCode}
             keyboardType="number-pad"
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
           />
-          <FormField label="New password" value={app.newPassword} onChangeText={app.setNewPassword} secureTextEntry />
+          <FormField label="New password" value={app.newPassword} onChangeText={app.setNewPassword} secureTextEntry autoComplete="new-password" textContentType="newPassword" />
           <Button label="Reset password" onPress={() => void app.resetPassword()} loading={app.busy} />
           <Button label="Back to sign in" onPress={() => app.setAuthPane("signIn")} variant="tertiary" />
         </View>
@@ -173,6 +183,7 @@ export function AuthScreen() {
 
       {app.authPane === "signIn" ? (
         <View style={styles.legalFooter}>
+          {FIRST_PROOF_EXPERIENCE_ENABLED ? <Button label="See a sample Proof" variant="tertiary" onPress={() => app.go("sample")} /> : null}
           <LegalLinks />
         </View>
       ) : null}

@@ -31,8 +31,9 @@
       "extends": "shipping-integration",
       "environment": "production",
       "env": {
-        "PACKPROOF_ANDROID_VERSION_CODE": "58",
-        "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true"
+        "PACKPROOF_ANDROID_VERSION_CODE": "60",
+        "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
+        "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
       }
     },
     "mobile-ux-review": {
@@ -43,7 +44,8 @@
       },
       "env": {
         "PACKPROOF_ANDROID_VERSION_CODE": "57",
-        "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true"
+        "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
+        "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
       }
     },
     "ios-testflight": {
@@ -61,7 +63,8 @@
         "EXPO_PUBLIC_COGNITO_USER_POOL_ID": "us-east-1_GdgTeYaOO",
         "EXPO_PUBLIC_COGNITO_CLIENT_ID": "34pnucunllka2jcs8hsq762m5e",
         "EXPO_PUBLIC_COGNITO_REGION": "us-east-1",
-        "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true"
+        "EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING": "true",
+        "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
       },
       "node": "22.14.0"
     },
@@ -70,13 +73,17 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
       }
     },
     "ios-simulator": {
       "extends": "ios-testflight",
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true"
+        "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
+        "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
       },
       "ios": {
         "simulator": true,

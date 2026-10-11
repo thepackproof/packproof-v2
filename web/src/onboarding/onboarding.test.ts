@@ -11,7 +11,7 @@ it('persists offline skip for replay on reconnect and prevents immediate reopeni
  let disk:string|null=null;let online=false;let state={...fresh};
  const api={getOnboarding:async()=>state,updateOnboarding:async(action:Action)=>{if(!online)throw Error('offline');if(action.action==='skip')state={...state,onboarding_completed:true,first_proof_coaching_completed:true};return state;}};
  const storage={read:async()=>disk,write:async(v:string)=>{disk=v;}};
- const c=new OnboardingController(api,storage);await c.load();c.start();c.finish(true);await settle();c.start();expect(c.snapshot.open).toBe(false);c.stop();
+ const c=new OnboardingController(api,storage,{autoTourEnabled:true});await c.load();c.start();c.finish(true);await settle();c.start();expect(c.snapshot.open).toBe(false);c.stop();
  online=true;const reopened=new OnboardingController(api,storage);await reopened.load();reopened.start();expect(reopened.snapshot.open).toBe(false);expect(state.onboarding_completed).toBe(true);expect(disk).toBe('[]');
 });
 it('does not enroll existing accounts or replay all steps for a future version',async()=>{

@@ -124,7 +124,7 @@ export class PackProofApi {
   async checkpointCaptureIdentifiers(proofId:string,sessionId:string,input:{clientEventId:string;revision:number;lastSequence:number;coverage:'COMPLETE'|'PARTIAL'|'UNAVAILABLE';omittedEvents:number}):Promise<IdentifierReview> {
     return this.featureRequest(proofId,`capture-sessions/${encodeURIComponent(sessionId)}/identifier-checkpoint`,'POST',input);
   }
-  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string;identifierPolicy?:IdentifierPolicy}> {
+  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string): Promise<{id:string;expiresAt:string;recoverUntil:string;state:string;maxRecordingBytes?:number;maxRecordingSeconds?:number;identifierPolicy?:IdentifierPolicy}> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, { method: "POST", body: {client:"WEB_CAMERA",idempotencyKey,stageId} });
   }
   async completeCaptureSession(proofId: string, sessionId: string, body: {sha256:string;byteSize:number;contentType:string;interrupted?:boolean;recordedDurationMs?:number}) {

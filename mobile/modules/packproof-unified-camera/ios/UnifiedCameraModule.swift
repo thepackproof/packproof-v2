@@ -9,6 +9,7 @@ public final class UnifiedCameraModule: Module {
 
     Function("newOperationNonce") { UUID().uuidString }
     Function("identifierScannerVersion") { 1 }
+    Function("captureLimitsVersion") { 1 }
     // iOS provides no public switch for reading the global system haptics preference;
     // system haptics APIs apply the user's settings when the caller requests feedback.
     AsyncFunction("getHapticsEnabled") { true }
@@ -41,6 +42,8 @@ public final class UnifiedCameraModule: Module {
       Prop("active") { (view: UnifiedCameraView, active: Bool) in view.setActive(active) }
       Prop("torchEnabled") { (view: UnifiedCameraView, enabled: Bool) in view.setTorchEnabled(enabled) }
       Prop("identifierCaptureEnabled") { (view: UnifiedCameraView, enabled: Bool) in view.setIdentifierCaptureEnabled(enabled) }
+      Prop("maxRecordingBytes") { (view: UnifiedCameraView, value: Double?) in view.setMaxRecordingBytes(value) }
+      Prop("maxRecordingSeconds") { (view: UnifiedCameraView, value: Double?) in view.setMaxRecordingSeconds(value) }
       AsyncFunction("startRecording") { (view: UnifiedCameraView, sessionID: String, audioEnabled: Bool, promise: Promise) in
         view.startRecording(sessionID: sessionID, audioEnabled: audioEnabled, promise: promise)
       }

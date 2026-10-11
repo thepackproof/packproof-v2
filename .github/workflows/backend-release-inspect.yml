@@ -1,0 +1,39 @@
+# No build, deployment, DDL, secret-value read, IAM mutation or legacy wrapper.
+name: Backend release inspect
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: backend-release-inspection
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Use the existing deployment role with a read-only session
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: packproof-readonly-${{ github.run_id }}
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["sts:GetCallerIdentity","ecs:DescribeServices","ecs:DescribeExpressGatewayService","ecs:DescribeTaskDefinition","ecs:ListTasks","ecs:DescribeTasks","ecs:ListServiceDeployments","ecs:DescribeServiceDeployments","ecs:DescribeServiceRevisions","codebuild:BatchGetProjects","ecr:DescribeRepositories","ecr:GetLifecyclePolicy","s3:GetBucketVersioning","rds:DescribeDBInstances","elasticloadbalancing:DescribeTargetGroups","elasticloadbalancing:DescribeLoadBalancers","elasticloadbalancing:DescribeLoadBalancerAttributes","ec2:DescribeSecurityGroups","ec2:DescribeSubnets","iam:GetRole","iam:ListRolePolicies","iam:GetRolePolicy","iam:ListAttachedRolePolicies"]}]}
+      - name: Verify current CLI and collect whitelisted runtime evidence
+        run: |
+          aws --version
+          node infra/backend-control-plane-readonly.mjs "$RUNNER_TEMP/backend-control-plane-readonly.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-readonly-${{ github.sha }}
+          path: ${{ runner.temp }}/backend-control-plane-readonly.json
+          if-no-files-found: error
+          retention-days: 14

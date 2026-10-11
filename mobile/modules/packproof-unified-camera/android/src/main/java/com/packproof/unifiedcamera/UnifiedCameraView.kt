@@ -247,6 +247,11 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     }
   }
 
+  private var requestedMaxBytes: Long = 250_000_000L
+  private var requestedMaxSeconds: Long = 300L
+  fun setMaxRecordingBytes(value: Double?) { requestedMaxBytes = if (value != null && value.isFinite() && value >= 1 && value <= 250_000_000 && value == value.toLong().toDouble()) value.toLong() else 0L }
+  fun setMaxRecordingSeconds(value: Double?) { requestedMaxSeconds = if (value != null && value.isFinite() && value >= 1 && value <= 300 && value == value.toLong().toDouble()) value.toLong() else 0L }
+
   @SuppressLint("MissingPermission")
   fun startRecording(sessionId: String, audioEnabled: Boolean, promise: Promise) {
     if (session != null) {
@@ -267,6 +272,10 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
     }
     try {
       val proofCapture = sessionId.startsWith("cap_")
+      if (proofCapture && (requestedMaxBytes < 1 || requestedMaxSeconds < 1)) {
+        promise.reject("CAPTURE_LIMITS_UNAVAILABLE", "Reopen this recording to verify its allowance before packing.", null)
+        return
+      }
       val root = File(context.filesDir, if (proofCapture) "packproof-captures" else "packproof-camera-spike")
       if (!root.exists() && !root.mkdirs()) throw IllegalStateException("Capture directory unavailable")
       val directory = File(root, sessionId)
@@ -289,8 +298,8 @@ class UnifiedCameraView(context: Context, appContext: AppContext) : ExpoView(con
       encodedDurationMs = 0L
       releaseAfterFinalize = false
       val options = FileOutputOptions.Builder(output)
-        .setDurationLimitMillis(if (proofCapture) 300 * 1000L else 10 * 60 * 1000L)
-        .setFileSizeLimit(if (proofCapture) 250_000_000L else 512 * 1024 * 1024L)
+        .setDurationLimitMillis(if (proofCapture) requestedMaxSeconds * 1000L else 10 * 60 * 1000L)
+        .setFileSizeLimit(if (proofCapture) requestedMaxBytes else 512 * 1024 * 1024L)
         .build()
       var pending = videoCapture!!.output.prepareRecording(context, options)
       if (audioEnabled) pending = pending.withAudioEnabled()

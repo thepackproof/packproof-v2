@@ -48,6 +48,7 @@ export interface TransactionView {
 }
 
 export interface TransactionCreateInput {
+  idempotencyKey: string | null;
   externalReference: string | null;
   transactionDate: string | null;
   itemTitle: string | null;
@@ -153,7 +154,19 @@ export function toTransactionView(
 export function parseTransactionCreate(body: unknown): TransactionCreateInput {
   const record = asRecord(body);
   const shippingRecord = hasOwn(record, "shipping") ? record.shipping : undefined;
+  let idempotencyKey: string | null = null;
+  if (record.idempotencyKey != null) {
+    if (typeof record.idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(record.idempotencyKey))
+      throw new DomainError('INVALID_TRANSACTION_IDEMPOTENCY_KEY', 'Use a stable creation key of 8 to 128 letters, numbers, dots, underscores, colons or hyphens.', 400);
+    idempotencyKey = record.idempotencyKey;
+  }
+  const metadata=record.metadata??{};
+  if (metadata && typeof metadata==='object' && Object.prototype.hasOwnProperty.call(metadata,'_packproofCreate'))
+    throw new DomainError('INVALID_TRANSACTION_METADATA', 'Creation identity is assigned by the server.', 400);
+  if (idempotencyKey && (typeof metadata!=='object'||Array.isArray(metadata)))
+    throw new DomainError('INVALID_TRANSACTION_METADATA', 'Transaction metadata must be an object for a retryable creation.', 400);
   return {
+    idempotencyKey,
     externalReference: normalizeOptionalString(
       record.externalReference,
       "externalReference",
@@ -169,7 +182,7 @@ export function parseTransactionCreate(body: unknown): TransactionCreateInput {
     quantity: normalizeQuantity(record.quantity),
     transactionValue: normalizeTransactionValue(record.transactionValue),
     currency: normalizeCurrency(record.currency),
-    metadata: record.metadata ?? {},
+    metadata,
     shipping: shippingRecord == null ? null : parseShippingWrite(shippingRecord),
   };
 }

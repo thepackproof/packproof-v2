@@ -9,6 +9,7 @@ export type AuthPane = "signIn" | "createAccount" | "verify" | "forgot" | "reset
 export type AppRouteName =
   | "boot"
   | "auth"
+  | "sample"
   | "home"
   | "proofs"
   | "orders"
@@ -74,6 +75,7 @@ export function normalizeRouteName(name: string): AppRouteName {
 
 export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigin = "home"): AppRouteName {
   switch (routeName) {
+    case "sample": return origin;
     case "dev": return "account";
     case "sharing":
     case "signature":

@@ -111,3 +111,5 @@
   .workspace-shell .workstation-panel-heading { padding:20px 17px; }
   .workspace-shell .workstation-empty { padding:35px 20px; }
 }
+
+.first-proof-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:20px}.first-proof-actions button{min-height:44px}

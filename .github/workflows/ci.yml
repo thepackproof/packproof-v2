@@ -312,6 +312,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate scoped release requests and service discovery
+        run: node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs
       - name: Validate PowerShell and runtime preservation
         shell: pwsh
         run: ./infra/tests/deployment-helpers.test.ps1

@@ -39,6 +39,7 @@ jobs:
       EXPO_PUBLIC_COGNITO_CLIENT_ID: 34pnucunllka2jcs8hsq762m5e
       EXPO_PUBLIC_COGNITO_REGION: us-east-1
       EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING: 'true'
+      EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

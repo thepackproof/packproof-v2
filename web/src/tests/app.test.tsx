@@ -141,7 +141,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.includes("cognito-idp")) {
           return json({
@@ -432,7 +432,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.split("?")[0].endsWith("/me/proofs")) {
           return json({ proofs: [] });
@@ -634,7 +634,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.includes("/shipment-integrity")) {
           return json({
@@ -750,7 +750,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
       const method = init?.method ?? "GET";
       if (url.includes("/users/search")) {
@@ -860,7 +860,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.includes("/dev/integrations/demo-storefront/connect") && init?.method === "POST") {
           connected = true;
@@ -938,7 +938,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.endsWith("/me/connected-accounts") && init?.method !== "POST") {
           return json({ ...emptyConnectedAccounts, providers: emptyConnectedAccounts.providers.map(provider => provider.provider === "ebay" ? { ...provider, enabled: true } : provider) });
@@ -1009,7 +1009,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.includes("/me/fulfillment-queue")) {
           return json({ items: [fulfillmentItem, fulfillmentNext], filter: "ready" });
@@ -1165,7 +1165,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.includes("/me/fulfillment-queue")) {
           return json({ items: [fulfillmentItem], filter: "ready" });
@@ -1256,7 +1256,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.endsWith("/public/proofs/guest-token")) {
           return json({
@@ -1324,7 +1324,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.endsWith("/auth/dev/login")) {
           return json({ userId: "user_seller", token: "token-seller" });
@@ -1418,7 +1418,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.endsWith("/me") && !url.includes("/proofs")) {
           return json({
@@ -1516,7 +1516,7 @@ describe("PackProof web reference client", () => {
         if(url.endsWith("/parts"))return json({partSize:5242880,parts:[]});
         if(/\/parts\/\d+$/.test(url))return json({partNumber:1,sha256:"aa"});
         if(url.endsWith("/parts/complete"))return json({complete:true});
-        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
+        if(url.endsWith("/capture-sessions"))return json({id:"cps_test",state:"ISSUED",maxRecordingBytes:250000000,maxRecordingSeconds:300,expiresAt:"2026-09-05T20:30:00Z",recoverUntil:"2026-09-12T20:00:00Z"});
         if(url.includes("/capture-sessions/cps_test/complete"))return json({id:"cps_test",state:"RECORDED"});
         if (url.endsWith("/me") && !url.includes("/proofs")) {
           return json({

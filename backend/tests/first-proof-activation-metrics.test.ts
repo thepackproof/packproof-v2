@@ -1,0 +1,30 @@
+import {afterEach,expect,it} from 'vitest';
+import {createHarness,commitFulfillmentAndAttest,type TestHarness} from './helpers.js';
+import {ensureIdentityUser} from '../src/domain/users.js';
+import {createTransaction} from '../src/domain/transactions.js';
+import {createOrGetProof} from '../src/domain/create-proof.js';
+import {finalizeProof} from '../src/domain/finalize.js';
+import {firstProofActivation} from '../src/analytics/first-proof-activation.js';
+import {analyticsSection} from '../src/admin/analytics.js';
+let h:TestHarness;afterEach(async()=>{await h?.close();});
+it('retains nonstarters, requires a full observation window and counts only real packing finalized within seven days',async()=>{
+ let now=new Date('2026-09-25T12:00:00Z');h=await createHarness({now:()=>new Date(now)});
+ const account=(subject:string,provider='cognito')=>ensureIdentityUser(h.db,h.clock,provider,subject);
+ const [activated,late,never,sample,admin,dev]=await Promise.all(['activated','late','never','sample','admin','dev'].map(subject=>account(subject,subject==='dev'?'dev':'cognito')));
+ await h.db.query("INSERT INTO user_system_roles(user_id,role,granted_at) VALUES($1,'SYSTEM_ADMIN',$2)",[admin,now.toISOString()]);
+ const finish=async(user:string,metadata={})=>{const txn=await createTransaction(h.db,h.clock,user,{itemTitle:'Fixture',metadata});const proof=await createOrGetProof(h.db,h.clock,user,txn.transactionId);await commitFulfillmentAndAttest(h,user,proof.proofId);await finalizeProof(h.db,h.clock,user,proof.proofId);};
+ now=new Date('2026-09-26T12:00:00Z');await finish(activated);await finish(sample,{sample:true});
+ now=new Date('2026-10-03T12:00:00Z');await finish(late);
+ now=new Date('2026-10-04T12:00:01Z');await account('immature');
+ now=new Date('2026-10-11T12:00:00Z');
+ const result=await firstProofActivation(h.db,{from:'2026-09-25T00:00:00Z',to:now.toISOString(),asOf:now.toISOString()});
+ expect(result).toMatchObject({eligibleAccounts:5,matureAccounts:4,immatureAccounts:1,activatedAccounts:1,neverStartedAccounts:2,activationPercent:25,intentConversion24h:{status:'unavailable'}});
+ for(const id of [activated,late,never,sample,admin,dev])expect(JSON.stringify(result)).not.toContain(id);
+ const view=await analyticsSection(h.db,h.clock,{view:'product',period:'30d'});
+ expect(view.metrics.find(metric=>metric.key==='first_packing_activation_7d')).toMatchObject({value:25,status:'available'});
+ expect(view.metrics.find(metric=>metric.key==='first_packing_intent_conversion_24h')).toMatchObject({value:null,status:'unavailable'});
+});
+it('returns unavailable instead of zero percent when no account has a fully observed week',async()=>{
+ const now=new Date('2026-10-11T12:00:00Z');h=await createHarness({now:()=>new Date(now)});await ensureIdentityUser(h.db,h.clock,'cognito','new-account');
+ expect(await firstProofActivation(h.db,{from:'2026-10-11T00:00:00Z',to:'2026-10-12T00:00:00Z',asOf:now.toISOString()})).toMatchObject({eligibleAccounts:1,matureAccounts:0,immatureAccounts:1,activatedAccounts:0,activationPercent:null});
+});

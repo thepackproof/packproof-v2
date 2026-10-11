@@ -16,6 +16,16 @@ test('empty and completed-only accounts recommend manual creation without a mark
   const model=selectTaskHome(input({proofs:[proof('done',{status:'FINALIZED',completed:true})]}));
   assert.equal(model.recommendation.kind,'create_proof');assert.equal(model.counts.completed,1);
 });
+test('empty requires reconciled online history and absence of all authorized local and order work',()=>{
+  assert.equal(selectTaskHome(input()).empty,true);
+  for(const override of [{reconciled:false},{online:false},{proofs:[proof('old')]},{captures:[capture('orphan','unknown')]},{jobs:[job('orphan','unknown')]},{orders:[{id:'order',proofId:'unknown',title:'Order',ready:false,authorized:true,createdAt:'2026-01-01'}]}])assert.equal(selectTaskHome(input(override)).empty,false);
+  assert.equal(selectTaskHome(input({captures:[capture('foreign','unknown',{authorized:false})]})).empty,true);
+  assert.equal(selectTaskHome(input()).recommendation.title,'Create a Proof','first-time wording additionally requires authoritative activation preferences');
+});
+test('submission continuation does not promise a second consent or premature completion',()=>{
+  const action=selectTaskHome(input({proofs:[proof('p',{action:'finalize',status:'EVIDENCE_COMMITTED'})]})).recommendation;
+  assert.equal(action.kind,'finalize_proof');assert.equal(action.buttonLabel,'Continue submission');assert.doesNotMatch(action.reason,/finalized|confirmation/i);
+});
 test('pristine linked orders enter rank five while a manual draft remains rank three',()=>{
   const state=input({proofs:[proof('order'),proof('manual')],orders:[{id:'order',proofId:'order',title:'Linked shipment',ready:true,authorized:true,createdAt:'2026-01-01'}]});
   assert.deepEqual(selectTaskHome(state).actions.map(a=>[a.targetId,a.rank]),[['manual',3],['order',5]]);

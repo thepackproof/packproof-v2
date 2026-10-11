@@ -246,6 +246,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
 
   return <>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
+    {import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true'&&phase==='ready'&&<div className="notice warning" role="status"><Icon name="warning"/><span>Your allowance has not been confirmed. You can save a recording on this computer while offline; submission still depends on server eligibility. Check your current plan before you start packing.</span></div>}
     {success&&<div className="notice success" role="status"><Icon name="check"/>{success}</div>}
     <div className="station-layout">
       <section className="station-main">

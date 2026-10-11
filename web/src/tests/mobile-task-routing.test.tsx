@@ -36,7 +36,7 @@ function mockApi(completedOnTap = false) {
 it("navigates Home to Pack and starts manual creation in one tap without integrations", async () => {
   const fetch = mockApi();
   render(<App />);
-  expect(await screen.findByRole("heading", { name: "Create your first Proof" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Create a Proof" })).toBeInTheDocument();
   fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("link", { name: "Pack" }));
   expect(await screen.findByRole("heading", { name: "Pack" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/pack");

@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { readDraft, saveDraft, pendingCreationRequest, sameCreationRequest } from "../first-experience/state";
 import type { IntakePreview } from "@packproof/copy/order-intake";
 import { IntakePanel } from "../components/IntakePanel";
 import type { EbaySellerOrderView, TransactionImportView, TransactionWriteInput } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { useBrowserOnline } from "../components/WorkstationHeader";
 export function CreateProofScreen(props: {
+  draftKey?: string;
   initialReference?: string;
   readyOrders?: ReactNode;
   busy: boolean;
@@ -27,33 +29,43 @@ export function CreateProofScreen(props: {
   onImportEbayOrder: (orderId: string) => Promise<TransactionImportView>;
   onConfirmImport: (transactionId: string) => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [reference, setReference] = useState(props.initialReference || "");
+  const [saved] = useState(() => readDraft<{ title: string; reference: string; description: string; currency: string; quantity: string; amount: string; carrier: string; tracking: string; intake: IntakePreview | null }>(props.draftKey));
+  const [title, setTitle] = useState(saved?.title || "");
+  const [reference, setReference] = useState(saved?.reference || props.initialReference || "");
   const online = useBrowserOnline();
-  const [description, setDescription] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [quantity, setQuantity] = useState("1");
-  const [amount, setAmount] = useState("");
-  const [carrier, setCarrier] = useState("");
-  const [tracking, setTracking] = useState("");
+  const [description, setDescription] = useState(saved?.description || "");
+  const [currency, setCurrency] = useState(saved?.currency || "USD");
+  const [quantity, setQuantity] = useState(saved?.quantity || "1");
+  const [amount, setAmount] = useState(saved?.amount || "");
+  const [carrier, setCarrier] = useState(saved?.carrier || "");
+  const [tracking, setTracking] = useState(saved?.tracking || "");
   const [paste, setPaste] = useState(false);
-  const [intake, setIntake] = useState<IntakePreview | null>(null);
+  const [intake, setIntake] = useState<IntakePreview | null>(saved?.intake || null);
+  const [draftSaved, setDraftSaved] = useState(true);
+  useEffect(() => {
+    if (props.draftKey) setDraftSaved(saveDraft(props.draftKey, { title, reference, description, currency, quantity, amount, carrier, tracking, intake }));
+  }, [props.draftKey, title, reference, description, currency, quantity, amount, carrier, tracking, intake]);
   const [gradingCount, setGradingCount] = useState("1");
   function reviewIntake(result: IntakePreview) { setIntake(result); setTitle(result.draft.itemTitle || ""); setReference(result.draft.externalReference || ""); setCurrency(result.draft.currency || "USD"); setQuantity(result.draft.quantity == null ? "1" : String(result.draft.quantity)); setAmount(result.draft.transactionValue == null ? "" : String(result.draft.transactionValue)); setCarrier(result.draft.shipping.carrier || ""); setTracking(result.draft.shipping.trackingNumber || ""); setPaste(false); }
   const quantityNumber = Math.max(1, Number.parseInt(quantity,10) || 1);
+  const request:TransactionWriteInput={itemTitle:title.trim(),externalReference:reference.trim()||null,itemDescription:description.trim()||null,currency:currency.trim()||null,quantity:quantity?Number(quantity):null,transactionValue:amount?Number(amount):null,shipping:{carrier:carrier.trim()||null,trackingNumber:tracking.trim()||null},...(intake?{metadata:{intake:{...intake.draft.metadata.intake,confirmed:true}}}:{})};
+  const pendingRequest=pendingCreationRequest(props.draftKey);
+  const changedPending=!!pendingRequest&&!sameCreationRequest(pendingRequest,request);
   return <main className="page narrow-page"><PageHeader title="Record shipment" onBack={props.onCancel} />
-    {!online && <p className="banner" role="status">A connection is needed to create this Proof before capture. Your entered details stay in this form while it is open.</p>}
+    {!online && <p className="banner" role="status">Connect before opening the camera. {props.draftKey && draftSaved ? "Your draft is saved in this browser for this account." : "Keep this form open to retain your entered details."}</p>}
+    {!draftSaved && <p className="banner" role="status">This browser could not save your draft. Keep this form open; your details may need to be entered again after closing it.</p>}
     {props.initialReference && <p className="note">Shipment reference: {props.initialReference}. Check the optional details before opening the camera.</p>}
     {props.readyOrders}
     {props.error ? <p role="alert" className="banner banner-error">{props.error}</p> : null}
+    {changedPending&&<section className="banner" aria-label="Pending creation recovery"><p>A creation request for <strong>{pendingRequest?.itemTitle||'this shipment'}</strong> may already have been saved. Changes in this form have not been sent.</p><button type="button" className="btn btn-secondary" disabled={props.busy||!online} onClick={()=>{if(pendingRequest)props.onCreate(pendingRequest);}}>Recover submitted draft</button><p>This resumes the original details so the same shipment does not get another Proof.</p></section>}
     {paste && props.onPreviewIntake ? (props.renderIntakePanel ? props.renderIntakePanel(reviewIntake) : <IntakePanel onPreview={props.onPreviewIntake} onReview={reviewIntake} />) : null}
-    <form className="stack" onSubmit={e => { e.preventDefault(); props.onCreate({itemTitle:title.trim(),externalReference:reference.trim() || null,itemDescription:description.trim() || null,currency:currency.trim() || null,quantity:quantity ? Number(quantity) : null,transactionValue:amount ? Number(amount) : null,shipping:{carrier:carrier.trim() || null,trackingNumber:tracking.trim() || null},...(intake ? {metadata:{intake:{...intake.draft.metadata.intake,confirmed:true}}} : {})}); }}>
+    <form className="stack" onSubmit={e => { e.preventDefault(); if(!changedPending)props.onCreate(request); }}>
       <label className="field"><span>What are you shipping?</span><input required maxLength={200} value={title} onChange={e => setTitle(e.target.value)} autoFocus /></label>
       <p>Show the shipping label during your packing video. PackProof will try to read it for you.</p>
       {intake ? <div className="note"><p>These details came from text you provided. Check them before recording.</p>{intake.warnings.map((warning,index)=><p key={index}>{warning}</p>)}<button className="btn btn-tertiary" type="button" onClick={()=>{setIntake(null);setTitle("");setReference("");setDescription("");setCurrency("USD");setQuantity("1");setAmount("");setCarrier("");setTracking("");}}>Clear pasted details</button></div> : null}
       {props.onPreviewIntake ? <button className="btn btn-tertiary" type="button" onClick={() => setPaste(!paste)}>Paste order or receipt</button> : null}
       <details open={Boolean(intake)}><summary>Optional details</summary><div className="stack">
-        <label className="field"><span>Order number (optional)</span><input placeholder="Store or marketplace order #" value={reference} onChange={e => setReference(e.target.value)} /></label>
+        <label className="field"><span>Your reference (optional)</span><input placeholder="A reference you provide" value={reference} onChange={e => setReference(e.target.value)} /></label>
         <label className="field"><span>Description</span><textarea value={description} onChange={e => setDescription(e.target.value)} /></label>
         <label className="field"><span>Currency</span><select value={currency} onChange={e=>setCurrency(e.target.value)}><option value="USD">USD</option><option value="CAD">CAD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="AUD">AUD</option></select></label>
         <div className="field"><span>Quantity</span><div className="row" style={{justifyContent:'flex-start'}}><button className="btn btn-tertiary" type="button" aria-label="Decrease quantity" disabled={quantityNumber <= 1} onClick={()=>setQuantity(String(Math.max(1,quantityNumber-1)))}>−</button><input style={{maxWidth:'8rem'}} aria-label="Quantity" type="number" min={1} step={1} value={quantity} onChange={e=>setQuantity(e.target.value)} /><button className="btn btn-tertiary" type="button" aria-label="Increase quantity" onClick={()=>setQuantity(String(quantityNumber+1))}>+</button></div></div>
@@ -61,7 +73,7 @@ export function CreateProofScreen(props: {
         <label className="field"><span>Carrier</span><input placeholder="USPS, UPS, FedEx…" value={carrier} onChange={e=>setCarrier(e.target.value)} /></label>
         <label className="field"><span>Tracking number</span><input value={tracking} onChange={e=>setTracking(e.target.value)} /></label>
       </div></details>
-      <button className="btn" disabled={props.busy || !title.trim() || !online} type="submit">{props.busy ? "Opening…" : "Open camera"}</button>
+      <button className="btn" disabled={props.busy || !title.trim() || !online || changedPending} type="submit">{props.busy ? "Opening…" : "Open camera"}</button>
     </form>
     <details><summary>Document a grading submission</summary>
       <label className="field"><span>Number of items</span><input value={gradingCount} onChange={e => setGradingCount(e.target.value)} type="number" min={1} max={50} step={1} /></label>

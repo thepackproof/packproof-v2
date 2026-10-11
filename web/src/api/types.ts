@@ -66,6 +66,8 @@ export interface TransactionView {
 }
 
 export interface TransactionWriteInput {
+  idempotencyKey?: string;
+  metadata?: unknown;
   externalReference?: string | null;
   transactionDate?: string | null;
   itemTitle?: string | null;

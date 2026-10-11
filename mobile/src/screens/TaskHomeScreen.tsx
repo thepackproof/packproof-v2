@@ -4,7 +4,8 @@ import { useTaskHome } from "../experience/use-task-home";
 import { formatDate } from "../copy/format";
 import { useTheme } from "../theme/ThemeProvider";
 import { typography } from "../theme/tokens";
-import { TutorialTarget } from "../onboarding/Onboarding";
+import { TutorialTarget, useFirstExperience } from "../onboarding/Onboarding";
+import { FIRST_PROOF_EXPERIENCE_ENABLED } from "../experience/first-proof";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { ErrorBanner } from "../ui/EmptyState";
@@ -13,6 +14,9 @@ import { WorkspaceHeader } from "../ui/WorkspaceHeader";
 
 export function TaskHomeScreen() {
   const app = usePackProof(), home = useTaskHome(), { colors } = useTheme();
+  const experience = useFirstExperience();
+  const quietHome = FIRST_PROOF_EXPERIENCE_ENABLED && home.empty;
+  const firstProof = quietHome && experience.status === "FIRST_PROOF";
   function library(view: "all" | "attention" | "completed") {
     app.setProofsView(view); app.setProofsQuery(""); app.setProofsRoleFilter("all"); app.setProofsCarrierFilter(null); app.go("proofs");
   }
@@ -25,23 +29,24 @@ export function TaskHomeScreen() {
           <View style={[styles.line, { backgroundColor: colors.surfaceElevated, width: "38%" }]} /><View style={[styles.titleLine, { backgroundColor: colors.surfaceElevated }]} /><View style={[styles.line, { backgroundColor: colors.surfaceElevated }]} /><View style={[styles.buttonPlaceholder, { backgroundColor: colors.surfaceElevated }]} />
         </View> : <>
           <Text style={[styles.state, { color: colors.accentText }]}>{action.sourceFreshness === "device" ? "Saved on this device" : action.kind === "create_proof" ? "Ready when you are" : "Your next action"}</Text>
-          <Text accessibilityRole="header" style={[styles.actionTitle, { color: colors.textPrimary }]}>{action.title}</Text>
+          <Text accessibilityRole="header" style={[styles.actionTitle, { color: colors.textPrimary }]}>{firstProof ? "Create your first Proof" : action.title}</Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>{action.reason}</Text>
           <TutorialTarget name="capture"><PressableScale accessibilityRole="button" accessibilityLabel={action.buttonLabel} accessibilityState={{ disabled: app.busy, busy: app.busy }} disabled={app.busy} onFocus={() => home.setInteracting(true)} onBlur={() => home.setInteracting(false)} onPressIn={() => home.setInteracting(true)} onPressOut={() => home.setInteracting(false)} onPress={() => void home.runAction(action)} style={[styles.primaryAction, { backgroundColor: app.busy ? colors.disabledBackground : colors.primary }]}>{app.busy ? <ActivityIndicator color={colors.disabledText} /> : <Text style={[typography.button, { color: colors.textOnPrimary, textAlign: "center" }]}>{action.buttonLabel}</Text>}</PressableScale></TutorialTarget>
         </>}
       </View>
+      {FIRST_PROOF_EXPERIENCE_ENABLED && !home.loading && action.kind === "create_proof" ? <Button label="See a sample Proof" variant="tertiary" onPress={() => app.go("sample")} /> : null}
       {home.loading || action.kind !== "create_proof" ? <TutorialTarget name="create"><Button label="Create Proof" icon="add-outline" variant="secondary" disabled={app.busy} onPress={() => app.go("create")} /></TutorialTarget> : null}
       {app.offline ? <Text style={[styles.body, { color: colors.warningText }]}>Offline. Saved work remains on this device. Connect before creating a Proof.</Text> : null}
       {home.freshnessLabel ? <Text accessibilityLiveRegion="polite" style={[styles.meta, { color: colors.textMuted }]}>{home.freshnessLabel}</Text> : null}
       <ErrorBanner message={home.error} />
       {home.error ? <Button label="Refresh your records" variant="tertiary" onPress={() => void home.refresh()} /> : null}
-      <View style={styles.metrics}>
+      {!quietHome && <View style={styles.metrics}>
         {[
           { label: "Needs attention", value: home.counts.attention, detail: "Records", onPress: () => library("attention") },
           { label: "Uploading", value: home.counts.uploading, detail: "Active jobs", onPress: () => app.go("activity", { activityFilter: "uploading" }) },
           { label: "Completed", value: home.counts.completed, detail: "All time", onPress: () => library("completed") },
         ].map(metric => <View key={metric.label} style={{ flex: 1 }}><PressableScale accessibilityRole="button" accessibilityLabel={`${metric.label}: ${home.loading ? "loading" : metric.value}. ${metric.detail}`} onPress={metric.onPress} style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.metricValue, { color: colors.textPrimary }]}>{home.loading ? "—" : metric.value}</Text><Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{metric.label}</Text><Text style={[styles.metricDetail, { color: colors.textMuted }]}>{metric.detail}</Text></PressableScale></View>)}
-      </View>
+      </View>}
       {home.counts.waiting > 0 ? <Button label={`${home.counts.waiting} ${home.counts.waiting === 1 ? "job" : "jobs"} ${app.offline ? "waiting for connection" : "waiting to upload"}`} variant="tertiary" onPress={() => app.go("activity", { activityFilter: "uploading" })} /> : null}
       {home.attention.length > 0 ? <TutorialTarget name="attention"><View style={styles.section}>
         <View style={styles.sectionHeading}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Needs attention</Text><Button label="View all" variant="tertiary" onPress={() => library("attention")} /></View>
@@ -51,13 +56,13 @@ export function TaskHomeScreen() {
           <Button label={next.buttonLabel} variant="tertiary" loading={app.busy} onPress={() => void home.runAction(next)} />
         </View>)}
       </View></TutorialTarget> : null}
-      <TutorialTarget name="proofs"><View style={styles.section}>
+      {!quietHome && <TutorialTarget name="proofs"><View style={styles.section}>
         <View style={styles.sectionHeading}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Recent Proofs</Text><Button label="View all" variant="tertiary" onPress={() => library("all")} /></View>
         {home.recent.map(proof => <PressableScale key={proof.proofId} accessibilityRole="button" accessibilityLabel={`${proof.transaction.itemTitle || "Shipment Proof"}. ${proof.presentation.displayStatus}. View Proof`} disabled={app.busy} onPress={() => void home.openProof(proof)} style={[styles.record, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <Text style={[styles.recordTitle, { color: colors.textPrimary }]}>{proof.transaction.itemTitle || "Shipment Proof"}</Text><Text style={[styles.body, { color: colors.textSecondary }]}>{proof.presentation.displayStatus}</Text><Text style={[styles.meta, { color: colors.textMuted }]}>Updated {formatDate(proof.updatedAt)}</Text>
         </PressableScale>)}
         {!home.loading && !home.recent.length ? <Text style={[styles.body, { color: colors.textSecondary }]}>{home.attention.length ? "Your other recent Proofs will appear here." : "Record the item, packing, seal and label in one continuous video. Your Proofs will appear here."}</Text> : null}
-      </View></TutorialTarget>
+      </View></TutorialTarget>}
     </View>
   </AppScreen>;
 }

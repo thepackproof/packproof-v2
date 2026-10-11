@@ -4,6 +4,7 @@ release/
 .env
 .env.*
 !.env.example
+!.env.production
 *.p12
 *.pfx
 artifacts/

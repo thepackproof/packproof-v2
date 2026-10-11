@@ -36,7 +36,7 @@ function client(handler:(path:string,method:string,body:unknown)=>unknown|Promis
     intakeRequest:vi.fn(async(path:string,method='GET',body?:unknown)=>handler(path,method,body)),
     getProof:vi.fn(async()=>({...canonicalProof,status:'READY_FOR_EVIDENCE',evidence:[],attestations:[],participationPolicy:'COUNTERPARTY_OPTIONAL'})),
     getCapabilities:vi.fn(async()=>({schemaVersion:1,capture:{protocolVersions:[1],maxBytes:1000000,maxDurationSeconds:120,maxActiveUploads:2},preservation:{receiptVersions:[1],durableReceiptsRequired:true},shippingReview:{requiredForObservedConflicts:true,noLabelAllowed:true},correctionPolicy:{importedFactsReadOnly:true,captureBindingLocksManualDetails:true},sellerAttestation:{contextBindingVersion:1}})),
-    createCaptureSession:vi.fn(async()=>({id:'legacy-capture',state:'ISSUED'})),
+    createCaptureSession:vi.fn(async()=>({id:'legacy-capture',state:'ISSUED',maxRecordingBytes:250000000,maxRecordingSeconds:300})),
     featureRequest:vi.fn(async()=>({cancelled:true})),
     getCaptureShippingReview:vi.fn(async()=>({currentTrackingNumber:null,reviewRequired:false,observations:[]})),
   };
@@ -54,7 +54,7 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 
 it('records the displayed multi-item snapshot in one deliberate action and retains it after consuming navigation intent',async()=>{
-  const api=client(path=>path==='/capabilities'?caps:path==='/orders'?{orders:[ready]}:path==='/orders/snapshot%2Fone/capture'?{session:{id:'accepted-capture',state:'ISSUED'}}:Promise.reject(new Error(`Unexpected ${path}`)));
+  const api=client(path=>path==='/capabilities'?caps:path==='/orders'?{orders:[ready]}:path==='/orders/snapshot%2Fone/capture'?{session:{id:'accepted-capture',state:'ISSUED',maxRecordingBytes:250000000,maxRecordingSeconds:300}}:Promise.reject(new Error(`Unexpected ${path}`)));
   const consumed=vi.fn();
   function Flow(){const [recording,setRecording]=useState(false),[accepted,setAccepted]=useState<IntakeSnapshot|null>(null);
     return recording?<PackingStationScreen api={api as unknown as PackProofApi} userId={owner} initialProofId={snapshot.proofId} acceptedIntakeSnapshot={accepted} onIntakeIntentConsumed={()=>{consumed();setAccepted(null);}} queue={[]} error={null} onAuthExpired={()=>{}}/>:<ReadyIntakeOrders api={api as unknown as PackProofApi} userId={owner} onRecord={value=>{setAccepted(value);setRecording(true);}}/>;
@@ -72,7 +72,7 @@ it('records the displayed multi-item snapshot in one deliberate action and retai
 
 it('retains the remaining-shipment limit from the ready checklist through recording review',async()=>{
   const remaining = { ...snapshot, fulfillmentScope: 'REMAINING_SHIPMENT' };
-  const api=client(path=>path==='/capabilities'?caps:path==='/orders'?{orders:[{...ready,snapshot:remaining}]}:path==='/orders/snapshot%2Fone/capture'?{session:{id:'remaining-capture',state:'ISSUED'}}:Promise.reject(new Error(`Unexpected ${path}`)));
+  const api=client(path=>path==='/capabilities'?caps:path==='/orders'?{orders:[{...ready,snapshot:remaining}]}:path==='/orders/snapshot%2Fone/capture'?{session:{id:'remaining-capture',state:'ISSUED',maxRecordingBytes:250000000,maxRecordingSeconds:300}}:Promise.reject(new Error(`Unexpected ${path}`)));
   function Flow(){const [accepted,setAccepted]=useState<IntakeSnapshot|null>(null),[recording,setRecording]=useState(false);
     return recording?<PackingStationScreen api={api as unknown as PackProofApi} userId={owner} initialProofId={snapshot.proofId} acceptedIntakeSnapshot={accepted} onIntakeIntentConsumed={()=>setAccepted(null)} queue={[]} error={null} onAuthExpired={()=>{}}/>:<ReadyIntakeOrders api={api as unknown as PackProofApi} userId={owner} onRecord={value=>{setAccepted(value);setRecording(true);}}/>;
   }
@@ -157,7 +157,7 @@ it.each([true,false])('retries camera startup without losing accepted order cont
     if(path==='/orders/snapshot%2Fone/capture'){
       captures.push(body as {idempotencyKey:string;client:string});
       if(!cancellationConfirmed&&captures.length===2)return{session:{id:'unused-capture',state:'CANCELLED'}};
-      return{session:{id:captures.length===1?'unused-capture':'retry-capture',state:'ISSUED'}};
+      return{session:{id:captures.length===1?'unused-capture':'retry-capture',state:'ISSUED',maxRecordingBytes:250000000,maxRecordingSeconds:300}};
     }
     throw new Error(`Unexpected ${path}`);
   });

@@ -167,6 +167,7 @@ module.exports = {
         projectId: "0196c3f7-cb3a-472c-99be-825558f227e8",
       },
       packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
+      packproofFirstProofExperience: env("EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE") === "true",
       ...(buildSourceSha ? { packproofBuildSha: buildSourceSha } : {}),
       ...(isProductionRelease ? { packproofMobileTaskUx: mobileTaskUxEnabled } : {}),
       ...(isMobileUxReview || isIosSimulatorReview ? { packproofInternalReview: true, packproofMobileTaskUx: env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX") === "true" } : {}),

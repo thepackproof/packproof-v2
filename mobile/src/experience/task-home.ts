@@ -39,7 +39,7 @@ export function selectTaskHome(input:HomeInput) {
     if (!input.online || !input.reconciled) continue;
     if(p.action==='capture' && readyOrders.has(p.id))continue;
     if (p.action==='capture' || p.action==='continue') add(p,'continue_proof',3,'Continue Proof','Continue the next available step for this Proof.');
-    else if (p.action==='finalize') add(p,'finalize_proof',4,'Finalize Proof','Committed evidence is ready for the required confirmation.');
+    else if (p.action==='finalize') add(p,'finalize_proof',4,'Continue submission','Check the saved submission and continue its required next step.');
   }
   if (input.online && input.reconciled) for (const order of input.orders) {
     const p=proofs.get(order.proofId);
@@ -48,8 +48,10 @@ export function selectTaskHome(input:HomeInput) {
   }
   actions.sort((a,b)=>a.rank-b.rank || Number(b.targetId===input.selection)-Number(a.targetId===input.selection) || (input.interactions?.[b.targetId!] ?? 0)-(input.interactions?.[a.targetId!] ?? 0) || time(proofs.get(a.targetId!)!.createdAt)-time(proofs.get(b.targetId!)!.createdAt) || a.targetId!.localeCompare(b.targetId!) || (a.sessionId??'').localeCompare(b.sessionId??''));
   for (const action of actions) action.count=actions.filter(other=>other.kind===action.kind).length;
-  const create:HomeAction={kind:'create_proof',targetId:null,rank:6,title:!proofs.size && input.reconciled?'Create your first Proof':'Create a Proof',reason:input.online?'Record the item, packing, seal, and label in one continuous video.':'Connect before creating a Proof. Your saved work remains available.',buttonLabel:'Create Proof',count:1,sourceFreshness:input.reconciled?'server':'unknown'};
-  return {creation:create,recommendation:actions.find(a=>a.rank<6) ?? (actions.find(a=>a.kind==='reconcile') || create), actions, counts:{attention:attentionIds.size,uploading:jobs.filter(j=>j.active).length,waiting:jobs.filter(j=>j.waiting&&!j.active).length,completed:[...proofs.values()].filter(p=>p.status==='FINALIZED'&&p.completed).length}};
+  // Orphaned local work still prevents an empty-account claim, even if its server row is unavailable.
+  const empty = input.online && input.reconciled && proofs.size===0 && !input.captures.some(c=>c.authorized) && !input.jobs.some(j=>j.authorized) && !input.orders.some(o=>o.authorized);
+  const create:HomeAction={kind:'create_proof',targetId:null,rank:6,title:'Create a Proof',reason:input.online?'Record your item as you pack and seal it, then keep the evidence together.':'Connect before creating a Proof. Your saved work remains available.',buttonLabel:'Create Proof',count:1,sourceFreshness:input.reconciled?'server':'unknown'};
+  return {empty,creation:create,recommendation:actions.find(a=>a.rank<6) ?? (actions.find(a=>a.kind==='reconcile') || create), actions, counts:{attention:attentionIds.size,uploading:jobs.filter(j=>j.active).length,waiting:jobs.filter(j=>j.waiting&&!j.active).length,completed:[...proofs.values()].filter(p=>p.status==='FINALIZED'&&p.completed).length}};
 }
 
 /** Pin a still-valid target during focus/press; never retain a target which became invalid. */
