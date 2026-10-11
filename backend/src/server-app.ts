@@ -1,5 +1,7 @@
 import { disclosureContextForLink } from "./domain/disclosure.js";
 import express, { type Express, type Request, type Response } from "express";
+import { rateLimit } from "express-rate-limit";
+import { ingressRateLimitOptions, ingressRatePolicies } from "./http/ingress-rate-limit.js";
 import { createApp, type AppDependencies } from "./app.js";
 import { httpBoundary, requestBodyErrors, requestCorrelation, configureTrustedProxy, distributedRateLimit, safeHttpError } from "./http/boundary.js";
 import { DomainError } from "./domain/errors.js";
@@ -56,6 +58,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
   server.use(requestCorrelation);
   server.use(httpBoundary(deps.corsOrigins ?? []));
   server.use("/public/proofs/:token/email-subscription", distributedRateLimit(deps.db,{scope:"public-subscription",limit:60,windowMs:60_000}));
+  server.use("/proofs/:id/email-subscriptions", rateLimit(ingressRateLimitOptions(deps.db, ingressRatePolicies.subscriptions)));
 
   const credentialStore = deps.credentialStore ?? new MemoryCredentialStore();
   const ebay = deps.ebay ?? disabledEbayRuntime();
@@ -71,6 +74,7 @@ export function createServerApp(deps: ServerAppDependencies): Express {
 
   server.post(
     "/integrations/webhooks/ebay/account-deletion",
+    rateLimit(ingressRateLimitOptions(deps.db, ingressRatePolicies.ebayDeletion)),
     express.raw({ type: () => true, limit: "256kb" }),
     async (req, res) => {
       try {

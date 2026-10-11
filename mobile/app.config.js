@@ -43,8 +43,8 @@ const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "56"));
 if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 53 || androidVersionCode > 2100000000)
   throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 52");
 if (isProductionRelease) {
-  // Build 56 is the verified Play baseline; 57 identifies the internal APK.
-  if (androidVersionCode < 58) throw new Error("Production Android versionCode must be at least 58");
+  // Build 58 is live on Play; the next production update must advance it.
+  if (androidVersionCode < 59) throw new Error("Production Android versionCode must be at least 59");
   if (env("EAS_BUILD_PLATFORM") && env("EAS_BUILD_PLATFORM") !== "android") {
     throw new Error("The production profile is for Android only");
   }

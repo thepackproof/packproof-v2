@@ -1,5 +1,7 @@
 import { afterAll,beforeAll,describe,expect,it } from 'vitest';
 import express, {type NextFunction,type Request,type Response} from 'express';
+import {rateLimit} from 'express-rate-limit';
+import {ingressRateLimitOptions,ingressRatePolicies} from '../src/http/ingress-rate-limit.js';
 import request from 'supertest';
 import {createPgliteDatabase} from '../src/db/pglite.js';
 import {migrate} from '../src/db/migrate.js';
@@ -22,7 +24,9 @@ let opened:Awaited<ReturnType<typeof createPgliteDatabase>>,admin:string,app:Ret
 const bearer=(id:string)=>({Authorization:`Bearer ${id}`});
 const command=(id:string,operationId:string,expectedVersion=0)=>({operationId,reason:'Reviewed support request',confirmation:id,expectedVersion});
 function buildApp(devAuth=true,authenticatedAt?:number){
- const result=express();result.use(express.json());const auth=new BearerUserAdapter(opened.db);
+ const result=express();
+ result.use(rateLimit(ingressRateLimitOptions(opened.db,ingressRatePolicies.firstPartyAuth)));
+ result.use(express.json());const auth=new BearerUserAdapter(opened.db);
  result.use((req:Request,_res:Response,next:NextFunction)=>{void auth.authenticate(req.headers).then(context=>{req.packproofUserId=context.userId;req.packproofAuth={...context,authenticatedAt};next();}).catch(next);});
  result.use('/admin',requireSystemAdmin({db:opened.db,clock}),adminActionsRouter({db:opened.db,clock,devAuth}));
  result.use((err:any,_req:Request,res:Response,_next:NextFunction)=>res.status(err.httpStatus??500).json({error:{code:err.code??'INTERNAL',message:err.message}}));return result;

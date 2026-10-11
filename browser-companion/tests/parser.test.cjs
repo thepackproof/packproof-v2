@@ -22,7 +22,17 @@ test('production adapter fails closed before any page scraping until an actual f
 test('synthetic complete multi-item fixture preserves data as plain strings', () => {
   const result = fixture().PackProofPageParser.extractPage(descriptor);
   assert.equal(result.ok, true); assert.equal(result.observation.items.length, 2); assert.equal(result.observation.items[0].quantity, 2);
-  assert.equal(result.observation.items[0].variant, 'Foil'); assert.match(result.sourceExcerpt, /<script>/);
+  assert.equal(result.observation.items[0].variant, 'Foil');
+  assert.equal(result.observation.items[0].title, 'Card <script>alert(1)</script>');
+  assert.equal(JSON.parse(result.sourceExcerpt).items[0].title, result.observation.items[0].title);
+});
+test('markup-like visible text is preserved verbatim without HTML filtering or execution', () => {
+  for (const title of ['Card <SCRIPT>alert(1)</SCRIPT >', '<script>Item: Wrong</script foo="bar">', '<scr<script>ipt>nested</script>', 'Card &lt;script&gt;']) {
+    const result = fixture({ title }).PackProofPageParser.extractPage(descriptor);
+    assert.equal(result.ok, true);
+    assert.equal(result.observation.items[0].title, title);
+    assert.equal(JSON.parse(result.sourceExcerpt).items[0].title, title);
+  }
 });
 test('unknown quantities, hidden lines, multiple selected orders and wrong origins fail closed', () => {
   for (const options of [{ qty: '' }, { qty: '2 boxes' }, { hidden: true }, { duplicate: true }, { title: 'x'.repeat(1001) }]) assert.equal(fixture(options).PackProofPageParser.extractPage(descriptor).ok, false);

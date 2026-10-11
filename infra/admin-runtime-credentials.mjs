@@ -30,6 +30,34 @@ export function parseArguments(args){
   return{mode:args[0],sourceSha:args[1],schemaSha256:args[2],rolesSqlSha256:args[3],rolesSqlPath:args[4]};
 }
 
+// Consume each character once: nested whitespace/option repetitions can otherwise
+// backtrack exponentially when a long, almost-valid value has an invalid suffix.
+function reviewedSessionOptions(options){
+  if(!options)return true;
+  const names=['statement_timeout=','lock_timeout=','idle_in_transaction_session_timeout='];
+  let cursor=0,count=0;
+  const whitespace=()=>cursor<options.length&&/\s/.test(options[cursor]);
+  while(cursor<options.length){
+    while(whitespace())cursor++;
+    if(cursor===options.length)return count>0;
+    if(!options.startsWith('-c',cursor))return false;
+    cursor+=2;
+    if(!whitespace())return false;
+    while(whitespace())cursor++;
+    const name=names.find(candidate=>options.startsWith(candidate,cursor));
+    if(!name)return false;
+    cursor+=name.length;
+    const numberStart=cursor;
+    while(cursor<options.length&&options[cursor]>='0'&&options[cursor]<='9')cursor++;
+    if(cursor===numberStart)return false;
+    if(options.startsWith('min',cursor))cursor+=3;
+    else if(options.startsWith('ms',cursor))cursor+=2;
+    else if(options[cursor]==='s')cursor++;
+    count++;
+  }
+  return count>0;
+}
+
 function databaseUrl(value,username){
   let url;try{url=new URL(value);}catch{fail('INVALID_DATABASE_COORDINATES');}
   if(!['postgres:','postgresql:'].includes(url.protocol)||!url.hostname||url.pathname.length<2||url.hash)fail('INVALID_DATABASE_COORDINATES');
@@ -41,7 +69,7 @@ function databaseUrl(value,username){
   const keys=[...url.searchParams.keys()];
   if(keys.some(key=>!allowed.has(key))||new Set(keys).size!==keys.length)fail('UNREVIEWED_DATABASE_URL_OPTION');
   const options=url.searchParams.get('options')??'';
-  if(options&& !/^(?:\s*-c\s+(?:statement_timeout|lock_timeout|idle_in_transaction_session_timeout)=\d+(?:ms|s|min)?\s*)+$/.test(options))fail('UNREVIEWED_DATABASE_SESSION_OPTION');
+  if(!reviewedSessionOptions(options))fail('UNREVIEWED_DATABASE_SESSION_OPTION');
   return url;
 }
 
