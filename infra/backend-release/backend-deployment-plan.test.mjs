@@ -42,6 +42,9 @@ for(const [name,modify] of [
 ]) test(`rejects ${name}`,()=>{const {snapshot,candidate}=fixture();modify(snapshot);assert.throws(()=>makePlan(snapshot,candidate));});
 for(const [name,modify] of [
   ['mutable tag',c=>{c.image=`${TARGET.repository}:latest`;}],
+  ['lookalike repository hostname',c=>{c.image=`${TARGET.repository.replace('.amazonaws.com','-amazonaws.com')}@sha256:${'b'.repeat(64)}`;}],
+  ['untrusted repository suffix',c=>{c.image=`${TARGET.repository}.example.invalid@sha256:${'b'.repeat(64)}`;}],
+  ['digest suffix',c=>{c.image=`${TARGET.repository}@sha256:${'b'.repeat(64)}?unexpected`;}],
   ['stale baseline',c=>{c.expectedPreviousTaskDefinition='old:1';}],
   ['missing database gate',c=>{c.databasePreflightPassed=false;}],
   ['missing source proof',c=>{c.sourceArchiveVerified=false;}],

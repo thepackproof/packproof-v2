@@ -34,8 +34,9 @@ export function makePlan(snapshot, candidate) {
   if (env.PACKPROOF_ENVIRONMENT !== 'staging' || !env.PACKPROOF_WEB_ORIGINS || !env.PACKPROOF_PUBLIC_URL) fail('RUNTIME_CONTEXT_MISSING');
   if (releaseNames.some(name => !Object.hasOwn(env, name))) fail('RELEASE_BINDINGS_MISSING');
   if (snapshot.meta.commit !== env.PACKPROOF_RELEASE_SHA || snapshot.meta.image !== env.PACKPROOF_RELEASE_IMAGE || snapshot.meta.version !== env.PACKPROOF_RELEASE_VERSION || snapshot.meta.image !== original.image) fail('PUBLIC_CONTROL_PLANE_IDENTITY_MISMATCH');
-  const imagePattern = new RegExp(`^${TARGET.repository.replaceAll('.', '\\.')}@sha256:[a-f0-9]{64}$`);
-  if (!imagePattern.test(original.image) || !imagePattern.test(candidate.image)) fail('IMMUTABLE_IMAGE_REQUIRED');
+  const imagePrefix = `${TARGET.repository}@sha256:`;
+  const immutableImage = value => typeof value === 'string' && value.startsWith(imagePrefix) && /^[a-f0-9]{64}$/.test(value.slice(imagePrefix.length));
+  if (!immutableImage(original.image) || !immutableImage(candidate.image)) fail('IMMUTABLE_IMAGE_REQUIRED');
   if (!/^[a-f0-9]{40}$/.test(candidate.sourceSha) || candidate.sourceSha === snapshot.meta.commit || !/^[A-Za-z0-9._-]{1,100}$/.test(candidate.version)) fail('INVALID_CANDIDATE_IDENTITY');
   if (candidate.expectedPreviousImage !== original.image || candidate.expectedPreviousTaskDefinition !== snapshot.service.taskDefinition) fail('PREDECESSOR_MISMATCH');
   if (candidate.ciPassed !== true || candidate.databasePreflightPassed !== true || candidate.sourceArchiveVerified !== true) fail('RELEASE_GATES_INCOMPLETE');
