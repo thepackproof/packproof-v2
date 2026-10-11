@@ -1,7 +1,7 @@
 import {defineConfig} from 'vite';
 import react from '@vitejs/plugin-react';
 import {resolve} from 'node:path';
-export default defineConfig({base:'./',plugins:[react()],build:{outDir:'dist/renderer',emptyOutDir:true},worker:{format:'es'},resolve:{alias:[
+export default defineConfig({base:'./',plugins:[react()],esbuild:{tsconfigRaw:JSON.stringify({compilerOptions:{jsx:'react-jsx',useDefineForClassFields:true}})},build:{outDir:'dist/renderer',emptyOutDir:true},worker:{format:'es'},resolve:{alias:[
  {find:'@packproof/copy',replacement:resolve(__dirname,'../mobile/src/copy')},
  {find:/^zxing-wasm\/reader\/zxing_reader\.wasm(\?.*)?$/,replacement:resolve(__dirname,'node_modules/zxing-wasm/dist/reader/zxing_reader.wasm')+'$1'},
  {find:/^zxing-wasm\/reader$/,replacement:resolve(__dirname,'node_modules/zxing-wasm/dist/es/reader/index.js')},
