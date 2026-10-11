@@ -131,6 +131,7 @@ describe("PackProof web reference client", () => {
     await clearStationCapture("user_seller");
     window.history.replaceState(null, "", "/proofs");
     sessionStorage.clear();
+    localStorage.clear();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, _init?:RequestInit) => {

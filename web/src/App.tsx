@@ -1,4 +1,5 @@
 import { firstProofExperienceEnabled, draftStorageKey, creationOperation, completeCreation, rejectCreationValidation, type ExperienceState } from './first-experience/state';
+import { clearReauthenticationTask, readReauthenticationTask, reauthenticationDestination, retainReauthenticationTask } from './first-experience/auth-return';
 import { selectFirstExperience } from '../../packages/onboarding/model';
 import { SampleProof } from './site/SampleProof';
 import { Onboarding } from "./onboarding/Onboarding";
@@ -317,6 +318,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   const [experienceState, setExperienceState] = useState<ExperienceState>(null);
   const [homeReconciled, setHomeReconciled] = useState(false);
   const createPending = useRef(false);
+  const reauthenticationTask = useRef(readReauthenticationTask());
   const [captureActive, setCaptureActive] = useState(false);
   const [homeProofs, setHomeProofs] = useState<ProofCollectionItem[]>([]);
   const [homeRefreshedAt, setHomeRefreshedAt] = useState<string | null>(null);
@@ -449,7 +451,14 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     [api, proof],
   );
 
-  function signOut() {
+  function signOut(expired = false) {
+    const previousSession = sessionRef.current;
+    if (expired === true && previousSession) {
+      reauthenticationTask.current = retainReauthenticationTask(previousSession, window.location.pathname + window.location.search);
+    } else {
+      reauthenticationTask.current = null;
+      clearReauthenticationTask();
+    }
     setHomeProofs([]); setHomeRefreshedAt(null); setTaskNotice(null); setTaskSelection(undefined); setTaskInteractions({}); setCaptureActive(false);
     setAcceptedIntakeSnapshot(null);
     sessionRef.current = null;
@@ -470,8 +479,9 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     setConnectedProviders([]);
     setConnectedNotice(null);
     setError(null);
-    writePath("/");
-    setRoute({ name: "proofs", view: "attention", query: "" });
+    const destination = expired === true && reauthenticationTask.current ? reauthenticationTask.current.path : "/";
+    writePath(destination);
+    setRoute(parseHref(destination));
   }
 
   function go(path: string) {
@@ -534,7 +544,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
   function handleError(caught: unknown): string {
     if (caught instanceof ApiError && caught.status === 401) {
-      signOut();
+      signOut(true);
       return "Session expired. Sign in again.";
     }
     if (caught instanceof ApiError && caught.code === "PARTICIPANT_NOT_AUTHORIZED") {
@@ -832,9 +842,13 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             sessionRef.current = next;
             tokenRef.current = next.token;
             setSession(next);
-            const authReturn = sessionStorage.getItem("packproof.auth-return");
-            sessionStorage.removeItem("packproof.auth-return");
+            let authReturn: string | null = null;
+            try { authReturn = sessionStorage.getItem("packproof.auth-return"); sessionStorage.removeItem("packproof.auth-return"); } catch { /* Optional return state must not block sign-in. */ }
+            const expiredTask = reauthenticationTask.current;
+            reauthenticationTask.current = null;
+            clearReauthenticationTask();
             if (authReturn === "/new/delete-account") go(authReturn);
+            else if (expiredTask) go(reauthenticationDestination(expiredTask, next));
             else if (["/login", "/signup", "/"].includes(window.location.pathname)) go("/app");
             // Keep the requested Proof or receiver invitation through sign-in.
             // The current route is already guarded until the session/profile is ready.
@@ -1023,7 +1037,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {route.name === "create" ? (
         <CreateProofScreen
           key={`${session.apiBaseUrl}:${session.userId}:${route.reference || ""}`}
-          draftKey={firstExperience ? draftStorageKey(session.apiBaseUrl, session.userId, route.reference) : undefined}
+          draftKey={draftStorageKey(session.apiBaseUrl, session.userId, route.reference)}
           initialReference={route.reference}
           readyOrders={<ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />}
           onPreviewIntake={(text) => api.previewOrderIntake(text)}
@@ -1086,14 +1100,14 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             createPending.current = true; setBusy(true); setError(null);
             const key = draftStorageKey(session.apiBaseUrl, session.userId, route.reference);
             const actor = session.userId, scope = session.apiBaseUrl;
-            void Promise.resolve().then(() => api.createTransaction(firstExperience ? { ...input, idempotencyKey: creationOperation(key,input) } : input).catch(caught=>{
-              if(firstExperience&&caught instanceof ApiError&&caught.status===400)rejectCreationValidation(key);
+            void Promise.resolve().then(() => api.createTransaction({ ...input, idempotencyKey: creationOperation(key,input) }).catch(caught=>{
+              if(caught instanceof ApiError&&caught.status===400)rejectCreationValidation(key);
               throw caught;
             }))
               .then((txn) => api.createOrGetProof(txn.transactionId))
               .then((created) => {
                 if (sessionRef.current?.userId !== actor || sessionRef.current?.apiBaseUrl !== scope) return;
-                if (firstExperience) completeCreation(key);
+                completeCreation(key);
                 go(`/proofs/${encodeURIComponent(created.proofId)}/capture`);
               })
               .catch((caught) => { if (sessionRef.current?.userId === actor && sessionRef.current?.apiBaseUrl === scope) setError(handleError(caught)); })

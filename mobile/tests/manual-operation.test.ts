@@ -4,7 +4,12 @@ import {manualDraftMatches,type ManualOperation} from '../src/experience/manual-
 import {EMPTY_FORM} from '../src/copy/forms.ts';
 test('an uncertain create retains the exact request and rejects a different draft until recovered',()=>{
   const form={...EMPTY_FORM,itemTitle:'Ceramic mug'};
-  const operation:ManualOperation={fingerprint:'original',key:'operation_123',form,request:{itemTitle:'Ceramic mug',metadata:{intake:{source:'PROVIDED_TEXT'}}}};
+  const operation:ManualOperation={
+    fingerprint:'original',
+    key:'test-only-id',
+    form,
+    request:{itemTitle:'Ceramic mug',metadata:{intake:{source:'PROVIDED_TEXT'}}},
+  };
   assert.equal(manualDraftMatches(null,form),true);
   assert.equal(manualDraftMatches(operation,{...form}),true);
   assert.equal(manualDraftMatches(operation,{...form,itemTitle:'Another item'}),false);
