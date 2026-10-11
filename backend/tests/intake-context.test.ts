@@ -3,7 +3,7 @@ import { upsertCommerceOrderRecord,bindCommerceOrderTransaction } from '../src/d
 import { afterEach,beforeEach,describe,expect,it } from 'vitest';
 import { createHarness,createUser,commitFulfillmentAndAttest,type TestHarness } from './helpers.js';
 import { submitIntakeObservation,listIntakeOrders,readApprovedIntakeSnapshot,assertIntakeFinalizeContext,prepareExistingIntakeOrder,admitIntakeProofContract,resolveIntakeIssue,normalizeIntakeObservation,type IntakeObservationInput,type IntakeScope } from '../src/intake/context.js';
-import { createCaptureSession } from '../src/domain/capture-sessions.js';
+import { createCaptureSession, admitDesktopCapture } from '../src/domain/capture-sessions.js';
 import { finalizeProof } from '../src/domain/finalize.js';
 import { createTransaction } from '../src/domain/transactions.js';
 import { createOrGetProof } from '../src/domain/create-proof.js';
@@ -64,6 +64,7 @@ describe('immutable shared order intake contract',()=>{
   const resolved=await resolveIntakeIssue(h.db,h.clock,actor,incomplete.observationId,{receiptId:'complete-order',items:[{title:'Lens',quantity:1}],physicalFulfillment:true,paid:true,fulfillmentScope:'FULL_ORDER',reason:'Confirmed the purchase details'});expect(resolved.readiness).toBe('READY');
   await createCaptureSession(h.db,h.clock,actor,resolved.proofId!,{client:'NATIVE_CAMERA',idempotencyKey:'one'});
   await expect(createCaptureSession(h.db,h.clock,actor,resolved.proofId!,{client:'WEB_CAMERA',idempotencyKey:'two'})).rejects.toMatchObject({code:'INTAKE_CAPTURE_IN_PROGRESS'});
+  await expect(admitDesktopCapture(h.db,h.clock,actor,resolved.proofId!)).rejects.toMatchObject({code:'INTAKE_CAPTURE_IN_PROGRESS'});
  });
  it('prepares actual CONFIRMED commerce orders and permits FULFILLED progression only after accepted packing',async()=>{
   const imported=await importNormalizedTransaction(h.db,h.clock,actor,{provider:'ebay',externalAccountReference:'seller-store',externalTransactionId:'provider-order',transactionDate:null,itemTitle:'Lens',itemDescription:null,quantity:1,transactionValue:null,currency:null,items:[{title:'Lens',quantity:1}],shipping:null,provenance:{source:'MARKETPLACE_API',importedAt:h.clock.now().toISOString()}},{createProof:true});

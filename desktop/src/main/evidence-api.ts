@@ -1,15 +1,12 @@
 import { DesktopApi, DesktopApiError } from './api.js';
 import type { EvidenceTransport, UploadReceipt, CaptureAuthorization } from './evidence/types.js';
-
-const LOCAL_LIMITS: CaptureAuthorization = { maxRecordingBytes: 250_000_000, maxRecordingSeconds: 300 };
+import {desktopCaptureAllowance} from './capture-allowance.js';
 
 /** Bridges the durable queue to authoritative PackProof commands; never invents a remote receipt. */
 export class DesktopEvidenceTransport implements EvidenceTransport {
   constructor(private readonly api: DesktopApi) {}
   async authorizeCapture(input: Parameters<EvidenceTransport['authorizeCapture']>[0], signal: AbortSignal): Promise<CaptureAuthorization> {
-    this.api.assertAccount(input.accountId); signal.throwIfAborted();
-    // Local capture is useful offline. It conveys no server permission or billing reservation.
-    return { ...LOCAL_LIMITS };
+    return desktopCaptureAllowance(this.api,input.proofId,input.accountId,input.offline===true,signal);
   }
   async registerCapture(input: Parameters<EvidenceTransport['registerCapture']>[0], signal: AbortSignal): Promise<CaptureAuthorization> {
     this.api.assertAccount(input.accountId);

@@ -1,3 +1,5 @@
+import { readCurrentProof } from './current-proof';
+import {desktopCaptureAllowance} from './capture-allowance';
 import {app,BrowserWindow,protocol,net,session,ipcMain,dialog,shell,Tray,Menu,nativeImage,Notification,powerSaveBlocker,powerMonitor} from 'electron';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {join,resolve,extname,sep} from 'node:path';
@@ -71,6 +73,7 @@ function setupIpc(){
  handle('auth.signOut',schemas.empty,async()=>{if(engine?.activeCapture)throw new Error('Finish recording before signing out.');await engine?.setAccount(null);revokeMedia();await auth?.signOut();emit({type:'session'});});
  const account=()=>{if(!auth)throw new Error('This desktop build needs PackProof service configuration.');return auth;};
  handle('auth.signUp',schemas.login,i=>account().signUp(i));handle('auth.confirmSignUp',schemas.code,i=>account().confirmSignUp(i));handle('auth.resendCode',schemas.email,e=>account().resendConfirmation(e));handle('auth.forgotPassword',schemas.email,e=>account().forgotPassword(e));handle('auth.resetPassword',schemas.reset,i=>account().confirmForgotPassword(i));
+ handle('proofs.current',schemas.currentProof,(id,owner)=>readCurrentProof(requireApi(),id,owner));
  handle('proofs.scope',schemas.id,owner=>{requireApi().assertAccount(owner);return config!.apiBaseUrl;});handle('proofs.list',schemas.empty,()=>cached('proof-list',()=>requireApi().listProofs()));handle('proofs.detail',schemas.id,id=>cached('proof-'+id,()=>requireApi().getProof(id)));handle('proofs.create',schemas.transaction,(i,owner)=>requireApi().createProof(i,owner));handle('proofs.finalize',schemas.id,async id=>(await requireApi().finalizeProof(id)).proof);
  handle('proofs.sharePreview',schemas.id,async id=>{
   const client=requireApi(),scope={accountId:auth!.getAccountId()!,epoch:sessionEpoch};
@@ -112,7 +115,10 @@ function setupIpc(){
   if(current())notify('Marketplace synchronization complete','Your fulfillment queue is ready to refresh.');
  });
  handle('integrations.list',schemas.empty,()=>requireApi().listConnectedAccounts());handle('integrations.connect',schemas.resolve,async()=>{await external(integrationManagementUrl(config?.webBaseUrl??'https://thepackproof.com'));});
- handle('capture.begin',schemas.capture,async i=>{const captureAccount=auth?.getAccountId();const captureEpoch=sessionEpoch;const proof=await cached('proof-'+i.proofId,()=>requireApi().getProof(i.proofId));if(captureEpoch!==sessionEpoch||captureAccount!==auth?.getAccountId())throw new Error('Your account changed. Select the shipment again.');if(proof.status==='FINALIZED')throw new Error('This Proof is finalized. Its evidence cannot be changed.');const job=await requireEngine().beginCapture({...i,offline:!online,appVersion:app.getVersion(),installationId});if(blocker===null)blocker=powerSaveBlocker.start('prevent-app-suspension');return {id:job.id,maxRecordingBytes:job.maxRecordingBytes,maxRecordingSeconds:job.maxRecordingSeconds};});
+ // Cached reads also tolerate service errors; only the OS network state can grant
+ // unconfirmed offline recording. HTTP failures never become allowance approval.
+ handle('capture.preflight',schemas.currentProof,(id,owner)=>desktopCaptureAllowance(requireApi(),id,owner,!net.isOnline()));
+ handle('capture.begin',schemas.capture,async i=>{const captureAccount=auth?.getAccountId();const captureEpoch=sessionEpoch;const proof=await cached('proof-'+i.proofId,()=>requireApi().getProof(i.proofId));if(captureEpoch!==sessionEpoch||captureAccount!==auth?.getAccountId())throw new Error('Your account changed. Select the shipment again.');if(proof.status==='FINALIZED')throw new Error('This Proof is finalized. Its evidence cannot be changed.');const job=await requireEngine().beginCapture({...i,offline:!net.isOnline(),appVersion:app.getVersion(),installationId});if(blocker===null)blocker=powerSaveBlocker.start('prevent-app-suspension');return {id:job.id,maxRecordingBytes:job.maxRecordingBytes,maxRecordingSeconds:job.maxRecordingSeconds};});
  const releaseBlocker=()=>{if(blocker!==null){powerSaveBlocker.stop(blocker);blocker=null;}};
  handle('capture.append',schemas.chunk,async(id,seq,b)=>{await requireEngine().appendChunk(id,seq,new Uint8Array(b));});
  handle('capture.finish',schemas.finish,async(id,i)=>{await requireEngine().finishCapture(id,{attestation:i.attestation,recordedDurationMs:i.durationMs,startedAt:i.startedAt,endedAt:i.endedAt,detections:i.detections.map((d:any)=>({value:d.rawValue,format:d.format,detectedAtMs:d.detectedAtMs,confirmed:d.confirmed,notThisPackage:d.notThisPackage}))});releaseBlocker();});

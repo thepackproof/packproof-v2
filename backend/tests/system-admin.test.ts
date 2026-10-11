@@ -17,7 +17,7 @@ import {registerOfferVersion,scheduleApprovedOfferPeriod,getAccountUsageSummary,
 import {syntheticPublication} from './program-metrics-publication-fixture.js';
 import {createTransaction} from '../src/domain/transactions.js';
 import {createOrGetProof} from '../src/domain/create-proof.js';
-import {createCaptureSession} from '../src/domain/capture-sessions.js';
+import {createCaptureSession,admitDesktopCapture} from '../src/domain/capture-sessions.js';
 
 const now=new Date('2026-09-24T12:00:00.000Z'),clock={now:()=>new Date(now)};
 let opened:Awaited<ReturnType<typeof createPgliteDatabase>>,admin:string,app:ReturnType<typeof express>;
@@ -122,6 +122,8 @@ describe('authoritative system administration',()=>{
   expect((await request(app).post(`/admin/feature-flags/${key}`).set(bearer(admin)).send({...command(key,'pause-capture-1'),enabled:true})).status).toBe(200);
   expect((await createCaptureSession(opened.db,clock,user,proof.proofId,{client:'WEB_CAMERA',idempotencyKey:'before-pause'})).id).toBe(session.id);
   await expect(createCaptureSession(opened.db,clock,user,proof.proofId,{client:'WEB_CAMERA',idempotencyKey:'after-pause'})).rejects.toMatchObject({code:'NEW_CAPTURE_PAUSED'});
+  await expect(admitDesktopCapture(opened.db,clock,user,proof.proofId)).rejects.toMatchObject({code:'NEW_CAPTURE_PAUSED'});
+  expect((await opened.db.query('SELECT proof_id FROM billing_capture_reservations WHERE proof_id=$1',[proof.proofId])).rows).toHaveLength(0);
   expect((await request(app).post(`/admin/feature-flags/${key}`).set(bearer(admin)).send({...command(key,'resume-capture',1),enabled:false})).status).toBe(200);
  });
  it('requires confirmations and never makes an unaudited partial change on invalid input',async()=>{

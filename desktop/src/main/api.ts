@@ -16,6 +16,7 @@ export interface DesktopCapabilities {
   capture: { protocolVersions: number[]; maxBytes: number; maxDurationSeconds: number; maxActiveUploads: number };
   desktopCapture?: { registrationVersions: number[]; client: string; surface: string; maxBytes: number; maxDurationSeconds: number; timingProvenance: string };
 }
+export interface DesktopCaptureAdmission {schemaVersion:1;proofId:string;client:'DESKTOP_CAMERA';surface:'DESKTOP';reservation:'RESERVED'|'NOT_REQUIRED';maxRecordingBytes:number;maxRecordingSeconds:number;registrationTiming:'POST_CAPTURE_CLIENT_REPORTED'}
 export interface DesktopRecording {
   sha256: string; byteSize: number; contentType: string; recordedDurationMs: number; interrupted: boolean;
   desktopContext: { schemaVersion: 1; installationId: string; appVersion: string; platform: 'win32' | 'darwin'; captureStartedAt: string; captureEndedAt: string; cameraLabel?: string; offline: boolean };
@@ -116,6 +117,7 @@ export class DesktopApi {
     const path = stageId ? `/proofs/${id(proofId)}/lifecycle/stages/${id(stageId)}/evidence/${id(evidenceId)}` : `/proofs/${id(proofId)}/evidence/${id(evidenceId)}`;
     return this.response(path, { signal, range, timeout: 600_000 });
   }
+  admitDesktopCapture(proofId:string,signal?:AbortSignal):Promise<DesktopCaptureAdmission> { return this.request(`/proofs/${id(proofId)}/capture-sessions/desktop-admission`,{method:'POST',body:{schemaVersion:1},signal}); }
   registerDesktopRecording(proofId: string, idempotencyKey: string, input: DesktopRecording, signal?: AbortSignal): Promise<CaptureSession> { return this.request(`/proofs/${id(proofId)}/capture-sessions/desktop-registration`, { method: 'POST', idempotencyKey, body: input, signal }); }
   completeCaptureSession(proofId: string, sessionId: string, input: { sha256: string; byteSize: number; contentType: string; interrupted?: boolean; recordedDurationMs?: number }, signal?: AbortSignal): Promise<CaptureSession> { return this.request(`/proofs/${id(proofId)}/capture-sessions/${id(sessionId)}/complete`, { method: 'POST', body: input, signal }); }
   recoverCaptureSession(proofId: string, sessionId: string, signal?: AbortSignal): Promise<CaptureSession> { return this.request(`/proofs/${id(proofId)}/capture-sessions/${id(sessionId)}/recover`, { method: 'POST', body: {}, signal }); }

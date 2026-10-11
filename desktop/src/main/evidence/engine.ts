@@ -183,7 +183,7 @@ export class EvidenceEngine {
       if (epoch !== this.accountEpoch || accountId !== this.accountId) fail('ACCOUNT_CHANGED', 'Sign in again before recording.');
       this.jobs.set(job.id, job);
       try {
-        const authorization = await this.options.api.authorizeCapture({ accountId, proofId, jobId: job.id }, new AbortController().signal);
+        const authorization = await this.options.api.authorizeCapture({ accountId, proofId, jobId: job.id, offline: input.offline===true }, new AbortController().signal);
         if (epoch !== this.accountEpoch || accountId !== this.accountId) fail('ACCOUNT_CHANGED', 'Sign in again before recording.');
         job.captureSessionId = authorization.id;
         job.maxRecordingBytes = Math.min(MAX_EVIDENCE_BYTES, authorization.maxRecordingBytes);

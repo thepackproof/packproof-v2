@@ -25,6 +25,7 @@ const previewHash=z.string().regex(/^[a-f0-9]{64}$/);
 const email=z.string().trim().email().max(254), password=z.string().min(1).max(1024), code=z.string().trim().min(1).max(128);
 export const settingsSchema=z.object({cameraId:z.string().max(512),microphoneId:z.string().max(512),audio:z.boolean(),resolution:z.enum(['720p','1080p']),frameRate:z.union([z.literal(24),z.literal(30)]),retentionHours:z.union([z.literal(0),z.literal(24),z.literal(168)]),notifications:z.boolean(),scannerSuffix:z.enum(['Enter','Tab']),theme:z.enum(['light','dark','system'])}).strict();
 export const schemas={
+ currentProof:z.tuple([idSchema,idSchema]),
  study:z.tuple([z.object({userId:idSchema,path:z.enum(['/consent','/timings/start','/timings']),method:z.enum(['GET','POST']),body:z.record(z.string(),z.unknown()).optional()}).strict().refine(v=>v.method==='POST'||v.path==='/consent'&&v.body===undefined).refine(v=>JSON.stringify(v.body??{}).length<=65536)]),
  onboarding:z.tuple([z.object({action:z.enum(['start','step','skip','complete','dismiss_coaching']),version:z.literal(1),step:z.number().int().min(0).max(5).optional()}).strict()]),
  empty:z.tuple([]),report:z.tuple([z.enum(['CAMERA_PERMISSION_DENIED','CAMERA_DISCONNECTED','CAMERA_UNAVAILABLE','RECORDING_FAILED'])]),id:z.tuple([idSchema]),login:z.tuple([z.object({email,password}).strict()]),email:z.tuple([email]),code:z.tuple([z.object({email,code}).strict()]),reset:z.tuple([z.object({email,code,password}).strict()]),

@@ -6,7 +6,7 @@ import {registerOfferVersion,scheduleApprovedOfferPeriod,type OfferDefinition} f
 import {syntheticPublication} from './program-metrics-publication-fixture.js';
 import {canonicalize} from '../src/canonical.js';
 import {sha256Hex} from '../src/hash.js';
-import {createCaptureSession,completeCaptureSession} from '../src/domain/capture-sessions.js';
+import {createCaptureSession,completeCaptureSession,admitDesktopCapture,registerDesktopCapture} from '../src/domain/capture-sessions.js';
 
 let h:TestHarness,sequence=0;const now=new Date('2026-09-07T12:00:00Z'),clock={now:()=>new Date(now)};
 beforeAll(async()=>{h=await createHarness(clock);},30000);afterAll(async()=>{await h.close();});
@@ -30,6 +30,35 @@ async function setup(){
   return {userId,offer,approval,service,input,calls,wrongPrice:()=>{wrongPrice=true;},complete:()=>{session.status='complete';session.payment_status='paid';},sub:()=>sub,session:()=>session};
 }
 describe('optional paid enrollment and capture limits',()=>{
+  it('reserves one desktop Proof allowance across concurrent admission, retries and later registration',async()=>{
+    const f=await setup(),first=await proof(f.userId),second=await proof(f.userId);
+    await scheduleApprovedOfferPeriod(h.db,clock,{id:`desktop-period-${sequence}`,userId:f.userId,offerVersion:f.offer.version,start:now.toISOString(),end:'2026-09-08T12:00:00.000Z',consentReceiptReference:'synthetic-consent'},f.approval);
+    const other=await createUser(h);
+    await expect(admitDesktopCapture(h.db,clock,other,first)).rejects.toMatchObject({code:'PARTICIPANT_NOT_AUTHORIZED'});
+    expect((await h.db.query('SELECT proof_id FROM billing_capture_reservations WHERE user_id=$1',[f.userId])).rows).toHaveLength(0);
+    const attempts=await Promise.allSettled([first,second].map(id=>admitDesktopCapture(h.db,clock,f.userId,id)));
+    expect(attempts.filter(a=>a.status==='fulfilled')).toHaveLength(1);expect(attempts.filter(a=>a.status==='rejected')).toHaveLength(1);
+    const accepted=attempts.find(a=>a.status==='fulfilled');if(accepted?.status!=='fulfilled')throw new Error('Missing admission');const admission=accepted.value;
+    expect(admission).toMatchObject({reservation:'RESERVED',maxRecordingBytes:10000,maxRecordingSeconds:30,registrationTiming:'POST_CAPTURE_CLIENT_REPORTED'});
+    expect(await admitDesktopCapture(h.db,clock,f.userId,admission.proofId)).toEqual(admission);
+    // Preview, repeated preview and the immediate Record check share the Proof key.
+    expect(await admitDesktopCapture(h.db,clock,f.userId,admission.proofId)).toEqual(admission);
+    expect((await h.db.query('SELECT id FROM capture_sessions WHERE proof_id=$1',[admission.proofId])).rows).toHaveLength(0);
+    const input={idempotencyKey:'desktop-after-admission',sha256:'a'.repeat(64),byteSize:10,contentType:'video/webm',recordedDurationMs:1000,desktopContext:{schemaVersion:1,installationId:'install_fixture',appVersion:'1.0.1',platform:'win32',captureStartedAt:now.toISOString(),captureEndedAt:new Date(now.getTime()+1000).toISOString(),offline:false}};
+    const session=await registerDesktopCapture(h.db,clock,f.userId,admission.proofId,input);
+    expect(session).toMatchObject({client:'DESKTOP_CAMERA',registrationTiming:'POST_CAPTURE_CLIENT_REPORTED',maxRecordingBytes:10000,maxRecordingSeconds:30});
+    expect((await h.db.query('SELECT proof_id FROM billing_capture_reservations WHERE user_id=$1',[f.userId])).rows).toHaveLength(1);
+    await expect(registerDesktopCapture(h.db,clock,f.userId,admission.proofId,{...input,idempotencyKey:'oversize',byteSize:10001})).rejects.toMatchObject({code:'CAPTURE_RECORDING_LIMIT'});
+  });
+  it('limits desktop allowance admission to the authorized account and exact schema without creating camera evidence',async()=>{
+    const userId=await createUser(h),other=await createUser(h),id=await proof(userId),path=`/proofs/${id}/capture-sessions/desktop-admission`;
+    expect((await request(h.app).post(path).send({schemaVersion:1})).status).toBe(401);
+    expect((await request(h.app).post(path).set(auth(other)).send({schemaVersion:1})).status).toBe(403);
+    for(const body of [{},{schemaVersion:2},{schemaVersion:1,client:'WEB_CAMERA'}])expect((await request(h.app).post(path).set(auth(userId)).send(body)).status).toBe(400);
+    const response=await request(h.app).post(path).set(auth(userId)).send({schemaVersion:1});expect(response.status).toBe(200);expect(response.body).toMatchObject({proofId:id,reservation:'NOT_REQUIRED',maxRecordingBytes:250000000,maxRecordingSeconds:300});
+    expect((await h.db.query('SELECT id FROM capture_sessions WHERE proof_id=$1',[id])).rows).toHaveLength(0);
+    expect((await h.db.query('SELECT proof_id FROM billing_capture_reservations WHERE proof_id=$1',[id])).rows).toHaveLength(0);
+  });
   it('keeps unconfigured billing hidden and free web capture usable',async()=>{
     const userId=await createUser(h),id=await proof(userId);
     expect((await request(h.app).get('/me/billing/status').set(auth(userId))).body).toMatchObject({enabled:false,subscriptions:[]});

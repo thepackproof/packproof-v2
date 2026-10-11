@@ -1,19 +1,15 @@
-import { selectTaskHome, type HomeInput } from "../../../mobile/src/experience/task-home";
+import { selectTaskHome } from "../../../mobile/src/experience/task-home";
 import type { CanonicalProof, FulfillmentQueueItem, ProofCollectionItem } from "../api/types";
 import type { LocalRecordingSummary } from "../capture-queue";
-import { workstationPresentation } from "../components/WorkstationProofTable";
 import { presentProof } from "../proof-presentation";
+import { taskProofs, canContributeToTask } from './task-proofs';
 
 /** Only display adaptation. Server Proof states and local upload ownership stay unchanged. */
 export function mobileHomeState(input: { proofs: ProofCollectionItem[]; recordings: LocalRecordingSummary[]; usable: ReadonlySet<string>; queue: FulfillmentQueueItem[]; online: boolean; reconciled: boolean; selection?: string; interactions?: Record<string, number> }) {
-  const proofs: HomeInput["proofs"] = input.proofs.map(proof => {
-    const view = workstationPresentation(proof);
-    const action: HomeInput["proofs"][number]["action"] = view.diagnostic ? "unknown" : proof.accessKind === "RECEIVER" || proof.invitationId ? "continue" : !view.canContribute ? "view" : view.nextAction.type === "REVIEW_CONFIRM" ? "finalize" : view.nextAction.type === "RECORD_PACKING" ? "capture" : view.nextAction.type === "WORKFLOW_ACTION" ? "continue" : "view";
-    return { id: proof.proofId, title: proof.transaction.itemTitle || "Shipment Proof", status: proof.status, authorized: true, action, continuationAfterFinalization: !!view.canContribute && view.nextAction.type === "WORKFLOW_ACTION", createdAt: proof.createdAt, updatedAt: proof.updatedAt, completed: proof.status === "FINALIZED" && !!proof.finalizedAt };
-  });
+  const proofs = taskProofs(input.proofs);
   const contribute = (id: string) => {
     const proof = input.proofs.find(row => row.proofId === id);
-    return !!proof && !proof.invitationId && proof.accessKind !== "RECEIVER" && !!workstationPresentation(proof).canContribute && !workstationPresentation(proof).diagnostic;
+    return canContributeToTask(proof);
   };
   const pending = input.recordings.filter(row => !row.finalized && !row.submitted && !row.discardRequested);
   return selectTaskHome({ proofs, online: input.online, reconciled: input.reconciled, selection: input.selection, interactions: input.interactions,

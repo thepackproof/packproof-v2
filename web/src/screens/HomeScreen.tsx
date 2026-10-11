@@ -6,6 +6,10 @@ import { WorkstationProofTable, workstationPresentation, type WorkstationProofAc
 import { formatWhen } from "../format";
 import { Glyph } from "../site/Brand";
 import "./workstation-home.css";
+import type { LocalRecordingSummary } from '../capture-queue';
+import type { HomeAction } from '../../../mobile/src/experience/task-home';
+import { mobileHomeState, usableSavedRecording } from '../mobile-task/task-state';
+import { useTaskRecommendation } from '../mobile-task/useTaskRecommendation';
 
 export interface HomeScreenProps extends WorkstationProofActions {
   firstExperience?: boolean; firstProof?: boolean; reconciled?: boolean;
@@ -16,11 +20,25 @@ export interface HomeScreenProps extends WorkstationProofActions {
   loading: boolean;
   error: string | null;
   pendingUploadCount?: number;
+  recordings?: LocalRecordingSummary[];
+  taskScope?: string;
+  taskSelection?: string;
+  taskInteractions?: Record<string, number>;
+  taskBusy?: boolean;
+  taskNotice?: string | null;
+  onTaskAction?: (action: HomeAction) => void;
   onGo: (path: string) => void;
   onRetry: () => void;
 }
 
 export function HomeScreen(props: HomeScreenProps) {
+  const [usable, setUsable] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let active = true;
+    setUsable(new Set());
+    void Promise.all((props.recordings ?? []).filter(row => !row.accepted && row.available).map(async row => ({ key: row.key, usable: await usableSavedRecording(row.file) }))).then(rows => { if (active) setUsable(new Set(rows.filter(row => row.usable).map(row => row.key))); });
+    return () => { active = false; };
+  }, [props.recordings, props.taskScope]);
   const [online, setOnline] = useState(() => navigator.onLine);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -33,6 +51,10 @@ export function HomeScreen(props: HomeScreenProps) {
   const ready = props.queue.filter(order => order.proofStatus !== "FINALIZED" && order.workflowState !== "COMPLETED" && order.workflowState !== "REMOVED_FROM_FULFILLMENT");
   const count = (value: number) => props.loading || props.error ? "—" : value;
   const pending = props.pendingUploadCount;
+  const taskState = mobileHomeState({ proofs, recordings: props.recordings ?? [], usable, queue: props.queue, online, reconciled: !!props.reconciled && !props.error && online && pending !== undefined, selection: props.taskSelection, interactions: props.taskInteractions });
+  const { action: next, handlers } = useTaskRecommendation(taskState, props.taskScope ?? '');
+  const adaptive = props.firstExperience && !!props.onTaskAction;
+  const needsRefresh = adaptive && next.kind === 'create_proof' && (!props.reconciled || !!props.error || pending === undefined);
   const connections = props.connections.filter(connection => ["ACTIVE", "CONNECTED"].includes(connection.status)).length;
   const empty = props.firstExperience && props.reconciled && !props.loading && !props.error && online && !proofs.length && !props.queue.length && pending === 0;
   const checking = props.firstExperience && !proofs.length && !props.queue.length && !pending && (!props.reconciled || props.loading || !!props.error);
@@ -41,7 +63,8 @@ export function HomeScreen(props: HomeScreenProps) {
   return <main className="page library-page workstation-home" aria-busy={props.loading}>
     <header className="workstation-page-heading"><div><span className="workstation-eyebrow">PackProof workspace</span><h1 className="page-title">Home</h1><p>Your fulfillment desk, at a glance.</p></div><button data-onboarding="create" className="btn" onClick={() => props.onGo("/new")}><Glyph name="plus" size={16} />New Proof</button></header>
     {props.error && <Notice title="We couldn’t refresh your workspace" kind="error"><p>{props.error}</p><button className="btn btn-secondary" onClick={props.onRetry}>Try again</button></Notice>}
-    <section className="workstation-hero"><div><span className="workstation-eyebrow">Your next shipment</span><h2>Ready at the packing table.</h2><p>Select an order. Record packing. Follow its upload through confirmation.</p><button className="btn" onClick={() => props.onGo("/station")}>Open Packing Station<Glyph name="arrow" size={17} /></button></div><div className="workstation-hero-symbol" aria-hidden="true"><div className="workstation-hero-ring"><Glyph name="box" size={67} /><span><Glyph name="check" size={18} /></span></div><span>Continuous capture</span></div></section>
+    {props.taskNotice && <p role="status">{props.taskNotice}</p>}
+    <section className="workstation-hero" aria-label="Recommended action" {...handlers}><div><span className="workstation-eyebrow">{adaptive ? 'Your next task' : 'Your next shipment'}</span><h2>{adaptive ? needsRefresh ? 'Check your workspace' : next.title : 'Ready at the packing table.'}</h2><p>{adaptive ? needsRefresh ? 'Refresh your Proofs and saved recordings before choosing the next task.' : next.reason : 'Select an order. Record packing. Follow its upload through confirmation.'}</p><button className="btn" disabled={props.taskBusy || needsRefresh && props.loading} onClick={() => adaptive ? needsRefresh ? props.onRetry() : props.onTaskAction?.(next) : props.onGo('/station')}>{props.taskBusy ? 'Checking task…' : adaptive ? needsRefresh ? 'Refresh records' : next.buttonLabel : 'Open Packing Station'}<Glyph name="arrow" size={17} /></button>{adaptive && (next.kind !== 'create_proof' || needsRefresh) && <button className="text-link" onClick={() => props.onGo('/new')}>Create Proof</button>}</div><div className="workstation-hero-symbol" aria-hidden="true"><div className="workstation-hero-ring"><Glyph name="box" size={67} /><span><Glyph name="check" size={18} /></span></div><span>Continuous capture</span></div></section>
     <section className="workstation-metrics" aria-label="Workspace summary">
       <button onClick={() => props.onGo("/proofs?filter=attention")}><span>Needs attention</span><strong>{count(proofs.filter(proof => workstationPresentation(proof).needsAttention).length)}</strong><small>Open records requiring an action</small></button>
       <button onClick={() => props.onGo("/fulfillment")}><span>Ready to fulfill</span><strong>{count(ready.length)}</strong><small>Synchronized marketplace orders</small></button>

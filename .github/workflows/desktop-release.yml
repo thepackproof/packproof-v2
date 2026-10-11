@@ -48,7 +48,7 @@ jobs:
             target: mac
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 180
     defaults:
       run:
         shell: bash

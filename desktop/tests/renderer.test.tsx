@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Auth } from '../src/renderer/Auth';
+import { AuthPasswordField } from '../src/renderer/AuthPasswordField';
 import { PackingStation } from '../src/renderer/PackingStation';
 import { SharePreviewContents, ShareProof } from '../src/renderer/ShareProof';
 import { appearsTracking, filterFulfillmentOrders, presentation, trackingMatch } from '../src/renderer/presentation';
@@ -8,6 +9,18 @@ import type { FulfillmentQueueItem, ProofCollectionItem, SystemView } from '../s
 
 const system:SystemView={version:'1.0.0',platform:'darwin',environment:'staging',online:true,configured:false,secureStorage:false,pendingOtherAccounts:false,update:{state:'idle'},settings:{cameraId:'',microphoneId:'',audio:false,resolution:'1080p',frameRate:30,retentionHours:24,notifications:true,scannerSuffix:'Enter',theme:'system'}};
 describe('desktop renderer safety and shared presentation',()=>{
+  it('offers an accessible non-submit password visibility control without losing autofill or the entered value',()=>{
+    for(const mode of ['signin','signup','reset'] as const)for(const visible of [false,true]){
+      const html=renderToStaticMarkup(<AuthPasswordField value="typed-value" onChange={()=>{}} visible={visible} onToggle={()=>{}} mode={mode} busy={false}/>);
+      expect(html).toContain(`type="${visible?'text':'password'}"`);
+      expect(html).toContain(`autoComplete="${mode==='signin'?'current-password':'new-password'}"`);
+      expect(html).toContain('value="typed-value"');
+      expect(html).toContain('for="desktop-auth-password"');
+      expect(html).toContain(`type="button" class="text-button" aria-controls="desktop-auth-password" aria-pressed="${visible}"`);
+      expect(html).toContain(visible?'Hide password':'Show password');
+    }
+    expect(renderToStaticMarkup(<Auth system={system} onSignedIn={()=>{}}/>)).toContain('Show password');
+  });
   it('disables sign-in when protected storage or environment configuration is absent',()=>{
     const html=renderToStaticMarkup(<Auth system={system} onSignedIn={()=>{}}/>);
     expect(html).toContain('Protected credential storage is unavailable');

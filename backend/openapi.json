@@ -3233,6 +3233,117 @@
           }
         ]
       }
+    },
+    "/proofs/{id}/capture-sessions/desktop-admission": {
+      "post": {
+        "operationId": "admitDesktopCapture",
+        "summary": "Check and reserve the existing Proof allowance before desktop recording",
+        "description": "First-party account endpoint. Requires the current seller and a writable packing Proof. Atomically reuses the immutable Proof allowance reservation and returns bounded recorder limits. Does not issue a camera session, take payment, create recording evidence or independently verify recording time. Desktop original registration remains post-capture and rechecks acceptance. Unsupported and denied online requests must not be treated as offline permission.",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "schemaVersion"
+                ],
+                "properties": {
+                  "schemaVersion": {
+                    "type": "integer",
+                    "const": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account-authorized limits; reservation is keyed to this Proof and reused by retries and later registration.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "schemaVersion",
+                    "proofId",
+                    "client",
+                    "surface",
+                    "reservation",
+                    "maxRecordingBytes",
+                    "maxRecordingSeconds",
+                    "registrationTiming"
+                  ],
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "proofId": {
+                      "type": "string"
+                    },
+                    "client": {
+                      "type": "string",
+                      "const": "DESKTOP_CAMERA"
+                    },
+                    "surface": {
+                      "type": "string",
+                      "const": "DESKTOP"
+                    },
+                    "reservation": {
+                      "type": "string",
+                      "enum": [
+                        "RESERVED",
+                        "NOT_REQUIRED"
+                      ]
+                    },
+                    "maxRecordingBytes": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 250000000
+                    },
+                    "maxRecordingSeconds": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 300
+                    },
+                    "registrationTiming": {
+                      "type": "string",
+                      "const": "POST_CAPTURE_CLIENT_REPORTED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

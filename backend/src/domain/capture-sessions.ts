@@ -116,6 +116,34 @@ export async function createCaptureSession(db: Database, clock: Clock, actor: st
     throw new DomainError('CAPTURE_CLIENT_REQUIRED','Start recording using the web or native camera workflow; desktop uses post-capture registration',400);
   return issueCaptureSession(db,clock,actor,proofId,input);
 }
+async function requireNewCaptureAvailable(tx:Database,clock:Clock,actor:string,proofId:string,stageId?:string) {
+  if (!stageId) {
+    const intakeContract=(await tx.query<{contract_version:number}>('SELECT contract_version FROM proof_order_contexts WHERE proof_id=$1',[proofId])).rows[0];
+    if (intakeContract?.contract_version===1 && (await tx.query("SELECT 1 FROM capture_sessions WHERE proof_id=$1 AND stage_id IS NULL AND state<>'CANCELLED' LIMIT 1",[proofId])).rows.length)
+      throw new DomainError('INTAKE_CAPTURE_IN_PROGRESS','Resume the current recording or finish its attestation before starting another',409);
+    const proof = await loadProof(tx, proofId);
+    await assertSupportedParcelCapture(tx, proof.transaction_id);
+  }
+  await requireFeatureAvailable(tx,'NEW_CAPTURE_PAUSED');
+  const active = await tx.query<{count: string}>("SELECT COUNT(*) AS count FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND state IN ('ISSUED','RECORDED','UPLOADING') AND recover_until > $3",[proofId,actor,clock.now().toISOString()]);
+  if (Number(active.rows[0].count) >= 20) throw new DomainError('CAPTURE_QUEUE_FULL','Finish or cancel pending recordings before starting another',409);
+}
+/** Allowance admission only: no camera session or recording-start claim is created.
+ * The immutable Proof reservation is reused by later desktop registration. */
+export async function admitDesktopCapture(db:Database,clock:Clock,actor:string,proofId:string) {
+  await prepareIntakeCaptureEntry(db,clock,actor,proofId);
+  return db.transaction(async tx=>{
+    await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[actor]);
+    await captureAccess(tx,actor,proofId,true);
+    await requireNewCaptureAvailable(tx,clock,actor,proofId);
+    const allowance=await reserveApprovedCaptureAllowance(tx,clock,{userId:actor,proofId});
+    return {schemaVersion:1,proofId,client:'DESKTOP_CAMERA',surface:'DESKTOP',
+      reservation:allowance.enforced?'RESERVED':'NOT_REQUIRED',
+      maxRecordingBytes:Math.min(CAPTURE_MAX_BYTES,allowance.enforced?allowance.maxRecordingBytes:CAPTURE_MAX_BYTES),
+      maxRecordingSeconds:Math.min(CAPTURE_MAX_DURATION_MS/1000,allowance.enforced?allowance.maxRecordingSeconds:CAPTURE_MAX_DURATION_MS/1000),
+      registrationTiming:'POST_CAPTURE_CLIENT_REPORTED'} as const;
+  });
+}
 async function issueCaptureSession(db: Database, clock: Clock, actor: string, proofId: string, input: {idempotencyKey: string; client: string; stageId?: string; surface?: unknown; desktopContext?: DesktopCaptureContext}) {
   if (typeof input.idempotencyKey !== 'string' || !input.idempotencyKey.trim() || input.idempotencyKey.length > 200)
     throw new DomainError('IDEMPOTENCY_KEY_REQUIRED','A capture idempotency key is required',400);
@@ -133,16 +161,7 @@ async function issueCaptureSession(db: Database, clock: Clock, actor: string, pr
         throw new DomainError('CAPTURE_SESSION_CONFLICT','Capture retry cannot change its client-reported desktop context',409);
       return captureSessionView(existing.rows[0]);
     }
-    if (!input.stageId) {
-      const intakeContract=(await tx.query<{contract_version:number}>('SELECT contract_version FROM proof_order_contexts WHERE proof_id=$1',[proofId])).rows[0];
-      if (intakeContract?.contract_version===1 && (await tx.query("SELECT 1 FROM capture_sessions WHERE proof_id=$1 AND stage_id IS NULL AND state<>'CANCELLED' LIMIT 1",[proofId])).rows.length)
-        throw new DomainError('INTAKE_CAPTURE_IN_PROGRESS','Resume the current recording or finish its attestation before starting another',409);
-      const proof = await loadProof(tx, proofId);
-      await assertSupportedParcelCapture(tx, proof.transaction_id);
-    }
-    await requireFeatureAvailable(tx,'NEW_CAPTURE_PAUSED');
-    const active = await tx.query<{count: string}>("SELECT COUNT(*) AS count FROM capture_sessions WHERE proof_id=$1 AND actor_user_id=$2 AND state IN ('ISSUED','RECORDED','UPLOADING') AND recover_until > $3",[proofId,actor,clock.now().toISOString()]);
-    if (Number(active.rows[0].count) >= 20) throw new DomainError('CAPTURE_QUEUE_FULL','Finish or cancel pending recordings before starting another',409);
+    await requireNewCaptureAvailable(tx,clock,actor,proofId,input.stageId);
     const allowance = input.stageId ? {enforced:false as const} : await reserveApprovedCaptureAllowance(tx,clock,{userId:actor,proofId});
     const maxRecordingBytes = Math.min(CAPTURE_MAX_BYTES,allowance.enforced ? allowance.maxRecordingBytes! : CAPTURE_MAX_BYTES);
     const maxDurationMs = Math.min(CAPTURE_MAX_DURATION_MS,allowance.enforced ? allowance.maxRecordingSeconds!*1000 : CAPTURE_MAX_DURATION_MS);
