@@ -40,7 +40,7 @@ Request app version, platform/OS, coarse network status, step, non-sensitive err
 
 ## Measurement mapping and limits
 
-Existing `mobile-ux-events.ts` stores session-only counts and bounded durations, with no identifiers, persistence or network transport. Existing native study timing has its own explicit consent, bounded checkpoint schema and account binding. These are retained; this change does not silently start expanded production analytics.
+The primary first-proof release uses the following existing diagnostic sources and seven-day authoritative activation query. Existing `mobile-ux-events.ts` stores session-only counts and bounded durations, with no identifiers, persistence or network transport. Existing native study timing has its own explicit consent, bounded checkpoint schema and account binding. The separate measurement follow-up extends that optional study as described below; neither release silently enables a dataset or grants account consent.
 
 | Plan concept | Existing source | Interpretation |
 |---|---|---|
@@ -52,7 +52,7 @@ Existing `mobile-ux-events.ts` stores session-only counts and bounded durations,
 | Commit / finalize | commitment / finalization and backend audit | Backend authoritative state is the completion source |
 | First finalized packing | Additive onboarding projection/event | Derived from eligible finalized root packing history; sample/tutorial excluded |
 | Seven-day account activation | `backend/src/analytics/first-proof-activation.ts`, existing admin Product funnel | Authoritative record query; full observation windows and denominator counts, with eligibility below |
-| Consented study | native-study / timing-bridge | Its approved task/device/phase schema; not all-production cohort analytics |
+| Consented study | native-study / timing-bridge / shared browser and desktop adapter | Primary task/device/phase schema; follow-up adds the bounded first-experience event family and consented intent cohort, never all-production analytics |
 
 The admin Product funnel now computes seven-day first-packing activation from existing authoritative domain records, without new browser telemetry or a schema migration. The registration cohort includes accounts created in the selected window with a non-development authentication identity, no development identity, and no current system-admin role. Only accounts with seven complete days as of the observation cutoff enter the rate; accounts that never create or finalize a Proof remain in the denominator. Accounts awaiting a full window are reported separately, and an empty mature denominator produces unavailable rather than zero percent. The default seven-day registration window can therefore contain no mature accounts; select a wider or earlier window when reviewing completed observation periods.
 
