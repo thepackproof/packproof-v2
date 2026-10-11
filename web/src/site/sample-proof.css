@@ -1,4 +1,4 @@
-.sample-record.sample-canonical { --accent: var(--brand-blue-text, #1255ad); }
+.sample-record.sample-canonical { --accent: var(--brand-blue-text, var(--blue, #1255ad)); }
 .sample-record.sample-canonical .document-toolbar { color: var(--text, var(--brand-ink)); }
 .sample-record.sample-canonical .sample-top { flex-wrap: wrap; }
 .sample-record.sample-canonical .sample-top > div:first-child { flex: 1; min-width: 150px; }
