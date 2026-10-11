@@ -39,10 +39,12 @@ export function stripeBillingConfigFromEnv(env:NodeJS.ProcessEnv):StripeBillingC
 }
 /** Documented Stripe v1 HMAC over original bytes, constant-time comparison and
  * five-minute delivery freshness. A delivery timestamp is never payment time. */
-export function verifyStripeSignature(rawBody:Buffer,header:string|null,secret:string,clock:Clock){
-  if(!Buffer.isBuffer(rawBody)||!rawBody.length||rawBody.length>MAX_BYTES)fail('STRIPE_INVALID_BODY','Bounded unmodified billing body required',413);
-  if(!/^whsec_[A-Za-z0-9_]{16,}$/.test(secret))fail('STRIPE_MANAGED_SECRET_REQUIRED','Managed webhook secret is unavailable',503);
-  if(!header||header.length>4096)fail('STRIPE_SIGNATURE_INVALID','Invalid billing signature',401);
+export function verifyStripeSignature(rawBody:unknown,header:unknown,secret:unknown,clock:Clock){
+  // The HTTP raw parser is not a runtime type guarantee for every caller.
+  // Measure bytes only after accepting a genuine Buffer, never array/string length.
+  if(!Buffer.isBuffer(rawBody)||!rawBody.byteLength||rawBody.byteLength>MAX_BYTES)fail('STRIPE_INVALID_BODY','Bounded unmodified billing body required',413);
+  if(typeof secret!=='string'||!/^whsec_[A-Za-z0-9_]{16,}$/.test(secret))fail('STRIPE_MANAGED_SECRET_REQUIRED','Managed webhook secret is unavailable',503);
+  if(typeof header!=='string'||!header||header.length>4096)fail('STRIPE_SIGNATURE_INVALID','Invalid billing signature',401);
   const fields=header.split(',').map(p=>p.trim().split('='));const times=fields.filter(([k])=>k==='t').map(([,v])=>v),signatures=fields.filter(([k])=>k==='v1').map(([,v])=>v);
   if(times.length!==1||!/^\d{1,12}$/.test(times[0]??'')||!signatures.length||signatures.length>16||signatures.some(v=>!/^[a-f0-9]{64}$/.test(v??'')))fail('STRIPE_SIGNATURE_INVALID','Invalid billing signature',401);
   if(Math.abs(Math.floor(clock.now().getTime()/1000)-Number(times[0]))>300)fail('STRIPE_SIGNATURE_EXPIRED','Billing signature is outside its freshness window',401);

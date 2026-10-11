@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import ts from 'typescript';
 import { useDirectUpload } from '../src/capture/upload-transport';
 import { uploadCompletionConfirmed } from '../src/capture/upload-outcome';
@@ -104,4 +105,27 @@ test('queued work is distinct from an interrupted upload or a live transfer', as
   assert.equal(localProofWork(h.capture,'uploading',42)?.state,'UPLOADING');
   h.capture.recovery!.lastError={code:'NETWORK',message:'Interrupted',retryable:true};
   assert.equal(localProofWork(h.capture)?.state,'UPLOAD_INTERRUPTED');
+});
+
+test('direct S3 upload preserves service endpoint forms and rejects lookalike suffixes', () => {
+  const target = {method:'PUT' as const,url:'',headers:{}};
+  for (const host of ['s3.amazonaws.com','bucket.s3.amazonaws.com','bucket.s3-us-east-1.amazonaws.com',
+    'bucket.s3.us-east-1.amazonaws.com','bucket.s3.dualstack.us-east-1.amazonaws.com','bucket.s3-accelerate.amazonaws.com'])
+    assert.equal(useDirectUpload({...target,url:`https://${host}/original`},'https://api.example.test'),true,host);
+  for (const host of ['s3.amazonaws.com.attacker.test','s3.amazonawsXcom','nots3.amazonaws.com','s3evil.amazonaws.com',
+    'bucket.s3-.amazonaws.com','bucket.s3..amazonaws.com','bucket.s3.us_east_1.amazonaws.com','s3.amazonaws.com.cn'])
+    assert.equal(useDirectUpload({...target,url:`https://${host}/original`},'https://api.example.test'),false,host);
+});
+
+test('malformed S3 hyphen runs complete within a bounded worker deadline', () => {
+  const moduleUrl=new URL('../src/capture/upload-transport.ts',import.meta.url).href;
+  const loaderUrl=new URL('../../backend/node_modules/tsx/dist/loader.mjs',import.meta.url).href;
+  const result=spawnSync(process.execPath,['--import',loaderUrl,'--input-type=module','-e',`
+    import assert from 'node:assert/strict';
+    import {useDirectUpload} from ${JSON.stringify(moduleUrl)};
+    const target={method:'PUT',headers:{}};
+    for (const host of ['s3-'+ '-'.repeat(100000)+'.amazonaws.com.attacker.test', 's3-'+ '-'.repeat(100000)+'x!.amazonaws.com'])
+      assert.equal(useDirectUpload({...target,url:'https://'+host+'/original'},'https://api.example.test'),false);
+  `],{timeout:5000,encoding:'utf8'});
+  assert.ifError(result.error);assert.equal(result.status,0,result.stderr);
 });

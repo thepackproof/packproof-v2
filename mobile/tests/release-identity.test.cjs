@@ -42,6 +42,7 @@ test('production config binds worker source, authenticated release guards and UX
   assert.equal(app.version, '1.0.1');
   assert.equal(app.android.versionCode, 60);
   assert.equal(app.android.package, 'com.packproof.mobile');
+  assert.equal(app.extra.eas.projectId, '0196c3f7-cb3a-472c-99be-825558f227e8');
   assert.equal(app.android.allowBackup, false);
   assert.equal(app.android.usesCleartextTraffic, false);
   assert.equal(app.extra.packproofBuildSha, 'ab'.repeat(20));
@@ -55,8 +56,9 @@ test('production config binds worker source, authenticated release guards and UX
 
 test('production refuses stale version, missing worker source, development auth, camera spike and wrong platform', () => {
   for (const [overrides, error] of [
-    [{PACKPROOF_ANDROID_VERSION_CODE: '56'}, /Production Android versionCode must be at least 58/],
-    [{PACKPROOF_ANDROID_VERSION_CODE: '57'}, /Production Android versionCode must be at least 58/],
+    [{PACKPROOF_ANDROID_VERSION_CODE: '56'}, /Production Android versionCode must be at least 59/],
+    [{PACKPROOF_ANDROID_VERSION_CODE: '57'}, /Production Android versionCode must be at least 59/],
+    [{PACKPROOF_ANDROID_VERSION_CODE: '58'}, /Production Android versionCode must be at least 59/],
     [{EAS_BUILD_GIT_COMMIT_HASH: ''}, /Source-bound build requires a valid EAS source commit/],
     [{EAS_BUILD_GIT_COMMIT_HASH: 'invalid'}, /Source-bound build requires a valid EAS source commit/],
     [{EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'dev'}, /Release builds must use Cognito authentication/],

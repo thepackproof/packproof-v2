@@ -45,6 +45,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test -- --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/backend-tests.xml"
       - run: npm run build
+      - name: Verify database credential and session-option guards
+        run: node --test ../infra/tests/admin-runtime-credentials.test.mjs
       - name: Hash exact API build and migration set
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/backend-bom.json" --api-dist dist --expected-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
