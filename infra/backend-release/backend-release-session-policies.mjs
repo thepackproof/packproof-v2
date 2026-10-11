@@ -2,7 +2,7 @@
 import {TARGET} from './backend-deployment-plan.mjs';
 const statement=(Action,Resource,Condition)=>({Effect:'Allow',Action,Resource,...(Condition?{Condition}:{})});
 const describe=['sts:GetCallerIdentity','ecs:DescribeServices','ecs:DescribeExpressGatewayService','ecs:DescribeTaskDefinition','ecs:ListTasks','ecs:DescribeTasks','ecs:ListServiceDeployments','ecs:DescribeServiceDeployments','ecs:DescribeServiceRevisions'];
-const topology=['elasticloadbalancing:DescribeTargetGroups','elasticloadbalancing:DescribeLoadBalancers','elasticloadbalancing:DescribeLoadBalancerAttributes','ec2:DescribeSecurityGroups','ec2:DescribeSubnets'];
+const topology=['elasticloadbalancing:DescribeTargetGroups','elasticloadbalancing:DescribeLoadBalancers','elasticloadbalancing:DescribeLoadBalancerAttributes','ec2:DescribeSecurityGroups','ec2:DescribeSubnets','ec2:DescribeNetworkInterfaces'];
 export function sessionPolicy(phase,{sourceSha,taskRoleArn,executionRoleArn,infrastructureRoleArn,apiTaskFamily,logGroup}){
  if(!/^[a-f0-9]{40}$/.test(sourceSha))throw Error('INVALID_SOURCE');
  const region=TARGET.region,account=TARGET.account,repository=`arn:aws:ecr:${region}:${account}:repository/${TARGET.serviceName}`;
