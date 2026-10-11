@@ -20,7 +20,7 @@ const AdminWorkspace = lazy(() => import("./admin/AdminWorkspace"));
 import { SubmissionIntakePanel } from "./components/SubmissionIntakePanel";
 import { IntakeLinkFallback, IntakeSignInContext } from "./screens/IntakeLinkFallback";
 import type {EngineSession} from "./capture/engine";
-import { applyLocalWork } from "./proof-presentation";
+import { presentProof, applyLocalWork } from "./proof-presentation";
 import { listRecoverableRecordings } from "./capture-queue";
 import { randomId } from "./random-id";
 import { LocalRecordingRecovery } from "./components/LocalRecordingRecovery";
@@ -539,16 +539,24 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     try {
       const local = await listRecoverableRecordings(account, api);
       if (!current()) return;
-      const recording = local.find(row => row.proofId === id && !row.finalized && !row.submitted && (!preferredRecording || row.key === preferredRecording.key));
+      const requestedSession = typeof target !== 'string' && 'kind' in target ? target.sessionId : undefined;
+      const recording = local.find(row => row.proofId === id && !row.finalized && !row.submitted && (!preferredRecording || row.key === preferredRecording.key) && (!requestedSession || row.key === requestedSession));
+      const recovery = typeof target !== 'string' && 'kind' in target && target.kind === 'review_upload';
       if (navigator.onLine === false) {
-        if (recording?.kind === "station" && !recording.accepted && recording.available && await usableSavedRecording(recording.file)) {
+        if (recovery && recording) { go(mobileTask ? '/activity' : '/uploads'); }
+        else if (recording?.kind === "station" && !recording.accepted && recording.available && await usableSavedRecording(recording.file)) {
           if (current()) { setTaskNotice("Reviewing evidence saved on this device. Connect to check server requirements before submitting."); go(`/proofs/${encodeURIComponent(id)}/capture`); }
         } else setTaskNotice("Connect to check this Proof’s next step. Your saved recording remains on this device.");
         return;
       }
       const fresh = await api.getProof(id);
       if (!current()) return;
-      const destination = mobileProofDestination(fresh, account, recording);
+      if (fresh.proofId !== id) throw new Error('The returned Proof does not match this task. Refresh your workspace.');
+      const view = presentProof(fresh, account);
+      let destination = mobileProofDestination(fresh, account, recording);
+      if (recovery && recording && fresh.status !== 'FINALIZED' && view.canContribute && !view.diagnostic) destination = mobileTask ? '/activity' : '/uploads';
+      if (requestedSession && !recording) destination = `/proofs/${encodeURIComponent(id)}`;
+      if (!mobileTask && destination === '/activity') destination = '/uploads';
       if (fresh.status === "FINALIZED" && fresh.finalizedAt) setTaskNotice("This Proof is already finalized. Its current record is ready to view.");
       const interactions = { ...taskInteractions, [id]: Date.now() };
       setTaskSelection(id); setTaskInteractions(interactions);
@@ -932,7 +940,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {!mobileTask && <WorkstationHeader route={route.name} refreshing={loading || busy} onRefresh={libraryProps.onRetry} />}
       {mobileTask && taskNotice && route.name !== "home" && <p className="task-notice" role="status">{taskNotice}</p>}
 
-      {route.name === "home" && (mobileTask ? <MobileHomeScreen firstExperience={firstExperience} experience={selectFirstExperience(experienceState)} reconciled={homeReconciled} proofs={homeProofs} recordings={recordings} recordingsLoaded={recordingsLoaded} queue={queue} loading={loading} error={error} refreshedAt={homeRefreshedAt} busy={taskBusy} notice={taskNotice} selection={taskSelection} interactions={taskInteractions} onGo={go} onRetry={libraryProps.onRetry} onAction={action => void openMobileTask(action)} onOpen={item => void openMobileTask(item)} /> : <HomeScreen firstExperience={firstExperience} firstProof={selectFirstExperience(experienceState).status === "FIRST_PROOF"} reconciled={homeReconciled} api={api} proofs={proofs} queue={queue} connections={connections} loading={loading} error={error} pendingUploadCount={recordingsLoaded ? recordings.filter(item => !(item.finalized && item.preserved)).length : undefined} onRetry={libraryProps.onRetry} onGo={go} onOpenProof={libraryProps.onOpenProof} onOpenInvitation={libraryProps.onOpenInvitation} onOpenReceiver={libraryProps.onOpenReceiver} />)}
+      {route.name === "home" && (mobileTask ? <MobileHomeScreen firstExperience={firstExperience} experience={selectFirstExperience(experienceState)} reconciled={homeReconciled} proofs={homeProofs} recordings={recordings} recordingsLoaded={recordingsLoaded} queue={queue} loading={loading} error={error} refreshedAt={homeRefreshedAt} busy={taskBusy} notice={taskNotice} selection={taskSelection} interactions={taskInteractions} onGo={go} onRetry={libraryProps.onRetry} onAction={action => void openMobileTask(action)} onOpen={item => void openMobileTask(item)} /> : <HomeScreen taskScope={`${session.apiBaseUrl}:${session.userId}`} recordings={recordings} taskSelection={taskSelection} taskInteractions={taskInteractions} taskBusy={taskBusy} taskNotice={taskNotice} onTaskAction={action => void openMobileTask(action)} firstExperience={firstExperience} firstProof={selectFirstExperience(experienceState).status === "FIRST_PROOF"} reconciled={homeReconciled} api={api} proofs={proofs} queue={queue} connections={connections} loading={loading} error={error} pendingUploadCount={recordingsLoaded ? recordings.filter(item => !(item.finalized && item.preserved)).length : undefined} onRetry={libraryProps.onRetry} onGo={go} onOpenProof={libraryProps.onOpenProof} onOpenInvitation={libraryProps.onOpenInvitation} onOpenReceiver={libraryProps.onOpenReceiver} />)}
       {(route.name === "pack" || mobileTask && route.name === "station" && !route.proofId && !route.reference && !route.tools && !recordings.some(row => row.kind === "station" && !row.finalized)) && <MobilePackScreen api={api} queue={queue} loading={loading} error={error} onRetry={libraryProps.onRetry} onGo={go} onOpen={id => void openMobileTask(id)} onCreate={reference => go(reference ? `/new?reference=${encodeURIComponent(reference)}` : "/new")} />}
       {route.name === "fulfillment" && <OrdersScreen orders={queue} loading={loading} error={error} syncBusy={busy} syncAvailable={connections.some(item => item.status === "ACTIVE")} onRetry={libraryProps.onRetry} onOpenProof={libraryProps.onOpenProof} onOpenStation={id => go(`/proofs/${encodeURIComponent(id)}/capture`)} onOpenIntegrations={() => go("/stores")} onCreate={libraryProps.onCreate} onSync={async () => {
         setBusy(true); setError(null);

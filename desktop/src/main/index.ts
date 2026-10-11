@@ -1,3 +1,4 @@
+import { readCurrentProof } from './current-proof';
 import {app,BrowserWindow,protocol,net,session,ipcMain,dialog,shell,Tray,Menu,nativeImage,Notification,powerSaveBlocker,powerMonitor} from 'electron';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {join,resolve,extname,sep} from 'node:path';
@@ -71,6 +72,7 @@ function setupIpc(){
  handle('auth.signOut',schemas.empty,async()=>{if(engine?.activeCapture)throw new Error('Finish recording before signing out.');await engine?.setAccount(null);revokeMedia();await auth?.signOut();emit({type:'session'});});
  const account=()=>{if(!auth)throw new Error('This desktop build needs PackProof service configuration.');return auth;};
  handle('auth.signUp',schemas.login,i=>account().signUp(i));handle('auth.confirmSignUp',schemas.code,i=>account().confirmSignUp(i));handle('auth.resendCode',schemas.email,e=>account().resendConfirmation(e));handle('auth.forgotPassword',schemas.email,e=>account().forgotPassword(e));handle('auth.resetPassword',schemas.reset,i=>account().confirmForgotPassword(i));
+ handle('proofs.current',schemas.currentProof,(id,owner)=>readCurrentProof(requireApi(),id,owner));
  handle('proofs.scope',schemas.id,owner=>{requireApi().assertAccount(owner);return config!.apiBaseUrl;});handle('proofs.list',schemas.empty,()=>cached('proof-list',()=>requireApi().listProofs()));handle('proofs.detail',schemas.id,id=>cached('proof-'+id,()=>requireApi().getProof(id)));handle('proofs.create',schemas.transaction,(i,owner)=>requireApi().createProof(i,owner));handle('proofs.finalize',schemas.id,async id=>(await requireApi().finalizeProof(id)).proof);
  handle('proofs.sharePreview',schemas.id,async id=>{
   const client=requireApi(),scope={accountId:auth!.getAccountId()!,epoch:sessionEpoch};

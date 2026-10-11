@@ -11,3 +11,8 @@
 
 .share-preview{border:1px solid var(--line);border-radius:8px;padding:16px;margin:18px 0}.share-preview h3{font-size:13px;margin:0 0 10px}.share-categories{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}.share-recordings{padding:0;list-style:none;margin:0}.share-recordings li{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--line)}.share-recordings li>div{min-width:0}.share-recordings strong{font-size:12px;overflow-wrap:anywhere}.share-recordings small{display:block;margin-top:5px}.share-recordings button{flex-shrink:0}.share-statement{border-top:1px solid var(--line);padding:10px 0}.share-statement p{margin-bottom:5px}.share-playback{margin:14px 0}.modal .declaration{display:flex;flex-direction:row;align-items:flex-start;gap:10px;line-height:1.6}.modal .declaration input{width:17px;min-height:17px;flex-shrink:0;margin-top:3px}
 .share-recipient-summary{border-top:1px solid var(--line);padding:15px 0}.share-milestones{list-style:none;padding:0;margin:12px 0}.share-milestones li{display:flex;justify-content:space-between;gap:14px;padding:6px 0;font-size:11px}
+
+/* Dynamic task titles stay inside the established workstation hero. */
+.hero-station[aria-label="Recommended action"]>div:first-child{min-width:0}
+.hero-station[aria-label="Recommended action"] h2{overflow-wrap:anywhere}
+.hero-station[aria-label="Recommended action"] .primary + .text-button{margin-inline-start:16px}

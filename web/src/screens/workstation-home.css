@@ -113,3 +113,8 @@
 }
 
 .first-proof-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:20px}.first-proof-actions button{min-height:44px}
+
+/* Task titles may contain long references; retain the existing desktop composition. */
+.workspace-shell .workstation-hero[aria-label="Recommended action"]>div:first-child { min-width:0; }
+.workspace-shell .workstation-hero[aria-label="Recommended action"] h2 { overflow-wrap:anywhere; }
+.workspace-shell .workstation-hero[aria-label="Recommended action"] .btn + .text-link { margin-inline-start:16px; }

@@ -1,8 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomeScreen } from "../screens/HomeScreen";
 import { summary } from "./fixtures";
+import type { LocalRecordingSummary } from '../capture-queue';
+
+vi.mock('../mobile-task/task-state', async original => ({ ...await original<typeof import('../mobile-task/task-state')>(), usableSavedRecording: vi.fn(async () => true) }));
 
 afterEach(cleanup);
 
@@ -47,4 +50,55 @@ it("routes receiver records and workstation actions to their existing flows", as
   expect(callbacks.onGo).toHaveBeenLastCalledWith("/fulfillment");
   await userEvent.click(screen.getByRole("button", { name: "2 pending" }));
   expect(callbacks.onGo).toHaveBeenLastCalledWith("/uploads");
+});
+
+const adaptive = () => ({ ...props(), firstExperience: true, reconciled: true, taskScope: 'api:user_seller', recordings: [] as LocalRecordingSummary[], pendingUploadCount: 0, onTaskAction: vi.fn() });
+const local = (extra: Partial<LocalRecordingSummary> = {}): LocalRecordingSummary => ({ key: 'saved', proofId: summary.proofId, kind: 'station', file: new Blob(['fixture'], { type: 'video/webm' }), available: true, accepted: true, committed: false, finalized: false, preserved: false, ...extra });
+it('keeps the desktop workspace sections while prioritizing an incomplete Proof', async () => {
+  const p = adaptive(); render(<HomeScreen {...p} />);
+  const hero = screen.getByRole('region', { name: 'Recommended action' });
+  await userEvent.click(within(hero).getByRole('button', { name: 'Continue Proof' }));
+  expect(p.onTaskAction).toHaveBeenCalledWith(expect.objectContaining({ kind: 'continue_proof', targetId: summary.proofId }));
+  expect(screen.getByRole('heading', { name: 'Recent Proofs' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Workspace status' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Fulfillment queue' })).toBeInTheDocument();
+  expect(within(hero).getByRole('button', { name: 'Create Proof' })).toBeInTheDocument();
+});
+it('puts a usable saved review ahead of a failed upload and both ahead of new packing', async () => {
+  const p = adaptive();
+  const second = { ...summary, proofId: 'second' };
+  const view = render(<HomeScreen {...p} proofs={[summary, second]} recordings={[local({ accepted: false }), local({ key: 'failed', proofId: 'second', retryStopped: true })]} pendingUploadCount={2} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Review evidence' })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Review evidence' }));
+  expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'review_evidence', sessionId: 'saved' }));
+  view.rerender(<HomeScreen {...p} recordings={[local({ retryStopped: true })]} pendingUploadCount={1} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Review upload' }));
+  expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'review_upload', sessionId: 'saved' }));
+});
+it('leaves healthy uploads passive and never offers capture for a viewer-only row', () => {
+  const p = adaptive(), second = { ...summary, proofId: 'second' };
+  const view = render(<HomeScreen {...p} proofs={[summary, second]} recordings={[local({ active: true })]} pendingUploadCount={1} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue Proof' }));
+  expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ targetId: second.proofId }));
+  view.rerender(<HomeScreen {...p} proofs={[{ ...summary, role: 'BUYER' }]} />);
+  expect(screen.queryByRole('button', { name: 'Continue Proof' })).not.toBeInTheDocument();
+});
+it('keeps a focused valid target stable, then drops it when permissions change', () => {
+  const p = adaptive(), second = { ...summary, proofId: 'second', createdAt: '2026-10-01T00:00:00Z' };
+  const view = render(<HomeScreen {...p} proofs={[summary, second]} />);
+  fireEvent.focus(screen.getByRole('button', { name: 'Continue Proof' }));
+  view.rerender(<HomeScreen {...p} proofs={[summary, second]} taskSelection='second' />);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue Proof' }));
+  expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ targetId: summary.proofId }));
+  view.rerender(<HomeScreen {...p} proofs={[{ ...summary, role: 'BUYER' }, second]} taskSelection='second' />);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue Proof' }));
+  expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ targetId: second.proofId }));
+});
+it('keeps populated unknown or unreconciled work separate from an empty-account claim', () => {
+  const p = adaptive();
+  const view = render(<HomeScreen {...p} reconciled={false} />);
+  expect(screen.getByRole('heading', { name: 'Check your workspace' })).toBeInTheDocument();
+  expect(screen.queryByText('Create your first Proof')).not.toBeInTheDocument();
+  view.rerender(<HomeScreen {...p} proofs={[{ ...summary, status: 'UNRECOGNIZED' }]} />);
+  expect(screen.getByRole('button', { name: 'Refresh Proof' })).toBeInTheDocument();
 });
