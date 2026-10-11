@@ -2,9 +2,10 @@ import { Onboarding, replayTutorial } from "../../../web/src/onboarding/Onboardi
 import { SampleProof } from "../../../web/src/site/SampleProof";
 import sampleVideo from '../../../web/public/sample-packing.mp4?url';
 import {selectFirstExperience,type OnboardingState} from '../../../packages/onboarding/model';
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConnectedAccountsListView, DesktopEvent, DesktopSettings, FulfillmentQueueItem, ProofCollectionItem, SessionView, SystemView, UploadView } from '../shared/contracts';
 import { Auth } from './Auth';
+import {NewProof} from './NewProof';
 import { PackingStation } from './PackingStation';
 import { ProofDetail } from './ProofDetail';
 import { Badge, Brand, Empty, ErrorNotice, Icon, Modal, SectionHeading } from './components';
@@ -171,7 +172,7 @@ export function App() {
     {page==='notifications'&&<section className="panel">{events.length?<div className="event-list">{events.map(event=><article key={event.id}><span className="empty-icon"><Icon name="notifications"/></span><div><h3>{event.title||'Workstation update'}</h3><p>{event.message}</p><small>{dateTime(event.at)}</small></div></article>)}</div>:<Empty icon="notifications" title="No workstation notifications yet">Upload confirmations, failures, and update notices will appear here during this session.</Empty>}</section>}
     {page==='settings'&&studyApi&&<StudyConsentPanel api={studyApi} userId={session.userId}/>}{page==='settings'&&system&&<Settings system={system} onSettings={updateSettings} action={action} busy={actionBusy}/>}
   </div><footer className="workspace-footer"><span>PackProof Desktop {system?.version}</span><span>{pendingUploads.length>0?`${pendingUploads.length} recording${pendingUploads.length===1?'':'s'} in local queue`:'Neutral evidence. Source-linked records.'}</span></footer></main>
-  {sample}{newProof&&<NewProof close={()=>setNewProof(false)} onCreated={id=>{setNewProof(false);openCapture(id);void refresh();}}/>}
+  {sample}{newProof&&<NewProof key={session.userId} userId={session.userId} close={()=>setNewProof(false)} onCreated={id=>{setNewProof(false);openCapture(id);void refresh();}}/>}
   {signOut&&<Modal title="Sign out of PackProof?" close={()=>setSignOut(false)}><p>{pendingUploads.length?`${pendingUploads.length} recording${pendingUploads.length===1?' remains':'s remain'} staged for this account. Uploads will resume when you sign in again with the same account.`:'Your account credentials will be removed from this computer. Committed Proofs remain available in your account.'}</p><div className="modal-actions"><button onClick={()=>setSignOut(false)}>Cancel</button><button className="primary" disabled={actionBusy} onClick={()=>void action(async()=>{await window.packproof.auth.signOut();setSession(null);setSignOut(false);setPage('home');})}>Sign out</button></div></Modal>}
   {discard&&<Modal title="Discard this local recording?" close={()=>setDiscard(null)}><p>“{discard.label}” has not been confirmed as secured by PackProof. Discarding removes this local evidence permanently.</p><div className="modal-actions"><button onClick={()=>setDiscard(null)}>Keep recording</button><button className="danger" disabled={actionBusy} onClick={()=>void action(async()=>{await window.packproof.uploads.discard(discard.id);setDiscard(null);await refresh();})}>Discard recording</button></div></Modal>}
   </div>;
@@ -179,11 +180,6 @@ export function App() {
 
 function Pagination({page,total,onPage}:{page:number;total:number;onPage:(page:number)=>void}) {
   return total>40?<div className="pagination"><span>{page*40+1}–{Math.min((page+1)*40,total)} of {total}</span><div className="button-group"><button disabled={page===0} onClick={()=>onPage(page-1)}>Previous</button><button disabled={(page+1)*40>=total} onClick={()=>onPage(page+1)}>Next</button></div></div>:null;
-}
-function NewProof({close,onCreated}:{close:()=>void;onCreated:(id:string)=>void}) {
-  const [title,setTitle]=useState('');const [reference,setReference]=useState('');const [tracking,setTracking]=useState('');const [carrier,setCarrier]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
-  async function submit(event:FormEvent){event.preventDefault();setBusy(true);setError('');try{const proof=await window.packproof.proofs.create({itemTitle:title.trim(),externalReference:reference.trim()||null,shipping:tracking.trim()?{trackingNumber:tracking.trim(),carrier:carrier.trim()||null}:null});onCreated(proof.proofId);}catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}}
-  return <Modal title="New shipment Proof" close={()=>{if(!busy)close();}}><p>For synchronized marketplace orders, select the existing order from your fulfillment queue.</p>{error&&<ErrorNotice>{error}</ErrorNotice>}<form onSubmit={event=>void submit(event)}><label>Item or shipment name<input required maxLength={250} value={title} onChange={event=>setTitle(event.target.value)} placeholder="e.g. Graded comic shipment" autoFocus/></label><label>Order reference <span className="optional">Optional</span><input maxLength={250} value={reference} onChange={event=>setReference(event.target.value)}/></label><div className="form-columns"><label>Tracking number <span className="optional">Optional</span><input maxLength={150} value={tracking} onChange={event=>setTracking(event.target.value)}/></label><label>Carrier <span className="optional">Optional</span><input maxLength={100} value={carrier} onChange={event=>setCarrier(event.target.value)}/></label></div><div className="modal-actions"><button type="button" onClick={close} disabled={busy}>Cancel</button><button className="primary" disabled={busy}>{busy?'Creating…':'Create & open camera'}</button></div></form></Modal>;
 }
 function Settings({system,onSettings,action,busy}:{system:SystemView;onSettings:(settings:DesktopSettings)=>void;action:(task:()=>Promise<void>)=>Promise<void>;busy:boolean}) {
   const save=(value:Partial<DesktopSettings>)=>void action(async()=>onSettings(await window.packproof.system.saveSettings(value)));

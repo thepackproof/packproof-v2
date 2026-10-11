@@ -92,8 +92,8 @@ export class DesktopApi {
   studyRequest<T>(path:'/consent'|'/timings/start'|'/timings',method:'GET'|'POST',body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
   updateOnboarding(action:Action):Promise<OnboardingState>{return this.request('/me/onboarding',{method:'POST',body:action});}
   getProof(proofId: string, signal?: AbortSignal): Promise<CanonicalProof> { return this.request(`/proofs/${id(proofId)}`, { signal }); }
-  /** Creation isn't blindly retried: this legacy backend route has no transaction-create idempotency contract. */
-  createProof(input: TransactionWriteInput): Promise<CanonicalProof> { return this.request('/proofs', { method: 'POST', body: { workflowType: 'COMMERCE_SALE', transaction: input } }); }
+  /** Transaction idempotency reopens the same canonical Proof after a lost response. */
+  createProof(input: TransactionWriteInput, expectedUserId?:string): Promise<CanonicalProof> { if(expectedUserId)this.assertAccount(expectedUserId); return this.request('/proofs', { method: 'POST', body: { workflowType: 'COMMERCE_SALE', transaction: input } }); }
   async listOrders(filter: 'ready' | 'completed' | 'all' = 'all'): Promise<FulfillmentQueueItem[]> { return (await this.request<{ items: FulfillmentQueueItem[] }>(`/me/fulfillment-queue?filter=${filter}`)).items; }
   resolvePackingStation(reference: string): Promise<PackingStationResolveView> { return this.request('/me/packing-station/resolve', { method: 'POST', body: { reference } }); }
   listConnectedAccounts(): Promise<ConnectedAccountsListView> { return this.request('/me/connected-accounts'); }
