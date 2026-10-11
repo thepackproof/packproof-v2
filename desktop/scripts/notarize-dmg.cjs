@@ -10,7 +10,7 @@ module.exports = async function notarizeDiskImage(event) {
   const auth = env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER
     ? ['--key', env.APPLE_API_KEY, '--key-id', env.APPLE_API_KEY_ID, '--issuer', env.APPLE_API_ISSUER]
     : ['--apple-id', env.APPLE_ID, '--password', env.APPLE_APP_SPECIFIC_PASSWORD, '--team-id', env.APPLE_TEAM_ID];
-  const result = spawnSync('xcrun', ['notarytool', 'submit', event.file, '--wait', '--timeout', '25m', '--output-format', 'json', ...auth], { encoding: 'utf8' });
+  const result = spawnSync('xcrun', ['notarytool', 'submit', event.file, '--wait', '--timeout', '60m', '--output-format', 'json', ...auth], { encoding: 'utf8' });
   // Do not echo credential arguments or Apple's diagnostic response into build logs.
   if (result.status !== 0 || JSON.parse(result.stdout).status !== 'Accepted') throw new Error('Apple did not accept the disk image for notarization.');
   for (const operation of ['staple', 'validate']) {
