@@ -33,11 +33,11 @@ Clients do not emit authoritative `evidence_committed` or `proof_finalized` outc
 ## Automated evidence
 
 - `npm run typecheck` in `mobile`: passed.
-- `npm run test:study-timing`: 27 passed, including 7 new native trigger/runtime tests, 7 native study tests, and 13 shared bridge tests.
+- `npm run test:study-timing`: 28 passed, including 8 new native trigger/runtime tests, 7 native study tests, and 13 shared bridge tests. The final auth-transfer test covers a restart after an interrupted buffer transfer and verifies stable task identity.
 - `npm run test:recovery`: 29 passed, including the real completion coordinator with native I/O replaced at its boundary.
 - `npm run test:first-proof`: 29 passed.
 - The new trigger tests exercise deferred measurement, no-consent silence, actual-ready callback semantics, persistence failure, durable task identity after process recovery, account isolation, previous-consent reauthentication and withdrawal.
 
-`npx expo export --platform android --platform ios --output-dir dist-measurement` passed for both platforms (1,058 Android modules and 1,055 iOS modules). The exports include the read-only sample asset. Metro reported the existing `@noble/hashes/crypto.js` fallback warning; export completed successfully.
+`npx expo export --platform android --platform ios --output-dir dist-measurement` passed for both platforms. After the authentication-transfer fix in `5bf0471`, a fresh `dist-measurement-final` export also passed, producing Android bundle `index-77672fc330816638c6682726946ecb98.hbc` and iOS bundle `index-8ea41a52c5a9e4d4d9e0a0e97c4e8cdd.hbc`. The generated files were preserved outside the checkout under `work/measurement-native-export-5bf0471`. The exports include the read-only sample asset. Metro reported the existing `@noble/hashes/crypto.js` fallback warning; export completed successfully.
 
 A fresh signed application build is still required to distribute these changes. Physical-device runs must still validate permission denial, camera interruption, termination/relaunch, offline recovery and timing on the intended devices. Existing signed binaries do not contain this measurement code merely because source and JavaScript exports pass.
