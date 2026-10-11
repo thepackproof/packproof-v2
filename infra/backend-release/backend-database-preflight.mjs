@@ -16,7 +16,7 @@ try {
   const url=new URL(config.databaseUrl);
   if(url.hostname!=='packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com'||url.pathname!=='/packproof_v2'||decodeURIComponent(url.username)!=='packproof_app_runtime_v1')throw Error('RUNTIME_DATABASE_TARGET_MISMATCH');
   const inventory=await migrationInventory();
-  if(inventory.length!==76 || digest(inventory)!==expectedInventorySha256)throw Error('SOURCE_INVENTORY_MISMATCH');
+  if(inventory.length!==77 || digest(inventory)!==expectedInventorySha256)throw Error('SOURCE_INVENTORY_MISMATCH');
   opened=await openDatabase(config);
   if(opened.engine!=='postgres')throw Error('POSTGRES_REQUIRED');
   const receipt=await opened.db.transaction(async db=>{

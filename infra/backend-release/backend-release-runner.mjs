@@ -1,3 +1,4 @@
+import {reviewedMeasurementInventory} from './backend-measurement-inventory.mjs';
 /** Release phase coordinator. Requires reviewed exact source and live topology. */
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -74,7 +75,9 @@ async function build(){
  const db=aws('rds','describe-db-instances',['--db-instance-identifier','packproof-v2-staging-db']).DBInstances?.[0];
  check(db?.DBInstanceStatus==='available'&&db.BackupRetentionPeriod>0&&db.LatestRestorableTime,'DATABASE_RECOVERY_UNAVAILABLE');
  state.recovery={latestRestorableTime:db.LatestRestorableTime,backupRetentionDays:db.BackupRetentionPeriod};
- const rows=inventory(input.sourceSha);check(rows.length===76&&hash(rows)===hash(inventory(state.baseline.meta.commit)),'MIGRATION_SOURCE_DELTA_REQUIRES_REVIEW');
+ const rows=inventory(input.sourceSha),priorInventory=inventory(state.baseline.meta.commit);
+ let compatibilitySource='';try{compatibilitySource=git('show',`${state.baseline.meta.commit}:backend/src/db/forward-compatible-migrations.ts`).toString();}catch{}
+ check(reviewedMeasurementInventory(rows,priorInventory,compatibilitySource),'MIGRATION_SOURCE_DELTA_REQUIRES_REVIEW');
  state.inventorySha256=sha(JSON.stringify(rows));state.preservation=preservationSnapshot(state.baseline);
  const previous=aws('ecr','batch-get-image',['--repository-name',TARGET.serviceName,'--image-ids',`imageDigest=${input.expectedPreviousImage.split('@')[1]}`]);check(previous.images?.length===1&&!previous.failures?.length,'ROLLBACK_IMAGE_UNAVAILABLE');
  const images=aws('ecr','describe-images',['--repository-name',TARGET.serviceName]).imageDetails??[];

@@ -3018,6 +3018,221 @@
         ],
         "description": "An account token may revoke any owned session. An intake-only session may revoke only itself; this supports immediate cleanup when the host account changes during session minting."
       }
+    },
+    "/study/consent": {
+      "servers": [
+        {
+          "url": "/"
+        }
+      ],
+      "get": {
+        "operationId": "getAccountStudyConsent",
+        "summary": "Read the optional account study and current consent",
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyConsent"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "writeAccountStudyConsent",
+        "summary": "Explicitly grant or withdraw account study consent",
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyConsent"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyConsentWrite"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/study/timings/start": {
+      "servers": [
+        {
+          "url": "/"
+        }
+      ],
+      "post": {
+        "operationId": "startAccountStudyTiming",
+        "summary": "Start a consented durable timing attempt",
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyTimingReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyTimingStart"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/study/timings": {
+      "servers": [
+        {
+          "url": "/"
+        }
+      ],
+      "post": {
+        "operationId": "appendAccountStudyTiming",
+        "summary": "Append a bounded consented client observation",
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyTimingReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyTimingCheckpoint"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/analytics/first-experience": {
+      "servers": [
+        {
+          "url": "/"
+        }
+      ],
+      "get": {
+        "operationId": "getAdminFirstExperienceReport",
+        "summary": "Read consented first-choice conversion and authoritative outcomes",
+        "security": [
+          {
+            "AccountBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstExperienceReport"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "description": "Requires SYSTEM_ADMIN. Study configuration and actual consent define availability. Never returns raw account/Proof IDs. Existing bounded admin period/from/to parser applies.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "today",
+                "7d",
+                "30d",
+                "90d",
+                "1y",
+                "all"
+              ],
+              "default": "7d"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Supply together with to."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Supply together with from."
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3025,7 +3240,7 @@
       "ApiKey": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "pp_sandbox_\u2026 or pp_live_\u2026"
+        "bearerFormat": "pp_sandbox_… or pp_live_…"
       },
       "AccountBearer": {
         "type": "http",
@@ -3567,6 +3782,455 @@
             "maxProperties": 0
           }
         ]
+      },
+      "StudyConsent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "granted": {
+            "type": "boolean"
+          },
+          "datasetRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "eventRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "statementVersion": {
+            "type": "string",
+            "const": "capture-timing-study-v1"
+          },
+          "statement": {
+            "type": "string"
+          },
+          "changedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "granted"
+        ]
+      },
+      "StudyConsentWrite": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "datasetRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "operationNonce": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "grant",
+              "withdraw"
+            ]
+          },
+          "statementVersion": {
+            "type": "string",
+            "const": "capture-timing-study-v1"
+          }
+        },
+        "required": [
+          "datasetRef",
+          "operationNonce",
+          "decision",
+          "statementVersion"
+        ]
+      },
+      "StudyTimingStart": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "datasetRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "operationNonce": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientStartedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "taskKind": {
+            "type": "string",
+            "enum": [
+              "packproof",
+              "ordinary_baseline",
+              "interface_action"
+            ]
+          },
+          "deviceClass": {
+            "type": "string",
+            "enum": [
+              "s24_ultra",
+              "a16_5g",
+              "other_android",
+              "ios",
+              "web",
+              "unknown"
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ebay",
+              "stripe",
+              "paypal",
+              "manual",
+              "other",
+              "unknown"
+            ]
+          },
+          "buildSha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "flowVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "appVersion": {
+            "type": "string",
+            "pattern": "^[0-9][a-zA-Z0-9._-]{0,63}$"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "android",
+              "ios",
+              "web",
+              "desktop"
+            ]
+          },
+          "entrySource": {
+            "type": "string",
+            "enum": [
+              "home",
+              "manual",
+              "order",
+              "deep_link",
+              "recovery",
+              "sample",
+              "help",
+              "auth",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "datasetRef",
+          "operationNonce",
+          "clientStartedAt",
+          "taskKind",
+          "deviceClass",
+          "channel"
+        ]
+      },
+      "StudyTimingCheckpoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "datasetRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "attemptRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "operationNonce": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "preflight",
+              "recording",
+              "upload",
+              "confirmation",
+              "finalization",
+              "ended"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "elapsedMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "activeMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "offlineMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "unattendedMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "errorCode": {
+            "type": "string",
+            "enum": [
+              "network",
+              "authentication",
+              "quota",
+              "storage",
+              "capability",
+              "integrity",
+              "provider",
+              "cancelled",
+              "unknown"
+            ]
+          },
+          "interaction": {
+            "type": "string",
+            "enum": [
+              "order_selected",
+              "recording_started",
+              "recording_stopped",
+              "label_read",
+              "label_mismatch",
+              "review_opened",
+              "consent_confirmed",
+              "consent_cancelled",
+              "consent_failed",
+              "upload_pending",
+              "server_completed",
+              "recovery_started",
+              "share_created",
+              "entry_viewed",
+              "start_selected",
+              "auth_started",
+              "auth_completed",
+              "auth_failed",
+              "capture_ready",
+              "capture_started",
+              "capture_saved",
+              "capture_interrupted",
+              "submission_authorized",
+              "upload_state_changed",
+              "help_opened",
+              "hint_dismissed",
+              "recovery_action"
+            ],
+            "description": "Client observations only. evidence_committed and proof_finalized are rejected; only canonical server history establishes those outcomes."
+          },
+          "clientOccurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "networkState": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline",
+              "unknown"
+            ]
+          },
+          "uploadState": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "uploading",
+              "waiting",
+              "retrying",
+              "committing",
+              "finalizing",
+              "complete",
+              "needs_attention"
+            ]
+          }
+        },
+        "required": [
+          "datasetRef",
+          "attemptRef",
+          "operationNonce",
+          "phase",
+          "outcome",
+          "elapsedMs",
+          "activeMs",
+          "offlineMs",
+          "unattendedMs"
+        ],
+        "description": "Current account/dataset consent required. Clocks are self-reported; duration counters cannot regress. uploadState requires interaction=upload_state_changed. Stable nonce retries return the original response; changed facts reject."
+      },
+      "StudyTimingReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "eventRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "attemptRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "authority": {
+            "type": "string",
+            "const": "client"
+          }
+        },
+        "required": [
+          "eventRef",
+          "attemptRef",
+          "authority"
+        ]
+      },
+      "FirstExperienceReport": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "definitionVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "datasetRef": {
+            "type": "string",
+            "pattern": "^pr_[a-f0-9]{32}$"
+          },
+          "matureConsentedAccounts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "finalizedAccounts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "conversion24hPercent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 100
+          },
+          "immatureAccounts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "withdrawnBeforeFullWindow": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stages": {
+            "type": "object"
+          },
+          "timings": {
+            "type": "object"
+          },
+          "cohorts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "authoritativeEvents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "eventName": {
+                  "type": "string",
+                  "enum": [
+                    "evidence_committed",
+                    "proof_finalized"
+                  ]
+                },
+                "authority": {
+                  "type": "string",
+                  "const": "server"
+                },
+                "eventRef": {
+                  "type": "string",
+                  "pattern": "^pr_[a-f0-9]{32}$"
+                },
+                "merchantRef": {
+                  "type": "string",
+                  "pattern": "^pr_[a-f0-9]{32}$"
+                },
+                "occurredAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "eventName",
+                "authority",
+                "eventRef",
+                "merchantRef",
+                "occurredAt"
+              ]
+            }
+          },
+          "eventCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "eventCountsPopulation": {
+            "type": "string"
+          },
+          "guardrails": {
+            "type": "object"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Read-only account/dataset pseudonymous cohort. Full 24-hour window required; withdrawal censors, failures remain. This is not all-customer conversion. Client timings are not app-controlled overhead; server outcomes derive from eligible committed-video/final-manifest history."
       }
     }
   }
