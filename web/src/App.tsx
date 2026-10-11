@@ -21,6 +21,7 @@ import { SubmissionIntakePanel } from "./components/SubmissionIntakePanel";
 import { IntakeLinkFallback, IntakeSignInContext } from "./screens/IntakeLinkFallback";
 import type {EngineSession} from "./capture/engine";
 import { presentProof, applyLocalWork } from "./proof-presentation";
+import { confirmLocalWorkSignOut } from './auth/signout-recovery';
 import { listRecoverableRecordings } from "./capture-queue";
 import { randomId } from "./random-id";
 import { LocalRecordingRecovery } from "./components/LocalRecordingRecovery";
@@ -321,6 +322,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   const createPending = useRef(false);
   const reauthenticationTask = useRef(readReauthenticationTask());
   const [captureActive, setCaptureActive] = useState(false);
+  const signOutPending = useRef(false);
+  const captureActiveRef = useRef(captureActive); captureActiveRef.current = captureActive;
   const [homeProofs, setHomeProofs] = useState<ProofCollectionItem[]>([]);
   const [homeRefreshedAt, setHomeRefreshedAt] = useState<string | null>(null);
   const [taskNotice, setTaskNotice] = useState<string | null>(null);
@@ -465,6 +468,17 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     [api, proof],
   );
 
+  async function requestSignOut() {
+    const owner = sessionRef.current;
+    if (!owner || owner !== session || signOutPending.current) return;
+    if (captureActiveRef.current) { window.alert('Finish or preserve your current recording before signing out.'); return; }
+    signOutPending.current = true;
+    const current = () => sessionRef.current === owner && !captureActiveRef.current;
+    try {
+      if (await confirmLocalWorkSignOut({ read: () => listRecoverableRecordings(owner.userId, api), current, confirm: message => window.confirm(message) }) && current()) signOut();
+    } finally { signOutPending.current = false; }
+  }
+
   function signOut(expired = false) {
     const previousSession = sessionRef.current;
     if(previousSession)pauseStudyAccount(api,previousSession.userId);
@@ -526,7 +540,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   }
 
   async function openMobileTask(target: string | ProofCollectionItem | HomeAction, preferredRecording?: LocalRecordingSummary) {
-    if (!session || taskPending.current) return;
+    if (!session || taskPending.current || signOutPending.current) return;
     if (typeof target !== "string" && "kind" in target && target.kind === "create_proof") { go("/new"); return; }
     const id = typeof target === "string" ? target : "proofId" in target ? target.proofId : target.targetId;
     if (!id) return;
@@ -535,7 +549,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     if (summary?.invitationId) { go(`/invitations/${encodeURIComponent(summary.invitationId)}`); return; }
     taskPending.current = true; setTaskBusy(true); setTaskNotice(null);
     const account = session.userId, scope = session.apiBaseUrl, path = window.location.pathname + window.location.search;
-    const current = () => sessionRef.current?.userId === account && sessionRef.current?.apiBaseUrl === scope && path === window.location.pathname + window.location.search;
+    const current = () => !signOutPending.current && sessionRef.current?.userId === account && sessionRef.current?.apiBaseUrl === scope && path === window.location.pathname + window.location.search;
     try {
       const local = await listRecoverableRecordings(account, api);
       if (!current()) return;
@@ -890,7 +904,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         <ProfileSetupScreen
           session={session}
           onGo={go}
-          onSignOut={signOut}
+          onSignOut={() => void requestSignOut()}
           onCompleted={(profile) => {
             setSession({
               ...session,
@@ -920,14 +934,14 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     onOpenInvitation: (invitationId: string) => go(`/invitations/${encodeURIComponent(invitationId)}`),
   };
 
-  if (route.name === "admin") return <Suspense fallback={<main className="app-loading" role="status">Opening administration…</main>}><AdminWorkspace api={api} access={adminAccess} accountName={session.displayName || session.username || "Administrator"} onGo={go} onSignOut={signOut} /></Suspense>;
+  if (route.name === "admin") return <Suspense fallback={<main className="app-loading" role="status">Opening administration…</main>}><AdminWorkspace api={api} access={adminAccess} accountName={session.displayName || session.username || "Administrator"} onGo={go} onSignOut={() => void requestSignOut()} /></Suspense>;
 
   return (
     <div className={`app-shell workspace-shell${mobileTask ? " mobile-task-shell" : ""}${captureActive ? " capture-active" : ""}`}>
       <Onboarding key={`${session.apiBaseUrl}:${session.userId}`} api={api} firstExperience={firstExperience} onState={setExperienceState} accountKey={`${session.apiBaseUrl}:${session.userId}`} dashboard={route.name==='proofs'} ready={!busy} onDashboard={()=>go('/proofs')} onCreate={()=>go('/new')} onViewProof={id=>go(`/proofs/${encodeURIComponent(id)}`)} capture={route.name==='station'} />
         {(route.name==='proofs'||route.name==='create')&&<CompanionBridge api={api} userId={session.userId} connections={connections}/>}
         {route.name==='proof'&&proof?.status==='READY_FOR_EVIDENCE'&&proof.workflowType==='COMMERCE_SALE'&&proof.participationPolicy==='COUNTERPARTY_OPTIONAL'&&<SelectedOrderHandoff key={proof.proofId} api={api} userId={session.userId} transactionId={proof.transaction.transactionId}/>}
-        {mobileTask ? (!captureActive && <MobileNavigation session={session} route={route.name} adminAllowed={adminAccess.allowed} onGo={go} onSignOut={signOut} />) : <AppNav
+        {mobileTask ? (!captureActive && <MobileNavigation session={session} route={route.name} adminAllowed={adminAccess.allowed} onGo={go} onSignOut={() => void requestSignOut()} />) : <AppNav
           adminAllowed={adminAccess.allowed}
           session={session}
           invitationCount={invitations.length}
@@ -935,7 +949,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           onGo={go}
           onGoHome={() => go("/")}
           onOpenAccount={() => go("/account")}
-          onSignOut={signOut}
+          onSignOut={() => void requestSignOut()}
         />}
       {!mobileTask && <WorkstationHeader route={route.name} refreshing={loading || busy} onRefresh={libraryProps.onRetry} />}
       {mobileTask && taskNotice && route.name !== "home" && <p className="task-notice" role="status">{taskNotice}</p>}
@@ -1054,7 +1068,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
               .catch((caught) => setError(handleError(caught)))
               .finally(() => setBusy(false));
           }}
-          onSignOut={signOut}
+          onSignOut={() => void requestSignOut()}
         />
       ) : null}
 
@@ -1220,7 +1234,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           error={error}
           initialReference={route.reference}
           initialProofId={route.proofId}
-          onAuthExpired={signOut}
+          onAuthExpired={() => signOut(true)}
           onLeave={() => go(route.proofId ? `/proofs/${encodeURIComponent(route.proofId)}` : "/proofs")}
           onRecoverProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}/capture`)}
           onCompleted={(proofId) => { proofIdRef.current = null; go(`/proofs/${encodeURIComponent(proofId)}`); }}

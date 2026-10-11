@@ -48,7 +48,7 @@ it('explicit sign-out clears task return and the visible account even when invok
   retainReauthenticationTask(account, '/receipt/previous');
   render(<App />);
   fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
-  expect(location.pathname).toBe('/');
+  await waitFor(() => expect(location.pathname).toBe('/'));
   expect(loadSession()).toBeNull();
   expect(readReauthenticationTask()).toBeNull();
 });

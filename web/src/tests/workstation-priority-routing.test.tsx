@@ -68,3 +68,18 @@ it('keeps a failed fresh authorization check on Home without opening the old cam
   expect(await screen.findByText('This Proof is not available.')).toBeInTheDocument();
   expect(window.location.pathname.endsWith('/capture')).toBe(false);
 });
+it('does not open a late camera task while sign-out checks saved local work', async () => {
+  let finishDetail!: (value: Response) => void;
+  let finishLocalCheck!: (value: LocalRecordingSummary[]) => void;
+  const detail = vi.fn(() => new Promise<Response>(resolve => { finishDetail = resolve; }));
+  mockApi(detail); render(<App />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue Proof' }));
+  await waitFor(() => expect(detail).toHaveBeenCalledOnce());
+  queue.list.mockImplementation(() => new Promise(resolve => { finishLocalCheck = resolve; }));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+  finishDetail(json(ready));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Continue Proof' })).toBeEnabled());
+  expect(window.location.pathname).toBe('/app');
+  finishLocalCheck([]);
+  await waitFor(() => expect(window.location.pathname).toBe('/'));
+});
