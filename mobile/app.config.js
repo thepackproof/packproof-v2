@@ -30,8 +30,7 @@ const isRelease = isAndroidRelease || isIosRelease;
 const mobileTaskUxEnabled = env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX", "true") !== "false";
 // expo-constants packages this public config as Android assets/app.config.
 // Use worker source metadata, never a persistent public environment value.
-const isIosStoreRelease = easProfile === "ios-testflight";
-const sourceBoundProfile = isAndroidRelease || isIosSimulatorReview || isIosStoreRelease;
+const sourceBoundProfile = isAndroidRelease || isIosSimulatorReview;
 const buildSourceSha = sourceBoundProfile ? env("EAS_BUILD_GIT_COMMIT_HASH") : "";
 if (sourceBoundProfile && (env("EAS_BUILD") === "true" || buildSourceSha) && !/^[a-f0-9]{40}$/.test(buildSourceSha)) {
   throw new Error("Source-bound build requires a valid EAS source commit for its packaged config");
@@ -40,9 +39,6 @@ const apiBaseUrl = env("EXPO_PUBLIC_PACKPROOF_API_BASE_URL");
 const authMode = env("EXPO_PUBLIC_PACKPROOF_AUTH_MODE", isRelease ? "cognito" : "dev");
 const iosBuildNumber = env("PACKPROOF_IOS_BUILD_NUMBER", "1");
 if (!/^[1-9]\d*$/.test(iosBuildNumber)) throw new Error("PACKPROOF_IOS_BUILD_NUMBER must be a positive integer");
-if (isIosStoreRelease && env("EAS_BUILD") === "true" && (!env("PACKPROOF_IOS_BUILD_NUMBER") || Number(iosBuildNumber) <= 5)) {
-  throw new Error("iOS store worker requires an explicit build number greater than the uploaded baseline 5");
-}
 const androidVersionCode = Number(env("PACKPROOF_ANDROID_VERSION_CODE", "56"));
 if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 53 || androidVersionCode > 2100000000)
   throw new Error("PACKPROOF_ANDROID_VERSION_CODE must exceed the verified Play baseline 52");
