@@ -34,7 +34,16 @@ it('counts mature consented first choices including abandoned starts, censors wi
  now=new Date('2026-10-02T00:00:04.000Z');await appendProgramTiming(h.db,h.clock,config,completed,{...event,operationNonce:randomUUID(),interaction:'capture_started',clientOccurredAt:now.toISOString(),elapsedMs:4000,activeMs:3000,unattendedMs:1000});
  await appendProgramTiming(h.db,h.clock,config,completed,{...event,operationNonce:randomUUID(),interaction:'recovery_action',clientOccurredAt:now.toISOString(),elapsedMs:4000,activeMs:3000,unattendedMs:1000});
  await expect(appendProgramTiming(h.db,h.clock,config,abandoned,{...event,interaction:'proof_finalized'})).rejects.toMatchObject({code:'INVALID_STUDY_REQUEST'});
- now=new Date('2026-10-02T01:00:00.000Z');await grant(withdrawn,'withdraw');const proofId=await finish(completed);await finish(sample,{sample:true});await finish(withdrawn);
+ now=new Date('2026-10-02T01:00:00.000Z');await grant(withdrawn,'withdraw');
+ const txn=await createTransaction(h.db,h.clock,completed,{itemTitle:'Test item'});
+ const proofId=(await createOrGetProof(h.db,h.clock,completed,txn.transactionId)).proofId;
+ const snapshot=()=>firstExperienceReport(h.db,h.clock,config,{from:'2026-10-02T00:00:00.000Z',to:'2026-10-04T00:00:00.000Z',asOf:now.toISOString()});
+ expect(await snapshot()).toMatchObject({authoritativeEvents:[]});
+ now=new Date('2026-10-02T01:01:00.000Z');await commitFulfillmentAndAttest(h,completed,proofId);
+ expect(await snapshot()).toMatchObject({authoritativeEvents:[{eventName:'evidence_committed',occurredAt:now.toISOString()}]});
+ now=new Date('2026-10-02T01:02:00.000Z');await finalizeProof(h.db,h.clock,completed,proofId);
+ expect(await snapshot()).toMatchObject({authoritativeEvents:[{eventName:'evidence_committed',occurredAt:'2026-10-02T01:01:00.000Z'},{eventName:'proof_finalized',occurredAt:now.toISOString()}]});
+ await finish(sample,{sample:true});await finish(withdrawn);
  now=new Date('2026-10-03T12:00:00.000Z');await choose(immature);now=new Date(now.getTime()+1000);
  const input={from:'2026-10-02T00:00:00.000Z',to:'2026-10-04T00:00:00.000Z',asOf:now.toISOString()};
  const result=await firstExperienceReport(h.db,h.clock,config,input);
