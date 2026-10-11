@@ -1,0 +1,3 @@
+export function AuthPasswordField({value,onChange,visible,onToggle,mode,busy}:{value:string;onChange:(value:string)=>void;visible:boolean;onToggle:()=>void;mode:'signin'|'signup'|'reset';busy:boolean}) {
+  return <><label htmlFor="desktop-auth-password">{mode==='reset'?'New password':'Password'}<input id="desktop-auth-password" type={visible?'text':'password'} autoComplete={mode==='signin'?'current-password':'new-password'} required minLength={mode==='signin'?1:8} value={value} onChange={event=>onChange(event.target.value)} disabled={busy}/></label><button type="button" className="text-button" aria-controls="desktop-auth-password" aria-pressed={visible} onClick={onToggle} disabled={busy}>{visible?'Hide password':'Show password'}</button></>;
+}

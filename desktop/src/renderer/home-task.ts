@@ -6,6 +6,9 @@ import type { FulfillmentQueueItem, PackProofDesktop, ProofCollectionItem, Uploa
 const pending = (job: UploadView) => !['COMPLETE', 'DISCARDED'].includes(job.state);
 const active = new Set(['LOCAL','HASHING','READY','UPLOADING','VERIFYING','COMMITTING','FINALIZING','RETRYING','RECORDING','AUTHORIZING','CAPTURING']);
 const waiting = new Set(['WAITING_FOR_NETWORK']);
+export function uniqueAttentionCount(proofs: Pick<ProofCollectionItem,'proofId'>[], jobs: Pick<UploadView,'proofId'>[]): number {
+  return new Set([...proofs.map(proof=>proof.proofId), ...jobs.map(job=>job.proofId)]).size;
+}
 export function desktopHomeState(input: { proofs: ProofCollectionItem[]; uploads: UploadView[]; orders: FulfillmentQueueItem[]; online: boolean; reconciled: boolean; selection?: string; interactions?: Record<string, number> }) {
   const contribute = (id: string) => canContributeToTask(input.proofs.find(proof => proof.proofId === id));
   return selectTaskHome({ ...input, proofs: taskProofs(input.proofs),

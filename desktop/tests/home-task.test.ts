@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { desktopHomeState, resolveDesktopHomeTask } from '../src/renderer/home-task';
+import { desktopHomeState, resolveDesktopHomeTask, uniqueAttentionCount } from '../src/renderer/home-task';
 import { readCurrentProof } from '../src/main/current-proof';
 import { schemas } from '../src/main/security';
 import { stableRecommendation } from '../../mobile/src/experience/task-home';
@@ -15,6 +15,11 @@ function bridge() {
 }
 const cast = (value: ReturnType<typeof bridge>) => value as unknown as Pick<PackProofDesktop, 'proofs' | 'uploads'>;
 describe('desktop Home shares task priority without changing queue ownership', () => {
+  it('counts a Proof needing attention only once across duplicate summaries and failed jobs',()=>{
+    expect(uniqueAttentionCount([summary,summary,second],[job(),job({id:'retry'}),job({id:'other',proofId:'third'})])).toBe(3);
+    expect(uniqueAttentionCount([],[job(),job({id:'retry'})])).toBe(1);
+    expect(uniqueAttentionCount([],[])).toBe(0);
+  });
   it('prefers an ordinary incomplete Proof with deterministic and focused stable ties', () => {
     const first = desktopHomeState(state());
     expect(first.recommendation).toMatchObject({ kind: 'continue_proof', targetId: summary.proofId });
