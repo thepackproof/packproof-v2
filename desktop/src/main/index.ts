@@ -63,6 +63,8 @@ function handle(name:string,schema:ZodType,fn:(...args:any[])=>unknown){ipcMain.
 async function state():Promise<SystemView>{return {version:app.getVersion(),platform:process.platform,environment,online,configured:!!config,secureStorage:secureStorageAvailable(),pendingOtherAccounts:await engine?.hasOtherAccountEvidence()??false,settings,reporting:reporting?.state,update:updates.state};}
 function setupIpc(){
  handle('onboarding.get',schemas.empty,()=>requireApi().getOnboarding());
+ handle('study.scope',schemas.id,userId=>{requireApi().assertAccount(userId);return config!.apiBaseUrl;});
+ handle('study.request',schemas.study,input=>{const client=requireApi();client.assertAccount(input.userId);return client.studyRequest(input.path,input.method,input.body);});
  handle('onboarding.update',schemas.onboarding,input=>requireApi().updateOnboarding(input));
  handle('auth.state',schemas.empty,sessionView);
  handle('auth.signIn',schemas.login,async input=>{if(!auth)throw new Error('This desktop build needs PackProof service configuration.');if(engine?.activeCapture)throw new Error('Finish recording before changing accounts.');await engine?.setAccount(null);revokeMedia();await auth.signIn(input);await engine?.setAccount(auth.getAccountId());emit({type:'session'});return sessionView();});

@@ -89,6 +89,7 @@ export class DesktopApi {
     return [...result.values()];
   }
   getOnboarding():Promise<OnboardingState>{return this.request('/me/onboarding');}
+  studyRequest<T>(path:'/consent'|'/timings/start'|'/timings',method:'GET'|'POST',body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
   updateOnboarding(action:Action):Promise<OnboardingState>{return this.request('/me/onboarding',{method:'POST',body:action});}
   getProof(proofId: string, signal?: AbortSignal): Promise<CanonicalProof> { return this.request(`/proofs/${id(proofId)}`, { signal }); }
   /** Creation isn't blindly retried: this legacy backend route has no transaction-create idempotency contract. */

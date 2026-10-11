@@ -3,9 +3,12 @@ import { BrowserIdentifierDecoder } from '../../../web/src/capture/identifier-de
 import type { CanonicalProof, DesktopSettings, Detection, FulfillmentQueueItem } from '../shared/contracts';
 import { Badge, Empty, ErrorNotice, Icon, Modal } from './components';
 import { appearsTracking, duration, errorMessage, trackingMatch } from './presentation';
+import type {StudyApi,StationStudyTimer} from '../../../web/src/analytics/study-capture';
+import {selectDesktopStudy,desktopStudyEvent,bindDesktopStudyJob} from './study';
 
 type Phase = 'ready'|'starting'|'recording'|'saving'|'review';
-export function PackingStation({proofId, orders, settings, chooseProof, onBusy, onSaved, onSettings}: {
+export function PackingStation({proofId, orders, settings, chooseProof, onBusy, onSaved, onSettings,studyApi,userId,appVersion}: {
+  studyApi?:StudyApi|null;userId?:string;appVersion?:string;
   proofId:string|null;orders:FulfillmentQueueItem[];settings:DesktopSettings;
   chooseProof:(id:string)=>void;onBusy:(busy:boolean)=>void;onSaved:()=>void;onSettings:(settings:DesktopSettings)=>void;
 }) {
@@ -13,6 +16,12 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
   const [phase,setPhase]=useState<Phase>('ready');
   const [devices,setDevices]=useState<MediaDeviceInfo[]>([]);
   const [cameraReady,setCameraReady]=useState(false);
+  const study=useRef<Promise<StationStudyTimer|null>|null>(null);
+  useEffect(()=>{
+    study.current=studyApi&&userId&&proofId?selectDesktopStudy(studyApi,userId,appVersion,'deep_link'):null;
+    const task=study.current;return()=>{void task?.then(timer=>timer?.suspend());};
+  },[studyApi,userId,proofId,appVersion]);
+  useEffect(()=>{if(cameraReady&&proofId)desktopStudyEvent(study.current,'capture_ready',true);},[cameraReady,proofId,studyApi]);
   const [error,setError]=useState('');
   const [recognitionError,setRecognitionError]=useState('');
   const [elapsed,setElapsed]=useState(0);
@@ -62,6 +71,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
       captureEndedAt.current=new Date().toISOString();
       updatePhase('saving');
       recorder.current.stop();
+      desktopStudyEvent(study.current,reason?'capture_interrupted':'recording_stopped');
     }
   },[]);
   stopRef.current=stop;
@@ -159,6 +169,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
       const camera=stream.current.getVideoTracks()[0]?.label||'Selected camera';
       const native=await window.packproof.capture.begin({proofId:proof.proofId,label:proof.transaction.externalReference||proof.transaction.itemTitle||'Shipment recording',mimeType,camera,expectedTracking:expected||undefined});
       captureId.current=native.id;limit.current={bytes:native.maxRecordingBytes,seconds:native.maxRecordingSeconds};
+      if(studyApi&&userId)bindDesktopStudyJob(studyApi,userId,native.id,study.current);
       const mediaRecorder=new MediaRecorder(stream.current,{mimeType,videoBitsPerSecond:settings.resolution==='1080p'?5_000_000:3_000_000,audioBitsPerSecond:96_000});
       recorder.current=mediaRecorder;
       mediaRecorder.ondataavailable=event=>{
@@ -178,10 +189,10 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
       mediaRecorder.onstop=()=>{
         void writeChain.current.then(async()=>{
           if(interruption.current){await window.packproof.capture.interrupt(native.id,interruption.current);setError(interruption.current);captureId.current=null;updatePhase('ready');onSaved();}
-          else{setElapsed(elapsedFinal.current);updatePhase('review');}
+          else{desktopStudyEvent(study.current,'review_opened');setElapsed(elapsedFinal.current);updatePhase('review');}
         }).catch(reason=>{setError(errorMessage(reason));updatePhase('review');});
       };
-      started.current=performance.now();captureStartedAt.current=new Date().toISOString();captureEndedAt.current='';mediaRecorder.start(1000);updatePhase('recording');suffixRef.current?.focus();
+      started.current=performance.now();captureStartedAt.current=new Date().toISOString();captureEndedAt.current='';mediaRecorder.start(1000);desktopStudyEvent(study.current,'capture_started');void study.current?.then(timer=>timer?.phase('recording'));updatePhase('recording');suffixRef.current?.focus();
     }catch(reason){
       if(captureId.current)await window.packproof.capture.interrupt(captureId.current,errorMessage(reason)).catch(()=>{});
       captureId.current=null;setError(errorMessage(reason));updatePhase('ready');
@@ -190,16 +201,16 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
 
   async function finish() {
     if(!attested||!captureId.current)return;
-    setError('');updatePhase('saving');
+    desktopStudyEvent(study.current,'submission_authorized');setError('');updatePhase('saving');
     try {
       const reviewedDetections=detectionsRef.current.slice(0,500).map(detection=>({...detection,confirmed:confirmedLabel===detection.rawValue||undefined,notThisPackage:excludeOtherLabels&&confirmedLabel!==detection.rawValue&&appearsTracking(detection.rawValue)||undefined}));
       await window.packproof.capture.finish(captureId.current,{detections:reviewedDetections,attestation:true,durationMs:Math.round(elapsedFinal.current),startedAt:captureStartedAt.current,endedAt:captureEndedAt.current});
-      captureId.current=null;updatePhase('ready');setSuccess('Evidence secured locally. Uploading in the background when a connection is available.');onSaved();
+      desktopStudyEvent(study.current,'capture_saved');void study.current?.then(timer=>{timer?.phase('upload');timer?.event('upload_state_changed',{uploadState:'queued'});});captureId.current=null;updatePhase('ready');setSuccess('Evidence secured locally. Uploading in the background when a connection is available.');onSaved();
     }catch(reason){setError(errorMessage(reason));updatePhase('review');}
   }
   async function preserveInterrupted() {
     if(!captureId.current)return;
-    try{await window.packproof.capture.interrupt(captureId.current,'Seller has not confirmed the packing declaration.');captureId.current=null;updatePhase('ready');onSaved();}
+    try{desktopStudyEvent(study.current,'consent_cancelled');await window.packproof.capture.interrupt(captureId.current,'Seller has not confirmed the packing declaration.');captureId.current=null;updatePhase('ready');onSaved();}
     catch(reason){setError(errorMessage(reason));}
   }
   async function resolve(event:React.FormEvent) {
