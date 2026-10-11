@@ -5,6 +5,8 @@ import {
   type NextFunction,
 } from "express";
 import { DomainError } from "../domain/errors.js";
+import { firstExperienceReport } from '../analytics/first-experience-report.js';
+import { getRange } from './analytics.js';
 import { analyticsSection, trend, type Query } from "./analytics.js";
 import {
   errorDetail,
@@ -98,6 +100,7 @@ export function adminRouter(input: AdminReadDeps) {
       trend(deps.db, deps.clock, q(req)),
     ),
   );
+  get('/analytics/first-experience',req=>cached(`first-experience:${JSON.stringify(q(req))}`,()=>{const range=getRange(deps.clock,q(req));return firstExperienceReport(deps.db,deps.clock,deps.observationConfig,{from:range.from,to:range.to,asOf:new Date(Math.min(Date.parse(range.to),deps.clock.now().getTime())).toISOString()});}));
   const sections: Record<string, (query: Query) => Promise<unknown>> = {
     users: (q) => usersSection(deps, q),
     proofs: (q) => proofsSection(deps, q),
@@ -106,7 +109,7 @@ export function adminRouter(input: AdminReadDeps) {
     analytics: (q) =>
       q.view === "versions"
         ? versionsSection(deps, q)
-        : analyticsSection(deps.db, deps.clock, q),
+        : analyticsSection(deps.db, deps.clock, q, deps.observationConfig),
     versions: (q) => versionsSection(deps, q),
     billing: (q) => billingSection(deps, q),
     errors: (q) => errorsSection(deps, q),

@@ -24,6 +24,7 @@ type AuthView = "sign-in" | "create-account" | "confirm-account" | "verified" | 
 
 export function SignInScreen(props: {
   firstExperience?: boolean;
+  onAuthAttempt?: (name:"auth_started"|"auth_failed")=>void;
   initialView?: "sign-in" | "create-account";
   onSignedIn: (session: WebSession) => void;
   onGo: (path: string) => void;
@@ -97,6 +98,7 @@ export function SignInScreen(props: {
 
   async function submitSignIn(event: FormEvent) {
     event.preventDefault();
+    props.onAuthAttempt?.("auth_started");
     setBusy(true);
     setError(null);
     setInfo(null);
@@ -140,6 +142,7 @@ export function SignInScreen(props: {
         throw caught;
       }
     } catch (caught) {
+      props.onAuthAttempt?.("auth_failed");
       setError(caught instanceof ApiError ? caught.message : formatCognitoError(caught));
     } finally {
       setBusy(false);

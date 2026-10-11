@@ -45,7 +45,7 @@ function timerFor(api:PackProofV2Client,userId:string,localRef:string,journal:Ti
   const stop=()=>{ended=true;clearInterval(interval);state.remove();timers.delete(key);};
   const timer:NativeStudyTimer={localRef,settled:()=>localPersistence,event:(interaction,options={})=>{if(ended||!current(api,userId))return;if(interaction==='upload_state_changed'){if(!options.uploadState||lastUploadState===options.uploadState)return;lastUploadState=options.uploadState;void AsyncStorage.setItem(scope(api,userId)+'upload-state:'+localRef,options.uploadState).catch(()=>{});}checkpoint(phase,'pending',undefined,interaction,options);},suspend:()=>{if(ended)return;checkpoint(phase);stop();},sampleContext:()=>{if(!current(api,userId)){stop();return;}if(!ended)sample();},problem:error=>{if(!ended)checkpoint(phase,'pending',error);},phase:next=>{if(ended||phase===next)return;checkpoint(next);phase=next;},end:(outcome,errorCode)=>{if(ended)return;checkpoint('ended',outcome,errorCode);stop();}};timers.set(key,timer);return timer;
 }
-async function startNativeStudy(api:PackProofV2Client,userId:string,taskKind:TimingStart['taskKind']='packproof',options:{observedAt?:Date;entrySource?:EntrySource}={}):Promise<NativeStudyTimer|null>{
+async function startNativeStudy(api:PackProofV2Client,userId:string,taskKind:TimingStart['taskKind']='packproof',options:{observedAt?:Date;entrySource?:EntrySource;localRef?:string}={}):Promise<NativeStudyTimer|null>{
   const observedAt=options.observedAt??new Date();
   try{
     if(!current(api,userId))return null;const cached=await AsyncStorage.getItem(scope(api,userId)+'consent');if(!cached)return null;const savedConsent=JSON.parse(cached);const declared=savedConsent.deviceClass;const deviceClass: NativeStudyDeviceClass=['s24_ultra','a16_5g','other_android','ios'].includes(declared)?declared:defaultDeviceClass;
@@ -53,7 +53,7 @@ async function startNativeStudy(api:PackProofV2Client,userId:string,taskKind:Tim
     // Persist the observed start under the existing explicit grant immediately.
     // Transport always rechecks live consent; camera entry never waits for it.
     if(!current(api,userId)||status.enabled===false||!status.granted||!status.datasetRef||status.statementVersion!=='capture-timing-study-v1')return null;
-    const localRef=newStudyOperationNonce(),tracker=bridge(api,userId,localRef);
+    const localRef=options.localRef??newStudyOperationNonce();if(!/^[a-f0-9-]{36}$/i.test(localRef))return null;const tracker=bridge(api,userId,localRef);
     const candidateBuild=sourceBuildSha?.();const buildSha=typeof candidateBuild==='string'&&/^[a-f0-9]{40}$/.test(candidateBuild)?candidateBuild:undefined;
     const version=appVersion?.();
     if(!await tracker.start({datasetRef:status.datasetRef,taskKind,deviceClass,channel:'unknown',flowVersion:1,...(platform?{platform}:{}),...(version&&/^[0-9][a-zA-Z0-9._-]{0,63}$/.test(version)?{appVersion:version}:{}),...(options.entrySource?{entrySource:options.entrySource}:{}),...(buildSha?{buildSha}:{})},{datasetRef:status.datasetRef,granted:true,statementVersion:status.statementVersion},observedAt))return null;
@@ -130,7 +130,7 @@ async function recordNativeStudyFlowEvent(api:PackProofV2Client,userId:string,in
 }
 // Previously consented reauthentication only. No fresh sign-up or arbitrary
 // signed-out visitor is measured. Flush requires the same authenticated account.
-type AuthPending={datasetRef:string;events:Array<{interaction:'auth_started'|'auth_failed';at:string}>};
+type AuthPending={datasetRef:string;localRef?:string;transferred?:boolean;events:Array<{interaction:'auth_started'|'auth_failed';at:string}>};
 async function retainNativeStudyAuth(api:PackProofV2Client,userId:string,interaction:'auth_started'|'auth_failed',at=new Date()){
   try{
     const consent=JSON.parse(await AsyncStorage.getItem(scope(api,userId)+'consent')??'null');
@@ -142,18 +142,23 @@ async function retainNativeStudyAuth(api:PackProofV2Client,userId:string,interac
   }catch{/* No credentials, email or error text enter this bounded journal. */}
 }
 async function completeNativeStudyAuth(api:PackProofV2Client,userId:string,at=new Date()){
-  try{
+ return withFlow(api,userId,async()=>{try{
     if(!current(api,userId))return;
     const key=scope(api,userId)+'reauth',pending=JSON.parse(await AsyncStorage.getItem(key)??'null') as AuthPending|null;
     const consent=JSON.parse(await AsyncStorage.getItem(scope(api,userId)+'consent')??'null');
     if(!pending?.events?.length||pending.events.length>16||pending.datasetRef!==consent?.datasetRef||pending.events.some(event=>!['auth_started','auth_failed'].includes(event.interaction)||!Number.isFinite(Date.parse(event.at))))return;
-    const timer=await startNativeStudy(api,userId,'interface_action',{observedAt:new Date(pending.events[0].at),entrySource:'auth'});
+    pending.localRef??=newStudyOperationNonce();await AsyncStorage.setItem(key,JSON.stringify(pending));
+    const stored=await AsyncStorage.getItem(scope(api,userId)+'task:'+pending.localRef);
+    if(!stored&&pending.transferred){await AsyncStorage.removeItem(key);return;}
+    if(stored&&JSON.parse(stored).ended){await AsyncStorage.removeItem(key);void bridge(api,userId,pending.localRef).flush().catch(()=>{});return;}
+    const timer=stored?await nativeStudyForCapture(api,userId,pending.localRef):await startNativeStudy(api,userId,'interface_action',{observedAt:new Date(pending.events[0].at),entrySource:'auth',localRef:pending.localRef});
     if(!timer)return;
-    for(const event of pending.events)timer.event(event.interaction,{at:new Date(event.at)});
+    pending.transferred=true;await AsyncStorage.setItem(key,JSON.stringify(pending));
+    for(const event of pending.events)timer.event(event.interaction,{at:new Date(event.at),once:true});
     timer.event('auth_completed',{at,once:true});timer.end('succeeded');
     await timer.settled?.();
     await AsyncStorage.removeItem(key);
-  }catch{/* Reauthentication itself is independent of optional measurement. */}
+  }catch{/* Reauthentication itself is independent of optional measurement. */}});
 }
 return {registerStudyAccountReader,rememberNativeStudyConsent,updateNativeStudyConnectivity,startNativeStudy,nativeStudyForCapture,flushNativeStudyTimings,recordNativeStudyInteraction,beginNativeFirstProof,nativeStudyForNewCapture,recordNativeStudyFlowEvent,retainNativeStudyAuth,completeNativeStudyAuth,dispose:()=>{for(const timer of [...timers.values()])timer.suspend();accountReader=()=>null;}};
 }

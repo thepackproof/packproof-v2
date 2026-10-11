@@ -15,7 +15,7 @@ let opened:Awaited<ReturnType<typeof createPgliteDatabase>>,db:Database;
 beforeAll(async()=>{
   opened=await createPgliteDatabase();db=opened.db;
   await db.query("CREATE FUNCTION reject_audit_mutation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'AUDIT_IMMUTABLE'; END; $$;");
-  for(const file of ['045_program_observations.sql','053_study_ui_instrumentation.sql'])for(const statement of splitSqlStatements(await readFile(new URL(`../migrations/${file}`,import.meta.url),'utf8')))await db.query(statement);
+  for(const file of ['045_program_observations.sql','053_study_ui_instrumentation.sql','076_first_experience_measurement.sql'])for(const statement of splitSqlStatements(await readFile(new URL(`../migrations/${file}`,import.meta.url),'utf8')))await db.query(statement);
 });
 afterAll(async()=>{await opened?.close();});
 const consent=(datasetRef:string,decision:'grant'|'withdraw'='grant')=>({datasetRef,decision,operationNonce:randomUUID(),statementVersion:STUDY_STATEMENT_VERSION});
@@ -94,3 +94,13 @@ describe('bounded opt-in UI instrumentation',()=>{
     expect(result.observations.effortTasks[0]).toMatchObject({completed:true,packproofActiveSeconds:0.01});
   });
 });
+
+ it('inherits bounded first-experience context and rejects invented authority, raw identifiers and invalid event clocks',async()=>{
+  const f=await fixture();const input={...start(f.datasetRef),flowVersion:1,platform:'desktop',entrySource:'manual',appVersion:'1.0.2'};
+  const attempt=await startProgramTiming(db,clock,config,f.userId,input);
+  const event={...checkpoint(f.datasetRef,attempt.attemptRef),interaction:'capture_ready',clientOccurredAt:clock.now().toISOString(),networkState:'offline'};
+  await appendProgramTiming(db,clock,config,f.userId,event);await appendProgramTiming(db,clock,config,f.userId,event);
+  const result=await exported(f.datasetRef);expect(result.timingObservations[1]).toMatchObject({flowVersion:1,platform:'desktop',entrySource:'manual',appVersion:'1.0.2',clientOccurredAt:clock.now().toISOString(),networkState:'offline'});
+  expect(result.timingObservations).toHaveLength(2);
+  for(const extra of [{interaction:'evidence_committed'},{interaction:'proof_finalized'},{clientOccurredAt:'2026-09-08T11:59:59.000Z'},{clientOccurredAt:'2026-09-08T12:06:00.000Z'},{networkState:'wifi-name-private'},{uploadState:'complete'},{sessionId:'secret'},{platform:'android'}])await expect(appendProgramTiming(db,clock,config,f.userId,{...event,...extra})).rejects.toMatchObject({code:'INVALID_STUDY_REQUEST'});
+ });

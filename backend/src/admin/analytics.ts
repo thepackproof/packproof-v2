@@ -2,6 +2,8 @@ import type { Database } from "../db/database.js";
 import type { Clock } from "../clock.js";
 import { DomainError } from "../domain/errors.js";
 import {firstProofActivation} from '../analytics/first-proof-activation.js';
+import {firstExperienceReport} from '../analytics/first-experience-report.js';
+import type {ProgramObservationConfig} from '../analytics/observation-router.js';
 export type Scalar = string | number | boolean | null;
 export interface Metric {
   key: string;
@@ -295,6 +297,7 @@ export async function analyticsSection(
   db: Database,
   clock: Clock,
   q: Query,
+  observationConfig?: ProgramObservationConfig|null,
 ): Promise<Section> {
   const range = getRange(clock, q);
   const view = textQuery(q, "view", 30) || "product";
@@ -505,11 +508,12 @@ export async function analyticsSection(
     "Use the Cohorts view for Day 1, Day 7 and Day 30 retention; values only include users with a fully elapsed observation day.",
   ];
   const activation=await firstProofActivation(db,{from:range.from,to:range.to,asOf:new Date(Math.min(Date.parse(range.to),clock.now().getTime())).toISOString()});
+  const intent=await firstExperienceReport(db,clock,observationConfig,{from:range.from,to:range.to,asOf:activation.asOf});
   s.metrics.push(
     metric('first_packing_activation_7d','First packing Proof within 7 days',activation.activationPercent,null,{unit:'percent',note:`${activation.activatedAccounts} of ${activation.matureAccounts} fully observed accounts; ${activation.immatureAccounts} accounts await a full seven-day window.`}),
     metric('first_packing_activation_7d_accounts','Activated accounts within 7 days',activation.activatedAccounts),
     metric('first_packing_activation_7d_nonstarters','Observed accounts with no eligible Proof created',activation.neverStartedAccounts),
-    metric('first_packing_intent_conversion_24h','Create-choice conversion within 24 hours',null,null,{unit:'percent',note:activation.intentConversion24h.reason}),
+    metric('first_packing_intent_conversion_24h','Consented Create-choice conversion within 24 hours',intent.status==='available'?intent.conversion24hPercent:null,null,{unit:'percent',note:intent.status==='available'?`${intent.finalizedAccounts} of ${intent.matureConsentedAccounts} fully observed consented accounts; ${intent.immatureAccounts} immature and ${intent.withdrawnBeforeFullWindow} withdrawn before a complete window. This is not all-customer conversion.`:intent.reason}),
   );
   s.notices.push(activation.eligibility,'These are descriptive operational counts, not an activation uplift estimate. Internal test accounts using ordinary customer authentication require governed cohort review.');
   return s;

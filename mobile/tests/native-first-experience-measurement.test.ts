@@ -111,3 +111,17 @@ test('upload measurement maps persisted states and never treats an unsubmitted r
   assert.equal(measuredUploadState('BYTES_RECEIVED'),'committing');assert.equal(measuredUploadState('PRESERVATION_PENDING'),'waiting');
   assert.equal(measuredUploadState('FINALIZATION_PENDING'),'finalizing');assert.equal(measuredUploadState('FINALIZED'),'complete');
 });
+
+
+test('reauthentication transfer survives a lost local buffer cleanup without creating duplicate lifecycle events',async()=>{
+ const f=fixture();try{
+  await f.runtime.rememberNativeStudyConsent(f.api,'original-account',consent);
+  await f.runtime.retainNativeStudyAuth(f.api,'original-account','auth_started');
+  const remove=f.storage.removeItem;f.storage.removeItem=async key=>{if(key.endsWith(':reauth'))throw new Error('simulated cleanup failure');await remove(key);};
+  await Promise.all([f.runtime.completeNativeStudyAuth(f.api,'original-account'),f.runtime.completeNativeStudyAuth(f.api,'original-account')]);await drain();
+  assert.equal(f.journals().length,1);const journal=f.journals()[0];assert.equal(journal.events.filter((event:{interaction?:string})=>event.interaction==='auth_started').length,1);
+  f.online();await f.runtime.flushNativeStudyTimings(f.api,'original-account');assert.equal(f.journals().length,0);
+  f.storage.removeItem=remove;await f.runtime.completeNativeStudyAuth(f.api,'original-account');assert.equal(f.journals().length,0);
+  assert.equal(f.requests.filter(row=>row.path==='/timings/start').length,1);
+ }finally{f.runtime.dispose();}
+});
