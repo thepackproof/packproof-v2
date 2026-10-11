@@ -1,0 +1,107 @@
+name: Verify and upload exact iOS archive
+
+on:
+  pull_request:
+    paths: ['mobile/scripts/verify-ios-release.py', 'mobile/tests/test_ios_release_verification.py', '.github/workflows/ios-submit-exact-build.yml']
+  workflow_dispatch:
+    inputs:
+      archive_run_id:
+        description: Successful main iOS workflow run that produced the signed archive
+        required: true
+        type: string
+      source_sha:
+        description: Exact 40-character source revision of the archive and current main
+        required: true
+        type: string
+      eas_build_id:
+        description: Exact finished EAS iOS build ID from that archive receipt
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packproof-ios-exact-upload-${{ github.event.inputs.eas_build_id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s mobile/tests -p test_ios_release_verification.py
+
+  upload:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify-source
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ARCHIVE_RUN_ID: ${{ inputs.archive_run_id }}
+      EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+      EAS_BUILD_ID: ${{ inputs.eas_build_id }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the precise main archive run
+        run: |
+          set -euo pipefail
+          [[ "$ARCHIVE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$EAS_BUILD_ID" =~ ^[a-f0-9-]{36}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_SOURCE_SHA"
+          mkdir -p dist/exact-ios-archive
+          gh api "repos/$GH_REPO/actions/runs/$ARCHIVE_RUN_ID" > dist/archive-run.json
+          python3 scripts/verify-ios-release.py --run-json dist/archive-run.json --source-sha "$EXPECTED_SOURCE_SHA" --run-id "$ARCHIVE_RUN_ID" --repository "$GH_REPO"
+          gh run download "$ARCHIVE_RUN_ID" --repo "$GH_REPO" --name "packproof-ios-archive-$EXPECTED_SOURCE_SHA" --dir dist/exact-ios-archive
+      - name: Verify IPA source, identity, checksum, signing and provisioning
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-ios-release.py --run-json dist/archive-run.json --source-sha "$EXPECTED_SOURCE_SHA" --run-id "$ARCHIVE_RUN_ID" --repository "$GH_REPO" \
+            --build-json dist/exact-ios-archive/eas-ios-build.json --build-id "$EAS_BUILD_ID" \
+            --ipa dist/exact-ios-archive/PackProof.ipa --checksums dist/exact-ios-archive/SHA256SUMS --verify-signature > dist/ios-upload-verification.json
+          cat dist/ios-upload-verification.json
+      - run: npm ci
+      - name: Authenticate using the existing Expo credential
+        uses: ./.github/actions/expo-auth
+      - name: Use the existing PackProof App Store Connect destination
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          config.submit['ios-testflight'].ios.ascAppId = '6815401074';
+          fs.writeFileSync('eas.json', JSON.stringify(config, null, 2) + '\n');
+          NODE
+      - name: Upload only the verified EAS build to Apple
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@24.4.2 submit --platform ios --profile ios-testflight --id "$EAS_BUILD_ID" --non-interactive --wait | tee dist/ios-upload-result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packproof-ios-upload-verification-${{ inputs.eas_build_id }}
+          path: |
+            mobile/dist/ios-upload-verification.json
+            mobile/dist/ios-upload-result.txt
+            mobile/dist/archive-run.json
