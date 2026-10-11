@@ -117,3 +117,11 @@ it("does not duplicate a flushed auth lifecycle when local buffer cleanup fails"
  await completeStudyAuth(f.api,f.userId);await flushStudyTimings(f.api,f.userId);expect(f.starts()).toHaveLength(1);
  remove.mockRestore();await completeStudyAuth(f.api,f.userId);expect(f.starts()).toHaveLength(1);
 });
+
+
+it("withdrawal immediately fences local callbacks even when preference storage removal fails",async()=>{
+ const f=fixture();rememberStudyStatus(f.api,f.userId,f.status);const timer=await selectFirstProofStudy(f.api,f.userId,'home');timers.push(timer!);await flushStudyTimings(f.api,f.userId);
+ const count=f.events().length;vi.spyOn(Storage.prototype,'removeItem').mockImplementation(()=>{throw new Error('storage failed');});
+ rememberStudyStatus(f.api,f.userId,{enabled:true,granted:false});timer!.event('capture_saved');retainStudyAuth(f.api,f.userId,'auth_started');
+ expect(await selectFirstProofStudy(f.api,f.userId,'manual')).toBeNull();await new Promise(resolve=>setTimeout(resolve,10));expect(f.events()).toHaveLength(count);
+});

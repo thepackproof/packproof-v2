@@ -136,7 +136,7 @@ async function retainNativeStudyAuth(api:PackProofV2Client,userId:string,interac
     const consent=JSON.parse(await AsyncStorage.getItem(scope(api,userId)+'consent')??'null');
     if(locallyWithdrawn.has(scope(api,userId))||!consent?.granted||consent.statementVersion!=='capture-timing-study-v1'||!/^pr_[a-f0-9]{32}$/.test(consent.datasetRef))return;
     const key=scope(api,userId)+'reauth',old=JSON.parse(await AsyncStorage.getItem(key)??'null') as AuthPending|null;
-    const events=old&&old.datasetRef===consent.datasetRef&&Array.isArray(old.events)?old.events:[];
+    const events=old&&!old.transferred&&old.datasetRef===consent.datasetRef&&Array.isArray(old.events)?old.events:[];
     if(events.length>=16)return;events.push({interaction,at:at.toISOString()});
     await AsyncStorage.setItem(key,JSON.stringify({datasetRef:consent.datasetRef,events}));
   }catch{/* No credentials, email or error text enter this bounded journal. */}

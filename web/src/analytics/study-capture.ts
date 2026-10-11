@@ -5,7 +5,11 @@ import type { EntrySource, TimingContext } from '../../../mobile/src/analytics/t
 export type StudyApi=Pick<PackProofApi,'recoveryScope'|'studyRequest'>;
 export type StudyStatus=Partial<StudyConsent>&{enabled:boolean;statement?:string;changedAt?:string|null};
 const prefix=(api:StudyApi,userId:string)=>`${api.recoveryScope}:${userId}:`;
+const locallyWithdrawn=new Set<string>();
 export function rememberStudyStatus(api:StudyApi,userId:string,status:StudyStatus){
+  const scope=prefix(api,userId);
+  if(status.enabled&&status.granted&&status.datasetRef)locallyWithdrawn.delete(scope);
+  else {locallyWithdrawn.add(scope);for(const [taskKey,live]of liveTimers)if(taskKey.startsWith(scope)){live.timer.suspend();liveTimers.delete(taskKey);}}
   try{const key=`packproof-study-consent:${prefix(api,userId)}`;if(status.enabled&&status.granted&&status.datasetRef)localStorage.setItem(key,JSON.stringify({datasetRef:status.datasetRef,granted:true,statementVersion:status.statementVersion}));else { localStorage.removeItem(key); for (const [taskKey, live] of liveTimers) if (taskKey.startsWith(prefix(api, userId))) { live.timer.suspend(); liveTimers.delete(taskKey); } }}catch{/* Unavailable local storage leaves capture uninstrumented. */}
 }
 async function storage<T>(mode:IDBTransactionMode,run:(store:IDBObjectStore)=>IDBRequest<T>):Promise<T>{
@@ -40,6 +44,7 @@ const validBuildSha = () => {
   return typeof sha === 'string' && /^[a-f0-9]{40}$/.test(sha) ? sha : undefined;
 };
 async function consent(api: StudyApi, userId: string): Promise<StudyConsent | null> {
+  if(locallyWithdrawn.has(prefix(api,userId)))return null;
   // An ordinary capture neither reads the remote study API nor installs listeners.
   const cached = localStorage.getItem(`packproof-study-consent:${prefix(api, userId)}`);
   if (!cached) return null;
@@ -66,6 +71,7 @@ function makeTimer(api: StudyApi, userId: string, localRef: string, journal: Tim
     else activeMs += delta;
   };
   const checkpoint = (phase: TimingCheckpoint['phase'], outcome: TimingCheckpoint['outcome'] = 'pending', errorCode?: TimingCheckpoint['errorCode'], interaction?: StudyInteraction, options?: {once?:boolean;observedAt?:Date;uploadState?:TimingCheckpoint['uploadState']}) => {
+    if(locallyWithdrawn.has(prefix(api,userId)))return;
     try { if (!localStorage.getItem(`packproof-study-consent:${prefix(api, userId)}`)) return; } catch { return; }
     sample();
     const elapsed = Math.min(86400000, Math.floor(elapsedMs)), active = Math.min(elapsed, Math.floor(activeMs));
@@ -183,10 +189,11 @@ export function pauseStudyAccount(api:StudyApi,userId:string){for(const [key,liv
  * Credential fields never enter this local buffer or the study API. */
 export function retainStudyAuth(api:StudyApi,userId:string,name:'auth_started'|'auth_failed',observedAt=new Date()) {
   try {
+    if(locallyWithdrawn.has(prefix(api,userId)))return;
     const allowed=JSON.parse(localStorage.getItem(`packproof-study-consent:${prefix(api,userId)}`)||'null');
     if(!allowed?.granted||allowed.statementVersion!=='capture-timing-study-v1')return;
     const key=`packproof-study-auth:${prefix(api,userId)}`,previous=JSON.parse(localStorage.getItem(key)||'null');
-    const value=previous?.datasetRef===allowed.datasetRef?previous:{datasetRef:allowed.datasetRef,localRef:randomId(),events:[]};
+    const value=previous?.datasetRef===allowed.datasetRef&&!previous.transferred?previous:{datasetRef:allowed.datasetRef,localRef:randomId(),events:[]};
     if(!value.events.some((row:{name:string})=>row.name===name))value.events.push({name,at:observedAt.toISOString()});
     localStorage.setItem(key,JSON.stringify(value));
   }catch{/* Measurement never blocks sign-in. */}
