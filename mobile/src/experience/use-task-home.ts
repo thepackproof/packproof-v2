@@ -7,6 +7,7 @@ import type { PresentedProof } from '../copy/proof-list';
 import { nativeHomeInput } from './home-adapter';
 import { selectTaskHome, stableRecommendation, actionIdentity, type HomeAction } from './task-home';
 import { recordMobileUxEvent } from '../analytics/mobile-ux-events';
+import {recordNativeStudyInteraction} from '../analytics/native-study';
 
 export function useTaskHome() {
   const app=usePackProof();
@@ -19,6 +20,7 @@ export function useTaskHome() {
   const [queueReconciled,setQueueReconciled]=useState(false);
   const [interacting,setInteracting]=useState(false);
   const scope=`${app.apiBaseUrl}:${app.session?.userId}`;
+  useEffect(()=>{if(app.session?.userId)void recordNativeStudyInteraction(app.client,app.session.userId,'entry_viewed','home');},[scope]);
   async function refresh() {
     if(refreshLock.current)return;
     const token=++generation.current, context=latest.current, account=context.session;
@@ -64,7 +66,7 @@ export function useTaskHome() {
     actionBusy.current=true;
     recordMobileUxEvent('recommendation_selected');
     try {
-      if(action.kind==='create_proof') {app.go('create');return;}
+      if(action.kind==='create_proof') {app.selectCreateProof();return;}
       if(action.kind==='reconcile'){await refresh();return;}
       if(!action.targetId)return;
       app.rememberTaskInteraction(action.targetId);

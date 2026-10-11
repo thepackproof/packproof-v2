@@ -10,6 +10,7 @@ import { prepareIdentifierCheckpoint } from './identifier-storage';
 import { beginUploadService, endUploadService, notifyUploadOutcome } from './upload-notifications';
 import { useDirectUpload } from './upload-transport';
 import { recordMobileUxEvent } from '../analytics/mobile-ux-events';
+import {captureMeasurement,measuredUploadState} from '../analytics/capture-measurement';
 
 const active = new Map<string, Promise<ProofView>>();
 export function captureCompletionActive(operationId?: string): boolean { return operationId ? active.has(operationId) : active.size > 0; }
@@ -37,7 +38,7 @@ export async function prepareSavedCapture(input: SavedCaptureInput): Promise<voi
   const state = initializeRecovery(input);
   const wasSubmitted = state.submitRequested;
   const proofId = state.proofId;
-  const study = await nativeStudyForCapture(client, userId, capture.studyTimingRef);
+  const study = await nativeStudyForCapture(client, userId, capture.studyTimingRef,capture.captureStageId?undefined:capture.captureProofId);
   const save = async () => { await persistCaptureMetadata(capture); input.onChange?.(capture); };
   input.assertAccount();
   study?.phase('confirmation');
@@ -63,6 +64,8 @@ export async function prepareSavedCapture(input: SavedCaptureInput): Promise<voi
   state.nextRetryAt = null;
   if (!['PRESERVATION_PENDING', 'FINALIZATION_PENDING', 'SUBMITTED', 'FINALIZED'].includes(state.phase)) state.phase = 'UPLOAD_QUEUED';
   await save();
+  captureMeasurement(study).authorized();
+  captureMeasurement(study).upload(measuredUploadState(state.phase));
   if (!wasSubmitted) recordMobileUxEvent("review_completed");
 }
 
@@ -77,9 +80,9 @@ export function completeSavedCapture(input: SavedCaptureInput): Promise<ProofVie
   if (active.size >= 2) return Promise.reject(Object.assign(new Error("Two recordings are already resuming. This recording remains queued."), { code: "UPLOAD_LIMIT", status: 429 }));
   let study:NativeStudyTimer|null=null;
   const run = (async () => {
-    study=await nativeStudyForCapture(client,userId,capture.studyTimingRef);
+    study=await nativeStudyForCapture(client,userId,capture.studyTimingRef,capture.captureStageId?undefined:capture.captureProofId);
     if(!input.interactive||(capture.recovery?.attempt??0)>0)study?.event('recovery_started');
-    const save = async () => { await persistCaptureMetadata(capture); input.onChange?.(capture); };
+    const save = async () => { await persistCaptureMetadata(capture); input.onChange?.(capture);captureMeasurement(study).upload(measuredUploadState(capture.recovery!.phase,capture.recovery!.lastError?.retryable)); };
     input.assertAccount();
     if (state.attempt > 0) recordMobileUxEvent("upload_recovery");
     if (input.interactive) await prepareSavedCapture(input);

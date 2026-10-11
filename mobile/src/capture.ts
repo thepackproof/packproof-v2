@@ -7,7 +7,8 @@ import { captureIdentifiers, identifierFailureBlocks, type IdentifierCapture } f
 import { identifierCaptureEnabled, mayRetainIdentifier } from './capture/identifier-observation';
 import { sessionRecordingLimits, requireNativeRecordingLimits, type RecordingLimits } from "./capture/limits";
 import { capturePreflight } from "./capture/preflight";
-import {startNativeStudy,nativeStudyForCapture,type NativeStudyTimer} from './analytics/native-study';
+import {nativeStudyForNewCapture,nativeStudyForCapture,type NativeStudyTimer} from './analytics/native-study';
+import {captureMeasurement} from './analytics/capture-measurement';
 import { recordMobileUxEvent } from './analytics/mobile-ux-events';
 import type { CaptureRecoveryState } from "./capture/recovery-model";
 import { resolveSavedCaptureUri } from "./capture/upload-recovery";
@@ -58,7 +59,7 @@ export interface LocalCapture {
 }
 
 export interface CaptureBookmark { label: string; startMs: number; endMs: number; sourceType: "USER_MARKED" | "SCANNER_TRIGGERED"; recipeVersion?: string; }
-export interface NativeRecordingRequest { recordingLimits?: RecordingLimits; remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onRecordingStarted?:()=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
+export interface NativeRecordingRequest { recordingLimits?: RecordingLimits; remoteControl?: boolean; identifierPolicy?: IdentifierPolicy; onIdentifierBarcode?: (event: UnifiedBarcodeDetection) => Promise<IdentifierReview | null>; onIdentifierUnavailable?: () => void; captureContext?:CaptureContext; autoStart?: boolean; onCameraReady?:()=>void; onGuidanceChanged?:(visible:boolean)=>void; onRecordingInterrupted?:()=>void; onRecordingStarted?:(at?:Date)=>void; onRecordingStopped?:()=>void; onShippingBarcode?: (scan: ShippingScan) => Promise<ShippingScanResult>; onConfirmShipping?: (rawValue: string) => Promise<ShippingScanResult>; proofId: string; orderLabel: string; captureSessionId?: string; expiresAt?: string; stageType?: string; compatibilityWorkflow?: "GRADING_SUBMISSION"; guide?: { uri: string; headers: Record<string, string> }; }
 type NativeRecorder = (request: NativeRecordingRequest) => Promise<LocalCapture | null>;
 let nativeRecorder: NativeRecorder | null = null;
 export function registerNativeRecorder(recorder: NativeRecorder): () => void {
@@ -111,11 +112,14 @@ export async function captureGradingPhoto(): Promise<{
 export async function recordPackingEvidence(input: {
   client: PackProofV2Client; relay?: { onSessionIssued: (id: string) => Promise<void>; onRecordingStarted: () => void }; authorizedSession?: CaptureSessionGrant; autoStart?: boolean; proofId: string; userId: string; orderLabel: string; stageId?: string; stageType?: string; guide?: { uri: string; headers: Record<string, string> };
 }): Promise<LocalCapture | null> {
-  // Starts are journaled before preflight only after explicit native study opt-in.
-  const study=input.stageId?null:await startNativeStudy(input.client,input.userId);
-  try{return await recordPackingEvidenceInner(input,study);}catch(error){study?.end('failed','capability');throw error;}
+  // Measurement observes the click concurrently. Its storage or transport never
+  // blocks preflight, camera readiness or persistence of the original recording.
+  const study=input.stageId?Promise.resolve(null):nativeStudyForNewCapture(input.client,input.userId,input.proofId);
+  try{return await recordPackingEvidenceInner(input,study);}catch(error){void study.then(value=>{value?.problem('capability');value?.suspend();});throw error;}
 }
-async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?:{onSessionIssued:(id:string)=>Promise<void>;onRecordingStarted:()=>void};authorizedSession?:CaptureSessionGrant;autoStart?:boolean;proofId:string;userId:string;orderLabel:string;stageId?:string;stageType?:string;guide?:{uri:string;headers:Record<string,string>}},study:NativeStudyTimer|null):Promise<LocalCapture|null>{
+async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?:{onSessionIssued:(id:string)=>Promise<void>;onRecordingStarted:()=>void};authorizedSession?:CaptureSessionGrant;autoStart?:boolean;proofId:string;userId:string;orderLabel:string;stageId?:string;stageType?:string;guide?:{uri:string;headers:Record<string,string>}},pendingStudy:Promise<NativeStudyTimer|null>):Promise<LocalCapture|null>{
+  const study={current:null as NativeStudyTimer|null};void pendingStudy.then(value=>{study.current=value;});
+  const measurement=captureMeasurement(pendingStudy);
   await capturePreflight(input.client, input.userId, !input.stageId);
   await requestCapturePermissions();
   if (!nativeRecorder) throw new Error("The camera is not ready. Return to this screen and try again.");
@@ -153,7 +157,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   }
   // Write the account binding before native acquisition. A process restart can discover finalized native media.
   await persistCaptureMetadata({ uri: `${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`, contentType: "video/mp4", byteSize: null, durationMs: null,
-    identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+    identifierPolicy, identifierCoverage, captureContext, recovery, studyTimingRef:study.current?.localRef,captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
   if (input.relay) await input.relay.onSessionIssued(session.id);
   const captured = await nativeRecorder({ recordingLimits, remoteControl: !!input.relay, identifierPolicy, captureContext, autoStart: input.autoStart, proofId: input.proofId, orderLabel: input.orderLabel, captureSessionId: session.id, expiresAt: session.expiresAt, stageType: input.stageType, guide: input.guide,
     ...(identifierCaptureEnabled(identifierPolicy) ? {
@@ -164,12 +168,15 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
       },
       onIdentifierUnavailable: () => { identifierCoverage = 'UNAVAILABLE'; try { identifiers?.markUnavailable(); } catch { /* Original-account journal remains locked. */ } },
     } : {}),
-    onRecordingStarted:()=>{study?.phase('recording');study?.event('recording_started');input.relay?.onRecordingStarted();},
-    onRecordingStopped:()=>{study?.event('recording_stopped');study?.phase('confirmation');},
+    onCameraReady:measurement.ready,
+    onRecordingInterrupted:measurement.interrupted,
+    onGuidanceChanged:measurement.guidance,
+    onRecordingStarted:(at)=>{measurement.started(at);input.relay?.onRecordingStarted();},
+    onRecordingStopped:measurement.stopped,
     ...(!input.stageId ? {onShippingBarcode:async (scan:ShippingScan)=>{
       const result=await queue.detect(scan);
-      if(result.status!=='UNRECOGNIZED')study?.event('label_read');
-      if(result.status==='CONFLICT')study?.event('label_mismatch');
+      if(result.status!=='UNRECOGNIZED')study.current?.event('label_read');
+      if(result.status==='CONFLICT')study.current?.event('label_mismatch');
       return result;
     },onConfirmShipping:queue.confirm} : {}),
   });
@@ -178,7 +185,7 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
   void queue.flush().catch(()=>undefined);
   void identifiers?.flush().catch(() => undefined);
   if (!captured) {
-    study?.end('cancelled','cancelled');
+    void pendingStudy.then(value=>value?.end('cancelled','cancelled'));
     releaseShippingQueue(session.id);
     const nativeFile = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}packproof-captures/${session.id}/video.mp4`);
     if (!nativeFile.exists || !("size" in nativeFile) || nativeFile.size === 0) {
@@ -189,8 +196,9 @@ async function recordPackingEvidenceInner(input:{client:PackProofV2Client;relay?
     return null;
   }
   const shippingBinding = journal.entries.some(e=>e.result.status==="CONFLICT") ? undefined : journal.entries.find(e=>e.result.status==="BOUND")?.result;
-  study?.phase('confirmation');
-  return persistLocalCapture({ ...captured,identifierPolicy,identifierCoverage,captureContext,studyTimingRef:study?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId });
+  study.current?.phase('confirmation');
+  if(captured.interrupted)measurement.interrupted();
+  return measurement.saved(()=>persistLocalCapture({ ...captured,identifierPolicy,identifierCoverage,captureContext,studyTimingRef:study.current?.localRef, recovery: { ...recovery, phase: "LOCAL_ONLY" }, shippingBinding, captureSessionId: session.id, captureProofId: input.proofId, captureUserId: input.userId, captureStageId: input.stageId }));
 }
 
 const inspections = new Map<string, Promise<EncodedVideoInspection | null>>();
@@ -230,7 +238,7 @@ export function inspectCaptureShipping(client: PackProofV2Client, capture: Local
     }
     if (journal) {
       const queue = shippingQueue(client, journal);
-      const study=await nativeStudyForCapture(client,capture.captureUserId!,capture.studyTimingRef);
+      const study=await nativeStudyForCapture(client,capture.captureUserId!,capture.studyTimingRef,capture.captureStageId?undefined:capture.captureProofId);
       for (const observation of inspection.observations) {
         const previousCount=journal.entries.length;
         const result=await queue.detect({ rawValue: observation.rawValue, format: observation.format,

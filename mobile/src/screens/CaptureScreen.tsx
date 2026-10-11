@@ -97,7 +97,7 @@ export function CaptureScreen() {
   useEffect(() => {
     if (reviewOnly || !capture || !belongs || !ordinaryCapture || !capture.captureUserId) return;
     let active=true;
-    void nativeStudyForCapture(app.client,capture.captureUserId,capture.studyTimingRef).then(study=>{if(active)study?.event('review_opened');});
+    void nativeStudyForCapture(app.client,capture.captureUserId,capture.studyTimingRef,capture.captureStageId?undefined:capture.captureProofId).then(study=>{if(active)study?.event('review_opened');});
     return()=>{active=false;};
   }, [capture?.captureSessionId, belongs, ordinaryCapture, app.client,reviewOnly]);
 

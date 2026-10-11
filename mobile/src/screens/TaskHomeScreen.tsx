@@ -35,7 +35,7 @@ export function TaskHomeScreen() {
         </>}
       </View>
       {FIRST_PROOF_EXPERIENCE_ENABLED && !home.loading && action.kind === "create_proof" ? <Button label="See a sample Proof" variant="tertiary" onPress={() => app.go("sample")} /> : null}
-      {home.loading || action.kind !== "create_proof" ? <TutorialTarget name="create"><Button label="Create Proof" icon="add-outline" variant="secondary" disabled={app.busy} onPress={() => app.go("create")} /></TutorialTarget> : null}
+      {home.loading || action.kind !== "create_proof" ? <TutorialTarget name="create"><Button label="Create Proof" icon="add-outline" variant="secondary" disabled={app.busy} onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}
       {app.offline ? <Text style={[styles.body, { color: colors.warningText }]}>Offline. Saved work remains on this device. Connect before creating a Proof.</Text> : null}
       {home.freshnessLabel ? <Text accessibilityLiveRegion="polite" style={[styles.meta, { color: colors.textMuted }]}>{home.freshnessLabel}</Text> : null}
       <ErrorBanner message={home.error} />
