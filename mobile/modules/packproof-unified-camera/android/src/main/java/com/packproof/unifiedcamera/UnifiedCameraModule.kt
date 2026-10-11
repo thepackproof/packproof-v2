@@ -11,6 +11,7 @@ class UnifiedCameraModule : Module() {
     Name("PackProofUnifiedCamera")
     Function("newOperationNonce") { java.util.UUID.randomUUID().toString() }
     Function("identifierScannerVersion") { 1 }
+    Function("captureLimitsVersion") { 1 }
     AsyncFunction("beginUploadService") { operationId: String ->
       val context = appContext.reactContext ?: throw IllegalStateException("App unavailable")
       UploadNotificationService.begin(context, operationId)
@@ -77,6 +78,8 @@ class UnifiedCameraModule : Module() {
       Prop("identifierCaptureEnabled") { view: UnifiedCameraView, enabled: Boolean ->
         view.setIdentifierCaptureEnabled(enabled)
       }
+      Prop("maxRecordingBytes") { view: UnifiedCameraView, value: Double? -> view.setMaxRecordingBytes(value) }
+      Prop("maxRecordingSeconds") { view: UnifiedCameraView, value: Double? -> view.setMaxRecordingSeconds(value) }
       OnViewDidUpdateProps { view: UnifiedCameraView -> view.ensureCamera() }
 
       AsyncFunction("startRecording") { view: UnifiedCameraView, sessionId: String, audioEnabled: Boolean, promise: Promise ->

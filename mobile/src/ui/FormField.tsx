@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type TextInputProps } from "react-native";
 import { radii, sizes, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 
@@ -14,10 +14,14 @@ export function FormField(props: {
   multiline?: boolean;
   editable?: boolean;
   accessibilityHint?: string;
+  autoComplete?: TextInputProps["autoComplete"];
+  textContentType?: TextInputProps["textContentType"];
+  maxLength?: number;
 }) {
   const { colors } = useTheme();
   const locked = props.editable === false;
   const [focused, setFocused] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   return (
     <View style={styles.wrap}>
       <Text style={[styles.label, { color: colors.textPrimary }]}>{props.label}</Text>
@@ -29,7 +33,10 @@ export function FormField(props: {
         placeholder={props.placeholder}
         placeholderTextColor={colors.textMuted}
         selectionColor={colors.accent}
-        secureTextEntry={props.secureTextEntry}
+        secureTextEntry={props.secureTextEntry && !revealed}
+        autoComplete={props.autoComplete}
+        textContentType={props.textContentType}
+        maxLength={props.maxLength}
         autoCapitalize={props.autoCapitalize ?? "none"}
         autoCorrect={false}
         keyboardType={props.keyboardType ?? "default"}
@@ -48,6 +55,7 @@ export function FormField(props: {
           props.multiline ? styles.multiline : null,
         ]}
       />
+      {props.secureTextEntry ? <Pressable accessibilityRole="button" accessibilityLabel={`${revealed ? "Hide" : "Show"} ${props.label.toLowerCase()}`} accessibilityState={{ expanded: revealed }} onPress={() => setRevealed(value => !value)} style={{minHeight:48,justifyContent:"center",alignSelf:"flex-start",paddingHorizontal:8}}><Text style={{color:colors.accentText,fontSize:16}}>{revealed ? "Hide password" : "Show password"}</Text></Pressable> : null}
     </View>
   );
 }

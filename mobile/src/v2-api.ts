@@ -97,6 +97,7 @@ export interface TransactionView {
 }
 
 export interface TransactionWriteInput {
+  idempotencyKey?: string;
   externalReference?: string | null;
   transactionDate?: string | null;
   itemTitle?: string | null;
@@ -1105,7 +1106,7 @@ export class PackProofV2Client {
     return this.request(path,{method,body});
   }
 
-  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string, surface?: "ANDROID" | "IOS"): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string; identifierPolicy?: IdentifierPolicy }> {
+  async createCaptureSession(proofId: string, idempotencyKey: string, stageId?: string, surface?: "ANDROID" | "IOS"): Promise<{ id: string; proofId: string; policyVersion: string; state: string; expiresAt: string; recoverUntil: string; maxRecordingBytes?: number; maxRecordingSeconds?: number; identifierPolicy?: IdentifierPolicy }> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions`, {
       method: "POST", body: { idempotencyKey, client: "NATIVE_CAMERA", ...(stageId ? { stageId } : {}), ...(surface ? { surface } : {}) },
     });

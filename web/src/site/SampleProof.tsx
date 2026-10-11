@@ -13,9 +13,10 @@ type SampleTab = "Recording" | "Activity" | "Tracking";
 type SampleTool = "receipt" | "case" | null;
 const recordTabs: SampleTab[] = ["Recording", "Activity", "Tracking"];
 
-export function SampleProof({ compact = false }: { compact?: boolean }) {
+export function SampleProof({ compact = false, readOnly = false, videoUrl = "/sample-packing.mp4" }: { compact?: boolean; readOnly?: boolean; videoUrl?: string }) {
   const [tab, setTab] = useState<SampleTab>("Recording");
   const [tool, setTool] = useState<SampleTool>(() => {
+    if (readOnly) return null;
     const view = new URLSearchParams(location.search).get("view");
     return view === "receipt" || view === "case" ? view : null;
   });
@@ -49,15 +50,15 @@ export function SampleProof({ compact = false }: { compact?: boolean }) {
   }
   return <article className={`sample-record sample-canonical ${compact ? "" : "sample-large"}`}>
     <div className="sample-top"><div><strong>Ceramic mug · Order #1042</strong><span>Fictional Proof · sample only</span></div><span className="sample-label">SAMPLE</span>
-      <details ref={more} className="sample-more"><summary>More</summary><div>
+      {!readOnly && <details ref={more} className="sample-more"><summary>More</summary><div>
         <button type="button" onClick={() => openTool("receipt")}>Receipt and returns</button>
         <button type="button" onClick={() => openTool("case")}>Evidence and claim tools</button>
-      </div></details>
+      </div></details>}
     </div>
     <div className="sample-tabs" role="tablist" aria-label="Sample record views">{recordTabs.map(t => <button key={t} id={`${id}-${t}-tab`} type="button" role="tab" aria-selected={tab === t} aria-controls={`${id}-${t}-panel`} tabIndex={tab === t ? 0 : -1} onKeyDown={event => navigateTabs(event, t)} onClick={() => selectTab(t)}>{t}</button>)}</div>
     <div className="sample-body">
       <section role="tabpanel" id={`${id}-Recording-panel`} aria-labelledby={`${id}-Recording-tab`} hidden={tab !== "Recording" || tool !== null}>
-        <div ref={player}><EvidencePreview url="/sample-packing.mp4" contentType="video/mp4" evidenceId="illustrative-stock" title="Packing a ceramic mug" provenanceLabel="Illustrative stock footage · not a PackProof capture"/></div>
+        <div ref={player}><EvidencePreview url={videoUrl} contentType="video/mp4" evidenceId="illustrative-stock" title="Packing a ceramic mug" provenanceLabel="Illustrative stock footage · not a PackProof capture"/></div>
         <div className="sample-chapters" aria-label="Source moments">{chapters.map(c => <button key={c.at} onClick={() => jump(c.at)}>{`0:${String(c.at).padStart(2, "0")}`} · {c.label}</button>)}</div><p className="note">These sample bookmarks point to visible moments in the clip. No seal, label, serial number or carrier handoff is shown.</p>
       </section>
       {tab === "Activity" && !tool && <section role="tabpanel" id={`${id}-Activity-panel`} aria-labelledby={`${id}-Activity-tab`}><ProofTimeline entries={sampleChronology} finalizedAt="2026-09-01T09:46:00Z"/></section>}

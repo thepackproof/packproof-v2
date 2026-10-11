@@ -1,4 +1,5 @@
-import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
+import {cleanup,render,screen,waitFor} from "@testing-library/react";
+import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it,vi} from "vitest";
 import {PlanBillingPanel,safeBillingDestination} from "../components/PlanBillingPanel";
 import type {PackProofApi} from "../api/client";
@@ -16,7 +17,9 @@ it("requires explicit offer acceptance and sends the exact displayed offer diges
   const button=await screen.findByRole("button",{name:"Continue to secure checkout"});
   expect(button).toBeDisabled();
   expect(billingRequest.mock.calls.some(([path])=>path==="checkout")).toBe(false);
-  fireEvent.click(screen.getByRole("checkbox"));fireEvent.click(button);
+  await userEvent.click(screen.getByRole("checkbox"));
+  await waitFor(()=>expect(button).toBeEnabled());
+  await userEvent.click(button);
   await waitFor(()=>expect(billingRequest).toHaveBeenCalledWith("checkout",expect.objectContaining({offerVersion:"offer-test",acceptedOfferSha256:"a".repeat(64),operationId:expect.any(String)})));
 });
 it("rejects credential-bearing, insecure and off-provider checkout URLs",()=>{

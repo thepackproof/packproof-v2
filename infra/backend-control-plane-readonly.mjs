@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
+import { serviceWithRevision } from './backend-service-state.mjs';
 const region='us-east-1',account='784514617543',cluster='packproof-v2-staging-cluster',serviceName='packproof-v2-staging-api';
 const expectedArn=`arn:aws:ecs:${region}:${account}:service/${cluster}/${serviceName}`;
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
@@ -60,7 +61,7 @@ async function main(){
   const identity=aws('sts','get-caller-identity');
   if(identity?.Account!==account)throw Error('Expected AWS account authentication unavailable');
   const result={observedAt:new Date().toISOString(),sourceSha:/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA??'')?process.env.GITHUB_SHA:null,readOnly:true,account,region,principalArn:identity.Arn,calls};
-  const service=aws('ecs','describe-services',['--cluster',cluster,'--services',serviceName])?.services?.[0];
+  let service=aws('ecs','describe-services',['--cluster',cluster,'--services',serviceName])?.services?.[0];
   if(service?.serviceArn!==expectedArn)throw Error('Expected existing service unavailable');
   result.service={...pick(service,['serviceArn','taskDefinition','status','desiredCount','runningCount','pendingCount','capacityProviderStrategy','launchType','platformVersion','networkConfiguration','deploymentConfiguration','healthCheckGracePeriodSeconds','loadBalancers']),
     deployments:(service.deployments??[]).map(v=>pick(v,['id','status','taskDefinition','desiredCount','runningCount','pendingCount','rolloutState','rolloutStateReason'])),configurationSha256:hash(service)};
@@ -69,6 +70,10 @@ async function main(){
   const revisionArns=unique((express?.activeConfigurations??[]).map(v=>v.serviceRevisionArn).filter(revisionArn));
   const revisions=revisionArns.length?(aws('ecs','describe-service-revisions',['--service-revision-arns',...revisionArns])?.serviceRevisions??[]).filter(v=>revisionArns.includes(v.serviceRevisionArn)&&v.serviceArn===expectedArn):[];
   result.serviceRevisions=revisions.map(v=>({...pick(v,['serviceRevisionArn','serviceArn','taskDefinition','capacityProviderStrategy','launchType','platformVersion','networkConfiguration','loadBalancers']),resolvedLoadBalancers:(v.resolvedConfiguration?.loadBalancers??[]).map(x=>pick(x,['targetGroupArn','productionListenerRule'])),managedIngress:(v.ecsManagedResources?.ingressPaths??[]).map(x=>({...pick(x,['accessType','endpoint']),loadBalancer:pick(x.loadBalancer,['arn','status'])})),configurationSha256:hash(v)}));
+  if(revisionArns.length===1&&revisions.length===1&&revisions[0].serviceRevisionArn===revisionArns[0]&&taskArn(revisions[0].taskDefinition)) {
+    service=serviceWithRevision(service,revisions[0]);
+    result.service={...result.service,...pick(service,['taskDefinition','capacityProviderStrategy','launchType','platformVersion','networkConfiguration','loadBalancers']),resolvedFromServiceRevision:revisionArns[0]};
+  }
   const taskArns=aws('ecs','list-tasks',['--cluster',cluster,'--service-name',serviceName,'--desired-status','RUNNING'])?.taskArns??[];
   const runningTasks=taskArns.length?aws('ecs','describe-tasks',['--cluster',cluster,'--tasks',...taskArns])?.tasks??[]:[];
   result.runningTasks=runningTasks.map(v=>({...pick(v,['taskArn','taskDefinitionArn','lastStatus','healthStatus','platformVersion']),containers:(v.containers??[]).map(c=>pick(c,['name','image','imageDigest','lastStatus','healthStatus','networkInterfaces']))}));

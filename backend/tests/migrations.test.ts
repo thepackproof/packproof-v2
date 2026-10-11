@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { migrate } from "../src/db/migrate.js";
+import { assertSchemaCurrent, migrate, migrationInventory } from "../src/db/migrate.js";
+import { FORWARD_COMPATIBLE_MIGRATIONS } from "../src/db/forward-compatible-migrations.js";
 import { createPgliteDatabase } from "../src/db/pglite.js";
 import { createPgDatabase } from "../src/db/postgres.js";
 import type { Database } from "../src/db/database.js";
@@ -26,6 +27,37 @@ async function checkConcurrentMigrations(first: Database, second: Database) {
 }
 
 describe("concurrent application startup migrations", () => {
+  it("remains ready across only the exact reviewed additive measurement receipt", async () => {
+    const opened = await createPgliteDatabase();
+    try {
+      await migrate(opened.db);
+      const inventory = await migrationInventory();
+      const future = FORWARD_COMPATIBLE_MIGRATIONS[0]!;
+      const sourceEntry = inventory.find(row => row.id === future.id);
+      if (sourceEntry) expect(sourceEntry.checksum).toBe(future.checksum);
+      await expect(assertSchemaCurrent(opened.db)).resolves.toBeUndefined();
+      if (!sourceEntry) await opened.db.query(
+        "INSERT INTO schema_migrations(id,applied_at,checksum,checksum_provenance) VALUES($1,NOW(),$2,'EXECUTED_BYTES')",
+        [future.id, future.checksum],
+      );
+      await expect(assertSchemaCurrent(opened.db)).resolves.toBeUndefined();
+      await expect(assertSchemaCurrent(opened.db, undefined, true)).resolves.toBeUndefined();
+
+      await opened.db.query("UPDATE schema_migrations SET checksum=$2 WHERE id=$1", [future.id, '0'.repeat(64)]);
+      await expect(assertSchemaCurrent(opened.db)).rejects.toThrow();
+      await opened.db.query("UPDATE schema_migrations SET checksum=$2 WHERE id=$1", [future.id, future.checksum]);
+      await opened.db.query("INSERT INTO schema_migrations(id,applied_at,checksum) VALUES('077_unreviewed',NOW(),$1)", ['a'.repeat(64)]);
+      await expect(assertSchemaCurrent(opened.db)).rejects.toThrow('outside this release compatibility envelope');
+      await opened.db.query("DELETE FROM schema_migrations WHERE id='077_unreviewed'");
+
+      const required = inventory[0]!;
+      await opened.db.query("DELETE FROM schema_migrations WHERE id=$1", [required.id]);
+      await expect(assertSchemaCurrent(opened.db)).rejects.toThrow(`Migration required or checksum mismatch: ${required.id}`);
+    } finally {
+      await opened.close();
+    }
+  });
+
   it("rolls back a failed migration and permits a corrected retry", async () => {
     const opened = await createPgliteDatabase();
     const directory = await mkdtemp(path.join(tmpdir(), "packproof-migration-"));

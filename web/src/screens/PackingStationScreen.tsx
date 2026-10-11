@@ -10,6 +10,7 @@ import { RemainingShipmentNotice } from "../components/RemainingShipmentNotice";
 import type { IntakeSnapshot } from '../intake-types';
 import {startStationStudy,resumeStationStudy,type StationStudyTimer} from '../analytics/study-capture';
 import { RelayStationPanel } from "../components/RelayStationPanel";
+import { sessionRecordingLimits } from "../../../mobile/src/capture/limits";
 import { capturePreflight } from "../capture-preflight";
 import { resumeStationRecording } from "../capture-queue";
 import { type CaptureBookmark } from "../components/CaptureCoach";
@@ -514,6 +515,7 @@ export function PackingStationScreen(props: {
       if(session.state!=='ISSUED')throw new Error('This order already has a recording. Recover it before recording again.');
       issuedSessionId = session.id;
       if (!stillReady()) { stopLiveTracks(); return; }
+      const limits = sessionRecordingLimits(session);
       captureSessionRef.current = session.id;
       identifierPolicyRef.current=session.identifierPolicy;
       identifierJournalRef.current=null;setIdentifierReview(null);
@@ -542,8 +544,8 @@ export function PackingStationScreen(props: {
             if(recorder.state==='recording'&&!finishingRef.current)void finishPacking('MANUAL',false);
           });
         } else journalRef.current = journalRef.current.then(async () => { await preserveStation(partial, false, true); }).catch(() => { setLocalError("Browser storage is full. Keep this page open and save the recording before leaving."); });
-        if (partial.size > capabilities.capture.maxBytes * 0.92 || durationRef.current >= capabilities.capture.maxDurationSeconds * 1000) {
-          setLocalError("Recording reached this device’s safe limit. Saving the recorded segment now.");
+        if (partial.size > Math.min(capabilities.capture.maxBytes, limits.maxRecordingBytes) * 0.92 || durationRef.current >= Math.min(capabilities.capture.maxDurationSeconds, limits.maxRecordingSeconds) * 1000) {
+          setLocalError("Recording reached its account or device limit. Saving this interrupted take; review it before deciding whether to record again.");
           if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); }
         }
       };

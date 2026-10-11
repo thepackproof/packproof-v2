@@ -43,6 +43,7 @@ export function ManualCreateScreen() {
     <AppScreen extraBottom={24}>
       <AppHeader title="New Proof" onBack={app.goBack} right={<IconButton label="Share Proof" onPress={() => Alert.alert("Share Proof", app.offline ? "Connect to create a share link. Your draft is kept." : "Create this Proof to get a share link. Your draft is kept.")}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton>} />
       <ErrorBanner message={app.error} />
+      {app.manualDraftNeedsRecovery ? <View><Text style={{color:colors.textSecondary,fontSize:16,lineHeight:24}}>A previous creation still needs to be checked. Recover its submitted details before starting another Proof.</Text><Button label="Recover submitted draft" variant="secondary" onPress={app.recoverManualDraft}/></View> : null}
       {app.offline ? <Text accessibilityLiveRegion="polite" style={{color:colors.textSecondary}}>Connect before creating this Proof or starting capture. Your form stays open.</Text> : null}
       <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Record shipment evidence without connecting a store.</Text>
       {app.intakeReview ? (
@@ -58,6 +59,7 @@ export function ManualCreateScreen() {
         value={form.itemTitle}
         onChangeText={(value) => setForm({ ...form, itemTitle: value })}
         autoCapitalize="sentences"
+        maxLength={200}
       />
       <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Show the shipping label during your packing video. PackProof will try to read it for you.</Text>
       <Button label="Paste order or receipt" variant="tertiary" onPress={() => app.go("intake")} />
@@ -160,8 +162,8 @@ export function ManualCreateScreen() {
         </>
       ) : null}
       <Button
-        disabled={!form.itemTitle.trim() || app.offline}
-        label="Open camera"
+        disabled={!form.itemTitle.trim() || app.offline || app.manualDraftNeedsRecovery}
+        label="Continue to camera"
         onPress={() => void app.createManualProof()}
         loading={app.busy}
       />

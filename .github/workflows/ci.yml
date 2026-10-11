@@ -131,6 +131,7 @@ jobs:
       - name: Verify Proof navigation and share-link cache
         run: node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/proof-navigation.test.ts tests/share-cache.test.ts
       - run: npm run test:recovery
+      - run: npm run test:first-proof
       - run: npm run test:identifiers
       - run: npm run test:api
 
@@ -276,6 +277,8 @@ jobs:
         run: node --test browser-companion/tests/*.test.cjs
       - name: Verify BOM refusal and artifact identity behavior
         run: node --test scripts/release-bom.test.mjs scripts/publication-policy-gate.test.mjs
+      - name: Verify exact-source backend release and CANARY revision preservation
+        run: node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs
       - name: Verify capture host handoff and signed receipts
         run: node --test packages/capture-sdk/server.test.mjs
       - name: Verify portable signatures and received supplement snapshots
@@ -314,6 +317,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate scoped release requests and service discovery
+        run: node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs
       - name: Validate PowerShell and runtime preservation
         shell: pwsh
         run: ./infra/tests/deployment-helpers.test.ps1

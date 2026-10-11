@@ -62,9 +62,9 @@ export function loadSession(): WebSession | null {
 }
 
 export function saveSession(session: WebSession): void {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session)); } catch { /* The active tab keeps the session in memory when browser storage is unavailable. */ }
 }
 
 export function clearSession(): void {
-  sessionStorage.removeItem(STORAGE_KEY);
+  try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Sign-out must still clear the active in-memory session. */ }
 }

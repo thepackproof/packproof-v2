@@ -1,0 +1,104 @@
+name: Backend exact-source release
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: Full reviewed main commit, with successful source-bound CI
+        required: true
+      expected_previous_image:
+        description: Current immutable API image from inspected control-plane and public metadata
+        required: true
+      expected_previous_task_definition:
+        description: Current inspected API task-definition ARN
+        required: true
+      expected_topology_sha256:
+        description: Reviewed topology hash from read-only inspection
+        required: true
+      version:
+        description: Public release identifier
+        required: true
+permissions:
+  contents: read
+  checks: read
+  id-token: write
+concurrency:
+  group: packproof-backend-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact main source and required current CI
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          PREVIOUS_IMAGE: ${{ inputs.expected_previous_image }}
+          PREVIOUS_TASK: ${{ inputs.expected_previous_task_definition }}
+          TOPOLOGY_SHA: ${{ inputs.expected_topology_sha256 }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            if (context.repo.owner !== 'thepackproof' || context.repo.repo !== 'packproof-v2' || context.ref !== 'refs/heads/main' || process.env.REVIEWED_SHA !== context.sha) throw Error('EXACT_MAIN_SOURCE_REQUIRED');
+            const checks = await github.paginate(github.rest.checks.listForRef, { ...context.repo, ref: context.sha, per_page: 100 });
+            for (const name of ['Backend', 'PostgreSQL release invariants', 'Source secrets and release tooling', 'Dependency audit (backend)', 'Deployment scripts', 'CodeQL']) {
+              const matching = checks.filter(check => check.name === name && check.head_sha === context.sha).sort((a,b) => b.id - a.id);
+              if (!matching.length || matching[0].status !== 'completed' || matching[0].conclusion !== 'success') throw Error(`REQUIRED_CI_NOT_SUCCESSFUL: ${name}`);
+            }
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'backend-release-input.json'), JSON.stringify({ sourceSha: context.sha, ciPassed: true, expectedPreviousImage: process.env.PREVIOUS_IMAGE, expectedPreviousTaskDefinition: process.env.PREVIOUS_TASK, expectedTopologySha256: process.env.TOPOLOGY_SHA, version: process.env.RELEASE_VERSION }), { mode: 0o600 });
+      - name: Validate release request constructors
+        run: node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs
+      - name: Restrict existing role for exact-source build
+        id: build-policy
+        run: node infra/backend-release/backend-release-runner.mjs policy-build "$RUNNER_TEMP/backend-release-input.json"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: packproof-build-${{ github.run_id }}
+          inline-session-policy: ${{ steps.build-policy.outputs.policy }}
+      - name: Build reviewed Git bytes using the existing CodeBuild project
+        run: node infra/backend-release/backend-release-runner.mjs build "$RUNNER_TEMP/backend-release-input.json"
+      - name: Restrict existing role for runtime-only database verification
+        id: preflight-policy
+        run: node infra/backend-release/backend-release-runner.mjs policy-preflight "$RUNNER_TEMP/backend-release-input.json"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: packproof-verify-${{ github.run_id }}
+          inline-session-policy: ${{ steps.preflight-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Verify candidate database compatibility without DDL
+        run: node infra/backend-release/backend-release-runner.mjs preflight "$RUNNER_TEMP/backend-release-input.json"
+      - name: Restrict existing role for configuration-preserving API update
+        id: deploy-policy
+        run: node infra/backend-release/backend-release-runner.mjs policy-deploy "$RUNNER_TEMP/backend-release-input.json"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: packproof-deploy-${{ github.run_id }}
+          inline-session-policy: ${{ steps.deploy-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Update only the API image and release identity, then verify rollout
+        run: node infra/backend-release/backend-release-runner.mjs deploy "$RUNNER_TEMP/backend-release-input.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-release-${{ github.sha }}
+          path: ${{ runner.temp }}/packproof-backend-evidence/*.json
+          if-no-files-found: warn
+          retention-days: 30

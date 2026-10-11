@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PackProofApi } from "../api/client";
 import { ApiError } from "../api/types";
 import {
@@ -23,16 +23,22 @@ import {
 type AuthView = "sign-in" | "create-account" | "confirm-account" | "verified" | "forgot-password" | "reset-password";
 
 export function SignInScreen(props: {
+  firstExperience?: boolean;
   initialView?: "sign-in" | "create-account";
   onSignedIn: (session: WebSession) => void;
   onGo: (path: string) => void;
 }) {
   const allowDevAuth = isDevAuthAvailable();
-  const [view, setView] = useState<AuthView>(props.initialView ?? "sign-in");
+  const [savedAuth] = useState(() => {
+    if (!props.firstExperience) return null;
+    try { const value = JSON.parse(sessionStorage.getItem('packproof:first-proof:auth:v1') || 'null'); return value && typeof value.email === 'string' && value.email.length <= 254 ? value : null; } catch { return null; }
+  });
+  const [view, setView] = useState<AuthView>(savedAuth?.view === 'confirm-account' ? 'confirm-account' : props.initialView ?? "sign-in");
+  const [showPassword, setShowPassword] = useState(false);
   const [apiBaseUrl, setApiBaseUrl] = useState(defaultApiBaseUrl());
   const [useDevAuth, setUseDevAuth] = useState(false);
   const [subject, setSubject] = useState("seller-1");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(savedAuth?.email || "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmationCode, setConfirmationCode] = useState("");
@@ -40,6 +46,11 @@ export function SignInScreen(props: {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const pendingPasswordRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!props.firstExperience) return;
+    try { sessionStorage.setItem('packproof:first-proof:auth:v1', JSON.stringify({ email, view })); } catch { /* Optional non-secret recovery. */ }
+  }, [props.firstExperience, email, view]);
 
   function clearSecrets() {
     pendingPasswordRef.current = null;
@@ -139,7 +150,7 @@ export function SignInScreen(props: {
     event.preventDefault();
     setError(null);
     setInfo(null);
-    if (password !== confirmPassword) {
+    if (!props.firstExperience && password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
@@ -275,6 +286,7 @@ export function SignInScreen(props: {
         </>
       )}
 
+      {props.firstExperience && <button type="button" className="link-button" onClick={() => props.onGo("/sample-proof")}>See a sample Proof</button>}
       {view === "sign-in" || view === "create-account" ? (
         <div className={`auth-switch ${view === "create-account" ? "auth-switch-create" : ""}`} role="tablist" aria-label="Account">
           <button
@@ -327,7 +339,7 @@ export function SignInScreen(props: {
                 <span>Password</span>
                 <input
                   id="sign-in-password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="current-password"
@@ -336,6 +348,7 @@ export function SignInScreen(props: {
               </label>
             </>
           )}
+          {!useDevAuth && <button className="link-button" type="button" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide password" : "Show password"}</button>}
           <DeveloperOptions
             allowDevAuth={allowDevAuth}
             useDevAuth={useDevAuth}
@@ -367,8 +380,8 @@ export function SignInScreen(props: {
         <form className="section stack" onSubmit={event => void resetPassword(event)}>
           {view === "forgot-password" ? <label className="field"><span>Email</span><input type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></label> : <>
             <label className="field"><span>Reset code</span><input autoComplete="one-time-code" inputMode="numeric" required value={confirmationCode} onChange={e => setConfirmationCode(e.target.value)} /></label>
-            <label className="field"><span>New password</span><input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} /></label>
-            <label className="field"><span>Confirm new password</span><input type="password" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
+            <label className="field"><span>New password</span><input type={showPassword ? "text" : "password"} autoComplete="new-password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} /></label>
+            <label className="field"><span>Confirm new password</span><input type={showPassword ? "text" : "password"} autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
           </>}
           {info ? <div className="banner banner-info" role="status">{info}</div> : null}
           {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
@@ -395,24 +408,26 @@ export function SignInScreen(props: {
             <span>Password</span>
             <input
               id="create-password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
               required
             />
           </label>
-          <label className="field" htmlFor="create-password-confirm">
+          {!props.firstExperience && <label className="field" htmlFor="create-password-confirm">
             <span>Confirm password</span>
             <input
               id="create-password-confirm"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
               required
             />
           </label>
+          }
+          <button className="link-button" type="button" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide password" : "Show password"}</button>
           <p className="auth-legal-note">
             By creating an account, you agree to the PackProof{" "}
             <a

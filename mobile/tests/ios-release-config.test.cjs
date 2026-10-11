@@ -41,6 +41,7 @@ test('iOS profiles share current Android feature flags and use an iOS 26 build i
   assert.deepEqual(release.env, {
     ...profiles.build['internal-staging'].env,
     EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING: profiles.build['shipping-integration'].env.EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING,
+    EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: profiles.build.production.env.EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE,
   });
   assert.match(release.ios.image, /xcode-26\./);
   assert.equal(release.distribution, 'store');

@@ -10,6 +10,7 @@ RUN npm run build
 FROM public.ecr.aws/docker/library/node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+# Alpine's distribution patch fixes CVE-2026-85091 without changing the zlib ABI.
 RUN apk add --no-cache --upgrade 'zlib>=1.3.2-r1' ffmpeg util-linux font-dejavu ca-certificates && command -v prlimit && command -v ffprobe
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

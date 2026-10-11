@@ -23,6 +23,10 @@ import { useTheme } from "../theme/ThemeProvider";
 import { applySystemBars } from "../theme/system-bars";
 import { Logo } from "../ui/Logo";
 import { AuthScreen } from "../screens/AuthScreen";
+import { SampleProofScreen } from "../screens/SampleProofScreen";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { parseTaskIntent, pendingLinkKey, taskIntent } from "../experience/task-intent";
+import { FIRST_PROOF_EXPERIENCE_ENABLED } from "../experience/first-proof";
 import { MyProofsScreen } from "../screens/MyProofsScreen";
 import { WorkspaceHomeScreen } from "../screens/WorkspaceHomeScreen";
 import { WorkspaceOrdersScreen } from "../screens/WorkspaceOrdersScreen";
@@ -54,6 +58,8 @@ export function Root() {
 
 function RootContent() {
   const app = usePackProof();
+  const latestApp=useRef(app);latestApp.current=app;
+  const pendingLinkOwner=useRef<string|null>(null);
   const theme = useTheme();
   const immersive = isImmersiveRoute(app.route) && app.route.name !== "capture" && app.route.name !== "station";
   const [captureIntent,setCaptureIntent]=useState<string|null>(null);
@@ -63,6 +69,9 @@ function RootContent() {
   const [completionVisible, setCompletionVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const previousRoute = useRef(app.route.name);
+  const sampleOrigin = useRef(app.route);
+  const lastNonSampleRoute = useRef(app.route);
+  if (app.route.name !== "sample") lastNonSampleRoute.current = app.route;
   const ready = theme.hydrated && app.hydrated && app.route.name !== "boot";
   const nativeShare = useSharedOrder(ready);
   const intakeNavigationReady = canNavigateForIntake({ ready, accountId: app.session?.userId ?? null, route: app.route.name === "station" && !app.session?.stationActive ? "orders" : app.route.name, busy: app.busy, captureStatus: app.captureStatus });
@@ -83,12 +92,19 @@ function RootContent() {
   useEffect(() => {
     const previous = previousRoute.current;
     previousRoute.current = app.route.name;
+    if(app.route.name === "sample" && previous !== "sample") sampleOrigin.current = lastNonSampleRoute.current;
     if (previous === "finalize" && app.route.name === "proof" && app.proof?.status === "FINALIZED") {
       setCompletionVisible(true);
     } else if (app.route.name !== "proof") {
       setCompletionVisible(false);
     }
   }, [app.route.name, app.proof?.status, app.proof?.proofId]);
+
+  useEffect(()=>{
+    if(app.route.name!=="sample")return;
+    const handler=BackHandler.addEventListener("hardwareBackPress",()=>{app.go(sampleOrigin.current.name,sampleOrigin.current);return true;});
+    return ()=>handler.remove();
+  },[app.route.name]);
 
   useEffect(() => {
     if (!completionVisible) return;
@@ -97,7 +113,7 @@ function RootContent() {
   }, [completionVisible, theme.reducedMotion]);
 
   useEffect(() => {
-    if (!ready || !app.session || ["auth", "account"].includes(app.route.name)) return;
+    if (!ready || !app.session || ["auth", "account", "sample"].includes(app.route.name)) return;
     if (app.route.name === "station" && app.session?.stationActive && app.localCapture && app.session.stationProofId === app.localCapture.captureProofId) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       if (Keyboard.isVisible()) { Keyboard.dismiss(); return true; }
@@ -121,6 +137,26 @@ function RootContent() {
   }, [immersive, ready, theme.colors.background, theme.colors.scanBackground, theme.scheme]);
 
   useEffect(() => {
+    // Only validated, non-secret record locators survive verification or process restart.
+    // Bearer capture invitations remain on their existing secure handoff path.
+    const applyPending=(route:'proof'|'orders',proofId?:string,historyShareId?:string,owner:string|null=null)=>{
+      pendingLinkOwner.current=owner;
+      if(route==='orders')setLinkedQueue(true);
+      else {setLinkedProofId(proofId!);setLinkedHistoryShareId(historyShareId??null);}
+    };
+    let received=false;
+    const retain=(route:'proof'|'orders',proofId?:string,historyShareId?:string)=>{
+      received=true;
+      const current=latestApp.current,owner=current.session?.userId??null;
+      const intent=taskIntent(route,proofId,FIRST_PROOF_EXPERIENCE_ENABLED?1:0,{historyShareId});
+      if(!intent)return;
+      applyPending(route,proofId,historyShareId,owner);
+      void AsyncStorage.setItem(pendingLinkKey(current.apiBaseUrl),JSON.stringify({owner,intent})).catch(()=>current.setError('Your link is open, but could not be saved for restart. Keep PackProof open while signing in.'));
+    };
+    void AsyncStorage.getItem(pendingLinkKey(app.apiBaseUrl)).then(raw=>{
+      if(received||!raw)return;
+      try {const saved=JSON.parse(raw),intent=parseTaskIntent(JSON.stringify(saved.intent));if(intent&&['proof','orders'].includes(intent.route)&&(saved.owner===null||typeof saved.owner==='string'))applyPending(intent.route as 'proof'|'orders',intent.proofId,intent.historyShareId,saved.owner);}catch{/* Ignore corrupt navigation storage. */}
+    }).catch(()=>undefined);
     const receive = (url: string) => {
       try {
         const link=new URL(url);
@@ -130,8 +166,8 @@ function RootContent() {
         if(hostAllowed&&captureRoute&&token&&/^intent_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(token)){setCaptureIntent(token);return;}
       } catch { /* Other supported link handlers retain their validation. */ }
       const proofId = proofIdFromLink(url);
-      if (proofId) { setLinkedHistoryShareId(historyShareFromLink(url)?.shareId ?? null); setLinkedProofId(proofId); return; }
-      if (packingQueueFromLink(url)) { setLinkedQueue(true); return; }
+      if (proofId) { retain('proof',proofId,historyShareFromLink(url)?.shareId); return; }
+      if (packingQueueFromLink(url)) { retain('orders'); return; }
       const text = sharedOrderText(url);
       if (text && orderShare) {
         // Compatibility-only input. New receiver links carry localId and never raw text.
@@ -155,18 +191,22 @@ function RootContent() {
   }, []);
   useEffect(() => {
     if (!linkedQueue || !intakeNavigationReady || !app.session) return;
+    if(pendingLinkOwner.current&&pendingLinkOwner.current!==app.session.userId)return;
     setLinkedQueue(false); app.go('orders');
+    void AsyncStorage.removeItem(pendingLinkKey(app.apiBaseUrl)).catch(()=>undefined);
     void app.run(app.syncWorkspace);
   }, [linkedQueue, intakeNavigationReady]);
 
   useEffect(() => {
     if (intakeNavigationReady && app.session && linkedProofId) {
+      if(pendingLinkOwner.current&&pendingLinkOwner.current!==app.session.userId)return;
       const id = linkedProofId, historyShareId = linkedHistoryShareId, userId = app.session.userId, api = app.apiBaseUrl;
       setLinkedProofId(null); setLinkedHistoryShareId(null); app.go("home");
       void app.run(async () => {
         await app.openProof(id);
         app.client.assertCaptureAccount(userId, api);
         if (historyShareId) app.go("signature", { historyShareId });
+        await AsyncStorage.removeItem(pendingLinkKey(api)).catch(()=>undefined);
       });
     }
   }, [intakeNavigationReady, app.session?.userId, linkedProofId, linkedHistoryShareId]);
@@ -197,6 +237,8 @@ function RootContent() {
       </View>
     );
   }
+
+  if (app.route.name === "sample") return <><StatusBar style={statusStyle}/><SampleProofScreen onClose={()=>app.go(sampleOrigin.current.name,sampleOrigin.current)}/></>;
 
   if (app.route.name === "auth" || !app.session) {
     return <><StatusBar style={statusStyle} /><AuthScreen /></>;

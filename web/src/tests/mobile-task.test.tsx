@@ -67,7 +67,7 @@ it("keeps an authorized receipt stage actionable while leaving its finalized roo
 it("starts an empty account manually without a connection prerequisite and retains Create Proof beside recommendations", () => {
   const props = homeProps();
   const view = render(<MobileHomeScreen {...props} proofs={[]} />);
-  expect(screen.getByRole("heading", { name: "Create your first Proof" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Create a Proof" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Create Proof" }));
   expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ kind: "create_proof" }));
   view.rerender(<MobileHomeScreen {...props} />);

@@ -24,6 +24,10 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
   private var ready = false
   private var torchRequested = false
   private var identifiersEnabled = false
+  private var requestedMaxBytes: Int64 = 250_000_000
+  private var requestedMaxSeconds: Int64 = 300
+  func setMaxRecordingBytes(_ value: Double?) { captureQueue.async { self.requestedMaxBytes = value.map { $0.isFinite && $0 >= 1 && $0 <= 250_000_000 && $0.rounded(.down) == $0 ? Int64($0) : 0 } ?? 0 } }
+  func setMaxRecordingSeconds(_ value: Double?) { captureQueue.async { self.requestedMaxSeconds = value.map { $0.isFinite && $0 >= 1 && $0 <= 300 && $0.rounded(.down) == $0 ? Int64($0) : 0 } ?? 0 } }
   private var current: Recording?
   private var recentCodes: [String: Double] = [:]
   private var candidateReads: [String: (time: Double, count: Int)] = [:]
@@ -54,11 +58,11 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
     var lastMetadataMs = 0.0
     var completionExpired = false // completionQueue only
 
-    init(url: URL, promise: Promise, proofCapture: Bool) {
+    init(url: URL, promise: Promise, proofCapture: Bool, limitBytes: Int64, limitSeconds: Int64) {
       self.url = url
       self.promise = promise
-      maxDurationMs = proofCapture ? 300_000 : 600_000
-      maxBytes = proofCapture ? 250_000_000 : 512 * 1024 * 1024
+      maxDurationMs = proofCapture ? limitSeconds * 1_000 : 600_000
+      maxBytes = proofCapture ? limitBytes : 512 * 1024 * 1024
       let directory = url.deletingLastPathComponent()
       journal = CaptureStorage.fileManager.fileExists(atPath: directory.appendingPathComponent("capture-context.json").path)
         ? CaptureJournal(directory: directory) : nil
@@ -231,6 +235,9 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
       guard !audioEnabled else {
         promise.reject("SILENT_CAPTURE_REQUIRED", "PackProof evidence is recorded without sound."); return
       }
+      guard !sessionID.hasPrefix("cap_") || (self.requestedMaxBytes > 0 && self.requestedMaxSeconds > 0) else {
+        promise.reject("CAPTURE_LIMITS_UNAVAILABLE", "Reopen this recording to verify its allowance before packing."); return
+      }
       do {
         let directory = try CaptureStorage.directory(sessionID, proofOnly: false)
         try CaptureStorage.prepareDirectory(directory)
@@ -238,7 +245,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
           promise.reject("CAPTURE_STORAGE_LOW", "Free some device storage before recording. Existing recordings are kept."); return
         }
         let url = try CaptureStorage.reserveVideo(directory)
-        let recording = Recording(url: url, promise: promise, proofCapture: sessionID.hasPrefix("cap_"))
+        let recording = Recording(url: url, promise: promise, proofCapture: sessionID.hasPrefix("cap_"), limitBytes: self.requestedMaxBytes, limitSeconds: self.requestedMaxSeconds)
         self.current = recording
         self.recentCodes.removeAll()
         self.candidateReads.removeAll()
@@ -331,7 +338,7 @@ final class UnifiedCameraView: ExpoView, AVCaptureVideoDataOutputSampleBufferDel
       if now - recording.lastStorageCheck >= 1 {
         recording.lastStorageCheck = now
         if CaptureStorage.availableBytes(recording.url.deletingLastPathComponent()) < 16 * 1024 * 1024 { interrupt("STORAGE_PRESSURE") }
-        else if CaptureStorage.bytes(recording.url) >= recording.maxBytes - 5_000_000 { interrupt("FILE_SIZE_LIMIT") }
+        else if CaptureStorage.bytes(recording.url) >= recording.maxBytes - min(5_000_000, recording.maxBytes / 10) { interrupt("FILE_SIZE_LIMIT") }
       }
     } catch {
       recording.interrupted = true

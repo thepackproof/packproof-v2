@@ -3,6 +3,7 @@ import { registerRemoteCaptureStop } from "../capture/remote-control";
 import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
 import { haptic } from "../theme/haptics";
 import { cinematicForScheme } from "../theme/cinematic";
+import { recordingLimitCopy } from "../capture/limits";
 import { UnifiedCameraView, isUnifiedCameraAvailable, isIdentifierScannerAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
 import { identifierCaptureEnabled, identifierStatus, shippingReadFeedback } from '../capture/identifier-observation';
 import { normalizeShippingBarcode } from '../../../backend/src/capture/shipping-barcode';
@@ -357,12 +358,14 @@ function CameraSession({
             style={{ color: colors.textSecondary }}
           >
             {recording
-              ? `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= 270000 ? " · under 30 seconds left" : ""}`
-              : !ready ? "Opening camera…" : "Camera recording · up to 5 minutes · audio is not required"}
+              ? `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= Math.max(0, (request.recordingLimits?.maxRecordingSeconds ?? 300) * 1000 - 30000) ? " · under 30 seconds left" : ""}`
+              : !ready ? "Opening camera…" : "Camera ready · recording has no sound"}
           </Text>
         </View>
         <View style={[styles.camera, { height: Math.max(160, Math.min(300, viewport.height * 0.38)) }]}>
           {useUnified ? <UnifiedCameraView
+            maxRecordingBytes={request.recordingLimits?.maxRecordingBytes}
+            maxRecordingSeconds={request.recordingLimits?.maxRecordingSeconds}
             ref={unifiedCamera}
             style={StyleSheet.absoluteFill}
             active
@@ -443,11 +446,12 @@ function CameraSession({
               retry.
             </Text>
           ) : null}
-          {coach ? <Text style={{ color: colors.textSecondary }}>
+          {!recording && request.recordingLimits ? <Text style={{ color: colors.textSecondary }}>{recordingLimitCopy(request.recordingLimits)}</Text> : null}
+          <Text style={{ color: colors.textSecondary }}>
             {recipe === receivingRecipe
               ? "Keep the unopened package in view as you open it. Show the contents and their visible condition."
               : "Keep the item and package in view as you pack and seal it. Show the shipping label during the recording."}
-          </Text> : null}
+          </Text>
           {coach ? <Coaching kind="camera"/> : null}
           <Button
             label={coach ? "Hide guidance" : "Show guidance"}

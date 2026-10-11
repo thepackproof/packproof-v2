@@ -2,7 +2,8 @@ import { createContext,useContext,useEffect,useRef,useState,type ReactNode } fro
 import { AccessibilityInfo,Animated,AppState,Modal,Pressable,ScrollView,Text,View,useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { OnboardingController,STEPS } from '../../../packages/onboarding/model';
+import { OnboardingController,STEPS,selectFirstExperience } from '../../../packages/onboarding/model';
+import { FIRST_PROOF_EXPERIENCE_ENABLED } from '../experience/first-proof';
 import { usePackProof } from '../app/PackProofProvider';
 import { useTheme } from '../theme/ThemeProvider';
 const Context=createContext<{controller:OnboardingController;targets:Map<string,View>;replay:()=>void}|null>(null);
@@ -12,24 +13,25 @@ export function OnboardingRoot({children}:{children:ReactNode}){
  return <Provider key={`${app.apiBaseUrl}:${app.session.userId}`}>{children}</Provider>;
 }
 function Provider({children}:{children:ReactNode}){
- const app=usePackProof();const [controller]=useState(()=>new OnboardingController(app.client,{read:()=>AsyncStorage.getItem(`onboarding:${app.apiBaseUrl}:${app.session!.userId}`),write:value=>AsyncStorage.setItem(`onboarding:${app.apiBaseUrl}:${app.session!.userId}`,value)}));
+ const app=usePackProof();const [controller]=useState(()=>new OnboardingController(app.client,{read:()=>AsyncStorage.getItem(`onboarding:${app.apiBaseUrl}:${app.session!.userId}`),write:value=>AsyncStorage.setItem(`onboarding:${app.apiBaseUrl}:${app.session!.userId}`,value)},{autoTourEnabled:!FIRST_PROOF_EXPERIENCE_ENABLED}));
  const [targets]=useState(()=>new Map<string,View>());const [,render]=useState(0);
  useEffect(()=>{const off=controller.subscribe(()=>render(n=>n+1));void controller.load();const sub=AppState.addEventListener('change',s=>{if(s==='active')void controller.refresh();});const timer=setInterval(()=>{if(AppState.currentState==='active')void controller.refresh();},15000);return()=>{off();sub.remove();clearInterval(timer);controller.stop();};},[controller]);
  const snapshot=controller.snapshot;
- useEffect(()=>{if(['home','proofs'].includes(app.route.name)&&!app.busy&&!snapshot.open)controller.start();},[app.route.name,app.busy,snapshot.state?.onboarding_completed,snapshot.open]);
+ useEffect(()=>{if(!FIRST_PROOF_EXPERIENCE_ENABLED&&['home','proofs'].includes(app.route.name)&&!app.busy&&!snapshot.open)controller.start();},[app.route.name,app.busy,snapshot.state?.onboarding_completed,snapshot.open]);
  // The guided targets belong to the library. Preserve enrollment and the saved
  // step when the new Home dashboard is the initial destination.
  useEffect(()=>{if(snapshot.open&&app.route.name==='home')app.go('proofs');},[snapshot.open,app.route.name]);
  const replay=()=>{app.go('proofs');controller.start(true);};
- return <Context.Provider value={{controller,targets,replay}}>{children}{snapshot.open&&app.route.name==='proofs'&&<Overlay/>}{!snapshot.open&&snapshot.state?.first_proof_completed&&!snapshot.state.first_proof_coaching_completed&&['home','proofs'].includes(app.route.name)&&<View style={{position:'absolute',bottom:90,left:16,right:16}}><Coaching kind="complete"/></View>}</Context.Provider>;
+ return <Context.Provider value={{controller,targets,replay}}>{children}{snapshot.open&&app.route.name==='proofs'&&<Overlay/>}{!FIRST_PROOF_EXPERIENCE_ENABLED&&!snapshot.open&&snapshot.state?.first_proof_completed&&!snapshot.state.first_proof_coaching_completed&&['home','proofs'].includes(app.route.name)&&<View style={{position:'absolute',bottom:90,left:16,right:16}}><Coaching kind="complete"/></View>}</Context.Provider>;
 }
+export function useFirstExperience(){const context=useContext(Context);return selectFirstExperience(context?.controller.snapshot.state,context?.controller.snapshot.error);}
 export function TutorialTarget({name,children,flex}:{name:string;children:ReactNode;flex?:number}){const context=useContext(Context);return <View collapsable={false} style={flex?{flex}:undefined} ref={node=>{for(const key of name.split(' ').filter(Boolean)){if(node)context?.targets.set(key,node);else context?.targets.delete(key);}}}>{children}</View>;}
 export function ReplayTutorial(){const context=useContext(Context);const {colors}=useTheme();return <Pressable accessibilityRole="button" onPress={()=>context?.replay()} style={{padding:14,borderWidth:1,borderColor:colors.primary,borderRadius:10}}><Text style={{color:colors.primary,fontSize:16}}>Replay Tutorial</Text></Pressable>;}
 export function Coaching({kind}:{kind:'camera'|'secured'|'complete'}){
  const context=useContext(Context);const app=usePackProof();const {colors}=useTheme();const [hidden,setHidden]=useState(false);const state=context?.controller.snapshot.state;
- if(hidden||!state?.onboarding_enrolled||state.first_proof_coaching_completed||context?.controller.snapshot.open)return null;
+ if(hidden||!state?.onboarding_enrolled||state.first_proof_coaching_completed||context?.controller.snapshot.open||(FIRST_PROOF_EXPERIENCE_ENABLED&&state.first_proof_completed))return null;
  if(kind==='complete'&&!state.first_proof_completed)return null;
- return <View accessibilityLiveRegion="polite" style={{padding:12,marginVertical:8,borderWidth:1,borderColor:colors.primary,borderRadius:10,backgroundColor:colors.surface}}><Text style={{fontSize:16,lineHeight:22,color:colors.textPrimary}}>{kind==='camera'?'Keep recording while you pack. One continuous capture preserves the sequence.':kind==='secured'?'Capture secured locally. Your upload continues automatically; you may leave this screen.':'Your first Proof is complete.'}</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:16}}><Pressable accessibilityRole="button" style={{minHeight:44,justifyContent:'center'}} onPress={()=>{setHidden(true);if(kind==='complete'){context?.controller.dismissCoaching();if(state.first_proof_id)void app.run(()=>app.openProof(state.first_proof_id!));}}}><Text style={{color:colors.primary,fontSize:16}}>{kind==='complete'?'View Proof':'Got it'}</Text></Pressable><Pressable accessibilityRole="button" style={{minHeight:44,justifyContent:'center'}} onPress={()=>context?.controller.dismissCoaching()}><Text style={{color:colors.textSecondary,fontSize:16}}>Dismiss guidance</Text></Pressable></View></View>;
+ return <View accessibilityLiveRegion="polite" style={{padding:12,marginVertical:8,borderWidth:1,borderColor:colors.primary,borderRadius:10,backgroundColor:colors.surface}}><Text style={{fontSize:16,lineHeight:22,color:colors.textPrimary}}>{kind==='camera'?'Keep recording while you pack. One continuous capture preserves the sequence.':kind==='secured'?'Recording saved on this device. Keep PackProof open while submission continues. Check Activity for its current status.':'Your first Proof is complete.'}</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:16}}><Pressable accessibilityRole="button" style={{minHeight:48,justifyContent:'center'}} onPress={()=>{setHidden(true);if(kind==='complete'){context?.controller.dismissCoaching();if(state.first_proof_id)void app.run(()=>app.openProof(state.first_proof_id!));}}}><Text style={{color:colors.primary,fontSize:16}}>{kind==='complete'?'View Proof':'Got it'}</Text></Pressable><Pressable accessibilityRole="button" style={{minHeight:48,justifyContent:'center'}} onPress={()=>context?.controller.dismissCoaching()}><Text style={{color:colors.textSecondary,fontSize:16}}>Dismiss guidance</Text></Pressable></View></View>;
 }
 function Overlay(){
  const {controller,targets}=useContext(Context)!;const app=usePackProof();const {colors,reducedMotion}=useTheme();const {width,height}=useWindowDimensions();const insets=useSafeAreaInsets();const {step,replay}=controller.snapshot;const [rect,setRect]=useState({x:0,y:0,w:0,h:0});const [cardHeight,setCardHeight]=useState(240);const position=useRef({x:new Animated.Value(0),y:new Animated.Value(0),w:new Animated.Value(0),h:new Animated.Value(0)}).current;const fade=useRef(new Animated.Value(0)).current;

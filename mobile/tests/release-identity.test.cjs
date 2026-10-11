@@ -10,19 +10,19 @@ function productionConfig(overrides = {}) {
     cwd: path.resolve(__dirname, '..'), encoding: 'utf8',
     env: {...process.env, EAS_BUILD_PROFILE: 'production', EAS_BUILD_PLATFORM: 'android', EAS_BUILD: 'true',
       EAS_BUILD_GIT_COMMIT_HASH: 'ab'.repeat(20), EXPO_PUBLIC_PACKPROOF_BUILD_SHA: 'cd'.repeat(20),
-      PACKPROOF_ANDROID_VERSION_CODE: '59', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
+      PACKPROOF_ANDROID_VERSION_CODE: '60', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
       EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'cognito', EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'https://api.example.com',
-      EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true', ...overrides},
+      EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true', EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true', ...overrides},
   });
 }
 
-test('production profile pins store AAB 59 and retains the existing runtime and upload key', () => {
+test('production profile pins store AAB 60 and retains the existing runtime and upload key', () => {
   const config = require('../eas.json');
   const production = config.build.production;
   assert.ok(production, 'Android production profile is required');
   assert.equal(production.extends, 'shipping-integration');
   assert.equal(production.environment, 'production');
-  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '59');
+  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '60');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX, 'true');
   const shipping = config.build[production.extends];
   const base = config.build[shipping.extends];
@@ -40,13 +40,14 @@ test('production config binds worker source, authenticated release guards and UX
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.version, '1.0.1');
-  assert.equal(app.android.versionCode, 59);
+  assert.equal(app.android.versionCode, 60);
   assert.equal(app.android.package, 'com.packproof.mobile');
   assert.equal(app.extra.eas.projectId, '0196c3f7-cb3a-472c-99be-825558f227e8');
   assert.equal(app.android.allowBackup, false);
   assert.equal(app.android.usesCleartextTraffic, false);
   assert.equal(app.extra.packproofBuildSha, 'ab'.repeat(20));
   assert.equal(app.extra.packproofMobileTaskUx, true);
+  assert.equal(app.extra.packproofFirstProofExperience, true);
   assert.equal(Object.hasOwn(app.extra, 'packproofInternalReview'), false);
   const rollback = productionConfig({EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'false'});
   assert.equal(rollback.status, 0, rollback.stderr);
@@ -89,7 +90,7 @@ test('signed AAB workflow resolves production identity before dispatch and freez
       env: {...process.env, EAS_BUILD: '', EAS_BUILD_PROFILE: '', EAS_BUILD_GIT_COMMIT_HASH: '',
         EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false', GITHUB_OUTPUT: output}});
     assert.equal(result.status, 0, result.stderr);
-    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-59(?:\n|$)/);
+    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-60(?:\n|$)/);
   } finally {
     fs.rmSync(temporary, {recursive: true, force: true});
   }
@@ -101,7 +102,7 @@ test('signed AAB workflow rejects a completed artifact from the wrong source or 
   const script = build.run.match(/node <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)[1];
   const source = 'ab'.repeat(20);
   const metadata = {status: 'FINISHED', gitCommitHash: source, platform: 'ANDROID', distribution: 'STORE',
-    buildProfile: 'production', appIdentifier: 'com.packproof.mobile', appVersion: '1.0.1', appBuildVersion: '59',
+    buildProfile: 'production', appIdentifier: 'com.packproof.mobile', appVersion: '1.0.1', appBuildVersion: '60',
     artifacts: {buildUrl: 'https://example.invalid/fixture.aab'}};
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'packproof-release-receipt-'));
   try {
@@ -112,7 +113,7 @@ test('signed AAB workflow rejects a completed artifact from the wrong source or 
       fs.rmSync(output, {force: true});
       fs.writeFileSync(path.join(temporary, 'dist/eas-build.json'), JSON.stringify([{...metadata, ...overrides}]));
       const result = spawnSync(process.execPath, ['-e', script], {cwd: temporary, encoding: 'utf8',
-        env: {...process.env, GITHUB_SHA: source, PACKPROOF_EXPECTED_VERSION: '1.0.1', PACKPROOF_EXPECTED_VERSION_CODE: '59'}});
+        env: {...process.env, GITHUB_SHA: source, PACKPROOF_EXPECTED_VERSION: '1.0.1', PACKPROOF_EXPECTED_VERSION_CODE: '60'}});
       if (overrides === null) {
         assert.equal(result.status, 0, result.stderr);
         assert.equal(fs.readFileSync(output, 'utf8').trim(), metadata.artifacts.buildUrl);

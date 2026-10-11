@@ -2,6 +2,9 @@ import { freshProofDestination, savedCaptureDestination } from "../experience/ac
 import { presentationForProof } from "../copy/proof-list";
 import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
+import { FIRST_PROOF_EXPERIENCE_ENABLED } from "../experience/first-proof";
+import { parseTaskIntent, taskIntent, taskIntentKey } from "../experience/task-intent";
+import { manualDraftMatches, type ManualOperation } from "../experience/manual-operation";
 import { orderShare } from '../../modules/packproof-order-share';
 import { clearNativeIntakeSession, stopNativeIntakeSession } from '../intake/native-session';
 import { clearIntakeQueueCache } from '../intake/queue-cache';
@@ -11,7 +14,7 @@ import {beginNativeEngine} from "../capture/engine";
 import { IntakeApi } from "../intake/api";
 import { assertIntakeAcceptance } from "../intake/model";
 import { clearIntakeRequestKey, forgetIntakeDevice, intakeRequestKey, readIntakeDevice, revokeIntakeDevice } from "../intake/storage";
-import { loadProofsCache, saveProofsCache, clearProofsCache, emptyProofsCache } from "./proofs-cache";
+import { loadProofsCache, saveProofsCache, emptyProofsCache } from "./proofs-cache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { clearSharedLinkCache } from "../copy/share-cache";
@@ -20,7 +23,7 @@ import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStud
 import { createClientVersionReporter } from "../analytics/client-version";
 import { readInstalledClientVersion } from "../analytics/native-client-version";
 import { listAccountCaptures, persistCaptureMetadata } from "../capture";
-import { requestUploadNotifications, notifyUploadOutcome } from "../capture/upload-notifications";
+import { notifyUploadOutcome } from "../capture/upload-notifications";
 import { hasDurableReceipt, mayCleanUpCapture } from "../capture/recovery-model";
 import { orderDestination } from "../copy/orders";
 import type { IntakePreview } from "../copy/order-intake";
@@ -210,6 +213,8 @@ export interface PackProofContextValue {
   localCapture: LocalCapture | null;
   uploadPercent: number | null;
   createForm: ContextForm;
+  manualDraftNeedsRecovery: boolean;
+  recoverManualDraft: () => void;
   intakeReview: IntakePreview | null;
   receiptProofId: string | null;
   openReceipt: (proofId: string) => void;
@@ -447,7 +452,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [scanCandidates,setScanCandidates]=useState<ProofCollectionItem[]>([]);
   const scanInFlight=useRef(false);
   const manualInFlight=useRef(false);
-  const manualTransaction=useRef<{fingerprint:string;id:string}|null>(null);
+  const manualTransaction=useRef<ManualOperation|null>(null);
   const [scanPhase, setScanPhase] = useState<"camera" | "reference" | "found" | "missing" | "ambiguous">(
     "camera",
   );
@@ -514,6 +519,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if(name==="activity"){activityFilterMemory.current=options?.activityFilter??activityFilterMemory.current;options={...options,activityFilter:activityFilterMemory.current};}
     const current = sessionRef.current;
     if (current) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
+    if(current && !['auth','sample','receipt','invitation'].includes(name)) {
+      const intent=taskIntent(name,current.proofId,FIRST_PROOF_EXPERIENCE_ENABLED?1:0,{historyShareId:options?.historyShareId});
+      if(intent)void AsyncStorage.setItem(taskIntentKey(current.apiBaseUrl,current.userId),JSON.stringify(intent)).catch(()=>undefined);
+      else if(name==='home')void AsyncStorage.removeItem(taskIntentKey(current.apiBaseUrl,current.userId)).catch(()=>undefined);
+    }
     setRoute({ name,
       ...(name === "activity" ? {activityFilter: options?.activityFilter,activitySessionId:options?.activitySessionId} : {}),
       ...(name === "account" ? { accountSection: options?.accountSection } : {}),
@@ -602,7 +612,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
       await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
-      await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+      await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
       await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
       await revokeIntakeDevice(client, sessionRef.current.userId).catch(() => forgetIntakeDevice(client, sessionRef.current!.userId));
     }
@@ -610,6 +620,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     const cached = await loadProofsCache(current.apiBaseUrl,current.userId);
     if (cacheScope.current !== key) return;
     cacheRef.current = cached; setProofsLibrary(cached.library); proofsScrollOffset.current = cached.offsetY;
+    manualTransaction.current=cached.manualOperation??null;
     setProofCollection(cached.rows);
     setWorkspaceFreshAt(cached.fetchedAt ?? null); taskInteractions.current=cached.interactions ?? {}; setCreateForm(cached.draft ?? EMPTY_FORM);
   }
@@ -766,7 +777,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setLocalCapture(null);
       setCaptureStatus("idle");
       setUploadPercent(null);
-      setCreateForm(EMPTY_FORM);
+      setCreateForm(cacheRef.current.draft ?? EMPTY_FORM);
       setImportReview(null);
       setEditForm(EMPTY_FORM);
       setManifest(null);
@@ -937,10 +948,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if(!account) return;
     try {
       await ensureFreshCognitoToken();
-      const [collection,inbox]=await Promise.all([client.listMyProofs(),client.listInvitations()]);
+      const [collection,inbox,captures]=await Promise.all([client.listMyProofs(),client.listInvitations(),listAccountCaptures(account.apiBaseUrl,account.userId)]);
       client.assertCaptureAccount(account.userId,account.apiBaseUrl);
       const fetchedAt=new Date().toISOString();
-      setProofCollection(collection.proofs); setPendingInvites(inbox.invitations);
+      setProofCollection(collection.proofs); setPendingInvites(inbox.invitations); setSavedRecordings(captures);
       setWorkspaceFreshAt(fetchedAt); setWorkspaceReconciled(true);
       cacheRef.current={...cacheRef.current,rows:collection.proofs,fetchedAt};
       void saveProofsCache(account.apiBaseUrl,account.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(()=>undefined);
@@ -997,6 +1008,36 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setProof(cached); setTransactionDetail(cached.transaction); setOffline(true);
     }
     go("proof");
+  }
+
+  async function restoreTaskAfterSignIn():Promise<void> {
+    const account=sessionRef.current;
+    if(!account)return;
+    if(account.stationActive){go('station');return;}
+    const intent=parseTaskIntent(await AsyncStorage.getItem(taskIntentKey(account.apiBaseUrl,account.userId)).catch(()=>null));
+    client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+    if(!intent){go('home');return;}
+    try {
+    // A locator never grants access or starts a camera. Existing routes check current authority.
+    if(intent.route==='receipt'&&intent.proofId){setReceiptProofId(intent.proofId);go('receipt');return;}
+    if(intent.route==='invitation'){
+      const inbox=await client.listInvitations();client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+      const invite=inbox.invitations.find(row=>row.invitationId===intent.invitationId);
+      if(invite){setSelectedInvite(invite);go('invitation');return;}
+      go('proofs');return;
+    }
+    if(intent.proofId){
+      await openProof(intent.proofId);client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+      if(intent.route==='signature')go('signature',{historyShareId:intent.historyShareId});
+      else if(['capture','finalize'].includes(intent.route))await value.openProofAction(intent.proofId);
+      return;
+    }
+    go(intent.route);
+    } catch(error) {
+      if(isAuthenticationFailure(error)||sessionRef.current?.userId!==account.userId||sessionRef.current.apiBaseUrl!==account.apiBaseUrl)throw error;
+      go('proofs');
+      setError('You are signed in. The saved task could not be opened. Check your connection or choose an available Proof; your local work is retained.');
+    }
   }
 
   async function run(action: () => Promise<void>, options?: { localReview?: boolean }): Promise<void> {
@@ -1105,7 +1146,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             go("auth");
             return;
           }
-          go(next.stationActive ? "station" : "home");
+          await restoreTaskAfterSignIn();
         } catch (err) {
           if (isAuthenticationFailure(err)) {
             await requireSignIn();
@@ -1295,7 +1336,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     accessExpiresAt?: number | null;
   }): Promise<void> {
     const profile = await establishSession(input);
-    if (!profile.username && usernameInput.trim()) {
+    if (!FIRST_PROOF_EXPERIENCE_ENABLED && !profile.username && usernameInput.trim()) {
       const updated = await client.updateProfile({
         username: usernameInput.trim(),
         displayName: displayNameInput.trim() || usernameInput.trim(),
@@ -1443,10 +1484,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
     localCapture,
     uploadPercent,
     createForm,
+    manualDraftNeedsRecovery:!manualDraftMatches(manualTransaction.current,createForm),
+    recoverManualDraft:()=>{if(manualTransaction.current){setCreateForm({...manualTransaction.current.form});setError(null);}},
     intakeReview,
     receiptProofId,
     openReceipt: (proofId) => {
       setReceiptProofId(proofId);
+      const account=sessionRef.current;
+      if(account)void AsyncStorage.setItem(taskIntentKey(account.apiBaseUrl,account.userId),JSON.stringify(taskIntent('receipt',proofId,FIRST_PROOF_EXPERIENCE_ENABLED?1:0))).catch(()=>undefined);
       go("receipt");
     },
     clearIntakeReview: () => {
@@ -1545,7 +1590,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             accessExpiresAt: tokens.expiresAt,
           });
         }
-        go(sessionRef.current?.stationActive ? "station" : "home");
+        await restoreTaskAfterSignIn();
       }),
     createAccount: async () =>
       run(async () => {
@@ -1611,7 +1656,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         if (sessionRef.current) {
           await saveCaptureRecovery(sessionRef.current);
           await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
-          await clearProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
+          await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
           await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
         }
         cacheScope.current = null; cacheRef.current = emptyProofsCache();
@@ -1719,10 +1764,15 @@ export function PackProofProvider(props: { children: ReactNode }) {
         }
         if(offline)throw new Error("Connect before creating a Proof. Your form is kept on this device.");
         const owner=sessionRef.current;
-        const fingerprint=JSON.stringify([owner.userId,owner.apiBaseUrl,createForm]);
+        if(!manualDraftMatches(manualTransaction.current,createForm))throw new Error('A previous creation still needs to be recovered. Use Recover submitted draft to check the same transaction before starting another Proof.');
+        const fingerprint=JSON.stringify([owner.userId,owner.apiBaseUrl,createForm,intakeReview?.draft.metadata.intake??null]);
         const parsed = parseContextForm(createForm);
+        if(!manualTransaction.current)manualTransaction.current={fingerprint,key:newIdempotencyKey(),form:{...createForm},request:{...parsed.transaction,shipping:parsed.shipping,...(intakeReview?{metadata:{intake:{...intakeReview.draft.metadata.intake,confirmed:true}}}:{})}};
+        cacheRef.current={...cacheRef.current,draft:createForm,manualOperation:manualTransaction.current};
+        // Persist the operation before the server call: a lost response must retry the same transaction.
+        await saveProofsCache(owner.apiBaseUrl,owner.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current});
         try {
-          let transactionId = importReview?.transaction.transactionId ?? (manualTransaction.current?.fingerprint===fingerprint?manualTransaction.current.id:null);
+          let transactionId = importReview?.transaction.transactionId ?? manualTransaction.current.id;
           if (transactionId) {
             await client.updateTransaction(transactionId, {
               ...parsed.transaction,
@@ -1731,22 +1781,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
             client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
           } else {
             const txn = await client.createTransaction({
-              ...parsed.transaction,
-              shipping: parsed.shipping,
-              ...(intakeReview
-                ? {
-                    metadata: {
-                      intake: {
-                        ...intakeReview.draft.metadata.intake,
-                        confirmed: true,
-                      },
-                    },
-                  }
-                : {}),
+              ...manualTransaction.current!.request,
+              idempotencyKey: manualTransaction.current!.key,
             });
             client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
             transactionId = txn.transactionId;
-            manualTransaction.current={fingerprint,id:transactionId};
+            manualTransaction.current={...manualTransaction.current!,id:transactionId};
+            cacheRef.current={...cacheRef.current,manualOperation:manualTransaction.current};
+            await saveProofsCache(owner.apiBaseUrl,owner.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current});
           }
           const created = await client.createOrGetProof(transactionId);
           client.assertCaptureAccount(owner.userId,owner.apiBaseUrl);
@@ -1761,8 +1803,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
           setIntakeReview(null);
           setImportReview(null);
           manualTransaction.current=null;
+          cacheRef.current={...cacheRef.current,draft:EMPTY_FORM,manualOperation:undefined};
+          await saveProofsCache(owner.apiBaseUrl,owner.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current});
           go("capture");
         } catch (err) {
+          if(err instanceof ApiError && err.status===400 && !manualTransaction.current?.id){
+            manualTransaction.current=null;cacheRef.current={...cacheRef.current,manualOperation:undefined};
+            await saveProofsCache(owner.apiBaseUrl,owner.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(()=>undefined);
+          }
           const mapped = presentError(err);
           if (mapped.action === "open_existing") {
             const match = proofCollection.find(
@@ -2068,7 +2116,6 @@ export function PackProofProvider(props: { children: ReactNode }) {
               // The account journal owns the original now. Releasing the screen never deletes it.
               if (sessionRef.current?.captureUri === uri) await persistCapture(null, null);
               setCaptureStatus("idle"); setUploadPercent(null); go("home");
-              void requestUploadNotifications();
             } catch (error) { setCaptureStatus("retry"); throw error; }
             return;
           }
@@ -2244,6 +2291,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }),
     openInvitation: (invite) => {
       setSelectedInvite(invite);
+      const account=sessionRef.current;
+      if(account)void AsyncStorage.setItem(taskIntentKey(account.apiBaseUrl,account.userId),JSON.stringify(taskIntent('invitation',invite.proofId,FIRST_PROOF_EXPERIENCE_ENABLED?1:0,{invitationId:invite.invitationId}))).catch(()=>undefined);
       go("invitation");
     },
     importDemoShipment: async (throughEventType?: string) =>

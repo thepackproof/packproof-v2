@@ -42,6 +42,8 @@ export type UnifiedCameraViewProps = ViewProps & {
   active: boolean;
   torchEnabled: boolean;
   identifierCaptureEnabled?: boolean;
+  maxRecordingBytes?: number;
+  maxRecordingSeconds?: number;
   onReady?: (event: NativeEvent<Record<string, never>>) => void;
   onBarcodeDetected?: (event: NativeEvent<UnifiedBarcodeDetection>) => void;
   onRecordingStarted?: (event: NativeEvent<{ startedAtUnixMs: number }>) => void;
@@ -57,7 +59,7 @@ export interface EncodedVideoInspection {
   timestampPrecision: "NEAR_REQUESTED_TIME";
 }
 
-const nativeModule = (Platform.OS === 'android' || Platform.OS === 'ios') ? requireOptionalNativeModule<{ identifierScannerVersion?(): number; bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection>; inspectIdentifierVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
+const nativeModule = (Platform.OS === 'android' || Platform.OS === 'ios') ? requireOptionalNativeModule<{ captureLimitsVersion?(): number; identifierScannerVersion?(): number; bindCaptureContext?(sessionId:string,proofId:string,contextJson:string):Promise<void>; readCaptureJournal?(sessionId:string):Promise<string>; getHapticsEnabled(): Promise<boolean>; newOperationNonce(): string; inspectRecordedVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection>; inspectIdentifierVideo?(sessionId: string, offsetsMs: number[]): Promise<EncodedVideoInspection> }>('PackProofUnifiedCamera') : null;
 const nativeAvailable = nativeModule != null;
 export function newStudyOperationNonce():string {
   if(!nativeModule?.newOperationNonce)throw new Error('This build cannot enable study collection. Install the current native build.');
@@ -75,6 +77,8 @@ export async function inspectRecordedVideo(sessionId: string, offsetsMs: number[
 }
 
 export function isIdentifierScannerAvailable(): boolean { return nativeModule?.identifierScannerVersion?.() === 1; }
+
+export function supportsRecordingLimits(): boolean { return nativeModule?.captureLimitsVersion?.() === 1; }
 
 export function isUnifiedCameraAvailable(): boolean {
   return nativeAvailable;
