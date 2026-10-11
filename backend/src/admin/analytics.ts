@@ -508,7 +508,7 @@ export async function analyticsSection(
   s.metrics.push(
     metric('first_packing_activation_7d','First packing Proof within 7 days',activation.activationPercent,null,{unit:'percent',note:`${activation.activatedAccounts} of ${activation.matureAccounts} fully observed accounts; ${activation.immatureAccounts} accounts await a full seven-day window.`}),
     metric('first_packing_activation_7d_accounts','Activated accounts within 7 days',activation.activatedAccounts),
-    metric('first_packing_activation_7d_nonstarters','Observed accounts with no eligible Proof started',activation.neverStartedAccounts),
+    metric('first_packing_activation_7d_nonstarters','Observed accounts with no eligible Proof created',activation.neverStartedAccounts),
     metric('first_packing_intent_conversion_24h','Create-choice conversion within 24 hours',null,null,{unit:'percent',note:activation.intentConversion24h.reason}),
   );
   s.notices.push(activation.eligibility,'These are descriptive operational counts, not an activation uplift estimate. Internal test accounts using ordinary customer authentication require governed cohort review.');
