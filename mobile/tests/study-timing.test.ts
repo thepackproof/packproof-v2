@@ -82,3 +82,26 @@ test('separate interface actions preserve their explicit task kind across retrie
   const f=fixture();f.grant();await f.bridge.start({...start,taskKind:'interface_action',buildSha});await f.bridge.checkpoint({...failed,outcome:'succeeded',interaction:'share_created'});await f.bridge.flush();
   assert.equal((f.starts[0] as {taskKind:string}).taskKind,'interface_action');assert.equal((f.appends[0] as {interaction:string}).interaction,'share_created');
 });
+
+
+test('observed choice time predates async preparation and finite lifecycle once keys survive retry restoration',async()=>{
+ const f=fixture();f.grant();const at=new Date('2026-10-11T12:00:00.000Z');
+ await f.bridge.start({...start,flowVersion:1,platform:'web',entrySource:'home',appVersion:'1.0.2'},undefined,at);
+ assert.equal(f.journal!.start.clientStartedAt,at.toISOString());
+ const checkpoint={phase:'preflight' as const,outcome:'pending' as const,elapsedMs:1000,activeMs:1000,unattendedMs:0,offlineMs:0,interaction:'capture_ready' as const,clientOccurredAt:new Date(at.getTime()+1000).toISOString(),networkState:'online' as const};
+ await f.bridge.checkpoint(checkpoint,true);f.loseAppend();await assert.rejects(f.bridge.flush(),/lost timing/);
+ f.restore(structuredClone(f.journal!));await f.bridge.checkpoint({...checkpoint,elapsedMs:2000},true);await f.bridge.flush();
+ assert.equal(f.appends.length,2);assert.deepEqual(f.appends[0],f.appends[1]);assert.deepEqual(f.journal!.once,['capture_ready']);
+});
+
+
+test('a slow consent round trip cannot delay durable actual-callback checkpoints',async()=>{
+ let journal:TimingJournal|null=null;let release!:(value:{datasetRef:string;granted:boolean;statementVersion:string})=>void;
+ const consent=new Promise<{datasetRef:string;granted:boolean;statementVersion:string}>(resolve=>{release=resolve;});
+ const grant={datasetRef,granted:true,statementVersion:'capture-timing-study-v1'};const sent:unknown[]=[];
+ const bridge=createConsentedTimingBridge({current:()=>true,newNonce:randomUUID,store:{read:async()=>structuredClone(journal),write:async value=>{journal=structuredClone(value);},remove:async()=>{journal=null;}},api:{getConsent:()=>consent,start:async()=>({attemptRef}),append:async input=>{sent.push(input);}}});
+ await bridge.start({...start,flowVersion:1},grant);const pending=bridge.flush();
+ await bridge.checkpoint({phase:'recording',outcome:'pending',elapsedMs:1000,activeMs:1000,offlineMs:0,unattendedMs:0,interaction:'capture_started',clientOccurredAt:new Date().toISOString()},true);
+ assert.equal((journal as unknown as TimingJournal).events.length,1);assert.equal(sent.length,0);
+ release(grant);await pending;assert.equal(sent.length,1);assert.equal((journal as unknown as TimingJournal).events.length,0);
+});

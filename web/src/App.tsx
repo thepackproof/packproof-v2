@@ -1,3 +1,4 @@
+import { selectFirstProofStudy, recordStudyInteraction, pauseStudyAccount, retainStudyAuth, completeStudyAuth } from './analytics/study-capture';
 import { firstProofExperienceEnabled, draftStorageKey, creationOperation, completeCreation, rejectCreationValidation, type ExperienceState } from './first-experience/state';
 import { clearReauthenticationTask, readReauthenticationTask, reauthenticationDestination, retainReauthenticationTask } from './first-experience/auth-return';
 import { selectFirstExperience } from '../../packages/onboarding/model';
@@ -421,6 +422,19 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       }),
     [session?.apiBaseUrl, session?.userId, getSessionToken],
   );
+  const studyEntry = useRef<string|null>(null);
+  useEffect(()=>{
+    if(!session || !firstExperience)return;
+    void completeStudyAuth(api,session.userId);
+    if(route.name==='home') {
+      const key=`${api.recoveryScope}:${session.userId}`;
+      if(studyEntry.current!==key){studyEntry.current=key;void recordStudyInteraction(api,session.userId,'entry_viewed');}
+    }
+    const help=()=>void recordStudyInteraction(api,session.userId,'help_opened');
+    const dismissed=()=>void recordStudyInteraction(api,session.userId,'hint_dismissed');
+    window.addEventListener('packproof:replay-tutorial',help);window.addEventListener('packproof:guidance-dismissed',dismissed);
+    return()=>{window.removeEventListener('packproof:replay-tutorial',help);window.removeEventListener('packproof:guidance-dismissed',dismissed);};
+  },[api,session?.userId,firstExperience,route.name]);
   const loadPublicProof = useCallback((token: string) => api.getPublicProof(token), [api]);
   const developerAllowed = useDeveloperAccess(api, session?.userId ?? "", route.name === "account" || route.name === "developer");
   const adminAccess = useAdminAccess(api, session?.userId ?? "");
@@ -453,6 +467,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
   function signOut(expired = false) {
     const previousSession = sessionRef.current;
+    if(previousSession)pauseStudyAccount(api,previousSession.userId);
     if (expired === true && previousSession) {
       reauthenticationTask.current = retainReauthenticationTask(previousSession, window.location.pathname + window.location.search);
     } else {
@@ -487,6 +502,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   function go(path: string) {
     if (captureActive && mobileTask) { setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
     if (mobileTask && (path === "/new" || path.startsWith("/new?") || path.endsWith("/capture"))) startMobileCaptureEntry();
+    if(firstExperience && session){if(path==='/new'||path.startsWith('/new?'))void selectFirstProofStudy(api,session.userId,'home');else if(path.endsWith('/capture'))void selectFirstProofStudy(api,session.userId,'order');else if(path==='/sample-proof')void recordStudyInteraction(api,session.userId,'help_opened');}
     if (path === "/" && !isLegalRoute(route)) path = "/app";
     path = canonicalWorkspacePath(path, session ? `${session.apiBaseUrl}.${session.userId}` : undefined);
     const next = parseHref(path);
@@ -836,6 +852,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         {enteredFromIntakeLink ? <IntakeSignInContext /> : null}
         <SignInScreen
           firstExperience={firstExperience}
+          onAuthAttempt={name=>{const prior=reauthenticationTask.current;if(firstExperience&&prior){const scoped=new PackProofApi({baseUrl:prior.apiBaseUrl,getToken:()=>null});retainStudyAuth(scoped,prior.userId,name);}}}
           initialView={authInitialView}
           onGo={go}
           onSignedIn={(next) => {

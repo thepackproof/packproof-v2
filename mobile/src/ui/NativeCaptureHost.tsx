@@ -241,6 +241,7 @@ function CameraSession({
     const listener = AppState.addEventListener("change", (state) => {
       if (state !== "active" && recordingRef.current) {
         interrupted.current = true;
+        request.onRecordingInterrupted?.();
         if (useUnified) void unifiedCamera.current?.stopRecording().catch(()=>undefined);
         else camera.current?.stopRecording();
       }
@@ -288,6 +289,7 @@ function CameraSession({
         interrupted: interrupted.current || ("interrupted" in video && video.interrupted === true),
       });
     } catch (e) {
+      if(recordingRef.current)request.onRecordingInterrupted?.();
       setError(
         e instanceof Error
           ? e.message
@@ -371,8 +373,8 @@ function CameraSession({
             active
             torchEnabled={false}
             identifierCaptureEnabled={identifiersEnabled && isIdentifierScannerAvailable()}
-            onReady={()=>setReady(true)}
-            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;request.onRecordingStarted?.(); void haptic("medium");}}
+            onReady={()=>{setReady(true);request.onCameraReady?.();}}
+            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;request.onRecordingStarted?.(new Date(nativeEvent.startedAtUnixMs)); void haptic("medium");}}
             onBarcodeDetected={({nativeEvent})=>{void detected(nativeEvent);}}
             onCaptureError={({nativeEvent})=>{
               if (recordingRef.current) {
@@ -388,7 +390,7 @@ function CameraSession({
             facing="back"
             mute
             videoQuality="720p"
-            onCameraReady={() => setReady(true)}
+            onCameraReady={() => {setReady(true);request.onCameraReady?.();}}
             onMountError={(event) => {
               setReady(false);
               setError(event.message);
@@ -456,7 +458,7 @@ function CameraSession({
           <Button
             label={coach ? "Hide guidance" : "Show guidance"}
             variant="tertiary"
-            onPress={() => setCoach(!coach)}
+            onPress={() => {request.onGuidanceChanged?.(!coach);setCoach(!coach);}}
           />
           {!recording ? (
             <Button

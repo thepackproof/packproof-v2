@@ -9,14 +9,14 @@ phases:
       - test "$(aws sts get-caller-identity --query Account --output text)" = 784514617543
       - test "$REVIEWED_SOURCE_SHA" != "" && printf '%s' "$REVIEWED_SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
       - test "$IMAGE_TAG" = "security-$REVIEWED_SOURCE_SHA"
-      - test -f src/index.ts && test -f migrations/075_onboarding.sql && test -f certs/rds-us-east-1-bundle.pem && test -f scripts/onboarding-migrate.mjs
+      - test -f src/index.ts && test -f migrations/075_onboarding.sql && test -f migrations/076_first_experience_measurement.sql && test -f certs/rds-us-east-1-bundle.pem && test -f scripts/onboarding-migrate.mjs
       - ECR=784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api
       - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 784514617543.dkr.ecr.us-east-1.amazonaws.com
   build:
     on-failure: ABORT
     commands:
       - docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" .
-      - docker run --rm --entrypoint node "$ECR:$IMAGE_TAG" --input-type=module -e 'import {readFile} from "node:fs/promises"; import {migrationInventory} from "./dist/db/migrate.js"; const rows=await migrationInventory(); if(process.getuid()===0||rows.length!==76)process.exit(1); await readFile("certs/rds-us-east-1-bundle.pem"); console.log(JSON.stringify({nonRoot:true,migrationFiles:rows.length}));'
+      - docker run --rm --entrypoint node "$ECR:$IMAGE_TAG" --input-type=module -e 'import {readFile} from "node:fs/promises"; import {migrationInventory} from "./dist/db/migrate.js"; const rows=await migrationInventory(); if(process.getuid()===0||rows.length!==77)process.exit(1); await readFile("certs/rds-us-east-1-bundle.pem"); console.log(JSON.stringify({nonRoot:true,migrationFiles:rows.length}));'
       - docker run --rm --entrypoint sh "$ECR:$IMAGE_TAG" -c 'command -v ffmpeg && command -v ffprobe && command -v prlimit && apk info --installed "zlib>=1.3.2-r1" && (test -r /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf || test -r /usr/share/fonts/dejavu/DejaVuSans.ttf || test -r /usr/share/fonts/ttf-dejavu/DejaVuSans.ttf)'
   post_build:
     on-failure: ABORT

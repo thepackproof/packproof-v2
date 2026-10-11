@@ -32,6 +32,6 @@ The capture-limit regressions cover invalid/missing limits, lower account limits
 
 ## Release dependencies and separate acceptance
 
-The backend release route pins the reviewed main commit, exact archived backend bytes, immutable image, current predecessor and reviewed network topology. It preserves service configuration and migration policy. Its read-only database verifier requires all 76 migration receipts, including `075_onboarding`; a missing onboarding migration is a release stop. Discovery, database verification, deployment and public postchecks each need their own successful receipt.
+The backend release route pins the reviewed main commit, exact archived backend bytes, immutable image, current predecessor and reviewed network topology. It preserves service configuration and migration policy. Its read-only database verifier requires all 76 migration receipts, including `075_onboarding`, for the primary compatibility image; the measurement follow-up requires all 77, including `076_first_experience_measurement`; a missing onboarding migration is a release stop. Discovery, database verification, deployment and public postchecks each need their own successful receipt.
 
 Permission revocation, force-stop during camera recording, device storage exhaustion, biometric cancellation, operating-system suspension and account switching with a real queued original remain installed-device acceptance work. The Galaxy S24 Ultra steps and T01–T28 mapping are in `ACCEPTANCE_AND_DEVICE_CHECKLIST.md`.

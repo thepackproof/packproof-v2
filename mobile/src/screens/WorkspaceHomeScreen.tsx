@@ -93,7 +93,7 @@ function LegacyWorkspaceHomeScreen() {
   }
   return <AppScreen onRefresh={() => void refresh()} refreshing={loading}>
     <WorkspaceHeader section="Home" />
-    <View style={styles.heading}><View style={styles.headingCopy}><Text style={[styles.eyebrow,{color:colors.textMuted}]}>PACKPROOF WORKSPACE</Text><Text style={[styles.title,{color:colors.textPrimary}]}>Home</Text></View><TutorialTarget name="create"><Button label="New Proof" icon="add-outline" onPress={() => app.go('create')} /></TutorialTarget></View>
+    <View style={styles.heading}><View style={styles.headingCopy}><Text style={[styles.eyebrow,{color:colors.textMuted}]}>PACKPROOF WORKSPACE</Text><Text style={[styles.title,{color:colors.textPrimary}]}>Home</Text></View><TutorialTarget name="create"><Button label="New Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget></View>
     <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Your fulfillment desk, at a glance.</Text>
     <OfflineBanner visible={app.offline} />
     <ErrorBanner message={app.error} />

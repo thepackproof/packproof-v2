@@ -8,7 +8,7 @@ import { IdentifierDetails } from '../components/IdentifierDetails';
 import { randomId } from "../random-id";
 import { RemainingShipmentNotice } from "../components/RemainingShipmentNotice";
 import type { IntakeSnapshot } from '../intake-types';
-import {startStationStudy,resumeStationStudy,type StationStudyTimer} from '../analytics/study-capture';
+import {startStationStudy,firstProofStudyForCapture,resumeStationStudy,type StationStudyTimer} from '../analytics/study-capture';
 import { RelayStationPanel } from "../components/RelayStationPanel";
 import { sessionRecordingLimits } from "../../../mobile/src/capture/limits";
 import { capturePreflight } from "../capture-preflight";
@@ -98,13 +98,22 @@ export function PackingStationScreen(props: {
   async function beginStudy() {
     if (studyTimer.current) return studyTimer.current;
     const scope = studyScope.current;
-    const promise = studyStart.current ?? startStationStudy(props.api, props.userId);
+    const promise = studyStart.current ?? (import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE === 'true' ? firstProofStudyForCapture(props.api, props.userId) : startStationStudy(props.api, props.userId));
     studyStart.current = promise;
     const timer = await promise;
     if (!mountedRef.current || studyScope.current !== scope) { timer?.suspend(); return null; }
     studyTimer.current = timer;
     if (studyStart.current === promise) studyStart.current = null;
     return timer;
+  }
+  function measured(interaction: Parameters<StationStudyTimer['event']>[0], options: Parameters<StationStudyTimer['event']>[1] = {}) {
+    if(import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE !== 'true')return;
+    const observedAt=new Date();
+    void beginStudy().then(timer=>timer?.event(interaction,{...options,observedAt}));
+  }
+  function cameraFrameReady() {
+    const video=videoRef.current;
+    if(video && video.videoWidth>0 && video.videoHeight>0 && streamRef.current?.active)measured('capture_ready',{once:true});
   }
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   orderRef.current = state.order;
@@ -265,7 +274,7 @@ export function PackingStationScreen(props: {
         if (props.initialProofId && pending.order.proofId !== props.initialProofId && props.onRecoverProof) { props.onRecoverProof(pending.order.proofId); return; }
         studyTimer.current = await resumeStationStudy(props.api, props.userId, pending.studyTaskRef);
         if (cancelled) { studyTimer.current?.suspend(); return; }
-        studyTimer.current?.event('recovery_started');
+        studyTimer.current?.event('recovery_started'); measured('recovery_action');
         studyTimer.current?.phase(pending.finishConfirmed ? 'upload' : 'confirmation');
         studyTimer.current?.event('review_opened');
         const url = URL.createObjectURL(pending.file);
@@ -296,9 +305,7 @@ export function PackingStationScreen(props: {
       } else if (!bootstrapped.current) {
         if (props.initialProofId) {
           bootstrapped.current = true;
-          const timer = await beginStudy();
-          if (cancelled) { timer?.suspend(); return; }
-          timer?.event('order_selected');
+          void beginStudy().then(timer=>{if(cancelled)timer?.suspend();else timer?.event('order_selected');});
           dispatch({type:"IDENTIFY_STARTED",method:"QUEUE_SELECT",reference:props.initialProofId});
           const proof = await props.api.getProof(props.initialProofId);
           if (!cancelled) dispatch({ type: "IDENTIFY_RESOLVED", context: stationContextFromProof(proof), method: "QUEUE_SELECT" });
@@ -321,7 +328,7 @@ export function PackingStationScreen(props: {
       if (recorderRef.current?.state !== "recording" && (!heldBlobRef.current || durableRef.current)) return;
       event.preventDefault(); event.returnValue = "";
     };
-    const interrupt = () => { if (recorderRef.current?.state === "recording") { interruptedRef.current=true; void finishPacking("MANUAL",false); } };
+    const interrupt = () => { if (recorderRef.current?.state === "recording") { measured('capture_interrupted',{once:true,errorCode:'capability'}); interruptedRef.current=true; void finishPacking("MANUAL",false); } };
     window.addEventListener("beforeunload",warn);
     window.addEventListener("pagehide",interrupt);
     return () => { window.removeEventListener("beforeunload",warn);window.removeEventListener("pagehide",interrupt);interrupt(); if (!finishJob.current) stopLiveTracks(); };
@@ -353,7 +360,7 @@ export function PackingStationScreen(props: {
   async function identify(method: "SCAN" | "REFERENCE" | "QUEUE_SELECT", reference: string, transactionId?: string) {
     setLocalError(null);
     setBusy(true);
-    (await beginStudy())?.event('order_selected');
+    void beginStudy().then(timer=>timer?.event('order_selected'));
     dispatch({ type: "IDENTIFY_STARTED", method, reference });
     try {
       let proof: CanonicalProof;
@@ -407,7 +414,7 @@ export function PackingStationScreen(props: {
     const proofId = orderRef.current.proofId;
     preparingCamera.current = true;
     try {
-      await beginStudy();
+      void beginStudy();
       await capturePreflight(props.api, true);
       if (!mountedRef.current || stateRef.current.phase !== "READY_TO_RECORD" || orderRef.current?.proofId !== proofId) return;
       const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" }, audio:false });
@@ -486,7 +493,7 @@ export function PackingStationScreen(props: {
     let recordingStarted = false;
     startingRef.current=true;
     setBusy(true); setLocalError(null);
-    await beginStudy();
+    void beginStudy();
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       studyTimer.current?.problem('capability');
       setLocalError("This browser cannot record packing. Open PackProof on a supported phone and sign in to the same account. Your order is preserved."); setBusy(false); startingRef.current=false; return;
@@ -549,9 +556,9 @@ export function PackingStationScreen(props: {
           if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); }
         }
       };
-      recorder.onerror = () => { studyTimer.current?.problem('capability'); interruptedRef.current=true; setLocalError("Camera recording was interrupted. Saved segments remain available on this device."); if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); } };
+      recorder.onerror = () => { measured('capture_interrupted',{once:true,errorCode:'capability'}); studyTimer.current?.problem('capability'); interruptedRef.current=true; setLocalError("Camera recording was interrupted. Saved segments remain available on this device."); if (!finishingRef.current) { finishingRef.current = true; interruptedRef.current = true; void finishPacking("MANUAL", false); } };
       recorderRef.current = recorder; startedAt.current = performance.now();
-      recorder.onstart = () => { studyTimer.current?.phase('recording'); studyTimer.current?.event('recording_started'); };
+      recorder.onstart = () => { measured('capture_started',{once:true}); studyTimer.current?.phase('recording'); studyTimer.current?.event('recording_started'); };
       setRecordingDurable(false); dispatch({type:"START_RECORDING",trigger:"MANUAL"}); recorder.start(2000); recordingStarted = true; dispatch({type:"RECORDING_STARTED"});
       return session.id;
     } catch (error) {
@@ -620,6 +627,7 @@ export function PackingStationScreen(props: {
       finishConfirmed, captureSessionId: captureSessionRef.current, bookmarks: bookmarksRef.current, durationMs: durationRef.current, interrupted,
     };
     await saveStationCapture(pending);
+    measured('capture_saved',{once:true});
     setRecordingDurable(true);
     pendingRef.current = pending;
     return pending;
@@ -645,6 +653,7 @@ export function PackingStationScreen(props: {
       durationMs: null,
     };
     dispatch({ type: "CAPTURE_READY", capture, trigger });
+    if(interruptedRef.current || !finishConfirmed)measured('capture_interrupted',{once:true,errorCode:'capability'});
     await preserveStation(blob, false, interruptedRef.current || !finishConfirmed);
     recordMobileUxEvent("capture_durably_saved");
     dispatch({ type:"RESTORE_LOCAL", state:{...stateRef.current,phase:"RECOVERY",capture,canRetry:true,error:null} });
@@ -663,6 +672,7 @@ export function PackingStationScreen(props: {
     setBusy(true);
     try {
       const pending = await preserveStation(blob, true, interruptedRef.current);
+      measured('submission_authorized',{once:true});
       window.dispatchEvent(new CustomEvent("packproof:capture-secured",{detail:{userId:props.userId,proofId:order.proofId}}));
       dispatch({ type: "PROCESSING_STARTED", idempotencyKey: pending.uploadKey, submitStep: "upload" });
       // Both foreground submission and the app-level worker join one serialized accepted intent.
@@ -730,7 +740,7 @@ export function PackingStationScreen(props: {
     <section className="ws-station-main" aria-label="Packing capture">
     <ol className="ws-station-steps" aria-label="Packing progress">{["Select shipment", "Record packing", "Confirm & submit"].map((step, index) => <li key={step} aria-current={stationStep === index + 1 ? "step" : undefined}><span>0{index + 1}</span><strong>{step}</strong></li>)}</ol>
     <div className={`ws-camera-surface${state.phase === "RECORDING" ? " is-recording" : ""}`} hidden={!!heldBlob || state.phase === "PROCESSING" || state.phase === "PROOF_CREATED"}>
-    <video ref={videoRef} className={state.phase === "READY_TO_RECORD" || state.phase === "RECORDING" ? "packing-preview" : "visually-hidden"} muted playsInline autoPlay aria-label="Packing camera preview" />
+    <video onLoadedData={cameraFrameReady} onPlaying={cameraFrameReady} ref={videoRef} className={state.phase === "READY_TO_RECORD" || state.phase === "RECORDING" ? "packing-preview" : "visually-hidden"} muted playsInline autoPlay aria-label="Packing camera preview" />
     {!cameraReady && <div className="ws-camera-placeholder"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="m15 10 6-3v10l-6-3" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg><h2>{state.order ? "Prepare your packing camera" : "Ready for your next shipment"}</h2><p>{state.order ? "Allow camera access in your browser to see the live preview." : "Select an order or find your shipment to open the camera preview."}</p></div>}
     <div className="ws-camera-overlay"><span>{state.phase === "RECORDING" ? "● Recording" : cameraReady ? "Live preview" : "Camera preview"}</span><span>{Math.floor(elapsed/60)}:{String(elapsed%60).padStart(2,"0")}</span></div>
     </div>
@@ -759,7 +769,7 @@ export function PackingStationScreen(props: {
     </div> : null}
     {state.phase === "PROCESSING" ? <p role="status">Finishing your Proof…{state.uploadPercent != null ? ` ${state.uploadPercent}%` : ""}</p> : null}
     {state.phase === "PROOF_CREATED" ? <section className="section stack"><h2>{state.completion === "FINALIZED" ? "Proof saved" : "Recording received"}</h2><p>{state.completion === "FINALIZED" ? "Packing record locked" : "Your Proof still needs attention before it can be locked."}</p><a className="btn" href={`/proofs/${encodeURIComponent(state.order?.proofId || "")}`}>View Proof</a>{state.completion === "FINALIZED" ? <button className="btn btn-secondary" onClick={() => dispatch({type:"RESET"})}>Pack next order</button> : null}</section> : null}
-    <details className="ws-remote-controls"><summary>Remote camera controls</summary><RelayStationPanel api={props.api} userId={props.userId} queue={props.queue} localProofId={state.order?.proofId} localPhase={state.phase} onRole={setRelayRole} start={startPacking} finish={async()=>{await finishPacking();}} selectProof={async(id)=>{if(stateRef.current.phase==="RECORDING"||pendingRef.current)throw new Error("Finish saving the current recording before selecting another order.");(await beginStudy())?.event('order_selected');const proof=await props.api.getProof(id);const context=stationContextFromProof(proof);orderRef.current=context;dispatch({type:"RESTORE_LOCAL",state:{...initialStationState(),phase:"READY_TO_RECORD",order:context}});}}/>{relayRole === "CONTROLLER" ? <p>Recording is controlled on the connected camera.</p> : null}</details>
+    <details className="ws-remote-controls"><summary>Remote camera controls</summary><RelayStationPanel api={props.api} userId={props.userId} queue={props.queue} localProofId={state.order?.proofId} localPhase={state.phase} onRole={setRelayRole} start={startPacking} finish={async()=>{await finishPacking();}} selectProof={async(id)=>{if(stateRef.current.phase==="RECORDING"||pendingRef.current)throw new Error("Finish saving the current recording before selecting another order.");void beginStudy().then(timer=>timer?.event('order_selected'));const proof=await props.api.getProof(id);const context=stationContextFromProof(proof);orderRef.current=context;dispatch({type:"RESTORE_LOCAL",state:{...initialStationState(),phase:"READY_TO_RECORD",order:context}});}}/>{relayRole === "CONTROLLER" ? <p>Recording is controlled on the connected camera.</p> : null}</details>
     {props.onLeave ? <button className="btn btn-tertiary" disabled={busy || state.phase === "RECORDING"} onClick={props.onLeave}>Back to Proof</button> : null}
     </section>
     <aside className="ws-station-sidebar" aria-label="Shipment selection">

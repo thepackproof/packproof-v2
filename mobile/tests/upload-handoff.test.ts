@@ -8,6 +8,7 @@ import { uploadCompletionConfirmed } from '../src/capture/upload-outcome';
 import { recoverCaptureCompletion } from '../src/capture/recover-completion';
 import { sameCaptureAccount } from '../src/capture/recovery-model';
 import { localProofWork } from '../src/copy/proof-list';
+import { captureMeasurement, measuredUploadState } from '../src/analytics/capture-measurement';
 import type { LocalCapture } from '../src/capture';
 import type { SavedCaptureInput } from '../src/capture/completion';
 
@@ -34,6 +35,7 @@ function harness() {
     './recover-completion': {recoverCaptureCompletion},
     './recovery-model': {sameCaptureAccount},
     '../analytics/native-study': {async nativeStudyForCapture() {return null;}},
+    '../analytics/capture-measurement': {captureMeasurement, measuredUploadState},
     '../analytics/mobile-ux-events': {recordMobileUxEvent() {}},
     './identifier-observation': {identifierCaptureEnabled:()=>false},
     './identifier-storage': {async prepareIdentifierCheckpoint() {}},

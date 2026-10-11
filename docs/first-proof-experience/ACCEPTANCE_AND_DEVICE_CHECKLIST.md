@@ -4,7 +4,9 @@ Date: October 11, 2026. Integration base: `0424f154edc1bcbd97f463f3a64e90e109d67
 
 The user subsequently authorized urgent production release and deferred their physical testing until after deployment. That changes release sequencing; it does not convert unperformed device or human tests into passes. Record actual deployed commit, backend image, website artifact, Android version/code and installer SHA-256 in the release receipt. A JavaScript export is not an installed native-build pass.
 
-## Evidence already obtained during implementation
+## Evidence already obtained during primary implementation
+
+The counts below record the earlier primary implementation checkpoint, not the final follow-up suite inventory. For later evidence, use [MEASUREMENT.md](MEASUREMENT.md), [NATIVE_MEASUREMENT_EVIDENCE.md](NATIVE_MEASUREMENT_EVIDENCE.md) and [DESKTOP_DRAFT_RECOVERY_EVIDENCE.md](DESKTOP_DRAFT_RECOVERY_EVIDENCE.md). In particular, the final desktop recovery check passed 105 tests; the earlier 94-test result below belongs to its stated primary checkpoint. The exact release receipt and successful source-bound CI remain authoritative for what shipped.
 
 - Native TypeScript check passed after first-use, task intent, sample and idempotent draft changes.
 - Native focused tests passed **36/36**: `manual-operation`, `first-proof-intent`, `task-home`, `proof-navigation`, `workspace-summary`.

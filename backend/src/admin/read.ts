@@ -26,6 +26,7 @@ import {
   ACTIVE_SQL,
 } from "./analytics.js";
 export interface AdminReadDeps {
+  observationConfig?: import('../analytics/observation-router.js').ProgramObservationConfig|null;
   db: Database;
   clock: Clock;
   objectStore: ObjectStore;

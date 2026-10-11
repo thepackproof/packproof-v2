@@ -31,7 +31,7 @@ export async function authorizeSellerCapture({ client, capture, proofId, userId,
     method,
   });
   validateSellerChallenge(challenge, { proofId, userId, captureSessionId: capture.captureSessionId, sha256: capture.captureSha256, publicKey, captureManifestSha256:capture.captureManifestSha256, method });
-  const study=await nativeStudyForCapture(client,userId,capture.studyTimingRef);
+  const study=await nativeStudyForCapture(client,userId,capture.studyTimingRef,capture.captureStageId?undefined:capture.captureProofId);
   let signature:string;
   try {
     ({signature}=await signAttestationPayload(userId,challenge.payload));

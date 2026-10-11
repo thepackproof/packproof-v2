@@ -1,0 +1,60 @@
+import {randomUUID} from 'node:crypto';
+import {afterEach,expect,it} from 'vitest';
+import {createHarness,commitFulfillmentAndAttest,type TestHarness} from './helpers.js';
+import {ensureIdentityUser} from '../src/domain/users.js';
+import {createTransaction} from '../src/domain/transactions.js';
+import {createOrGetProof} from '../src/domain/create-proof.js';
+import {finalizeProof} from '../src/domain/finalize.js';
+import {firstExperienceReport} from '../src/analytics/first-experience-report.js';
+import {createProgramDataset,recordProgramConsent,startProgramTiming,appendProgramTiming,STUDY_STATEMENT_VERSION} from '../src/analytics/observation-export.js';
+let h:TestHarness;afterEach(async()=>{await h?.close();});
+const runtime={key:Buffer.alloc(32,7),keyVersion:'measurement-fixture'};
+it('counts mature consented first choices including abandoned starts, censors withdrawal, and only accepts canonical outcomes',async()=>{
+ let now=new Date('2026-10-01T00:00:00.000Z');h=await createHarness({now:()=>new Date(now)});
+ const {datasetRef}=await createProgramDataset(h.db,h.clock,runtime),config={...runtime,datasetRef};
+ const people=await Promise.all(['completed','abandoned','withdrawn','sample','previous','admin','immature'].map(name=>ensureIdentityUser(h.db,h.clock,'cognito',name)));
+ const [completed,abandoned,withdrawn,sample,previous,admin,immature]=people;
+ const grant=async(user:string,decision:'grant'|'withdraw'='grant')=>recordProgramConsent(h.db,h.clock,config,user,{datasetRef,decision,operationNonce:randomUUID(),statementVersion:STUDY_STATEMENT_VERSION});
+ for(const user of people)await grant(user);
+ await h.db.query("INSERT INTO user_system_roles(user_id,role,granted_at) VALUES($1,'SYSTEM_ADMIN',$2)",[admin,now.toISOString()]);
+ const finish=async(user:string,metadata={})=>{const txn=await createTransaction(h.db,h.clock,user,{itemTitle:'Test item',metadata});const p=await createOrGetProof(h.db,h.clock,user,txn.transactionId);await commitFulfillmentAndAttest(h,user,p.proofId);await finalizeProof(h.db,h.clock,user,p.proofId);return p.proofId;};
+ await finish(previous);
+ now=new Date('2026-10-02T00:00:00.000Z');
+ const choose=async(user:string)=>{
+   const input={datasetRef,taskKind:'packproof',deviceClass:'web',channel:'manual',operationNonce:randomUUID(),clientStartedAt:now.toISOString(),flowVersion:1,platform:'web',entrySource:'home',appVersion:'1.0.2'};
+   const attempt=await startProgramTiming(h.db,h.clock,config,user,input);
+   const event={datasetRef,attemptRef:attempt.attemptRef,operationNonce:randomUUID(),phase:'preflight',outcome:'pending',elapsedMs:0,activeMs:0,offlineMs:0,unattendedMs:0,interaction:'start_selected',clientOccurredAt:now.toISOString(),networkState:'online'};
+   await appendProgramTiming(h.db,h.clock,config,user,event);await appendProgramTiming(h.db,h.clock,config,user,event);
+   return {...event,operationNonce:randomUUID()};
+ };
+ const event=await choose(completed);
+ expect(await firstExperienceReport(h.db,h.clock,config,{from:'2026-10-01T00:00:00.000Z',to:'2026-10-03T00:00:00.000Z',asOf:new Date(now).toISOString()})).toMatchObject({authoritativeEvents:[]});
+ for(const user of [abandoned,withdrawn,sample,previous,admin])await choose(user);
+ now=new Date('2026-10-02T00:00:02.000Z');await appendProgramTiming(h.db,h.clock,config,completed,{...event,interaction:'capture_ready',clientOccurredAt:now.toISOString(),elapsedMs:2000,activeMs:2000});
+ now=new Date('2026-10-02T00:00:04.000Z');await appendProgramTiming(h.db,h.clock,config,completed,{...event,operationNonce:randomUUID(),interaction:'capture_started',clientOccurredAt:now.toISOString(),elapsedMs:4000,activeMs:3000,unattendedMs:1000});
+ await appendProgramTiming(h.db,h.clock,config,completed,{...event,operationNonce:randomUUID(),interaction:'recovery_action',clientOccurredAt:now.toISOString(),elapsedMs:4000,activeMs:3000,unattendedMs:1000});
+ await expect(appendProgramTiming(h.db,h.clock,config,abandoned,{...event,interaction:'proof_finalized'})).rejects.toMatchObject({code:'INVALID_STUDY_REQUEST'});
+ now=new Date('2026-10-02T01:00:00.000Z');await grant(withdrawn,'withdraw');
+ const txn=await createTransaction(h.db,h.clock,completed,{itemTitle:'Test item'});
+ const proofId=(await createOrGetProof(h.db,h.clock,completed,txn.transactionId)).proofId;
+ const snapshot=()=>firstExperienceReport(h.db,h.clock,config,{from:'2026-10-02T00:00:00.000Z',to:'2026-10-04T00:00:00.000Z',asOf:now.toISOString()});
+ expect(await snapshot()).toMatchObject({authoritativeEvents:[]});
+ now=new Date('2026-10-02T01:01:00.000Z');await commitFulfillmentAndAttest(h,completed,proofId);
+ expect(await snapshot()).toMatchObject({authoritativeEvents:[{eventName:'evidence_committed',occurredAt:now.toISOString()}]});
+ now=new Date('2026-10-02T01:02:00.000Z');await finalizeProof(h.db,h.clock,completed,proofId);
+ expect(await snapshot()).toMatchObject({authoritativeEvents:[{eventName:'evidence_committed',occurredAt:'2026-10-02T01:01:00.000Z'},{eventName:'proof_finalized',occurredAt:now.toISOString()}]});
+ await finish(sample,{sample:true});await finish(withdrawn);
+ now=new Date('2026-10-03T12:00:00.000Z');await choose(immature);now=new Date(now.getTime()+1000);
+ const input={from:'2026-10-02T00:00:00.000Z',to:'2026-10-04T00:00:00.000Z',asOf:now.toISOString()};
+ const result=await firstExperienceReport(h.db,h.clock,config,input);
+ expect(result).toMatchObject({status:'available',observedStarters:7,excludedIneligibleAccounts:1,previouslyActivatedAccounts:1,immatureAccounts:1,withdrawnBeforeFullWindow:1,matureConsentedAccounts:3,finalizedAccounts:1,conversion24hPercent:33.3,guardrails:{recoveryAccounts:1,recoveredAccounts:1,retrySuccess24hPercent:100,crashes:{status:'unavailable'}},eventCounts:{start_selected:5},timings:{choiceToReadyMs:{samples:1,p50:2000,p95:2000},choiceToRecordingMs:{samples:1,p50:4000,p95:4000}}});
+ if(result.status==='available'){
+   expect(result.authoritativeEvents.map(row=>row.eventName)).toEqual(['evidence_committed','proof_finalized']);
+   expect(result.authoritativeEvents).toEqual((await firstExperienceReport(h.db,h.clock,config,input) as typeof result).authoritativeEvents);
+   for(const raw of [...people,proofId])expect(JSON.stringify(result)).not.toContain(raw);
+ }
+ expect(await firstExperienceReport(h.db,h.clock,null,input)).toMatchObject({status:'unavailable'});
+ // A later retry does not put the same account into a later cohort.
+ now=new Date('2026-10-04T12:00:00.000Z');await choose(abandoned);
+ expect(await firstExperienceReport(h.db,h.clock,config,{from:'2026-10-04T00:00:00.000Z',to:'2026-10-05T00:00:00.000Z',asOf:now.toISOString()})).toMatchObject({observedStarters:0,matureConsentedAccounts:0,conversion24hPercent:null});
+});

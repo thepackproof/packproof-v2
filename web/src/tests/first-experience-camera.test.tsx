@@ -1,0 +1,28 @@
+import 'fake-indexeddb/auto';
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {afterEach,expect,it,vi} from 'vitest';
+import type {PackProofApi} from '../api/client';
+import {PackingStationScreen} from '../screens/PackingStationScreen';
+import {canonicalProof} from './fixtures';
+const study=vi.hoisted(()=>({start:vi.fn(),event:vi.fn(),phase:vi.fn(),suspend:vi.fn()}));
+vi.mock('../analytics/study-capture',()=>({startStationStudy:study.start,firstProofStudyForCapture:study.start,resumeStationStudy:async()=>null}));
+vi.mock('../capture-preflight',()=>({capturePreflight:async()=>({}),requiresDurableReceipts:async()=>false}));
+afterEach(()=>{cleanup();vi.unstubAllEnvs();vi.restoreAllMocks();});
+it('camera preparation proceeds while study preparation is pending and readiness comes only from a rendered frame',async()=>{
+ vi.stubEnv('VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE','true');
+ let finishStudy!:(value:unknown)=>void;study.start.mockImplementation(()=>new Promise(resolve=>{finishStudy=resolve;}));
+ const getUserMedia=vi.fn(async()=>({active:true,getTracks:()=>[{stop:vi.fn()}]}));
+ Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia}});
+ vi.spyOn(HTMLMediaElement.prototype,'play').mockResolvedValue();vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(()=>{});
+ const proof={...canonicalProof,status:'READY_FOR_EVIDENCE',evidence:[],attestations:[]};
+ render(<PackingStationScreen api={{recoveryScope:'camera-test',getProof:async()=>proof} as unknown as PackProofApi} userId="frame-test-user" queue={[]} initialProofId={proof.proofId} error={null} onAuthExpired={()=>{}}/>);
+ await waitFor(()=>expect(getUserMedia).toHaveBeenCalledTimes(1));
+ const video=screen.getByLabelText('Packing camera preview');
+ fireEvent.loadedData(video);expect(study.event).not.toHaveBeenCalled();
+ Object.defineProperty(video,'videoWidth',{value:1920});Object.defineProperty(video,'videoHeight',{value:1080});
+ const before=new Date();fireEvent.playing(video);const after=new Date();
+ finishStudy({localRef:'local-test',event:study.event,phase:study.phase,suspend:study.suspend});
+ await waitFor(()=>expect(study.event).toHaveBeenCalledWith('capture_ready',expect.objectContaining({once:true,observedAt:expect.any(Date)})));
+ const observed=study.event.mock.calls.find(call=>call[0]==='capture_ready')![1].observedAt.getTime();
+ expect(observed).toBeGreaterThanOrEqual(before.getTime());expect(observed).toBeLessThanOrEqual(after.getTime());
+});

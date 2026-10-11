@@ -19,7 +19,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { clearSharedLinkCache } from "../copy/share-cache";
 import { completeSavedCapture, prepareSavedCapture, captureCompletionActive } from "../capture/completion";
-import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture,recordNativeStudyInteraction} from '../analytics/native-study';
+import {registerStudyAccountReader,updateNativeStudyConnectivity,flushNativeStudyTimings,nativeStudyForCapture,recordNativeStudyInteraction,beginNativeFirstProof,nativeStudyForNewCapture,recordNativeStudyFlowEvent,retainNativeStudyAuth,completeNativeStudyAuth} from '../analytics/native-study';
 import { createClientVersionReporter } from "../analytics/client-version";
 import { readInstalledClientVersion } from "../analytics/native-client-version";
 import { listAccountCaptures, persistCaptureMetadata } from "../capture";
@@ -303,6 +303,7 @@ export interface PackProofContextValue {
   importPurchase: () => Promise<void>;
   confirmImportedPurchase: () => Promise<void>;
   createManualProof: () => Promise<void>;
+  selectCreateProof: () => void;
   createGradingProof: (itemCount: number) => Promise<void>;
   shareProofLink: () => Promise<void>;
   runWorkflowAction: (action: ProofWorkflowAction, body?: Record<string, unknown>) => Promise<void>;
@@ -489,6 +490,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     [apiBaseUrl],
   );
   const versionReporter = useMemo(() => createClientVersionReporter(readInstalledClientVersion), []);
+  const studyClient=useRef(client);studyClient.current=client;
   useEffect(() => {
     if (hydrated) versionReporter.update(session, client);
   }, [client, hydrated, session, versionReporter]);
@@ -518,6 +520,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     }
     if(name==="activity"){activityFilterMemory.current=options?.activityFilter??activityFilterMemory.current;options={...options,activityFilter:activityFilterMemory.current};}
     const current = sessionRef.current;
+    if(name==='sample'&&current&&!current.needsReauthentication)void recordNativeStudyFlowEvent(studyClient.current,current.userId,'help_opened','sample');
     if (current) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
     if(current && !['auth','sample','receipt','invitation'].includes(name)) {
       const intent=taskIntent(name,current.proofId,FIRST_PROOF_EXPERIENCE_ENABLED?1:0,{historyShareId:options?.historyShareId});
@@ -1443,7 +1446,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       assertOriginalAccount();
       setCaptureReviewOnlyReason(destination.reviewOnly?destination.notice:null);
       if(destination.reviewOnly){setCaptureStatus('retry');go('capture');return;}
-      (await nativeStudyForCapture(client,current.userId,capture.studyTimingRef))?.event("recovery_started");
+      const recoveryStudy=await nativeStudyForCapture(client,current.userId,capture.studyTimingRef,capture.captureStageId?undefined:capture.captureProofId);
+      recoveryStudy?.event("recovery_started");recoveryStudy?.event('recovery_action');
       assertOriginalAccount();
       setCaptureStatus("retry");
       if (!capture.recovery.submitRequested) { go("capture"); return; }
@@ -1570,8 +1574,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setConfirmFinalize,
     setSelectedEvent,
     run,
-    signIn: async () =>
-      run(async () => {
+    signIn: async () => {
+      const previous=sessionRef.current;
+      const retry=previous?.needsReauthentication?{userId:previous.userId,pending:retainNativeStudyAuth(client,previous.userId,'auth_started')}:null;
+      await run(async () => {try{
         if (authMode === "dev") {
           const result = await client.login(subject.trim());
           await finishSignIn({ token: result.token, subject: subject.trim() });
@@ -1591,7 +1597,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
           });
         }
         await restoreTaskAfterSignIn();
-      }),
+        if(retry)void retry.pending.then(()=>completeNativeStudyAuth(client,retry.userId));
+      }catch(error){if(retry)void retry.pending.then(()=>retainNativeStudyAuth(client,retry.userId,'auth_failed'));throw error;}});
+    },
     createAccount: async () =>
       run(async () => {
         const created = await cognitoSignUp(requireCognitoConfig(), {
@@ -1710,7 +1718,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     syncWorkspace,
     batchPacking,
     setBatchPacking,
-    openOrder: async (proofId, batch = false) => run(async () => {
+    openOrder: async (proofId, batch = false) => {
+      const chosenAt=new Date(),chosenAccount=sessionRef.current;
+      if(chosenAccount)void beginNativeFirstProof(client,chosenAccount.userId,'order',proofId,chosenAt);
+      await run(async () => {
       rememberTaskInteraction(proofId);startMobileCaptureEntry();
       const current = sessionRef.current;
       if (!current) return;
@@ -1727,7 +1738,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         proofStatus: fresh.status, workflowType: fresh.workflowType, seller: mine,
         hasLocalCapture: Boolean(local), committedEvidenceCount: fresh.evidence.filter(item => item.validationStatus === "COMMITTED").length,
       }));
-    }),
+    });},
     openProof,
     refreshProof,
     importPurchase: async () =>
@@ -1755,8 +1766,15 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setImportReview(null);
         go("proof");
       }),
+    selectCreateProof: () => {
+      const current=sessionRef.current;
+      if(current&&!current.needsReauthentication)void beginNativeFirstProof(client,current.userId,'manual');
+      go('create');
+    },
     createManualProof: async () => {
       if(manualInFlight.current)return;
+      const chosenAccount=sessionRef.current;
+      if(chosenAccount)void beginNativeFirstProof(client,chosenAccount.userId,'manual');
       manualInFlight.current=true;
       try { await run(async () => {
         if (!sessionRef.current) {
@@ -1979,6 +1997,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }),
     startCaptureIntent: async token => {
       if(intakeCaptureLock.current)return;
+      const chosenAccount=sessionRef.current;
+      if(chosenAccount)void beginNativeFirstProof(client,chosenAccount.userId,'deep_link');
       intakeCaptureLock.current=true;
       try { await run(async()=>{
         const account=sessionRef.current;if(!account)return;
@@ -1997,6 +2017,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     },
     startIntakeCapture: async input => {
       if (intakeCaptureLock.current) return;
+      const chosenAccount=sessionRef.current;
+      if(chosenAccount)void beginNativeFirstProof(client,chosenAccount.userId,'order');
       intakeCaptureLock.current = true;
       try {
         await run(async () => {
@@ -2038,8 +2060,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
         });
       } finally { intakeCaptureLock.current = false; }
     },
-    startCapture: async () =>
-      run(async () => {
+    startCapture: async () => {
+      const chosenAccount=sessionRef.current;
+      if(chosenAccount&&proof&&!isGradingWorkflow(proof.workflowType))void nativeStudyForNewCapture(client,chosenAccount.userId,proof.proofId);
+      await run(async () => {
         if(captureReviewOnlyReason)throw new Error("Reconnect and check this saved recording's current Proof before recording again.");
         if (!proof) {
           return;
@@ -2061,13 +2085,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await queueRetiredUpload(proof.proofId);
         await persistCapture(captured, newIdempotencyKey());
         if (localCapture && localCapture.uri !== captured.uri && !localCapture.uploadEvidenceId) {
-          (await nativeStudyForCapture(client,sessionRef.current!.userId,localCapture.studyTimingRef))?.end('cancelled','cancelled');
+          if(localCapture.studyTimingRef&&localCapture.studyTimingRef!==captured.studyTimingRef)(await nativeStudyForCapture(client,sessionRef.current!.userId,localCapture.studyTimingRef))?.end('cancelled','cancelled');
           await discardLocalCapture(localCapture.uri);
         }
         setCaptureStatus("captured");
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);
-      }),
+      });},
     discardCapture: async () => run(async () => {
       if (localCapture) await discardSavedRecording(localCapture);
     }),

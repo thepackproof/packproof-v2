@@ -368,7 +368,8 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
     const study = await resumeStationStudy(api, userId, pending.studyTaskRef);
     const studyState = { step: 'upload' as SubmitStep };
     study?.phase('upload');
-    if (pending.attempts || pending.evidenceId) study?.event('recovery_started');
+    if (pending.attempts || pending.evidenceId) { study?.event('recovery_started'); if(import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('recovery_action'); }
+    if(import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:pending.attempts?'retrying':'queued'});
     study?.event('upload_pending');
     try {
       assertCurrent(active);
@@ -425,7 +426,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
             if(!pending.evidenceId)throw new Error("Upload identity is unavailable. Original retained.");
             await trackTransfer(api,pending.key,()=>api.uploadResumable(pending.order.proofId,pending.evidenceId!,pending.file,value=>{assertCurrent(active);progress(value);}));assertCurrent(active);
           },
-        },onProgress:progress=>{assertCurrent(active);studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);},
+        },onProgress:progress=>{assertCurrent(active);if(studyState.step!==progress.step&&import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:progress.step==='finalize'?'finalizing':progress.step==='commit'?'committing':progress.step==='attest'?'waiting':'uploading'});studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);},
       });
       pending.committed = true; await saveStationCapture(pending); assertCurrent(active);
       proof=await api.getProof(pending.order.proofId);assertCurrent(active);
@@ -441,12 +442,13 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       if(pending.captureContext) await forgetBrowserEngine(api.recoveryScope,userId,pending.captureSessionId!);
       await clearStationCapture(userId,pending.uploadKey);
       if (proof.status === "FINALIZED" && result.completion === "FINALIZED") {
-        study?.phase('finalization'); study?.event('server_completed'); study?.end('succeeded');
+        study?.phase('finalization'); if(import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:'complete'}); study?.event('server_completed'); study?.end('succeeded');
       } else { study?.suspend(); }
       return result;
     } catch(error) {
       const failure = error as {status?:number;code?:string};
       if (failure.code === "CONFIRMATION_REQUIRED" || studyState.step === "attest") study?.event('consent_failed');
+      if(import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:failure.status===401?'needs_attention':'waiting',errorCode:failure.status===401?'authentication':failure.code==='PRESERVATION_PENDING'?'provider':'network'});
       study?.problem(failure.status === 401 ? 'authentication' : failure.code === "PRESERVATION_PENDING" ? 'provider' : 'network');
       study?.suspend();
       const latest=await recoverStationCapture(userId);

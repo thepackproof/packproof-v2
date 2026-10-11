@@ -63,13 +63,15 @@ function handle(name:string,schema:ZodType,fn:(...args:any[])=>unknown){ipcMain.
 async function state():Promise<SystemView>{return {version:app.getVersion(),platform:process.platform,environment,online,configured:!!config,secureStorage:secureStorageAvailable(),pendingOtherAccounts:await engine?.hasOtherAccountEvidence()??false,settings,reporting:reporting?.state,update:updates.state};}
 function setupIpc(){
  handle('onboarding.get',schemas.empty,()=>requireApi().getOnboarding());
+ handle('study.scope',schemas.id,userId=>{requireApi().assertAccount(userId);return config!.apiBaseUrl;});
+ handle('study.request',schemas.study,input=>{const client=requireApi();client.assertAccount(input.userId);return client.studyRequest(input.path,input.method,input.body);});
  handle('onboarding.update',schemas.onboarding,input=>requireApi().updateOnboarding(input));
  handle('auth.state',schemas.empty,sessionView);
  handle('auth.signIn',schemas.login,async input=>{if(!auth)throw new Error('This desktop build needs PackProof service configuration.');if(engine?.activeCapture)throw new Error('Finish recording before changing accounts.');await engine?.setAccount(null);revokeMedia();await auth.signIn(input);await engine?.setAccount(auth.getAccountId());emit({type:'session'});return sessionView();});
  handle('auth.signOut',schemas.empty,async()=>{if(engine?.activeCapture)throw new Error('Finish recording before signing out.');await engine?.setAccount(null);revokeMedia();await auth?.signOut();emit({type:'session'});});
  const account=()=>{if(!auth)throw new Error('This desktop build needs PackProof service configuration.');return auth;};
  handle('auth.signUp',schemas.login,i=>account().signUp(i));handle('auth.confirmSignUp',schemas.code,i=>account().confirmSignUp(i));handle('auth.resendCode',schemas.email,e=>account().resendConfirmation(e));handle('auth.forgotPassword',schemas.email,e=>account().forgotPassword(e));handle('auth.resetPassword',schemas.reset,i=>account().confirmForgotPassword(i));
- handle('proofs.list',schemas.empty,()=>cached('proof-list',()=>requireApi().listProofs()));handle('proofs.detail',schemas.id,id=>cached('proof-'+id,()=>requireApi().getProof(id)));handle('proofs.create',schemas.transaction,i=>requireApi().createProof(i));handle('proofs.finalize',schemas.id,async id=>(await requireApi().finalizeProof(id)).proof);
+ handle('proofs.scope',schemas.id,owner=>{requireApi().assertAccount(owner);return config!.apiBaseUrl;});handle('proofs.list',schemas.empty,()=>cached('proof-list',()=>requireApi().listProofs()));handle('proofs.detail',schemas.id,id=>cached('proof-'+id,()=>requireApi().getProof(id)));handle('proofs.create',schemas.transaction,(i,owner)=>requireApi().createProof(i,owner));handle('proofs.finalize',schemas.id,async id=>(await requireApi().finalizeProof(id)).proof);
  handle('proofs.sharePreview',schemas.id,async id=>{
   const client=requireApi(),scope={accountId:auth!.getAccountId()!,epoch:sessionEpoch};
   const preview=await client.previewSharedProof(id);
