@@ -203,3 +203,32 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^mobile/tests/manual\-operation\.test\.ts$''']
 regexes = ['''^\n?  const operation:ManualOperation=\{fingerprint:'original',key:'operation_123',form,request:\{itemTitle:'Ceramic mug',metadata:\{intake:\{source:'PROVIDED_TEXT'\}\}\}\};\r?$''']
+
+# Reviewed CI run 38195724458 / Source secrets job 114637799188.
+# Recomputed each digest from its 17 inputs and generator at the named commit.
+# 39a82c5 used Windows CRLF/backslash input names; 406c8c9 made identity portable.
+[[allowlists]]
+description = "Exact recomputed generated schema digest from 39a82c5; no authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^packages/evidence\-contracts/generated\-client\.mjs$''']
+regexes = ['''^\n?export const RND_API_SCHEMA_DIGEST = "d116bb138f0d74181296ec55c95cca578587ee2b2b81993e44f57f8daffd11d7";\r?$''']
+
+[[allowlists]]
+description = "Exact recomputed generated schema digest from 406c8c9; no authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^packages/evidence\-contracts/generated\-client\.mjs$''']
+regexes = ['''^\n?export const RND_API_SCHEMA_DIGEST = "f6843ffc4b315e5e684bdb3830e973cec50857f01f227948f7da4c95cc3a9082";\r?$''']
+
+# The exact negative test rejects a literal REDACTED body in a PEM envelope.
+# It decodes to six non-DER bytes and cannot represent a private key.
+[[allowlists]]
+description = "Exact historical malformed-PEM rejection fixture; no private key bytes."
+targetRules = ["private-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^research/qualification/witness/test_operator_profile\.py$''']
+regexes = ['''^\n?        for pem in \('-----BEGIN PRIVATE KEY-----\\nREDACTED\\n-----END PRIVATE KEY-----',\r?\n                    '-----BEGIN PUBLIC KEY-----\\n' \+ base64\.b64encode\(b'X' \* 44\)\.decode\(\) \+ '\\n-----END PUBLIC KEY-----'\):\r?$''']

@@ -2,6 +2,9 @@ name: Android R&D release checks
 on:
   pull_request:
     paths:
+      - '.gitattributes'
+      - 'backend/migrations/**'
+      - 'backend/src/db/migrate.ts'
       - 'backend/src/db/forward-compatible-migrations.ts'
       - 'backend/tests/migrations.test.ts'
       - '.github/workflows/android-rnd-release-checks.yml'
