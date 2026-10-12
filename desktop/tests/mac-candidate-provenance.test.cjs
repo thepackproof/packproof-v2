@@ -33,9 +33,11 @@ test('candidate descriptor requires exact two architectures and distinct positiv
 test('release workflow propagates exact platform scope before cloud credential access',()=>{
   const workflow=YAML.parse(fs.readFileSync(path.join(__dirname,'../../.github/workflows/desktop-release.yml'),'utf8'));
   assert.deepEqual(workflow.on.workflow_dispatch.inputs.platforms.options,['all','mac','windows']);
-  assert.equal(workflow.jobs.signed.needs,'plan');
+  assert.deepEqual(workflow.jobs.signed.needs,['plan','rnd-release-policy']);
+  assert.match(workflow.jobs.signed.if,/needs\.rnd-release-policy\.outputs\.allowed == 'true'/);
   assert.match(workflow.jobs.signed.strategy.matrix,/needs\.plan\.outputs\.matrix/);
-  assert.deepEqual(workflow.jobs.publish.needs,['plan','signed']);
+  assert.deepEqual(workflow.jobs.publish.needs,['plan','signed','rnd-release-policy']);
+  assert.match(workflow.jobs.publish.if,/needs\.rnd-release-policy\.outputs\.allowed == 'true'/);
   assert.equal(workflow.jobs.publish.env.PACKPROOF_RELEASE_PLATFORMS,'${{ inputs.platforms }}');
   const steps=workflow.jobs.publish.steps;
   const gate=steps.findIndex(step=>step.name?.startsWith('Validate acceptance'));

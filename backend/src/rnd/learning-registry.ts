@@ -15,11 +15,46 @@ const hex=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v)
 const fraction=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=1;
 const object=(v:unknown):Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:bad('RND_LEARNING_INVALID','Invalid signed record field');
 const allowedPayload=['schema','scope','purpose','featureOrder','model','modelSha256','parentSha256','recipeSha256','datasetManifestSha256','holdoutManifestSha256','privacy','qualityGate','evaluation','productionReleaseAuthorized','reviewStatus','rollbackModelSha256'];
+const MAX_SIGNED_PAYLOAD_LENGTH=32768;
+
+/** Preserve signed Python number spelling without backtracking or matching nested/string keys. */
+export function signedModelArrayBytes(text:string):string|undefined {
+ if(text.length>MAX_SIGNED_PAYLOAD_LENGTH)return undefined;
+ const whitespace=(c:string|undefined)=>c===' '||c==='\t'||c==='\r'||c==='\n';
+ let depth=0,start=-1,end=-1;
+ for(let i=0;i<text.length;i++) {
+  const c=text[i];
+  if(c==='"') {
+   const tokenStart=i;
+   for(i++;i<text.length;i++) {
+    if(text[i]==='\\'){i++;continue;}
+    if(text[i]==='"')break;
+   }
+   if(i>=text.length)return undefined;
+   if(depth!==1)continue;
+   let next=i+1;while(whitespace(text[next]))next++;
+   if(text[next]!==':')continue;
+   let key:unknown;try{key=JSON.parse(text.slice(tokenStart,i+1));}catch{return undefined;}
+   if(key!=='model')continue;
+   // Duplicate top-level model keys make the signed byte binding ambiguous.
+   if(start!==-1)return undefined;
+   next++;while(whitespace(text[next]))next++;
+   if(text[next]!=='[')return undefined;
+   start=next;
+  } else if(c==='{'||c==='[') {
+   depth++;
+  } else if(c==='}'||c===']') {
+   if(c===']'&&depth===2&&start!==-1&&end===-1)end=i+1;
+   depth--;if(depth<0)return undefined;
+  }
+ }
+ return depth===0&&start!==-1&&end!==-1?text.slice(start,end):undefined;
+}
 
 export function validateLearningCandidate(input:unknown,trustedKeysHex:string[]) {
  onlyKeys(input,['payload','canonicalPayload','signature','keyId']);
  const envelope=input as unknown as SignedCandidate;
- if(!hex(envelope.keyId)||typeof envelope.canonicalPayload!=='string'||envelope.canonicalPayload.length>32768||!/^[\x20-\x7e]+$/.test(envelope.canonicalPayload)||typeof envelope.signature!=='string'||!/^[A-Za-z0-9+/]{86}==$/.test(envelope.signature))bad('RND_LEARNING_SIGNATURE_INVALID','Invalid signed record envelope');
+ if(!hex(envelope.keyId)||typeof envelope.canonicalPayload!=='string'||envelope.canonicalPayload.length>MAX_SIGNED_PAYLOAD_LENGTH||!/^[\x20-\x7e]+$/.test(envelope.canonicalPayload)||typeof envelope.signature!=='string'||!/^[A-Za-z0-9+/]{86}==$/.test(envelope.signature))bad('RND_LEARNING_SIGNATURE_INVALID','Invalid signed record envelope');
  const trusted=trustedKeysHex.find(key=>hex(key)&&sha256Hex(Buffer.from(key,'hex'))===envelope.keyId);
  if(!trusted)bad('RND_LEARNING_SIGNER_UNTRUSTED','Configure the isolated training signer in the server trust policy',403);
  const key=createPublicKey({key:Buffer.concat([Buffer.from('302a300506032b6570032100','hex'),Buffer.from(trusted,'hex')]),format:'der',type:'spki'});
@@ -30,7 +65,7 @@ export function validateLearningCandidate(input:unknown,trustedKeysHex:string[])
  if(p.schema!=='proofcollective-candidate/v1'||p.scope!=='SYNTHETIC_LOCAL_RESEARCH'||p.purpose!=='capture-frame-usefulness/v1'||p.productionReleaseAuthorized!==false||p.reviewStatus!=='EXTERNAL_PRIVACY_SECURITY_AND_PARTNER_VALIDATION_REQUIRED')bad('RND_LEARNING_SCOPE_FORBIDDEN','Only isolated synthetic candidate records are accepted');
  if(canonicalize(p.featureOrder)!==canonicalize(['sharpness','glare_fraction','local_contrast','bias'])||!Array.isArray(p.model)||p.model.length!==4||p.model.some(x=>typeof x!=='number'||!Number.isFinite(x)||Math.abs(x)>20))bad('RND_LEARNING_MODEL_INVALID','Unsupported model or feature contract');
  for(const field of ['modelSha256','parentSha256','recipeSha256','datasetManifestSha256','holdoutManifestSha256','rollbackModelSha256'])if(!hex(p[field]))bad('RND_LEARNING_INVALID','Invalid lineage digest');
- const modelBytes=envelope.canonicalPayload.match(/"model":(\[[^\]]*\])/ )?.[1];
+ const modelBytes=signedModelArrayBytes(envelope.canonicalPayload);
  if(!modelBytes||sha256Hex(modelBytes)!==p.modelSha256)bad('RND_LEARNING_MODEL_INVALID','Model weights do not match their signed digest');
  const privacy=object(p.privacy),evaluation=object(p.evaluation),gate=object(p.qualityGate);
  onlyKeys(privacy,['epsilonMaxCumulative','delta','noiseMultiplier','accountant','sampling','adjacency','reservation']);
