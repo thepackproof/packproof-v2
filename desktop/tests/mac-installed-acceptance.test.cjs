@@ -80,6 +80,20 @@ test('cleanup requires explicit ownership and preserves pre-existing targets', t
   removeOwnedDirectory(owned, new Set([owned])); assert.equal(fs.existsSync(owned), false);
 });
 
+test('root-owned PKG cleanup uses only the exact owned application after non-symlink checks', () => {
+  const app = '/Applications/PackProof.app'; let exists = true, invocation;
+  const filesystem = { existsSync: () => exists, lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }), realpathSync: () => app, rmSync: () => { throw new Error('must not try Node deletion of root-owned package'); } };
+  const run = (...args) => { invocation = args; exists = false; };
+  assert.throws(() => removeOwnedDirectory(app, new Set(), run, filesystem), /NOT_OWNED/);
+  assert.equal(invocation, undefined);
+  assert.throws(() => removeOwnedDirectory(app, new Set([app]), run, { ...filesystem, lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => true }) }), /TARGET_CHANGED/);
+  assert.throws(() => removeOwnedDirectory(app, new Set([app]), run, { ...filesystem, realpathSync: () => '/Applications/Other.app' }), /TARGET_CHANGED/);
+  assert.equal(invocation, undefined);
+  removeOwnedDirectory(app, new Set([app]), run, filesystem);
+  assert.deepEqual(invocation, ['/usr/bin/sudo', ['-n', '/bin/rm', '-rf', '--', app], 'OWNED_APP_CLEANUP_FAILED']);
+  assert.equal(exists, false);
+});
+
 test('command failures retain fixed step/status details without private stderr or argument contents', () => {
   let caught;
   try { command('/usr/bin/example', ['private-value'], 'NATIVE_VERIFICATION_FAILED', { run: () => ({ status: 9, stderr: 'credential=private-value', stdout: 'private-user-record' }) }); } catch (error) { caught = error; }

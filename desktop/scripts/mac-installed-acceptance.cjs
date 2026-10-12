@@ -136,16 +136,17 @@ function assertCleanLocations(app, profile) {
   requireCondition(app === APP && !fs.existsSync(app) && !fs.existsSync(profile), 'PREEXISTING_APP_OR_PROFILE_PRESERVED');
   requireCondition(!fs.lstatSync('/Applications').isSymbolicLink(), 'APPLICATIONS_DIRECTORY_UNEXPECTED');
 }
-function removeOwnedDirectory(target, allowed, run = command) {
+function removeOwnedDirectory(target, allowed, run = command, filesystem = fs) {
   requireCondition(allowed.has(target), 'CLEANUP_TARGET_NOT_OWNED');
-  if (!fs.existsSync(target)) return;
-  requireCondition(fs.lstatSync(target).isDirectory() && !fs.lstatSync(target).isSymbolicLink() && fs.realpathSync(target) === target, 'CLEANUP_TARGET_CHANGED');
-  try { fs.rmSync(target, { recursive: true, force: false }); }
-  catch (error) {
-    requireCondition(target === APP && ['EACCES', 'EPERM'].includes(error.code), 'OWNED_DIRECTORY_CLEANUP_FAILED');
+  if (!filesystem.existsSync(target)) return;
+  requireCondition(filesystem.lstatSync(target).isDirectory() && !filesystem.lstatSync(target).isSymbolicLink() && filesystem.realpathSync(target) === target, 'CLEANUP_TARGET_CHANGED');
+  if (target === APP) {
+    // The real PKG installer owns its payload as root. Remove only this exact,
+    // originally absent, harness-owned app through the same CI privilege boundary.
+    // Node recursive deletion can wrap that ownership failure as ENOTEMPTY.
     run('/usr/bin/sudo', ['-n', '/bin/rm', '-rf', '--', APP], 'OWNED_APP_CLEANUP_FAILED');
-  }
-  requireCondition(!fs.existsSync(target), 'OWNED_DIRECTORY_REMAINS');
+  } else filesystem.rmSync(target, { recursive: true, force: false });
+  requireCondition(!filesystem.existsSync(target), 'OWNED_DIRECTORY_REMAINS');
 }
 
 async function runAcceptance(options) {
