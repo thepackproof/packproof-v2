@@ -1,24 +1,10 @@
+# Legacy CodeBuild default is intentionally inert. The image now requires a
+# repository-root archive, shared contracts and the authorized profile marker.
+# Governed API releases supply an exact-source buildspecOverride after review.
+# Never authenticate to ECR, build, push latest or update a service from here.
 version: 0.2
-
 phases:
   pre_build:
+    on-failure: ABORT
     commands:
-      - ls -la
-      - test -f src/index.ts
-      - test -f migrations/001_init.sql
-      - ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-      - ECR=$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
-      - IMAGE_TAG=${IMAGE_TAG:-$(date -u +%Y%m%d%H%M%S)}
-  build:
-    commands:
-      - docker build -t $ECR:$IMAGE_TAG -t $ECR:latest .
-  post_build:
-    commands:
-      - docker push $ECR:$IMAGE_TAG
-      - docker push $ECR:latest
-      - printf '%s' "$IMAGE_TAG" > image-tag.txt
-
-artifacts:
-  files:
-    - image-tag.txt
+      - 'echo "LEGACY_BACKEND_BUILD_DISABLED: use the governed repository-root API buildspec override described in docs/ADMIN_DEPLOYMENT_RUNBOOK.md." >&2; exit 2'

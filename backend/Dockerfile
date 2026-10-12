@@ -19,6 +19,8 @@ COPY --from=build /app/backend/dist ./dist
 COPY --from=build /app/packages/evidence-contracts /app/packages/evidence-contracts
 COPY backend/migrations ./migrations
 COPY backend/certs ./certs
+# Preserve the existing service's absolute TLS CA binding during this layout change.
+COPY backend/certs /app/certs
 COPY backend/openapi.json ./openapi.json
 COPY backend/rnd-openapi.json ./rnd-openapi.json
 COPY config/rnd/research-build.json /app/config/rnd/research-build.json

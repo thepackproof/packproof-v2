@@ -242,7 +242,7 @@ jobs:
           PACKPROOF_RELEASE_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
           PACKPROOF_REQUIRE_POSTGRES_RELEASE_GATES: '1'
         run: |
-          npm test -- tests/rnd-production-profile.test.ts tests/rnd-runtime-isolation.test.ts \
+          npm test -- tests/rnd-production-profile.test.ts tests/rnd-production-packaging.test.ts tests/rnd-runtime-isolation.test.ts \
             tests/rnd-sidecar-preview.test.ts tests/rnd-mobile-receipt.integration.test.ts tests/rnd-migrate.test.ts tests/rnd-migrate-postgres.integration.test.ts \
             tests/migrations.test.ts tests/release-postgres.integration.test.ts \
             --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/backend-receipts.xml" \
