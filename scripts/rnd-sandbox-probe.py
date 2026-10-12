@@ -13,6 +13,25 @@ import subprocess
 import sys
 import tempfile
 
+def native_tool_diagnostics():
+    """Fixed commands on synthetic CI hosts only; no jobs, files or environment dump."""
+    results = {}
+    for name, args in (
+        ('ffprobeVersion', ['/usr/bin/ffprobe', '-version']),
+        ('tesseractVersion', ['/usr/bin/tesseract', '--version']),
+        ('tesseractLanguages', ['/usr/bin/tesseract', '--list-langs']),
+    ):
+        try:
+            completed = subprocess.run(args, capture_output=True, text=True, timeout=5)
+            results[name] = {'exitCode': completed.returncode,
+                             'stdoutTail': completed.stdout[-4096:],
+                             'stderrTail': completed.stderr[-4096:]}
+        except subprocess.TimeoutExpired:
+            results[name] = {'failureClass': 'TIMEOUT'}
+        except OSError:
+            results[name] = {'failureClass': 'PROCESS_UNAVAILABLE'}
+    return results
+
 job = json.loads(Path(sys.argv[sys.argv.index('--job') + 1]).read_text())
 root = Path.cwd()
 
@@ -64,5 +83,5 @@ checks = {
     'fileSizeGrowthDenied': bounded_child("import os,errno\nf=os.open('limit-file.bin',os.O_WRONLY|os.O_CREAT,0o600)\ntry:os.ftruncate(f,134217729)\nexcept OSError as e:\n if e.errno==errno.EFBIG:print('DENIED')\nfinally:os.close(f)"),
     'fdExhaustionDenied': bounded_child("import os,errno\nfds=[]\ntry:\n for i in range(129):fds.append(os.open('/dev/null',os.O_RDONLY))\nexcept OSError as e:\n if e.errno==errno.EMFILE:print('DENIED')\nfinally:\n for fd in fds:os.close(fd)"),
 }
-print(json.dumps({'checks': checks, 'limits': limits, 'passed': all(checks.values())}))
+print(json.dumps({'checks': checks, 'limits': limits, 'nativeTools': native_tool_diagnostics(), 'passed': all(checks.values())}))
 sys.exit(0 if all(checks.values()) else 1)

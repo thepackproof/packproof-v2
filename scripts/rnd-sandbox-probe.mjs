@@ -57,7 +57,7 @@ try {
  const input={hostPort:listener.address().port,outsideCanary:join(outside,'unrelated.txt'),codeCanary:join(code,'code-canary.txt'),runtimeCanary:join(vision,'pyvenv.cfg'),hostNamespaces:Object.fromEntries(['net','pid','mnt','user'].map(name=>[name,readlinkSync(`/proc/self/ns/${name}`)]))};
  writeFileSync(join(job,'probe.json'),JSON.stringify(input),{mode:0o600});
  const probe=JSON.parse(execute(vision,code,'vision/worker.py',['--job',join(job,'probe.json'),'--output',job],null));
- report.checks=probe.checks;report.processLimits=probe.limits;assert.equal(probe.passed,true,'CONTAINMENT_PROBE_FAILED');
+ report.checks=probe.checks;report.processLimits=probe.limits;report.nativeTools=probe.nativeTools;assert.equal(probe.passed,true,'CONTAINMENT_PROBE_FAILED');
  report.stage='REAL_VISION_WORKER';
  const research=join(root,'research'),visionJob=privateDirectory('packproof-rnd-');
  const source=readFileSync(join(root,'backend/tests/fixtures/rnd-mask-source.png'));const sourceHash=hash(source);
@@ -70,8 +70,9 @@ try {
  const result=JSON.parse(readFileSync(join(visionJob,'result.json'),'utf8'));
  assert.equal(result.operationalState,'SUCCEEDED');assert.equal(result.qualification.customerFindingsEnabled,false);assert.equal(result.provenance.sources[0].sha256,largeHash);
  assert.equal(hash(readFileSync(join(visionJob,'source.png'))),largeHash);report.checks.realVisionWorker=true;report.checks.admittedSourceAbove32MiB=true;report.syntheticSourceByteLength=largeSource.length;
- assert.equal(result.provenance.ocrRuntime.state,'RECORDED');assert.match(result.provenance.ocrRuntime.executableSha256,/^[a-f0-9]{64}$/);assert.match(result.provenance.ocrRuntime.traineddataSha256,/^[a-f0-9]{64}$/);assert.equal(result.provenance.ocrRuntime.approvedRuntime,false);
- report.ocrRuntime=result.provenance.ocrRuntime;report.checks.observedOcrRuntimeHashes=true;
+ // Retain partial identity before testing it. Run the independent redaction
+ // check first so a missing OCR observation cannot hide its native-tool error.
+ report.ocrRuntime=result.provenance.ocrRuntime;
  report.stage='MALFORMED_MEDIA';
  const badJob=privateDirectory('packproof-rnd-'),bad=Buffer.from('\x89PNG\r\n\x1a\ninvalid-synthetic-container','binary');
  writeFileSync(join(badJob,'source.png'),bad,{mode:0o600});
@@ -83,6 +84,8 @@ try {
  writeFileSync(join(privacyJob,'masks.json'),JSON.stringify([{x:0,y:0,width:8,height:8,class:'manual'}]),{mode:0o600});
  const manifest=JSON.parse(execute(privacy,research,'privacy/redact.py',['create',join(privacyJob,'source.png'),join(privacyJob,'derivative.png'),'--masks',join(privacyJob,'masks.json'),'--kind','still','--unsigned-record']));
  assert.equal(manifest.record.sourceSha256,sourceHash);assert.equal(manifest.record.derivativeSha256,hash(readFileSync(join(privacyJob,'derivative.png'))));assert.equal(manifest.requiresServerSignature,true);assert.equal(manifest.record.review.state,'REQUIRED');assert.equal(hash(readFileSync(join(privacyJob,'source.png'))),sourceHash);report.checks.realUnsignedRedactionWorker=true;
+ report.stage='OCR_RUNTIME_IDENTITY';
+ assert.equal(report.ocrRuntime.state,'RECORDED');assert.match(report.ocrRuntime.executableSha256,/^[a-f0-9]{64}$/);assert.match(report.ocrRuntime.traineddataSha256,/^[a-f0-9]{64}$/);assert.equal(report.ocrRuntime.approvedRuntime,false);report.checks.observedOcrRuntimeHashes=true;
  report.launcherSha256=hash(readFileSync(join(root,'scripts/rnd-worker-sandbox.mjs')));report.probeSha256=hash(readFileSync(join(root,'scripts/rnd-sandbox-probe.py')));
  report.passed=Object.values(report.checks).every(value=>value===true);
  report.stage='COMPLETE';

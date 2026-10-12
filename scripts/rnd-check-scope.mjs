@@ -5,12 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 const groups = {
   backend: /^(backend\/|packages\/|research\/(vision|privacy|witness|benchmarks)\/|verifier\/|scripts\/(rnd-source-text|generate-rnd-client|check-rnd-openapi|requirements-rnd-contracts))/,
-  surfaces: /^(web\/|desktop\/|mobile\/|packages\/|config\/rnd\/)/,
+  surfaces: /^(web\/|desktop\/|mobile\/|packages\/|config\/rnd\/|backend\/src\/(capture\/|identifiers\/|domain\/proof-presentation\.|canonical\.|hash\.))/,
   federated: /^research\/federated\//,
   proof: /^research\/privacy\/zk\//,
   sandbox: /^(research\/(vision|privacy)\/|scripts\/rnd-(worker-sandbox|sandbox-probe))/,
   container: /^(backend\/|packages\/|research\/(backend\.Dockerfile|container-)|scripts\/rnd-container)/,
-  android: /^(mobile\/|packages\/evidence-contracts\/(?!generated-client|test\/generated-client)|config\/rnd\/)/,
+  android: /^(mobile\/|packages\/onboarding\/|packages\/evidence-contracts\/(?!generated-client|test\/generated-client)|config\/rnd\/|backend\/src\/(capture\/|identifiers\/|domain\/proof-presentation\.|canonical\.|hash\.))/,
   fragments: /^(research\/capture-fragments\/|packages\/evidence-contracts\/)/,
 };
 

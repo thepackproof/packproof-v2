@@ -3,10 +3,10 @@ name: Isolated native research compilation
 on:
   push:
     branches: ['rnd/**']
-    paths: ['mobile/**', 'packages/**', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
+    paths: ['mobile/**', 'packages/**', 'backend/src/capture/**', 'backend/src/identifiers/**', 'backend/src/domain/proof-presentation.*', 'backend/src/canonical.*', 'backend/src/hash.*', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
   pull_request:
     branches: [main]
-    paths: ['mobile/**', 'packages/**', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
+    paths: ['mobile/**', 'packages/**', 'backend/src/capture/**', 'backend/src/identifiers/**', 'backend/src/domain/proof-presentation.*', 'backend/src/canonical.*', 'backend/src/hash.*', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
   workflow_dispatch:
     inputs:
       include_ios:

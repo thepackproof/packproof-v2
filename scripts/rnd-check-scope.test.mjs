@@ -13,6 +13,12 @@ test('documentation reuses prior checks while changed research areas select thei
   assert.equal(scopeFor(['mobile/package-lock.json']).android, true);
   assert.equal(scopeFor(['packages/evidence-contracts/generated-client.mjs']).android, false);
   assert.equal(scopeFor(['packages/evidence-contracts/contracts.mjs']).android, true);
+  for (const file of ['packages/onboarding/model.ts', 'backend/src/capture/core.ts',
+    'backend/src/identifiers/gs1/dictionary.ts', 'backend/src/domain/proof-presentation.ts',
+    'backend/src/canonical.ts', 'backend/src/hash.ts']) {
+    assert.equal(scopeFor([file]).android, true, file);
+    assert.equal(scopeFor([file]).surfaces, true, file);
+  }
   assert.equal(scopeFor(['research/federated/requirements.lock']).federated, true);
   assert.equal(scopeFor(['research/privacy/zk/circuit.mjs']).proof, true);
   assert.equal(scopeFor(['packages/evidence-contracts/fragments.mjs']).fragments, true);
