@@ -12,9 +12,9 @@ The backend TypeScript build imports the versioned contracts from the repository
 ["--runtime","/opt/packproof-vision","--code","/app/research","--"]
 ```
 
-The Python executable must belong to that venv. The research code directory and interpreter are read-only; only the backend-owned mode-0700 job directory is writable. The launcher mounts neither the host root nor homes nor cloud configuration, clears the environment, creates separate PID/network/user namespaces, drops capabilities, and enforces process limits. It only permits the vision and redaction entry points. Source files are privately materialized and verified by digest before decoding. The parent kills the process group on timeout and deletes the job directory after completion or failure. Proving and witness processes have distinct trust/credential requirements and must use their own isolated service profiles.
+The Python executable must belong to that venv. The research code directory and interpreter are read-only. Writable storage is the backend-owned mode-0700 job directory and a private temporary filesystem; neither exposes other host jobs. The launcher mounts neither the host root nor homes nor cloud configuration, clears the environment, creates separate PID/network/user namespaces, drops capabilities, and enforces process limits. It only permits the vision and redaction entry points. Source files are privately materialized and verified by digest before decoding. The backend parent implements process-group termination on timeout and job-directory cleanup after completion or failure. Proving and witness processes have distinct trust/credential requirements and must use their own isolated service profiles.
 
-This environment rejected Bubblewrap's proc mount (`Operation not permitted`), including the permitted elevated check. Therefore **namespace containment is implemented but not validated on this host**. Do not remove the wrapper to claim a contained run: a failure must remain an operational failure. The explicitly documented local synthetic harness uses bounded subprocesses without network namespaces; its measurements are not decoder-isolation qualification.
+The inherited handoff at `41c9af8` reported a prior host rejecting Bubblewrap's proc mount (`Operation not permitted`); that remains a historical failed host observation. The current Windows development host cannot execute Linux namespaces. A separate Ubuntu CI runner subsequently passed the measured containment checks recorded below. Do not remove the wrapper to claim a contained run on an unsupported host: a failure must remain an operational failure. Ordinary local synthetic subprocess tests do not establish namespace containment.
 
 Before consented pilots, execute the actual worker under this wrapper on the target Linux host, verify that external network access and unrelated files are unavailable, run malicious decoder/resource fixtures, and record the host kernel, Bubblewrap version and results. No pilot or production decoder isolation is certified by this branch.
 
@@ -55,15 +55,49 @@ The same run executes the real vision worker on a committed synthetic image, rej
 a malformed synthetic image without issuing a finding, and creates a real unsigned,
 review-required redaction while checking source and derivative hashes. The sanitized
 JSON records host/kernel/tool/source identity, each check, and a static failure stage.
-It contains neither environment values nor private key material. A pass qualifies only
-this measured synthetic decoder boundary on that host; it does not establish physical
-accuracy, pilot readiness, or containment of the separate ZK and witness processes.
+It contains neither environment values nor private key material. Fixed native-tool version
+diagnostics and bounded synthetic-only failure tracebacks are retained for diagnosis.
+A pass verifies only these measured synthetic decoder boundaries on that host; it does
+not establish general malicious-decoder exploit resistance, physical accuracy, pilot
+readiness, or containment of the separate ZK and witness processes.
 
 The launcher now mounts an exact `/opt` base-Python installation when a venv points
 there (as with GitHub setup-python), validates exact job inputs and output boundaries,
-and rejects signing-key arguments. Vision process limits clamp to inherited ceilings
-rather than attempting to raise Bubblewrap's stricter CPU/file-size limits. Runtime
-qualification remains pending until a source-bound Linux result actually passes.
+and rejects signing-key arguments. Exact public BLAS/LAPACK alternative aliases may
+be read-only bound to validated library files under `/usr/lib` or `/lib`; the host
+`/etc/alternatives` directory is not mounted. Vision process limits clamp to inherited
+ceilings rather than attempting to raise Bubblewrap's stricter CPU/file-size limits.
+
+### Observed Linux result and retained failures
+
+On 2026-10-12 at 01:05:53 UTC, source `501280b2a59900f6f861c48327828ffc59138465`
+passed all 23 reported checks on Ubuntu 22.04, kernel `6.8.0-1064-azure`, Bubblewrap
+`0.6.1` in [decoder job 114621994436](https://github.com/thepackproof/packproof-v2/actions/runs/38190471528/job/114621994436).
+The job completed successfully at 01:06:00 UTC. Cancellation of the remaining obsolete
+backend job in the parent workflow does not turn this job result into a full-workflow pass.
+
+The measured result includes separate mount/user/PID/network namespaces, denied host
+loopback access, an empty IPv4 external routing table, hidden unrelated host files and
+`/etc/passwd`, read-only code/runtime, and writable private job/temporary storage. Actual
+allocation, file-growth and descriptor-exhaustion attempts were denied under the
+reported 2-GiB address-space, 128-MiB file and 128-descriptor ceilings. The 55-second CPU
+ceiling was inspected, not exhausted. No aggregate memory/disk quota, process-count
+limit, seccomp policy or timeout-kill adversarial test is claimed by this probe.
+
+The real vision worker accepted a valid 34,603,138-byte synthetic PNG and preserved its
+source digest. Malformed media failed without findings. The real still-image redaction
+worker produced an unsigned, review-required derivative with verified source/output
+digests. Tesseract 4.1.1 executable and explicitly selected English trained-data hashes
+were recorded; `approvedRuntime` remains false. The probe does not establish OCR
+accuracy, video-redaction containment, consented-media performance or deployment readiness.
+
+Failures are retained separately: source `39a82c5` at 00:53:49 UTC passed its hostile
+boundary checks but failed redaction; source `406c8c9` at 00:58:34 UTC stopped on the OCR
+provenance assertion before redaction. Source `64bf401` at 01:02:58 UTC then captured the
+actual `ffprobe` exit 127 from unresolved `libblas.so.3`, plus Tesseract 4's legacy language
+listing without a directory. The library-alias and explicit OCR-directory fixes were
+validated by the subsequent `501280b` run. These are distinct evidence checkpoints,
+not retroactive passes for the failed sources.
 
 ## Isolated container startup gate
 

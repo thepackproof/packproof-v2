@@ -2,8 +2,8 @@
   "schemaVersion": "packproof.rnd-status-ledger.v1",
   "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
   "sourcePlan": "PackProof_Executive_Overview_and_ASTRA_RnD_Development_Plan_2026-10-02(1).docx",
-  "lastUpdated": "2026-10-02T12:07:50.763236+00:00",
-  "status": "ENGINEERING_HANDOFF_WITH_EXTERNAL_QUALIFICATION_GATES",
+  "lastUpdated": "2026-10-12T01:23:36.995257Z",
+  "status": "LOCAL_ENGINEERING_VALIDATED_WITH_EXTERNAL_QUALIFICATION_GATES",
   "releaseAuthorization": "NOT_AUTHORIZED",
   "tickets": [
     {
@@ -2294,27 +2294,40 @@
       "codeReferences": [
         "research/federated/proofcollective/governance.py",
         "research/federated/proofcollective/protocol.py",
-        "backend/src/rnd/learning-registry.ts"
+        "backend/src/rnd/learning-registry.ts",
+        "research/federated/proofcollective/process_runner.py",
+        "research/federated/tests/test_process_runner.py"
       ],
-      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "commitReference": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
         "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
       ],
-      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "testPopulation": "Full Linux federated suite: 54 passed, 0 failed, 0 skipped, 2 warnings, including real 20-process TLS/SecAgg+ rounds. Earlier protocol populations overlap and are not summed. Zero independently governed partner organizations; no production release or automatic promotion.",
       "outputArtifacts": [
         "docs/rnd/validation/final-verification.json",
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
         "research/federated/reports/2026-10-02-mtls/transport-validation.json",
-        "docs/rnd/validation/ci-results.json"
+        "docs/rnd/validation/ci-results.json",
+        "docs/rnd/validation/2026-10-11-follow-up.json"
       ],
-      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
-      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "observedResult": "The process runner verifies signed model/recipe/roster/run/dataset bindings and checks each endpoint's fresh local consent before and after protocol stages and at a candidate-bound checkpoint after unmasking. Coordinator and separate endpoint-ledger withdrawal tests fail closed. This is a controlled laboratory consent authority, not independent organizational consent.",
+      "unresolvedLimitation": "One laboratory operator controls all endpoints and synthetic data. Independent enrolled partners, representative held-out utility, protected keys/ledgers, reviewed privacy/accountant/finite-precision/poisoning assumptions and target operator recovery remain unqualified. Checkpoint consent is not an atomic distributed withdrawal transaction; the coordinator sees the pre-noise aggregate.",
+      "nextDependency": "Independent partner governance and permitted data, specialist security/privacy/accounting review, an agreed commit/withdrawal boundary, representative utility and operator recovery qualification before any separately authorized pilot.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "historicalEngineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "historicalObservedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "historicalUnresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "historicalNextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "historicalCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "historicalTestPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "currentAssessmentProvisional": false,
+      "currentAssessmentSourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "currentEvidenceReference": "docs/rnd/validation/2026-10-11-follow-up.json",
+      "currentImplementationFollowUp": "The source-matched Linux federated suite passed all 54 tests. This closes the identified separate-process laboratory integration gap, without scientific or independent-organization qualification."
     },
     {
       "id": "F10-02",
@@ -2336,27 +2349,40 @@
         "research/federated/proofcollective/mtls.py",
         "research/federated/TRANSPORT.md",
         "research/federated/reports/2026-10-02-mtls/transport-validation.json",
-        "docs/rnd/validation/f10-status.json"
+        "docs/rnd/validation/f10-status.json",
+        "research/federated/proofcollective/process_runner.py",
+        "research/federated/tests/test_process_runner.py"
       ],
-      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "commitReference": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
         "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
       ],
-      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "testPopulation": "Full Linux federated suite: 54 passed, 0 failed, 0 skipped, 2 warnings, including real 20-process TLS/SecAgg+ rounds. Earlier protocol populations overlap and are not summed. Zero independently governed partner organizations; no production release or automatic promotion.",
       "outputArtifacts": [
         "docs/rnd/validation/final-verification.json",
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
         "research/federated/reports/2026-10-02-mtls/transport-validation.json",
-        "docs/rnd/validation/ci-results.json"
+        "docs/rnd/validation/ci-results.json",
+        "docs/rnd/validation/2026-10-11-follow-up.json"
       ],
-      "observedResult": "Actual TLS 1.3 mutually authenticated Flower protobuf exchanges validate CA/EKU/hostname/ALPN and exact leaf/node pins. Real 20-client/80-connection local transport run and 22 tests include ciphertext tamper, live profile expiry and persistent monotonic run admission across endpoint restarts. Operators remain controlled synthetic identities; the noisy candidate failed its quality gate and was not promoted.",
-      "unresolvedLimitation": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
-      "nextDependency": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "observedResult": "Reusable PartnerEndpoint owns its admitted Flower Context and loads only its exact consented local dataset. The configured TLS coordinator does not load participant data or invoke training locally. Actual 20-process rounds, signed-input and dataset substitution tests passed on Linux at the current source.",
+      "unresolvedLimitation": "One laboratory operator controls all endpoints and synthetic data. Independent enrolled partners, representative held-out utility, protected keys/ledgers, reviewed privacy/accountant/finite-precision/poisoning assumptions and target operator recovery remain unqualified. Checkpoint consent is not an atomic distributed withdrawal transaction; the coordinator sees the pre-noise aggregate.",
+      "nextDependency": "Independent partner governance and permitted data, specialist security/privacy/accounting review, an agreed commit/withdrawal boundary, representative utility and operator recovery qualification before any separately authorized pilot.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "historicalEngineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "historicalObservedResult": "Actual TLS 1.3 mutually authenticated Flower protobuf exchanges validate CA/EKU/hostname/ALPN and exact leaf/node pins. Real 20-client/80-connection local transport run and 22 tests include ciphertext tamper, live profile expiry and persistent monotonic run admission across endpoint restarts. Operators remain controlled synthetic identities; the noisy candidate failed its quality gate and was not promoted.",
+      "historicalUnresolvedLimitation": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
+      "historicalNextDependency": "Authorized independent partner enrollment/network identity infrastructure; no raw images or labels in telemetry.",
+      "currentAssessmentProvisional": false,
+      "currentAssessmentSourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "currentImplementationFollowUp": "The source-matched Linux federated suite passed all 54 tests. This closes the identified separate-process laboratory integration gap, without scientific or independent-organization qualification.",
+      "historicalCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "historicalTestPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "currentEvidenceReference": "docs/rnd/validation/2026-10-11-follow-up.json"
     },
     {
       "id": "F10-03",
@@ -2375,27 +2401,41 @@
       "codeReferences": [
         "research/federated/proofcollective/governance.py",
         "research/federated/proofcollective/protocol.py",
-        "backend/src/rnd/learning-registry.ts"
+        "backend/src/rnd/learning-registry.ts",
+        "research/federated/TRANSPORT.md",
+        "research/federated/proofcollective/process_runner.py",
+        "research/federated/tests/test_process_runner.py"
       ],
-      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "commitReference": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
         "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
       ],
-      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "testPopulation": "Full Linux federated suite: 54 passed, 0 failed, 0 skipped, 2 warnings, including real 20-process TLS/SecAgg+ rounds. Earlier protocol populations overlap and are not summed. Zero independently governed partner organizations; no production release or automatic promotion.",
       "outputArtifacts": [
         "docs/rnd/validation/final-verification.json",
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
         "research/federated/reports/2026-10-02-mtls/transport-validation.json",
-        "docs/rnd/validation/ci-results.json"
+        "docs/rnd/validation/ci-results.json",
+        "docs/rnd/validation/2026-10-11-follow-up.json"
       ],
-      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
-      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "observedResult": "ProfileGrid uses actual configured peer addresses and certificate pins with unmodified Flower SecAgg+. Real separate-process rounds, persistent increasing run IDs, unavailable/killed endpoints and bounded cleanup tests passed. Transport or consent errors abort the conservative runner; the original SecAgg+ dropout tests retain the 20-contributor reconstruction floor.",
+      "unresolvedLimitation": "One laboratory operator controls all endpoints and synthetic data. Independent enrolled partners, representative held-out utility, protected keys/ledgers, reviewed privacy/accountant/finite-precision/poisoning assumptions and target operator recovery remain unqualified. Checkpoint consent is not an atomic distributed withdrawal transaction; the coordinator sees the pre-noise aggregate.",
+      "nextDependency": "Independent partner governance and permitted data, specialist security/privacy/accounting review, an agreed commit/withdrawal boundary, representative utility and operator recovery qualification before any separately authorized pilot.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "historicalEngineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "historicalObservedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "historicalUnresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "historicalNextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "currentAssessmentProvisional": false,
+      "currentAssessmentSourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "currentImplementationFollowUp": "The source-matched Linux federated suite passed all 54 tests. This closes the identified separate-process laboratory integration gap, without scientific or independent-organization qualification.",
+      "historicalCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "historicalTestPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "currentEvidenceReference": "docs/rnd/validation/2026-10-11-follow-up.json"
     },
     {
       "id": "F10-04",
@@ -2414,27 +2454,40 @@
       "codeReferences": [
         "research/federated/proofcollective/governance.py",
         "research/federated/proofcollective/protocol.py",
-        "backend/src/rnd/learning-registry.ts"
+        "backend/src/rnd/learning-registry.ts",
+        "research/federated/proofcollective/process_runner.py",
+        "research/federated/tests/test_process_runner.py"
       ],
-      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "commitReference": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
         "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
       ],
-      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "testPopulation": "Full Linux federated suite: 54 passed, 0 failed, 0 skipped, 2 warnings, including real 20-process TLS/SecAgg+ rounds. Earlier protocol populations overlap and are not summed. Zero independently governed partner organizations; no production release or automatic promotion.",
       "outputArtifacts": [
         "docs/rnd/validation/final-verification.json",
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
         "research/federated/reports/2026-10-02-mtls/transport-validation.json",
-        "docs/rnd/validation/ci-results.json"
+        "docs/rnd/validation/ci-results.json",
+        "docs/rnd/validation/2026-10-11-follow-up.json"
       ],
-      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
-      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "observedResult": "The coordinator reserves persistent cumulative privacy spend before aggregation; exhausted budget and failed attempts cannot reset or refund prior spend. The successful Linux suite verifies budget rejection leaves no new candidate. Central DP still exposes the pre-noise aggregate to the coordinator, with specialist assumptions unqualified.",
+      "unresolvedLimitation": "One laboratory operator controls all endpoints and synthetic data. Independent enrolled partners, representative held-out utility, protected keys/ledgers, reviewed privacy/accountant/finite-precision/poisoning assumptions and target operator recovery remain unqualified. Checkpoint consent is not an atomic distributed withdrawal transaction; the coordinator sees the pre-noise aggregate.",
+      "nextDependency": "Independent partner governance and permitted data, specialist security/privacy/accounting review, an agreed commit/withdrawal boundary, representative utility and operator recovery qualification before any separately authorized pilot.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "historicalEngineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "historicalObservedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "historicalUnresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "historicalNextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "historicalCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "historicalTestPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "currentAssessmentProvisional": false,
+      "currentAssessmentSourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "currentEvidenceReference": "docs/rnd/validation/2026-10-11-follow-up.json",
+      "currentImplementationFollowUp": "The source-matched Linux federated suite passed all 54 tests. This closes the identified separate-process laboratory integration gap, without scientific or independent-organization qualification."
     },
     {
       "id": "F10-05",
@@ -2491,27 +2544,41 @@
       "codeReferences": [
         "research/federated/proofcollective/governance.py",
         "research/federated/proofcollective/protocol.py",
-        "backend/src/rnd/learning-registry.ts"
+        "backend/src/rnd/learning-registry.ts",
+        "research/federated/TRANSPORT.md",
+        "research/federated/proofcollective/process_runner.py",
+        "research/federated/tests/test_process_runner.py"
       ],
-      "commitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "commitReference": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
       "schemaModelPolicyVersion": "See exact code commit, pinned dependency locks, packages/evidence-contracts/schemas and feature policy/method digests; no production-qualified policy.",
       "exactTestCommand": [
         "PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests -q",
         "npm --prefix backend test -- tests/rnd-learning-registry.test.ts"
       ],
-      "testPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "testPopulation": "Full Linux federated suite: 54 passed, 0 failed, 0 skipped, 2 warnings, including real 20-process TLS/SecAgg+ rounds. Earlier protocol populations overlap and are not summed. Zero independently governed partner organizations; no production release or automatic promotion.",
       "outputArtifacts": [
         "docs/rnd/validation/final-verification.json",
         "docs/rnd/validation/final-audit.json",
         "docs/rnd/validation/f10-status.json",
         "research/federated/reports/2026-10-02/report.json",
         "research/federated/reports/2026-10-02-mtls/transport-validation.json",
-        "docs/rnd/validation/ci-results.json"
+        "docs/rnd/validation/ci-results.json",
+        "docs/rnd/validation/2026-10-11-follow-up.json"
       ],
-      "observedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
-      "unresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "nextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "observedResult": "The new round path writes the existing signed candidate format only after protocol, accounting and final participant checkpoint checks. Incomplete aggregation, withdrawal, unavailable peers and budget rejection leave no new candidate or active-registry change; prior candidates remain immutable. Existing promotion/rollback gates remain, and no model is automatically promoted.",
+      "unresolvedLimitation": "One laboratory operator controls all endpoints and synthetic data. Independent enrolled partners, representative held-out utility, protected keys/ledgers, reviewed privacy/accountant/finite-precision/poisoning assumptions and target operator recovery remain unqualified. Checkpoint consent is not an atomic distributed withdrawal transaction; the coordinator sees the pre-noise aggregate.",
+      "nextDependency": "Independent partner governance and permitted data, specialist security/privacy/accounting review, an agreed commit/withdrawal boundary, representative utility and operator recovery qualification before any separately authorized pilot.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "historicalEngineeringStatus": "ENGINEERED_LOCAL_SCOPE",
+      "historicalObservedResult": "Local engineering verified at the explicitly documented scope; see linked per-feature measurements.",
+      "historicalUnresolvedLimitation": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "historicalNextDependency": "At least20 independent consented partners, real partner/device heldouts, protected cumulative ledger, finite-precision/accountant/poisoning/security review. Synthetic DP candidate did not beat local-only baseline; no automatic promotion.",
+      "currentAssessmentProvisional": false,
+      "currentAssessmentSourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "currentImplementationFollowUp": "The source-matched Linux federated suite passed all 54 tests. This closes the identified separate-process laboratory integration gap, without scientific or independent-organization qualification.",
+      "historicalCommitReference": "08892e142ad383680fd4b9cc085a272a69daa543",
+      "historicalTestPopulation": "22 Python and5 registry tests;24 synthetic clients/two rounds; actual20-client80-connection mTLS run;0 independent consented partners;0 promotions.",
+      "currentEvidenceReference": "docs/rnd/validation/2026-10-11-follow-up.json"
     },
     {
       "id": "CORE-01",
@@ -2917,10 +2984,15 @@
         "docs/rnd/validation/native-status.json",
         "docs/rnd/validation/ci-results.json"
       ],
-      "observedResult": "120 requests/minute/actor admission plus32 active jobs per tenant and20 comparisons per hour under tenant advisory lock; permissions, source ownership, consent and immutable reviewer logs tested. OS namespace sandbox must be qualified on a host that permits it.",
-      "unresolvedLimitation": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
-      "nextDependency": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "observedResult": "Existing tenant admission, permissions, source ownership, consent and immutable review controls retain their historical tests. Follow-up source 501280b passed all 23 synthetic Linux sandbox checks: namespace/network/filesystem controls, actual address-space/file-size/file-descriptor limit denials, CPU ceiling inspection, bounded vision input, malformed-input rejection, unsigned still redaction and observed OCR runtime bytes.",
+      "unresolvedLimitation": "The measured synthetic sandbox checks are not malicious-decoder exploit qualification, cgroup/process-count or aggregate quota enforcement, or target deployment-host acceptance. Key management, retention, security/privacy and hostile-decoder review remain required before any pilot.",
+      "nextDependency": "Independent hostile-decoder/security review and acceptance on the intended deployment host, with key/retention/privacy controls and any additional workload-wide resource limits required by that threat model.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "historicalObservedResult": "120 requests/minute/actor admission plus32 active jobs per tenant and20 comparisons per hour under tenant advisory lock; permissions, source ownership, consent and immutable reviewer logs tested. OS namespace sandbox must be qualified on a host that permits it.",
+      "historicalUnresolvedLimitation": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
+      "historicalNextDependency": "Target Linux host allowing Bubblewrap; malicious-decoder sandbox tests; key/retention/security review before pilot.",
+      "currentAssessmentSourceCommit": "501280b2a59900f6f861c48327828ffc59138465",
+      "currentEvidenceReference": "docs/rnd/validation/2026-10-11-follow-up.json"
     },
     {
       "id": "CORE-10",
@@ -2976,5 +3048,228 @@
     "ENGINEERED_LOCAL_SCOPE": 60,
     "EXTERNAL_QUALIFICATION_BLOCKED": 11
   },
-  "commandContext": "Commands run from repository root except explicit cd; private environments are installed from committed locks. Exact feature artifacts disambiguate overlapping test populations; counts must not be added."
+  "commandContext": "Commands run from repository root except explicit cd; private environments are installed from committed locks. Exact feature artifacts disambiguate overlapping test populations; counts must not be added.",
+  "historicalSnapshot": {
+    "asOf": "2026-10-02T12:07:50.763236+00:00",
+    "sourceCommit": "08892e142ad383680fd4b9cc085a272a69daa543",
+    "branch": "rnd/trust-infrastructure-2026-10-02",
+    "ticketCounts": {
+      "ENGINEERED_LOCAL_SCOPE": 60,
+      "EXTERNAL_QUALIFICATION_BLOCKED": 11
+    },
+    "scope": "Original dated local engineering assessment; counts and evidence do not establish current remote-runner completeness or scientific qualification."
+  },
+  "currentEngineeringSnapshot": {
+    "sourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+    "branch": "rnd/trust-completion-2026-10-11",
+    "observedAt": "2026-10-12T01:23:36.995257Z",
+    "status": "LOCAL_ENGINEERING_VALIDATED_EXTERNAL_QUALIFICATION_GATES_REMAIN",
+    "releaseAuthorized": false,
+    "currentCountsProvisional": false,
+    "implementedChanges": [
+      {
+        "area": "Consent admission",
+        "result": "Experimental analysis consent follows enabled collection capabilities without enabling verified capture; learning consent remains separately gated and withdrawal remains available after kill.",
+        "code": [
+          "backend/src/rnd/config.ts",
+          "backend/src/rnd/capture.ts"
+        ],
+        "tests": [
+          "backend/tests/rnd-evidence.test.ts"
+        ]
+      },
+      {
+        "area": "Sidecar review",
+        "result": "Authorized exact-byte native sidecar retrieval plus explicit lossless PGM-to-PNG display conversion; current proof authorization, consent, flags, length and SHA256 are checked. Web, desktop and mobile no longer silently substitute parent video for a sidecar.",
+        "code": [
+          "backend/src/rnd/capture-sidecars.ts",
+          "backend/src/rnd/sidecar-preview.ts",
+          "web/src/rnd/RndWebPanel.tsx",
+          "desktop/src/main/api.ts",
+          "mobile/src/research/ResearchSidecarPreview.tsx"
+        ],
+        "tests": [
+          "backend/tests/rnd-capture-sidecars.test.ts",
+          "backend/tests/rnd-sidecar-preview.test.ts",
+          "web/src/rnd/RndReview.test.tsx",
+          "desktop/tests/rnd-isolation.test.ts"
+        ]
+      },
+      {
+        "area": "Witness execution lease",
+        "result": "Stage-boundary renewal keeps the existing 90-second unexpired-token fence and caps each attempt at 600 seconds from acquisition. No background keepalive, expired lease resurrection or migration.",
+        "code": [
+          "backend/src/rnd/witness-lease.ts",
+          "backend/src/rnd/worker.ts",
+          "backend/src/rnd/analyses.ts"
+        ],
+        "tests": [
+          "backend/tests/rnd-witness-lease.test.ts",
+          "backend/tests/rnd-witness-stage.test.ts"
+        ]
+      },
+      {
+        "area": "Runtime portability and method identity",
+        "result": "Filesystem URLs use fileURLToPath; method identity includes imported vision helpers and the lease implementation. OCR records observed executable/language-data bytes, not approved model status.",
+        "code": [
+          "backend/src/rnd/method.ts",
+          "research/vision/ocr_runtime.py"
+        ],
+        "tests": [
+          "backend/tests/rnd-method-portability.test.ts",
+          "research/benchmarks/test_ocr_runtime.py"
+        ]
+      },
+      {
+        "area": "Isolated container",
+        "result": "Non-root private local runtime includes PGlite and shared contracts. Exact-source CI container job passed readiness, closed capabilities and restart preservation with network disabled; this is not a decoder or deployment qualification.",
+        "code": [
+          "research/backend.Dockerfile",
+          "research/container-entry.mjs",
+          "research/container-smoke.mjs"
+        ],
+        "ciJobId": 114620533850
+      },
+      {
+        "area": "Native optional capture queue",
+        "result": "Atomic queue admission and final marker; queued optional work is skipped after disable, while already executing work may finish. No physical recording continuity or performance claim."
+      },
+      {
+        "area": "Source storage deduplication follow-up",
+        "result": "Additive migration removes only global blob/version uniqueness. Separate source/evidence, Proof, tenant, subject and capture-session identities remain immutable and authorized. Exact-source 8bfd9ba backend integration passed.",
+        "code": [
+          "backend/migrations/087_rnd_source_storage_dedup.sql"
+        ],
+        "tests": [
+          "backend/tests/rnd-capture-sidecars.test.ts",
+          "backend/tests/rnd-evidence.test.ts"
+        ]
+      },
+      {
+        "area": "Separate-process federated runner",
+        "result": "Profile-bound endpoint/coordinator APIs and synthetic loopback wrapper execute real 20-process TLS/SecAgg+ tests; exact signed model/recipe/roster/data/run binding, fresh consent, monotonic restart admission, privacy reservation and no-candidate failure gates passed. No automatic promotion or independent-partner qualification.",
+        "code": [
+          "research/federated/proofcollective/process_runner.py",
+          "research/federated/proofcollective/protocol.py",
+          "research/federated/proofcollective/cli.py"
+        ],
+        "tests": [
+          "research/federated/tests/test_process_runner.py"
+        ],
+        "sourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+        "ciJobId": 114624979663
+      }
+    ],
+    "validationLimits": [
+      "Local focused test populations and historical suites overlap and must not be summed.",
+      "Backend 406c8c9 failure is preserved separately; all 191 selected backend tests passed at repair snapshot 8bfd9ba.",
+      "Decoder containment failed at 406c8c9 and passed separately at 501280b; record each source and scope without transferring outcomes.",
+      "No physical specimen, native device acceptance, independent witness or independently controlled partner is established by these checks.",
+      "The 54-test federated suite includes earlier protocol tests and new process cases; do not add overlapping test populations.",
+      "Twenty separate endpoint processes are controlled by one laboratory operator; zero independent organizations or production partner deployment is established.",
+      "Participant checkpoint acknowledgments are not atomic distributed withdrawal; specialist review and a governed commit/withdrawal boundary remain required."
+    ],
+    "priorCi": {
+      "runId": 38190001157,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190001157",
+      "sourceCommit": "406c8c9297319316ea623e4a19a1f28fc3d72085",
+      "state": "COMPLETED_FAILURE",
+      "backendProtocols": "FAILED",
+      "decoderContainment": "FAILED_REQUIRES_REPAIR",
+      "passedJobs": [
+        "source-isolation",
+        "surfaces",
+        "image-transform-proof",
+        "dependency-audit",
+        "federated-protocol",
+        "isolated-container"
+      ],
+      "allChecksPassed": false,
+      "backendCompletedAt": "2026-10-12T01:01:55Z",
+      "backendTestCounts": {
+        "filesPassed": 25,
+        "filesFailed": 2,
+        "testsPassed": 182,
+        "testsFailed": 9
+      },
+      "backendFailureAnalysis": [
+        "Eight failures followed a consent regression leaving withdrawn work queued; the follow-up test drains it through real terminal worker failure.",
+        "One failure exposed global blob/version uniqueness preventing distinct native recordings with identical frame bytes; additive migration 087 retains identity and authorization constraints."
+      ]
+    },
+    "separateScopeChecks": [
+      {
+        "sourceCommit": "501280b2a59900f6f861c48327828ffc59138465",
+        "runId": 38190471528,
+        "jobId": 114621994436,
+        "scope": "decoder-containment",
+        "conclusion": "success",
+        "overallRun": "cancelled intentionally after successful containment; obsolete backend work replaced"
+      },
+      {
+        "sourceCommit": "64bf40138c398bbae8a42daae12ea7d07923cee5",
+        "runId": 38190294655,
+        "scope": "Android and live fragments",
+        "conclusion": "success",
+        "ios": "skipped"
+      }
+    ],
+    "validationReference": "docs/rnd/validation/2026-10-11-follow-up.json",
+    "backendRepairCi": {
+      "runId": 38190599091,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190599091",
+      "sourceCommit": "8bfd9ba458010aeba7bb1ea47c46e1ce83cc5739",
+      "state": "COMPLETED_SUCCESS",
+      "allChecksPassed": true,
+      "backendProtocols": "SUCCESS",
+      "backendCompletedAt": "2026-10-12T01:10:22Z",
+      "backendTestCounts": {
+        "filesPassed": 27,
+        "filesFailed": 0,
+        "testsPassed": 191,
+        "testsFailed": 0,
+        "testsSkipped": 0
+      },
+      "passedJobs": [
+        "source-isolation",
+        "backend-protocols",
+        "isolated-container",
+        "dependency-audit"
+      ],
+      "skippedUnchangedJobs": [
+        "surfaces",
+        "image-transform-proof",
+        "decoder-containment",
+        "federated-protocol"
+      ],
+      "allChecksPassedMeaning": "Every selected job passed; unchanged jobs explicitly skipped, not rerun."
+    },
+    "ci": {
+      "runId": 38191469774,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38191469774",
+      "sourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "state": "COMPLETED_SUCCESS",
+      "passedJobs": [
+        "source-isolation",
+        "federated-protocol"
+      ],
+      "federatedTests": {
+        "passed": 54,
+        "failed": 0,
+        "skipped": 0,
+        "warnings": 2
+      },
+      "skippedUnchangedJobs": [
+        "backend-protocols",
+        "isolated-container",
+        "surfaces",
+        "image-transform-proof",
+        "decoder-containment",
+        "dependency-audit"
+      ],
+      "allChecksPassed": true,
+      "allChecksPassedMeaning": "Every selected job passed; unchanged jobs explicitly skipped, with source-bound evidence in the current validation receipt."
+    }
+  },
+  "currentValidationReference": "docs/rnd/validation/2026-10-11-follow-up.json"
 }
