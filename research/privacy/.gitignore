@@ -1,0 +1,7 @@
+*.pem
+*.sqlite
+*.sqlite-*
+*.db
+*.db.lock
+PRIVATE-*
+prover-cache/

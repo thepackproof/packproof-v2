@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/platform-assurance.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "challengeId",
+    "intentId",
+    "proofId",
+    "actorId",
+    "tenantId",
+    "purpose",
+    "inventoryDigest",
+    "requestHash",
+    "platform",
+    "state",
+    "reasonCodes",
+    "components",
+    "limitations",
+    "verifiedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.platform-assurance.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "challengeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "intentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "actorId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "purpose": {
+      "enum": [
+        "REGISTER_KEY",
+        "CLOSE_INVENTORY"
+      ]
+    },
+    "inventoryDigest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "platform": {
+      "enum": [
+        "android",
+        "ios"
+      ]
+    },
+    "state": {
+      "enum": [
+        "VALIDATED",
+        "INVALID",
+        "UNSUPPORTED"
+      ]
+    },
+    "reasonCodes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      },
+      "maxItems": 100
+    },
+    "components": {
+      "type": "object"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      },
+      "maxItems": 100
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

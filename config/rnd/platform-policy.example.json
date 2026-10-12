@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "packproof.platform-policy.v1",
+  "apple": {
+    "appId": "REPLACE_TEAM_ID.com.packproof.mobile.research",
+    "environment": "development",
+    "trustedRootCertificatesPem": [],
+    "trustPolicyId": "unconfigured-research-policy",
+    "trustPolicyExpiresAt": 0,
+    "allowedValidationCategories": [3],
+    "allowedBundleVersions": [],
+    "allowLegacyWithoutExtensions": false,
+    "revokedKeyIds": []
+  },
+  "android": {
+    "packageName": "com.packproof.mobile.research",
+    "certificateSha256Digests": [],
+    "minimumVersionCode": "1",
+    "requiredDeviceVerdicts": ["MEETS_DEVICE_INTEGRITY"],
+    "requireLicensed": true,
+    "maxTokenAgeMs": 120000
+  }
+}

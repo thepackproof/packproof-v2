@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packproof.vision-result.v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "feature",
+    "operationalState",
+    "findingState",
+    "observations",
+    "artifacts",
+    "coverage",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.vision-result.v1"
+    },
+    "feature": {
+      "enum": [
+        "proofprint",
+        "proofsight",
+        "prooftwin",
+        "prooflive",
+        "proofpilot",
+        "proofmatch"
+      ]
+    },
+    "operationalState": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "findingState": {
+      "enum": [
+        "RECORDED",
+        "INCONCLUSIVE",
+        "NOT_CHECKED",
+        "UNSUPPORTED"
+      ]
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "sourceRefs"
+        ],
+        "properties": {
+          "sourceRefs": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "sha256",
+          "byteLength",
+          "mimeType",
+          "sourceRefs"
+        ]
+      }
+    },
+    "coverage": {
+      "type": "object"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

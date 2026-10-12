@@ -17,6 +17,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+throw "LEGACY_BACKEND_DEPLOY_DISABLED: this flat-source deploy path cannot build the repository-root backend image or preserve the current service configuration. Use the governed exact-source API release procedure in docs/ADMIN_DEPLOYMENT_RUNBOOK.md with a reviewed repository-root buildspec override. No cloud or filesystem mutation has been attempted."
+# Historical implementation below is retained for reference only. The guard above
+# intentionally cannot be bypassed by ReviewedReleaseSha or another parameter.
 $currentReleaseSha = (& git rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $ReviewedReleaseSha -or $ReviewedReleaseSha -ne $currentReleaseSha) {
   throw "Direct legacy deployment is gated. Use deploy-staging-current.ps1 after reviewing the exact release and runtime preservation."

@@ -1,0 +1,258 @@
+name: Android production receipt integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'backend/**'
+      - 'packages/**'
+      - 'config/rnd/**'
+      - 'scripts/rnd*'
+      - '.github/workflows/android-rnd-integration-checks.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'backend/**'
+      - 'packages/**'
+      - 'config/rnd/**'
+      - 'scripts/rnd*'
+      - '.github/workflows/android-rnd-integration-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-rnd-integration-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: '1'
+  EXPO_NO_TELEMETRY: '1'
+
+# Tests use disposable runners/databases. No signing, EAS build, cloud credentials,
+# production API requests or publication occur in this workflow.
+jobs:
+  android-native:
+    name: Production Android identity and native receipts
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.head_ref == 'release/android-rnd-production-2026-10-11' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
+      - name: Resolve the committed production profile and assert its bounded identity
+        run: |
+          node <<'JS'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const {execFileSync} = require('node:child_process');
+          const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
+          assert.equal(sourceCommit, process.env.GITHUB_SHA);
+          const profiles = JSON.parse(fs.readFileSync('mobile/eas.json', 'utf8')).build;
+          const seen = new Set();
+          function profileEnv(name) {
+            assert(!seen.has(name), 'EAS profile inheritance cycle');
+            seen.add(name);
+            const profile = profiles[name];
+            assert(profile, 'Missing EAS profile');
+            return {...(profile.extends ? profileEnv(profile.extends) : {}), ...profile.env};
+          }
+          const values = {...profileEnv('production'), EAS_BUILD_PROFILE:'production', EAS_BUILD_PLATFORM:'android',
+            EAS_BUILD_GIT_COMMIT_HASH:sourceCommit, EXPO_PUBLIC_PACKPROOF_BUILD_SHA:sourceCommit,
+            EXPO_PUBLIC_PACKPROOF_RND:'false', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE:'false',
+            EXPO_PUBLIC_PACKPROOF_RND_PLATFORM_ASSURANCE:'false', EXPO_PUBLIC_PACKPROOF_RND_KEY_ATTESTATION:'false'};
+          for (const [key,value] of Object.entries(values)) {
+            assert(/^(EXPO_PUBLIC_|PACKPROOF_ANDROID_VERSION_CODE$|EAS_BUILD_(PROFILE|PLATFORM|GIT_COMMIT_HASH)$)/.test(key), 'Unexpected non-public build variable');
+            assert.equal(typeof value, 'string');
+            assert(!/[\r\n]/.test(value), 'Multiline build variable');
+            process.env[key] = value;
+          }
+          assert.equal(values.EXPO_PUBLIC_PACKPROOF_AUTH_MODE, 'cognito');
+          assert.equal(new URL(values.EXPO_PUBLIC_PACKPROOF_API_BASE_URL).protocol, 'https:');
+          assert.equal(values.EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION, 'true');
+          for (const key of ['EXPO_PUBLIC_COGNITO_USER_POOL_ID','EXPO_PUBLIC_COGNITO_CLIENT_ID','EXPO_PUBLIC_COGNITO_REGION']) assert(values[key]);
+          const config = require(path.resolve('mobile/app.config.js')).expo;
+          assert.equal(config.android.package, 'com.packproof.mobile');
+          assert.equal(config.android.versionCode, 62);
+          assert.equal(config.android.usesCleartextTraffic, false);
+          assert.equal(config.extra.packproofResearch, false);
+          assert.equal(config.extra.packproofResearchProduction, true);
+          assert.equal(config.extra.packproofResearchProfile, 'capture-receipts-v1');
+          assert.equal(config.extra.packproofBuildSha, sourceCommit);
+          assert.equal(config.extra.packproofApiBaseUrl, values.EXPO_PUBLIC_PACKPROOF_API_BASE_URL);
+          assert.equal(config.extra.packproofInternalReview, undefined);
+          fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(values).map(([key,value]) => `${key}=${value}\n`).join(''));
+          const receipt = {schema:'packproof.android-receipt-ci.v1', sourceCommit, ref:process.env.GITHUB_REF,
+            event:process.env.GITHUB_EVENT_NAME, runId:process.env.GITHUB_RUN_ID, runAttempt:process.env.GITHUB_RUN_ATTEMPT,
+            profile:'production', package:config.android.package, version:config.version, versionCode:config.android.versionCode,
+            researchLocal:config.extra.packproofResearch, productionProfile:config.extra.packproofResearchProfile,
+            apiBaseUrl:config.extra.packproofApiBaseUrl, authMode:values.EXPO_PUBLIC_PACKPROOF_AUTH_MODE,
+            platformAssurance:false, keyAttestation:false, signedBinaryBuilt:false, physicalDeviceTested:false,
+            configSha256:crypto.createHash('sha256').update(JSON.stringify(config)).digest('hex')};
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'android-production-identity.json'), JSON.stringify(receipt,null,2)+'\n');
+          JS
+      - name: Install locked mobile dependencies
+        run: npm ci --prefix mobile 2>&1 | tee "$RUNNER_TEMP/android-dependencies.log"
+      - name: Generate a disposable production-configured Android project
+        working-directory: mobile
+        run: node node_modules/expo/bin/cli prebuild --platform android --no-install 2>&1 | tee "$RUNNER_TEMP/android-prebuild.log"
+      - name: Verify the generated package and version
+        run: |
+          node <<'JS'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const gradle = fs.readFileSync('mobile/android/app/build.gradle','utf8');
+          assert.match(gradle, /applicationId\s+["']com\.packproof\.mobile["']/);
+          assert.match(gradle, /versionCode\s+62\b/);
+          assert(!gradle.includes('com.packproof.mobile.research'));
+          const receiptPath = `${process.env.RUNNER_TEMP}/android-production-identity.json`;
+          const receipt = JSON.parse(fs.readFileSync(receiptPath,'utf8'));
+          receipt.generatedPackageVerified = true;
+          receipt.generatedGradleSha256 = require('node:crypto').createHash('sha256').update(gradle).digest('hex');
+          fs.writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n');
+          JS
+      - name: Compile actual release Kotlin and execute native receipt regression tests
+        working-directory: mobile/android
+        run: |
+          ./gradlew :packproof-unified-camera:compileReleaseKotlin :packproof-unified-camera:testDebugUnitTest \
+            --tests 'com.packproof.unifiedcamera.Research*' --no-daemon --max-workers=2 \
+            -Dorg.gradle.jvmargs=-Xmx3072m 2>&1 | tee "$RUNNER_TEMP/android-native-receipts.log"
+      - name: Compile the production Android JavaScript bundle
+        working-directory: mobile
+        run: node node_modules/expo/bin/cli export --platform android --output-dir dist/android-receipt-ci --max-workers 2 2>&1 | tee "$RUNNER_TEMP/android-metro.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-production-receipt-native-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/android-production-identity.json
+            ${{ runner.temp }}/android-*.log
+            mobile/modules/packproof-unified-camera/android/build/test-results/**
+            mobile/android/**/test-results/**
+
+  mobile-receipts:
+    name: Mobile consent, recovery and receipt integration
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.head_ref == 'release/android-rnd-production-2026-10-11' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mobile/package-lock.json
+      - name: Record the exact source tested
+        run: |
+          node -e 'const fs=require("node:fs"),cp=require("node:child_process");const sourceCommit=cp.execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();require("node:assert/strict").equal(sourceCommit,process.env.GITHUB_SHA);fs.writeFileSync(process.env.RUNNER_TEMP+"/mobile-source.json",JSON.stringify({sourceCommit,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,ref:process.env.GITHUB_REF,event:process.env.GITHUB_EVENT_NAME},null,2)+"\n")'
+      - name: Install locked test dependencies
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix mobile
+      - name: Typecheck the integrated mobile app
+        run: npm run typecheck --prefix mobile 2>&1 | tee "$RUNNER_TEMP/mobile-typecheck.log"
+      - name: Test production consent, native gating, receipt retry and ordinary recovery
+        working-directory: mobile
+        run: |
+          node --import ../backend/node_modules/tsx/dist/loader.mjs --test \
+            tests/research/*.test.ts tests/upload-handoff.test.ts tests/capture-limits.test.ts tests/capture-recovery.test.ts \
+            2>&1 | tee "$RUNNER_TEMP/mobile-receipts.log"
+      - name: Test Android release identity and source binding
+        working-directory: mobile
+        run: node --test tests/release-identity.test.cjs tests/android-build-provenance.test.cjs 2>&1 | tee "$RUNNER_TEMP/mobile-release-config.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-production-receipt-mobile-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/mobile-source.json
+            ${{ runner.temp }}/mobile-*.log
+
+  backend-receipts:
+    name: Receipt API and isolated PostgreSQL migrations
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.head_ref == 'release/android-rnd-production-2026-10-11' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: packproof_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d packproof_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Record the exact source tested
+        run: |
+          node -e 'const fs=require("node:fs"),cp=require("node:child_process");const sourceCommit=cp.execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();require("node:assert/strict").equal(sourceCommit,process.env.GITHUB_SHA);fs.writeFileSync(process.env.RUNNER_TEMP+"/backend-source.json",JSON.stringify({sourceCommit,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,ref:process.env.GITHUB_REF,event:process.env.GITHUB_EVENT_NAME,database:"disposable PostgreSQL 16 service"},null,2)+"\n")'
+      - name: Install locked backend dependencies
+        run: npm ci --prefix backend
+      - name: Install media tools required by existing release invariants
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Typecheck and compile the integrated backend
+        run: |
+          npm run typecheck --prefix backend 2>&1 | tee "$RUNNER_TEMP/backend-typecheck.log"
+          npm run build --prefix backend 2>&1 | tee "$RUNNER_TEMP/backend-build.log"
+      - name: Verify bounded receipt operations and real migration isolation
+        working-directory: backend
+        env:
+          PACKPROOF_MIGRATION_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
+          PACKPROOF_RELEASE_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
+          PACKPROOF_REQUIRE_POSTGRES_RELEASE_GATES: '1'
+        run: |
+          npm test -- tests/rnd-production-profile.test.ts tests/rnd-production-packaging.test.ts tests/rnd-runtime-isolation.test.ts \
+            tests/rnd-sidecar-preview.test.ts tests/rnd-mobile-receipt.integration.test.ts tests/rnd-migrate.test.ts tests/rnd-migrate-postgres.integration.test.ts tests/rnd-learning-registry.test.ts \
+            tests/migrations.test.ts tests/release-postgres.integration.test.ts \
+            --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/backend-receipts.xml" \
+            2>&1 | tee "$RUNNER_TEMP/backend-receipts.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-production-receipt-backend-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/backend-source.json
+            ${{ runner.temp }}/backend-*.log
+            ${{ runner.temp }}/backend-receipts.xml

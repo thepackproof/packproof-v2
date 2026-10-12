@@ -1,0 +1,66 @@
+name: R&D qualification preparation
+
+on:
+  push:
+    branches: ['rnd/**']
+    paths:
+      - 'research/qualification/**'
+      - '.github/workflows/rnd-qualification.yml'
+      - '.gitattributes'
+      - 'research/benchmarks/configs/physical-corpus-240-60-v1.json'
+      - 'research/benchmarks/configs/physical-corpus-240-60-v1.json.sha256'
+      - 'research/benchmarks/configs/physical-qualification-v1.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/qualification/**'
+      - '.github/workflows/rnd-qualification.yml'
+      - '.gitattributes'
+      - 'research/benchmarks/configs/physical-corpus-240-60-v1.json'
+      - 'research/benchmarks/configs/physical-corpus-240-60-v1.json.sha256'
+      - 'research/benchmarks/configs/physical-qualification-v1.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rnd-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+# Offline study preparation only. No corpus uploads, device control, production
+# credentials, external reviewers, independent-operator claims or model promotion.
+jobs:
+  preparation-tools:
+    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    env:
+      PACKPROOF_RESEARCH_BUILD: 'true'
+      PACKPROOF_DISTRIBUTION_AUTHORIZED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require research distribution to remain disabled
+        run: node --input-type=module -e "import {evaluateRepository} from './scripts/rnd-release-guard.mjs'; if(evaluateRepository('.').allowed) throw Error('Research source must not distribute');"
+      - name: Test physical acquisition intake
+        run: python -m unittest discover -s research/qualification/physical -p 'test_*.py' -v
+      - name: Test blinded reviewer assignment and scoring
+        run: python -m unittest discover -s research/qualification/reviewers -p 'test_*.py' -v
+      - name: Test public witness enrollment preparation
+        run: python -m unittest discover -s research/qualification/witness -p 'test_*.py' -v
+      - name: Test distributed-noise assumption analysis
+        run: python -m unittest discover -s research/qualification/federated -p 'test_*.py' -v
+      - name: Test bounded proof measurement admission
+        run: node --test research/qualification/privacy/performance-report.test.mjs

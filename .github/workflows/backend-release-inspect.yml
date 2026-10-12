@@ -9,8 +9,14 @@ concurrency:
   group: backend-release-inspection
   cancel-in-progress: false
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   inspect:
-    if: github.ref == 'refs/heads/main'
+    needs: rnd-release-policy
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

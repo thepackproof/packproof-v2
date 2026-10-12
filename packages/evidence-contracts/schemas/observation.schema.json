@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/observation.schema.json",
+  "type": "object",
+  "required": [
+    "observationId",
+    "proofId",
+    "subject",
+    "sourceRefs",
+    "type",
+    "attribution",
+    "value",
+    "method",
+    "coverage",
+    "limitations",
+    "schemaVersion",
+    "interval",
+    "polygon"
+  ],
+  "properties": {
+    "observationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "subject": {
+      "$ref": "subject.schema.json"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "source.schema.json"
+      }
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "attribution": {
+      "enum": [
+        "MACHINE_OBSERVATION",
+        "PARTICIPANT_STATEMENT",
+        "PROVIDER_REPORT"
+      ]
+    },
+    "value": {},
+    "method": {
+      "type": "object",
+      "required": [
+        "executableDigest",
+        "modelDigest",
+        "policyVersion"
+      ],
+      "properties": {
+        "executableDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "modelDigest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object"
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    },
+    "interval": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "polygon": {
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "schemaVersion": {
+      "const": "packproof.observation.v1"
+    }
+  },
+  "description": "Normalized observation interchange contract. Feature-specific worker observations remain explicitly scoped under analysis.details and do not implicitly conform to this schema.",
+  "additionalProperties": false
+}

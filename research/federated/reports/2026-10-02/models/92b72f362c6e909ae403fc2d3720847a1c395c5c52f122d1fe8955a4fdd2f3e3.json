@@ -1,0 +1,61 @@
+{
+  "keyId": "6f5497155b5ef6c8aef5973e849a87489489d6aea2bacfaa2dc37a135d743572",
+  "payload": {
+    "datasetManifestSha256": "a338d91aada7702391c4e2be6d6ec3a586f80d816919f751041e11b98674f503",
+    "evaluation": {
+      "accuracy": 0.9153645833333334,
+      "groups": {
+        "synthetic-device-group-0": 0.9287109375,
+        "synthetic-device-group-1": 0.9072265625,
+        "synthetic-device-group-2": 0.91015625
+      },
+      "n": 3072,
+      "population": "frozen synthetic held-out quality vectors; no camera or partner validation",
+      "split": "seed-v1; training partners 1..64; holdout 100..143 with separate seed domain"
+    },
+    "featureOrder": [
+      "sharpness",
+      "glare_fraction",
+      "local_contrast",
+      "bias"
+    ],
+    "holdoutManifestSha256": "5ee7910ce6f5b5129dbf630f2a80a8c0c8a78ee4b73de042751017feb8e87830",
+    "model": [
+      1.9949333484465417,
+      -1.756301686332725,
+      1.3967768747919347,
+      0.3800609707349758
+    ],
+    "modelSha256": "ab272eeffa62eb4961726b558a99d562e163c549d8723f2321cc8139973f163f",
+    "parentSha256": "e5d7a9e8b99255698200edcd2d112c636be77b9361fcd08e1dbdc48124af7dbb",
+    "privacy": {
+      "accountant": "google-dp-accounting/0.6.0:RdpAccountant",
+      "adjacency": "replace one bounded enrolled partner contribution",
+      "delta": 1e-06,
+      "epsilonMaxCumulative": 1.6606191992577408,
+      "noiseMultiplier": 4.0,
+      "reservation": "spent before aggregate; no refund on abort",
+      "sampling": "full-participation; no amplification"
+    },
+    "productionReleaseAuthorized": false,
+    "purpose": "capture-frame-usefulness/v1",
+    "qualityGate": {
+      "groupDeltas": {
+        "synthetic-device-group-0": 0.0849609375,
+        "synthetic-device-group-1": 0.052734375,
+        "synthetic-device-group-2": 0.0595703125
+      },
+      "maximumAllowedGroupDrop": 0.02,
+      "observedGain": 0.06575520833333337,
+      "passed": true,
+      "requiredGain": 0.05
+    },
+    "recipeSha256": "7eb96d256585ffd30553d7ef74209102dea9ddf76f8e9e071fd87247b3a9c3d0",
+    "reviewStatus": "EXTERNAL_PRIVACY_SECURITY_AND_PARTNER_VALIDATION_REQUIRED",
+    "rollbackModelSha256": "e5d7a9e8b99255698200edcd2d112c636be77b9361fcd08e1dbdc48124af7dbb",
+    "schema": "proofcollective-candidate/v1",
+    "scope": "SYNTHETIC_LOCAL_RESEARCH"
+  },
+  "signature": "CQEPGRw27spIBv+HjbPN4+Tp3V7AduBqCkWrrqpfu+pJE/KgDtt160gkrqRKhYxQDS0CZ6vtB6VfXUNwVyVmBQ==",
+  "canonicalPayload": "{\"datasetManifestSha256\":\"a338d91aada7702391c4e2be6d6ec3a586f80d816919f751041e11b98674f503\",\"evaluation\":{\"accuracy\":0.9153645833333334,\"groups\":{\"synthetic-device-group-0\":0.9287109375,\"synthetic-device-group-1\":0.9072265625,\"synthetic-device-group-2\":0.91015625},\"n\":3072,\"population\":\"frozen synthetic held-out quality vectors; no camera or partner validation\",\"split\":\"seed-v1; training partners 1..64; holdout 100..143 with separate seed domain\"},\"featureOrder\":[\"sharpness\",\"glare_fraction\",\"local_contrast\",\"bias\"],\"holdoutManifestSha256\":\"5ee7910ce6f5b5129dbf630f2a80a8c0c8a78ee4b73de042751017feb8e87830\",\"model\":[1.9949333484465417,-1.756301686332725,1.3967768747919347,0.3800609707349758],\"modelSha256\":\"ab272eeffa62eb4961726b558a99d562e163c549d8723f2321cc8139973f163f\",\"parentSha256\":\"e5d7a9e8b99255698200edcd2d112c636be77b9361fcd08e1dbdc48124af7dbb\",\"privacy\":{\"accountant\":\"google-dp-accounting/0.6.0:RdpAccountant\",\"adjacency\":\"replace one bounded enrolled partner contribution\",\"delta\":1e-06,\"epsilonMaxCumulative\":1.6606191992577408,\"noiseMultiplier\":4.0,\"reservation\":\"spent before aggregate; no refund on abort\",\"sampling\":\"full-participation; no amplification\"},\"productionReleaseAuthorized\":false,\"purpose\":\"capture-frame-usefulness/v1\",\"qualityGate\":{\"groupDeltas\":{\"synthetic-device-group-0\":0.0849609375,\"synthetic-device-group-1\":0.052734375,\"synthetic-device-group-2\":0.0595703125},\"maximumAllowedGroupDrop\":0.02,\"observedGain\":0.06575520833333337,\"passed\":true,\"requiredGain\":0.05},\"recipeSha256\":\"7eb96d256585ffd30553d7ef74209102dea9ddf76f8e9e071fd87247b3a9c3d0\",\"reviewStatus\":\"EXTERNAL_PRIVACY_SECURITY_AND_PARTNER_VALIDATION_REQUIRED\",\"rollbackModelSha256\":\"e5d7a9e8b99255698200edcd2d112c636be77b9361fcd08e1dbdc48124af7dbb\",\"schema\":\"proofcollective-candidate/v1\",\"scope\":\"SYNTHETIC_LOCAL_RESEARCH\"}"
+}

@@ -31,7 +31,8 @@
       "extends": "shipping-integration",
       "environment": "production",
       "env": {
-        "PACKPROOF_ANDROID_VERSION_CODE": "61",
+        "PACKPROOF_ANDROID_VERSION_CODE": "62",
+        "EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION": "true",
         "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
         "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
       }
@@ -88,6 +89,22 @@
       "ios": {
         "simulator": true,
         "autoIncrement": false
+      }
+    },
+    "research-local": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_RND": "true",
+        "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "http://127.0.0.1:3000",
+        "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "dev"
       }
     }
   },

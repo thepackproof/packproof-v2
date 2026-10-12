@@ -1,0 +1,15 @@
+{
+  "payload": {
+    "schema": "proofcollective-model/v1",
+    "weights": [
+      1.7572342337993132,
+      -1.1679440388565407,
+      0.44943329283776656,
+      0.34845808282696583
+    ],
+    "purpose": "capture-frame-usefulness/v1"
+  },
+  "signature": "Bn05yPEinXPd/U0qC7dkQzcGV69BM5XKKY5LMvqc9r2CLhZfIC7p+M2kA3Wp1PYxLPhIZj14SELWYq18t9pRCg==",
+  "keyId": "6f5497155b5ef6c8aef5973e849a87489489d6aea2bacfaa2dc37a135d743572",
+  "canonicalPayload": "{\"purpose\":\"capture-frame-usefulness/v1\",\"schema\":\"proofcollective-model/v1\",\"weights\":[1.7572342337993132,-1.1679440388565407,0.44943329283776656,0.34845808282696583]}"
+}

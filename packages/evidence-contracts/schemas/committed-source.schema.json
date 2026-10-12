@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/committed-source.schema.json",
+  "type": "object",
+  "required": [
+    "sourceId",
+    "proofId",
+    "tenantId",
+    "subjectId",
+    "evidenceId",
+    "legId",
+    "packageInstanceId",
+    "captureSessionId",
+    "objectKey",
+    "objectVersionId",
+    "sha256",
+    "byteLength",
+    "mimeType"
+  ],
+  "properties": {
+    "sourceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "subjectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "evidenceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "legId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "packageInstanceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "captureSessionId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "objectKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "objectVersionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "byteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 134217728
+    },
+    "mimeType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "relationship": {
+      "enum": [
+        "ORIGINAL_RECORDING",
+        "CONCURRENT_SIDECAR",
+        "DECODED_FRAME",
+        "PARTICIPANT_IMPORT",
+        "CAPTURE_METADATA"
+      ]
+    },
+    "frameReference": {
+      "anyOf": [
+        {
+          "$ref": "native-frame.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

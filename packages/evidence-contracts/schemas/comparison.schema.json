@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/comparison.schema.json",
+  "type": "object",
+  "required": [
+    "subject",
+    "leftSourceRefs",
+    "rightSourceRefs",
+    "channels",
+    "missingChannels",
+    "conflicts",
+    "policyVersion",
+    "limitations"
+  ],
+  "properties": {
+    "subject": {
+      "$ref": "subject.schema.json"
+    },
+    "leftSourceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "source.schema.json"
+      }
+    },
+    "rightSourceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "source.schema.json"
+      }
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "channel",
+          "findingState",
+          "sourceRefs",
+          "limitations"
+        ],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "findingState": {
+            "enum": [
+              "RECORDED",
+              "CONSISTENT",
+              "DIFFERENCE_OBSERVED",
+              "INCONCLUSIVE",
+              "NOT_CHECKED",
+              "UNSUPPORTED"
+            ]
+          },
+          "sourceRefs": {
+            "type": "array"
+          },
+          "limitations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        }
+      }
+    },
+    "missingChannels": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    },
+    "policyVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    }
+  }
+}

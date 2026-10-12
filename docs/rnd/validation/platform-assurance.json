@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "packproof.research-validation.v1",
+  "scope": "Optional server platform assurance; generated protocol fixtures only",
+  "commands": [
+    {
+      "command": "npm --prefix backend test -- tests/rnd-android-key-policy.test.ts tests/rnd-platform-assurance.test.ts",
+      "result": "PASS",
+      "tests": 42
+    },
+    {
+      "command": "npm --prefix backend run typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "npm --prefix backend test -- tests/rnd-platform-service.test.ts",
+      "result": "PASS",
+      "tests": 6
+    }
+  ],
+  "assertions": [
+    "Strict Google transport/requestHash/app/certificate/device/version/time policy",
+    "Apple X.509 chain, certificate challenge nonce, App ID, P-256 key and real assertion signature",
+    "Actor-bound immutable challenge/results, one-use challenge and transactional monotonic counters",
+    "Authenticated HTTP route, no-store responses and research kill switch",
+    "Android strict current KeyMint ASN.1 authorization, locked verified boot and patch floors",
+    "Root-most extension, explicit pinned chain and fresh revocation, provisioning checks",
+    "Dedicated challenged P256 inventory key, exact digest/signature, immutable persistence and replay rejection; recording key not upgraded"
+  ],
+  "testPopulation": "Generated local EC certificates and signatures; injected Google protocol responses; PGlite; zero physical devices",
+  "externalValidation": "NOT_MEASURED",
+  "limitations": [
+    "No live provider call or production credentials",
+    "No sensor provenance or physical identity established",
+    "Real device/provider account qualification remains pending",
+    "Android delegated key, legacy Keymaster and expired factory certificate compatibility profiles explicitly unsupported"
+  ],
+  "releaseAuthorization": "NOT_AUTHORIZED"
+}

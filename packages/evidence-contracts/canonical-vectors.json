@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "packproof.canonical-vectors.v1",
+  "encoding": "RFC8785_UTF8",
+  "vectors": [
+    {
+      "name": "utf16-order",
+      "value": {
+        "1": "one",
+        "2": "two",
+        "128": "numeric-key",
+        "€": "euro",
+        "😀": "emoji",
+        "\r": "CR",
+        "דּ": "hebrew"
+      },
+      "canonical": "{\"\\r\":\"CR\",\"1\":\"one\",\"128\":\"numeric-key\",\"2\":\"two\",\"€\":\"euro\",\"😀\":\"emoji\",\"דּ\":\"hebrew\"}",
+      "sha256": "0ef45cec2acbeebfc35246b7a6ff16b12879b9ec33e2b4e46ccf10b2b9a87afa"
+    },
+    {
+      "name": "numbers",
+      "value": [
+        333333333.3333333,
+        1e+30,
+        4.5,
+        0.002,
+        1e-27,
+        0,
+        0.000001,
+        1e-7,
+        100000000000000000000,
+        1e+21
+      ],
+      "canonical": "[333333333.3333333,1e+30,4.5,0.002,1e-27,0,0.000001,1e-7,100000000000000000000,1e+21]",
+      "sha256": "17f4bfd1cfb41572dc8d58ae5418f6089b08ecc3f64047010c7c1df6e76316db"
+    },
+    {
+      "name": "counter",
+      "value": {
+        "offsetNs": "12345678901234567890",
+        "nullValue": null,
+        "events": [
+          {
+            "sequence": 0,
+            "t": "line\n\t\"\\"
+          }
+        ]
+      },
+      "canonical": "{\"events\":[{\"sequence\":0,\"t\":\"line\\n\\t\\\"\\\\\"}],\"nullValue\":null,\"offsetNs\":\"12345678901234567890\"}",
+      "sha256": "d3daa9fbd0e5445670cfb448d11b7e7b68a692ce5b56e124ba823f9d8d2579e2"
+    },
+    {
+      "name": "prototype",
+      "value": {
+        "__proto__": {
+          "x": 1
+        },
+        "constructor": null
+      },
+      "canonical": "{\"__proto__\":{\"x\":1},\"constructor\":null}",
+      "sha256": "19924da02cb2c399e44240a96fbbab7ee2d142c3e93832a756bce3afad4f2da9"
+    }
+  ],
+  "rejectedJson": [
+    "{\"a\":1,\"a\":2}",
+    "{\"a\":1,\"\\u0061\":2}",
+    "1e999",
+    "\"\\ud800\"",
+    "{\"x\":undefined}"
+  ]
+}

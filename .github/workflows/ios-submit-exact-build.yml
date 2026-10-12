@@ -26,6 +26,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   verify-source:
     runs-on: ubuntu-latest
     steps:
@@ -36,8 +41,8 @@ jobs:
       - run: python3 -m unittest discover -s mobile/tests -p test_ios_release_verification.py
 
   upload:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    needs: verify-source
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
+    needs: [verify-source, rnd-release-policy]
     runs-on: macos-15
     timeout-minutes: 45
     permissions:

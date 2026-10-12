@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/subject.schema.json",
+  "type": "object",
+  "required": [
+    "packageInstanceId",
+    "shipmentLegId"
+  ],
+  "properties": {
+    "packageInstanceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "shipmentLegId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "productInstanceId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

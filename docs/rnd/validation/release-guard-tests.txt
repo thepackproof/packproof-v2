@@ -1,0 +1,15 @@
+✔ distribution is denied for research branches, pull requests, tags and non-main sources (2.09797ms)
+✔ research marker blocks renamed branches, merged source and explicit authorization (0.349805ms)
+✔ absence of explicit authorization, exact source, or supported metadata fails closed (0.167932ms)
+✔ missing and malformed marker do not become release authorization (0.604798ms)
+✔ checked-out source must match event source and current R&D checkout cannot distribute (5.053546ms)
+✔ every credential-bearing and publishing workflow job requires no-secret source policy (1.389606ms)
+✔ legacy native candidate builds cannot inherit live endpoints on the R&D branch (0.308823ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16.161371

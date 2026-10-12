@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "packproof.build-policy.v1",
+  "researchOnly": false,
+  "distributionAllowed": true,
+  "program": "trust-infrastructure-2026-10-02",
+  "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
+  "branch": "main",
+  "productionProfiles": ["capture-receipts-v1"],
+  "releaseAuthorization": "OWNER_AUTHORIZED_ANDROID_INTEGRATION_2026_10_11",
+  "reason": "Owner authorized production Android integration. Only opt-in digital final-file receipt collection, review and export are enabled; scientific analysis, passive frame sampling, active controls, witnesses and collaborative learning remain unavailable. Local research mode and research branches remain nondistributable."
+}

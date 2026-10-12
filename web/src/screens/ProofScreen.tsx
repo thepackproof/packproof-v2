@@ -1,3 +1,4 @@
+import {RndWebPanel} from "../rnd/RndWebPanel";
 import { MediaPrivacyTools } from "../components/MediaPrivacyTools";
 import { EvidenceResponsePanel } from "../components/EvidenceResponsePanel";
 import { SignatureWorkbench } from "../components/SignatureWorkbench";
@@ -170,6 +171,7 @@ export function ProofScreen(props: {
 
   return (
     <main className="page stack">
+      {props.api && <RndWebPanel proofId={proof.proofId} api={props.api} loadEvidence={props.onLoadEvidence}/>}
       <PageHeader
         title="Proof"
         onBack={props.onBack}

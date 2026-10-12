@@ -12,8 +12,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   upload:
-    if: github.ref == 'refs/heads/main'
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (github.ref == 'refs/heads/main') }}
+    needs: rnd-release-policy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:

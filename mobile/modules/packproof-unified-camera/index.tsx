@@ -34,6 +34,7 @@ export type UnifiedCameraViewRef = {
   startRecording(sessionId: string, audioEnabled: boolean): Promise<UnifiedCameraResult>;
   /** Requests finalization. Await startRecording's promise for the completed file. */
   stopRecording(): Promise<void>;
+  disableResearchSampling?(reason: string): Promise<void>;
 };
 
 type NativeEvent<T> = { nativeEvent: T };

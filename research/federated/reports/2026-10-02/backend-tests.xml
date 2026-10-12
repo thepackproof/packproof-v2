@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="5" failures="0" errors="0" time="1.895158695">
+    <testsuite name="tests/rnd-learning-registry.test.ts" timestamp="2026-10-02T10:57:23.562Z" hostname="2459d264c39e" tests="5" failures="0" errors="0" skipped="0" time="1.895158695">
+        <testcase classname="tests/rnd-learning-registry.test.ts" name="isolated signed learning registry &gt; verifies the actual Python-generated Ed25519 candidate and exact signed bytes" time="0.006793047">
+        </testcase>
+        <testcase classname="tests/rnd-learning-registry.test.ts" name="isolated signed learning registry &gt; requires server-side admin identity and independent training trust" time="0.024722402">
+        </testcase>
+        <testcase classname="tests/rnd-learning-registry.test.ts" name="isolated signed learning registry &gt; persists an idempotent immutable report, admin audit, safe list and independently verifiable export" time="0.025854039">
+        </testcase>
+        <testcase classname="tests/rnd-learning-registry.test.ts" name="isolated signed learning registry &gt; rejects private participant fields, unapproved scope and exhausted privacy even if signed by a trusted research key" time="0.003081405">
+        </testcase>
+        <testcase classname="tests/rnd-learning-registry.test.ts" name="isolated signed learning registry &gt; rechecks admin revocation on already stored reports" time="0.001809126">
+        </testcase>
+    </testsuite>
+</testsuites>

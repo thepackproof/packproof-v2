@@ -135,6 +135,18 @@ function CameraSession({
 }) {
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
+  useEffect(() => {
+    if (!request.researchPolicyCheck) return;
+    let current = true, checking = false;
+    const check = async () => {
+      if (checking) return; checking = true;
+      const allowed = await request.researchPolicyCheck!().catch(() => false);
+      if (current && !allowed) await unifiedCamera.current?.disableResearchSampling?.('SERVER_POLICY_OR_CONNECTION_UNAVAILABLE').catch(() => undefined);
+      checking = false;
+    };
+    const timer = setInterval(() => { void check(); }, 5000);
+    return () => { current = false; clearInterval(timer); };
+  }, [request]);
   const useUnified = isUnifiedCameraAvailable() && Boolean(request.captureSessionId);
   const identifiersEnabled = identifierCaptureEnabled(request.identifierPolicy);
   const [codeStatus, setCodeStatus] = useState<string | null>(null);
@@ -424,6 +436,7 @@ function CameraSession({
               disabled={!ready || saving} onPress={() => void start()} />
           )}
           {saving ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>Finishing the recording. Keep PackProof open until saving is confirmed.</Text> : null}
+          {request.researchNotice ? <Text style={{ color: colors.textSecondary }}>{request.researchNotice}</Text> : null}
           {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
             <Text style={{color:shipping?.status==='BOUND'?colors.accentText:colors.textSecondary}}>
               {identifiersEnabled ? (codeStatus ?? 'Pack normally. Item and shipping codes are read during recording.') : request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'

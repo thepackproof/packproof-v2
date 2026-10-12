@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "packproof.local-runtime-validation.v1",
+  "date": "2026-10-02",
+  "scope": "LOCAL_LOOPBACK_DEVELOPMENT_ONLY",
+  "freshPrivateDirectory": true,
+  "freshPgliteMigrationRun": "PASSED",
+  "signer": "new local P-256 research key, never committed",
+  "healthHttpStatus": 200,
+  "unauthenticatedResearchHttpStatus": 401,
+  "developmentLoginHttpStatus": 200,
+  "authenticatedCapabilitiesHttpStatus": 200,
+  "enabled": false,
+  "killSwitch": true,
+  "anyFeatureEnabled": false,
+  "temporaryProcessStopped": true,
+  "osDecoderSandbox": "HOST_PROC_MOUNT_DENIED",
+  "deploymentPerformed": false,
+  "releaseAuthorized": false
+}

@@ -3,6 +3,7 @@ import { firstProofExperienceEnabled, draftStorageKey, creationOperation, comple
 import { clearReauthenticationTask, readReauthenticationTask, reauthenticationDestination, retainReauthenticationTask } from './first-experience/auth-return';
 import { selectFirstExperience } from '../../packages/onboarding/model';
 import { SampleProof } from './site/SampleProof';
+import {DerivativeRedeem} from "./rnd/DerivativeRedeem";
 import { Onboarding } from "./onboarding/Onboarding";
 import { useMobileTaskExperience } from "./mobile-task/useMobileTaskExperience";
 import { MobileNavigation } from "./mobile-task/MobileNavigation";
@@ -1505,6 +1506,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 }
 
 export function App({ authInitialView }: { authInitialView?: "sign-in" | "create-account" } = {}) {
+  if(import.meta.env.VITE_PACKPROOF_RND==='1'&&window.location.pathname==='/research/derivative')return <ThemeProvider><DerivativeRedeem/></ThemeProvider>;
   retainCaptureLaunch();
   return (
     <ThemeProvider>

@@ -1,0 +1,3 @@
+-r requirements.txt
+# Maintained in colmap/colmap; not the archived standalone pycolmap repository.
+pycolmap==3.13.0

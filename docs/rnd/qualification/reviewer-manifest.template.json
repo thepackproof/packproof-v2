@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "packproof.reviewer-study.v1",
+  "studyId": "replace-with-private-study-code",
+  "dataOrigin": "REQUIRES_AUTHORIZED_INPUTS",
+  "policy": {
+    "version": "replace-with-frozen-policy-version",
+    "reviewerCount": 12,
+    "seed": null,
+    "timeLimitSeconds": null,
+    "eventToleranceMs": null,
+    "frozenBeforeReview": false
+  },
+  "cases": []
+}
