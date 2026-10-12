@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "packproof.distribution-decision.v1",
+  "allowed": false,
+  "sourceSha": "53bd56e9741007c1f660ff02da8b0056add57d02",
+  "reasons": [
+    "RESEARCH_BUILD_NOT_DISTRIBUTABLE",
+    "RESEARCH_BRANCH",
+    "MAIN_BRANCH_REQUIRED",
+    "NON_MAIN_SOURCE",
+    "DISTRIBUTION_NOT_AUTHORIZED"
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "packproof.rnd-validation.v1",
+  "component": "backend",
+  "date": "2026-10-02",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "status": "IMPLEMENTED_RESEARCH_ONLY",
+  "tests": [
+    {
+      "command": "cd backend && npx vitest run tests/rnd-evidence.test.ts",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "scope": [
+        "authorization",
+        "idempotency",
+        "source ownership",
+        "signed concurrent extension chain",
+        "lease expiry and terminal failure",
+        "signed reviewer annotation",
+        "admin retry and metrics",
+        "actual immutable shipment report adapters",
+        "intent freshness",
+        "actual Python analysis",
+        "actual opaque derivative and export",
+        "actual private log and two controlled witness checkpoint consistency/retry",
+        "serialized tenant admission",
+        "safe bounded witness checkpoint metrics and actual operator outage stage classification"
+      ]
+    },
+    {
+      "command": "cd backend && npx vitest run tests/rnd-matrix.test.ts",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "cd backend && npx vitest run tests/rnd-runtime-isolation.test.ts",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "cd backend && npx vitest run tests/rnd-restart.test.ts",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "scope": "actual separate OS processes reopen durable PGlite and recover expired lease exactly once"
+    }
+  ],
+  "limits": [
+    "Customer display disabled; all profiles unqualified.",
+    "Native hardware claims require actual hardware and trust-policy qualification.",
+    "Local witness operators are controlled test identities, not independent operators.",
+    "Process limits do not imply OS network isolation; sandbox executor configuration is explicit.",
+    "Physical match, replay-resistance and model accuracy are not established by synthetic protocol tests."
+  ],
+  "pendingIntegrationChecks": [
+    "Parent final combined suite after Android assurance and derivative grants modules stabilize."
+  ],
+  "typecheck": {
+    "command": "cd backend && npm run typecheck",
+    "status": "PASS"
+  },
+  "localWitnessOperations": {
+    "checkpointMetrics": "IMPLEMENTED",
+    "maxCompletedReceiptsSampled": 100,
+    "errorWindow": "jobs created within previous 24 hours; errors do not establish an attack",
+    "privateOpeningsInMetrics": false,
+    "stageCodes": [
+      "APPEND",
+      "INCLUSION",
+      "CHECKPOINT",
+      "CONSISTENCY",
+      "OPERATOR",
+      "VERIFICATION"
+    ],
+    "targetedRegression": "12/12 PASS after final metrics integration; typecheck PASS"
+  }
+}

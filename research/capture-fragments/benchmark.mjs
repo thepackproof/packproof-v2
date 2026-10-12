@@ -1,0 +1,9 @@
+#!/usr/bin/env node
+import {mkdir,writeFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
+import {captureSoftwareFragments} from './run-spike.mjs';
+const output=path.resolve(process.argv[2]??'/tmp/packproof-fragment-benchmark'),runs=[];await mkdir(output,{recursive:true});
+for(let index=0;index<5;index++){const run=await captureSoftwareFragments({seconds:3,realTime:true});runs.push(run.report);console.log(`Verified live software fragment run ${index+1}/5`);}
+const range=key=>({min:Math.min(...runs.map(r=>r[key])),max:Math.max(...runs.map(r=>r[key])),mean:runs.reduce((n,r)=>n+r[key],0)/runs.length});
+const report={schemaVersion:'packproof.fragment-benchmark.v1',executedAt:new Date().toISOString(),population:{unit:'local synthetic encoder process',sampleCount:5,physicalDevices:0,recordingDurationSeconds:3,realTimePacing:true},encoderVersion:execFileSync('ffmpeg',['-version'],{encoding:'utf8'}).split('\n')[0],allVerified:runs.every(r=>r.verification.valid),allFirstMediaBeforeProcessExit:runs.every(r=>r.mediaDeliveredBeforeProducerExit),statistics:{producerWallMs:range('producerWallMs'),firstMediaArrivalMs:range('firstMediaArrivalMs'),journalHashParseMs:range('journalHashParseMs'),totalEncodedBytes:range('totalEncodedBytes'),peakUnclosedChunkBytes:range('peakUnclosedChunkBytes')},runs,qualification:'SOFTWARE_PROTOCOL_ONLY',limitations:['Five repeated runs describe one local FFmpeg/CPU environment, not a device population or accuracy estimate.','No confidence interval, native performance budget or physical qualification is inferred.','No native camera encoder or normal capture flow was changed.']};await writeFile(path.join(output,'benchmark.json'),JSON.stringify(report,null,2)+'\n');console.log(`Report: ${path.join(output,'benchmark.json')}`);

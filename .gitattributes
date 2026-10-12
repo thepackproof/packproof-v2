@@ -1,0 +1,6 @@
+# Frozen physical-study byte references must survive Windows and Linux checkouts.
+/research/benchmarks/configs/physical-corpus-240-60-v1.json text eol=lf
+/research/benchmarks/configs/physical-qualification-v1.json text eol=lf
+
+# Database receipts bind canonical repository bytes on every platform.
+*.sql text eol=lf

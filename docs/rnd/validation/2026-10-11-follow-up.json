@@ -1,0 +1,286 @@
+{
+  "schemaVersion": "packproof.rnd-follow-up-validation.v1",
+  "recordedAt": "2026-10-12T01:24:00.448Z",
+  "implementationSource": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+  "originalResearchTarget": "41c9af8f937893c318ba29d6e011cdac3151e6ef",
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/69",
+  "targetBranch": "rnd/trust-infrastructure-2026-10-02",
+  "status": "LOCAL_SOFTWARE_CHECKS_PASSED_EXTERNAL_QUALIFICATION_OPEN",
+  "releaseAuthorized": false,
+  "selectedJobs": [
+    {
+      "job": "source-isolation",
+      "runId": 38191469774,
+      "sourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "jobId": 114624944303,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38191469774/job/114624944303",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:20:08Z",
+      "workflowConclusion": "success",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "config/rnd",
+        "scripts/rnd.mjs",
+        "scripts/rnd-release-guard.mjs",
+        "scripts/rnd-runtime.mjs",
+        "scripts/rnd-check-scope.mjs",
+        ".github/workflows"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "backend-protocols",
+      "runId": 38190599091,
+      "sourceCommit": "8bfd9ba458010aeba7bb1ea47c46e1ce83cc5739",
+      "jobId": 114622381431,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190599091/job/114622381431",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:10:22Z",
+      "workflowConclusion": "success",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "backend",
+        "packages",
+        "research/vision",
+        "research/privacy",
+        "research/witness",
+        "research/benchmarks",
+        "verifier",
+        "scripts/generate-rnd-client.mjs",
+        "scripts/rnd-source-text.mjs"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "isolated-container",
+      "runId": 38190599091,
+      "sourceCommit": "8bfd9ba458010aeba7bb1ea47c46e1ce83cc5739",
+      "jobId": 114622381460,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190599091/job/114622381460",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:07:42Z",
+      "workflowConclusion": "success",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "backend",
+        "packages",
+        "config/rnd",
+        "scripts/rnd-runtime.mjs",
+        "research/backend.Dockerfile",
+        "research/container-entry.mjs",
+        "research/container-smoke.mjs"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "dependency-audit",
+      "runId": 38190599091,
+      "sourceCommit": "8bfd9ba458010aeba7bb1ea47c46e1ce83cc5739",
+      "jobId": 114622381481,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190599091/job/114622381481",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:06:57Z",
+      "workflowConclusion": "success",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "backend/package-lock.json",
+        "mobile/package-lock.json",
+        "web/package-lock.json",
+        "desktop/package-lock.json",
+        "research/privacy/zk/package-lock.json"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "surfaces",
+      "runId": 38190001157,
+      "sourceCommit": "406c8c9297319316ea623e4a19a1f28fc3d72085",
+      "jobId": 114620533733,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190001157/job/114620533733",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T00:58:27Z",
+      "workflowConclusion": "failure",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "web",
+        "desktop",
+        "mobile",
+        "packages",
+        "config/rnd",
+        "backend/src/capture",
+        "backend/src/identifiers",
+        "backend/src/domain/proof-presentation.ts",
+        "backend/src/canonical.ts",
+        "backend/src/hash.ts"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "image-transform-proof",
+      "runId": 38190001157,
+      "sourceCommit": "406c8c9297319316ea623e4a19a1f28fc3d72085",
+      "jobId": 114620533760,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190001157/job/114620533760",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T00:58:48Z",
+      "workflowConclusion": "failure",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "research/privacy/zk"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "decoder-containment",
+      "runId": 38190471528,
+      "sourceCommit": "501280b2a59900f6f861c48327828ffc59138465",
+      "jobId": 114621994436,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190471528/job/114621994436",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:06:00Z",
+      "workflowConclusion": "cancelled",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "research/vision",
+        "research/privacy",
+        "scripts/rnd-worker-sandbox.mjs",
+        "scripts/rnd-worker-sandbox.test.mjs",
+        "scripts/rnd-sandbox-probe.mjs",
+        "scripts/rnd-sandbox-probe.py"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "android-library",
+      "runId": 38190294655,
+      "sourceCommit": "64bf40138c398bbae8a42daae12ea7d07923cee5",
+      "jobId": 114621433711,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190294655/job/114621433711",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:05:48Z",
+      "workflowConclusion": "success",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "mobile",
+        "packages",
+        "config/rnd",
+        "backend/src/capture",
+        "backend/src/identifiers",
+        "backend/src/domain/proof-presentation.ts",
+        "backend/src/canonical.ts",
+        "backend/src/hash.ts",
+        ".github/workflows/rnd-native.yml"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "encoded-fragment-protocol",
+      "runId": 38190294655,
+      "sourceCommit": "64bf40138c398bbae8a42daae12ea7d07923cee5",
+      "jobId": 114621433702,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38190294655/job/114621433702",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:02:53Z",
+      "workflowConclusion": "success",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "research/capture-fragments",
+        "packages/evidence-contracts"
+      ],
+      "documentationOnlyChanges": []
+    },
+    {
+      "job": "federated-protocol",
+      "runId": 38191469774,
+      "sourceCommit": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "jobId": 114624979663,
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38191469774/job/114624979663",
+      "conclusion": "success",
+      "completedAt": "2026-10-12T01:22:15Z",
+      "workflowConclusion": "success",
+      "unchangedCodeInputsVerifiedThrough": "24ba5224fe5d7830e2ebebcc9c975b07e2db2235",
+      "comparedPaths": [
+        "research/federated"
+      ],
+      "documentationOnlyChanges": []
+    }
+  ],
+  "failedHistory": [
+    {
+      "source": "39a82c5",
+      "runId": 38189704264,
+      "reason": "Generated client checkout drift and redaction decoder failure inside sandbox."
+    },
+    {
+      "source": "406c8c9",
+      "runId": 38190001157,
+      "reason": "Backend consent fixture and source storage uniqueness failures; OCR provenance assertion."
+    },
+    {
+      "source": "64bf401",
+      "runId": 38190294649,
+      "reason": "Diagnostics confirmed missing BLAS alias and legacy OCR language-list format."
+    },
+    {
+      "source": "d27ed90",
+      "runId": 38190939759,
+      "reason": "Flower consumes stage metadata during handling; participant completion bookkeeping needed to retain the stage before invoking it."
+    }
+  ],
+  "measuredOutcomes": {
+    "backend": {
+      "source": "8bfd9ba",
+      "passed": 191,
+      "failed": 0,
+      "files": 27
+    },
+    "containment": {
+      "source": "501280b",
+      "passedChecks": 23
+    },
+    "federated": {
+      "source": "24ba522",
+      "passed": 54,
+      "failed": 0,
+      "skipped": 0,
+      "dependencyDeprecationWarnings": 2,
+      "seconds": 72.88,
+      "additionalSyntheticCommands": {
+        "bothExecuted": true,
+        "bothUtilityGatesPassed": false,
+        "bothUtilityGatesFailed": true,
+        "productionReleaseAuthorized": false
+      },
+      "scope": "Actual separate-process lab plus protocol suite; not independent partner qualification."
+    }
+  },
+  "cancelledHistory": [
+    {
+      "source": "501280b",
+      "runId": 38190471528,
+      "reason": "After containment and audit jobs passed, remaining obsolete backend checks were cancelled; repaired backend validated on later source."
+    },
+    {
+      "source": "35d9e69",
+      "runId": 38191114695,
+      "reason": "Process-failure regression exposed a multiprocessing.Event shutdown deadlock after terminating a waiting participant. Cancelled after independent reproduction; a lock-free one-writer shutdown byte and killed-child cleanup regression replace that path. No runtime pass is claimed for this source."
+    }
+  ],
+  "scope": {
+    "ios": "Execution and release deferred by user; policy-only checks do not count as iOS compilation.",
+    "desktop": "Typechecked and compiled without producing or publishing installers.",
+    "android": "Kotlin compilation, JVM tests and Metro bundle; no physical-device qualification.",
+    "container": "No-network non-root startup/authentication/restart/cleanup; not deployed.",
+    "containment": "Synthetic Linux runner, actual still redaction/vision/OCR and hostile resource probes; not general exploit-resistance qualification.",
+    "federated": "Synthetic separate processes using real pinned TLS/SecAgg+; one operator, zero independent organizations; central DP and no automatic promotion."
+  },
+  "externalEvidence": {
+    "physicalSpecimensCollected": 0,
+    "independentWitnessOperators": 0,
+    "independentlyConsentedFederatedOrganizations": 0,
+    "physicalProgram": "240 labels/60 cartons plus matched device, attack, metrology and blinded reviewer studies.",
+    "nativeIncrementalCapture": "Current native recorders remain FINAL_FILE_ONLY; device-specific implementation and qualification remain open.",
+    "independentReviews": "Cryptographic, privacy, security, camera-control safety and representative operational studies remain open."
+  },
+  "evidencePolicy": "Job evidence is tied to exact source and unchanged code inputs. Skipped jobs are not fresh execution. Historical failed/cancelled workflows are retained. Overlapping test counts are never summed."
+}

@@ -1,0 +1,1134 @@
+{
+  "schemaVersion": "packproof.qualification-readiness-validation.v1",
+  "observedAt": "2026-10-12T01:39:34.987980+00:00",
+  "baseCommit": "c420de30a4d7f0be34356ee8da1639216dc80ee3",
+  "testedSourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/70",
+  "researchBranch": "rnd/trust-infrastructure-2026-10-02",
+  "sourceFiles": [
+    {
+      "path": ".gitattributes",
+      "sha256": "003ac65106849b7012311016f5d381ea9dd6841ce3103589836e87169c124f6f"
+    },
+    {
+      "path": ".github/workflows/rnd-qualification.yml",
+      "sha256": "c19e6fcc2bd980869b5465b564340d5d99b187a50a0d562771c885b7aaf52f02"
+    },
+    {
+      "path": "research/qualification/federated/example-assumptions.json",
+      "sha256": "3774d493cf5551cf4b8ee1ba52e3e22cbec7e2e51f6d21761dd5522e82a68ee0"
+    },
+    {
+      "path": "research/qualification/federated/noise_envelope.py",
+      "sha256": "b054d2eb8d533e9590b47f43cce9d2737867e5c1223dfc26d3685fb5a13109d8"
+    },
+    {
+      "path": "research/qualification/federated/test_noise_envelope.py",
+      "sha256": "6059050bb9fa3bbb521911018163b8ce8594645f1eee40db0aaf99d20b417652"
+    },
+    {
+      "path": "research/qualification/physical/device_preflight.py",
+      "sha256": "4364d30f79075642401555edbcb675ae37a9cb4cd2b9cfd6c680eacd580c429a"
+    },
+    {
+      "path": "research/qualification/physical/intake.py",
+      "sha256": "646faf916cca62e68ebdd2fad4799c6e192215c2d4a99939c01c1ab684de7918"
+    },
+    {
+      "path": "research/qualification/physical/test_device_preflight.py",
+      "sha256": "e7b10f87aa161947886337f7a5d7198566a664db197e29bcbb422cb68374f7cf"
+    },
+    {
+      "path": "research/qualification/physical/test_intake.py",
+      "sha256": "192e89659fe0a8bd67341bc43ad213c08e4459aaff2a6793d3e4c77c7a0548b3"
+    },
+    {
+      "path": "research/qualification/privacy/performance-preflight.mjs",
+      "sha256": "6cc277c6d8086ac4969b48598d26e377a6f93a0b95e029543846d11d2231aab0"
+    },
+    {
+      "path": "research/qualification/privacy/performance-report.mjs",
+      "sha256": "7cc6015dc70738de349b5ed4be899334b5230a2ce6df736c5a4793ecefa10147"
+    },
+    {
+      "path": "research/qualification/privacy/performance-report.test.mjs",
+      "sha256": "e8ff619c9ad589670b21033f257bc7cb12af4659c9b0cfcddd59e5edb11622aa"
+    },
+    {
+      "path": "research/qualification/reviewers/reviewer.html",
+      "sha256": "0f789d82a2474ff50458327059acdb2d3b0e02ec88be03b2f1cbe6554d3dbbe9"
+    },
+    {
+      "path": "research/qualification/reviewers/study.py",
+      "sha256": "1a487aba96235b31a2cd65ef20bf988b67e8fd39a2876c4b22c748565673b3f0"
+    },
+    {
+      "path": "research/qualification/reviewers/synthetic_demo.py",
+      "sha256": "c11ab1ecc29339adbaed74039dcc70ea2037466bfa1071bc3f380262f8711c31"
+    },
+    {
+      "path": "research/qualification/reviewers/test_study.py",
+      "sha256": "eb03b13c11c4bd90a736a401296695120163786040b4c4afcb4f17c9c540a041"
+    },
+    {
+      "path": "research/qualification/witness/operator_profile.py",
+      "sha256": "092266b231d72350c090880feff532392f7c41b704b7f8dcee0f80273bb1c637"
+    },
+    {
+      "path": "research/qualification/witness/test_operator_profile.py",
+      "sha256": "3611f632c204a08926b53e9a4c4e3407e6d19fe8e0ac89aa5f564b5654972bd8"
+    }
+  ],
+  "ci": [
+    {
+      "conclusion": "success",
+      "headSha": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+      "jobs": [
+        {
+          "completedAt": "2026-10-12T01:38:47Z",
+          "conclusion": "success",
+          "databaseId": 114628553703,
+          "name": "preparation-tools (windows-2022)",
+          "startedAt": "2026-10-12T01:38:23Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-12T01:38:25Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-12T01:38:24Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:32Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "startedAt": "2026-10-12T01:38:25Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:33Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-python@v5",
+              "number": 3,
+              "startedAt": "2026-10-12T01:38:32Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:38Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-node@v4",
+              "number": 4,
+              "startedAt": "2026-10-12T01:38:33Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:38Z",
+              "conclusion": "success",
+              "name": "Require research distribution to remain disabled",
+              "number": 5,
+              "startedAt": "2026-10-12T01:38:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:41Z",
+              "conclusion": "success",
+              "name": "Test physical acquisition intake",
+              "number": 6,
+              "startedAt": "2026-10-12T01:38:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:42Z",
+              "conclusion": "success",
+              "name": "Test blinded reviewer assignment and scoring",
+              "number": 7,
+              "startedAt": "2026-10-12T01:38:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:42Z",
+              "conclusion": "success",
+              "name": "Test public witness enrollment preparation",
+              "number": 8,
+              "startedAt": "2026-10-12T01:38:42Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:43Z",
+              "conclusion": "success",
+              "name": "Test distributed-noise assumption analysis",
+              "number": 9,
+              "startedAt": "2026-10-12T01:38:42Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:44Z",
+              "conclusion": "success",
+              "name": "Test bounded proof measurement admission",
+              "number": 10,
+              "startedAt": "2026-10-12T01:38:43Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:44Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-node@v4",
+              "number": 18,
+              "startedAt": "2026-10-12T01:38:44Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:44Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-python@v5",
+              "number": 19,
+              "startedAt": "2026-10-12T01:38:44Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:46Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 20,
+              "startedAt": "2026-10-12T01:38:44Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:46Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 21,
+              "startedAt": "2026-10-12T01:38:46Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660941/job/114628553703"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:33Z",
+          "conclusion": "success",
+          "databaseId": 114628553980,
+          "name": "preparation-tools (ubuntu-24.04)",
+          "startedAt": "2026-10-12T01:38:24Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-12T01:38:25Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-12T01:38:24Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:27Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "startedAt": "2026-10-12T01:38:25Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:27Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-python@v5",
+              "number": 3,
+              "startedAt": "2026-10-12T01:38:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-node@v4",
+              "number": 4,
+              "startedAt": "2026-10-12T01:38:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Require research distribution to remain disabled",
+              "number": 5,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Test physical acquisition intake",
+              "number": 6,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Test blinded reviewer assignment and scoring",
+              "number": 7,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Test public witness enrollment preparation",
+              "number": 8,
+              "startedAt": "2026-10-12T01:38:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Test distributed-noise assumption analysis",
+              "number": 9,
+              "startedAt": "2026-10-12T01:38:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Test bounded proof measurement admission",
+              "number": 10,
+              "startedAt": "2026-10-12T01:38:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-node@v4",
+              "number": 18,
+              "startedAt": "2026-10-12T01:38:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-python@v5",
+              "number": 19,
+              "startedAt": "2026-10-12T01:38:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 20,
+              "startedAt": "2026-10-12T01:38:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:29Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 21,
+              "startedAt": "2026-10-12T01:38:29Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660941/job/114628553980"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660941"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+      "jobs": [
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "success",
+          "databaseId": 114628553628,
+          "name": "source-isolation",
+          "startedAt": "2026-10-12T01:38:23Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-12T01:38:24Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-12T01:38:24Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:27Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "startedAt": "2026-10-12T01:38:24Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:27Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-node@v4",
+              "number": 3,
+              "startedAt": "2026-10-12T01:38:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Test research branch and source distribution interlocks",
+              "number": 4,
+              "startedAt": "2026-10-12T01:38:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Select checks affected by this source change",
+              "number": 5,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Assert this experimental source cannot distribute",
+              "number": 6,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-node@v4",
+              "number": 11,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 12,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-12T01:38:28Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 13,
+              "startedAt": "2026-10-12T01:38:28Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628553628"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "skipped",
+          "databaseId": 114628585373,
+          "name": "backend-protocols",
+          "startedAt": "2026-10-12T01:38:31Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628585373"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "skipped",
+          "databaseId": 114628585600,
+          "name": "decoder-containment",
+          "startedAt": "2026-10-12T01:38:31Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628585600"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "skipped",
+          "databaseId": 114628585698,
+          "name": "dependency-audit",
+          "startedAt": "2026-10-12T01:38:31Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628585698"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "skipped",
+          "databaseId": 114628585767,
+          "name": "federated-protocol",
+          "startedAt": "2026-10-12T01:38:31Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628585767"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "skipped",
+          "databaseId": 114628585774,
+          "name": "image-transform-proof",
+          "startedAt": "2026-10-12T01:38:31Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628585774"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "skipped",
+          "databaseId": 114628585797,
+          "name": "isolated-container",
+          "startedAt": "2026-10-12T01:38:31Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628585797"
+        },
+        {
+          "completedAt": "2026-10-12T01:38:31Z",
+          "conclusion": "skipped",
+          "databaseId": 114628585818,
+          "name": "surfaces",
+          "startedAt": "2026-10-12T01:38:31Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897/job/114628585818"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38192660897"
+    }
+  ],
+  "focusedTestsPerPlatform": {
+    "physical": 30,
+    "reviewers": 17,
+    "witness": 12,
+    "noisePlanning": 6,
+    "proofReceipt": 3,
+    "totalDistinctCases": 68,
+    "failed": 0,
+    "skipped": 0
+  },
+  "sourceIsolationTests": {
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0
+  },
+  "localExecution": {
+    "proofProfiles": [
+      {
+        "size": 4,
+        "schemaVersion": "packproof.zk-performance-preflight.v1",
+        "startedAt": "2026-10-12T01:29:25.931Z",
+        "source": {
+          "head": "c420de30a4d7f0be34356ee8da1639216dc80ee3",
+          "workingTreeDirty": true,
+          "files": [
+            {
+              "path": "research/privacy/zk/circuit.mjs",
+              "sha256": "73282c52eec149c640375f86cf95b8a0e0af61bf5f754e25bcb85846beb867b8"
+            },
+            {
+              "path": "research/privacy/zk/verify.mjs",
+              "sha256": "c479b79329251931dfd511ea2f8960759e014740157a8f61cab5d4ebd77f3647"
+            },
+            {
+              "path": "research/qualification/privacy/performance-preflight.mjs",
+              "sha256": "6cc277c6d8086ac4969b48598d26e377a6f93a0b95e029543846d11d2231aab0"
+            },
+            {
+              "path": "research/privacy/zk/package-lock.json",
+              "sha256": "ad0f931fd5c900858c078f88b6b99ede48eaf694abaa9534f65500cb9135e215"
+            }
+          ]
+        },
+        "runtime": {
+          "node": "v22.23.2",
+          "o1js": "2.15.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "Intel(R) Core(TM) i9-14900K",
+          "workers": 2
+        },
+        "profile": 4,
+        "requestedSamples": 3,
+        "measurements": [
+          {
+            "sample": 1,
+            "proveMs": 17025.256300000005,
+            "verifyMs": 1632.820900000006,
+            "proofJsonBytes": 30151,
+            "bundleBytes": 31536,
+            "proofSha256": "c63e4120836d9a4a662a4ffc8d7e6d29028ebcba91f55c01309f9537b9914a88",
+            "outputSha256": "088c68466d0eceb87fbcbf14e284d191d5fe8571927d48b1d77477fd8602fcde",
+            "verified": true
+          },
+          {
+            "sample": 2,
+            "proveMs": 11714.486600000004,
+            "verifyMs": 829.1686999999947,
+            "proofJsonBytes": 30151,
+            "bundleBytes": 31536,
+            "proofSha256": "08753c20c1eefb615242e6459516100da6fa4406e186825e49736ef4f949806b",
+            "outputSha256": "5d126ff201cd018b10d0e944430b43d9fd80ccbb3e028d4f7d4f0a52294bb34f",
+            "verified": true
+          },
+          {
+            "sample": 3,
+            "proveMs": 14133.561800000003,
+            "verifyMs": 1270.4281000000046,
+            "proofJsonBytes": 30151,
+            "bundleBytes": 31537,
+            "proofSha256": "f6cb3ee5fd5ac9a083c9c2b85f333b2fef7b182e1648ef652e0dc21075eeb22c",
+            "outputSha256": "f9e6c8dc4328d65e2cd620a494df141700127f3ee681d687bfcf2d335b49918f",
+            "verified": true
+          }
+        ],
+        "passed": true,
+        "qualificationPassed": false,
+        "independentReview": false,
+        "publicReliance": false,
+        "limitations": [
+          "Synthetic exact-size RGB8 only; no real source media or video.",
+          "At most three observations: no p95, SLA, population reliability or full-size extrapolation.",
+          "Compilation measured separately; subsequent proofs share a compiled circuit in one process.",
+          "Process high-water RSS is not an OS allocation limit or aggregate system measurement.",
+          "No cloud or target-device cost measurement; no deployment, certification or independent review."
+        ],
+        "compileMs": 20378.1943,
+        "descriptiveSummary": {
+          "proveMs": {
+            "count": 3,
+            "min": 11714.486600000004,
+            "median": 14133.561800000003,
+            "max": 17025.256300000005
+          },
+          "verifyMs": {
+            "count": 3,
+            "min": 829.1686999999947,
+            "median": 1270.4281000000046,
+            "max": 1632.820900000006
+          }
+        },
+        "maxRssKiB": 680628,
+        "completedAt": "2026-10-12T01:30:33.106Z"
+      },
+      {
+        "size": 8,
+        "schemaVersion": "packproof.zk-performance-preflight.v1",
+        "startedAt": "2026-10-12T01:34:46.224Z",
+        "source": {
+          "head": "c420de30a4d7f0be34356ee8da1639216dc80ee3",
+          "workingTreeDirty": true,
+          "files": [
+            {
+              "path": "research/privacy/zk/circuit.mjs",
+              "sha256": "73282c52eec149c640375f86cf95b8a0e0af61bf5f754e25bcb85846beb867b8"
+            },
+            {
+              "path": "research/privacy/zk/verify.mjs",
+              "sha256": "c479b79329251931dfd511ea2f8960759e014740157a8f61cab5d4ebd77f3647"
+            },
+            {
+              "path": "research/qualification/privacy/performance-preflight.mjs",
+              "sha256": "6cc277c6d8086ac4969b48598d26e377a6f93a0b95e029543846d11d2231aab0"
+            },
+            {
+              "path": "research/privacy/zk/package-lock.json",
+              "sha256": "ad0f931fd5c900858c078f88b6b99ede48eaf694abaa9534f65500cb9135e215"
+            }
+          ]
+        },
+        "runtime": {
+          "node": "v22.23.2",
+          "o1js": "2.15.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "Intel(R) Core(TM) i9-14900K",
+          "workers": 2
+        },
+        "profile": 8,
+        "requestedSamples": 3,
+        "measurements": [
+          {
+            "sample": 1,
+            "proveMs": 17374.1963,
+            "verifyMs": 1760.7773000000016,
+            "proofJsonBytes": 30340,
+            "bundleBytes": 31998,
+            "proofSha256": "8c0f23cc9ea9e89e182fc992be7192a925eea55ab5086ad1efe21f3ad13b61d5",
+            "outputSha256": "cdc9eb6fe313fce257eeaf601e897ae47a20d1ea59f02e19783bb428c57bccfc",
+            "verified": true
+          },
+          {
+            "sample": 2,
+            "proveMs": 15541.531500000005,
+            "verifyMs": 1896.3804999999993,
+            "proofJsonBytes": 30340,
+            "bundleBytes": 31999,
+            "proofSha256": "8646f098e78ebcc388ff69c3af0a11e632f0d223abd70f2a31ca83c10df4d56d",
+            "outputSha256": "5f679469b6e5f029459ffb7d34b17530e0b59bf00375259cc326e6dcc7d008af",
+            "verified": true
+          },
+          {
+            "sample": 3,
+            "proveMs": 17959.411900000006,
+            "verifyMs": 1366.1364999999932,
+            "proofJsonBytes": 30338,
+            "bundleBytes": 31994,
+            "proofSha256": "3730a35b7b288b30002ae58c5cca7c41444cf57166586fa363e5f6f42ffbb2e4",
+            "outputSha256": "e1dba913e7da00ab2dddd266558348ad638cd1159f5ff19499f813fc2c9e8601",
+            "verified": true
+          }
+        ],
+        "passed": true,
+        "qualificationPassed": false,
+        "independentReview": false,
+        "publicReliance": false,
+        "limitations": [
+          "Synthetic exact-size RGB8 only; no real source media or video.",
+          "At most three observations: no p95, SLA, population reliability or full-size extrapolation.",
+          "Compilation measured separately; subsequent proofs share a compiled circuit in one process.",
+          "Process high-water RSS is not an OS allocation limit or aggregate system measurement.",
+          "No cloud or target-device cost measurement; no deployment, certification or independent review."
+        ],
+        "compileMs": 28153.0356,
+        "descriptiveSummary": {
+          "proveMs": {
+            "count": 3,
+            "min": 15541.531500000005,
+            "median": 17374.1963,
+            "max": 17959.411900000006
+          },
+          "verifyMs": {
+            "count": 3,
+            "min": 1366.1364999999932,
+            "median": 1760.7773000000016,
+            "max": 1896.3804999999993
+          }
+        },
+        "maxRssKiB": 780028,
+        "completedAt": "2026-10-12T01:36:10.835Z"
+      }
+    ],
+    "reviewerBrowser": {
+      "syntheticOnly": true,
+      "browser": "Microsoft Edge",
+      "complete": 1,
+      "abstain": 1,
+      "notAnswered": 14,
+      "allAssignedRetained": 16,
+      "humanStudy": false
+    },
+    "noiseAnalysis": {
+      "schemaVersion": "packproof.distributed-noise-envelope.v1",
+      "scope": "IDEAL_CONTINUOUS_GAUSSIAN_VARIANCE_PLANNING_ONLY",
+      "assumptions": {
+        "schemaVersion": "packproof.distributed-noise-planning.v1",
+        "enrolledContributors": 24,
+        "minimumSurvivors": 20,
+        "maximumColludingSurvivors": 4,
+        "clipL2": 1,
+        "targetNoiseMultiplier": 4
+      },
+      "minimumHypothesizedHonestSurvivors": 16,
+      "replacementSensitivityOfSum": 2.0,
+      "requiredHiddenSumNoiseStd": 8.0,
+      "perHonestParticipantIdealNoiseStd": 2.0,
+      "nominalCohortOnlyNoiseStd": 1.6329931618554523,
+      "cases": [
+        {
+          "survivors": 20,
+          "colludingSurvivors": 0,
+          "hypothesizedHonestSurvivors": 20,
+          "replacementSensitivityOfMean": 0.1,
+          "requiredMeanNoiseStd": 0.4,
+          "plannedIdealMeanNoiseStd": 0.447213595499958,
+          "plannedIdealEffectiveMultiplier": 4.47213595499958,
+          "nominalCohortEffectiveMultiplier": 3.651483716701108,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 20,
+          "colludingSurvivors": 1,
+          "hypothesizedHonestSurvivors": 19,
+          "replacementSensitivityOfMean": 0.1,
+          "requiredMeanNoiseStd": 0.4,
+          "plannedIdealMeanNoiseStd": 0.4358898943540674,
+          "plannedIdealEffectiveMultiplier": 4.358898943540674,
+          "nominalCohortEffectiveMultiplier": 3.559026084010438,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 20,
+          "colludingSurvivors": 2,
+          "hypothesizedHonestSurvivors": 18,
+          "replacementSensitivityOfMean": 0.1,
+          "requiredMeanNoiseStd": 0.4,
+          "plannedIdealMeanNoiseStd": 0.42426406871192845,
+          "plannedIdealEffectiveMultiplier": 4.242640687119284,
+          "nominalCohortEffectiveMultiplier": 3.4641016151377544,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 20,
+          "colludingSurvivors": 3,
+          "hypothesizedHonestSurvivors": 17,
+          "replacementSensitivityOfMean": 0.1,
+          "requiredMeanNoiseStd": 0.4,
+          "plannedIdealMeanNoiseStd": 0.41231056256176607,
+          "plannedIdealEffectiveMultiplier": 4.123105625617661,
+          "nominalCohortEffectiveMultiplier": 3.366501646120693,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 20,
+          "colludingSurvivors": 4,
+          "hypothesizedHonestSurvivors": 16,
+          "replacementSensitivityOfMean": 0.1,
+          "requiredMeanNoiseStd": 0.4,
+          "plannedIdealMeanNoiseStd": 0.4,
+          "plannedIdealEffectiveMultiplier": 4.0,
+          "nominalCohortEffectiveMultiplier": 3.265986323710904,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 21,
+          "colludingSurvivors": 0,
+          "hypothesizedHonestSurvivors": 21,
+          "replacementSensitivityOfMean": 0.09523809523809523,
+          "requiredMeanNoiseStd": 0.38095238095238093,
+          "plannedIdealMeanNoiseStd": 0.4364357804719847,
+          "plannedIdealEffectiveMultiplier": 4.58257569495584,
+          "nominalCohortEffectiveMultiplier": 3.741657386773942,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 21,
+          "colludingSurvivors": 1,
+          "hypothesizedHonestSurvivors": 20,
+          "replacementSensitivityOfMean": 0.09523809523809523,
+          "requiredMeanNoiseStd": 0.38095238095238093,
+          "plannedIdealMeanNoiseStd": 0.42591770999996,
+          "plannedIdealEffectiveMultiplier": 4.47213595499958,
+          "nominalCohortEffectiveMultiplier": 3.651483716701108,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 21,
+          "colludingSurvivors": 2,
+          "hypothesizedHonestSurvivors": 19,
+          "replacementSensitivityOfMean": 0.09523809523809523,
+          "requiredMeanNoiseStd": 0.38095238095238093,
+          "plannedIdealMeanNoiseStd": 0.41513323271815944,
+          "plannedIdealEffectiveMultiplier": 4.358898943540674,
+          "nominalCohortEffectiveMultiplier": 3.5590260840104384,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 21,
+          "colludingSurvivors": 3,
+          "hypothesizedHonestSurvivors": 18,
+          "replacementSensitivityOfMean": 0.09523809523809523,
+          "requiredMeanNoiseStd": 0.38095238095238093,
+          "plannedIdealMeanNoiseStd": 0.40406101782088427,
+          "plannedIdealEffectiveMultiplier": 4.242640687119285,
+          "nominalCohortEffectiveMultiplier": 3.464101615137755,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 21,
+          "colludingSurvivors": 4,
+          "hypothesizedHonestSurvivors": 17,
+          "replacementSensitivityOfMean": 0.09523809523809523,
+          "requiredMeanNoiseStd": 0.38095238095238093,
+          "plannedIdealMeanNoiseStd": 0.392676726249301,
+          "plannedIdealEffectiveMultiplier": 4.123105625617661,
+          "nominalCohortEffectiveMultiplier": 3.366501646120694,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 22,
+          "colludingSurvivors": 0,
+          "hypothesizedHonestSurvivors": 22,
+          "replacementSensitivityOfMean": 0.09090909090909091,
+          "requiredMeanNoiseStd": 0.36363636363636365,
+          "plannedIdealMeanNoiseStd": 0.4264014327112209,
+          "plannedIdealEffectiveMultiplier": 4.69041575982343,
+          "nominalCohortEffectiveMultiplier": 3.8297084310253533,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 22,
+          "colludingSurvivors": 1,
+          "hypothesizedHonestSurvivors": 21,
+          "replacementSensitivityOfMean": 0.09090909090909091,
+          "requiredMeanNoiseStd": 0.36363636363636365,
+          "plannedIdealMeanNoiseStd": 0.4165977904505309,
+          "plannedIdealEffectiveMultiplier": 4.58257569495584,
+          "nominalCohortEffectiveMultiplier": 3.7416573867739418,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 22,
+          "colludingSurvivors": 2,
+          "hypothesizedHonestSurvivors": 20,
+          "replacementSensitivityOfMean": 0.09090909090909091,
+          "requiredMeanNoiseStd": 0.36363636363636365,
+          "plannedIdealMeanNoiseStd": 0.4065578140908709,
+          "plannedIdealEffectiveMultiplier": 4.47213595499958,
+          "nominalCohortEffectiveMultiplier": 3.651483716701108,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 22,
+          "colludingSurvivors": 3,
+          "hypothesizedHonestSurvivors": 19,
+          "replacementSensitivityOfMean": 0.09090909090909091,
+          "requiredMeanNoiseStd": 0.36363636363636365,
+          "plannedIdealMeanNoiseStd": 0.39626354032187944,
+          "plannedIdealEffectiveMultiplier": 4.358898943540674,
+          "nominalCohortEffectiveMultiplier": 3.559026084010438,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 22,
+          "colludingSurvivors": 4,
+          "hypothesizedHonestSurvivors": 18,
+          "replacementSensitivityOfMean": 0.09090909090909091,
+          "requiredMeanNoiseStd": 0.36363636363636365,
+          "plannedIdealMeanNoiseStd": 0.385694607919935,
+          "plannedIdealEffectiveMultiplier": 4.242640687119285,
+          "nominalCohortEffectiveMultiplier": 3.464101615137755,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 23,
+          "colludingSurvivors": 0,
+          "hypothesizedHonestSurvivors": 23,
+          "replacementSensitivityOfMean": 0.08695652173913043,
+          "requiredMeanNoiseStd": 0.34782608695652173,
+          "plannedIdealMeanNoiseStd": 0.4170288281141495,
+          "plannedIdealEffectiveMultiplier": 4.795831523312719,
+          "nominalCohortEffectiveMultiplier": 3.9157800414902435,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 23,
+          "colludingSurvivors": 1,
+          "hypothesizedHonestSurvivors": 22,
+          "replacementSensitivityOfMean": 0.08695652173913043,
+          "requiredMeanNoiseStd": 0.34782608695652173,
+          "plannedIdealMeanNoiseStd": 0.40786223998464605,
+          "plannedIdealEffectiveMultiplier": 4.69041575982343,
+          "nominalCohortEffectiveMultiplier": 3.8297084310253533,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 23,
+          "colludingSurvivors": 2,
+          "hypothesizedHonestSurvivors": 21,
+          "replacementSensitivityOfMean": 0.08695652173913043,
+          "requiredMeanNoiseStd": 0.34782608695652173,
+          "plannedIdealMeanNoiseStd": 0.39848484303963827,
+          "plannedIdealEffectiveMultiplier": 4.58257569495584,
+          "nominalCohortEffectiveMultiplier": 3.7416573867739418,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 23,
+          "colludingSurvivors": 3,
+          "hypothesizedHonestSurvivors": 20,
+          "replacementSensitivityOfMean": 0.08695652173913043,
+          "requiredMeanNoiseStd": 0.34782608695652173,
+          "plannedIdealMeanNoiseStd": 0.3888813873912678,
+          "plannedIdealEffectiveMultiplier": 4.47213595499958,
+          "nominalCohortEffectiveMultiplier": 3.6514837167011085,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 23,
+          "colludingSurvivors": 4,
+          "hypothesizedHonestSurvivors": 19,
+          "replacementSensitivityOfMean": 0.08695652173913043,
+          "requiredMeanNoiseStd": 0.34782608695652173,
+          "plannedIdealMeanNoiseStd": 0.3790346907426673,
+          "plannedIdealEffectiveMultiplier": 4.358898943540674,
+          "nominalCohortEffectiveMultiplier": 3.559026084010438,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 24,
+          "colludingSurvivors": 0,
+          "hypothesizedHonestSurvivors": 24,
+          "replacementSensitivityOfMean": 0.08333333333333333,
+          "requiredMeanNoiseStd": 0.3333333333333333,
+          "plannedIdealMeanNoiseStd": 0.40824829046386296,
+          "plannedIdealEffectiveMultiplier": 4.898979485566356,
+          "nominalCohortEffectiveMultiplier": 4.0,
+          "nominalCohortVarianceShortfall": false
+        },
+        {
+          "survivors": 24,
+          "colludingSurvivors": 1,
+          "hypothesizedHonestSurvivors": 23,
+          "replacementSensitivityOfMean": 0.08333333333333333,
+          "requiredMeanNoiseStd": 0.3333333333333333,
+          "plannedIdealMeanNoiseStd": 0.3996526269427266,
+          "plannedIdealEffectiveMultiplier": 4.795831523312719,
+          "nominalCohortEffectiveMultiplier": 3.9157800414902435,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 24,
+          "colludingSurvivors": 2,
+          "hypothesizedHonestSurvivors": 22,
+          "replacementSensitivityOfMean": 0.08333333333333333,
+          "requiredMeanNoiseStd": 0.3333333333333333,
+          "plannedIdealMeanNoiseStd": 0.39086797998528583,
+          "plannedIdealEffectiveMultiplier": 4.690415759823431,
+          "nominalCohortEffectiveMultiplier": 3.8297084310253533,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 24,
+          "colludingSurvivors": 3,
+          "hypothesizedHonestSurvivors": 21,
+          "replacementSensitivityOfMean": 0.08333333333333333,
+          "requiredMeanNoiseStd": 0.3333333333333333,
+          "plannedIdealMeanNoiseStd": 0.38188130791298663,
+          "plannedIdealEffectiveMultiplier": 4.58257569495584,
+          "nominalCohortEffectiveMultiplier": 3.7416573867739418,
+          "nominalCohortVarianceShortfall": true
+        },
+        {
+          "survivors": 24,
+          "colludingSurvivors": 4,
+          "hypothesizedHonestSurvivors": 20,
+          "replacementSensitivityOfMean": 0.08333333333333333,
+          "requiredMeanNoiseStd": 0.3333333333333333,
+          "plannedIdealMeanNoiseStd": 0.37267799624996495,
+          "plannedIdealEffectiveMultiplier": 4.47213595499958,
+          "nominalCohortEffectiveMultiplier": 3.6514837167011085,
+          "nominalCohortVarianceShortfall": true
+        }
+      ],
+      "noiseSampled": false,
+      "trainingExecuted": false,
+      "independentOrganizationsVerified": 0,
+      "epsilonClaim": null,
+      "mechanismImplemented": false,
+      "qualified": false,
+      "distributedModeEnabled": false,
+      "releaseAuthorized": false,
+      "limitations": [
+        "Independent zero-mean noise and a fixed survivor roster are assumed, not verified.",
+        "Known colluder noise is conservatively removed from hidden variance.",
+        "Variance sufficiency alone is not a differential privacy proof.",
+        "Discrete sampling, rounding, modular wraparound and finite precision are unmodeled.",
+        "No malicious clipping, Sybil resistance, adaptive dropout or transcript guarantee.",
+        "No multi-round accountant, amplification, utility or deployment claim."
+      ],
+      "configSha256": "3774d493cf5551cf4b8ee1ba52e3e22cbec7e2e51f6d21761dd5522e82a68ee0",
+      "toolSha256": "b054d2eb8d533e9590b47f43cce9d2737867e5c1223dfc26d3685fb5a13109d8",
+      "installedQuantizerProbe": {
+        "flowerVersion": "1.39.0",
+        "quantizerSourceSha256": "351fcfc9d1a9244c5dfee622620a7f74f3d512b0d942875a7a5a12538fd8f15c",
+        "publicInputs": [
+          -4.0,
+          -1.0,
+          0.0,
+          1.0,
+          4.0
+        ],
+        "decoded": [
+          -1.0,
+          -1.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "observation": "The current encoder clips before quantization. Adding unbounded noise before it does not preserve the intended additive Gaussian mechanism.",
+        "privacyConclusion": "No privacy guarantee inferred from this diagnostic."
+      }
+    },
+    "existingFailClosedRegression": {
+      "command": "PYTHONPATH=research/federated python -m pytest research/federated/tests/test_federated.py -k group_gate_and_distributed_branch_fail_closed -q",
+      "passed": 1,
+      "deselected": 13,
+      "warnings": 2,
+      "scope": "Existing runtime test; source unchanged from base, no distributed mechanism enabled"
+    }
+  },
+  "retainedFailure": "Initial 4x4 proof harness used incompatible CommonJS/ESM o1js instances; zero samples, original failure retained; fixed ESM loader used for both subsequent profiles.",
+  "localEvidenceDirectory": "C:\\Users\\neric\\Documents\\Codex\\2026-10-09\\fu\\outputs\\PackProof-RnD-Qualification-2026-10-11",
+  "evidence": [
+    {
+      "path": "Host-readiness.json",
+      "sha256": "117d228fc87a28d7c7ead1ce93c417a4942bd3832d1cf57fa1532e0ced881ec4"
+    },
+    {
+      "path": "physical-readiness-verification.json",
+      "sha256": "f5bde187af3aafa12356df7c01fae33a2c88a89c0bee5f0bef355784257069f6"
+    },
+    {
+      "path": "reviewer-toolkit/validation-receipt.json",
+      "sha256": "ef8d766234b3dde864122aa28fc92f64b3d83a399d84864bb46665b125f1072a"
+    },
+    {
+      "path": "privacy-witness-preparation-receipt.json",
+      "sha256": "25e5d13312abebdddd82f08b60be7317bec6e094a8ea476de30644a7d2934840"
+    },
+    {
+      "path": "privacy-witness-integrity-check.json",
+      "sha256": "3ccb66968f78abdec25b2cb5723581f8b4ea7e347e8e1fc380fe758113b86f47"
+    },
+    {
+      "path": "privacy-performance-4x4/performance.json",
+      "sha256": "77c12cc767f45cedc6f88bc971ac0b4401ddc1cf2a72387294b50d4b0cb7d94b"
+    },
+    {
+      "path": "privacy-performance-4x4-final/performance.json",
+      "sha256": "8e228e502d651a756ed6b696d86af4dd5b8729b12312563cb9ea8c5c2b990e92"
+    },
+    {
+      "path": "privacy-performance-8x8-final/performance.json",
+      "sha256": "1b611962cb4c1dc956b4f4b1b62434464c6271c7ea5d153c216df4598ecc2b9d"
+    },
+    {
+      "path": "privacy-performance-4x4-integrity.json",
+      "sha256": "778ade3db9a2744088f087bd6c0cf66119744e9c6b265ffd648b14e74f7d8d70"
+    },
+    {
+      "path": "privacy-performance-8x8-integrity.json",
+      "sha256": "75c7c4106b39aa583240c975e016a31460abe2b968fa59ecbab8aeeae41fa6ce"
+    },
+    {
+      "path": "distributed-noise-envelope.json",
+      "sha256": "e81051c2acb3ff1231c231b51779cbc0dd0d92647c2cacf47c0a27da077fb07b"
+    },
+    {
+      "path": "distributed-noise-envelope-final.json",
+      "sha256": "a932e420f9396ff99c1dc5473edb0244899dd0aaebe9eefd0dfb6d03a7ed4a73"
+    },
+    {
+      "path": "Preparation-CI.log",
+      "sha256": "3a6556a88f4216ef6216db2e99005819384f22cc0030f3edbf5632b29aadfcb7"
+    },
+    {
+      "path": "Isolation-CI.log",
+      "sha256": "efed5d574a894317d465af54f20b9f8029d9dd45e073e4527a43d672c9417912"
+    }
+  ],
+  "qualification": {
+    "localEngineeringTickets": 60,
+    "externalQualificationTickets": 11,
+    "physicalCaptures": 0,
+    "independentWitnessOperators": 0,
+    "independentlyConsentedLearningOrganizations": 0,
+    "humanStudyParticipants": 0,
+    "phoneConnection": "USER_DEFERRED",
+    "ios": "USER_DEFERRED",
+    "fullyImplementedPlan": false,
+    "qualificationComplete": false,
+    "releaseAuthorized": false
+  },
+  "scope": "Only preparation tools and documentation added; no existing backend/mobile/desktop/web/model/circuit/dependency source changed. CI skipped unchanged runtime groups."
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "packproof.platform-policy.v1",
+  "androidKey": {
+    "trustedRootCertificatesPem": [],
+    "revocationEntries": {},
+    "revocationValidUntil": 0,
+    "trustPolicyId": "UNCONFIGURED-RESEARCH-KEYMINT-POLICY",
+    "trustPolicyExpiresAt": 0,
+    "authorization": {
+      "packageName": "com.packproof.mobile.research",
+      "certificateSha256Digests": [],
+      "minimumVersionCode": "1",
+      "allowedAttestationVersions": [
+        100,
+        200,
+        300,
+        400,
+        500
+      ],
+      "allowedSecurityLevels": [
+        1,
+        2
+      ],
+      "minimumOsVersion": 120000,
+      "minimumOsPatchLevel": 202609,
+      "minimumVendorPatchLevel": 20260901,
+      "minimumBootPatchLevel": 20260901
+    }
+  }
+}

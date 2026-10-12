@@ -16,7 +16,14 @@ permissions:
   actions: read
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   verify-ci:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') }}
+    needs: rnd-release-policy
     name: Require CI for this commit
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -49,8 +56,9 @@ jobs:
             throw new Error(`No successful CI run for ${context.sha} within 20 minutes.`);
 
   deploy:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') }}
     name: API + web staging parity
-    needs: verify-ci
+    needs: [verify-ci, rnd-release-policy]
     runs-on: windows-latest
     timeout-minutes: 90
     env:

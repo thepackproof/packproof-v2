@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/derivative-grant.schema.json",
+  "description": "Public signed record only; bearer tokens and stored token hashes must never appear here.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "proofId",
+    "analysisId",
+    "issuerId",
+    "scope",
+    "artifactSha256",
+    "recipeSha256",
+    "reviewDigest",
+    "createdAt",
+    "expiresAt",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "packproof.derivative-grant.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "proofId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "analysisId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "issuerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "scope": {
+      "const": "REVIEWED_DERIVATIVE_ZIP_ONLY"
+    },
+    "artifactSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "recipeSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reviewDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      }
+    }
+  },
+  "additionalProperties": false
+}

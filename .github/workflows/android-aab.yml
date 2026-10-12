@@ -18,7 +18,14 @@ permissions:
   contents: read
 
 jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
   build:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') }}
+    needs: rnd-release-policy
     name: Signed Android release AAB
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -55,6 +62,7 @@ jobs:
           npm run typecheck
           npm run test:proof-record
           npm run test:recovery
+          npm run test:research
           npm run test:intake
           npm run test:build-security
           npm run test:redesign
@@ -73,6 +81,7 @@ jobs:
           if (!/^\d+\.\d+(?:\.\d+)?$/.test(expo.version) || !Number.isSafeInteger(expo.android.versionCode)) throw new Error('Invalid release identity');
           if (expo.extra.packproofMobileTaskUx !== true || expo.extra.packproofInternalReview) throw new Error('Production UX configuration is incorrect');
           if (expo.extra.packproofFirstProofExperience !== true) throw new Error('Production first Proof experience is not enabled');
+          if (expo.extra.packproofResearch !== false || expo.extra.packproofResearchProduction !== true || expo.extra.packproofResearchProfile !== 'capture-receipts-v1') throw new Error('Production capture receipt profile is incorrect');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact=packproof-${expo.version}-${expo.android.versionCode}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${expo.version}\nversionCode=${expo.android.versionCode}\n`);
           NODE

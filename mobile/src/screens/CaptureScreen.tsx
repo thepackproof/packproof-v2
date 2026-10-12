@@ -1,4 +1,6 @@
 import { nativeStudyForCapture } from "../analytics/native-study";
+import { researchProductionEnabled } from '../research/isolation';
+import { ReceiptConsent } from '../research/ReceiptConsent';
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { IdentifierReview } from '../../../backend/src/identifiers/types';
@@ -36,6 +38,7 @@ export function CaptureScreen() {
   const [checkingLabel, setCheckingLabel] = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
   const [reviewVersion, setReviewVersion] = useState(0);
+  const [receiptBusy, setReceiptBusy] = useState(false);
   const [identifiers, setIdentifiers] = useState<IdentifierReview | null>(null);
   const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [identifierBlocked, setIdentifierBlocked] = useState(false);
@@ -51,7 +54,7 @@ export function CaptureScreen() {
   const ordinaryCapture = Boolean(capture?.captureSessionId) && !capture?.captureStageId && !isGradingWorkflow(app.proof?.workflowType);
 
   useEffect(() => {
-    if (reviewOnly || !app.proof || capture || inFlight || app.busy || openedPreview.current === app.proof.proofId) return;
+    if (researchProductionEnabled() || reviewOnly || !app.proof || capture || inFlight || app.busy || openedPreview.current === app.proof.proofId) return;
     openedPreview.current = app.proof.proofId;
     // Selection opens the preview only. Native Record packing remains intentional.
     void app.startCapture();
@@ -151,6 +154,7 @@ export function CaptureScreen() {
       <RemainingShipmentNotice value={app.proof} />
     </View> : null}
     <ErrorBanner message={app.error} />
+    {researchProductionEnabled() && app.proof && app.session && !capture && !inFlight && !reviewOnly && !isGradingWorkflow(app.proof.workflowType) ? <ReceiptConsent key={`${app.client.apiBaseUrl}:${app.session.userId}:${app.proof.proofId}`} onBusy={setReceiptBusy} /> : null}
     {capture && !belongs ? <Button label="Return to saved recording" onPress={() => {
       if (app.session?.captureProofId) void app.run(() => app.openProof(app.session!.captureProofId!)); else app.goBack();
     }} /> : null}
@@ -165,6 +169,7 @@ export function CaptureScreen() {
     </View> : null}
     {reviewing && capture ? <View style={styles.preview}>
       <VideoReview key={capture.uri} uri={capture.uri} compact />
+      {capture.researchNotice ? <Text style={[styles.note, { color: colors.textSecondary }]}>{capture.research?.unavailableReason ?? capture.researchNotice}</Text> : null}
       {reviewOnly ? <><Text accessibilityRole="alert" style={[styles.note,{color:colors.textSecondary}]}>{app.captureReviewOnlyReason}</Text><Button label="Check current Proof" onPress={()=>void app.resumeSavedCapture(capture)} disabled={app.busy||app.offline} variant="secondary" /></> : null}
       {!reviewOnly && labelBlocked ? <Text accessibilityLiveRegion="polite" style={[styles.note, { color: colors.textSecondary }]}>{checkingLabel
         ? "Checking required recording details before confirmation…"
@@ -230,7 +235,7 @@ export function CaptureScreen() {
         onPress={() => void (Platform.OS === "android" ? Linking.sendIntent("android.settings.BIOMETRIC_ENROLL").catch(() => Linking.openSettings()) : Linking.openSettings())} variant="tertiary" disabled={app.busy} /> : null}
       {!reviewOnly ? <Button label="Discard recording" onPress={discardRecording} variant="tertiary" disabled={app.busy} /> : null}
     </View> : null}
-    {!capture && !inFlight ? <Button label="Open camera" onPress={() => void app.startCapture()} loading={app.busy} /> : null}
+    {!capture && !inFlight ? <Button label="Open camera" onPress={() => void app.startCapture()} loading={app.busy} disabled={receiptBusy} /> : null}
     {!capture && /camera permission|permission denied/i.test(app.error ?? "") ? <Button label="Open camera settings" variant="secondary" disabled={app.busy} onPress={() => void Linking.openSettings()} /> : null}
     <Button label="Back" onPress={app.goBack} variant="tertiary" disabled={app.busy} />
   </ScrollView>;

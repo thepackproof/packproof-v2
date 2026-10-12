@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/signed-record.schema.json",
+  "type": "object",
+  "required": [
+    "canonicalJson",
+    "digest",
+    "signature"
+  ],
+  "properties": {
+    "canonicalJson": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 4194304
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "signature": {
+      "$ref": "signature.schema.json"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Detached transport record. digest is unprefixed SHA-256 of exact canonicalJson UTF-8 bytes. Signature policy is external; structural validation supplies no trust."
+}

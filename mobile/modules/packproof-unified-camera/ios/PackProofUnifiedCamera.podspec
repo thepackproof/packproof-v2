@@ -14,9 +14,12 @@ Pod::Spec.new do |s|
   s.source = { :git => 'https://github.com/thepackproof/packproof-v2.git' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'AVFoundation', 'Vision', 'CryptoKit', 'ImageIO', 'UIKit'
+  s.frameworks = 'AVFoundation', 'Vision', 'CryptoKit', 'ImageIO', 'UIKit', 'DeviceCheck', 'Security'
   s.swift_version = '5.0'
-  s.source_files = '**/*.{h,m,mm,swift}'
+  s.source_files = '*.{h,m,mm,swift}'
+  s.test_spec 'ResearchTests' do |test_spec|
+    test_spec.source_files = 'Tests/*.swift'
+  end
   s.resource_bundles = { 'PackProofUnifiedCamera_privacy' => ['PrivacyInfo.xcprivacy'] }
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
 end

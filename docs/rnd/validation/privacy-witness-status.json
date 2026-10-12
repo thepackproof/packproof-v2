@@ -1,0 +1,180 @@
+{
+  "schemaVersion": "packproof.rnd-ticket-evidence.v1",
+  "workstream": "ProofShield, ProofWitness and portable verification",
+  "branch": "rnd/trust-infrastructure-2026-10-02",
+  "validatedScope": "LOCAL_SYNTHETIC_CRYPTOGRAPHIC_AND_MEDIA_PIPELINES",
+  "releaseAuthorized": false,
+  "publicReliance": false,
+  "code": [
+    "research/privacy/redact.py",
+    "research/privacy/zk",
+    "research/witness/witness.py",
+    "verifier/rnd_bundle.mjs",
+    "verifier/rnd_verify.py",
+    "backend/src/rnd/zk-service.ts",
+    "backend/migrations/083_rnd_zk.sql",
+    "backend/src/rnd/derivative-grants.ts",
+    "backend/migrations/086_rnd_derivative_grants.sql"
+  ],
+  "tickets": [
+    {
+      "id": "F02-07",
+      "status": "ENGINEERED",
+      "evidence": "Offline CLI/library checks exact frozen root bytes, real ECDSA/RSA-PSS/Ed25519 signatures against independently pinned trust, canonical extension links, exact analysis input/subject/source bindings, capture intents/receipts, signed export completeness, annotations, enrollment events, native sidecar acquisition/frame links and actual exported bytes. Unknown/revoked/expired trust rejects. No account or signing secret is needed.",
+      "open": "Specialist witness/ZK trust verification uses separate commands. Metadata-only verification explicitly reports bytes NOT_CHECKED. Cryptographic validity never establishes physical truth or omitted/unsubmitted evidence completeness."
+    },
+    {
+      "id": "F07-01",
+      "status": "ENGINEERED",
+      "evidence": "Face/text/quadrilateral candidate detectors, bounded mask classes and local optical-flow temporal tracking with full-frame fallback on tracking loss; manual review remains mandatory.",
+      "open": "Representative sensitive-class recall and evidence-critical exception evaluation; no completeness or identity-recognition claim."
+    },
+    {
+      "id": "F07-02",
+      "status": "VALIDATED FOR SCOPE",
+      "scope": "Synthetic still/video fixtures",
+      "evidence": "Lossless opaque RGB PNG and lossless encoded H264 derivatives with canonical pixel digests, explicit spatial/temporal recipe, transparent-pixel hygiene and stripped audio/metadata/subtitles/data. Private originals remain separate."
+    },
+    {
+      "id": "F07-03",
+      "status": "ENGINEERED",
+      "evidence": "Exact artifact/recipe human approval, authorized derivative preview and reviewed ZIP export, signed review/disclosure, 256-bit scoped bearer grants with server-stored SHA256 only, 60-second to one-day expiry, signed immutable revocation/audit, current approval/consent/access checked for every output chunk, and omission/non-revocation notices. Authenticated revocation remains available under the research kill switch.",
+      "open": "Representative human mask review and external deployment/retention qualification remain prerequisites; research service is isolated and release is not authorized."
+    },
+    {
+      "id": "F07-04",
+      "status": "ENGINEERED",
+      "evidence": "Standalone signed transformation verification and authorized source/output recomputation; ordinary transformation records remain distinct from actual ZK verification."
+    },
+    {
+      "id": "F07-05",
+      "status": "VALIDATED FOR SCOPE",
+      "scope": "Fixed 4x4 and 8x8 canonical RGB8 opaque-mask circuits",
+      "evidence": "Real o1js proofs constrain boolean masks, every RGB8 channel/range, fixed dimensions/format/transform, blinded private-source Poseidon commitment and exact public output digest. Source commitment is signed before mask selection. Backend uses an immutable earlier enrollment and external pinned verification-key registry; the witness pixels/blind never enter public artifacts. Twenty adversarial cases per measured profile reject.",
+      "open": "Trusted decoding/commitment issuer is outside the circuit. No camera-origin, real-image-size or full-image extraction qualification; circuit specialist review pending."
+    },
+    {
+      "id": "F07-06",
+      "status": "ENGINEERED_REVIEW_BLOCKED",
+      "evidence": "Real compile/prove/verify timings, proof size and peak RSS measured for both tiny profiles. Actual backend queued proof integration tested. Local spend zero; cloud per-image cost unmeasured.",
+      "open": "Independent cryptographic review, repeated representative performance/percentiles, production memory enforcement and realistic image sizes are required before public reliance."
+    },
+    {
+      "id": "F09-01",
+      "status": "ENGINEERED",
+      "evidence": "Pinned pymerkle RFC6962 SHA256 construction/proofs, domain-separated blinded leaf commitment, signed canonical checkpoints, strict proof shape and policy ID. Transparency.dev components evaluated; no invented Merkle hash protocol.",
+      "open": "pymerkle JSON encoding is not Tessera tile/signed-note interoperability; external operator adapter and dependency/license review required."
+    },
+    {
+      "id": "F09-02",
+      "status": "ENGINEERED",
+      "evidence": "Private SQLite log stores only blinded leaves. Unique commitment insertion, persistent publisher identity/outbox and retries, isolated worker failure and inclusion verification preserve ordinary proof finalization."
+    },
+    {
+      "id": "F09-03",
+      "status": "ENGINEERED",
+      "evidence": "Actual consistency proofs, durable per-operator checkpoint history, split-view/rollback rejection and two named controlled test countersignatures. Optional backend adapter collects/reconciles both signatures and verifies TEST_WITNESSED; absent operators retain INCLUDED.",
+      "open": "Backend final integration matrix is reported separately by backend validation. Controlled operator count does not imply organizational independence."
+    },
+    {
+      "id": "F09-04",
+      "status": "BLOCKED",
+      "evidence": "Strict two-operator policy and documented independent onboarding, key exchange/rotation/revocation and retained checkpoint assumptions; require-independent rejects controlled test keys.",
+      "open": "Two actual independently controlled operators, external key exchange and security review are unavailable. independentOperatorCount remains zero."
+    },
+    {
+      "id": "F09-05",
+      "status": "ENGINEERED",
+      "evidence": "Offline public-key CLI/library verifies exact canonical record opening, inclusion, checkpoints, named witness signatures and consistency. Receipts carry checkpoint age, scope and omission limits; no PackProof login/secret required."
+    },
+    {
+      "id": "F09-06",
+      "status": "ENGINEERED",
+      "evidence": "Persistent state, idempotent retries, fail-closed rollback/split-view handling, reconciliation adapter, actual SQLite coherent log/witness restore rehearsal against a retained checkpoint, stale-log refusal without rewinding history, and documented key/restore/incident runbook. Bounded admin metrics project the latest checkpoint age/policy/tree size/controlled signature count and clock skew from up to 100 completed receipts, plus 24-hour safe failure-stage attention counts; actual unavailable-operator fault produces NEEDS_ATTENTION.",
+      "open": "External multi-operator service monitoring, qualified latency SLO and external disaster-recovery rehearsal remain deployment/qualification prerequisites."
+    }
+  ],
+  "tests": [
+    {
+      "command": "/tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness",
+      "result": "17 passed, including actual SQLite log/witness backup-restore rehearsal with retained checkpoint and stale-log rejection"
+    },
+    {
+      "command": "node verifier/test_rnd_bundle.mjs",
+      "result": "18 passed"
+    },
+    {
+      "command": "npm --prefix backend run test -- --reporter=verbose tests/rnd-zk-service.test.ts",
+      "result": "3 passed, including actual queued proof generation",
+      "artifact": "research/privacy/reports/backend-zk-integration-2026-10-02.json"
+    },
+    {
+      "command": "node research/privacy/zk/benchmark.mjs --output TEMP_DIRECTORY --size 4",
+      "result": "Actual proof verified; all 20 adversarial mutations rejected",
+      "artifact": "research/privacy/reports/zk-4x4-synthetic-2026-10-02.json"
+    },
+    {
+      "command": "node research/privacy/zk/benchmark.mjs --output TEMP_DIRECTORY --size 8",
+      "result": "Actual proof verified; all 20 adversarial mutations rejected",
+      "artifact": "research/privacy/reports/zk-8x8-synthetic-2026-10-02.json"
+    },
+    {
+      "command": "/tmp/packproof-privacy-venv/bin/python -m research.witness.benchmark --output TEMP_DIRECTORY",
+      "result": "32 real local append/inclusion/consistency/test-witness rounds",
+      "artifact": "research/witness/reports/local-synthetic-2026-10-02.json"
+    },
+    {
+      "command": "npm --prefix backend test -- --run tests/rnd-derivative-grants.test.ts --reporter=verbose",
+      "result": "6 passed, including actual local HTTP auth boundary, real still redaction, midstream revocation and no plaintext token persistence",
+      "runtime": "Loopback HTTP listen enabled for integration test; no external service used."
+    },
+    {
+      "command": "npm --prefix backend test -- --run tests/rnd-capture-sidecars.test.ts",
+      "result": "3 passed by native agent, including actual signed backend export plus all bytes verified by portable verifier with pinned external test trust"
+    },
+    {
+      "command": "npm --prefix backend run typecheck",
+      "result": "passed after derivative grant integration"
+    },
+    {
+      "command": "npm --prefix backend test -- --run tests/rnd-derivative-grants.test.ts -t 'revokes idempotently' --reporter=verbose",
+      "result": "1 targeted regression passed after allowing authenticated research revocation under kill switch; grant remains revoked after reenable"
+    },
+    {
+      "command": "npm --prefix backend test -- --run tests/rnd-evidence.test.ts",
+      "result": "12 boundary tests passed by backend agent, including actual two-controlled-witness adapter, consistency/retry and missing-operator failure-stage/health metrics; backend typecheck passed",
+      "artifact": "docs/rnd/validation/backend-status.json"
+    }
+  ],
+  "measuredRuns": {
+    "zk4x4": {
+      "compileSeconds": 17.96865736,
+      "proveSeconds": 12.287085065,
+      "verifySeconds": 1.285898602,
+      "proofBytes": 30151,
+      "peakRssKiB": 890900
+    },
+    "zk8x8": {
+      "compileSeconds": 25.438826595,
+      "proveSeconds": 16.522658575,
+      "verifySeconds": 1.497758543,
+      "proofBytes": 30340,
+      "peakRssKiB": 983700
+    },
+    "witness32LocalRounds": {
+      "publicationP95Ms": 3.2193229999,
+      "verificationP95Ms": 0.5607620001,
+      "independentOperators": 0
+    },
+    "cloudSpendUsd": 0,
+    "limits": "ZK single-run synthetic measurements are not p95 qualification; witness timing excludes external network/operators."
+  },
+  "openDependencies": [
+    "Independent cryptographic/security review of ZK relation, source binding, verification-key policy and witness protocol",
+    "Two independently operated witnesses and real external latency/recovery testing",
+    "Representative physical capture/redaction datasets and prespecified sensitive-content evaluation",
+    "Actual device-origin and canonical extraction qualification",
+    "Private witness retention/encryption policy, sandbox memory enforcement and operational recovery review",
+    "Explicit pilot or production release authorization"
+  ]
+}

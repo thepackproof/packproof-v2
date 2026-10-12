@@ -1,25 +1,30 @@
 FROM public.ecr.aws/docker/library/node:22-alpine AS build
 RUN apk add --no-cache --upgrade 'zlib>=1.3.2-r1'
-WORKDIR /app
-COPY package.json package-lock.json ./
+WORKDIR /app/backend
+COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
-COPY tsconfig.json ./
-COPY src ./src
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
+COPY packages/evidence-contracts /app/packages/evidence-contracts
 RUN npm run build
 
 FROM public.ecr.aws/docker/library/node:22-alpine
-WORKDIR /app
+WORKDIR /app/backend
 ENV NODE_ENV=production
 # Alpine's distribution patch fixes CVE-2026-85091 without changing the zlib ABI.
 RUN apk add --no-cache --upgrade 'zlib>=1.3.2-r1' ffmpeg util-linux font-dejavu ca-certificates && command -v prlimit && command -v ffprobe
-COPY package.json package-lock.json ./
+COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev
-COPY --from=build /app/dist ./dist
-COPY migrations ./migrations
-COPY certs ./certs
-COPY openapi.json ./openapi.json
-COPY scripts/onboarding-migrate.mjs ./scripts/onboarding-migrate.mjs
-COPY scripts/measurement-migrate.mjs ./scripts/measurement-migrate.mjs
+COPY --from=build /app/backend/dist ./dist
+COPY --from=build /app/packages/evidence-contracts /app/packages/evidence-contracts
+COPY backend/migrations ./migrations
+COPY backend/certs ./certs
+COPY backend/openapi.json ./openapi.json
+COPY backend/rnd-openapi.json ./rnd-openapi.json
+COPY config/rnd/research-build.json /app/config/rnd/research-build.json
+COPY backend/scripts/onboarding-migrate.mjs ./scripts/onboarding-migrate.mjs
+COPY backend/scripts/measurement-migrate.mjs ./scripts/measurement-migrate.mjs
+COPY backend/scripts/rnd-migrate.mjs ./scripts/rnd-migrate.mjs
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

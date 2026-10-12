@@ -1,0 +1,18 @@
+{
+  "schema": "proofcollective-mtls-profile/v1",
+  "scope": "RESEARCH_ONLY",
+  "productionReleaseAuthorized": false,
+  "purpose": "capture-frame-usefulness/v1",
+  "expiresAtUnix": 0,
+  "runId": 1,
+  "localNodeId": 0,
+  "admissionLedger": "/private/research/transport-admission.sqlite",
+  "identity": {
+    "certificate": "/private/research/coordinator.cert.pem",
+    "privateKey": "/private/research/coordinator.key.pem",
+    "ca": "/private/research/approved-research-ca.pem"
+  },
+  "coordinatorCertificateSha256": "REPLACE_WITH_INDEPENDENTLY_APPROVED_CERTIFICATE_SHA256",
+  "peers": [],
+  "bind": {"host": "127.0.0.1", "port": 24443}
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "packproof.witness-benchmark.v1",
+  "generatedAt": "2026-10-02T10:50:10.003140+00:00",
+  "population": 32,
+  "topology": "one local sqlite log; two stateful same-process PackProof-controlled test operators",
+  "independentOperatorCount": 0,
+  "hardware": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+    "python": "3.12.14"
+  },
+  "publicationMs": {
+    "median": 2.1014745000229595,
+    "p95": 3.2193229999393225
+  },
+  "verificationMs": {
+    "median": 0.46071199994912604,
+    "p95": 0.560762000077375
+  },
+  "latestReceiptBytes": 2636,
+  "cloudSpendUsd": 0,
+  "externalLatency": "NOT_MEASURED",
+  "securityReview": "PENDING",
+  "publicReliance": false,
+  "library": "pymerkle 6.1.0; SHA256 RFC6962 domain separation",
+  "limits": [
+    "Local synthetic protocol validation only.",
+    "No external independently operated witness or network availability qualification.",
+    "Timing and volume leakage remain; no PII is logged."
+  ]
+}

@@ -1,0 +1,6 @@
+# CPU worker; isolated venv only. See THIRD_PARTY.md for licenses.
+numpy==2.2.6
+opencv-python-headless==4.11.0.86
+Pillow==11.3.0
+scipy==1.15.3
+rfc8785==0.1.4

@@ -10,20 +10,21 @@ function productionConfig(overrides = {}) {
     cwd: path.resolve(__dirname, '..'), encoding: 'utf8',
     env: {...process.env, EAS_BUILD_PROFILE: 'production', EAS_BUILD_PLATFORM: 'android', EAS_BUILD: 'true',
       EAS_BUILD_GIT_COMMIT_HASH: 'ab'.repeat(20), EXPO_PUBLIC_PACKPROOF_BUILD_SHA: 'cd'.repeat(20),
-      PACKPROOF_ANDROID_VERSION_CODE: '61', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
+      PACKPROOF_ANDROID_VERSION_CODE: '62', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
       EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'cognito', EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'https://api.example.com',
-      EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true', EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true', ...overrides},
+      EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION: 'true', EXPO_PUBLIC_PACKPROOF_RND: 'false', EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true', EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true', ...overrides},
   });
 }
 
-test('production profile pins store AAB 61 and retains the existing runtime and upload key', () => {
+test('production profile pins store AAB 62 and retains the existing runtime and upload key', () => {
   const config = require('../eas.json');
   const production = config.build.production;
   assert.ok(production, 'Android production profile is required');
   assert.equal(production.extends, 'shipping-integration');
   assert.equal(production.environment, 'production');
-  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '61');
+  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '62');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX, 'true');
+  assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION, 'true');
   const shipping = config.build[production.extends];
   const base = config.build[shipping.extends];
   assert.equal(base.distribution, 'store');
@@ -40,7 +41,7 @@ test('production config binds worker source, authenticated release guards and UX
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.version, '1.0.1');
-  assert.equal(app.android.versionCode, 61);
+  assert.equal(app.android.versionCode, 62);
   assert.equal(app.android.package, 'com.packproof.mobile');
   assert.equal(app.extra.eas.projectId, '0196c3f7-cb3a-472c-99be-825558f227e8');
   assert.equal(app.android.allowBackup, false);
@@ -48,6 +49,8 @@ test('production config binds worker source, authenticated release guards and UX
   assert.equal(app.extra.packproofBuildSha, 'ab'.repeat(20));
   assert.equal(app.extra.packproofMobileTaskUx, true);
   assert.equal(app.extra.packproofFirstProofExperience, true);
+  assert.equal(app.extra.packproofResearchProduction, true);
+  assert.equal(app.extra.packproofResearchProfile, 'capture-receipts-v1');
   assert.equal(Object.hasOwn(app.extra, 'packproofInternalReview'), false);
   const rollback = productionConfig({EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'false'});
   assert.equal(rollback.status, 0, rollback.stderr);
@@ -56,14 +59,15 @@ test('production config binds worker source, authenticated release guards and UX
 
 test('production refuses stale version, missing worker source, development auth, camera spike and wrong platform', () => {
   for (const [overrides, error] of [
-    [{PACKPROOF_ANDROID_VERSION_CODE: '56'}, /Production Android versionCode must be at least 59/],
-    [{PACKPROOF_ANDROID_VERSION_CODE: '57'}, /Production Android versionCode must be at least 59/],
-    [{PACKPROOF_ANDROID_VERSION_CODE: '58'}, /Production Android versionCode must be at least 59/],
+    [{PACKPROOF_ANDROID_VERSION_CODE: '56'}, /Production Android versionCode must be at least 62/],
+    [{PACKPROOF_ANDROID_VERSION_CODE: '57'}, /Production Android versionCode must be at least 62/],
+    [{PACKPROOF_ANDROID_VERSION_CODE: '61'}, /Production Android versionCode must be at least 62/],
+    [{PACKPROOF_ANDROID_VERSION_CODE: '58'}, /Production Android versionCode must be at least 62/],
     [{EAS_BUILD_GIT_COMMIT_HASH: ''}, /Source-bound build requires a valid EAS source commit/],
     [{EAS_BUILD_GIT_COMMIT_HASH: 'invalid'}, /Source-bound build requires a valid EAS source commit/],
-    [{EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'dev'}, /Release builds must use Cognito authentication/],
-    [{EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'http://localhost:3000'}, /Release builds must target a public HTTPS API/],
-    [{EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'true'}, /Camera spike builds cannot use a release profile/],
+    [{EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'dev'}, /Production capture receipts require the authorized Android production profile and HTTPS\/Cognito configuration/],
+    [{EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'http://localhost:3000'}, /Production capture receipts require the authorized Android production profile and HTTPS\/Cognito configuration/],
+    [{EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'true'}, /Production capture receipts require the authorized Android production profile and HTTPS\/Cognito configuration/],
     [{EAS_BUILD_PLATFORM: 'ios'}, /The production profile is for Android only/],
   ]) {
     const result = productionConfig(overrides);
@@ -81,6 +85,7 @@ test('signed AAB workflow resolves production identity before dispatch and freez
   const identity = steps.find(step => step.id === 'release');
   const build = steps.find(step => step.name === 'Build signed Android App Bundle');
   assert.equal(build.env.EAS_BUILD_PROFILE, 'production');
+  assert.match(identity.run, /npm run test:research\b/);
   assert.match(build.run, /eas build --platform android --profile production\b[^\n]*--freeze-credentials/);
   const script = identity.run.match(/node <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)[1];
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'packproof-release-identity-'));
@@ -90,9 +95,32 @@ test('signed AAB workflow resolves production identity before dispatch and freez
       env: {...process.env, EAS_BUILD: '', EAS_BUILD_PROFILE: '', EAS_BUILD_GIT_COMMIT_HASH: '',
         EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false', GITHUB_OUTPUT: output}});
     assert.equal(result.status, 0, result.stderr);
-    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-61(?:\n|$)/);
+    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-62(?:\n|$)/);
   } finally {
     fs.rmSync(temporary, {recursive: true, force: true});
+  }
+});
+
+test('signed AAB workflow rejects missing or mismatched receipt scope before publishing artifact identity', () => {
+  const workflow = require('js-yaml').load(fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/android-aab.yml'), 'utf8'));
+  const script = workflow.jobs.build.steps.find(step => step.id === 'release').run.match(/node <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)[1];
+  const base = JSON.parse(productionConfig().stdout);
+  const env = {...process.env};
+  try {
+    for (const change of [{packproofResearch:true}, {packproofResearchProduction:false}, {packproofResearchProfile:'laboratory'}, {packproofResearchProfile:null}]) {
+      let outputWritten = false;
+      const dependency = name => {
+        if (name === 'fs') return {appendFileSync() { outputWritten = true; }};
+        if (name === './eas.json') return require('../eas.json');
+        if (name === './app.config.js') return {expo:{...base,extra:{...base.extra,...change}}};
+        throw new Error(`Unexpected workflow dependency ${name}`);
+      };
+      assert.throws(() => new Function('require', script)(dependency), /Production capture receipt profile is incorrect/);
+      assert.equal(outputWritten, false);
+    }
+  } finally {
+    for (const name of Object.keys(process.env)) if (!(name in env)) delete process.env[name];
+    Object.assign(process.env,env);
   }
 });
 
@@ -102,18 +130,18 @@ test('signed AAB workflow rejects a completed artifact from the wrong source or 
   const script = build.run.match(/node <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)[1];
   const source = 'ab'.repeat(20);
   const metadata = {status: 'FINISHED', gitCommitHash: source, platform: 'ANDROID', distribution: 'STORE',
-    buildProfile: 'production', appIdentifier: 'com.packproof.mobile', appVersion: '1.0.1', appBuildVersion: '61',
+    buildProfile: 'production', appIdentifier: 'com.packproof.mobile', appVersion: '1.0.1', appBuildVersion: '62',
     artifacts: {buildUrl: 'https://example.invalid/fixture.aab'}};
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'packproof-release-receipt-'));
   try {
     fs.mkdirSync(path.join(temporary, 'dist'));
     const output = path.join(temporary, 'dist/aab-url.txt');
     for (const overrides of [null, {gitCommitHash: 'cd'.repeat(20)}, {platform: 'IOS'}, {distribution: 'INTERNAL'},
-      {buildProfile: 'shipping-integration'}, {appIdentifier: 'com.thepackproof.app'}, {appVersion: '0.2.0'}, {appBuildVersion: '56'}, {appBuildVersion: '60'}]) {
+      {buildProfile: 'shipping-integration'}, {appIdentifier: 'com.thepackproof.app'}, {appVersion: '0.2.0'}, {appBuildVersion: '56'}, {appBuildVersion: '60'}, {appBuildVersion: '61'}]) {
       fs.rmSync(output, {force: true});
       fs.writeFileSync(path.join(temporary, 'dist/eas-build.json'), JSON.stringify([{...metadata, ...overrides}]));
       const result = spawnSync(process.execPath, ['-e', script], {cwd: temporary, encoding: 'utf8',
-        env: {...process.env, GITHUB_SHA: source, PACKPROOF_EXPECTED_VERSION: '1.0.1', PACKPROOF_EXPECTED_VERSION_CODE: '61'}});
+        env: {...process.env, GITHUB_SHA: source, PACKPROOF_EXPECTED_VERSION: '1.0.1', PACKPROOF_EXPECTED_VERSION_CODE: '62'}});
       if (overrides === null) {
         assert.equal(result.status, 0, result.stderr);
         assert.equal(fs.readFileSync(output, 'utf8').trim(), metadata.artifacts.buildUrl);
@@ -127,6 +155,8 @@ test('signed AAB workflow rejects a completed artifact from the wrong source or 
     fs.rmSync(temporary, {recursive: true, force: true});
   }
 });
+const policyPath = path.resolve(__dirname, '../../config/rnd/research-build.json');
+const researchOnly = fs.existsSync(policyPath) && JSON.parse(fs.readFileSync(policyPath, 'utf8')).researchOnly;
 
 test('next standard Android candidate advances the installed baseline and retains account media protection', () => {
   const result=spawnSync(process.execPath,['-e','process.stdout.write(JSON.stringify(require("./app.config.js").expo))'],{
@@ -152,6 +182,7 @@ test('store profiles preserve the existing Play package and signing credential',
       env: {...process.env, EAS_BUILD_PROFILE: profile, EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false', EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'cognito', ...overrides},
     });
     const result = run();
+    if (researchOnly) { assert.notEqual(result.status, 0); assert.match(result.stderr, /R&D branch cannot use distribution/); continue; }
     assert.equal(result.status, 0, result.stderr);
     const config = JSON.parse(result.stdout);
     assert.equal(config.android.package, 'com.packproof.mobile');
@@ -169,4 +200,17 @@ test('native Gradle outputs are ignored while local module source remains part o
       assert.equal(result.status,expected,result.stderr);
     }
   }
+});
+
+test('production research mode rejects lab mode, other profiles and unsafe HTTPS authority', () => {
+  for (const overrides of [
+    {EXPO_PUBLIC_PACKPROOF_RND: 'true'}, {EAS_BUILD_PROFILE: 'shipping-integration'}, {EAS_BUILD_PROFILE: 'ios-testflight'},
+    ...['https://user:pass@api.example.com','https://api.example.com/path','https://api.example.com?x=1','https://api.example.com#x','https://10.0.0.1','https://172.16.0.1','https://192.168.1.1','https://[::1]','https://8.8.8.8','https://api.example.com:8443','https://test.local'].map(value => ({EXPO_PUBLIC_PACKPROOF_API_BASE_URL: value})),
+  ]) {
+    const result = productionConfig(overrides);
+    assert.notEqual(result.status, 0, JSON.stringify(overrides));
+    assert.match(result.stderr, /Production capture receipts require the authorized Android production profile/);
+  }
+  const disabled = productionConfig({EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION:'false'});
+  assert.equal(disabled.status,0,disabled.stderr); assert.equal(JSON.parse(disabled.stdout).extra.packproofResearchProduction,false);
 });

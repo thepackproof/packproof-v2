@@ -23,6 +23,7 @@ function harness() {
   const proof = { proofId:'proof_A', status:'READY_FOR_EVIDENCE', evidence:[] as {evidenceId:string;validationStatus:string}[] };
   const capture: LocalCapture = {uri:'file:///original-A.mp4',contentType:'video/mp4',byteSize:12000,captureSessionId:'cap_A',captureProofId:'proof_A',captureUserId:'seller'};
   const modules: Record<string, unknown> = {
+    '../research/capture': { async closeResearchSession() {} },
     '../capture': {
       async bindRecordedCapture(_client: unknown, value:LocalCapture) { value.captureSha256 = 'digest'; },
       async inspectCaptureShipping() {},

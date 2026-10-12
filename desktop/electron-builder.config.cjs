@@ -1,6 +1,9 @@
 const { releaseContext, checkReleaseEnvironment, windowsSigningOptions } = require('./scripts/release-policy.cjs');
 
 const release = releaseContext();
+const research = require('../config/rnd/research-build.json').researchOnly === true;
+if(research && release.channel !== 'development')throw new Error('Experimental source cannot be signed or distributed.');
+if(research)Object.assign(release,{appId:'com.thepackproof.desktop.research',productName:'PackProof Research',packageName:'packproof-desktop-research',artifactPrefix:'PackProof-Research',protocol:'packproof-research',outputDirectory:`release/research/${release.platform}-${release.arch}`,updateUrl:undefined});
 const signed = release.channel !== 'development';
 
 /** Every packaged environment has its own identity, protocol and update feed. */

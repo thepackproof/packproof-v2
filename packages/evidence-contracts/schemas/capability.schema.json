@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/rnd/v1/capability.schema.json",
+  "type": "object",
+  "required": [
+    "profileId",
+    "platform",
+    "hardware",
+    "os",
+    "streamProfile",
+    "algorithmVersion",
+    "supportedScope",
+    "qualificationRecordId",
+    "gate",
+    "disabledReason"
+  ],
+  "properties": {
+    "profileId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "platform": {
+      "enum": [
+        "android",
+        "ios",
+        "web",
+        "windows",
+        "macos",
+        "worker"
+      ]
+    },
+    "hardware": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "os": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "streamProfile": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "algorithmVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "supportedScope": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 2048
+      }
+    },
+    "qualificationRecordId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gate": {
+      "enum": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5"
+      ]
+    },
+    "disabledReason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

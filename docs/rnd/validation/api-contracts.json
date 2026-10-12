@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "packproof.api-contract-validation.v1",
+  "recordedDate": "2026-10-02",
+  "scope": "LOCAL_RESEARCH_API_AND_CLIENT_CONTRACTS",
+  "releaseAuthorized": false,
+  "operationCount": 33,
+  "pathCount": 28,
+  "apiComponentSchemas": 83,
+  "sharedSchemaFiles": 22,
+  "files": [
+    {
+      "path": "backend/rnd-openapi.json",
+      "sha256": "46564b14e6d55ab9645028ef442a983babf5543396916be985f6e6a10eb81d81"
+    },
+    {
+      "path": "scripts/generate-rnd-client.mjs",
+      "sha256": "979ef76cf2c4e39356ff4f646ae857fe9cf25402791c91dfc0439a0f0da22c1d"
+    },
+    {
+      "path": "packages/evidence-contracts/generated-client.mjs",
+      "sha256": "58352e1d1674bb47f90e4b246287f408c10b12e41cecee1a8ddb0dd9d355916a"
+    },
+    {
+      "path": "packages/evidence-contracts/generated-client.d.mts",
+      "sha256": "0858195285bef9262792d57f9e191c0f4cb9da17cd92a2108c7e75d629a2e8ef"
+    },
+    {
+      "path": "scripts/check-rnd-openapi.py",
+      "sha256": "7db8c8cb1d3f5b339755e9c18e000d7c99ff2b1447b5cabb14f36c8412b2d037"
+    }
+  ],
+  "checks": [
+    {
+      "command": "node scripts/generate-rnd-client.mjs --check",
+      "result": "PASS",
+      "assertion": "Generated JS/declarations match exact OpenAPI, referenced JSON Schemas and generator."
+    },
+    {
+      "command": "node packages/evidence-contracts/test/generated-client.test.mjs",
+      "result": "PASS",
+      "tests": 5,
+      "coverage": [
+        "Actual router method/path inventory including administration and public redemption",
+        "Input onlyKeys/feature parameter agreement",
+        "Encoded path/query, required body and idempotency",
+        "Existing auth and abort propagation, no redirects",
+        "Binary redemption/error without token URL or retry"
+      ]
+    },
+    {
+      "command": "node backend/node_modules/typescript/bin/tsc --noEmit --strict --module nodenext --target ES2022 --lib es2022,dom packages/evidence-contracts/test/generated-client-types.mts",
+      "result": "PASS",
+      "negativeTypeFixtures": 4
+    },
+    {
+      "command": "/tmp/packproof-openapi-venv/bin/python scripts/check-rnd-openapi.py",
+      "result": "PASS",
+      "positiveFixtures": 5,
+      "adversarialFixtures": 8,
+      "validator": "jsonschema 4.25.1"
+    },
+    {
+      "check": "Official OpenAPI 3.1 document meta-schema",
+      "result": "PASS",
+      "source": "https://spec.openapis.org/oas/3.1/schema/2026-08-03",
+      "schemaSha256": "59f106413cb48c31299f96f024c938d3628aed6cd02cd14bcfb2fcaae7a130b6"
+    }
+  ],
+  "ciWorkflow": ".github/workflows/rnd-ci.yml",
+  "limitations": [
+    "Local protocol and static type validation only; no deployed service or release qualification.",
+    "Generated transport deliberately leaves body validation, authorization, consent, source checks and signature validation to the server and evidence verifier.",
+    "API-specific generator supports the schemas used here and rejects unsupported type structures; it is not a general-purpose OpenAPI generator."
+  ]
+}
