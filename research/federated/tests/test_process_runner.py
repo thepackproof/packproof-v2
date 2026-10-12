@@ -7,6 +7,7 @@ from copy import deepcopy
 import json
 import multiprocessing
 import os
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -116,10 +117,33 @@ def test_process_start_failure_closes_both_control_pipe_ends(monkeypatch):
     reader=SimpleNamespace(close=lambda:closed.append('reader'))
     writer=SimpleNamespace(close=lambda:closed.append('writer'))
     def fail_start():raise OSError('Synthetic process startup failure')
-    context=SimpleNamespace(Event=lambda:SimpleNamespace(set=lambda:None),Pipe=lambda **kwargs:(reader,writer),Process=lambda **kwargs:SimpleNamespace(start=fail_start),set_forkserver_preload=lambda modules:None)
+    context=SimpleNamespace(RawValue=lambda *args:SimpleNamespace(value=False),Pipe=lambda **kwargs:(reader,writer),Process=lambda **kwargs:SimpleNamespace(start=fail_start),set_forkserver_preload=lambda modules:None)
     monkeypatch.setattr(runner.multiprocessing,'get_context',lambda method:context)
     with pytest.raises(OSError,match='startup failure'):PartnerProcesses([Path('unused')]*20)
     assert sorted(closed)==['reader','writer']
+
+
+def _wait_on_shutdown_byte(stop,ready):
+    ready.send('ready');ready.close()
+    while not stop.value:time.sleep(.1)
+
+
+def test_killed_waiter_cannot_deadlock_parent_shutdown():
+    # An Event/Condition signal deadlocks after a terminated waiter; this actual
+    # subprocess regression verifies cleanup without depending on POSIX TLS files.
+    context=multiprocessing.get_context('spawn')
+    cohort=object.__new__(PartnerProcesses);cohort.stop=context.RawValue('b',False)
+    reader,writer=context.Pipe(duplex=False);cohort.pipes=[reader]
+    process=context.Process(target=_wait_on_shutdown_byte,args=(cohort.stop,writer))
+    process.start();writer.close();cohort.processes=[process]
+    try:
+        assert reader.poll(20) and reader.recv()=='ready'
+        process.terminate();process.join(3)
+        started=time.monotonic();cohort.close()
+        assert time.monotonic()-started<4 and not process.is_alive()
+    finally:
+        if process.is_alive():process.kill();process.join(3)
+        reader.close()
 
 
 def test_real_flower_handler_retains_stage_before_modifier_consumes_it():

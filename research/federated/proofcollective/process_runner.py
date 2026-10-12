@@ -262,7 +262,8 @@ def _partner_process(configuration:Path,ready,stop):
         artifacts=RunArtifacts(_json(Path(config['model'])),_json(Path(config['recipe'])),bytes.fromhex(config['trustKey']),profile)
         endpoint=PartnerEndpoint(profile,artifacts,Path(config['dataset']),Path(config['consentLedger']))
         ready.send({'status':'ready','nodeId':profile.node_id,'pid':os.getpid()})
-        stop.wait(ENDPOINT_SECONDS)
+        deadline=time.monotonic()+ENDPOINT_SECONDS
+        while not stop.value and time.monotonic()<deadline:time.sleep(.1)
     except Exception:
         # Fixed diagnostics: never export exception content, data, keys or updates.
         ready.send({'status':'rejected'})
@@ -280,7 +281,9 @@ class PartnerProcesses:
         method='forkserver' if 'forkserver' in multiprocessing.get_all_start_methods() else 'spawn'
         self.context=multiprocessing.get_context(method)
         if method=='forkserver':self.context.set_forkserver_preload(['proofcollective.process_runner'])
-        self.stop=self.context.Event();self.processes=[];self.readiness=[];self.pipes=[]
+        # One-writer byte signal: unlike Event/Condition, it has no waiter lock that
+        # a killed endpoint can strand and deadlock the parent's cleanup path.
+        self.stop=self.context.RawValue('b',False);self.processes=[];self.readiness=[];self.pipes=[]
         deadline=time.monotonic()+STARTUP_SECONDS
         try:
             for configuration in configurations:
@@ -302,7 +305,7 @@ class PartnerProcesses:
             self.close();raise
 
     def close(self):
-        self.stop.set();deadline=time.monotonic()+8
+        self.stop.value=True;deadline=time.monotonic()+8
         for process in self.processes:process.join(max(0,deadline-time.monotonic()))
         for process in self.processes:
             if process.is_alive():process.terminate()
