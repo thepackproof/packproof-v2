@@ -2,7 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {chmodSync,mkdirSync,mkdtempSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {sandboxCommand} from './rnd-worker-sandbox.mjs';
+import {sandboxCommand,nativeLibraryAliasMounts} from './rnd-worker-sandbox.mjs';
+
+test('native aliases expose only exact read-only public BLAS/LAPACK files',()=>{
+ const alias='/etc/alternatives/libblas.so.3-x86_64-linux-gnu';
+ const target='/usr/lib/x86_64-linux-gnu/blas/libblas.so.3.10.0';
+ const fs={existsSync:path=>path===alias,realpathSync:()=>target,statSync:()=>({isFile:()=>true})};
+ assert.deepEqual(nativeLibraryAliasMounts(fs),['--ro-bind',target,alias]);
+ assert.deepEqual(nativeLibraryAliasMounts({...fs,existsSync:()=>false}),[]);
+ for(const outside of ['/etc/private/key','/home/runner/token','/usr/library/secret'])assert.throws(()=>nativeLibraryAliasMounts({...fs,realpathSync:()=>outside}),/Unsupported native library alias/);
+ assert.throws(()=>nativeLibraryAliasMounts({...fs,statSync:()=>({isFile:()=>false})}),/Unsupported native library alias/);
+});
 
 test('non-Linux hosts reject namespace containment explicitly',{skip:process.platform==='linux'},()=>{
  assert.throws(()=>sandboxCommand([]),/Linux namespaces/);

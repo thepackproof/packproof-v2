@@ -68,6 +68,7 @@ checks = {
     'hostLoopbackDenied': host_network_denied,
     'noExternalRoute': len(Path('/proc/net/route').read_text().splitlines()) == 1,
     'unrelatedHostFileUnavailable': not Path(job['outsideCanary']).exists(),
+    'unrelatedHostConfigurationUnavailable': not Path('/etc/passwd').exists(),
     'hostEnvironmentRemoved': 'PACKPROOF_SANDBOX_CANARY' not in os.environ,
     'separateNamespaces': all(namespaces[name] != job['hostNamespaces'][name] for name in namespaces),
     'capabilitiesDropped': int(status['CapEff'].strip(), 16) == 0,

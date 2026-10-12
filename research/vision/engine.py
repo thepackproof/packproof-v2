@@ -14,6 +14,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+try:
+    from .ocr_runtime import ocr_command
+except ImportError:  # Direct worker entry point.
+    from ocr_runtime import ocr_command
 
 POLICY_PATH = Path(__file__).with_name('policy.json')
 POLICY = json.loads(POLICY_PATH.read_text())
@@ -437,10 +441,13 @@ def condition(frames, artifacts, parameters):
 def ocr(frame):
     if not shutil.which('tesseract'):
         return [], 'TESSERACT_NOT_INSTALLED'
+    command=ocr_command()
+    if command is None:
+        return [], 'OCR_RUNTIME_UNRECORDED'
     ok, encoded = cv2.imencode('.png',frame.image)
     if not ok:
         raise ValueError('OCR_ENCODE_FAILED')
-    process = subprocess.run(['tesseract','stdin','stdout','-l','eng','--psm','11','tsv'], input=encoded.tobytes(),
+    process = subprocess.run(command, input=encoded.tobytes(),
                              capture_output=True,timeout=8,check=False)
     if process.returncode:
         return [], 'OCR_EXECUTION_FAILED'

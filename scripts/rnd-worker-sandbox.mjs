@@ -4,6 +4,20 @@ import {spawnSync} from 'node:child_process';
 import {realpathSync,statSync,lstatSync,existsSync,readFileSync} from 'node:fs';
 import {resolve,dirname,basename,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
+export function nativeLibraryAliasMounts(fs={existsSync,realpathSync,statSync}) {
+ const mounts=[];
+ // Debian/Ubuntu public BLAS libraries use these alternative links. Binding
+ // the resolved library at the exact alias repairs loader resolution without
+ // exposing /etc/alternatives or any additional host configuration directory.
+ for(const architecture of ['x86_64-linux-gnu','aarch64-linux-gnu'])for(const library of ['libblas.so.3','liblapack.so.3']) {
+  const alias=`/etc/alternatives/${library}-${architecture}`;
+  if(!fs.existsSync(alias))continue;
+  const target=fs.realpathSync(alias);
+  if(!(target.startsWith('/usr/lib/')||target.startsWith('/lib/'))||!fs.statSync(target).isFile())throw new Error('Unsupported native library alias.');
+  mounts.push('--ro-bind',target,alias);
+ }
+ return mounts;
+}
 export function sandboxCommand(argv) {
  if(process.platform!=='linux')throw new Error('Linux namespaces are required.');
  if(!Array.isArray(argv)||argv.some(v=>typeof v!=='string'||v.includes('\0')))throw new Error('Invalid sandbox arguments.');
@@ -42,6 +56,7 @@ export function sandboxCommand(argv) {
  const mounts=['--unshare-all','--die-with-parent','--new-session','--clearenv','--cap-drop','ALL','--proc','/proc','--dev','/dev','--tmpfs','/tmp'];
  for(const directory of ['/usr','/lib','/lib64'])if(existsSync(directory))mounts.push('--ro-bind',directory,directory);
  for(const file of ['/etc/ld.so.cache','/etc/fonts'])if(existsSync(file))mounts.push('--ro-bind',file,file);
+ mounts.push(...nativeLibraryAliasMounts());
  if(!base.startsWith('/usr/')&&base!=='/usr')mounts.push('--ro-bind',base,base);
  mounts.push('--ro-bind',runtime,runtime,'--ro-bind',code,code,'--bind',job,job,'--chdir',job,
   '--setenv','PATH','/usr/bin:/bin','--setenv','HOME',job,'--setenv','TMPDIR','/tmp',
