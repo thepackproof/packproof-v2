@@ -85,12 +85,12 @@ async function stopOwnedChild(child, target, result) {
   }
   return 'owned-fresh-profile-process-terminated';
 }
-async function launchCycle(target, logFile, result) {
+async function launchCycle(target, logFile, result, { env = process.env } = {}) {
   const previousRows = diagnosticRows(logFile).length;
   let failure, child;
   try {
     // Keep the real sandbox, packaged runtime configuration and native credential store.
-    child = spawn(target.executable, [], { cwd: path.dirname(target.executable), env: process.env, stdio: ['ignore', 'ignore', 'ignore'] });
+    child = spawn(target.executable, [], { cwd: path.dirname(target.executable), env, stdio: ['ignore', 'ignore', 'ignore'] });
     child.on('error', error => { failure = new Error(`Native process failed to start (${error.code || 'unknown'}).`); });
     const deadline = Date.now() + 90000; let readyAt = null;
     while (Date.now() < deadline) {
@@ -166,5 +166,5 @@ async function main() {
   if (failure) throw failure;
   console.log('Native application launch, normal quit/relaunch and persisted protected installation passed. Authentication, real evidence recovery, hardware and production signing were not tested.');
 }
-module.exports = { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose, shutdownDiagnostics };
+module.exports = { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose, shutdownDiagnostics, launchCycle };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

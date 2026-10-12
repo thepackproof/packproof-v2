@@ -1,0 +1,10 @@
+{
+  "repository": "thepackproof/packproof-v2",
+  "sourceCommit": "76415e2d37fdf3599a7f13a6bbdd0b4f6b1f8731",
+  "runId": 38184321656,
+  "teamId": "AAY67GYL4D",
+  "artifacts": [
+    {"arch":"x64","id":11719082927,"digest":"sha256:dc5e25eef780d244b3f63850dc49f4ed4dc8253869dd4f9c740d497935fe0019"},
+    {"arch":"arm64","id":11719217177,"digest":"sha256:027074c08d79c688f5aa9ab807506e63bf3442603a0d9496e22844d438983e1e"}
+  ]
+}

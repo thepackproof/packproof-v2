@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { releaseContext, checkReleaseEnvironment, windowsSigningOptions } = require('../scripts/release-policy.cjs');
-const { validateAcceptance, required } = require('../scripts/check-acceptance.cjs');
+const { validateAcceptance, required, validatePlatformScope, platformsForScope, requiredForScope } = require('../scripts/check-acceptance.cjs');
 const { inspectRelease } = require('../scripts/publish-release.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -95,6 +95,40 @@ test('hardware acceptance cannot be replaced by a successful compile', () => {
   assert.throws(() => validateAcceptance(report, 'b'.repeat(40)), /exact source commit/);
   report.tests[0].status = 'pending';
   assert.throws(() => validateAcceptance(report, sourceCommit), /incomplete/);
+});
+
+test('explicit platform scopes retain every shared gate and default only an omitted value to all', () => {
+  assert.equal(validatePlatformScope(), 'all');
+  for (const value of ['', 'Mac', 'darwin', 'mac,windows', null, [], {}]) assert.throws(() => validatePlatformScope(value));
+  assert.deepEqual(platformsForScope('mac'), ['darwin/x64', 'darwin/arm64']);
+  assert.deepEqual(platformsForScope('windows'), ['win32/x64']);
+  assert.equal(requiredForScope('all').length, 18);assert.equal(requiredForScope('mac').length, 17);assert.equal(requiredForScope('windows').length, 16);
+  const shared = required.slice(3);
+  for (const scope of ['mac', 'windows']) assert.ok(shared.every(id => requiredForScope(scope).includes(id)));
+});
+
+test('acceptance scope must match and legacy approval cannot authorize a partial-platform release', () => {
+  const sourceCommit = 'a'.repeat(40);
+  const report = platforms => ({ sourceCommit, platforms, approvedBy: 'Reviewer', testedAt: '2026-10-12T01:00:00Z', tests: requiredForScope(platforms).map(id => ({ id, status: 'passed', evidence: 'Synthetic policy-test reference; not real acceptance' })) });
+  for (const scope of ['all', 'mac', 'windows']) {
+    assert.equal(validateAcceptance(report(scope), sourceCommit, scope), true);
+    for (const other of ['all', 'mac', 'windows'].filter(value => value !== scope)) assert.throws(() => validateAcceptance(report(scope), sourceCommit, other), /scope/);
+  }
+  const legacy = report('all');delete legacy.platforms;
+  assert.equal(validateAcceptance(legacy, sourceCommit), true);
+  for (const scope of ['mac', 'windows']) assert.throws(() => validateAcceptance(legacy, sourceCommit, scope), /scope/);
+  const duplicate = report('mac');duplicate.tests.push({ ...duplicate.tests[0], status: 'pending' });
+  assert.throws(() => validateAcceptance(duplicate, sourceCommit, 'mac'), /duplicate/);
+  const extra = report('mac');extra.tests.push({ id: 'windows-install-upgrade-uninstall', status: 'passed', evidence: 'Unrelated scope' });
+  assert.throws(() => validateAcceptance(extra, sourceCommit, 'mac'), /scope/);
+  for (const value of ['pending', 'partial', 'not-applicable']) {
+    const incomplete = report('mac');incomplete.tests.find(test => test.id === 'continuous-recording-valid-media').status = value;
+    assert.throws(() => validateAcceptance(incomplete, sourceCommit, 'mac'), /continuous-recording-valid-media/);
+  }
+  for (const value of ['', ' ', null, true]) {
+    const incomplete = report('mac');incomplete.tests.find(test => test.id === 'privacy-review').evidence = value;
+    assert.throws(() => validateAcceptance(incomplete, sourceCommit, 'mac'), /privacy-review/);
+  }
 });
 test('production promotion requires actual centralized reporting delivery evidence', () => {
   const sourceCommit = 'd'.repeat(40);
