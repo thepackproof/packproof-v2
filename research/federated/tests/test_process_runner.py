@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from flwr.app import ConfigRecord, Message, Metadata, RecordDict
+from flwr.app import ConfigRecord, Context, Message, Metadata, RecordDict
 from flwr.common.secure_aggregation.secaggplus_constants import Key, Stage, RECORD_KEY_CONFIGS
 
 from proofcollective.governance import GateError, Governance, ModelRegistry, PURPOSE, digest, public_key, sign, verify
@@ -24,6 +24,7 @@ from proofcollective.process_runner import (
     _enrollment, coordinate, prepare_lab, run_process_lab,
 )
 import proofcollective.process_runner as runner
+from proofcollective.protocol import LocalAgent, _run_aggregate
 
 posix=pytest.mark.skipif(os.name!='posix',reason='Existing TLS private-file controls require POSIX; Linux CI executes this case')
 
@@ -119,6 +120,31 @@ def test_process_start_failure_closes_both_control_pipe_ends(monkeypatch):
     monkeypatch.setattr(runner.multiprocessing,'get_context',lambda method:context)
     with pytest.raises(OSError,match='startup failure'):PartnerProcesses([Path('unused')]*20)
     assert sorted(closed)==['reader','writer']
+
+
+def test_real_flower_handler_retains_stage_before_modifier_consumes_it():
+    """Direct handler contract only; separate Linux tests exercise actual TLS/processes."""
+    authority,model,recipe,profile=signed_inputs()
+    artifacts=RunArtifacts(sign(model,authority),sign(recipe,authority),public_key(authority),profile)
+    endpoints={};agents=[]
+    for node in profile.peers:
+        endpoint=object.__new__(PartnerEndpoint)
+        endpoint.artifacts=artifacts;endpoint.profile=SimpleNamespace(run_id=7,node_id=node)
+        endpoint.context=Context(7,node,{},RecordDict(),{})
+        endpoint.completed=False;endpoint.release_checked=False;endpoint.check_consent=lambda:None
+        endpoint.agent=LocalAgent(node,lambda:np.array([.1,.05,0.,0.]),lambda:None)
+        endpoints[node]=endpoint;agents.append(endpoint.agent)
+    grid=object.__new__(ProfileGrid);grid.run_id=7;grid.artifacts=artifacts;grid.transcript=[]
+    def exchange(node,message):
+        grid.client.connections+=1
+        return endpoints[node].respond(message)
+    grid.client=SimpleNamespace(exchange=exchange,connections=0)
+    aggregate,report=_run_aggregate(agents,grid,1.)
+    assert report['contributors']==20 and report['tlsConnections']==80
+    assert np.allclose(aggregate,[.1,.05,0.,0.],atol=1e-5)
+    assert all(endpoint.completed for endpoint in endpoints.values())
+    grid.final_consent_checkpoint('a'*64)
+    assert grid.client.connections==100 and all(endpoint.release_checked for endpoint in endpoints.values())
 
 
 def _prepared(tmp_path,run_id=1):

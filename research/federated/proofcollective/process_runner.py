@@ -150,12 +150,14 @@ class PartnerEndpoint:
             content=RecordDict({RELEASE_RECORD:ConfigRecord({'candidateSha256':candidate,'consentCurrent':True})})
             self.release_checked=True
         else:
+            # Flower consumes Key.STAGE from the incoming ConfigRecord in place.
+            stage=message.content.config_records[RECORD_KEY_CONFIGS][Key.STAGE]
             try:
                 reply=secaggplus_mod(message,self.context,self.agent.fit)
             except Exception as exc:
                 raise GateError('Flower participant protocol rejected') from exc
             content=reply.content
-            if message.content.config_records[RECORD_KEY_CONFIGS][Key.STAGE]==Stage.UNMASK:self.completed=True
+            if stage==Stage.UNMASK:self.completed=True
         self.check_consent()
         metadata=Metadata(self.profile.run_id,str(uuid4()),self.profile.node_id,0,message.metadata.message_id,message.metadata.group_id,time.time(),60,'train')
         return Message(content=content,metadata=metadata)
