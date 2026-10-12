@@ -11,9 +11,9 @@ An administrator must create and verify these environments; naming them in YAML 
 | Environment | Configuration and protection |
 | --- | --- |
 | `desktop-staging` | Staging public API/Cognito values and signing configuration; selected approved branch rule. |
-| `desktop-production` | Production public API/Cognito/reporting values and signing configuration; selected `main` branch, authorized reviewer, prevent self-review, disable administrator bypass where available. |
+| `desktop-production` | Production public API/Cognito/reporting values and signing configuration; selected `main` branch, authorized reviewer, disable administrator bypass where available. Preserve the owner-approved self-review setting. |
 | `desktop-staging-publish` | Staging bucket/publisher role; selected `main` branch. |
-| `desktop-production-publish` | Production bucket/publisher role and exact-commit acceptance JSON; selected `main` branch, authorized reviewer, prevent self-review, disable bypass where available. |
+| `desktop-production-publish` | Production bucket/publisher role and exact-commit, platform-scoped acceptance JSON; selected `main` branch, authorized reviewer, disable bypass where available. Preserve the owner-approved self-review setting. |
 
 Use selected branch rules, not an unrestricted environment. Keep signing credentials in the build environments, separate from publication. Configure production reviewers before adding production credentials. The release workflow does not create environments, purchase certificates, validate business identity, or grant itself permission.
 

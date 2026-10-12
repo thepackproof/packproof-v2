@@ -8,6 +8,11 @@ on:
         type: choice
         options: [staging, production]
         default: staging
+      platforms:
+        description: Platforms to build and publish independently
+        type: choice
+        options: [all, mac, windows]
+        default: all
       include_pkg:
         description: Build signed and notarized macOS PKG in addition to DMG and ZIP
         type: boolean
@@ -25,7 +30,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  plan:
+    name: Select release platforms
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+      artifact-pattern: ${{ steps.scope.outputs.artifact-pattern }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: scope
+        env:
+          PACKPROOF_RELEASE_PLATFORMS: ${{ inputs.platforms }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const {validatePlatformScope, platformsForScope} = require('./desktop/scripts/check-acceptance.cjs');
+          const scope = validatePlatformScope(process.env.PACKPROOF_RELEASE_PLATFORMS);
+          const all = [
+            {runner:'windows-2022',platform:'win32',target:'win',arch:'x64'},
+            {runner:'macos-15-intel',platform:'darwin',target:'mac',arch:'x64'},
+            {runner:'macos-15',platform:'darwin',target:'mac',arch:'arm64'},
+          ];
+          const selected = platformsForScope(scope);
+          const matrix = {include:all.filter(row => selected.includes(`${row.platform}/${row.arch}`))};
+          const platform = scope === 'mac' ? 'darwin' : scope === 'windows' ? 'win32' : '*';
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(matrix)}\nartifact-pattern=packproof-desktop-${process.env.RELEASE_CHANNEL}-${platform}-*-${process.env.GITHUB_SHA}\n`);
+          NODE
+
   signed:
+    needs: plan
     name: Signed ${{ inputs.channel }} / ${{ matrix.platform }} / ${{ matrix.arch }}
     environment: desktop-${{ inputs.channel }}
     permissions:
@@ -33,20 +67,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: windows-2022
-            platform: win32
-            target: win
-            arch: x64
-          - runner: macos-15-intel
-            platform: darwin
-            target: mac
-            arch: x64
-          - runner: macos-15
-            platform: darwin
-            target: mac
-            arch: arm64
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     defaults:
@@ -126,7 +147,7 @@ jobs:
 
   publish:
     name: Publish signed artifacts and promote updater metadata
-    needs: signed
+    needs: [plan, signed]
     if: inputs.publish
     environment: desktop-${{ inputs.channel }}-publish
     runs-on: ubuntu-latest
@@ -136,6 +157,7 @@ jobs:
       id-token: write
     env:
       APP_ENV: ${{ inputs.channel }}
+      PACKPROOF_RELEASE_PLATFORMS: ${{ inputs.platforms }}
       PACKPROOF_RELEASE_BUCKET: ${{ vars.PACKPROOF_RELEASE_BUCKET }}
       PACKPROOF_RELEASE_ACCEPTANCE_JSON: ${{ vars.PACKPROOF_RELEASE_ACCEPTANCE_JSON }}
     steps:
@@ -152,14 +174,14 @@ jobs:
           if (!process.env.PACKPROOF_RELEASE_BUCKET) throw new Error('PACKPROOF_RELEASE_BUCKET is required.');
           if (process.env.APP_ENV === 'production') {
             const {validateAcceptance} = await import('./desktop/scripts/check-acceptance.cjs');
-            validateAcceptance(JSON.parse(process.env.PACKPROOF_RELEASE_ACCEPTANCE_JSON || '{}'), process.env.GITHUB_SHA);
+            validateAcceptance(JSON.parse(process.env.PACKPROOF_RELEASE_ACCEPTANCE_JSON || '{}'), process.env.GITHUB_SHA, process.env.PACKPROOF_RELEASE_PLATFORMS);
           }
           NODE
       - run: npm ci --ignore-scripts
         working-directory: desktop
       - uses: actions/download-artifact@v4
         with:
-          pattern: packproof-desktop-${{ inputs.channel }}-*-${{ github.sha }}
+          pattern: ${{ needs.plan.outputs.artifact-pattern }}
           path: desktop/release-downloads
       - uses: aws-actions/configure-aws-credentials@v4
         with:

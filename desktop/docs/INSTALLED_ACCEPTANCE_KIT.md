@@ -7,19 +7,19 @@ place until the accountable reviewer has the required evidence.
 
 ## Prepare once
 
-1. Download the final candidate artifacts for Windows x64, Intel Mac and Apple
-   Silicon Mac. Extract each CI artifact into its own subdirectory; keep its
+1. Select `all`, `mac` or `windows` and download the final candidate artifacts for
+   that scope (both Intel and Apple Silicon for `mac`). Extract each CI artifact into its own subdirectory; keep its
    installers, `release-evidence.json`, `SHA256SUMS` and native reports together.
 2. From the matching source checkout run, substituting the exact 40-character
    commit and local paths:
 
    ```sh
-   node desktop/scripts/prepare-acceptance-kit.cjs --source COMMIT --artifacts /path/to/candidate-artifacts --out /path/to/new-acceptance-kit
+   node desktop/scripts/prepare-acceptance-kit.cjs --source COMMIT --platforms mac --artifacts /path/to/candidate-artifacts --out /path/to/new-acceptance-kit
    ```
 
    The command streams and compares every installer hash/size, rejects mixed
    sources/channels/versions, and writes a candidate manifest, blank worksheet
-   and acceptance report. It refuses to overwrite an existing kit. Missing
+   and acceptance report bound to the chosen scope. Omit `--platforms` only for the default `all` scope. Mac retains all shared tests and excludes only the Windows installation case. It refuses to overwrite an existing kit. Missing
    platforms are listed, not treated as passed. No test, login or upload runs.
 3. Assign one operator per platform and one final reviewer. Use clean dedicated
    QA machines: standard-user Windows 11 x64, supported Intel macOS, and supported
@@ -43,7 +43,7 @@ update. Its synthetic queue sentinel is not a recording.
 | Source tests and Chromium fixture smoke | Error handling, schemas, local decoder and original streaming logic, renderer workflows. Chromium fake cameras and injected fixtures do not establish installed OS or hardware behavior. |
 | Native CI startup/restart report | Real packaged main process, local renderer and sandboxed preload; independent readiness after each normal quit/relaunch; OS-protected installation material reopened without replacement. No account, real recording or queued evidence is used. |
 | Windows installer smoke | Registered current-user installed executable and application bytes match the packaged candidate and launch/restart; same-version reinstall and uninstall preserve a synthetic sentinel and protected installation material. No earlier-version upgrade or real queue recovery is claimed. |
-| macOS native CI | App in packaging output launches/restarts on native runners. This does not mount/install the DMG, establish clean-machine Gatekeeper trust or exercise physical cameras. |
+| Mac installed acceptance workflow | Pinned production artifacts, native signatures/team/notarization/Gatekeeper, read-only DMG mount, actual installation to Applications, exact installed bundle comparison, native launch/relaunch and same-version DMG/PKG reinstall preservation. Receipts bind the signed candidate and separate harness source. No older-version update, authenticated workflow, physical camera/scanner or real recording/queue recovery is claimed. |
 | Controlled service acceptance, if separately recorded | The identified synthetic sample's backend upload/hash/commit/disclosure/revocation only. It does not establish a physical seller workflow. |
 
 The new native harness must run successfully in final-source CI before its result

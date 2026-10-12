@@ -1,0 +1,85 @@
+name: Mac installed acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/desktop-release.yml'
+      - '.github/workflows/desktop-mac-acceptance.yml'
+      - 'desktop/scripts/**'
+      - 'desktop/tests/**'
+      - 'desktop/docs/mac-acceptance-candidate.json'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mac-installed-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Independent platform release checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: desktop
+      - name: Verify scope, provenance, installed harness and updater safeguards
+        working-directory: desktop
+        run: |
+          node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs tests/acceptance-kit.test.cjs tests/native-launch-harness.test.cjs tests/mac-installed-acceptance.test.cjs tests/mac-candidate-provenance.test.cjs
+          npx --no-install vitest run tests/updates.test.ts
+
+  installed:
+    name: Installed signed Mac / ${{ matrix.arch }}
+    needs: policy
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x64
+          - runner: macos-15
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify exact signed artifact provenance and unchanged application inputs
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node desktop/scripts/mac-candidate-provenance.cjs desktop/docs/mac-acceptance-candidate.json '${{ matrix.arch }}' "$RUNNER_TEMP/mac-provenance.json" "$RUNNER_TEMP/signed-mac"
+      - name: Install locked inspection dependencies without package scripts
+        working-directory: desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify, install and relaunch the native signed DMG and PKG
+        run: >-
+          node desktop/scripts/mac-installed-acceptance.cjs
+          --artifacts "$RUNNER_TEMP/signed-mac"
+          --source-commit '${{ steps.candidate.outputs.source-commit }}'
+          --team-id '${{ steps.candidate.outputs.team-id }}'
+          --report "$RUNNER_TEMP/mac-installed-acceptance.json"
+      - name: Save sanitized partial acceptance receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-installed-acceptance-${{ matrix.arch }}-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/mac-provenance.json
+            ${{ runner.temp }}/mac-installed-acceptance.json

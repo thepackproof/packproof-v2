@@ -1,18 +1,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { required } = require('./check-acceptance.cjs');
-const platforms = ['win32-x64', 'darwin-x64', 'darwin-arm64'];
+const { required, validatePlatformScope, platformsForScope, requiredForScope } = require('./check-acceptance.cjs');
 
 function parseArguments(args) {
   const values = {};
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
-    if (!['--source', '--artifacts', '--out'].includes(key) || values[key] || !args[index + 1]) throw new Error('Use --source <40-character commit> --artifacts <downloaded artifact directory> --out <new kit directory>.');
+    if (!['--source', '--artifacts', '--out', '--platforms'].includes(key) || values[key] || !args[index + 1]) throw new Error('Use --source <40-character commit> --artifacts <downloaded artifact directory> --out <new kit directory> [--platforms all|mac|windows].');
     values[key] = args[index + 1];
   }
   if (!/^[a-f0-9]{40}$/.test(values['--source'] || '') || !values['--artifacts'] || !values['--out']) throw new Error('An exact source commit, artifact directory and new output directory are required.');
-  return { sourceCommit: values['--source'], artifacts: path.resolve(values['--artifacts']), out: path.resolve(values['--out']) };
+  return { sourceCommit: values['--source'], artifacts: path.resolve(values['--artifacts']), out: path.resolve(values['--out']), platforms: validatePlatformScope(values['--platforms']) };
 }
 function findInventories(root) {
   const found = []; let visited = 0;
@@ -37,7 +36,8 @@ async function hashFile(file) {
   for await (const bytes of fs.createReadStream(file)) hash.update(bytes);
   return hash.digest('hex');
 }
-async function inspectCandidates(root, sourceCommit) {
+async function inspectCandidates(root, sourceCommit, value = 'all') {
+  const scope = validatePlatformScope(value), platforms = platformsForScope(scope).map(item => item.replace('/', '-'));
   const inventories = []; const seen = new Set(); let identity;
   for (const file of findInventories(root)) {
     if (fs.statSync(file).size > 5 * 1024 * 1024) throw new Error('Artifact inventory is too large.');
@@ -60,21 +60,23 @@ async function inspectCandidates(root, sourceCommit) {
     }
     inventories.push({ platform: report.platform, arch: report.arch, version: report.version, channel: report.channel, signed: report.signed, inventory: path.relative(root, file), artifacts });
   }
-  return { sourceCommit, inventories, missingPlatforms: platforms.filter(platform => !seen.has(platform)) };
+  return { sourceCommit, platforms: scope, inventories, missingPlatforms: platforms.filter(platform => !seen.has(platform)) };
 }
-async function prepareKit({ sourceCommit, artifacts, out }) {
+async function prepareKit({ sourceCommit, artifacts, out, platforms: value = 'all' }) {
+  const scope = validatePlatformScope(value), gates = requiredForScope(scope);
   if (!/^[a-f0-9]{40}$/.test(sourceCommit)) throw new Error('An exact source commit is required.');
   if (fs.existsSync(out)) throw new Error('Output already exists; preserve its operator results and choose a new directory.');
-  const candidate = await inspectCandidates(artifacts, sourceCommit);
+  const candidate = await inspectCandidates(artifacts, sourceCommit, scope);
   const template = JSON.parse(fs.readFileSync(path.join(__dirname, '../docs/release-acceptance.template.json'), 'utf8'));
   if (template.tests?.length !== required.length || required.some(id => !template.tests.some(test => test.id === id))) throw new Error('Acceptance template and required release gates disagree.');
-  const report = { schemaVersion: template.schemaVersion, sourceCommit, approvedBy: '', testedAt: '', tests: required.map(id => ({ id, status: 'pending', evidence: '' })) };
+  const report = { schemaVersion: template.schemaVersion, sourceCommit, platforms: scope, approvedBy: '', testedAt: '', tests: gates.map(id => ({ id, status: 'pending', evidence: '' })) };
+  const columns = platformsForScope(scope).map(item => ({ 'win32/x64': 'Windows', 'darwin/x64': 'Intel Mac', 'darwin/arm64': 'Apple Silicon' })[item]);
   const worksheet = ['# Candidate acceptance worksheet', '', `Exact source: \`${sourceCommit}\``, '',
-    `Candidate identity: ${candidate.inventories[0].channel} ${candidate.inventories[0].version}.`,
+    `Candidate identity: ${candidate.inventories[0].channel} ${candidate.inventories[0].version}.`, `Release platform scope: ${scope}.`,
     `Missing platform inventories: ${candidate.missingPlatforms.join(', ') || 'none'}.`, '',
     'Hash verification identifies the supplied bytes; it does not establish a valid publisher signature, native installation, hardware behavior or acceptance. Every gate below is pending. Follow INSTALLED_ACCEPTANCE_KIT.md and retain redacted evidence. Do not reuse or enable disabled acceptance accounts.', '',
-    '| Gate | Status | Windows evidence | Intel Mac evidence | Apple Silicon evidence |', '|---|---|---|---|---|',
-    ...required.map(id => `| ${id} | pending | | | |`), '',
+    `| Gate | Status | ${columns.map(label => `${label} evidence`).join(' | ')} |`, `|---|---|${columns.map(() => '---|').join('')}`,
+    ...gates.map(id => `| ${id} | pending |${columns.map(() => ' |').join('')}`), '',
     'For each test record: OS/build, candidate SHA-256, hardware model, start/end time, operator, actions, observed result and evidence file reference. Record blocked or failed honestly. A gate can pass only when all its required platform/behavior coverage is supported. An accountable reviewer completes release-acceptance.json after reviewing those records.', '',
     'No passwords, tokens, customer recordings, protected credential-store files or unredacted diagnostics belong in this kit.', ''].join('\n');
   fs.mkdirSync(path.dirname(out), { recursive: true }); fs.mkdirSync(out);
@@ -82,7 +84,7 @@ async function prepareKit({ sourceCommit, artifacts, out }) {
   fs.writeFileSync(path.join(out, 'release-acceptance.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
   fs.writeFileSync(path.join(out, 'WORKSHEET.md'), worksheet, { mode: 0o600 });
   fs.copyFileSync(path.join(__dirname, '../docs/INSTALLED_ACCEPTANCE_KIT.md'), path.join(out, 'INSTALLED_ACCEPTANCE_KIT.md'));
-  return { platforms: candidate.inventories.length, missingPlatforms: candidate.missingPlatforms, pendingGates: required.length };
+  return { platforms: candidate.inventories.length, platformScope: scope, missingPlatforms: candidate.missingPlatforms, pendingGates: gates.length };
 }
 module.exports = { parseArguments, inspectCandidates, prepareKit };
 if (require.main === module) Promise.resolve().then(() => prepareKit(parseArguments(process.argv.slice(2)))).then(result => console.log(JSON.stringify({ prepared: true, ...result, testsExecuted: 0 }))).catch(error => { console.error(error.message); process.exitCode = 1; });
