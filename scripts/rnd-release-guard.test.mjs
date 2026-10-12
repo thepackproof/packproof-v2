@@ -53,6 +53,7 @@ test('checked-out source must match event source and current R&D checkout cannot
 });
 
 function jobs(source) {
+  source = source.replace(/\r\n/g, '\n');
   const body = source.slice(source.indexOf('\njobs:\n') + 7);
   const matches = [...body.matchAll(/^  ([\w-]+):\n/gm)];
   return matches.map((match, index) => ({ name: match[1], text: body.slice(match.index, matches[index + 1]?.index ?? body.length) }));
@@ -61,7 +62,7 @@ function jobs(source) {
 test('every credential-bearing and publishing workflow job requires no-secret source policy', () => {
   let protectedCount = 0;
   for (const filename of readdirSync(resolve(root, '.github/workflows')).filter(name => /\.ya?ml$/.test(name))) {
-    const source = readFileSync(resolve(root, '.github/workflows', filename), 'utf8');
+    const source = readFileSync(resolve(root, '.github/workflows', filename), 'utf8').replace(/\r\n/g, '\n');
     for (const job of jobs(source)) {
       const sensitive = /secrets\.|configure-aws-credentials|azure\/login|eas(?:-cli@[^ ]+)?\s+(?:build|submit|update)|publish-release\.cjs|deploy-staging-current/.test(job.text);
       if (!sensitive) continue;

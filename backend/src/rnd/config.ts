@@ -32,6 +32,13 @@ export function requireRnd(config:RndConfig|undefined,feature:Feature,operation:
  if(!config?.enabled||config.killSwitch||!['research','test'].includes(config.environment)||!config.features[feature]?.[operation])
   throw new DomainError('RND_DISABLED','This experimental capability is disabled',404);
 }
+/** Consent admits only an enabled collection purpose; it does not enable a feature. */
+export function requireConsentAdmission(config:RndConfig|undefined,purpose:'EXPERIMENTAL_ANALYSIS'|'LEARNING') {
+ const eligible=purpose==='LEARNING'?['proofcollective'] as const:FEATURES;
+ const feature=eligible.find(feature=>config?.features[feature]?.collection);
+ if(!feature)throw new DomainError('RND_DISABLED','Research collection for this consent purpose is disabled',404);
+ requireRnd(config,feature,'collection');
+}
 export function enabledResearchConfig():RndConfig {
  return {enabled:true,killSwitch:false,environment:'test',features:Object.fromEntries(FEATURES.map(f=>[f,{collection:true,processing:true,internalDisplay:true,customerDisplay:false}])) as RndConfig['features']};
 }

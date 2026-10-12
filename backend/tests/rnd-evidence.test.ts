@@ -33,6 +33,24 @@ describe('research evidence boundary',()=>{
   expect(rndConfigFromEnv({}).enabled).toBe(false);expect(rndConfigFromEnv({}).killSwitch).toBe(true);
   expect(()=>rndConfigFromEnv({PACKPROOF_ENV:'research',PACKPROOF_RND_ENABLED:'1',PACKPROOF_RND_KILL_SWITCH:'0',PACKPROOF_RND_PROOFPRINT_CUSTOMER_DISPLAY:'1'})).toThrow(/qualification/);
  });
+ it('admits vision-only purpose consent without enabling capture or collaborative learning',async()=>{
+  const rnd=enabledResearchConfig();
+  for(const flag of Object.values(rnd.features))Object.assign(flag,{collection:false,processing:false,internalDisplay:false});
+  for(const feature of ['proofpilot','proofsight','proofprint','prooftwin'] as const)Object.assign(rnd.features[feature],{collection:true,processing:true,internalDisplay:true});
+  const scoped={...deps,rnd},txn=await createTransaction(h.db,h.clock,seller,{itemTitle:'Vision-only fixture'});
+  const p=await createOrGetProof(h.db,h.clock,seller,txn.transactionId);
+  const consent={purpose:'EXPERIMENTAL_ANALYSIS',version:'packproof.research-consent.v1',granted:true};
+  await recordConsent(scoped,seller,p.proofId,'vision-consent',consent);
+  const evidence=await commitFulfillmentAndAttest(h,seller,p.proofId);await finalizeProof(h.db,h.clock,seller,p.proofId,signing.signer);
+  expect(await requestAnalysis(scoped,seller,p.proofId,'vision-analysis',{feature:'proofpilot',evidenceIds:[evidence.evidenceId]})).toMatchObject({operationalState:'QUEUED'});
+  await expect(recordConsent(scoped,seller,p.proofId,'learning-denied',{...consent,purpose:'LEARNING'})).rejects.toMatchObject({code:'RND_DISABLED'});
+  await expect(issueIntent(scoped,seller,p.proofId,'capture-denied',{legId:'OUTBOUND',acquisitionMode:'ONLINE'})).rejects.toMatchObject({code:'RND_DISABLED'});
+  rnd.killSwitch=true;
+  await expect(recordConsent(scoped,seller,p.proofId,'killed',consent)).rejects.toMatchObject({code:'RND_DISABLED'});
+  expect(await recordConsent(scoped,seller,p.proofId,'withdraw-killed',{...consent,granted:false})).toMatchObject({granted:false});
+  rnd.killSwitch=false;for(const flag of Object.values(rnd.features))flag.collection=false;
+  await expect(recordConsent(scoped,seller,p.proofId,'all-off',consent)).rejects.toMatchObject({code:'RND_DISABLED'});
+ });
  it('rejects cross-proof sources, forged outcomes, conflicting idempotency and wrong actor',async()=>{
   const a=await proof(),b=await proof();
   const input={feature:'proofpilot',evidenceIds:[a.evidenceId]};

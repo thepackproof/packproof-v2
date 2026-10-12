@@ -66,6 +66,17 @@ describe('experimental desktop isolation',()=>{
   const pending=api.rndArtifact('proof_a','analysis_a',0);account='user_b';token.resolve('token-b');
   await expect(pending).rejects.toMatchObject({code:'SESSION_CHANGED'});expect(fetcher).not.toHaveBeenCalled();
  });
+ it('fetches native sidecar preview through a bounded authenticated research route',async()=>{
+  const fetcher=vi.fn<typeof fetch>().mockResolvedValue(new Response(new Uint8Array([137,80,78,71]),{headers:{'Content-Type':'image/png'}}));
+  const api=new DesktopApi({config:research(),getAccountId:()=> 'local_user',getToken:async()=> 'local-token',fetch:fetcher});
+  const response=await api.rndSidecarPreview('proof_a','rnd_sidecar_a');expect(response.headers.get('content-type')).toBe('image/png');
+  expect(fetcher.mock.calls[0][0]).toBe('http://127.0.0.1:3000/proofs/proof_a/rnd/sidecars/rnd_sidecar_a/preview');
+  expect(fetcher.mock.calls[0][1]?.headers).toMatchObject({Authorization:'Bearer local-token'});
+  expect(fetcher.mock.calls[0][1]?.redirect).toBe('error');
+  const ordinary=new DesktopApi({config:{...research(),research:false},getAccountId:()=> 'local_user',getToken:async()=> 'local-token',fetch:fetcher});
+  expect(()=>ordinary.rndSidecarPreview('proof_a','rnd_sidecar_a')).toThrow('unavailable');
+  expect(()=>api.rndSidecarPreview('proof_a','../escape')).toThrow();expect(fetcher).toHaveBeenCalledTimes(1);
+ });
  it('bounds research IPC and binds deep links to the research scheme',()=>{
   expect(parseDeepLink('packproof-research://proof/proof_a','packproof-research')).toBe('/proof/proof_a');
   expect(parseDeepLink('packproof://proof/proof_a','packproof-research')).toBeNull();

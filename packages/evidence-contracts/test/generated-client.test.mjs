@@ -23,7 +23,7 @@ test('generated client is reproducible and covers the actual mounted router meth
  }
  const actual=Object.entries(spec.paths).flatMap(([path,methods])=>Object.keys(methods).map(method=>method.toUpperCase()+' '+path));
  assert.deepEqual(actual.sort(),expected.sort());
- assert.equal(RND_OPERATIONS.length,33);
+ assert.equal(RND_OPERATIONS.length,35);
  const app=readFileSync(new URL('backend/src/app.ts',root),'utf8');
  for(const router of ['rndRouter','rndDerivativeGrantRouter','rndDerivativeGrantPublicRouter'])assert.match(app,new RegExp('app\\.use\\('+router+'\\(deps\\)\\)'));
 });
@@ -35,6 +35,8 @@ test('pure builder encodes exact path, query, body and idempotency without crede
  assert.deepEqual(built,{path:'/proofs/proof%2Fa/rnd/analyses',method:'POST',body,headers:{Accept:'application/json','Idempotency-Key':'request-1','Content-Type':'application/json'}});
  assert.equal(built.body,body);
  assert.equal(buildRndRequest('listExtensions',{path:{id:'p'},query:{after:17}}).path,'/proofs/p/rnd/extensions?after=17');
+ assert.equal(buildRndRequest('previewCaptureSidecar',{path:{id:'p',sidecarId:'rnd_sidecar_a'}}).path,'/proofs/p/rnd/sidecars/rnd_sidecar_a/preview');
+ assert.equal(buildRndRequest('readCaptureSidecar',{path:{id:'p',sidecarId:'rnd_sidecar_a'}}).path,'/proofs/p/rnd/sidecars/rnd_sidecar_a');
  assert.equal(buildRndRequest('getAnalysisArtifact',{path:{id:'p',analysisId:'a',index:0}}).method,'GET');
  assert.throws(()=>buildRndRequest('constructor',{}),/Unknown/);
  assert.throws(()=>buildRndRequest('requestAnalysis',{path:{id:'p'},body}),/Idempotency/);

@@ -5,15 +5,21 @@ on:
     branches: ['rnd/**']
     paths: ['mobile/**', 'packages/**', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
   pull_request:
+    branches: [main]
     paths: ['mobile/**', 'packages/**', 'research/capture-fragments/**', 'config/rnd/**', 'scripts/rnd*', '.github/workflows/rnd-native.yml']
   workflow_dispatch:
+    inputs:
+      include_ios:
+        description: Explicitly include the deferred unsigned iOS compiler check
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: rnd-native-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   EXPO_PUBLIC_PACKPROOF_RND: 'true'
@@ -32,13 +38,20 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      android: ${{ steps.scope.outputs.android }}
+      fragments: ${{ steps.scope.outputs.fragments }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Select affected native research checks
+        id: scope
+        run: node scripts/rnd-check-scope.mjs
       - name: Require immutable research source marker and isolated app configuration
         run: |
           node --input-type=module <<'JS'
@@ -58,6 +71,7 @@ jobs:
           JS
 
   android-library:
+    if: ${{ needs.source-isolation.outputs.android == 'true' }}
     needs: source-isolation
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -80,7 +94,7 @@ jobs:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
           log-accepted-android-sdk-licenses: false
       - name: Install isolated JavaScript dependencies
-        run: npm ci --prefix mobile --ignore-scripts
+        run: npm ci --prefix mobile
       - name: Generate disposable native project
         working-directory: mobile
         run: node node_modules/expo/bin/cli prebuild --platform android --no-install
@@ -92,6 +106,7 @@ jobs:
         run: node node_modules/expo/bin/cli export --platform android --output-dir dist/rnd-ci --max-workers 2
 
   ios-simulator-compile:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_ios }}
     needs: source-isolation
     runs-on: macos-15
     timeout-minutes: 45
@@ -109,7 +124,7 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks
       - name: Install isolated JavaScript dependencies
-        run: npm ci --prefix mobile --ignore-scripts
+        run: npm ci --prefix mobile
       - name: Generate disposable iOS project without signing
         working-directory: mobile
         run: node node_modules/expo/bin/cli prebuild --platform ios --no-install
@@ -128,6 +143,7 @@ jobs:
           xcodebuild -quiet -workspace "$workspace" -scheme "$scheme" -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/packproof-research-ios" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM='' build
 
   encoded-fragment-protocol:
+    if: ${{ needs.source-isolation.outputs.fragments == 'true' }}
     needs: source-isolation
     runs-on: ubuntu-24.04
     timeout-minutes: 10

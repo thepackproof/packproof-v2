@@ -186,6 +186,21 @@ def strict_object(pairs):
     return result
 
 
+def apply_resource_limits(resource, timeout):
+    """Tighten limits without attempting to raise an inherited sandbox ceiling."""
+    for kind, requested in (
+        (resource.RLIMIT_CPU, (timeout, timeout + 1)),
+        (resource.RLIMIT_FSIZE, (128 * 1024 * 1024, 128 * 1024 * 1024)),
+        (resource.RLIMIT_NOFILE, (128, 128)),
+        (resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3)),
+    ):
+        inherited = resource.getrlimit(kind)
+        limited = [min(wanted, current) if current != resource.RLIM_INFINITY else wanted
+                   for wanted, current in zip(requested, inherited)]
+        limited[0] = min(limited)
+        resource.setrlimit(kind, tuple(limited))
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('job_file',nargs='?'); parser.add_argument('result_file',nargs='?')
@@ -205,10 +220,7 @@ def main():
     timeout=bounded_int(args.timeout,1,180,'TIMEOUT_LIMIT')
     try:
         import resource
-        resource.setrlimit(resource.RLIMIT_CPU,(timeout,timeout+1))
-        resource.setrlimit(resource.RLIMIT_FSIZE,(128*1024*1024,128*1024*1024))
-        resource.setrlimit(resource.RLIMIT_NOFILE,(128,128))
-        resource.setrlimit(resource.RLIMIT_AS,(2*1024**3,2*1024**3))
+        apply_resource_limits(resource,timeout)
     except ImportError:
         parser.error('This worker requires Linux process limits; run in the documented container.')
     def expired(*_):

@@ -1,0 +1,11 @@
+# PackProof-maintained braces patch
+
+This private local fork is owned and maintained by PackProof. It is not an upstream release. The upstream MIT license and attribution are retained in LICENSE. Exact upstream braces 3.0.3 tarball URL, SHA-512 SRI, SHA-256, and retained-file SHA-256 values are in provenance.json. Local files are checked against ../integrity.json at postinstall and by security tests. Vendor bytes are preserved without Git line-ending conversion.
+
+This fixes the recursive stack exhaustion reported in [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and [upstream issue #70](https://github.com/micromatch/braces/issues/70). `lib/limits.js` bounds structural nesting to 128, independently of the existing character limit. `lib/parse.js` checks before pushing either brace or parenthesis blocks; quoted, bracketed, and escaped literal text does not consume structural depth. `lib/compile.js`, `lib/expand.js`, and `lib/stringify.js` use an iterative AST preflight before recursive traversal, covering direct AST and deep-import callers as well as the package entry point. Over-limit input throws SyntaxError with a bounded-depth explanation before recursive work.
+
+Existing range limits and ordinary glob behavior remain. This is a recursion-depth fix, not a general bound on all combinatorial expansion requested by callers. The package identity is explicitly local; upstream development-only scripts/dependencies are removed. All source execution entry points remain available and the recursive walkers share the guard; there are no prebuilt bundles.
+
+`tests/vendor-security-regressions.test.cjs` covers balanced, malformed, mixed brace/parenthesis nesting, public and deep-import AST walkers, ordinary ranges/globs, escaped/quoted literals, and micromatch integration. The same defect regressions failed against the unchanged 3.0.3 installation before the fix.
+
+No official patched release existed when verified on 2026-10-10. PackProof must track the upstream advisory, review future changes, and replace this fork when a compatible maintained release fixes the defect. npm audit does not inspect local fork code. Local provenance, hashes, regression tests, and Metro/native build checks are separate required evidence from a clean registry audit.

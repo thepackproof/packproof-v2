@@ -77,22 +77,27 @@ export class FragmentJournal {
   if(this.sealed||this.entries.length>=MAX_FRAGMENTS||!/^\d{1,20}$/.test(closedMonotonicNs)||BigInt(closedMonotonicNs)<BigInt(this.entries.at(-1)?.closedMonotonicNs??this.session.startedMonotonicNs))fail('INVALID_FRAGMENT_ORDER');
   if(!Buffer.isBuffer(bytes)||bytes.length<1||bytes.length>MAX_FRAGMENT_BYTES||this.totalBytes+bytes.length>MAX_STREAM_BYTES)fail('FRAGMENT_SIZE_LIMIT');
   const sequence=this.entries.length;
-  if(sequence===0){if(kind!=='INIT')fail('INIT_REQUIRED');this.tracks=trackInfo(bytes);if(this.session.audioRequired&&!this.tracks.some(t=>t.kind==='AUDIO'))fail('AUDIO_TRACK_REQUIRED');}
+  // Validate against candidate state. A rejected unit must not consume a sequence or a track range.
+  let tracks=this.tracks,lastMediaSequence=this.lastMediaSequence;const trackEnds=new Map(this.trackEnds);
+  if(sequence===0){if(kind!=='INIT')fail('INIT_REQUIRED');tracks=trackInfo(bytes);if(this.session.audioRequired&&!tracks.some(t=>t.kind==='AUDIO'))fail('AUDIO_TRACK_REQUIRED');}
   else if(kind==='INIT'||this.entries.at(-1).kind==='FINAL_INDEX')fail('INVALID_FRAGMENT_ORDER');
   let detail={};
   if(kind==='MEDIA'){
-   detail=mediaInfo(bytes,this.tracks);if(detail.fragmentSequence!==this.lastMediaSequence+1)fail('FRAGMENT_SEQUENCE_GAP');this.lastMediaSequence=detail.fragmentSequence;
-   for(const t of detail.timing){const expected=this.trackEnds.get(t.trackId)??'0';if(t.decodeStartTicks!==expected)fail('TRACK_DECODE_GAP_OR_REORDER');this.trackEnds.set(t.trackId,t.decodeEndTicks);}
+   detail=mediaInfo(bytes,tracks);if(detail.fragmentSequence!==lastMediaSequence+1)fail('FRAGMENT_SEQUENCE_GAP');lastMediaSequence=detail.fragmentSequence;
+   for(const t of detail.timing){const expected=trackEnds.get(t.trackId)??'0';if(t.decodeStartTicks!==expected)fail('TRACK_DECODE_GAP_OR_REORDER');trackEnds.set(t.trackId,t.decodeEndTicks);}
   }else if(kind==='FINAL_INDEX'){if(this.lastMediaSequence<1||mp4Boxes(bytes).length!==1||mp4Boxes(bytes)[0].type!=='mfra')fail('INVALID_FINAL_INDEX');}
   else if(kind!=='INIT')fail('INVALID_FRAGMENT_KIND');
   const record={schemaVersion:'packproof.encoded-fragment.v1',sessionDigest:this.sessionDigest,sequence,previousDigest:this.entries.at(-1)?.digest??null,kind,sha256:sha(bytes),byteLength:bytes.length,closedMonotonicNs,...detail};
-  const entry={...record,digest:sha(canonicalize(record))};this.entries.push(entry);this.bytes.push(Buffer.from(bytes));this.totalBytes+=bytes.length;return entry;
+  const entry={...record,digest:sha(canonicalize(record))},ownedBytes=Buffer.from(bytes);
+  this.tracks=tracks;this.lastMediaSequence=lastMediaSequence;this.trackEnds=trackEnds;
+  this.entries.push(entry);this.bytes.push(ownedBytes);this.totalBytes+=bytes.length;return entry;
  }
  seal(privateKey){
   if(this.sealed||this.entries.at(-1)?.kind!=='FINAL_INDEX'||this.tracks.some(t=>!this.trackEnds.has(t.trackId)))fail('INCOMPLETE_FRAGMENT_STREAM');
-  this.sealed=true;const key=createPublicKey(privateKey);if(key.asymmetricKeyType!=='ec'||key.asymmetricKeyDetails?.namedCurve!=='prime256v1')fail('P256_KEY_REQUIRED');
+  const key=createPublicKey(privateKey);if(key.asymmetricKeyType!=='ec'||key.asymmetricKeyDetails?.namedCurve!=='prime256v1')fail('P256_KEY_REQUIRED');
   const record={schemaVersion:'packproof.fragment-manifest.v1',session:this.session,sessionDigest:this.sessionDigest,entryCount:this.entries.length,headDigest:this.entries.at(-1).digest,tracks:this.tracks,entries:this.entries,completeEncodedSha256:sha(Buffer.concat(this.bytes)),completeEncodedByteLength:this.bytes.reduce((n,b)=>n+b.length,0),coverage:'SOFTWARE_ENCODED_FRAGMENT_CHAIN',nativeCaptureAssurance:'UNSUPPORTED',sensorAttestation:'UNSUPPORTED'};
-  const canonicalJson=canonicalize(record);return {canonicalJson,digest:sha(canonicalJson),signatureBase64:sign('sha256',Buffer.from(canonicalJson),privateKey).toString('base64')};
+  const canonicalJson=canonicalize(record),sealed={canonicalJson,digest:sha(canonicalJson),signatureBase64:sign('sha256',Buffer.from(canonicalJson),privateKey).toString('base64')};
+  this.sealed=true;return sealed;
  }
 }
 /** Trusted public key must come from caller policy, never from the untrusted packet. */

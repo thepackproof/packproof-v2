@@ -3,7 +3,9 @@ name: Isolated R&D checks
 on:
   push:
     branches: ['rnd/**']
+    paths-ignore: ['docs/**', '**/*.md']
   pull_request:
+    branches: [main]
     paths:
       - 'backend/**'
       - 'web/**'
@@ -26,15 +28,23 @@ permissions:
 
 concurrency:
   group: rnd-source-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # All jobs are local build/test work on experimental source. No deployment,
-# publishing, signing credentials, cloud secrets, or artifact upload actions.
+# publishing, signing credentials, cloud secrets, or application artifact uploads.
+# PRs into an existing rnd branch reuse the push checks for the same source.
 jobs:
   source-isolation:
     if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      surfaces: ${{ steps.scope.outputs.surfaces }}
+      federated: ${{ steps.scope.outputs.federated }}
+      proof: ${{ steps.scope.outputs.proof }}
+      sandbox: ${{ steps.scope.outputs.sandbox }}
+      container: ${{ steps.scope.outputs.container }}
     env:
       PACKPROOF_RESEARCH_BUILD: 'true'
       PACKPROOF_RND: 'true'
@@ -44,11 +54,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Test research branch and source distribution interlocks
-        run: node --test scripts/rnd-release-guard.test.mjs scripts/rnd-runtime.test.mjs
+        run: node --test scripts/rnd-release-guard.test.mjs scripts/rnd-runtime.test.mjs scripts/rnd-check-scope.test.mjs
+      - name: Select checks affected by this source change
+        id: scope
+        run: node scripts/rnd-check-scope.mjs
       - name: Assert this experimental source cannot distribute
         run: |
           node --input-type=module <<'JS'
@@ -60,7 +74,7 @@ jobs:
           JS
 
   backend-protocols:
-    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    if: ${{ needs.source-isolation.outputs.backend == 'true' }}
     needs: source-isolation
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -115,7 +129,7 @@ jobs:
           node --test verifier/test_rnd_bundle.mjs
           /tmp/packproof-privacy-venv/bin/python -m unittest discover -s verifier -p 'test_*.py'
       - name: Run actual bounded vision and canonicalization protocols
-        run: /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical -v
+        run: /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training research.benchmarks.test_worker_limits research.benchmarks.test_video_coordinates -v
       - name: Run redaction and private witness protocols
         run: /tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness -v
       - name: Typecheck backend
@@ -128,12 +142,15 @@ jobs:
           tests/canonical.test.ts tests/core-integrity-audit.test.ts
           tests/api-flow.test.ts tests/durable-recovery.test.ts
           tests/finalize-requirements.test.ts
+          tests/trusted-proxy-dependency.test.ts tests/api-key-token-security.test.ts
+          tests/ingress-rate-limit.test.ts tests/order-intake-security.test.ts
+          tests/shopify-shop-security.test.ts tests/webhook-input-types.test.ts
       - name: Compile API without deployment
         run: npm run build
         working-directory: backend
 
   surfaces:
-    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    if: ${{ needs.source-isolation.outputs.surfaces == 'true' }}
     needs: source-isolation
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -177,6 +194,7 @@ jobs:
         run: |
           npm run test:research
           npm run test:recovery
+          npm run test:vendor-security
           node --test tests/ios-release-config.test.cjs tests/release-identity.test.cjs
       - name: Compile the isolated web build without publishing
         working-directory: web
@@ -194,7 +212,7 @@ jobs:
         run: npm run build
 
   federated-protocol:
-    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    if: ${{ needs.source-isolation.outputs.federated == 'true' }}
     needs: source-isolation
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -221,7 +239,7 @@ jobs:
         run: '"$RUNNER_TEMP/federated-venv/bin/python" -m proofcollective.cli simulate --clients 20 --rounds 1 --transport local-mtls --output "$RUNNER_TEMP/federated-mtls-report"'
 
   image-transform-proof:
-    if: ${{ startsWith(github.ref, 'refs/heads/rnd/') || startsWith(github.head_ref, 'rnd/') }}
+    if: ${{ needs.source-isolation.outputs.proof == 'true' }}
     needs: source-isolation
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -242,3 +260,88 @@ jobs:
         run: node research/privacy/zk/verify.mjs research/privacy/zk/fixtures/synthetic-proof.json research/privacy/zk/fixtures/synthetic-redacted.png research/privacy/zk/fixtures/synthetic-trust.json
       - name: Generate a real bounded proof and exercise adversarial transformation checks
         run: timeout 300s node research/privacy/zk/benchmark.mjs "$RUNNER_TEMP/zk-synthetic-report"
+
+  decoder-containment:
+    if: ${{ needs.source-isolation.outputs.sandbox == 'true' }}
+    needs: source-isolation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install namespace and decoder prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap util-linux ffmpeg tesseract-ocr
+          python -m venv /tmp/packproof-vision-venv
+          /tmp/packproof-vision-venv/bin/pip install --require-hashes -r research/vision/requirements-linux-py312.lock
+          python -m venv /tmp/packproof-privacy-venv
+          /tmp/packproof-privacy-venv/bin/pip install -r research/privacy/requirements.lock.txt
+      - name: Exercise actual worker containment and hostile resource probes
+        run: |
+          node --test scripts/rnd-worker-sandbox.test.mjs
+          node scripts/rnd-sandbox-probe.mjs --vision-runtime /tmp/packproof-vision-venv --privacy-runtime /tmp/packproof-privacy-venv --report "$RUNNER_TEMP/rnd-sandbox-report.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rnd-sandbox-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/rnd-sandbox-report.json
+          if-no-files-found: error
+
+  isolated-container:
+    if: ${{ needs.source-isolation.outputs.container == 'true' }}
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and exercise the private research runtime
+        run: |
+          docker build -f research/backend.Dockerfile -t packproof-rnd-smoke:${{ github.sha }} .
+          node research/container-smoke.mjs packproof-rnd-smoke:${{ github.sha }} --report "$RUNNER_TEMP/rnd-container-report.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rnd-container-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/rnd-container-report.json
+          if-no-files-found: error
+
+  dependency-audit:
+    if: ${{ needs.source-isolation.outputs.backend == 'true' || needs.source-isolation.outputs.surfaces == 'true' || needs.source-isolation.outputs.proof == 'true' }}
+    needs: source-isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit all five committed dependency locks
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/rnd-audits"
+          result=0
+          for app in backend mobile web desktop research/privacy/zk; do
+            npm audit --prefix "$app" --package-lock-only --json > "$RUNNER_TEMP/rnd-audits/${app//\//-}.json" || result=1
+          done
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rnd-dependency-audits-${{ github.sha }}
+          path: ${{ runner.temp }}/rnd-audits/*.json
+          if-no-files-found: error

@@ -11,12 +11,11 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Optional R&D work shares the existing camera. One pending native task; no pixels cross JS. */
 class ResearchCapture(private val context: Context, private val directory: File) {
-  private val queue = Executors.newSingleThreadExecutor()
+  private val queue = ResearchTaskQueue()
   private val busy = AtomicBoolean(false)
   private val ended = AtomicBoolean(false)
   private val started = SystemClock.elapsedRealtimeNanos()
@@ -40,7 +39,7 @@ class ResearchCapture(private val context: Context, private val directory: File)
   }
   fun controlEvent(type: String, reason: String) {
     val at = (SystemClock.elapsedRealtimeNanos()-started).toString()
-    if (!ended.get()) queue.execute {
+    if (!ended.get()) queue.submit {
       if(controlEvents.length()<8) controlEvents.put(JSONObject().put("type",type).put("reason",reason).put("monotonicNs",at).put("restoration","ORDINARY_CONTROLS_UNCHANGED"))
     }
   }
@@ -61,11 +60,10 @@ class ResearchCapture(private val context: Context, private val directory: File)
       for (y in 0 until image.height) for (x in 0 until image.width) luma[y * image.width + x] = buffer.get(y * plane.rowStride + x * plane.pixelStride)
       val width = image.width; val height = image.height
       val pts = image.imageInfo.timestamp.toString(); val rotation = image.imageInfo.rotationDegrees
-      queue.execute {
+      if (!queue.submit(optionalSample = true, settled = { busy.set(false) }) {
         try { process(luma, width, height, rotation, pts, now, mediaTimeMs) }
-        catch (_: Exception) { disabled = "OPTIONAL_STORAGE_OR_PROCESSING_FAILURE" }
-        finally { busy.set(false) }
-      }
+        catch (_: Exception) { disable("OPTIONAL_STORAGE_OR_PROCESSING_FAILURE") }
+      }) busy.set(false)
     } catch (_: OutOfMemoryError) { busy.set(false); lumaBuffer = null; disable("MEMORY_PRESSURE") }
     catch (_: Exception) { busy.set(false); disable("OPTIONAL_FRAME_UNAVAILABLE") }
   }
@@ -108,12 +106,12 @@ class ResearchCapture(private val context: Context, private val directory: File)
     if(candidate==null || candidate.pts!=pts || candidate.width!=width || candidate.height!=height){regionUnavailableReason="DECODER_FRAME_NOT_IN_BOUNDED_CACHE";return}
     val bounds=ResearchRegions.nativeBounds(regions[0],width,height,rotation) ?: run {regionUnavailableReason="UNMAPPABLE_OR_CLIPPED_REGION";return}
     if(!busy.compareAndSet(false,true)){regionUnavailableReason="OPTIONAL_WORK_BACKPRESSURE";return}
-    queue.execute {try {
+    if (!queue.submit(optionalSample = true, settled = { busy.set(false) }) {try {
       val frame=JSONObject(candidate.metadata);val mediaMs=frame.getLong("mediaTimeMs")
       val quality=ResearchRegions.quality(candidate.luma,width,height,bounds)
-      if(quality.getValue("meanLuma")<12 || quality.getValue("meanLuma")>243 || quality.getValue("saturationFraction")>0.6){regionUnavailableReason="REGION_EXPOSURE_UNUSABLE";return@execute}
+      if(quality.getValue("meanLuma")<12 || quality.getValue("meanLuma")>243 || quality.getValue("saturationFraction")>0.6){regionUnavailableReason="REGION_EXPOSURE_UNUSABLE";return@submit}
       val previous=frames[2]?.optJSONObject("regionQuality")?.optDouble("sharpness",-1.0) ?: -1.0
-      if(frames[2]!=null && (mediaMs-lastRegionMs<750 || quality.getValue("sharpness")<=previous*1.1))return@execute
+      if(frames[2]!=null && (mediaMs-lastRegionMs<750 || quality.getValue("sharpness")<=previous*1.1))return@submit
       val polygon=JSONArray().put(JSONArray(listOf(bounds[0],bounds[1]))).put(JSONArray(listOf(bounds[2],bounds[1]))).put(JSONArray(listOf(bounds[2],bounds[3]))).put(JSONArray(listOf(bounds[0],bounds[3])))
       frame.put("regionCandidates",JSONArray().put(JSONObject().put("target","BARCODE_REGION").put("coordinateSpace","stored-native-luma-pixels").put("polygon",polygon).put("association","EXACT_ANALYSIS_TIMESTAMP").put("identityInterpretation","UNASSIGNED")))
       frame.put("regionQuality",JSONObject(quality)).put("selectionTask","BARCODE_REGION")
@@ -121,13 +119,13 @@ class ResearchCapture(private val context: Context, private val directory: File)
       val file=File(directory,"research-frame-2.pgm");write(file,bytes)
       frame.put("fileName",file.name).put("sha256",sha256(bytes)).put("byteLength",bytes.size).put("relationship","CONCURRENT_CAPTURED_SIDECAR").put("transform","NATIVE_LUMA_PLANE_PGM_NO_RESIZE").put("colorLimitation","Luma only; not RGB or pixel-identical decoded video")
       frames[2]=frame;lastRegionMs=mediaMs;regionUnavailableReason="NONE";persist()
-    }catch(_:Exception){regionUnavailableReason="OPTIONAL_REGION_FAILURE"}finally{busy.set(false)}}
+    }catch(_:Exception){regionUnavailableReason="OPTIONAL_REGION_FAILURE"}}) busy.set(false)
   }
-  fun disable(reason: String) { disabled = reason }
+  fun disable(reason: String) { disabled = reason; queue.disableSampling() }
   fun finish(completion: () -> Unit) {
     ended.set(true)
     regionFrame=null
-    queue.execute { try { persist(); write(File(directory, "research-complete.json"), "{}".toByteArray()) } catch (_: Exception) { /* Original remains independent. */ }; completion(); queue.shutdown() }
+    queue.finish { regionFrame=null; try { persist(); write(File(directory, "research-complete.json"), "{}".toByteArray()) } catch (_: Exception) { /* Original remains independent. */ }; completion() }
   }
   private fun persist() {
     val result = JSONObject().put("schemaVersion", "packproof.native-acquisition.v1").put("mode", "PASSIVE")

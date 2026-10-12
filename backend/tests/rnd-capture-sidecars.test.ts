@@ -1,4 +1,6 @@
-import {beforeAll,afterAll,describe,it,expect} from 'vitest';
+import express from 'express';
+import request from 'supertest';
+import {beforeAll,afterAll,describe,it,expect,vi} from 'vitest';
 import {generateKeyPairSync,sign} from 'node:crypto';
 import {readFile,mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -15,7 +17,7 @@ import {createOrGetProof} from '../src/domain/create-proof.js';
 import {createCaptureSession,completeCaptureSession} from '../src/domain/capture-sessions.js';
 import {initializeEvidenceUpload,commitEvidence} from '../src/domain/evidence.js';
 import {recordConsent,issueIntent,startIntent,closeIntent} from '../src/rnd/capture.js';
-import {uploadCaptureSidecar,listCaptureSidecars,validateSidecarChunk,validateNativeAcquisition,SIDECAR_CHUNK_BYTES} from '../src/rnd/capture-sidecars.js';
+import {uploadCaptureSidecar,listCaptureSidecars,readCaptureSidecar,rndCaptureSidecarsRouter,validateSidecarChunk,validateNativeAcquisition,SIDECAR_CHUNK_BYTES} from '../src/rnd/capture-sidecars.js';
 import {enabledResearchConfig} from '../src/rnd/config.js';
 import {sha256Hex} from '../src/hash.js';
 import type {RndDeps} from '../src/rnd/types.js';
@@ -52,6 +54,26 @@ describe('native signed sidecar receipt',()=>{
   expect(()=>validateSidecarChunk({...chunk(acquisition),partCount:9})).toThrow();
   expect(()=>validateSidecarChunk({...chunk(acquisition),dataBase64:'YQ==\n'})).toThrow();
   expect(()=>validateNativeAcquisition(Buffer.from(JSON.stringify({schemaVersion:'packproof.native-acquisition.v1',mode:'PASSIVE',frames:[{...descriptor,fileName:'../secret'}]})))).toThrow();
+ });
+ it('serves authorized sidecar originals and explicit lossless previews without parent substitution',async()=>{
+  const f=await fixture();
+  await uploadCaptureSidecar(deps,seller,f.proofId,f.intentId,'research-acquisition.json','read-acq',chunk(acquisition));
+  for(let part=0;part<Math.ceil(frameBytes.length/SIDECAR_CHUNK_BYTES);part++)await uploadCaptureSidecar(deps,seller,f.proofId,f.intentId,descriptor.fileName,`read-frame-${part}`,chunk(frameBytes,part));
+  const frame=(await listCaptureSidecars(deps,seller,f.proofId)).find(r=>r.sidecar.fileName===descriptor.fileName)!;
+  const id=frame.sidecar.id;
+  expect((await readCaptureSidecar(deps,seller,f.proofId,id)).body).toEqual(frameBytes);
+  const app=express();app.use((r,_s,next)=>{r.packproofUserId=seller;next();});app.use(rndCaptureSidecarsRouter(deps));
+  const response=await request(app).get(`/proofs/${f.proofId}/rnd/sidecars/${id}/preview`).expect(200);
+  expect(response.headers['content-type']).toMatch(/^image\/png/);expect(response.headers['cache-control']).toBe('private, no-store');
+  expect(response.headers['x-packproof-source-sha256']).toBe(sha256Hex(frameBytes));expect(response.headers['x-packproof-preview-transformation']).toBe('PGM_LUMA_TO_PNG_NO_RESIZE');
+  expect(response.body.subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+  const other=await fixture();await expect(readCaptureSidecar(deps,seller,other.proofId,id)).rejects.toMatchObject({code:'RND_SIDECAR_NOT_FOUND'});
+  await expect(readCaptureSidecar(deps,outsider,f.proofId,id)).rejects.toMatchObject({code:'PARTICIPANT_NOT_AUTHORIZED'});
+  deps.rnd!.killSwitch=true;await expect(readCaptureSidecar(deps,seller,f.proofId,id,true)).rejects.toMatchObject({code:'RND_DISABLED'});deps.rnd!.killSwitch=false;
+  const get=vi.spyOn(h.objectStore,'get').mockResolvedValueOnce({body:Buffer.from('changed')} as never);
+  await expect(readCaptureSidecar(deps,seller,f.proofId,id)).rejects.toMatchObject({code:'RND_SIDECAR_INTEGRITY'});get.mockRestore();
+  now++;await recordConsent(deps,seller,f.proofId,'read-withdraw',consent(false));
+  await expect(readCaptureSidecar(deps,seller,f.proofId,id,true)).rejects.toMatchObject({code:'RND_CONSENT_REQUIRED'});
  });
  it('receives exact signed acquisition then out-of-order chunks and never upgrades pixel identity',async()=>{
   const f=await fixture();

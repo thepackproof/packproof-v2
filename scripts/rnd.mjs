@@ -19,13 +19,13 @@ if(command==='init'||command==='serve') {
 } else if(command==='test'&&args[0]==='core') {
  run(process.execPath,['scripts/rnd-release-guard.test.mjs']);
  run(process.execPath,['packages/evidence-contracts/test/contracts.test.mjs']);
- run('npm',['test','--','tests/canonical.test.ts','tests/core-integrity-audit.test.ts','tests/api-flow.test.ts','tests/durable-recovery.test.ts','tests/finalize-requirements.test.ts','tests/accounts-search-invitations.test.ts'],resolve(root,'backend'));
+ run(process.execPath,['node_modules/vitest/vitest.mjs','run','tests/canonical.test.ts','tests/core-integrity-audit.test.ts','tests/api-flow.test.ts','tests/durable-recovery.test.ts','tests/finalize-requirements.test.ts','tests/accounts-search-invitations.test.ts'],resolve(root,'backend'));
 } else if(command==='test'&&args[0]==='research') {
  run(process.execPath,['packages/evidence-contracts/test/contracts.test.mjs']);
  run(process.execPath,['verifier/test_rnd_bundle.mjs']);
  const modules=readdirSync(resolve(root,'backend/tests')).filter(file=>/^rnd-.*\.test\.ts$/.test(file)).map(file=>'tests/'+file);
  if(!modules.length)throw new Error('Research backend tests are missing.');
- run('npm',['test','--',...modules],resolve(root,'backend'));
+ run(process.execPath,['node_modules/vitest/vitest.mjs','run',...modules],resolve(root,'backend'));
  run(python,['-m','unittest','discover','-s','research/benchmarks','-p','test_*.py']);
 } else if(command==='bench') {
  const feature=args[0];const output=option('--output');if(!output)throw new Error('Use --output with a fresh private directory.');

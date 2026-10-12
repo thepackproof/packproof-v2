@@ -18,6 +18,8 @@ node research/capture-fragments/benchmark.mjs /tmp/packproof-fragment-benchmark
 
 The five-run benchmark reports only the measured local synthetic producer population, encoded sizes, first-fragment arrival and parse/hash work. It supplies no physical accuracy estimate, mobile performance budget, hardware qualification or confidence claim. The checked-in report is `docs/rnd/validation/fragment-benchmark.json`.
 
+October 11 software follow-through adds transactional journal admission and sealing: a rejected later track cannot consume the fragment sequence or an earlier track's decode range, and a rejected signing key cannot seal the journal. The two regressions first failed against the previous implementation, then passed with the fix alongside all six existing real-encoder tests. These are software protocol checks only.
+
 A real native upgrade still requires safe encoder-produced immutable segments (including init/audio ownership), camera continuity and crash recovery on actual devices, pressure/thermal/latency measurement, final signed close verification, and explicit profile qualification. Post-finalization chunking remains a transport operation and must never be relabeled as incremental capture provenance.
 
 ## Native compile workflow
@@ -28,7 +30,7 @@ A real native upgrade still requires safe encoder-produced immutable segments (i
 - iOS: CocoaPods resolution and unsigned `xcodebuild` for the `PackProofResearch` simulator scheme. `CODE_SIGNING_ALLOWED=NO` and no development team are supplied. The macOS image's actual Xcode/SDK version is printed in its run log.
 - Fragment protocol: real local encoder fixtures and mutation tests.
 
-The workflow has read-only repository permissions, no secrets, EAS commands, distribution upload, artifact-upload step, production endpoint, or simulator/device qualification claim. The iOS CI result is pending an actual GitHub execution; a workflow definition is not a passed compilation.
+The workflow has read-only repository permissions, no secrets, EAS commands, distribution upload, artifact-upload step, production endpoint, or simulator/device qualification claim. The October 2 iOS compilation evidence is recorded in `docs/rnd/validation/native-status.json`; it did not execute XCTest. Current iOS execution and release work remain deferred, and a workflow definition is not a passed compilation.
 
 Primary references checked 2026-10-02:
 
