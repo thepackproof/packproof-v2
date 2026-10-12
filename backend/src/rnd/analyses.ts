@@ -12,6 +12,7 @@ import { executeVision,shipmentObservations } from './worker.js';
 import { assertSystemAdmin } from '../admin/auth.js';
 import { executableInventory } from './method.js';
 import { bindEnrollmentComparison,onEnrollmentAnalysisCompleted } from './enrollment.js';
+import { witnessLeaseCheckpoint } from './witness-lease.js';
 
 export const POLICY='packproof.rnd.conservative.v1';
 export const sourceRef=(s:Source):SourceRef=>({sourceId:s.sourceId,proofId:s.proofId,objectKey:s.objectKey,objectVersionId:s.objectVersionId,sha256:`sha256:${s.sha256}`,byteLength:s.byteLength,mimeType:s.mimeType,captureSessionId:s.captureSessionId,relationship:s.relationship??(s.captureSessionId?'ORIGINAL_RECORDING':'PARTICIPANT_IMPORT'),retentionState:'AVAILABLE',...(s.frameReference?{frameReference:{sampleId:s.frameReference.sampleId===undefined?null:String(s.frameReference.sampleId),offsetMs:typeof s.frameReference.offsetMs==='number'?s.frameReference.offsetMs:typeof s.frameReference.mediaTimeMs==='number'?s.frameReference.mediaTimeMs:null,clockDomain:typeof s.frameReference.clockDomain==='string'?s.frameReference.clockDomain:null,decoderBuild:null,rotation:typeof s.frameReference.rotation==='number'?s.frameReference.rotation:typeof s.frameReference.rotationDegrees==='number'?s.frameReference.rotationDegrees:null,colorConversion:typeof s.frameReference.colorConversion==='string'?s.frameReference.colorConversion:null}}:{})});
@@ -86,8 +87,8 @@ export async function listAnalyses(deps:RndDeps,actor:string,proofId:string) {
  if(!deps.rnd?.enabled||deps.rnd.killSwitch)bad('RND_DISABLED','Experimental analysis is disabled',404);
  const rows=(await deps.db.query<AnalysisRow>('SELECT * FROM rnd_analyses WHERE proof_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100',[proofId])).rows.filter(r=>deps.rnd!.features[r.feature].internalDisplay);
   const available=(await deps.db.query<Record<string,unknown>>(`SELECT id,content_type,byte_size,sha256,'OUTBOUND' AS leg_id FROM evidence WHERE proof_id=$1 AND validation_status='COMMITTED' UNION ALL SELECT e.id,e.content_type,e.byte_size,e.sha256,s.id AS leg_id FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1 AND e.committed_at IS NOT NULL AND e.discarded_at IS NULL`,[proofId])).rows;
-  const sidecars=(await deps.db.query<Record<string,unknown>>(`SELECT c.id,c.mime_type AS content_type,c.byte_length AS byte_size,c.sha256,s.leg_id,c.parent_evidence_id,c.frame_reference,'CONCURRENT_SIDECAR' AS relationship FROM rnd_capture_sidecars c JOIN rnd_subjects s ON s.id=c.subject_id WHERE c.proof_id=$1 AND c.mime_type LIKE 'image/%'`,[proofId])).rows;available.push(...sidecars);
- return {analyses:rows.map(analysisView),sources:available.map(s=>({sourceId:s.id,evidenceId:s.id,proofId,mimeType:s.content_type,byteLength:Number(s.byte_size),sha256:s.sha256,legId:s.leg_id,retentionState:'AVAILABLE',relationship:s.relationship??'ORIGINAL_RECORDING',...(s.parent_evidence_id?{parentEvidenceId:s.parent_evidence_id,frameReference:s.frame_reference}:{})})),limitations:['Research findings are unqualified for customer claims.','Different lifecycle legs are separate package subjects until physical correspondence is independently qualified.']};
+  const sidecars=(await deps.db.query<Record<string,unknown>>(`SELECT c.id,c.mime_type AS content_type,c.byte_length AS byte_size,c.sha256,c.object_version_id,s.leg_id,c.parent_evidence_id,c.frame_reference,'CONCURRENT_SIDECAR' AS relationship FROM rnd_capture_sidecars c JOIN rnd_subjects s ON s.id=c.subject_id WHERE c.proof_id=$1 AND c.mime_type LIKE 'image/%'`,[proofId])).rows;available.push(...sidecars);
+ return {analyses:rows.map(analysisView),sources:available.map(s=>({sourceId:s.id,evidenceId:s.id,proofId,mimeType:s.content_type,byteLength:Number(s.byte_size),sha256:s.sha256,legId:s.leg_id,retentionState:'AVAILABLE',relationship:s.relationship??'ORIGINAL_RECORDING',...(s.object_version_id?{objectVersionId:s.object_version_id}:{}),...(s.parent_evidence_id?{parentEvidenceId:s.parent_evidence_id,frameReference:s.frame_reference}:{})})),limitations:['Research findings are unqualified for customer claims.','Different lifecycle legs are separate package subjects until physical correspondence is independently qualified.']};
 }
 export async function leaseAnalysis(deps:RndDeps):Promise<AnalysisRow|null> {
  if(!deps.rnd?.enabled||deps.rnd.killSwitch)return null;
@@ -139,7 +140,10 @@ export async function runRndWorkerOnce(deps:RndDeps,adapter?:((job:AnalysisRow)=
   await authorized(deps.db,job.proof_id,job.actor_id);await requireConsent(deps.db,job.proof_id,job.actor_id);
   const method=await executableInventory(deps,job.feature);
   if(!adapter&&job.input_json.executableDigest!==method.digest)bad('RND_EXECUTABLE_CHANGED','Queued executable differs from the frozen job; request a new analysis with the updated method',409);
-  const result=adapter?await adapter(job):await executeVision(deps,job);
+  const checkpoint=job.feature==='proofwitness'?witnessLeaseCheckpoint(deps,job):undefined;
+  if(checkpoint)await checkpoint();
+  const result=adapter?await adapter(job):await executeVision(deps,job,false,checkpoint);
+  if(checkpoint)await checkpoint();
   result.provenance={...result.provenance,executableInventory:method.files};
   const executableDigest=adapter?sha256Hex('TEST_INJECTED_ADAPTER'):method.digest;
   await completeAnalysis(deps,job,result,executableDigest);

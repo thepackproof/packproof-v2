@@ -2,7 +2,7 @@ import type {AnalysisEnvelope, Feature, FindingState, OperationalState, RndFlags
 export type {AnalysisEnvelope,Feature,SourceRef};
 export interface AnalysisJob {analysisId:string;feature:Feature;operationalState:OperationalState;findingState:FindingState;result:AnalysisEnvelope|null;errorCode:string|null;createdAt:string;completedAt:string|null;}
 export interface ReviewerAnnotation {annotation:{annotationId:string;analysisId:string;actorId:string;statement:string;createdAt:string;sourceRefs:SourceRef[];interval:{startMs:number;endMs:number}|null;supersedesId:string|null};digest:string;}
-export interface RndSnapshot {annotations?:ReviewerAnnotation[];analyses:AnalysisJob[];sources:Array<Pick<SourceRef,'sourceId'|'mimeType'|'byteLength'|'sha256'|'relationship'|'retentionState'> & {evidenceId?:string;legId?:string}>;limitations:string[];}
+export interface RndSnapshot {annotations?:ReviewerAnnotation[];analyses:AnalysisJob[];sources:Array<Pick<SourceRef,'sourceId'|'mimeType'|'byteLength'|'sha256'|'relationship'|'retentionState'> & {evidenceId?:string;legId?:string;objectVersionId?:string}>;limitations:string[];}
 export interface RndCapabilities {enabled:boolean;flags?:RndFlags;features?:RndFlags['features'];killSwitch?:boolean;releaseAuthorized?:boolean;}
 export interface DerivativeGrant {grant:{id:string;expiresAt:string;artifactSha256:string;recipeSha256:string};token?:string|null;expired?:boolean;revoked?:boolean;}
 export interface RndTransport {
@@ -21,4 +21,4 @@ export interface RndTransport {
  artifact(proofId:string,analysisId:string,index:number):Promise<SourcePreview>;
  review(proofId:string,analysisId:string,input:{approved:true;artifactSha256:string;recipeSha256:string},key:string):Promise<unknown>;
 }
-export interface SourcePreview {url:string;mimeType:string;startMs?:number;endMs?:number;}
+export interface SourcePreview {notice?:string;url:string;mimeType:string;startMs?:number;endMs?:number;}

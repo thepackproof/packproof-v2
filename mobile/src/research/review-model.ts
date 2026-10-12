@@ -1,6 +1,6 @@
 import { assertAnalysisEnvelope, findingLabel, type AnalysisEnvelope, type Feature, type OperationalState, type FindingState } from '../../../packages/evidence-contracts/contracts.mjs';
 export interface ResearchAnalysisRow { analysisId: string; feature: Feature; operationalState: OperationalState; findingState: FindingState; result: AnalysisEnvelope | null; errorCode: string | null; }
-export interface ResearchSource { evidenceId: string; mimeType: string; byteLength: number; sha256: string; legId: string; relationship?:string; parentEvidenceId?:string; frameReference?:{mediaTimeMs?:number}; }
+export interface ResearchSource { evidenceId: string; mimeType: string; byteLength: number; sha256: string; legId: string; objectVersionId?:string; relationship?:string; parentEvidenceId?:string; frameReference?:{mediaTimeMs?:number}; }
 export interface ResearchReview { analyses: ResearchAnalysisRow[]; sources: ResearchSource[]; limitations: string[]; }
 export function checkedReview(input: ResearchReview, proofId: string): ResearchReview {
   for (const row of input.analyses) {

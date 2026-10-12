@@ -11,6 +11,8 @@ import { pipeline } from "node:stream/promises";
 import {guardAuthorizedStream} from "../domain/authorized-stream.js";
 import { createCaptureSession, completeCaptureSession, recoverCaptureSession, cancelCaptureSession } from "../domain/capture-sessions.js";
 import express, { type Request, type Response, type NextFunction } from "express";
+import { rateLimit } from "express-rate-limit";
+import { ingressRateLimitOptions, ingressRatePolicies } from "../http/ingress-rate-limit.js";
 import { fileURLToPath } from "node:url";
 import type { AppDependencies } from "../app.js";
 import type { Database } from "../db/database.js";
@@ -94,7 +96,7 @@ const route =
   };
 export function createPlatformRouter(deps: AppDependencies) {
   const router = express.Router();
-  router.get("/openapi.json", (_req, res) =>
+  router.get("/openapi.json", rateLimit(ingressRateLimitOptions(deps.db, ingressRatePolicies.openApi)), (_req, res) =>
     res.sendFile(fileURLToPath(new URL("../../openapi.json", import.meta.url))),
   );
   const webBase = (deps.corsOrigins?.[0] ?? deps.publicBaseUrl).replace(/\/$/, "");

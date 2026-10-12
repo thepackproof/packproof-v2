@@ -96,7 +96,7 @@ def run(output:Path,*,clients:int=24,rounds:int=2,campaign:str='synthetic-qualit
 
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['simulate','verify'])
+    parser.add_argument('command',choices=['simulate','process-lab','verify'])
     parser.add_argument('--output',type=Path,default=Path('/tmp/packproof-proofcollective'))
     parser.add_argument('--clients',type=int,default=24)
     parser.add_argument('--rounds',type=int,default=2)
@@ -105,6 +105,7 @@ def main() -> None:
     parser.add_argument('--transport',choices=['simulated','local-mtls'],default='simulated')
     parser.add_argument('--artifact',type=Path)
     parser.add_argument('--trust-key',type=Path)
+    parser.add_argument('--run-id',type=int)
     args=parser.parse_args()
     try:
         if args.command=='verify':
@@ -112,6 +113,12 @@ def main() -> None:
                 raise GateError('--artifact and --trust-key are required')
             payload=verify(json.loads(args.artifact.read_text()),bytes.fromhex(args.trust_key.read_text().strip()))
             print(json.dumps({'signature':'VALID','digest':digest(payload),'scope':payload.get('scope'),'productionReleaseAuthorized':False}))
+        elif args.command=='process-lab':
+            if args.run_id is None or args.privacy_mode!='central':
+                raise GateError('process-lab requires --run-id and reviewed central privacy mode')
+            from .process_runner import run_process_lab
+            report=run_process_lab(args.output,args.run_id,args.clients)
+            print(json.dumps({'report':str(args.output/f'run-{args.run_id}'/'report.json'),'scope':report['scope'],'partnerProcesses':report['execution']['partnerProcesses'],'independentOrganizations':0,'productionReleaseAuthorized':False}))
         else:
             report=run(args.output,clients=args.clients,rounds=args.rounds,campaign=args.campaign,privacy_mode=args.privacy_mode,transport=args.transport)
             print(json.dumps({'report':str(args.output/'latest-report.json'),'scope':report['scope'],'qualityGate':report['qualityGate'],'epsilon':report['rounds'][-1]['privacy']['epsilonMaxCumulative'],'elapsedSeconds':report['elapsedSeconds'],'productionReleaseAuthorized':False},indent=2))

@@ -7,6 +7,7 @@ import type { Database } from '../db/database.js';
 import { requireRnd } from './config.js';
 import { authorized,bad,idempotent,onlyKeys,requireConsent,signedRecord } from './security.js';
 import type { RndDeps,Source } from './types.js';
+import { nativeLumaPreview } from './sidecar-preview.js';
 
 export const SIDECAR_CHUNK_BYTES=262144, SIDECAR_MAX_BYTES=2097216;
 const filename=/^(research-acquisition\.json|native-journal\.jsonl|research-frame-[0-5]\.pgm)$/;
@@ -109,9 +110,29 @@ export async function listCaptureSidecars(deps:RndDeps,actor:string,proofId:stri
  await authorized(deps.db,proofId,actor);requireRnd(deps.rnd,'verifiedcapture','internalDisplay');
  return (await deps.db.query<Stored>('SELECT * FROM rnd_capture_sidecars WHERE proof_id=$1 ORDER BY created_at,id',[proofId])).rows.map(unpack);
 }
+export async function readCaptureSidecar(deps:RndDeps,actor:string,proofId:string,sidecarId:string,preview=false) {
+ requireRnd(deps.rnd,'verifiedcapture','internalDisplay');
+ await authorized(deps.db,proofId,actor);await requireConsent(deps.db,proofId,actor);
+ const row=(await deps.db.query<Stored>('SELECT * FROM rnd_capture_sidecars WHERE proof_id=$1 AND id=$2',[proofId,sidecarId])).rows[0];
+ if(!row)bad('RND_SIDECAR_NOT_FOUND','Native sidecar is unavailable',404);
+ const sidecar=JSON.parse(row.canonical_json),source=sidecar.source;
+ const object=await deps.objectStore.get(row.object_key,{versionId:row.object_version_id.startsWith('content-addressed:')?null:row.object_version_id});
+ if(!object||object.body.length!==Number(row.byte_length)||sha256Hex(object.body)!==row.sha256)
+  bad('RND_SIDECAR_INTEGRITY','Native sidecar bytes are unavailable or changed',409);
+ if(preview&&source.mimeType!=='image/x-portable-graymap')bad('RND_SIDECAR_PREVIEW_UNSUPPORTED','Only a native luma frame has an image preview',415);
+ return {body:preview?nativeLumaPreview(object.body,sidecar.frameReference):object.body,mimeType:preview?'image/png':source.mimeType,sha256:row.sha256};
+}
 export function rndCaptureSidecarsRouter(deps:RndDeps){
  const router=Router(),base='/proofs/:id/rnd/capture-intents/:intent/sidecars';
  const route=(fn:(r:Request,s:Response)=>Promise<unknown>)=>(r:Request,s:Response,n:NextFunction)=>{void fn(r,s).catch(n);};
  router.post(`${base}/:name`,route(async(r,s)=>s.json(await uploadCaptureSidecar(deps,r.packproofUserId??bad('UNAUTHENTICATED','Authentication required',401),r.params.id,r.params.intent,r.params.name,r.header('Idempotency-Key'),r.body))));
+ const read=(preview:boolean)=>route(async(r:Request,s:Response)=>{
+  const value=await readCaptureSidecar(deps,r.packproofUserId??bad('UNAUTHENTICATED','Authentication required',401),r.params.id,r.params.sidecarId,preview);
+  s.set('Cache-Control','private, no-store').set('X-Content-Type-Options','nosniff').set('X-PackProof-Source-SHA256',value.sha256);
+  if(preview)s.set('X-PackProof-Preview-Transformation','PGM_LUMA_TO_PNG_NO_RESIZE');
+  s.type(value.mimeType).send(value.body);
+ });
+ router.get('/proofs/:id/rnd/sidecars/:sidecarId',read(false));
+ router.get('/proofs/:id/rnd/sidecars/:sidecarId/preview',read(true));
  return router;
 }

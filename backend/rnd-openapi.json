@@ -1819,6 +1819,110 @@
           }
         }
       }
+    },
+    "/proofs/{id}/rnd/sidecars/{sidecarId}": {
+      "get": {
+        "operationId": "readCaptureSidecar",
+        "summary": "Read exact committed native sidecar bytes",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "sidecarId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/rnd/sidecars/{sidecarId}/preview": {
+      "get": {
+        "operationId": "previewCaptureSidecar",
+        "summary": "Read lossless native grayscale PNG display preview; original bytes are unchanged",
+        "tags": [
+          "Research"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_:./-]{1,180}$"
+            }
+          },
+          {
+            "name": "sidecarId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,180}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful research operation; no release or physical qualification is implied.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Bounded error. Authorization, consent, feature flags, immutable bindings and service limits are enforced by the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3511,6 +3615,11 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Versioned research record; inspect schemaVersion or the feature envelope before interpreting feature-specific fields."
+          },
+          "objectVersionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
           }
         },
         "required": [

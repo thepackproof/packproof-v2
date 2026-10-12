@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { sha256Hex } from '../hash.js';
 import { canonicalize } from '../../../packages/evidence-contracts/contracts.mjs';
 import type { Feature,RndDeps } from './types.js';
@@ -8,20 +9,20 @@ import type { Feature,RndDeps } from './types.js';
 export async function executableInventory(deps:RndDeps,feature:Feature) {
  const inventory:Record<string,string>={};
  for(const name of ['analyses','worker','security','matrix','capture']){
-  const compiled=new URL(`./${name}.js`,import.meta.url),source=compiled.pathname.replace(/\.js$/,'.ts');
+   const compiled=new URL(`./${name}.js`,import.meta.url),source=fileURLToPath(compiled).replace(/\.js$/,'.ts');
   inventory[`backend/${name}`]=sha256Hex(await readFile(source).catch(()=>readFile(compiled)));
  }
  inventory.contracts=sha256Hex(await readFile(new URL('../../../packages/evidence-contracts/contracts.mjs',import.meta.url)));
- for(const name of ['method','config','enrollment','learning-registry','platform-assurance']){
+ for(const name of ['method','config','enrollment','learning-registry','platform-assurance','witness-lease']){
   const compiled=new URL(`./${name}.js`,import.meta.url);
-  inventory[`backend/${name}`]=sha256Hex(await readFile(compiled.pathname.replace(/\.js$/,'.ts')).catch(()=>readFile(compiled)));
+   inventory[`backend/${name}`]=sha256Hex(await readFile(fileURLToPath(compiled).replace(/\.js$/,'.ts')).catch(()=>readFile(compiled)));
  }
  if(feature==='proofshield'&&deps.rnd?.zk){inventory.zkExecutable=sha256Hex(await readFile(deps.rnd.zk.script));inventory.zkVerificationRegistry=sha256Hex(await readFile(deps.rnd.zk.verificationRegistryFile));for(const name of ['circuit.mjs','verify.mjs','package-lock.json'])inventory[`zk/${name}`]=sha256Hex(await readFile(path.join(path.dirname(deps.rnd.zk.script),name)));}
  const script=feature==='proofwitness'?deps.rnd?.witness?.script:['proofprint','proofsight','prooftwin','prooflive','proofpilot','proofshield','proofmatch'].includes(feature)?deps.rnd?.worker?.script:undefined;
  if(script){
   const entry=feature==='proofshield'?path.resolve(path.dirname(script),'../privacy/redact.py'):script;
   inventory.worker=sha256Hex(await readFile(entry));
-  if(feature!=='proofshield'&&feature!=='proofwitness')for(const name of ['engine.py','sfm.py','policy.json']){
+  if(feature!=='proofshield'&&feature!=='proofwitness')for(const name of ['engine.py','sfm.py','enrollment.py','action_model.py','segmentation.py','ocr_runtime.py','policy.json']){
    try{inventory[name]=sha256Hex(await readFile(path.join(path.dirname(script),name)));}catch{inventory[name]='ABSENT';}
   }
  }

@@ -47,6 +47,24 @@ describe('research review boundaries',()=>{
   fireEvent.click(screen.getByLabelText(/evidence_a · image/));fireEvent.click(screen.getByLabelText(/evidence_b · image/));
   expect(screen.queryByRole('button',{name:'Create derivative for review'})).toBeNull();expect(f.transport.derivative).not.toHaveBeenCalled();
  });
+ it('routes native sidecars to the explicit preview endpoint instead of ordinary evidence',async()=>{
+  vi.stubEnv('VITE_PACKPROOF_RND','1');const f=fixture(true);
+  const sidecar={...source('rnd_sidecar_a'),mimeType:'image/x-portable-graymap',relationship:'CONCURRENT_SIDECAR' as const};
+  f.snapshot.sources=[sidecar];const analysis=result('proofpilot',0);analysis.sourceRefs=[{...analysis.sourceRefs[0],...sidecar}];analysis.details.observations=[];
+  f.snapshot.analyses[0]={...f.snapshot.analyses[0],feature:'proofpilot',result:analysis};
+  const api={rndCapabilities:f.transport.capabilities,rndAnalyses:vi.fn().mockResolvedValue(f.snapshot),rndAnnotations:vi.fn().mockResolvedValue({annotations:[]}),rndSidecarPreview:vi.fn().mockResolvedValue(new Blob(['preview'],{type:'image/png'})),featureDownload:vi.fn()} as unknown as PackProofApi;
+  const loadEvidence=vi.fn();render(<RndWebPanel proofId="proof_a" api={api} loadEvidence={loadEvidence}/>);
+  fireEvent.click(await screen.findByRole('button',{name:/^Original /}));
+  await screen.findByAltText('Native sidecar display preview');
+  expect(api.rndSidecarPreview).toHaveBeenCalledWith('proof_a','rnd_sidecar_a');expect(loadEvidence).not.toHaveBeenCalled();expect(api.featureDownload).not.toHaveBeenCalled();
+  expect(screen.getByText(/Lossless PNG preview/)).toBeVisible();
+ });
+ it('allows withdrawal after kill while disallowing new collection consent',async()=>{
+  const f=fixture();vi.mocked(f.transport.capabilities).mockResolvedValue({enabled:true,killSwitch:true,features:flagSet()});
+  render(<RndReview proofId="proof_a" {...f}/>);await waitFor(()=>expect(f.transport.capabilities).toHaveBeenCalled());await act(async()=>{});
+  fireEvent.click(screen.getByText('Consented research tools'));expect(screen.getByRole('button',{name:'Record research consent'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'Withdraw future participation'}));await waitFor(()=>expect(f.transport.consent).toHaveBeenCalledWith('proof_a',false,expect.any(String)));
+ });
  it('does not revive an old Proof preview after navigation and revokes the stale object URL',async()=>{
   const f=fixture(true),pending=deferred<SourcePreview>();f.openSource.mockReturnValueOnce(pending.promise);
   const {rerender}=render(<RndReview proofId="proof_a" {...f}/>);fireEvent.click(await screen.findByRole('button',{name:'Open supporting source'}));

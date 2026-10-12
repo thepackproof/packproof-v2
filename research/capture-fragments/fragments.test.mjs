@@ -7,7 +7,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {generateKeyPairSync,sign,createHash} from 'node:crypto';
 import {canonicalize} from '../../packages/evidence-contracts/contracts.mjs';
-import {FragmentJournal,ClosedFmp4Stream,verifyFragmentManifest,nativeFragmentCapability} from '../../packages/evidence-contracts/fragments.mjs';
+import {FragmentJournal,ClosedFmp4Stream,verifyFragmentManifest,nativeFragmentCapability,mp4Boxes} from '../../packages/evidence-contracts/fragments.mjs';
 import {captureSoftwareFragments} from './run-spike.mjs';
 const exec=promisify(execFile),sha=b=>createHash('sha256').update(b).digest('hex');let fixture;
 before(async()=>{fixture=await captureSoftwareFragments({seconds:2,realTime:false});});
@@ -36,4 +36,26 @@ test('unfinished streams cannot seal and nonmonotonic closure timestamps fail',(
 test('both native adapters accurately remain final-file-only and unqualified',()=>{
  for(const platform of ['android','ios'])assert.deepEqual([nativeFragmentCapability(platform).activeProfile,nativeFragmentCapability(platform).incrementalFragments,nativeFragmentCapability(platform).hardwareQualified],['FINAL_FILE_ONLY','UNSUPPORTED',false]);
  assert.throws(()=>nativeFragmentCapability('simulated'),/UNKNOWN_NATIVE_PLATFORM/);
+});
+test('a rejected later track leaves the journal unchanged and permits the original fragment retry',()=>{
+ const record=JSON.parse(fixture.sealed.canonicalJson),journal=new FragmentJournal(record.session);
+ journal.append({kind:'INIT',bytes:fixture.units[0],closedMonotonicNs:record.entries[0].closedMonotonicNs});
+ const invalid=Buffer.from(fixture.units[1]),moof=mp4Boxes(invalid).find(box=>box.type==='moof');
+ const tracks=mp4Boxes(moof.body).filter(box=>box.type==='traf');assert.equal(tracks.length,2);
+ const tfdt=mp4Boxes(tracks[1].body).find(box=>box.type==='tfdt').body;
+ if(tfdt[0]===1)tfdt.writeBigUInt64BE(1n,4);else tfdt.writeUInt32BE(1,4);
+ const before={entries:JSON.stringify(journal.entries),totalBytes:journal.totalBytes,sequence:journal.lastMediaSequence,ends:[...journal.trackEnds]};
+ assert.throws(()=>journal.append({kind:'MEDIA',bytes:invalid,closedMonotonicNs:record.entries[1].closedMonotonicNs}),/TRACK_DECODE_GAP_OR_REORDER/);
+ assert.deepEqual({entries:JSON.stringify(journal.entries),totalBytes:journal.totalBytes,sequence:journal.lastMediaSequence,ends:[...journal.trackEnds]},before);
+ fixture.units.slice(1).forEach((bytes,index)=>journal.append({kind:record.entries[index+1].kind,bytes,closedMonotonicNs:record.entries[index+1].closedMonotonicNs}));
+ const pair=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const sealed=journal.seal(pair.privateKey);
+ assert.equal(verifyFragmentManifest(sealed,fixture.units,pair.publicKey.export({format:'pem',type:'spki'})).valid,true);
+});
+test('a rejected signing key does not consume a complete journal',()=>{
+ const record=JSON.parse(fixture.sealed.canonicalJson),journal=new FragmentJournal(record.session);
+ fixture.units.forEach((bytes,index)=>journal.append({kind:record.entries[index].kind,bytes,closedMonotonicNs:record.entries[index].closedMonotonicNs}));
+ assert.throws(()=>journal.seal(generateKeyPairSync('ed25519').privateKey),/P256_KEY_REQUIRED/);
+ assert.equal(journal.sealed,false);
+ assert.ok(journal.seal(generateKeyPairSync('ec',{namedCurve:'prime256v1'}).privateKey).signatureBase64);
 });

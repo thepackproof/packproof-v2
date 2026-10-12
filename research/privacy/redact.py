@@ -14,6 +14,7 @@ POLICY = 'opaque-rgb8-review-required-v1'
 MAX_PIXELS = 24_000_000
 MAX_SECONDS = 300
 MAX_BYTES = 500_000_000
+MAX_TRACKING_FRAMES = 500
 LIMITATIONS = ['Candidate detectors are unqualified; all external exports require human review.', 'Masks can hide evidence-critical regions; findings depending on omitted pixels are not disclosed.', 'A signed transformation is not a zero-knowledge proof or a claim that every sensitive field was found.']
 
 def canonical(x): return rfc8785.dumps(x)
@@ -23,8 +24,8 @@ def file_sha(path):
     with open(path,'rb') as f:
         for b in iter(lambda:f.read(1024*1024), b''): h.update(b)
     return h.hexdigest()
-def run(args, timeout=120):
-    return subprocess.run(args, check=True, capture_output=True, timeout=timeout).stdout
+def run(args, timeout=120, input=None):
+    return subprocess.run(args, check=True, capture_output=True, timeout=timeout, input=input).stdout
 
 def inspect(path):
     p=Path(path)
@@ -117,8 +118,11 @@ def recompute(source,derivative,manifest,trusted_pem):
 def detect(path):
     """Candidates only: all text is conservatively sensitive; no identity recognition."""
     w,h,_=inspect(path)
-    frame=cv2.imread(str(path))
+    # Mask coordinates and the transform both use stored pixels, including JPEGs
+    # carrying EXIF orientation. Every detector must see this same coordinate frame.
+    frame=cv2.imread(str(path),cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
     if frame is None: raise ValueError('detect expects a decoded still')
+    if frame.shape[:2]!=(h,w): raise ValueError('detector stored-pixel dimensions mismatch')
     boxes=[]
     def add(x,y,bw,bh,kind):
         pad=8; x0,y0=max(0,int(x)-pad),max(0,int(y)-pad)
@@ -128,7 +132,9 @@ def detect(path):
     for x,y,bw,bh in detector.detectMultiScale(gray,1.1,5): add(x,y,bw,bh,'face-candidate')
     ocr='unavailable'
     try:
-        data=run(['tesseract',str(path),'stdout','tsv'],timeout=30).decode()
+        encoded_ok,encoded=cv2.imencode('.png',frame)
+        if not encoded_ok: raise ValueError('detector OCR image encoding failed')
+        data=run(['tesseract','stdin','stdout','tsv'],timeout=30,input=encoded.tobytes()).decode()
         for row in csv.DictReader(io.StringIO(data),delimiter='\t'):
             if row.get('text','').strip() and float(row['conf'])>=0: add(int(row['left']),int(row['top']),int(row['width']),int(row['height']),'text-address-label-candidate')
         ocr='candidate-only'
@@ -161,10 +167,12 @@ def track_masks(source,seeds):
     recipe_for(w,h,seeds,'video')
     cap=cv2.VideoCapture(str(source));cap.set(cv2.CAP_PROP_ORIENTATION_AUTO,0)
     fps=cap.get(cv2.CAP_PROP_FPS);count=cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    if not math.isfinite(fps) or fps<=0 or count<=0 or count>500:
+    if not math.isfinite(fps) or fps<=0 or not math.isfinite(count) or count<=0 or count>MAX_TRACKING_FRAMES:
         cap.release();raise ValueError('tracking requires a bounded <=500-frame video')
     ok,frame=cap.read()
     if not ok: cap.release();raise ValueError('cannot decode video')
+    if frame.shape[:2]!=(h,w):
+        cap.release();raise ValueError('tracking stored-pixel dimensions mismatch')
     import numpy as np
     prev=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
     tracks=[]
@@ -182,6 +190,11 @@ def track_masks(source,seeds):
         while True:
             ok,frame=cap.read()
             if not ok: break
+            # Container frame counts are advisory, not an execution limit. Reject
+            # a stream that decodes beyond the accepted profile even if it lied.
+            if frame_index>=MAX_TRACKING_FRAMES:
+                raise ValueError('tracking decoded frame cap exceeded')
+            if frame.shape[:2]!=(h,w): raise ValueError('tracking stored-pixel dimensions mismatch')
             gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
             for index,t in enumerate(tracks):
                 old=t['box'][:]

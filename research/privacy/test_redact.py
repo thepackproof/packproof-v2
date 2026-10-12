@@ -1,5 +1,9 @@
 import base64,copy,json,subprocess,tempfile,unittest,zipfile
 from pathlib import Path
+from unittest.mock import patch
+import io
+import cv2
+import numpy as np
 from PIL import Image,PngImagePlugin
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
@@ -60,5 +64,61 @@ class PrivacyTests(unittest.TestCase):
     def test_invalid_masks_cannot_overwrite_source(self):
         with self.assertRaises(ValueError):create(self.source,self.source,self.masks,'still',self.key)
         with self.assertRaises(ValueError):create(self.source,self.out,[{'x':-1,'y':0,'width':10,'height':10}],'still',self.key)
+
+    def test_exif_rotated_jpeg_detectors_and_ocr_use_stored_pixels(self):
+        source=self.p/'oriented.jpg'
+        exif=Image.Exif();exif[274]=6
+        Image.new('RGB',(80,40),(180,30,50)).save(source,exif=exif)
+        seen=[];case=self
+        class Detector:
+            def detectMultiScale(self,gray,*args):
+                case.assertEqual(gray.shape,(40,80))
+                seen.append(gray.shape)
+                return [(52,8,10,12)]
+        from research.privacy import redact
+        original_run=redact.run
+        def run(args,**kwargs):
+            if args[0]!='tesseract':return original_run(args,**kwargs)
+            self.assertEqual(args[1],'stdin')
+            with Image.open(io.BytesIO(kwargs['input'])) as decoded:
+                self.assertEqual(decoded.size,(80,40))
+                self.assertFalse(decoded.getexif())
+            return b'left\ttop\twidth\theight\tconf\ttext\n52\t8\t10\t12\t95\tSYNTHETIC\n'
+        with patch.object(cv2,'CascadeClassifier',return_value=Detector()),patch.object(redact,'run',side_effect=run):
+            result=detect(source)
+        self.assertEqual(seen,[(40,80)])
+        for kind in ('face-candidate','text-address-label-candidate'):
+            box=next(mask for mask in result['masks'] if mask['class']==kind)
+            self.assertEqual((box['x'],box['y'],box['width'],box['height']),(44,0,26,28))
+        create(source,self.out,result['masks'],'still',self.key)
+        with Image.open(self.out) as image:
+            self.assertEqual(image.size,(80,40))
+            self.assertEqual(image.getpixel((55,15)),(0,0,0))
+
+    def test_actual_decoded_frame_count_is_bounded_when_metadata_understates_it(self):
+        from research.privacy import redact
+        class Capture:
+            def __init__(self):self.reads=0;self.released=False
+            def set(self,*args):return True
+            def get(self,prop):return 1000 if prop==cv2.CAP_PROP_FPS else 1
+            def read(self):
+                self.reads+=1
+                return (True,np.zeros((16,16,3),np.uint8)) if self.reads<=501 else (False,None)
+            def release(self):self.released=True
+        cap=Capture()
+        with patch.object(redact,'inspect',return_value=(16,16,1)),patch.object(cv2,'VideoCapture',return_value=cap):
+            with self.assertRaisesRegex(ValueError,'decoded frame cap'):
+                track_masks(self.source,[])
+        self.assertEqual(cap.reads,501)
+        self.assertTrue(cap.released)
+
+    def test_nonfinite_frame_count_is_rejected_before_decode(self):
+        from research.privacy import redact
+        from unittest.mock import Mock
+        cap=Mock();cap.get.side_effect=lambda prop:30 if prop==cv2.CAP_PROP_FPS else float('nan')
+        with patch.object(redact,'inspect',return_value=(16,16,1)),patch.object(cv2,'VideoCapture',return_value=cap):
+            with self.assertRaisesRegex(ValueError,'bounded'):
+                track_masks(self.source,[])
+        cap.read.assert_not_called();cap.release.assert_called_once()
 
 if __name__=='__main__':unittest.main()

@@ -29,7 +29,8 @@
     "submit:ios:testflight": "node scripts/assert-release-allowed.cjs && npx --yes eas-cli@24.4.2 submit --platform ios --profile ios-testflight",
     "test:ios-config": "node --test tests/ios-release-config.test.cjs",
     "test:ios": "node --test tests/ios-release-config.test.cjs tests/order-share-plugin.test.cjs && node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/ios-parity.test.ts tests/ios-billing.test.ts tests/handoff-sender.test.ts tests/developer-access.test.ts tests/supporting-tools.test.ts tests/statements.test.ts tests/redactions.test.ts tests/relay-station.test.ts tests/signature-workflows.test.ts",
-    "test:research": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/research/*.test.ts"
+    "test:research": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/research/*.test.ts",
+    "test:vendor-security": "node --test tests/vendor-security-regressions.test.cjs tests/vendor-integrity.test.cjs tests/vendor-pem-security.test.cjs tests/vendor-http-security.test.cjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -61,7 +62,9 @@
   "devDependencies": {
     "@types/react": "~19.0.10",
     "image-size": "npm:image-size-next@1.2.2",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "braces": "file:vendor/braces",
+    "node-forge": "file:vendor/node-forge"
   },
   "overrides": {
     "@expo/plist": {
@@ -80,6 +83,18 @@
       "uuid": "11.1.1"
     },
     "tar": "7.5.22",
-    "image-size": "npm:image-size-next@1.2.2"
+    "image-size": "npm:image-size-next@1.2.2",
+    "brace-expansion@^1.1.7": "1.1.21",
+    "fast-uri": "3.1.8",
+    "shell-quote": "1.12.0",
+    "source-map-js": "1.2.2",
+    "braces": "$braces",
+    "node-forge": "$node-forge",
+    "cosmiconfig@5.2.1": {
+      "js-yaml": "4.3.2"
+    },
+    "@istanbuljs/load-nyc-config@1.1.0": {
+      "js-yaml": "4.3.2"
+    }
   }
 }

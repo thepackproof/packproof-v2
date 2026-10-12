@@ -124,6 +124,7 @@ def process(job, root, output):
     import cv2
     import numpy as np
     import rfc8785
+    from ocr_runtime import observed_ocr_runtime
     cv2.setNumThreads(1); cv2.setRNGSeed(173)
     if job.get('schemaVersion')!='packproof.vision-job.v1':
         raise ValueError('UNSUPPORTED_JOB_SCHEMA')
@@ -165,6 +166,7 @@ def process(job, root, output):
                        'provenance':{'sources':inventory,'modelDigest':('sha256:'+result.get('diagnostics',{}).get('modelInference',{}).get('sha256','')) if result.get('diagnostics',{}).get('modelInference',{}).get('sha256') else None,
                                      'modelReleaseId':result.get('diagnostics',{}).get('modelInference',{}).get('releaseId'),'sourceInventoryDigest':hashlib.sha256(rfc8785.dumps(inventory)).hexdigest(),
                                      'opencvVersion':cv2.__version__,'numpyVersion':np.__version__,'pythonVersion':sys.version.split()[0],
+                                     'ocrRuntime':observed_ocr_runtime() if feature in ('proofsight','proofprint') else {'state':'NOT_USED'},
                                      'decoderBuildDigest':hashlib.sha256(cv2.getBuildInformation().encode()).hexdigest(),
                                      'reconstructionExecutableDigest':digest(Path(__file__).with_name('sfm.py')),
                                      'enrollmentExecutableDigest':digest(Path(__file__).with_name('enrollment.py')),
@@ -186,6 +188,21 @@ def strict_object(pairs):
     return result
 
 
+def apply_resource_limits(resource, timeout):
+    """Tighten limits without attempting to raise an inherited sandbox ceiling."""
+    for kind, requested in (
+        (resource.RLIMIT_CPU, (timeout, timeout + 1)),
+        (resource.RLIMIT_FSIZE, (128 * 1024 * 1024, 128 * 1024 * 1024)),
+        (resource.RLIMIT_NOFILE, (128, 128)),
+        (resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3)),
+    ):
+        inherited = resource.getrlimit(kind)
+        limited = [min(wanted, current) if current != resource.RLIM_INFINITY else wanted
+                   for wanted, current in zip(requested, inherited)]
+        limited[0] = min(limited)
+        resource.setrlimit(kind, tuple(limited))
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('job_file',nargs='?'); parser.add_argument('result_file',nargs='?')
@@ -205,10 +222,7 @@ def main():
     timeout=bounded_int(args.timeout,1,180,'TIMEOUT_LIMIT')
     try:
         import resource
-        resource.setrlimit(resource.RLIMIT_CPU,(timeout,timeout+1))
-        resource.setrlimit(resource.RLIMIT_FSIZE,(128*1024*1024,128*1024*1024))
-        resource.setrlimit(resource.RLIMIT_NOFILE,(128,128))
-        resource.setrlimit(resource.RLIMIT_AS,(2*1024**3,2*1024**3))
+        apply_resource_limits(resource,timeout)
     except ImportError:
         parser.error('This worker requires Linux process limits; run in the documented container.')
     def expired(*_):

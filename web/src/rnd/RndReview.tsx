@@ -37,8 +37,9 @@ function Findings({result,onSource}:{result:AnalysisEnvelope;onSource:(id:string
  </div>;
 }
 /** Authenticated review only. No customer/public route mounts this component. */
-export function RndReview({proofId,transport,openSource,saveExport}:{proofId:string;transport:RndTransport;openSource:(sourceId:string,legId?:string)=>Promise<SourcePreview>;saveExport:(bundle:unknown)=>Promise<void>}) {
+export function RndReview({proofId,transport,openSource,saveExport}:{proofId:string;transport:RndTransport;openSource:(sourceId:string,legId?:string,relationship?:string)=>Promise<SourcePreview>;saveExport:(bundle:unknown)=>Promise<void>}) {
  const [snapshot,setSnapshot]=useState<RndSnapshot|null>(null);
+ const [canConsent,setCanConsent]=useState(false);
  const [allowed,setAllowed]=useState<Feature[]>([]),[displayed,setDisplayed]=useState<Feature[]>([]);
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[agreed,setAgreed]=useState(false),[consented,setConsented]=useState(false);
  const [selected,setSelected]=useState<string[]>([]),[feature,setFeature]=useState<Feature>('proofpilot'),[parameters,setParameters]=useState('{}');
@@ -49,12 +50,12 @@ export function RndReview({proofId,transport,openSource,saveExport}:{proofId:str
  const generation=useRef(0),video=useRef<HTMLVideoElement>(null),urls=useRef<string[]>([]);
  const refresh=useCallback(async()=>{const current=generation.current;const [value,notes]=await Promise.all([transport.list(proofId),transport.annotations?.(proofId)]);if(current===generation.current)setSnapshot({...value,annotations:notes?.annotations??value.annotations??[]});},[transport,proofId]);
  useEffect(()=>{
-  generation.current++;setSnapshot(null);setSelected([]);setConsented(false);setAgreed(false);setPreview(null);setPinned(null);setMaskSource(null);setReviewedPreview(null);setError('');setBusy(false);setAllowed([]);setDisplayed([]);setParameters('{}');let alive=true;
+  generation.current++;setSnapshot(null);setSelected([]);setConsented(false);setAgreed(false);setPreview(null);setPinned(null);setMaskSource(null);setReviewedPreview(null);setError('');setBusy(false);setAllowed([]);setDisplayed([]);setCanConsent(false);setParameters('{}');let alive=true;
   void transport.capabilities().then(async cap=>{
    if(!alive)return;
    const flags=cap.flags?.features??cap.features;
    if(!cap.enabled||(cap.flags?.killSwitch??cap.killSwitch)!==false){setSnapshot({analyses:[],sources:[],limitations:['Research operations are disabled.']});return;}
-   setAllowed(FEATURES.filter(f=>flags?.[f]?.processing===true));setDisplayed(FEATURES.filter(f=>flags?.[f]?.internalDisplay===true));await refresh();
+   setCanConsent(FEATURES.some(f=>flags?.[f]?.collection===true));setAllowed(FEATURES.filter(f=>flags?.[f]?.processing===true));setDisplayed(FEATURES.filter(f=>flags?.[f]?.internalDisplay===true));await refresh();
   }).catch(e=>{if(alive)setError(e instanceof Error?e.message:'Research results unavailable.');});
   return()=>{alive=false;generation.current++;urls.current.forEach(URL.revokeObjectURL);urls.current=[];};
  },[transport,proofId,refresh]);
@@ -70,8 +71,8 @@ export function RndReview({proofId,transport,openSource,saveExport}:{proofId:str
  async function showSource(id:string,startMs?:number) {await action(async current=>{
   const mapped=snapshot?.sources.find(s=>s.sourceId===id||`rnd_source_${s.sourceId}`===id);
   if(!mapped)throw new Error('This source is no longer available in the authorized inventory.');
-  const source=await openSource(mapped.evidenceId??mapped.sourceId,mapped.legId);
-  if(retain(source,current))setPreview({...source,startMs,label:'Authorized original source'});
+  const source=await openSource(mapped.evidenceId??mapped.sourceId,mapped.legId,mapped.relationship);
+  if(retain(source,current))setPreview({...source,startMs,label:mapped.relationship==='CONCURRENT_SIDECAR'?'Native sidecar display preview':'Authorized original source'});
  });}
  const sources=snapshot?.sources??[],analyses=snapshot?.analyses.filter(job=>displayed.includes(job.feature))??[];
  return <section className="rnd-panel" aria-label="Experimental evidence analysis">
@@ -99,7 +100,7 @@ export function RndReview({proofId,transport,openSource,saveExport}:{proofId:str
   <details className="rnd-controls"><summary>Consented research tools</summary>
    <p>Use staged or explicitly consented evidence. This consent covers experimental analysis of this Proof; it does not grant collaborative training permission.</p>
    <label><input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)}/> I am authorized to use these sources for experimental analysis.</label>
-   <div className="rnd-actions"><button disabled={busy||!agreed||consented||!allowed.length} onClick={()=>void action(async current=>{await transport.consent(proofId,true,crypto.randomUUID());if(current())setConsented(true);})}>{consented?'Research consent recorded':'Record research consent'}</button><button disabled={busy||!allowed.length} onClick={()=>void action(async current=>{await transport.consent(proofId,false,crypto.randomUUID());if(current()){setConsented(false);setAgreed(false);setMaskSource(null);}})}>Withdraw future participation</button></div>
+   <div className="rnd-actions"><button disabled={busy||!agreed||consented||!canConsent} onClick={()=>void action(async current=>{await transport.consent(proofId,true,crypto.randomUUID());if(current())setConsented(true);})}>{consented?'Research consent recorded':'Record research consent'}</button><button disabled={busy} onClick={()=>void action(async current=>{await transport.consent(proofId,false,crypto.randomUUID());if(current()){setConsented(false);setAgreed(false);setMaskSource(null);}})}>Withdraw future participation</button></div>
    <fieldset disabled={busy||!consented}><legend>Committed sources for this analysis</legend>{sources.length===0?<p>No committed sources are available.</p>:sources.map(source=><label key={source.sourceId}><input type="checkbox" disabled={source.retentionState!=='AVAILABLE'} checked={selected.includes(source.sourceId)} onChange={e=>{setMaskSource(null);setSelected(current=>e.target.checked?[...current,source.sourceId]:current.filter(id=>id!==source.sourceId));}}/>{source.sourceId.slice(-12)} · {source.mimeType} · {readable(source.relationship)}</label>)}</fieldset>
    <label>Analysis <select value={feature} onChange={e=>{setFeature(e.target.value as Feature);setMaskSource(null);setParameters('{}');}}>{FEATURES.map(f=><option key={f} value={f} disabled={!allowed.includes(f)}>{FEATURE_LABELS[f]}{allowed.includes(f)?'':' · disabled'}</option>)}</select></label>
    {feature!=='proofshield'&&<details><summary>Research annotations</summary><p>For region comparisons, enter source-pixel polygons and unchanged support regions. Sparse reconstruction requires a mask for every view. These annotations describe inputs; they cannot set a finding or qualification.</p><textarea aria-label="Research parameters" rows={6} value={parameters} maxLength={32768} onChange={e=>setParameters(e.target.value)}/></details>}
@@ -108,7 +109,7 @@ export function RndReview({proofId,transport,openSource,saveExport}:{proofId:str
     <button disabled={busy||!analyses.length} onClick={()=>void action(async current=>{const bundle=await transport.export(proofId,crypto.randomUUID());if(current())await saveExport(bundle);})}>Export research record</button>
     <button disabled={busy||!analyses.length} onClick={()=>void action(()=>transport.exportArchive(proofId))}>Export with original sources</button>
    </div>
-   {feature==='proofshield'&&<div><p>Select one image or video, then mark the private regions. Review the generated derivative before approving it.</p><button disabled={busy||!consented||selected.length!==1||!allowed.includes('proofshield')} onClick={()=>void action(async current=>{const sourceId=selected[0],mapped=snapshot?.sources.find(s=>s.sourceId===sourceId);if(!mapped)throw new Error('Original is unavailable.');const source=await openSource(mapped.evidenceId??sourceId,mapped.legId);if(retain(source,current))setMaskSource({...source,sourceId});})}>Open mask editor</button>
+   {feature==='proofshield'&&<div><p>Select one image or video, then mark the private regions. Review the generated derivative before approving it.</p><button disabled={busy||!consented||selected.length!==1||!allowed.includes('proofshield')} onClick={()=>void action(async current=>{const sourceId=selected[0],mapped=snapshot?.sources.find(s=>s.sourceId===sourceId);if(!mapped)throw new Error('Original is unavailable.');const source=await openSource(mapped.evidenceId??sourceId,mapped.legId,mapped.relationship);if(retain(source,current))setMaskSource({...source,sourceId});})}>Open mask editor</button>
     {maskSource&&selected.length===1&&selected[0]===maskSource.sourceId&&<MaskEditor key={maskSource.url} source={maskSource} disabled={busy||!consented} onSubmit={(masks,kind)=>{const boundId=maskSource.sourceId;void action(async current=>{await transport.derivative(proofId,{evidenceIds:[boundId],parameters:{masks,kind}},crypto.randomUUID());if(current()){setMaskSource(null);await refresh();}});}}/>}
    </div>}
    <p className="rnd-limits">Server permissions, consent, feature controls, and qualified profiles determine which operations are available.</p>
@@ -116,7 +117,7 @@ export function RndReview({proofId,transport,openSource,saveExport}:{proofId:str
   <div className={pinned?"rnd-comparison":""}>
   {preview&&<div className="rnd-preview" role="region" aria-label="Evidence preview"><button onClick={()=>setPreview(null)}>Close source</button><button onClick={()=>setPinned(preview)}>Pin for comparison</button>
    {preview.mimeType.startsWith('video')?<video ref={video} controls src={preview.url} onLoadedMetadata={()=>{if(video.current&&preview.startMs!==undefined)video.current.currentTime=preview.startMs/1000;}}/>:preview.mimeType.startsWith('image')?<img src={preview.url} alt={preview.label}/>:<ArtifactPreview source={preview} onSource={id=>void showSource(id)}/>}
-   <p>{preview.label}{preview.startMs!==undefined?` at ${(preview.startMs/1000).toFixed(1)} seconds`:''}.</p>
+   <p>{preview.notice}</p><p>{preview.label}{preview.startMs!==undefined?` at ${(preview.startMs/1000).toFixed(1)} seconds`:''}.</p>
   </div>}
   {pinned&&<aside className="rnd-preview" aria-label="Pinned comparison source"><button onClick={()=>setPinned(null)}>Unpin source</button><p>{pinned.label} · pinned for comparison</p>{pinned.mimeType.startsWith('image')?<img src={pinned.url} alt="Pinned comparison evidence"/>:pinned.mimeType.startsWith('video')?<video controls src={pinned.url}/>:<ArtifactPreview source={pinned} onSource={id=>void showSource(id)}/>}</aside>}
   </div>

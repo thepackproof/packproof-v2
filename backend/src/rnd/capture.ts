@@ -2,7 +2,7 @@ import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { createPublicKey,verify } from 'node:crypto';
 import { canonicalize,parseStrictJson } from '../../../packages/evidence-contracts/contracts.mjs';
-import { requireRnd } from './config.js';
+import { requireRnd,requireConsentAdmission } from './config.js';
 import { authorized,bad,boundedId,digest,idempotent,nonce,onlyKeys,requireConsent,resolveSources,signedRecord,subjectFor } from './security.js';
 import type { RndDeps } from './types.js';
 
@@ -10,7 +10,7 @@ export async function recordConsent(deps:RndDeps,actor:string,proofId:string,key
  onlyKeys(input,['purpose','version','granted']);
  if(input.version!=='packproof.research-consent.v1'||!['EXPERIMENTAL_ANALYSIS','LEARNING'].includes(String(input.purpose))||typeof input.granted!=='boolean')bad('RND_INVALID_CONSENT','Use the explicit versioned research consent');
  // Withdrawal remains available after the collection kill switch is activated.
- if(input.granted)requireRnd(deps.rnd,'verifiedcapture','collection');
+ if(input.granted)requireConsentAdmission(deps.rnd,input.purpose as 'EXPERIMENTAL_ANALYSIS'|'LEARNING');
  return idempotent(deps,proofId,actor,'consent',key,input,async tx=>{
   const id=newId('rnd_consent'),createdAt=deps.clock.now().toISOString();
   await tx.query('INSERT INTO rnd_consents(id,proof_id,actor_id,purpose,version,granted,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,proofId,actor,input.purpose,input.version,input.granted,createdAt]);

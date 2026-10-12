@@ -11,6 +11,8 @@ import { committedRecordEvidence, type RecordEvidence } from '../copy/proof-reco
 import { newIdempotencyKey } from '../v2-api';
 import { ResearchAnnotations } from './ResearchAnnotations';
 import { ResearchArtifacts } from './ResearchArtifacts';
+import { ResearchSidecarPreview } from './ResearchSidecarPreview';
+import { sidecarPreviewSource, type SidecarPreviewSource } from './sidecar-preview-policy';
 import { researchEnabled } from './isolation';
 import { checkedReview, comparisonAvailable, resultLabel, sourceEvidenceId, observationSourceLinks, privacyMask, type ResearchReview } from './review-model';
 
@@ -26,7 +28,9 @@ function ScopedResearchPanel() {
   const [review, setReview] = useState<ResearchReview | null>(null), [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false), [consent, setConsent] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]), [feature, setFeature] = useState<Feature>('proofpilot');
-  const [source, setSource] = useState<{ evidence: RecordEvidence; offsetMs: number; polygon?: unknown; associationNote?:string } | null>(null);
+  const [source, setSource] = useState<
+    { kind: 'original'; evidence: RecordEvidence; offsetMs: number; polygon?: unknown } |
+    { kind: 'sidecar'; binding: SidecarPreviewSource; offsetMs: number; polygon?: unknown; parent?: RecordEvidence } | null>(null);
   const [mask, setMask] = useState('');
   const alive = useRef(true);
   useEffect(() => { alive.current = true; void refresh(); return () => { alive.current = false; }; }, [proofId]);
@@ -66,11 +70,17 @@ function ScopedResearchPanel() {
   function openSource(ref: SourceRef, offsetMs = ref.frameReference?.offsetMs ?? 0, polygon: unknown = null) {
     const id = sourceEvidenceId(ref.sourceId);
     const record = review?.sources.find(item => item.evidenceId === id);
-    const parent = record?.relationship === 'CONCURRENT_SIDECAR' ? record.parentEvidenceId : undefined;
-    const evidence = committedRecordEvidence(proof).find(item => item.evidenceId === (parent ?? id));
+    if (ref.relationship === 'CONCURRENT_SIDECAR') {
+      try {
+        const binding = sidecarPreviewSource(ref, record, proofId);
+        const parent = committedRecordEvidence(proof).find(item => item.evidenceId === record?.parentEvidenceId);
+        setSource({ kind: 'sidecar', binding, parent, offsetMs: record?.frameReference?.mediaTimeMs ?? offsetMs, polygon });
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Native sidecar unavailable'); }
+      return;
+    }
+    const evidence = committedRecordEvidence(proof).find(item => item.evidenceId === id);
     if (!evidence) { setError('Source is unavailable in the currently authorized Proof. Refresh the record.'); return; }
-    setSource({ evidence, offsetMs: parent ? record?.frameReference?.mediaTimeMs ?? offsetMs : offsetMs, polygon,
-      ...(parent ? {associationNote:'This observation uses a native luma sidecar. The player shows its associated original recording time; pixels are not asserted equivalent. Exact sidecar bytes are included in the verification archive.'} : {}) });
+    setSource({ kind: 'original', evidence, offsetMs, polygon });
   }
   async function exportReview() {
     if (!review || !FileSystem.cacheDirectory || !(await Sharing.isAvailableAsync())) throw new Error('Export unavailable on this device.');
@@ -121,9 +131,11 @@ function ScopedResearchPanel() {
     {error ? <Text accessibilityRole="alert" style={{ color: colors.error }}>{error}</Text> : null}
     <Modal visible={source !== null} animationType="slide" onRequestClose={() => setSource(null)}><ScrollView contentContainerStyle={{ padding: 20, gap: 16, backgroundColor: colors.background }}>
       <Button label="Close source" onPress={() => setSource(null)} />
-      {source?.associationNote ? <Text style={muted}>{source.associationNote}</Text> : null}
-      {source?.polygon ? <Text style={text}>Observation region in decoded original pixels: {JSON.stringify(source.polygon)}</Text> : null}
-      {source ? <ProofEvidencePreview key={`${source.evidence.evidenceId}:${source.offsetMs}`} evidence={source.evidence} title="Preserved original source" bookmarks={[]} initialTime={source.offsetMs / 1000} /> : null}
+      {source?.polygon ? <Text style={text}>Observation region in {source.kind === 'sidecar' ? 'stored native luma' : 'decoded original'} pixels: {JSON.stringify(source.polygon)}</Text> : null}
+      {source?.kind === 'sidecar' ? <>
+        <ResearchSidecarPreview key={`${source.binding.id}:${source.binding.sha256}`} proofId={proofId} source={source.binding} />
+        {source.parent ? <Button label="Open associated original recording" variant="secondary" onPress={() => setSource({ kind: 'original', evidence: source.parent!, offsetMs: source.offsetMs })} /> : null}
+      </> : source?.kind === 'original' ? <ProofEvidencePreview key={`${source.evidence.evidenceId}:${source.offsetMs}`} evidence={source.evidence} title="Preserved original source" bookmarks={[]} initialTime={source.offsetMs / 1000} /> : null}
     </ScrollView></Modal>
   </View>;
 }

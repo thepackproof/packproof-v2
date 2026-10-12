@@ -16,6 +16,13 @@ python3 -m venv /tmp/packproof-vision
 
 Install a controlled Tesseract build for OCR; the recorded experiment used Tesseract 5.3.4 with English language data. Missing Tesseract yields explicit unavailable OCR diagnostics while preserving other observations. No automatic model or language downloads occur. The hash lock targets Linux x86-64 CPython 3.12. Other platforms must create and review a matching wheel lock, not silently substitute dependencies. The simpler `requirements.txt` excludes optional COLMAP; `requirements-sfm.txt` includes it.
 
+New ProofSight/ProofPrint worker results also record the observed Tesseract executable
+SHA-256, explicit `eng.traineddata` SHA-256 and version. Missing/inaccessible runtime
+files remain `UNAVAILABLE`/`INCOMPLETE`; filesystem paths are not exported. Hashing
+has byte caps and metadata commands have deadlines. These hashes identify observed
+runtime bytes, not an approved runtime or an OCR accuracy claim. A reviewed image and
+language-data allowlist remains a separate deployment prerequisite.
+
 ## Adapter contract
 
 ```sh
@@ -56,6 +63,8 @@ These process limits are defense in depth, not a substitute for OS isolation of 
 The baseline intentionally does not emit untrained closure/packing actions, infer hidden package faces, identify products from labels, equate a rendered surface with a measurement, or treat detector confidence as a probability of authenticity. Sources retained for review are at least as important as selected diagnostic frames.
 
 ## Passive enrollment and locked baselines
+
+OCR records observed Tesseract executable and English trained-data SHA-256 values. The actual OCR invocation uses the same explicitly selected `--tessdata-dir`. Tesseract 4 omits the directory from its language listing, so the Ubuntu 4.00 data directory is accepted only when the file exists and an explicit listing confirms English there. Missing or unverifiable data stays `INCOMPLETE`, and OCR abstains with `OCR_RUNTIME_UNRECORDED`; a default location is never guessed as observed provenance. These hashes identify the bytes used, not approved versions or physical OCR accuracy.
 
 `proofprint` with `parameters: {"mode":"enroll"}` proposes regions without manually annotated polygons. Localization uses a single white quadrilateral with observed OCR text, a separate enclosing quadrilateral, and kraft-color support outside the label. Multiple/no plausible labels or cartons, unreadable text, absent separated substrate patches and poor quality yield unavailable candidates. This intentionally narrow, unqualified proposal method does not infer that a loose label was actually attached. It prefers the last third of video while retaining wider beginning/middle/end context. It never asks the seller for a close-up or new step.
 

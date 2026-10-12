@@ -1,4 +1,6 @@
 import { getOnboarding, updateOnboarding } from "./domain/onboarding.js";
+import { rateLimit } from "express-rate-limit";
+import { ingressRateLimitOptions, ingressRatePolicies } from "./http/ingress-rate-limit.js";
 import { clientVersionRouter } from "./admin/client-versions.js";
 import { errorActionsRouter } from "./admin/error-actions.js";
 import { integrationActionsRouter } from "./admin/integration-actions.js";
@@ -291,6 +293,17 @@ export function createApp(deps: AppDependencies): Express {
   app.disable("x-powered-by");
   configureTrustedProxy(app);
   app.use(requestCorrelation);
+  const scopedIntakeToken = (req: Request) => req.header('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+  const requiresUserAuthentication = (req: Request) => scopedIntakeToken(req).startsWith(INTAKE_SESSION_PREFIX) || !(
+    req.path === '/health' || req.path === '/meta' || req.path.startsWith('/auth/') ||
+    req.path.startsWith('/upload/') || req.path.startsWith('/public/') ||
+    req.path.startsWith('/integrations/webhooks/') || req.path.startsWith('/integrations/oauth/') ||
+    req.path.startsWith('/oauth/')
+  );
+  const authenticationRateLimit = rateLimit({
+    ...ingressRateLimitOptions(deps.db, ingressRatePolicies.firstPartyAuth),
+    skip: req => !requiresUserAuthentication(req),
+  });
   app.use("/public",distributedRateLimit(deps.db,{scope:"public-proof",limit:120,windowMs:60_000}));
   const corsOrigins = deps.corsOrigins ?? [];
   const integrations = deps.integrations ?? createDefaultIntegrationRegistry(deps.clock);
@@ -331,7 +344,7 @@ export function createApp(deps: AppDependencies): Express {
     const result = await receiveAdmittedUpload(deps.db, deps.clock, deps.objectStore, req.params.token, req);
     res.json({objectKey:result.key,evidenceId:result.evidenceId});
   }));
-  app.put("/proofs/:id/evidence/:evidenceId/parts/:partNumber", asyncRoute(async (req, res) => {
+  app.put("/proofs/:id/evidence/:evidenceId/parts/:partNumber", authenticationRateLimit, asyncRoute(async (req, res) => {
     const actor = await deps.auth.authenticate(req.headers);
     req.packproofUserId = actor.userId;
     res.json(await receiveAdmittedUploadPart(deps.db, deps.clock, deps.objectStore, actor.userId,
@@ -454,6 +467,7 @@ export function createApp(deps: AppDependencies): Express {
   if (deps.devAuth) {
     app.post(
       "/auth/dev/login",
+      rateLimit(ingressRateLimitOptions(deps.db, ingressRatePolicies.devLogin)),
       asyncRoute(async (req, res) => {
         const subject = String(req.body?.subject ?? "").trim();
         if (!subject) {
@@ -469,8 +483,9 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/rnd/derivative-grants/redeem",distributedRateLimit(deps.db,{scope:"rnd-derivative-redemption",limit:30,windowMs:60_000}));
   app.use(rndDerivativeGrantPublicRouter(deps));
 
+  app.use(authenticationRateLimit);
   app.use((req, res, next) => {
-    const scopedToken=req.header('authorization')?.replace(/^Bearer\s+/i,'')??'';
+    const scopedToken=scopedIntakeToken(req);
     if(scopedToken.startsWith(INTAKE_SESSION_PREFIX)){
       // Intake-only sessions are never elevated into the normal authentication adapter.
       const selfRevoke=req.method==='POST'&&/^\/me\/intake\/sessions\/intake_session_[A-Za-z0-9]+\/revoke$/.test(req.path);
@@ -482,16 +497,7 @@ export function createApp(deps: AppDependencies): Express {
       }).catch(next);
       return;
     }
-    if (
-      req.path === "/health" ||
-      req.path === "/meta" ||
-      req.path.startsWith("/auth/") ||
-      req.path.startsWith("/upload/") ||
-      req.path.startsWith("/public/") ||
-      req.path.startsWith("/integrations/webhooks/") ||
-      req.path.startsWith("/integrations/oauth/") ||
-      req.path.startsWith("/oauth/")
-    ) {
+    if (!requiresUserAuthentication(req)) {
       next();
       return;
     }

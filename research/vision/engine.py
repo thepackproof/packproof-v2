@@ -14,6 +14,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+try:
+    from .ocr_runtime import ocr_command
+except ImportError:  # Direct worker entry point.
+    from ocr_runtime import ocr_command
 
 POLICY_PATH = Path(__file__).with_name('policy.json')
 POLICY = json.loads(POLICY_PATH.read_text())
@@ -98,6 +102,7 @@ def decode_sources(sources, sampling_hz=2.0):
         try:
             if not cap.isOpened():
                 raise ValueError('VIDEO_DECODE_FAILED')
+            cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0)
             width, height = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
             fps, count = cap.get(cv2.CAP_PROP_FPS), cap.get(cv2.CAP_PROP_FRAME_COUNT)
             if width * height > MAX_PIXELS or fps <= 0 or not np.isfinite(fps) or count <= 0:
@@ -151,6 +156,7 @@ def full_resolution(frame):
     else:
         cap=cv2.VideoCapture(str(source['_snapshot']),cv2.CAP_FFMPEG)
         try:
+            cap.set(cv2.CAP_PROP_ORIENTATION_AUTO,0)
             cap.set(cv2.CAP_PROP_POS_FRAMES,frame.frame_index)
             ok,image=cap.read()
             if not ok or abs(cap.get(cv2.CAP_PROP_POS_FRAMES)-(frame.frame_index+1))>.5:
@@ -435,10 +441,13 @@ def condition(frames, artifacts, parameters):
 def ocr(frame):
     if not shutil.which('tesseract'):
         return [], 'TESSERACT_NOT_INSTALLED'
+    command=ocr_command()
+    if command is None:
+        return [], 'OCR_RUNTIME_UNRECORDED'
     ok, encoded = cv2.imencode('.png',frame.image)
     if not ok:
         raise ValueError('OCR_ENCODE_FAILED')
-    process = subprocess.run(['tesseract','stdin','stdout','--psm','11','tsv'], input=encoded.tobytes(),
+    process = subprocess.run(command, input=encoded.tobytes(),
                              capture_output=True,timeout=8,check=False)
     if process.returncode:
         return [], 'OCR_EXECUTION_FAILED'

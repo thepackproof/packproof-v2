@@ -1,4 +1,5 @@
 import { assertResearchEndpoint, researchEnabled } from "./research/isolation";
+import { assertResearchContentPath } from './research/sidecar-preview-policy';
 import type { OnboardingState, Action } from "../../packages/onboarding/model";
 import type { ProofRecovery } from "./capture/recovery-model";
 import type { ShippingScan, ShippingScanResult } from "./capture/shipping-scan-queue";
@@ -1118,7 +1119,7 @@ export class PackProofV2Client {
   researchContentUrl(proofId: string, path: string): string {
     if (!researchEnabled()) throw new Error("Research features are disabled");
     assertResearchEndpoint(this.options.baseUrl);
-    if (!/^\/(?:analyses\/[a-zA-Z0-9_-]+\/(?:artifacts\/[0-9]+|export\.zip)|export\.zip)$/.test(path)) throw new Error("Invalid research content path");
+    assertResearchContentPath(path);
     return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/rnd${path}`);
   }
 
