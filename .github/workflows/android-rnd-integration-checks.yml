@@ -243,7 +243,7 @@ jobs:
           PACKPROOF_REQUIRE_POSTGRES_RELEASE_GATES: '1'
         run: |
           npm test -- tests/rnd-production-profile.test.ts tests/rnd-production-packaging.test.ts tests/rnd-runtime-isolation.test.ts \
-            tests/rnd-sidecar-preview.test.ts tests/rnd-mobile-receipt.integration.test.ts tests/rnd-migrate.test.ts tests/rnd-migrate-postgres.integration.test.ts \
+            tests/rnd-sidecar-preview.test.ts tests/rnd-mobile-receipt.integration.test.ts tests/rnd-migrate.test.ts tests/rnd-migrate-postgres.integration.test.ts tests/rnd-learning-registry.test.ts \
             tests/migrations.test.ts tests/release-postgres.integration.test.ts \
             --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/backend-receipts.xml" \
             2>&1 | tee "$RUNNER_TEMP/backend-receipts.log"
