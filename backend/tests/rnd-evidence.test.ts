@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import { beforeAll,afterAll,describe,it,expect } from 'vitest';
 import { generateKeyPairSync,sign } from 'node:crypto';
 import { readFile,writeFile,mkdtemp,rm } from 'node:fs/promises';
@@ -42,14 +43,18 @@ describe('research evidence boundary',()=>{
   const consent={purpose:'EXPERIMENTAL_ANALYSIS',version:'packproof.research-consent.v1',granted:true};
   await recordConsent(scoped,seller,p.proofId,'vision-consent',consent);
   const evidence=await commitFulfillmentAndAttest(h,seller,p.proofId);await finalizeProof(h.db,h.clock,seller,p.proofId,signing.signer);
-  expect(await requestAnalysis(scoped,seller,p.proofId,'vision-analysis',{feature:'proofpilot',evidenceIds:[evidence.evidenceId]})).toMatchObject({operationalState:'QUEUED'});
+  const queued=await requestAnalysis(scoped,seller,p.proofId,'vision-analysis',{feature:'proofpilot',evidenceIds:[evidence.evidenceId]});
+  expect(queued).toMatchObject({operationalState:'QUEUED'});
   await expect(recordConsent(scoped,seller,p.proofId,'learning-denied',{...consent,purpose:'LEARNING'})).rejects.toMatchObject({code:'RND_DISABLED'});
   await expect(issueIntent(scoped,seller,p.proofId,'capture-denied',{legId:'OUTBOUND',acquisitionMode:'ONLINE'})).rejects.toMatchObject({code:'RND_DISABLED'});
-  rnd.killSwitch=true;
+  rnd.killSwitch=true;now++;
   await expect(recordConsent(scoped,seller,p.proofId,'killed',consent)).rejects.toMatchObject({code:'RND_DISABLED'});
   expect(await recordConsent(scoped,seller,p.proofId,'withdraw-killed',{...consent,granted:false})).toMatchObject({granted:false});
   rnd.killSwitch=false;for(const flag of Object.values(rnd.features))flag.collection=false;
   await expect(recordConsent(scoped,seller,p.proofId,'all-off',consent)).rejects.toMatchObject({code:'RND_DISABLED'});
+  // Withdrawal terminates the real queued job before any adapter or decoder executes.
+  expect(await runRndWorkerOnce(scoped)).toEqual({state:'FAILED',analysisId:queued.analysisId,errorCode:'RND_CONSENT_REQUIRED'});
+  expect(await getAnalysis(scoped,seller,queued.analysisId)).toMatchObject({operationalState:'FAILED',errorCode:'RND_CONSENT_REQUIRED'});
  });
  it('rejects cross-proof sources, forged outcomes, conflicting idempotency and wrong actor',async()=>{
   const a=await proof(),b=await proof();
@@ -137,7 +142,7 @@ describe('research evidence boundary',()=>{
   await expect(startIntent(deps,seller,p.id,expired.intent.id,'expired',{nonce:expired.intent.nonce,captureSessionId:cap.id})).rejects.toMatchObject({code:'RND_INTENT_EXPIRED'});
  });
  it('executes actual Python analysis against committed bytes and persists source-linked output',async()=>{
-  const p=await proof();deps.rnd!.worker={python:process.env.PACKPROOF_RND_TEST_VISION_PYTHON??'/tmp/packproof-vision-venv/bin/python',script:new URL('../../research/vision/worker.py',import.meta.url).pathname,timeoutMs:60000,maxInputBytes:128*1024*1024};
+  const p=await proof();deps.rnd!.worker={python:process.env.PACKPROOF_RND_TEST_VISION_PYTHON??'/tmp/packproof-vision-venv/bin/python',script:fileURLToPath(new URL('../../research/vision/worker.py',import.meta.url)),timeoutMs:60000,maxInputBytes:128*1024*1024};
   const job=await requestAnalysis(deps,seller,p.id,'python',{feature:'proofpilot',evidenceIds:[p.evidenceId]});
   expect(await runRndWorkerOnce(deps)).toEqual({state:'SUCCEEDED',analysisId:job.analysisId});
   const result=await getAnalysis(deps,seller,job.analysisId);expect(result.operationalState).toBe('SUCCEEDED');expect(result.result).toMatchObject({schemaVersion:'packproof.analysis.v1',feature:'proofpilot'});
@@ -147,7 +152,7 @@ describe('research evidence boundary',()=>{
   const p=await proof(false),png=await readFile(new URL('./fixtures/rnd-mask-source.png',import.meta.url));
   const image=await commitProofEvidence(h,seller,p.id,{contentType:'image/png',bytes:png,idempotencyKey:'privacy-image'});
   await commitFulfillmentAndAttest(h,seller,p.id);await finalizeProof(h.db,h.clock,seller,p.id,signing.signer);
-  deps.rnd!.worker={python:process.env.PACKPROOF_RND_TEST_PRIVACY_PYTHON??'/tmp/packproof-privacy-venv/bin/python',script:new URL('../../research/vision/worker.py',import.meta.url).pathname,timeoutMs:60000,maxInputBytes:128*1024*1024};
+  deps.rnd!.worker={python:process.env.PACKPROOF_RND_TEST_PRIVACY_PYTHON??'/tmp/packproof-privacy-venv/bin/python',script:fileURLToPath(new URL('../../research/vision/worker.py',import.meta.url)),timeoutMs:60000,maxInputBytes:128*1024*1024};
   const job=await requestAnalysis(deps,seller,p.id,'redact',{feature:'proofshield',evidenceIds:[image.evidenceId],parameters:{kind:'still',masks:[{x:0,y:0,width:12,height:12}]}});
   expect(await runRndWorkerOnce(deps)).toMatchObject({state:'SUCCEEDED'});
   const artifact=await artifactFor(deps,seller,p.id,job.analysisId,0);

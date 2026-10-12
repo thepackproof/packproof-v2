@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import express from 'express';
 import request from 'supertest';
 import {beforeAll,afterAll,describe,it,expect,vi} from 'vitest';
@@ -18,6 +19,7 @@ import {createCaptureSession,completeCaptureSession} from '../src/domain/capture
 import {initializeEvidenceUpload,commitEvidence} from '../src/domain/evidence.js';
 import {recordConsent,issueIntent,startIntent,closeIntent} from '../src/rnd/capture.js';
 import {uploadCaptureSidecar,listCaptureSidecars,readCaptureSidecar,rndCaptureSidecarsRouter,validateSidecarChunk,validateNativeAcquisition,SIDECAR_CHUNK_BYTES} from '../src/rnd/capture-sidecars.js';
+import {resolveSources} from '../src/rnd/security.js';
 import {enabledResearchConfig} from '../src/rnd/config.js';
 import {sha256Hex} from '../src/hash.js';
 import type {RndDeps} from '../src/rnd/types.js';
@@ -34,18 +36,18 @@ describe('native signed sidecar receipt',()=>{
  const descriptor={fileName:'research-frame-0.pgm',sha256:sha256Hex(frameBytes),byteLength:frameBytes.length,width:1024,height:512,mediaTimeMs:300,relationship:'CONCURRENT_CAPTURED_SIDECAR',transform:'NATIVE_LUMA_PLANE_PGM_NO_RESIZE'};
  const acquisition=Buffer.from(JSON.stringify({schemaVersion:'packproof.native-acquisition.v1',mode:'PASSIVE',frames:[descriptor]}));
  const journal=Buffer.from('{"event":"stop"}\n');
- async function fixture(){
-  const txn=await createTransaction(h.db,h.clock,seller,{itemTitle:'Sidecar fixture'}),p=await createOrGetProof(h.db,h.clock,seller,txn.transactionId),proofId=p.proofId;
-  await recordConsent(deps,seller,proofId,'consent',consent(true));
-  const intent=await issueIntent(deps,seller,proofId,'intent',{legId:'OUTBOUND',acquisitionMode:'ONLINE',profileId:'native-final-file-v1'});
-  const cap=await createCaptureSession(h.db,h.clock,seller,proofId,{client:'NATIVE_CAMERA',idempotencyKey:'cap'});
-  await startIntent(deps,seller,proofId,intent.intent.id,'start',{nonce:intent.intent.nonce,captureSessionId:cap.id,clientPublicKeyPem:pem});
+ async function fixture(actor=seller){
+  const txn=await createTransaction(h.db,h.clock,actor,{itemTitle:'Sidecar fixture'}),p=await createOrGetProof(h.db,h.clock,actor,txn.transactionId),proofId=p.proofId;
+  await recordConsent(deps,actor,proofId,'consent',consent(true));
+  const intent=await issueIntent(deps,actor,proofId,'intent',{legId:'OUTBOUND',acquisitionMode:'ONLINE',profileId:'native-final-file-v1'});
+  const cap=await createCaptureSession(h.db,h.clock,actor,proofId,{client:'NATIVE_CAMERA',idempotencyKey:'cap'});
+  await startIntent(deps,actor,proofId,intent.intent.id,'start',{nonce:intent.intent.nonce,captureSessionId:cap.id,clientPublicKeyPem:pem});
   const video=await readFile(new URL('./fixtures/camera-recording.mp4',import.meta.url));
-  await completeCaptureSession(h.db,h.clock,seller,proofId,cap.id,{sha256:sha256Hex(video),byteSize:video.length,contentType:'video/mp4'});
-  const upload=await initializeEvidenceUpload(h.db,h.clock,h.objectStore,seller,proofId,{contentType:'video/mp4',evidenceType:'FULFILLMENT_CAPTURE',captureSessionId:cap.id,idempotencyKey:'upload'});
-  await h.objectStore.put(upload.objectKey,video,'video/mp4');const evidence=await commitEvidence(h.db,h.clock,h.objectStore,seller,proofId,upload.evidenceId,sha256Hex(video));
+  await completeCaptureSession(h.db,h.clock,actor,proofId,cap.id,{sha256:sha256Hex(video),byteSize:video.length,contentType:'video/mp4'});
+  const upload=await initializeEvidenceUpload(h.db,h.clock,h.objectStore,actor,proofId,{contentType:'video/mp4',evidenceType:'FULFILLMENT_CAPTURE',captureSessionId:cap.id,idempotencyKey:'upload'});
+  await h.objectStore.put(upload.objectKey,video,'video/mp4');const evidence=await commitEvidence(h.db,h.clock,h.objectStore,actor,proofId,upload.evidenceId,sha256Hex(video));
   const canonicalJson=canonicalize({schemaVersion:'packproof.native-final-file.v1',intentId:intent.intent.id,proofId,captureSessionId:cap.id,mediaSha256:sha256Hex(video),mediaByteLength:video.length,journalSha256:sha256Hex(journal),acquisitionSha256:sha256Hex(acquisition),chainCoverage:'FINAL_FILE_ONLY'});
-  const receipt=await closeIntent(deps,seller,proofId,intent.intent.id,'close',{evidenceIds:[evidence.evidenceId],clientCanonicalJson:canonicalJson,clientSignatureBase64:sign('sha256',Buffer.from(canonicalJson),pair.privateKey).toString('base64')});
+  const receipt=await closeIntent(deps,actor,proofId,intent.intent.id,'close',{evidenceIds:[evidence.evidenceId],clientCanonicalJson:canonicalJson,clientSignatureBase64:sign('sha256',Buffer.from(canonicalJson),pair.privateKey).toString('base64')});
   return {proofId,intentId:intent.intent.id,evidenceId:evidence.evidenceId,receipt};
  }
  const chunk=(bytes:Buffer,index=0)=>({partIndex:index,partCount:Math.ceil(bytes.length/SIDECAR_CHUNK_BYTES),byteLength:bytes.length,sha256:sha256Hex(bytes),dataBase64:bytes.subarray(index*SIDECAR_CHUNK_BYTES,(index+1)*SIDECAR_CHUNK_BYTES).toString('base64')});
@@ -67,7 +69,26 @@ describe('native signed sidecar receipt',()=>{
   expect(response.headers['content-type']).toMatch(/^image\/png/);expect(response.headers['cache-control']).toBe('private, no-store');
   expect(response.headers['x-packproof-source-sha256']).toBe(sha256Hex(frameBytes));expect(response.headers['x-packproof-preview-transformation']).toBe('PGM_LUMA_TO_PNG_NO_RESIZE');
   expect(response.body.subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
-  const other=await fixture();await expect(readCaptureSidecar(deps,seller,other.proofId,id)).rejects.toMatchObject({code:'RND_SIDECAR_NOT_FOUND'});
+  // Identical bytes may share storage, but each recording retains its own signed identity.
+  const other=await fixture(outsider);
+  await uploadCaptureSidecar(deps,outsider,other.proofId,other.intentId,'research-acquisition.json','other-acq',chunk(acquisition));
+  for(let part=0;part<Math.ceil(frameBytes.length/SIDECAR_CHUNK_BYTES);part++)await uploadCaptureSidecar(deps,outsider,other.proofId,other.intentId,descriptor.fileName,`other-frame-${part}`,chunk(frameBytes,part));
+  const otherFrame=(await listCaptureSidecars(deps,outsider,other.proofId)).find(r=>r.sidecar.fileName===descriptor.fileName)!;
+  const originalSource=frame.sidecar.source,otherSource=otherFrame.sidecar.source;
+  expect(otherSource.objectKey).toBe(originalSource.objectKey);expect(otherSource.objectVersionId).toBe(originalSource.objectVersionId);
+  for(const field of ['sourceId','evidenceId','proofId','tenantId','subjectId','captureSessionId'] as const)expect(otherSource[field]).not.toBe(originalSource[field]);
+  expect((await resolveSources(deps,h.db,other.proofId,outsider,[otherFrame.sidecar.id]))[0]).toMatchObject(otherSource);
+  await expect(resolveSources(deps,h.db,other.proofId,outsider,[id])).rejects.toMatchObject({code:'RND_SOURCE_FORBIDDEN'});
+  await expect(readCaptureSidecar(deps,outsider,other.proofId,id)).rejects.toMatchObject({code:'RND_SIDECAR_NOT_FOUND'});
+  await expect(readCaptureSidecar(deps,seller,other.proofId,otherFrame.sidecar.id)).rejects.toMatchObject({code:'PARTICIPANT_NOT_AUTHORIZED'});
+  expect((await readCaptureSidecar(deps,outsider,other.proofId,otherFrame.sidecar.id)).body).toEqual(frameBytes);
+  for(const [fixture,actor,ownId,foreignId] of [[f,seller,id,otherFrame.sidecar.id],[other,outsider,otherFrame.sidecar.id,id]] as const){
+   await commitAttestation(h.db,h.clock,actor,fixture.proofId,{statement:'PACKED_DESCRIBED_ITEM',relatedEvidenceId:fixture.evidenceId});
+   await finalizeProof(h.db,h.clock,actor,fixture.proofId,signing.signer);
+   const bundle=await researchBundle(deps,actor,fixture.proofId);
+   expect(bundle.sources.some(source=>source.evidenceId===ownId)).toBe(true);
+   expect(bundle.sources.some(source=>source.evidenceId===foreignId)).toBe(false);
+  }
   await expect(readCaptureSidecar(deps,outsider,f.proofId,id)).rejects.toMatchObject({code:'PARTICIPANT_NOT_AUTHORIZED'});
   deps.rnd!.killSwitch=true;await expect(readCaptureSidecar(deps,seller,f.proofId,id,true)).rejects.toMatchObject({code:'RND_DISABLED'});deps.rnd!.killSwitch=false;
   const get=vi.spyOn(h.objectStore,'get').mockResolvedValueOnce({body:Buffer.from('changed')} as never);
@@ -92,7 +113,7 @@ describe('native signed sidecar receipt',()=>{
   await uploadCaptureSidecar(deps,seller,f.proofId,f.intentId,'native-journal.jsonl','journal',chunk(journal));
   await commitAttestation(h.db,h.clock,seller,f.proofId,{statement:'PACKED_DESCRIBED_ITEM',relatedEvidenceId:f.evidenceId});
   await finalizeProof(h.db,h.clock,seller,f.proofId,signing.signer);
-  deps.rnd!.worker={python:process.env.PACKPROOF_RND_TEST_PYTHON??'/tmp/packproof-vision-venv/bin/python',script:new URL('../../research/vision/worker.py',import.meta.url).pathname,timeoutMs:60000,maxInputBytes:128*1024*1024};
+  deps.rnd!.worker={python:process.env.PACKPROOF_RND_TEST_PYTHON??'/tmp/packproof-vision-venv/bin/python',script:fileURLToPath(new URL('../../research/vision/worker.py',import.meta.url)),timeoutMs:60000,maxInputBytes:128*1024*1024};
   await requestAnalysis(deps,seller,f.proofId,'sidecar-analysis',{feature:'proofpilot',evidenceIds:[frame.sidecar.id]});
   const job=await leaseAnalysis(deps);expect(job?.input_json.sources[0]).toMatchObject({relationship:'CONCURRENT_SIDECAR',frameReference:descriptor});
   const result=await executeVision(deps,job!);expect(result.observations.length).toBeGreaterThan(0);await completeAnalysis(deps,job!,result,'a'.repeat(64));
