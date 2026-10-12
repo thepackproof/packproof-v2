@@ -1,0 +1,45 @@
+name: Android R&D release checks
+on:
+  pull_request:
+    paths:
+      - '.gitattributes'
+      - 'backend/migrations/**'
+      - 'backend/src/db/migrate.ts'
+      - 'backend/src/db/forward-compatible-migrations.ts'
+      - 'backend/tests/migrations.test.ts'
+      - '.github/workflows/android-rnd-release-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-rnd-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  schema:
+    name: Additive schema compatibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: disposable_test_password
+          POSTGRES_DB: packproof_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-fund
+        working-directory: backend
+      - run: npm run build
+        working-directory: backend
+      - run: npx vitest run tests/migrations.test.ts
+        working-directory: backend
+        env:
+          PACKPROOF_MIGRATION_TEST_DATABASE_URL: postgres://postgres:disposable_test_password@localhost:5432/packproof_test
