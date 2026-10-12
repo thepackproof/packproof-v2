@@ -2,7 +2,7 @@
   "schemaVersion": "packproof.rnd-status-ledger.v1",
   "baselineCommit": "a157356924bf4bf688e171c9ff223576fcb6ca3d",
   "sourcePlan": "PackProof_Executive_Overview_and_ASTRA_RnD_Development_Plan_2026-10-02(1).docx",
-  "lastUpdated": "2026-10-12T01:23:36.995257Z",
+  "lastUpdated": "2026-10-12T01:39:34.987980+00:00",
   "status": "LOCAL_ENGINEERING_VALIDATED_WITH_EXTERNAL_QUALIFICATION_GATES",
   "releaseAuthorization": "NOT_AUTHORIZED",
   "tickets": [
@@ -90,8 +90,15 @@
       ],
       "observedResult": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed.",
       "unresolvedLimitation": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
-      "nextDependency": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "The planned physical labels/cartons, printer/media access and cross-phone recordings with reviewed ground truth.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Frozen allocation import, original-byte hashes, specimen lineage, split/holdout admission and attempt accounting.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F01-03",
@@ -257,8 +264,15 @@
       ],
       "observedResult": "Harness/templates and synthetic attacks exist; no actual physical corpus or attack trial is claimed.",
       "unresolvedLimitation": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
-      "nextDependency": "240 labels/60 cartons across four printing technologies, printer units/media lots, same-content copies, transfers and S24 Ultra/A16 plus independent Android/iPhone captures. Independent rare-error sample and all attack families. The original October 1 reference has been reviewed; corpus specimens and independent collection remain unavailable.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Dedicated real attack specimens, independent labeling and a separately frozen independent rare-error population. The 240-label screening corpus cannot establish a 0.01% error bound.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Copy/transfer/replay/failure intake and holdout-gap reporting; failed/excluded/missing attempts remain visible.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F02-01",
@@ -816,8 +830,15 @@
       ],
       "observedResult": "No blinded human comparison completed.",
       "unresolvedLimitation": "Independent reviewers; randomized original-only versus enriched review tasks; event-search/accuracy/contradiction metrics.",
-      "nextDependency": "Independent reviewers; randomized original-only versus enriched review tasks; event-search/accuracy/contradiction metrics.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Authorized original recordings plus frozen enrichment, independent reference annotations and participating reviewers.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Offline balanced assignment, scenario/outcome blinding, source/interval scoring and failure-aware timing reports.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F04-01",
@@ -1056,8 +1077,15 @@
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Measured physical carton changes, sizes/materials, lighting/reflective tape, missing faces and natural shipping wear with independent lab metrology.",
-      "nextDependency": "Measured physical carton changes, sizes/materials, lighting/reflective tape, missing faces and natural shipping wear with independent lab metrology.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Independent metrology, calibrated references and real measured changed/unchanged cartons.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Millimetre units, calibration-artifact binding, measured error and uncertainty intake.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F05-01",
@@ -1307,8 +1335,15 @@
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Same-SKU substitutions, copied serials, partial returns, new cartons, legitimate repairs, absent recipients, and blinded matrix-assisted review study.",
-      "nextDependency": "Same-SKU substitutions, copied serials, partial returns, new cartons, legitimate repairs, absent recipients, and blinded matrix-assisted review study.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Authorized lifecycle examples, independent annotations and reviewers; final effect size/sample/analysis decisions.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Blinded paired-source channel questions, missing/conflicting observation handling and descriptive confidence calibration.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F06-01",
@@ -1503,8 +1538,15 @@
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Authorized genuine/real display/print/lamination/reflection/delay/adaptive display/injected stream experiments with held-out devices/materials; safety review.",
-      "nextDependency": "Authorized genuine/real display/print/lamination/reflection/delay/adaptive display/injected stream experiments with held-out devices/materials; safety review.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Dedicated held-out attack rigs/specimens and device/exposure safety review before active optical experiments.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Passive-only replay/injection intake, retained failed trials and frozen profile references.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F06-06",
@@ -1793,8 +1835,15 @@
       ],
       "observedResult": "Actual tiny circuit proofs/measurements exist; not p95 full-image/video cost measurements.",
       "unresolvedLimitation": "Independent qualified cryptographic/parameter/constraint/issuer review, target runtime cost and larger supported profiles before public reliance.",
-      "nextDependency": "Independent qualified cryptographic/parameter/constraint/issuer review, target runtime cost and larger supported profiles before public reliance.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Independent cryptographic/privacy review, authorized sensitive-class data and a chosen target compute/latency/memory/cost budget. Larger images/video need additional method research and implementation.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Actual three-sample measurements for each currently supported 4x4 and 8x8 proof profile; hash-bound report checking and review scope.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F08-01",
@@ -1913,8 +1962,15 @@
       ],
       "observedResult": "No qualified native camera-control profile exists and no automatic focus/exposure driver is enabled or claimed. Native ROI selection hysteresis/cooldown and camera lease/restore infrastructure are implemented, but they are not a camera adjustment driver. Implement/qualify any future active driver only after measured stable passive profiles and safety review.",
       "unresolvedLimitation": "Measured passive recorder stability and qualified device/OS/control profiles, conservative hardware bounds, restoration/continuity benchmarks and independent safety review before implementing or enabling active focus/exposure assistance.",
-      "nextDependency": "Measured passive recorder stability and qualified device/OS/control profiles, conservative hardware bounds, restoration/continuity benchmarks and independent safety review before implementing or enabling active focus/exposure assistance.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "S24 connection, exact-profile continuity/stability measurements and specialist hardware limits before active-control driver engineering. No qualified active driver exists.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Saved read-only device inventory and ordinary OFF baseline protocol.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F08-04",
@@ -2032,8 +2088,15 @@
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Matched/randomized physical feature-on/off packing trials with blinded independent readability/downstream assessment.",
-      "nextDependency": "Matched/randomized physical feature-on/off packing trials with blinded independent readability/downstream assessment.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Actual passive-on capability on a measured profile, real matched tasks, reliable telemetry and blinded detail/context assessment.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Balanced paired order, strict same-task pairing, retained missing arms and descriptive telemetry differences.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F09-01",
@@ -2192,8 +2255,15 @@
       ],
       "observedResult": "Local implementation exercised; qualification experiment remains blocked.",
       "unresolvedLimitation": "Two named genuinely independent external witness organizations, authenticated key exchange, service/freshness/retention agreements, incident contacts and security review. Current independent operator count0.",
-      "nextDependency": "Two named genuinely independent external witness organizations, authenticated key exchange, service/freshness/retention agreements, incident contacts and security review. Current independent operator count0.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Two willing independently controlled outside witness organizations, contacts, authenticated public keys and agreed contracts. Then implement the selected real service adapter and exercise both operators.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Public policy/key packet validator and concrete key exchange, restore, operating and security-review requirements.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F09-05",
@@ -2524,8 +2594,15 @@
       ],
       "observedResult": "Distributed-noise mode explicitly fails closed; central Gaussian DP baseline retained as plan permits.",
       "unresolvedLimitation": "Reviewed dropout/collusion/distributed-noise mechanism and cohort assumptions before stronger coordinator privacy can be implemented/claimed.",
-      "nextDependency": "Reviewed dropout/collusion/distributed-noise mechanism and cohort assumptions before stronger coordinator privacy can be implemented/claimed.",
-      "releaseAuthorization": "NOT_AUTHORIZED"
+      "nextDependency": "Distributed privacy/SecAgg specialist decisions and a reviewed mechanism, followed by implementation. A later independent pilot requires at least 20 separately enrolled, consenting contributor organizations per released aggregate.",
+      "releaseAuthorization": "NOT_AUTHORIZED",
+      "qualificationPreparation": {
+        "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+        "status": "OFFLINE_PREPARATION_VALIDATED_EXTERNAL_GATE_UNCHANGED",
+        "completed": "Dropout/collusion variance planner and a probe of the installed encoder's clipping; documented mechanism-review scope.",
+        "guide": "docs/rnd/qualification/README.md",
+        "validation": "docs/rnd/validation/2026-10-11-qualification-readiness.json"
+      }
     },
     {
       "id": "F10-06",
@@ -3271,5 +3348,29 @@
       "allChecksPassedMeaning": "Every selected job passed; unchanged jobs explicitly skipped, with source-bound evidence in the current validation receipt."
     }
   },
-  "currentValidationReference": "docs/rnd/validation/2026-10-11-follow-up.json"
+  "currentValidationReference": "docs/rnd/validation/2026-10-11-qualification-readiness.json",
+  "currentQualificationPreparation": {
+    "sourceCommit": "24f50ddc06e0be805ed355eccd671dfc47a9c41a",
+    "branch": "rnd/qualification-readiness-2026-10-11",
+    "status": "PREPARATION_VALIDATED_EXTERNAL_QUALIFICATION_REQUIRED",
+    "tickets": [
+      "F01-02",
+      "F01-06",
+      "F03-06",
+      "F04-06",
+      "F05-06",
+      "F06-05",
+      "F07-06",
+      "F08-03",
+      "F08-06",
+      "F09-04",
+      "F10-05"
+    ],
+    "ticketCountsUnchanged": true,
+    "reference": "docs/rnd/qualification/README.md",
+    "validationReference": "docs/rnd/validation/2026-10-11-qualification-readiness.json",
+    "phoneConnection": "USER_DEFERRED",
+    "ios": "USER_DEFERRED",
+    "releaseAuthorized": false
+  }
 }
