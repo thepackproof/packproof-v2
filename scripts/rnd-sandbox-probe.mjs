@@ -17,6 +17,17 @@ const reportPath=option('--report');
 const report={schema:'packproof.rnd-sandbox-probe.v1',observedAt:new Date().toISOString(),sourceSha:process.env.GITHUB_SHA??null,platform:process.platform,kernel:os.release(),passed:false,checks:{},releaseAuthorized:false,scope:'Synthetic unprivileged Linux decoder containment on this runner only; no physical, production, witness-service or ZK isolation qualification.'};
 const directories=[];let listener;
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+function withLargeAncillaryChunk(png) {
+ // A valid private ancillary PNG chunk tests admitted original bytes above the
+ // former 32-MiB file ceiling without inflating decoded dimensions or claiming
+ // a large physical-image corpus. No original fixture is modified.
+ assert(png.subarray(-8,-4).equals(Buffer.from('IEND')),'PNG_FIXTURE_IEND_REQUIRED');
+ const body=Buffer.concat([Buffer.from('npAD'),Buffer.alloc(33*1024*1024)]);
+ const table=Uint32Array.from({length:256},(_,n)=>{let value=n;for(let bit=0;bit<8;bit++)value=(value&1)?(0xedb88320^(value>>>1)):(value>>>1);return value>>>0;});
+ let crc=0xffffffff;for(const byte of body)crc=table[(crc^byte)&255]^(crc>>>8);
+ const length=Buffer.alloc(4),checksum=Buffer.alloc(4);length.writeUInt32BE(body.length-4);checksum.writeUInt32BE((crc^0xffffffff)>>>0);
+ return Buffer.concat([png.subarray(0,-12),length,body,checksum,png.subarray(-12)]);
+}
 const privateDirectory=prefix=>{const dir=mkdtempSync(`/tmp/${prefix}`);chmodSync(dir,0o700);directories.push(dir);return dir;};
 const execute=(runtime,code,script,args,expected=0)=>{
  const command=sandboxCommand(['--runtime',runtime,'--code',code,'--',join(runtime,'bin/python'),join(code,script),...args]);
@@ -25,6 +36,10 @@ const execute=(runtime,code,script,args,expected=0)=>{
  // are not copied into the public evidence report.
  report.lastProcess={entryPoint:script,exitCode:result.status,signal:result.signal??null,
   failureClass:result.error?'PROCESS_UNAVAILABLE':/bwrap:.*(?:permitted|namespace)/i.test(result.stderr??'')?'NAMESPACE_UNAVAILABLE':result.status!==0?'CHILD_NONZERO':null};
+ // This harness creates every input itself and passes a cleared environment.
+ // Retain a bounded synthetic-only traceback so CI failures are diagnosable;
+ // the application worker's general error-reporting policy is unchanged.
+ if(result.status!==expected&&result.status!==0)report.lastProcess.syntheticStderrTail=(result.stderr??'').slice(-8192);
  assert(!result.error,'SANDBOX_PROCESS_UNAVAILABLE');if(expected!==null)assert.equal(result.status,expected,'SANDBOX_PROCESS_FAILED');
  return result.stdout;
 };
@@ -46,13 +61,17 @@ try {
  report.stage='REAL_VISION_WORKER';
  const research=join(root,'research'),visionJob=privateDirectory('packproof-rnd-');
  const source=readFileSync(join(root,'backend/tests/fixtures/rnd-mask-source.png'));const sourceHash=hash(source);
- writeFileSync(join(visionJob,'source.png'),source,{mode:0o600});
- const visionInput={schemaVersion:'packproof.vision-job.v1',feature:'proofpilot',analysisId:'synthetic-sandbox-probe',sandboxRoot:visionJob,sources:[{sourceId:'synthetic-source',path:join(visionJob,'source.png'),sha256:sourceHash,byteLength:source.length,mimeType:'image/png'}],parameters:{}};
+ const largeSource=withLargeAncillaryChunk(source),largeHash=hash(largeSource);
+ assert(largeSource.length>32*1024*1024&&largeSource.length<128*1024*1024);
+ writeFileSync(join(visionJob,'source.png'),largeSource,{mode:0o600});
+ const visionInput={schemaVersion:'packproof.vision-job.v1',feature:'proofsight',analysisId:'synthetic-sandbox-probe',sandboxRoot:visionJob,sources:[{sourceId:'synthetic-source',path:join(visionJob,'source.png'),sha256:largeHash,byteLength:largeSource.length,mimeType:'image/png'}],parameters:{}};
  writeFileSync(join(visionJob,'job.json'),JSON.stringify(visionInput),{mode:0o600});
  execute(vision,research,'vision/worker.py',['--job',join(visionJob,'job.json'),'--output',visionJob]);
  const result=JSON.parse(readFileSync(join(visionJob,'result.json'),'utf8'));
- assert.equal(result.operationalState,'SUCCEEDED');assert.equal(result.qualification.customerFindingsEnabled,false);assert.equal(result.provenance.sources[0].sha256,sourceHash);
- assert.equal(hash(readFileSync(join(visionJob,'source.png'))),sourceHash);report.checks.realVisionWorker=true;
+ assert.equal(result.operationalState,'SUCCEEDED');assert.equal(result.qualification.customerFindingsEnabled,false);assert.equal(result.provenance.sources[0].sha256,largeHash);
+ assert.equal(hash(readFileSync(join(visionJob,'source.png'))),largeHash);report.checks.realVisionWorker=true;report.checks.admittedSourceAbove32MiB=true;report.syntheticSourceByteLength=largeSource.length;
+ assert.equal(result.provenance.ocrRuntime.state,'RECORDED');assert.match(result.provenance.ocrRuntime.executableSha256,/^[a-f0-9]{64}$/);assert.match(result.provenance.ocrRuntime.traineddataSha256,/^[a-f0-9]{64}$/);assert.equal(result.provenance.ocrRuntime.approvedRuntime,false);
+ report.ocrRuntime=result.provenance.ocrRuntime;report.checks.observedOcrRuntimeHashes=true;
  report.stage='MALFORMED_MEDIA';
  const badJob=privateDirectory('packproof-rnd-'),bad=Buffer.from('\x89PNG\r\n\x1a\ninvalid-synthetic-container','binary');
  writeFileSync(join(badJob,'source.png'),bad,{mode:0o600});

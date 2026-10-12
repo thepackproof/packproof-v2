@@ -440,7 +440,7 @@ def ocr(frame):
     ok, encoded = cv2.imencode('.png',frame.image)
     if not ok:
         raise ValueError('OCR_ENCODE_FAILED')
-    process = subprocess.run(['tesseract','stdin','stdout','--psm','11','tsv'], input=encoded.tobytes(),
+    process = subprocess.run(['tesseract','stdin','stdout','-l','eng','--psm','11','tsv'], input=encoded.tobytes(),
                              capture_output=True,timeout=8,check=False)
     if process.returncode:
         return [], 'OCR_EXECUTION_FAILED'

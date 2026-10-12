@@ -115,6 +115,29 @@ actual partner consent and useful representative task evaluation. The coordinato
 still sees the pre-noise aggregate. TLS does not add distributed-noise privacy or prove
 honest clients, clipping, camera provenance, model utility, or organizational diversity.
 
+## Remaining execution engineering versus qualification
+
+The operational TLS profile is an adapter construction point, not a complete remote
+training runner. `secure_aggregate()` still creates `LocalSimulationGrid`; the CLI
+offers only `simulate` and `verify`. Even its real TLS mode creates every partner as a
+thread in one process with a synthetic local dataset. No end-to-end multi-process or
+separately hosted partner round is established by the current measurements.
+
+An operational research runner still needs a coordinator Grid bound to the configured
+remote peer roster, partner-owned persistent Flower contexts and consent authorities,
+signed model/recipe delivery and exact dataset binding, and coordinated monotonic run
+IDs across restart/withdrawal/certificate changes. Its bounded integration tests must
+cover real separate processes, incomplete rounds, restart admission, unavailable peers,
+consent withdrawal and no release when aggregation or privacy accounting fails. Such
+local multi-process tests would be achievable software evidence, but still represent
+one laboratory operator unless independent control is actually established.
+
+Separate qualification requires independently enrolled organizations, their protected
+data/keys and consent, reviewed privacy/accounting/threat assumptions, representative
+held-out utility and operator recovery exercises. Neither the profile loader nor a
+future successful laboratory harness can supply these governance or scientific facts.
+No remote partner service, new cloud resource or pilot authorization is created here.
+
 ## Measured local result
 
 `reports/2026-10-02-mtls/` records one 20-client, one-round signed-recipe training run:

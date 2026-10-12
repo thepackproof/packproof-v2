@@ -16,6 +16,13 @@ python3 -m venv /tmp/packproof-vision
 
 Install a controlled Tesseract build for OCR; the recorded experiment used Tesseract 5.3.4 with English language data. Missing Tesseract yields explicit unavailable OCR diagnostics while preserving other observations. No automatic model or language downloads occur. The hash lock targets Linux x86-64 CPython 3.12. Other platforms must create and review a matching wheel lock, not silently substitute dependencies. The simpler `requirements.txt` excludes optional COLMAP; `requirements-sfm.txt` includes it.
 
+New ProofSight/ProofPrint worker results also record the observed Tesseract executable
+SHA-256, explicit `eng.traineddata` SHA-256 and version. Missing/inaccessible runtime
+files remain `UNAVAILABLE`/`INCOMPLETE`; filesystem paths are not exported. Hashing
+has byte caps and metadata commands have deadlines. These hashes identify observed
+runtime bytes, not an approved runtime or an OCR accuracy claim. A reviewed image and
+language-data allowlist remains a separate deployment prerequisite.
+
 ## Adapter contract
 
 ```sh

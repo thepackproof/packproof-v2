@@ -13,7 +13,7 @@ export async function executableInventory(deps:RndDeps,feature:Feature) {
   inventory[`backend/${name}`]=sha256Hex(await readFile(source).catch(()=>readFile(compiled)));
  }
  inventory.contracts=sha256Hex(await readFile(new URL('../../../packages/evidence-contracts/contracts.mjs',import.meta.url)));
- for(const name of ['method','config','enrollment','learning-registry','platform-assurance']){
+ for(const name of ['method','config','enrollment','learning-registry','platform-assurance','witness-lease']){
   const compiled=new URL(`./${name}.js`,import.meta.url);
    inventory[`backend/${name}`]=sha256Hex(await readFile(fileURLToPath(compiled).replace(/\.js$/,'.ts')).catch(()=>readFile(compiled)));
  }
@@ -22,7 +22,7 @@ export async function executableInventory(deps:RndDeps,feature:Feature) {
  if(script){
   const entry=feature==='proofshield'?path.resolve(path.dirname(script),'../privacy/redact.py'):script;
   inventory.worker=sha256Hex(await readFile(entry));
-  if(feature!=='proofshield'&&feature!=='proofwitness')for(const name of ['engine.py','sfm.py','policy.json']){
+  if(feature!=='proofshield'&&feature!=='proofwitness')for(const name of ['engine.py','sfm.py','enrollment.py','action_model.py','segmentation.py','ocr_runtime.py','policy.json']){
    try{inventory[name]=sha256Hex(await readFile(path.join(path.dirname(script),name)));}catch{inventory[name]='ABSENT';}
   }
  }

@@ -58,10 +58,10 @@ checks = {
     'privateTmpWritable': private_tmp_writable,
     'configuredAddressSpaceLimit': limits['AS'] == [2147483648, 2147483648],
     'configuredCpuLimit': limits['CPU'] == [55, 55],
-    'configuredFileSizeLimit': limits['FSIZE'] == [33554432, 33554432],
+    'configuredFileSizeLimit': limits['FSIZE'] == [134217728, 134217728],
     'configuredFdLimit': limits['NOFILE'] == [128, 128],
     'addressSpaceAllocationDenied': bounded_child("import mmap\ntry:mmap.mmap(-1,3*1024**3)\nexcept (OSError,ValueError):print('DENIED')"),
-    'fileSizeGrowthDenied': bounded_child("import os,errno\nf=os.open('limit-file.bin',os.O_WRONLY|os.O_CREAT,0o600)\ntry:os.ftruncate(f,33554433)\nexcept OSError as e:\n if e.errno==errno.EFBIG:print('DENIED')\nfinally:os.close(f)"),
+    'fileSizeGrowthDenied': bounded_child("import os,errno\nf=os.open('limit-file.bin',os.O_WRONLY|os.O_CREAT,0o600)\ntry:os.ftruncate(f,134217729)\nexcept OSError as e:\n if e.errno==errno.EFBIG:print('DENIED')\nfinally:os.close(f)"),
     'fdExhaustionDenied': bounded_child("import os,errno\nfds=[]\ntry:\n for i in range(129):fds.append(os.open('/dev/null',os.O_RDONLY))\nexcept OSError as e:\n if e.errno==errno.EMFILE:print('DENIED')\nfinally:\n for fd in fds:os.close(fd)"),
 }
 print(json.dumps({'checks': checks, 'limits': limits, 'passed': all(checks.values())}))

@@ -47,7 +47,7 @@ export function sandboxCommand(argv) {
   '--setenv','PATH','/usr/bin:/bin','--setenv','HOME',job,'--setenv','TMPDIR','/tmp',
   '--setenv','PYTHONNOUSERSITE','1','--setenv','PYTHONDONTWRITEBYTECODE','1',
   '--setenv','OMP_NUM_THREADS','1','--setenv','OPENBLAS_NUM_THREADS','1',
-  '--','/usr/bin/prlimit','--as=2147483648','--cpu=55','--fsize=33554432','--nofile=128','--',program,scriptPath,...args);
+  '--','/usr/bin/prlimit','--as=2147483648','--cpu=55','--fsize=134217728','--nofile=128','--',program,scriptPath,...args);
  return {program:'/usr/bin/bwrap',args:mounts};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {

@@ -47,6 +47,9 @@ runtime/code mounts, and writable job/private temporary space. Child processes
 actually attempt address-space allocation, file growth and descriptor exhaustion;
 the CPU limit is inspected, without consuming its full 55-second budget. These are
 per-process/per-file limits, not an aggregate process-tree memory or disk quota.
+There is no per-job process-count/cgroup quota in this launcher. The file-size ceiling
+is 128 MiB, matching admitted source snapshots; the probe includes a valid synthetic
+PNG above 32 MiB to catch accidental rejection of that admitted input range.
 
 The same run executes the real vision worker on a committed synthetic image, rejects
 a malformed synthetic image without issuing a finding, and creates a real unsigned,

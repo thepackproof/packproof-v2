@@ -59,7 +59,7 @@ jobs:
         with:
           node-version: 22
       - name: Test research branch and source distribution interlocks
-        run: node --test scripts/rnd-release-guard.test.mjs scripts/rnd-runtime.test.mjs scripts/rnd-check-scope.test.mjs
+        run: node --test scripts/rnd-release-guard.test.mjs scripts/rnd-runtime.test.mjs scripts/rnd-check-scope.test.mjs scripts/rnd-source-text.test.mjs
       - name: Select checks affected by this source change
         id: scope
         run: node scripts/rnd-check-scope.mjs
@@ -129,7 +129,7 @@ jobs:
           node --test verifier/test_rnd_bundle.mjs
           /tmp/packproof-privacy-venv/bin/python -m unittest discover -s verifier -p 'test_*.py'
       - name: Run actual bounded vision and canonicalization protocols
-        run: /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training research.benchmarks.test_worker_limits research.benchmarks.test_video_coordinates -v
+        run: /tmp/packproof-vision-venv/bin/python -m unittest research.benchmarks.test_protocol research.benchmarks.test_canonical research.benchmarks.test_training research.benchmarks.test_worker_limits research.benchmarks.test_video_coordinates research.benchmarks.test_ocr_runtime -v
       - name: Run redaction and private witness protocols
         run: /tmp/packproof-privacy-venv/bin/python -m unittest research.privacy.test_redact research.witness.test_witness -v
       - name: Typecheck backend

@@ -9,6 +9,7 @@ import type { RndDeps,AnalysisRow,WorkerResult,Source } from './types.js';
 import { evidenceMatrix } from './matrix.js';
 import { getLearningSummary } from './learning-registry.js';
 import { executeZkAnalysis } from './zk-service.js';
+import type { WitnessCheckpoint } from './witness-lease.js';
 
 export async function boundedProcess(program:string,args:string[],timeoutMs=60_000,maxOutput=1_048_576,sandbox?:{program:string;args:string[]}):Promise<string> {
  return new Promise((resolve,reject)=>{
@@ -23,12 +24,16 @@ export async function boundedProcess(program:string,args:string[],timeoutMs=60_0
   child.on('close',code=>{clearTimeout(timer);if(settled)return;settled=true;if(failure||code!==0)reject(Object.assign(new Error('Worker execution failed'),{code:failure??'RND_WORKER_FAILED'}));else resolve(stdout);});
  });
 }
-async function witnessStage(program:string,args:string[],stage:'APPEND'|'INCLUSION'|'CHECKPOINT'|'CONSISTENCY'|'OPERATOR'|'VERIFICATION') {
- try{return await boundedProcess(program,args);}catch(error){
+export async function witnessStage(program:string,args:string[],stage:'APPEND'|'INCLUSION'|'CHECKPOINT'|'CONSISTENCY'|'OPERATOR'|'VERIFICATION',checkpoint?:WitnessCheckpoint) {
+ const timeout=checkpoint?await checkpoint():60_000;
+ let result:string;
+ try{result=await boundedProcess(program,args,timeout);}catch(error){
   const original=error&&typeof error==='object'&&'code'in error?String(error.code):'';
   const reason=original==='RND_WORKER_TIMEOUT'?'TIMEOUT':original==='RND_WORKER_UNAVAILABLE'?'UNAVAILABLE':original==='RND_WORKER_OUTPUT_LIMIT'?'OUTPUT_LIMIT':'FAILED';
   throw Object.assign(new Error('Research witness stage requires attention'),{code:`RND_WITNESS_${stage}_${reason}`});
  }
+ if(checkpoint)await checkpoint();
+ return result;
 }
 export async function materializeSources(deps:RndDeps,sources:Source[],directory:string) {
  const total=sources.reduce((n,s)=>n+s.byteLength,0);
@@ -102,34 +107,35 @@ export async function shipmentObservations(deps:RndDeps,job:Pick<AnalysisRow,'in
  for(const label of labels){const source=job.input_json.sources.find(s=>s.captureSessionId===label.session_id);if(source)observations.push({type:'CAPTURE_LABEL_READING',channel:'tracking',sourceRefs:[{sourceId:source.sourceId,timeMs:label.detected_at_ms}],findingState:'RECORDED',qualified:false,attribution:'CLIENT_REPORTED_DECODER',recordId:label.id,observedAt:new Date(label.received_at as string).toISOString(),value:{trackingNumber:label.tracking_number,carrier:label.carrier_hint,barcodeFormat:label.barcode_format},limitations:['Client-reported label decoding is an observation, not an independently authenticated label or parcel identity.']});}
  return observations;
 }
-export async function executeVision(deps:RndDeps,job:AnalysisRow,mediaOnly=false):Promise<WorkerResult> {
+export async function executeVision(deps:RndDeps,job:AnalysisRow,mediaOnly=false,witnessCheckpoint?:WitnessCheckpoint):Promise<WorkerResult> {
  if(job.feature==='proofcollective')return getLearningSummary(deps,job);
  if(job.feature==='proofwitness'){
   const witness=deps.rnd?.witness;if(!witness)bad('RND_SERVICE_IDENTITY_REQUIRED','Configure the private witness service identity and pinned trust policy');
+  const runStage=(args:string[],stage:Parameters<typeof witnessStage>[2])=>witnessStage(witness.python,args,stage,witnessCheckpoint);
   const directory=await mkdtemp(path.join(tmpdir(),'packproof-witness-'));
   try{
    const policy=parseStrictJson(await readFile(witness.trustPolicyFile,'utf8')) as Record<string,unknown>;
    const params=job.input_json.parameters;
-   const receipt=parseStrictJson(await witnessStage(witness.python,[witness.script,'append','--record-digest',String(params.recordDigest),'--blind',String(params.blind),'--log-db',witness.logDb,'--log-key',witness.logKey,'--log-id',witness.logId,'--policy-id',String(policy.policyId)],'APPEND')) as Record<string,unknown>;
+   const receipt=parseStrictJson(await runStage([witness.script,'append','--record-digest',String(params.recordDigest),'--blind',String(params.blind),'--log-db',witness.logDb,'--log-key',witness.logKey,'--log-id',witness.logId,'--policy-id',String(policy.policyId)],'APPEND')) as Record<string,unknown>;
    const receiptPath=path.join(directory,'receipt.json');await writeFile(receiptPath,canonicalize(receipt),{mode:0o600});
-   let verification=parseStrictJson(await witnessStage(witness.python,[witness.script,'verify-inclusion',receiptPath,'--policy',witness.trustPolicyFile,'--record-digest',String(params.recordDigest)],'INCLUSION')) as Record<string,unknown>;
+   let verification=parseStrictJson(await runStage([witness.script,'verify-inclusion',receiptPath,'--policy',witness.trustPolicyFile,'--record-digest',String(params.recordDigest)],'INCLUSION')) as Record<string,unknown>;
    if(verification.valid!==true||verification.publicationState!=='INCLUDED')bad('RND_WITNESS_INVALID','Log inclusion could not be independently verified');
    if(witness.operators){
     const required=policy.requiredOperators,keys=Object.values(policy.witnessKeys as Record<string,Record<string,unknown>>??{});
     if(witness.operators.length!==2||new Set(witness.operators.map(o=>o.operatorId)).size!==2||policy.testOnly!==true||!Array.isArray(required)||required.length!==2||witness.operators.some(o=>!required.includes(o.operatorId)||!keys.some(k=>k.operatorId===o.operatorId&&k.testOnly===true&&k.independent===false)))bad('RND_WITNESS_POLICY','Locally controlled witness keys require two named test-only, non-independent trust entries');
     const checkpoint=receipt.checkpoint as Record<string,unknown>,signatures:unknown[]=[],links:unknown[]=[];
     for(const [index,operator] of witness.operators.entries()){
-     const previous=parseStrictJson(await witnessStage(witness.python,[witness.script,'checkpoint','--state-db',operator.stateDb,'--log-id',witness.logId,'--operator-id',operator.operatorId],'CHECKPOINT')) as Record<string,unknown>|null;
+     const previous=parseStrictJson(await runStage([witness.script,'checkpoint','--state-db',operator.stateDb,'--log-id',witness.logId,'--operator-id',operator.operatorId],'CHECKPOINT')) as Record<string,unknown>|null;
      const args=[witness.script,'witness',receiptPath,'--policy',witness.trustPolicyFile,'--state-db',operator.stateDb,'--key',operator.keyFile,'--operator-id',operator.operatorId];
      if(previous&&Number(previous.treeSize)<Number(checkpoint.treeSize)){
-      const proof=parseStrictJson(await witnessStage(witness.python,[witness.script,'consistency','--log-db',witness.logDb,'--old-size',String(previous.treeSize),'--new-size',String(checkpoint.treeSize)],'CONSISTENCY'));
+      const proof=parseStrictJson(await runStage([witness.script,'consistency','--log-db',witness.logDb,'--old-size',String(previous.treeSize),'--new-size',String(checkpoint.treeSize)],'CONSISTENCY'));
       const proofPath=path.join(directory,`consistency-${index}.json`);await writeFile(proofPath,canonicalize(proof),{mode:0o600});args.push('--consistency-proof',proofPath);links.push({previousCheckpoint:previous,checkpoint,proof});
      }
-     signatures.push(parseStrictJson(await witnessStage(witness.python,args,'OPERATOR')));
+     signatures.push(parseStrictJson(await runStage(args,'OPERATOR')));
     }
     receipt.witnessSignatures=signatures;receipt.consistencyLinks=links;receipt.publicationState='WITNESSED';
     await writeFile(receiptPath,canonicalize(receipt),{mode:0o600});
-    verification=parseStrictJson(await witnessStage(witness.python,[witness.script,'verify',receiptPath,'--policy',witness.trustPolicyFile,'--record-digest',String(params.recordDigest)],'VERIFICATION')) as Record<string,unknown>;
+    verification=parseStrictJson(await runStage([witness.script,'verify',receiptPath,'--policy',witness.trustPolicyFile,'--record-digest',String(params.recordDigest)],'VERIFICATION')) as Record<string,unknown>;
     if(verification.valid!==true||verification.assurance!=='TEST_WITNESSED'||verification.independentOperatorCount!==0)bad('RND_WITNESS_INVALID','Controlled witness verification failed');
    }
    const {blind,recordDigest,...parameters}=params;

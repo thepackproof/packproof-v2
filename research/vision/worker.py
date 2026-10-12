@@ -124,6 +124,7 @@ def process(job, root, output):
     import cv2
     import numpy as np
     import rfc8785
+    from ocr_runtime import observed_ocr_runtime
     cv2.setNumThreads(1); cv2.setRNGSeed(173)
     if job.get('schemaVersion')!='packproof.vision-job.v1':
         raise ValueError('UNSUPPORTED_JOB_SCHEMA')
@@ -165,6 +166,7 @@ def process(job, root, output):
                        'provenance':{'sources':inventory,'modelDigest':('sha256:'+result.get('diagnostics',{}).get('modelInference',{}).get('sha256','')) if result.get('diagnostics',{}).get('modelInference',{}).get('sha256') else None,
                                      'modelReleaseId':result.get('diagnostics',{}).get('modelInference',{}).get('releaseId'),'sourceInventoryDigest':hashlib.sha256(rfc8785.dumps(inventory)).hexdigest(),
                                      'opencvVersion':cv2.__version__,'numpyVersion':np.__version__,'pythonVersion':sys.version.split()[0],
+                                     'ocrRuntime':observed_ocr_runtime() if feature in ('proofsight','proofprint') else {'state':'NOT_USED'},
                                      'decoderBuildDigest':hashlib.sha256(cv2.getBuildInformation().encode()).hexdigest(),
                                      'reconstructionExecutableDigest':digest(Path(__file__).with_name('sfm.py')),
                                      'enrollmentExecutableDigest':digest(Path(__file__).with_name('enrollment.py')),

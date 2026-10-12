@@ -12,6 +12,7 @@ import { executeVision,shipmentObservations } from './worker.js';
 import { assertSystemAdmin } from '../admin/auth.js';
 import { executableInventory } from './method.js';
 import { bindEnrollmentComparison,onEnrollmentAnalysisCompleted } from './enrollment.js';
+import { witnessLeaseCheckpoint } from './witness-lease.js';
 
 export const POLICY='packproof.rnd.conservative.v1';
 export const sourceRef=(s:Source):SourceRef=>({sourceId:s.sourceId,proofId:s.proofId,objectKey:s.objectKey,objectVersionId:s.objectVersionId,sha256:`sha256:${s.sha256}`,byteLength:s.byteLength,mimeType:s.mimeType,captureSessionId:s.captureSessionId,relationship:s.relationship??(s.captureSessionId?'ORIGINAL_RECORDING':'PARTICIPANT_IMPORT'),retentionState:'AVAILABLE',...(s.frameReference?{frameReference:{sampleId:s.frameReference.sampleId===undefined?null:String(s.frameReference.sampleId),offsetMs:typeof s.frameReference.offsetMs==='number'?s.frameReference.offsetMs:typeof s.frameReference.mediaTimeMs==='number'?s.frameReference.mediaTimeMs:null,clockDomain:typeof s.frameReference.clockDomain==='string'?s.frameReference.clockDomain:null,decoderBuild:null,rotation:typeof s.frameReference.rotation==='number'?s.frameReference.rotation:typeof s.frameReference.rotationDegrees==='number'?s.frameReference.rotationDegrees:null,colorConversion:typeof s.frameReference.colorConversion==='string'?s.frameReference.colorConversion:null}}:{})});
@@ -139,7 +140,10 @@ export async function runRndWorkerOnce(deps:RndDeps,adapter?:((job:AnalysisRow)=
   await authorized(deps.db,job.proof_id,job.actor_id);await requireConsent(deps.db,job.proof_id,job.actor_id);
   const method=await executableInventory(deps,job.feature);
   if(!adapter&&job.input_json.executableDigest!==method.digest)bad('RND_EXECUTABLE_CHANGED','Queued executable differs from the frozen job; request a new analysis with the updated method',409);
-  const result=adapter?await adapter(job):await executeVision(deps,job);
+  const checkpoint=job.feature==='proofwitness'?witnessLeaseCheckpoint(deps,job):undefined;
+  if(checkpoint)await checkpoint();
+  const result=adapter?await adapter(job):await executeVision(deps,job,false,checkpoint);
+  if(checkpoint)await checkpoint();
   result.provenance={...result.provenance,executableInventory:method.files};
   const executableDigest=adapter?sha256Hex('TEST_INJECTED_ADAPTER'):method.digest;
   await completeAnalysis(deps,job,result,executableDigest);
