@@ -62,6 +62,18 @@ and operator; neither establishes independent partner control or isolation from 
 operator's memory. A pilot still requires separate partner-controlled machines,
 reviewed identity/key management and deployment-specific attack qualification.
 
+`process-lab --clients 20 --run-id 1 --output /private/persistent-lab` additionally
+executes separately stateful participant processes over those TLS sockets. It exercises
+the reusable profile-bound `PartnerEndpoint`, `ProfileGrid` and `coordinate` APIs,
+signed exact enrollment/model/recipe/dataset bindings, monotonic restart admission,
+fresh participant consent checkpoints, cumulative accounting and existing candidate
+registry. Reuse the directory and increase the run ID on every attempt. This mode
+never promotes models automatically. It still has one local operator, synthetic data
+and zero independently controlled organizations; POSIX/Linux execution is required.
+See [TRANSPORT.md](TRANSPORT.md) for executable commands, resource bounds, failure
+tests and the non-atomic distributed withdrawal boundary. Remote deployment,
+enrollment, protected authorities and scientific qualification remain separate gates.
+
 `governance.py` stores append-only consent/withdrawal and budget events in SQLite,
 serializes reservations with `BEGIN IMMEDIATE`, and composes Google's pinned
 `dp-accounting` Gaussian events for each stable partner identity across all campaign

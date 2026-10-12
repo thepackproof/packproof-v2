@@ -115,27 +115,73 @@ actual partner consent and useful representative task evaluation. The coordinato
 still sees the pre-noise aggregate. TLS does not add distributed-noise privacy or prove
 honest clients, clipping, camera provenance, model utility, or organizational diversity.
 
-## Remaining execution engineering versus qualification
+## Profile-bound endpoint/coordinator and separate-process lab
 
-The operational TLS profile is an adapter construction point, not a complete remote
-training runner. `secure_aggregate()` still creates `LocalSimulationGrid`; the CLI
-offers only `simulate` and `verify`. Even its real TLS mode creates every partner as a
-thread in one process with a synthetic local dataset. No end-to-end multi-process or
-separately hosted partner round is established by the current measurements.
+`process_runner.py` connects the validated operational profile to reusable
+`PartnerEndpoint`, `ProfileGrid`, and `coordinate` entry points. A participant retains
+one Flower Context for its admitted run, calls unmodified `secaggplus_mod`, and loads
+only its own bounded local NPZ through the exact-byte consent loader. The coordinator
+Grid uses the profile's actual peer addresses/certificate pins; it neither calls local
+training functions nor loads participant data. Both verify the signed input model,
+recipe, run ID, complete enrollment digest (including pins and endpoints), participant
+mapping and exact dataset digest. A different key, model, roster, run or purpose fails.
+The only supported artifact scope remains synthetic local research.
 
-An operational research runner still needs a coordinator Grid bound to the configured
-remote peer roster, partner-owned persistent Flower contexts and consent authorities,
-signed model/recipe delivery and exact dataset binding, and coordinated monotonic run
-IDs across restart/withdrawal/certificate changes. Its bounded integration tests must
-cover real separate processes, incomplete rounds, restart admission, unavailable peers,
-consent withdrawal and no release when aggregation or privacy accounting fails. Such
-local multi-process tests would be achievable software evidence, but still represent
-one laboratory operator unless independent control is actually established.
+The lab command provisions synthetic loopback fixtures and invokes those same APIs:
+
+```sh
+PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m proofcollective.cli process-lab --clients 20 --run-id 1 --output /tmp/proofcollective-process-lab
+PYTHONPATH=research/federated /tmp/packproof-federated-venv/bin/python -m pytest research/federated/tests/test_process_runner.py -q
+```
+
+Keep this output directory and use a strictly increasing `--run-id` on subsequent
+attempts. Each endpoint and the coordinator consume persistent admission IDs. A crash
+or incomplete round cannot resume its old cryptographic context or reset replay
+admission; a new signed run, current profiles and privacy reservation are required.
+Existing generated datasets require matching lab provenance and existing exact consent.
+The wrapper never automatically consents to preexisting arbitrary files, resets a
+withdrawal, or refunds failed attempts. No remote partner is contacted by this command.
+
+Twenty to 64 child processes host separately stateful endpoints, each with a TLS server
+thread. Readiness IPC carries only status, node number and process ID; training examples,
+labels and individual updates never travel over that pipe. Linux uses forkserver with
+code/dependency preload for copy-on-write memory sharing; other supported runtimes use
+spawn. This avoids inheriting the caller's live keys, arrays and database handles.
+Native BLAS/OpenMP worker counts are one before package imports. Startup is bounded to
+90 seconds, endpoints self-expire after 300 seconds, stage/checkpoint acceptance is
+bounded to 30 seconds, and existing TLS connect/frame deadlines limit in-flight work.
+Cleanup first stops all endpoints, then terminates/kills stragglers with bounded waits.
+This is **not an OS sandbox** or an isolation claim against the single lab operator.
+The private-file permission guards require POSIX; Linux CI executes the TLS/process
+tests. Windows dependency/static checks cannot qualify that execution path.
+
+The coordinator reserves cumulative privacy spend before protocol work. Every local
+endpoint reads its consent ledger afresh before/after stages and local training. After
+unmasking, an additional authenticated checkpoint checks each participant's own current
+consent, bound to the proposed candidate digest. A failure, unavailable peer or rejected
+checkpoint aborts candidate storage. This conservative runner aborts on any transport
+error rather than treating a consent rejection as an ordinary dropout. The original
+SecAgg+ dropout tests still exercise its 20-contributor reconstruction floor.
+
+Checkpoint acknowledgments are **not a distributed atomic withdrawal transaction**:
+withdrawal after a participant's last acknowledgment may race final storage. A governed
+deployment requires an agreed commit/withdrawal boundary and separate authority review.
+The coordinator sees the pre-noise aggregate; only centrally noised candidates are
+stored. The runner uses the existing signed `proofcollective-candidate/v1` registry and
+does not automatically promote any model. Existing signature, privacy, utility and
+rollback gates remain unchanged. Failed runs leave no candidate/active registry change.
+
+The focused suite covers signed input/enrollment changes, actual 20-process TLS/SecAgg+
+rounds, increasing restart IDs, killed endpoints, coordinator and separate participant
+ledger withdrawal (including after unmask), exact-byte dataset changes, exhausted
+privacy budgets, no candidate on failure and immutable earlier candidates. Test results
+must be cited from the exact execution source; the historical measurements below do
+not establish these new checks.
 
 Separate qualification requires independently enrolled organizations, their protected
 data/keys and consent, reviewed privacy/accounting/threat assumptions, representative
 held-out utility and operator recovery exercises. Neither the profile loader nor a
-future successful laboratory harness can supply these governance or scientific facts.
+successful laboratory harness can supply these governance or scientific facts.
 No remote partner service, new cloud resource or pilot authorization is created here.
 
 ## Measured local result

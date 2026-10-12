@@ -146,11 +146,13 @@ def secure_aggregate(agents:list[LocalAgent],*,dropout:set[int]|None=None,tamper
 
 
 def _run_aggregate(agents:list[LocalAgent],grid:LocalSimulationGrid,clip:float) -> tuple[np.ndarray,dict]:
+    run_id=getattr(grid,'run_id',1)
+    TaskIdentity.run_id=run_id;TaskIdentity.node_id=0;TaskIdentity.task_id=0
     manager=SimpleClientManager()
     for agent in agents:
-        manager.register(GridClientProxy(agent.node_id,grid,1))
+        manager.register(GridClientProxy(agent.node_id,grid,run_id))
     strategy=FedAvg(fraction_fit=1,min_fit_clients=len(agents),min_available_clients=len(agents),fraction_evaluate=0,accept_failures=True,fit_metrics_aggregation_fn=lambda _: {})
-    ctx=LegacyContext(Context(1,0,{},RecordDict(),{}),strategy=strategy,client_manager=manager)
+    ctx=LegacyContext(Context(run_id,0,{},RecordDict(),{}),strategy=strategy,client_manager=manager)
     ctx.state.config_records[MAIN_CONFIGS_RECORD]=ConfigRecord({WorkflowKey.CURRENT_ROUND:1})
     ctx.state.array_records[MAIN_PARAMS_RECORD]=compat.parameters_to_arrayrecord(ndarrays_to_parameters([np.zeros(4)]),True)
     workflow=SecAggPlusWorkflow(num_shares=len(agents),reconstruction_threshold=(1.0 if len(agents)==MIN_CONTRIBUTORS else MIN_CONTRIBUTORS),max_weight=1.0,clipping_range=float(clip),quantization_range=QUANTIZATION_RANGE,modulus_range=MODULUS_RANGE,timeout=30)
@@ -172,4 +174,5 @@ def _run_aggregate(agents:list[LocalAgent],grid:LocalSimulationGrid,clip:float) 
     slack=np.sqrt(aggregate.size)*2*clip/QUANTIZATION_RANGE
     if not np.isfinite(aggregate).all() or np.linalg.norm(aggregate)>clip+slack:
         raise GateError('Aggregate sanity limit exceeded; malicious clipping not verifiable')
-    return aggregate,{'protocol':'Flower 1.39.0 SecAggPlusWorkflow + secaggplus_mod','contributors':contributors,'independentOrganizations':0,'topology':'all-to-all shares','reconstructionThreshold':MIN_CONTRIBUTORS,'quantizationRange':QUANTIZATION_RANGE,'quantizationL2Slack':float(slack),'transport':grid.link.description if isinstance(grid.link,LocalMtlsLink) else 'Fernet authenticated encrypted protobuf in process; simulation only','tlsConnections':grid.link.client.connections if isinstance(grid.link,LocalMtlsLink) else 0,'stages':grid.transcript,'rawSamplesUploaded':0,'individualUpdatesLogged':0}
+    transport=grid.transport_report() if hasattr(grid,'transport_report') else {'transport':grid.link.description if isinstance(grid.link,LocalMtlsLink) else 'Fernet authenticated encrypted protobuf in process; simulation only','tlsConnections':grid.link.client.connections if isinstance(grid.link,LocalMtlsLink) else 0}
+    return aggregate,{'protocol':'Flower 1.39.0 SecAggPlusWorkflow + secaggplus_mod','contributors':contributors,'independentOrganizations':0,'topology':'all-to-all shares','reconstructionThreshold':MIN_CONTRIBUTORS,'quantizationRange':QUANTIZATION_RANGE,'quantizationL2Slack':float(slack),**transport,'stages':grid.transcript,'rawSamplesUploaded':0,'individualUpdatesLogged':0}
