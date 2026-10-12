@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "packproof.distributed-noise-planning.v1",
+  "enrolledContributors": 24,
+  "minimumSurvivors": 20,
+  "maximumColludingSurvivors": 4,
+  "clipL2": 1,
+  "targetNoiseMultiplier": 4
+}

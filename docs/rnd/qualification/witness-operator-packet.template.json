@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "packproof.witness-operator-packet.v1",
+  "policySha256": null,
+  "logOrganizationId": null,
+  "operators": [
+    {
+      "operatorId": null,
+      "organizationId": null,
+      "publicKeyIds": [],
+      "serviceEndpoint": null,
+      "protocol": "packproof-pymerkle-json-v1",
+      "checkpointMaxAgeSeconds": null,
+      "retentionDays": null,
+      "incidentContactRole": null,
+      "keyExchangeEvidenceSha256": null,
+      "agreementEvidenceSha256": null,
+      "restoreExerciseEvidenceSha256": null
+    },
+    {
+      "operatorId": null,
+      "organizationId": null,
+      "publicKeyIds": [],
+      "serviceEndpoint": null,
+      "protocol": "packproof-pymerkle-json-v1",
+      "checkpointMaxAgeSeconds": null,
+      "retentionDays": null,
+      "incidentContactRole": null,
+      "keyExchangeEvidenceSha256": null,
+      "agreementEvidenceSha256": null,
+      "restoreExerciseEvidenceSha256": null
+    }
+  ],
+  "independenceReview": {
+    "reviewerRole": null,
+    "evidenceSha256": null
+  }
+}

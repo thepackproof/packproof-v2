@@ -2,6 +2,8 @@
 
 Engineering status and claim eligibility are separate. G0 means isolated and contract-safe; G1 an executable slice; G2 measured physical/technical feasibility; G3 frozen blind evaluation plus security/privacy review; G4 consented pilot with usability/cost/operations; G5 eligibility for separately authorized release. None grants production authorization by itself.
 
+The [qualification preparation packet](qualification/README.md) now supplies executable offline intake, reviewer assignment/scoring, supported proof measurements, witness enrollment checks and a distributed-noise analysis for all eleven outstanding tickets. Its [validation receipt](validation/2026-10-11-qualification-readiness.json) binds the new tests and measured outputs to their source. Physical collection, human studies and independent review remain unperformed. The owner has an S24 Ultra and PC, will connect the phone later, and has deferred iOS.
+
 | Track | Evidence still requiring physical, independent or specialist access |
 |---|---|
 | F01 | 240-label/60-carton optical screening, actual same-content copies and transfers, cross-phone S24 Ultra/A16 plus other Android/iPhone profiles, independent rare-error trials |
