@@ -27,12 +27,12 @@ async function checkConcurrentMigrations(first: Database, second: Database) {
 }
 
 describe("concurrent application startup migrations", () => {
-  it("remains ready across only the exact reviewed additive measurement receipt", async () => {
+  it("remains ready across only exact reviewed additive receipts", async () => {
     const opened = await createPgliteDatabase();
     try {
       await migrate(opened.db);
       const inventory = await migrationInventory();
-      const future = FORWARD_COMPATIBLE_MIGRATIONS[0]!;
+      for (const future of FORWARD_COMPATIBLE_MIGRATIONS) {
       const sourceEntry = inventory.find(row => row.id === future.id);
       if (sourceEntry) expect(sourceEntry.checksum).toBe(future.checksum);
       await expect(assertSchemaCurrent(opened.db)).resolves.toBeUndefined();
@@ -46,6 +46,7 @@ describe("concurrent application startup migrations", () => {
       await opened.db.query("UPDATE schema_migrations SET checksum=$2 WHERE id=$1", [future.id, '0'.repeat(64)]);
       await expect(assertSchemaCurrent(opened.db)).rejects.toThrow();
       await opened.db.query("UPDATE schema_migrations SET checksum=$2 WHERE id=$1", [future.id, future.checksum]);
+      }
       await opened.db.query("INSERT INTO schema_migrations(id,applied_at,checksum) VALUES('077_unreviewed',NOW(),$1)", ['a'.repeat(64)]);
       await expect(assertSchemaCurrent(opened.db)).rejects.toThrow('outside this release compatibility envelope');
       await opened.db.query("DELETE FROM schema_migrations WHERE id='077_unreviewed'");
