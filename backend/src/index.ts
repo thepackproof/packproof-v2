@@ -14,6 +14,7 @@ import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
 import { assertRealDataRuntime } from './operations/integration-readiness.js';
+import { assertProductionRuntime } from './operations/production-runtime.js';
 import { dispatchCaptureShipments } from './workers/capture-shipment-worker.js';
 import { startOperationsWorkers } from './operations/runtime-jobs.js';
 import { assertSchemaCurrent } from './db/migrate.js';
@@ -55,6 +56,7 @@ loadEnvFile(path.resolve(process.cwd()));
 assertRealDataRuntime();
 
 const config = loadConfig();
+assertProductionRuntime(config);
 const rnd=rndConfigFromEnv();
 assertResearchRuntimeIsolation(config,rnd);
 // Validate signing configuration before opening the database or starting workers.
@@ -92,14 +94,14 @@ if(accountRuntimes.shopify.enabled && accountRuntimes.shopify.client) integratio
   createShopifyAccessTokenRunner(opened.db,systemClock,{
     registry:createConnectedAccountRegistry(accountRuntimes),credentials:credentialStore,
     syncShopifyWebhooks:accountRuntimes.shopify.syncWebhooks,
-    packproofEnvironment:config.release.environment,
+    packproofEnvironment:config.credentialNamespace ?? config.release.environment,
     webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
   })));
 if(ebayRuntime.enabled) integrations.registerCommerce(createEbayCommerceAdapter(opened.db,systemClock,ebayRuntime,credentialStore));
 if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(createEtsyCommerceAdapter(etsyRuntime.client,
   createEtsyAccessTokenRunner(opened.db,systemClock,{
     registry:createConnectedAccountRegistry(accountRuntimes),credentials:credentialStore,
-    packproofEnvironment:config.release.environment,
+    packproofEnvironment:config.credentialNamespace ?? config.release.environment,
     webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
   })));
 const readinessProbes=[
@@ -137,6 +139,7 @@ const app = config.processRole==='worker'?express():createServerApp({
   manifestSigning,
   futurePlatform: futurePlatformFromEnv(process.env),
   releaseIdentity: config.release,
+  credentialNamespace: config.credentialNamespace,
   requireDurableReceipts: config.requireDurableReceipts,
   readinessProbes,
   ebay: ebayRuntime,

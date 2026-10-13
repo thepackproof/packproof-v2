@@ -250,6 +250,7 @@ export interface AppDependencies {
     put?: (credentials: IntegrationCredentials) => void;
   };
   releaseIdentity?: ReleaseIdentity;
+  credentialNamespace?: string;
   ebay?: EbayRuntime;
   shopify?: ShopifyOAuthRuntime;
   etsy?: EtsyRuntime;
@@ -326,7 +327,7 @@ export function createApp(deps: AppDependencies): Express {
     }),
     credentials: credentialStore,
     syncShopifyWebhooks: shopify.syncWebhooks,
-    packproofEnvironment: releaseIdentity.environment,
+    packproofEnvironment: deps.credentialNamespace ?? releaseIdentity.environment,
     webReturnUrl: corsOrigins[0] ? `${corsOrigins[0].replace(/\/$/, "")}/account` : "/account",
   };
   if (etsy.enabled && etsy.client) {

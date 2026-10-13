@@ -33,6 +33,8 @@ export interface AppConfig {
   uploadSecret: string;
   webOrigins: string[];
   credentialStore: "memory" | "env" | "secrets-manager";
+  /** Stable secret namespace; promotion must not relocate existing credentials. */
+  credentialNamespace?: string;
   release: ReleaseIdentity;
   ebay: EbayConfig;
   shopify: ShopifyOAuthConfig;
@@ -138,6 +140,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     uploadSecret: env.PACKPROOF_UPLOAD_SECRET ?? "dev-upload-secret",
     webOrigins: parseWebOrigins(env),
     credentialStore: parseCredentialStoreMode(env),
+    credentialNamespace: parseCredentialNamespace(env),
     release: parseReleaseIdentity(env),
     ebay: parseEbayConfig(env),
     shopify: parseShopifyConfig(env),
@@ -181,6 +184,14 @@ export function parseEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfi
       env.EBAY_DELETION_VERIFICATION_TOKEN?.trim() ||
       null,
   };
+}
+
+export function parseCredentialNamespace(env: NodeJS.ProcessEnv = process.env): string {
+  const value = env.PACKPROOF_CREDENTIAL_NAMESPACE?.trim() || parseReleaseIdentity(env).environment;
+  if (!/^[a-z][a-z0-9-]{0,62}$/.test(value)) {
+    throw new Error("PACKPROOF_CREDENTIAL_NAMESPACE must be a lowercase secret namespace");
+  }
+  return value;
 }
 
 function assertEbayEnabledConfiguration(input: {

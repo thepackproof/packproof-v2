@@ -31,7 +31,7 @@ export function makePlan(snapshot, candidate) {
   const original = config.primaryContainer;
   const env = bindings(original);
   if (env.PACKPROOF_MIGRATE_ON_START !== 'false') fail('AUTOMATIC_MIGRATION_NOT_DISABLED');
-  if (env.PACKPROOF_ENVIRONMENT !== 'staging' || !env.PACKPROOF_WEB_ORIGINS || !env.PACKPROOF_PUBLIC_URL) fail('RUNTIME_CONTEXT_MISSING');
+  if (!['staging','production'].includes(env.PACKPROOF_ENVIRONMENT) || !env.PACKPROOF_WEB_ORIGINS || !env.PACKPROOF_PUBLIC_URL) fail('RUNTIME_CONTEXT_MISSING');
   if (releaseNames.some(name => !Object.hasOwn(env, name))) fail('RELEASE_BINDINGS_MISSING');
   if (snapshot.meta.commit !== env.PACKPROOF_RELEASE_SHA || snapshot.meta.image !== env.PACKPROOF_RELEASE_IMAGE || snapshot.meta.version !== env.PACKPROOF_RELEASE_VERSION || snapshot.meta.image !== original.image) fail('PUBLIC_CONTROL_PLANE_IDENTITY_MISMATCH');
   const imagePrefix = `${TARGET.repository}@sha256:`;

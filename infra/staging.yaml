@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: PackProof V2 staging RDS PostgreSQL, IAM, VPC, and ECS cluster. The API image is deployed onto this foundation.
+Description: PackProof V2 customer foundation with historical staging resource names. Production updates preserve customer resources.
 
 Parameters:
   EvidenceBucket:
@@ -11,6 +11,11 @@ Parameters:
   CognitoClientId:
     Type: String
     Default: 34pnucunllka2jcs8hsq762m5e
+  EbayAppSecretArn:
+    Type: String
+    Description: Existing eBay application secret already authorized for task startup; preserve during foundation updates.
+    Default: arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/staging/integrations/ebay/production/app-Yo42fa
+    AllowedPattern: '^arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/staging/integrations/ebay/production/app-[A-Za-z0-9]{6}$'
 
 Resources:
   Vpc:
@@ -172,11 +177,11 @@ Resources:
       StorageEncrypted: true
       MultiAZ: false
       PubliclyAccessible: false
-      BackupRetentionPeriod: 1
+      BackupRetentionPeriod: 35
       PreferredBackupWindow: "07:00-08:00"
       PreferredMaintenanceWindow: "sun:08:00-sun:09:00"
       AutoMinorVersionUpgrade: true
-      DeletionProtection: false
+      DeletionProtection: true
       MasterUsername: packproof
       ManageMasterUserPassword: true
       VPCSecurityGroups:
@@ -227,6 +232,7 @@ Resources:
                 Resource:
                   - !GetAtt Database.MasterUserSecret.SecretArn
                   - !Ref NotificationSecret
+                  - !Ref EbayAppSecretArn
 
   TaskRole:
     Type: AWS::IAM::Role
