@@ -2,8 +2,8 @@
 
 This kit gathers evidence for the exact candidate. It does not complete tests or
 approve a release. Every gate starts **pending**. A failed, blocked, omitted or
-emulated physical test is not a pass. The production publication gate stays in
-place until the accountable reviewer has the required evidence.
+emulated physical test is not a pass. An explicit release-owner device-check
+exception uses the source/scoped `waived-device-check` record in [RELEASING.md](RELEASING.md), never a fabricated pass. Signing, integrity, privacy and reporting requirements remain in force.
 
 ## Prepare once
 
