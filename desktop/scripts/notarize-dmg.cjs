@@ -28,6 +28,20 @@ async function stapleAndValidate(file, { run = spawnSync, wait = ms => new Promi
   throw failure;
 }
 
+// Validation can contact Apple's ticket service even when a ticket is stapled.
+// Retry only transient service/network failures and never mutate the signed bytes.
+async function validateStapledArtifact(file, { run = spawnSync, wait = ms => new Promise(resolve => setTimeout(resolve, ms)), env = process.env } = {}) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const result = run('xcrun', ['stapler', 'validate', file], { encoding: 'utf8' });
+    if (result.status === 0) return attempt;
+    const diagnostic = safeDiagnostic(result, env);
+    const failure = new Error(`Stapled artifact validation failed (exit ${result.status ?? 'unknown'}, attempt ${attempt}/3): ${diagnostic}`);
+    const transient = /NSURLErrorDomain|network connection was lost|timed out|Error 68|CloudKit's response is inconsistent/i.test(diagnostic);
+    if (!transient || attempt === 3) throw failure;
+    await wait(attempt * 10000);
+  }
+}
+
 // This hook runs BEFORE artifactCreated and update-metadata hashing. Stapling changes bytes.
 module.exports = async function notarizeDiskImage(event) {
   if (process.env.APP_ENV === 'development' || !process.env.APP_ENV || !event.file?.endsWith('.dmg')) return;
@@ -45,3 +59,4 @@ module.exports = async function notarizeDiskImage(event) {
   event.updateInfo = { sha512: sha.digest('base64'), size: fs.statSync(event.file).size };
 };
 module.exports.stapleAndValidate = stapleAndValidate;
+module.exports.validateStapledArtifact = validateStapledArtifact;
