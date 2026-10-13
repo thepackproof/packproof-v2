@@ -1,3 +1,7 @@
+import { gradingCreationKey, gradingCreationRequest, parseGradingCreation, type GradingCreation } from '../experience/grading-creation';
+import { listPhotoDrafts, persistPhotoDraft, readPhotoDraft, retainPhoto } from '../capture/photo-drafts';
+import { photoDraftContext, photoContextKey, submitPhotoDraft, type PhotoDraft, type PhotoDraftContext } from '../capture/photo-draft-model';
+import { recordMobileUxEvent } from '../analytics/mobile-ux-events';
 import { freshProofDestination, savedCaptureDestination } from "../experience/action-routing";
 import { presentationForProof } from "../copy/proof-list";
 import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
@@ -308,12 +312,13 @@ export interface PackProofContextValue {
   confirmImportedPurchase: () => Promise<void>;
   createManualProof: () => Promise<void>;
   selectCreateProof: () => void;
-  createGradingProof: (itemCount: number) => Promise<void>;
+  gradingCreation: GradingCreation | null;
+  createGradingProof: (itemCount?: number, itemTitle?: string) => Promise<void>;
   shareProofLink: () => Promise<void>;
   runWorkflowAction: (action: ProofWorkflowAction, body?: Record<string, unknown>) => Promise<void>;
-  commitGradingCapture: (
-    slots: Array<{ slot: string; uri: string; contentType: string }>,
-  ) => Promise<void>;
+  photoDrafts: PhotoDraft[];
+  retainGradingPhoto: (context: PhotoDraftContext, photo: { slot: string; uri: string; contentType: string }) => Promise<void>;
+  commitGradingCapture: (draft: PhotoDraft) => Promise<void>;
   identifyReference: (reference: string) => Promise<void>;
   continueFromScan: () => Promise<void>;
   savePurchaseDetails: () => Promise<void>;
@@ -443,6 +448,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [manifest, setManifest] = useState<ManifestView | null>(null);
   const [shipmentIntegrity, setShipmentIntegrity] = useState<ShipmentIntegrityView | null>(null);
   const [savedRecordings, setSavedRecordings] = useState<LocalCapture[]>([]);
+  const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
+  const photoSubmissionBusy = useRef(false);
+  const gradingCreateBusy = useRef(false);
+  const [gradingCreation, setGradingCreation] = useState<GradingCreation | null>(null);
   const [captureReviewOnlyReason,setCaptureReviewOnlyReason] = useState<string|null>(null);
   const recoveryConnection = useRef<boolean | null>(null);
   const retryOnConnection = useRef(false);
@@ -474,6 +483,19 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const tokenRef = useRef<string | null>(null);
   const sessionRef = useRef<CachedClientState | null>(null);
+  useEffect(() => {
+    let active = true;
+    setPhotoDrafts([]); setGradingCreation(null);
+    const owner = session;
+    if (owner) void AsyncStorage.getItem(gradingCreationKey(owner.apiBaseUrl, owner.userId)).then(raw => {
+      const operation = parseGradingCreation(raw, owner.apiBaseUrl, owner.userId);
+      if (active && sessionRef.current?.userId === owner.userId && sessionRef.current.apiBaseUrl === owner.apiBaseUrl) setGradingCreation(operation);
+    }).catch(() => { if (active) setError('The saved creation request could not be loaded. Recover it before creating another grading Proof.'); });
+    if (owner) void listPhotoDrafts(owner.apiBaseUrl, owner.userId).then(rows => {
+      if (active && sessionRef.current?.userId === owner.userId && sessionRef.current.apiBaseUrl === owner.apiBaseUrl) setPhotoDrafts(rows);
+    }).catch(() => { if (active) setError('Saved photo details could not be loaded. Originals remain on this device.'); });
+    return () => { active = false; };
+  }, [session?.userId, session?.apiBaseUrl]);
   useEffect(()=>registerStudyAccountReader(()=>{const value=sessionRef.current;return value&&tokenRef.current&&!value.needsReauthentication?{userId:value.userId,apiBaseUrl:value.apiBaseUrl}:null;}),[]);
   useEffect(()=>{updateNativeStudyConnectivity(offline);},[offline,session?.userId,session?.apiBaseUrl,session?.needsReauthentication]);
   const searchGeneration = useRef(0);
@@ -615,7 +637,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     proofRecordViews.current.clear();
     workspaceOffsets.current={home:0,activity:0};activityFilterMemory.current="all"; setWorkspaceFreshAt(null); setWorkspaceReconciled(false); setSelectedTask(null); taskInteractions.current={}; clearMobileUxMetrics(); setScanResult(null);setScanCandidates([]);setScanInput("");setScanPhase("camera");
     setProofsLibrary({...DEFAULT_PROOFS_LIBRARY}); proofsScrollOffset.current = 0;
-    setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]); setCaptureReviewOnlyReason(null);
+    setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]); setPhotoDrafts([]); setCaptureReviewOnlyReason(null);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
       await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
@@ -1211,10 +1233,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     return () => listener.remove();
   }, []);
   useEffect(() => {
-    const idleWorkspace = ['home','proofs','orders','proof'].includes(route.name) || (route.name === 'station' && !session?.stationActive);
+    const idleWorkspace = ['home','proofs','orders','proof','activity'].includes(route.name) || (route.name === 'station' && !session?.stationActive);
     if (!hydrated || !session?.userId || busy || !idleWorkspace || session.captureUri) return;
     const proofId = pendingNotificationProof.current;
-    if (proofId) { pendingNotificationProof.current = null; void run(() => openProof(proofId)); }
+    if (proofId) { pendingNotificationProof.current = null; void value.openProofAction(proofId); }
   }, [hydrated, session?.userId, session?.captureUri, session?.stationActive, busy, route.name, notificationTap]);
 
   // The retry owner lives above screens. Foreground wake and a bounded timer resume saved work
@@ -1370,6 +1392,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
       const row=proofCollection.find(row=>row.proofId===proofId);
       if(row?.accessKind==="RECEIVER") {value.openReceipt(proofId);return;}
       rememberTaskInteraction(proofId); startMobileCaptureEntry();
+      if (offline) { await run(() => openProof(proofId)); return; }
+      if (photoDrafts.some(draft => draft.proofId === proofId && draft.phase !== 'COMPLETE' && draft.userId === sessionRef.current?.userId && draft.apiBaseUrl === sessionRef.current?.apiBaseUrl.replace(/\/+$/, ''))) {
+        await run(() => openProof(proofId)); return;
+      }
       const saved=savedRecordings.find(c=>c.captureProofId===proofId && !["FINALIZED","SUBMITTED"].includes(c.recovery?.phase??""));
       if(saved) {
         if(saved.recovery?.phase==="RECORDING") {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});return;}
@@ -1415,6 +1441,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     captureStatus,
     uploadProgressByProof,
     savedRecordings,
+    photoDrafts: photoDrafts.filter(row => row.userId === session?.userId && row.apiBaseUrl === session?.apiBaseUrl.replace(/\/+$/, "")),
     captureReviewOnlyReason,
     resumeSavedCapture: async capture => run(async () => {
       const current = sessionRef.current;
@@ -1853,25 +1880,34 @@ export function PackProofProvider(props: { children: ReactNode }) {
         }
       }); } finally {manualInFlight.current=false;}
     },
-    createGradingProof: async (itemCount: number) =>
-      run(async () => {
-        if (!sessionRef.current) {
-          return;
+    gradingCreation: gradingCreation?.userId === session?.userId && gradingCreation?.apiBaseUrl === session?.apiBaseUrl.replace(/\/+$/, "") ? gradingCreation : null,
+    createGradingProof: async (itemCount, itemTitle) => {
+      if (gradingCreateBusy.current) return;
+      gradingCreateBusy.current = true;
+      try { await run(async () => {
+        const owner = sessionRef.current;
+        if (!owner) return;
+        if (offline) throw new Error('Reconnect before creating a Proof. Your saved request is retained.');
+        const assertAccount = () => client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
+        const key = gradingCreationKey(owner.apiBaseUrl, owner.userId);
+        let operation = parseGradingCreation(await AsyncStorage.getItem(key), owner.apiBaseUrl, owner.userId);
+        assertAccount();
+        if (operation && itemCount !== undefined) { setGradingCreation(operation); throw new Error('Recover the previous creation request before starting another grading Proof.'); }
+        if (!operation) {
+          if (!Number.isInteger(itemCount) || itemCount! < 1 || itemCount! > 20 || !itemTitle?.trim() || itemTitle.trim().length > 200) throw new Error('Enter an item description and choose between 1 and 20 items.');
+          operation = { schema: 1, userId: owner.userId, apiBaseUrl: owner.apiBaseUrl.replace(/\/+$/, ''), key: newIdempotencyKey(), itemCount: itemCount!, itemTitle: itemTitle.trim() };
+          await AsyncStorage.setItem(key, JSON.stringify(operation)); assertAccount();
+          setGradingCreation(operation);
         }
-        const created = await client.createProof({
-          workflowType: "GRADING_SUBMISSION",
-          itemCount,
-          itemTitle: "Grading submission",
-        });
-        await persist({
-          ...sessionRef.current,
-          proofId: created.proofId,
-          transactionId: created.transactionId,
-        });
-        await refreshProofCollection();
-        await refreshProof(created.proofId);
-        go("proof");
-      }),
+        const created = await client.createProof(gradingCreationRequest(operation)); assertAccount();
+        await persist({ ...sessionRef.current!, proofId: created.proofId, transactionId: created.transactionId }); assertAccount();
+        await refreshProof(created.proofId); assertAccount();
+        await refreshProofCollection(); assertAccount();
+        // Keep the original request until its server record is successfully reopened.
+        await AsyncStorage.removeItem(key); assertAccount(); setGradingCreation(null);
+        go('proof');
+      }); } finally { gradingCreateBusy.current = false; }
+    },
     shareProofLink: async () => { if (proof) go("sharing"); },
     runWorkflowAction: async (action: ProofWorkflowAction, body: Record<string, unknown> = {}) =>
       run(async () => {
@@ -1884,52 +1920,53 @@ export function PackProofProvider(props: { children: ReactNode }) {
         });
         await refreshProof(result.proof.proofId);
       }),
-    commitGradingCapture: async (
-      slots: Array<{ slot: string; uri: string; contentType: string }>,
-    ) =>
-      run(async () => {
-        if (!proof || slots.length === 0) {
-          return;
-        }
-        const serverAction = proof.nextAction;
-        const evidenceType = captureEvidenceType({
-          workflowType: proof.workflowType,
-          captureRecipe: serverAction?.captureRecipe,
-          nextActionType: serverAction?.type,
+    retainGradingPhoto: async (context, photo) => {
+      const owner = sessionRef.current;
+      if (!owner || owner.userId !== context.userId || owner.apiBaseUrl.replace(/\/+$/, '') !== context.apiBaseUrl) throw new Error('Return to the original account to save this photo.');
+      client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
+      const current = proof && photoDraftContext(proof, owner.userId, owner.apiBaseUrl);
+      if (!current || photoContextKey(current) !== photoContextKey(context)) throw new Error('This photo belongs to a different item step. Return to the original Proof.');
+      const draft = await retainPhoto(context, photo);
+      client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
+      setPhotoDrafts(rows => [...rows.filter(row => photoContextKey(row) !== photoContextKey(draft)), draft]);
+      recordMobileUxEvent('capture_durably_saved');
+    },
+    commitGradingCapture: async requested => {
+      if (photoSubmissionBusy.current) return;
+      photoSubmissionBusy.current = true;
+      try { await run(async () => {
+        const owner = sessionRef.current;
+        if (!owner || requested.userId !== owner.userId || requested.apiBaseUrl !== owner.apiBaseUrl.replace(/\/+$/, '')) throw new Error('Return to the original account to submit these photos.');
+        const assertAccount = () => client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
+        const draft = await readPhotoDraft(requested);
+        assertAccount();
+        if (!draft || draft.id !== requested.id) throw new Error('Refresh the saved photo draft before submitting.');
+        if (offline) throw new Error('Reconnect to submit. Your photos remain saved on this device.');
+        const evidenceType = captureEvidenceType({ workflowType: 'GRADING_SUBMISSION', captureRecipe: draft.recipe, nextActionType: draft.actionType });
+        const photoStartedAt = Date.now(); recordMobileUxEvent('photo_upload_started');
+        await submitPhotoDraft(draft, {
+          assertAccount,
+          getProof: () => client.getProof(draft.proofId),
+          persist: async updated => {
+            await persistPhotoDraft(updated); assertAccount();
+            setPhotoDrafts(rows => [...rows.filter(row => photoContextKey(row) !== photoContextKey(updated)), { ...updated, slots: updated.slots.map(slot => ({ ...slot })) }]);
+          },
+          fileExists: localCaptureExists,
+          initialize: slot => client.initializeEvidenceUpload(draft.proofId, { contentType: slot.contentType, evidenceType, idempotencyKey: slot.uploadKey }),
+          upload: (slot, target) => uploadCaptureFile({ baseUrl: owner.apiBaseUrl, target: target as Parameters<typeof uploadCaptureFile>[0]['target'], fileUri: slot.uri, contentType: slot.contentType }),
+          commit: evidenceId => client.commitEvidence(draft.proofId, evidenceId),
+          apply: async (updated, action) => {
+            await client.runProofAction(updated.proofId, action, { assetId: updated.assetId ?? undefined, transferId: updated.transferId ?? undefined, recipe: updated.recipe,
+              evidence: updated.slots.map(slot => ({ slot: slot.slot, evidenceId: slot.evidenceId })), idempotencyKey: updated.actionKey });
+          },
         });
-        const committed: Array<{ slot: string; evidenceId: string }> = [];
-        for (const row of slots) {
-          const available = await localCaptureExists(row.uri);
-          if (!available) {
-            throw new Error("A captured photo is no longer available. Capture again.");
-          }
-          const initialized = await client.initializeEvidenceUpload(proof.proofId, {
-            contentType: row.contentType,
-            evidenceType,
-            idempotencyKey: newIdempotencyKey(),
-          });
-          await uploadCaptureFile({
-            baseUrl: apiBaseUrl.trim(),
-            target: initialized.upload,
-            fileUri: row.uri,
-            contentType: row.contentType,
-          });
-          const result = await client.commitEvidence(proof.proofId, initialized.evidenceId);
-          committed.push({ slot: row.slot, evidenceId: result.evidenceId });
-        }
-        const actionName = workflowActionFor(serverAction?.type);
-        if (actionName && nextActionNeedsCapture(serverAction?.type)) {
-          await client.runProofAction(proof.proofId, actionName, {
-            assetId: serverAction?.assetId,
-            transferId: serverAction?.transferId,
-            recipe: serverAction?.captureRecipe,
-            evidence: committed,
-            idempotencyKey: newIdempotencyKey(),
-          });
-        }
-        void haptic("success");
-        await refreshProof(proof.proofId);
-      }),
+        recordMobileUxEvent('photo_upload_acknowledged', { durationMs: Date.now() - photoStartedAt });
+        recordMobileUxEvent('commitment');
+        void haptic('success');
+        await refreshProof(draft.proofId);
+        await refreshProofCollection();
+      }); } finally { photoSubmissionBusy.current = false; }
+    },
     identifyReference: async (reference: string) => {
       if(scanInFlight.current)return;
       scanInFlight.current=true;

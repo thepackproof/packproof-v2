@@ -9,7 +9,7 @@ import { Button } from './Button';
 import { FormField } from './FormField';
 import { PressableScale } from './motion';
 
-export function TrackingIntake() {
+export function TrackingIntake({compact=false}: {compact?:boolean} = {}) {
   const app = usePackProof(), { colors } = useTheme(), proof = app.proof!;
   const shipping = proof.shipmentObservations?.identity ?? proof.transaction.shipping;
   const [open, setOpen] = useState(false), [value, setValue] = useState(shipping?.trackingNumber ?? ''), [carrier, setCarrier] = useState(shipping?.carrier?.toLowerCase() ?? '');
@@ -25,8 +25,8 @@ export function TrackingIntake() {
     finally { setBusy(false); }
   }
   return <View style={styles.stack}>
-    <Text accessibilityLiveRegion="polite" style={[typography.secondary, { color: colors.textSecondary }]}>{connection}</Text>
-    {app.role === 'SELLER' && !open ? <Button label={shipping?.trackingNumber ? 'Connect or retry tracking' : 'Add tracking'} variant="secondary" onPress={() => setOpen(true)} /> : null}
+    {!compact ? <Text accessibilityLiveRegion="polite" style={[typography.secondary, { color: colors.textSecondary }]}>{connection}</Text> : null}
+    {app.role === 'SELLER' && !open ? <Button label={shipping?.trackingNumber ? 'Manage tracking' : 'Add tracking'} variant="tertiary" onPress={() => setOpen(true)} /> : null}
     {open ? <View style={[styles.form, { backgroundColor: colors.surface }]}>
       <FormField label="Tracking number or carrier link" value={value} onChangeText={setValue} />
       <Text style={[typography.secondaryStrong, { color: colors.textPrimary }]}>Carrier</Text>

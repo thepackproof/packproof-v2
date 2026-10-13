@@ -155,20 +155,10 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
     const missingLabel = state.kind === "missing_label";
     const needsAttention = state.kind === "failed" || state.kind === "unavailable";
     return <View style={styles.emptyState}>
-      <View style={[styles.emptyIcon, { backgroundColor: needsAttention ? colors.warningSoft : colors.shipmentSoft }]}>
-        <Ionicons name={needsAttention ? "alert-outline" : "arrow-up-outline"} size={34} color={needsAttention ? colors.warningText : colors.shipmentText} style={needsAttention ? undefined : styles.directionArrow} />
-      </View>
       <View style={styles.emptyCopy}>
-        <Text accessibilityRole={state.kind === "failed" ? "alert" : "header"} style={[styles.emptyTitle, { color: colors.textPrimary }]}>{missingLabel ? "Tracking will appear here" : state.title}</Text>
-        <Text style={[styles.emptyDetail, { color: colors.textSecondary }]}>{missingLabel ? "Carrier updates appear here when a shipping label is identified and tracking is connected." : state.detail}</Text>
+        <Text accessibilityRole={state.kind === 'failed' ? 'alert' : 'header'} style={[styles.emptyTitle, {color:colors.textPrimary}]}>{missingLabel ? 'No tracking added' : state.title}</Text>
+        <Text style={[styles.emptyDetail,{color:colors.textSecondary}]}>{missingLabel ? 'Tracking is optional. You can capture and finalize evidence without it.' : state.detail}</Text>
       </View>
-      {missingLabel ? <View style={[styles.emptyNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.noticeIcon, { backgroundColor: colors.warningSoft }]}><Ionicons name="alert-outline" size={20} color={colors.warningText} /></View>
-        <View style={styles.noticeText}>
-          <Text style={[styles.link, { color: colors.textPrimary }]}>No tracking number identified yet</Text>
-          <Text style={[styles.finePrint, { color: colors.textSecondary }]}>The saved recording is unaffected.</Text>
-        </View>
-      </View> : null}
       {carrier || trackingNumber ? <View style={[styles.emptyIdentity, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {carrier ? <Text style={[styles.note, { color: colors.textSecondary }]}>{carrier}</Text> : null}
         {trackingNumber ? <Text selectable style={[styles.bodyStrong, { color: colors.textPrimary }]}>{trackingNumber}</Text> : null}
@@ -227,7 +217,7 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
 
 const styles = StyleSheet.create({
   panel: { gap: spacing.lg },
-  emptyState: { alignItems: "center", paddingHorizontal: spacing.md, paddingTop: spacing.xxxl, paddingBottom: spacing.lg, gap: spacing.xxl },
+  emptyState: { paddingVertical: 12, gap: 12 },
   emptyIcon: { width: 86, height: 86, borderRadius: 43, alignItems: "center", justifyContent: "center" },
   directionArrow: { transform: [{ rotate: "45deg" }] },
   emptyCopy: { alignSelf: "stretch", gap: spacing.sm }, emptyTitle: { ...typography.sectionTitle, fontSize: 20, lineHeight: 27 }, emptyDetail: { ...typography.secondary, fontSize: 15, lineHeight: 21 },

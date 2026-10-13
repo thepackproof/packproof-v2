@@ -1,5 +1,5 @@
 /** A recommendation is presentation only. Adapters authorize inputs; routers revalidate on tap. */
-export interface HomeProof { id:string; title:string; status:string; authorized:boolean; action:'capture'|'continue'|'finalize'|'view'|'unknown'; createdAt:string; updatedAt:string; completed:boolean; continuationAfterFinalization?:boolean; }
+export interface HomeProof { id:string; title:string; status:string; authorized:boolean; action:'capture'|'continue'|'finalize'|'view'|'unknown'; createdAt:string; updatedAt:string; completed:boolean; continuationAfterFinalization?:boolean; actionLabel?:string; actionReason?:string; }
 export interface HomeCapture { id:string; proofId:string; usable:boolean; needsReview:boolean; authorized:boolean; interrupted?:boolean; }
 export interface HomeJob { id:string; proofId:string; authorized:boolean; active:boolean; waiting:boolean; intervention:boolean; reason?:string; }
 export interface HomeOrder { id:string; proofId:string; title:string; ready:boolean; authorized:boolean; createdAt:string; }
@@ -38,8 +38,8 @@ export function selectTaskHome(input:HomeInput) {
     if (["capture","continue","finalize"].includes(p.action) || readyOrders.has(p.id))attentionIds.add(p.id);
     if (!input.online || !input.reconciled) continue;
     if(p.action==='capture' && readyOrders.has(p.id))continue;
-    if (p.action==='capture' || p.action==='continue') add(p,'continue_proof',3,'Continue Proof','Continue the next available step for this Proof.');
-    else if (p.action==='finalize') add(p,'finalize_proof',4,'Continue submission','Check the saved submission and continue its required next step.');
+    if (p.action==='capture' || p.action==='continue') add(p,'continue_proof',3,p.actionLabel || 'Continue Proof',p.actionReason || 'Review the next required step.');
+    else if (p.action==='finalize') add(p,'finalize_proof',4,p.actionLabel || 'Continue submission',p.actionReason || 'Check the saved submission and continue its required next step.');
   }
   if (input.online && input.reconciled) for (const order of input.orders) {
     const p=proofs.get(order.proofId);

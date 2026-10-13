@@ -1,3 +1,6 @@
+import { SavedPhotoDraft } from '../ui/SavedPhotoDraft';
+import { photoDraftContext, photoContextKey } from '../capture/photo-draft-model';
+import { PhotoCaptureFlow } from '../ui/PhotoCaptureFlow';
 import { EvidencePackageButton } from "../ui/EvidencePackageButton";
 import { Coaching } from "../onboarding/Onboarding";
 import { ProofNotificationMute } from "../notifications/NotificationCenter";
@@ -7,7 +10,6 @@ import { useState, type ComponentProps } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
-import { captureGradingPhoto } from "../capture";
 import { ContinuityCompare } from "../ui/ContinuityCompare";
 import {
   assetItemLabel,
@@ -45,7 +47,6 @@ import { InfoCard } from "../ui/ProofCard";
 import { ProofRecord } from "../ui/ProofRecord";
 import { ProofRecordSkeleton } from "../ui/Skeleton";
 
-type SlotCapture = { uri: string; contentType: string };
 
 export function ProofDetailScreen() {
   const app = usePackProof();
@@ -53,7 +54,6 @@ export function ProofDetailScreen() {
   const { colors } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [workflowDetailsOpen, setWorkflowDetailsOpen] = useState(false);
-  const [slotCaptures, setSlotCaptures] = useState<Record<string, SlotCapture>>({});
   const proof = app.proof;
   const txn = app.transactionDetail ?? proof?.transaction;
   if (!proof || !txn || !app.session) {
@@ -103,9 +103,8 @@ export function ProofDetailScreen() {
     nextActionNeedsCapture(serverAction?.type) &&
     captureRecipe === "PACKING_STANDARD_V1";
   const usesImageCapture = grading && imageSlots.length > 0 && !usesVideoCapture;
-  const slotsReady = imageSlots
-    .filter((slot) => slot.required)
-    .every((slot) => Boolean(slotCaptures[slot.slot]));
+  const currentPhotoContext = photoDraftContext(proof, app.session.userId, app.apiBaseUrl);
+  const otherPhotoDrafts = app.photoDrafts.filter(draft => draft.proofId === proof.proofId && draft.phase !== 'COMPLETE' && (!currentPhotoContext || photoContextKey(draft) !== photoContextKey(currentPhotoContext)));
   const statusLabel = presentation.displayStatus;
   const seller = proof.participants.find((p) => p.role === "SELLER");
   const buyer = proof.participants.find((p) => p.role === "BUYER");
@@ -119,25 +118,6 @@ export function ProofDetailScreen() {
   ]
     .filter(Boolean)
     .join(" • ");
-
-  async function captureSlot(slot: string) {
-    const captured = await captureGradingPhoto();
-    if (!captured) {
-      return;
-    }
-    setSlotCaptures((current) => ({ ...current, [slot]: captured }));
-  }
-
-  async function submitImageCapture() {
-    const payload = imageSlots
-      .map((slot) => {
-        const row = slotCaptures[slot.slot];
-        return row ? { slot: slot.slot, uri: row.uri, contentType: row.contentType } : null;
-      })
-      .filter((row): row is { slot: string; uri: string; contentType: string } => Boolean(row));
-    await app.commitGradingCapture(payload);
-    setSlotCaptures({});
-  }
 
   function handlePrimary() {
     if (!grading && presentation.nextAction.type === "WORKFLOW_ACTION") { app.openReceipt(proof!.proofId); return; }
@@ -285,6 +265,7 @@ export function ProofDetailScreen() {
       />
 
       {proof.status === "FINALIZED" ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId}/> : null}
+      {otherPhotoDrafts.map(draft => <SavedPhotoDraft key={draft.id} draft={draft} />)}
       <ProofRecord
         key={proof.proofId}
         statusLabel={statusLabel}
@@ -293,34 +274,9 @@ export function ProofDetailScreen() {
         action={showActionCard || (!grading && isCompletedAction(localAction) && (app.role === "SELLER" || app.role === "BUYER")) || (app.localCapture && app.session.captureProofId && !captureBelongs) ? <>
 {showActionCard && (actionTitle || actionHint) ? (
         <View style={styles.action}>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {actionHint || actionTitle}
-          </Text>
+          {!usesImageCapture ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{actionHint || actionTitle}</Text> : null}
           {usesImageCapture ? (
-            <View style={styles.slotList}>
-              {imageSlots.map((slot) => (
-                <View key={slot.slot} style={styles.slotRow}>
-                  <Text style={[styles.meta, { color: colors.textSecondary, flex: 1 }]}>
-                    {slot.prompt}
-                  </Text>
-                  {slotCaptures[slot.slot] ? (
-                    <Text style={[styles.meta, { color: colors.success }]}>Captured</Text>
-                  ) : null}
-                  <Button
-                    label={slotCaptures[slot.slot] ? "Retake" : "Capture"}
-                    variant="secondary"
-                    disabled={app.busy}
-                    onPress={() => void app.run(() => captureSlot(slot.slot))}
-                  />
-                </View>
-              ))}
-              <Button
-                label="Save capture"
-                onPress={() => void submitImageCapture()}
-                loading={app.busy}
-                disabled={!slotsReady}
-              />
-            </View>
+            <PhotoCaptureFlow />
           ) : (
             renderPrimaryButton()
           )}

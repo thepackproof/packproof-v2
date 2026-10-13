@@ -1,3 +1,5 @@
+import { selectRecoveryWorkspace } from '../experience/recovery-workspace';
+import { CompactProofRow } from '../ui/CompactProofRow';
 import { TutorialTarget } from "../onboarding/Onboarding";
 import { proofReference, shipmentRecordLabel } from "../copy/evidence-record";
 import { RecordThumbnail } from "../ui/RecordThumbnail";
@@ -49,32 +51,13 @@ export function MyProofsScreen() {
   }, [app.proofCollection, app.pendingInvites, requestedRefresh, loading]);
   const presentedRows = useMemo(() => {
     const proofs = snapshot.rows.map(row => app.proofCollection.find(current => current.proofId === row.proofId) ?? row);
-    // Classify the last known snapshot consistently with Home; the action router still reconciles on tap.
-    const actionable = MOBILE_TASK_UX_ENABLED ? new Map(selectTaskHome(nativeHomeInput({ proofs, invitations: snapshot.invites, captures: workspaceRecordings(app.savedRecordings, app.localCapture), orders: [], progress: app.uploadProgressByProof, userId: app.session?.userId ?? '', apiBaseUrl: app.apiBaseUrl, online: true, reconciled: true })).actions.map(action => [action.targetId, action])) : null;
-    return mergeProofInvitations(proofs, snapshot.invites).map(item => {
-    const capture = app.savedRecordings.find(row => row.captureProofId === item.proofId && row.recovery?.phase !== 'FINALIZED')
-      ?? (app.session?.captureProofId === item.proofId ? app.localCapture : null);
-    const uploading = Object.prototype.hasOwnProperty.call(app.uploadProgressByProof, item.proofId);
-    const presentation = { ...presentationForProof(item, item.role, localProofWork(capture, uploading ? 'uploading' : app.session?.captureProofId === item.proofId ? app.captureStatus : undefined, uploading ? app.uploadProgressByProof[item.proofId] : undefined)) };
-    if (actionable) {
-      const action = actionable.get(item.proofId);
-      // A frozen root can still have a separately authorized receipt/return stage.
-      const laterStage = item.status === 'FINALIZED' && item.presentation?.canContribute === true && item.presentation.nextAction.type === 'WORKFLOW_ACTION';
-      presentation.needsAttention = Boolean(action) || laterStage;
-      if (laterStage) presentation.nextAction = { ...item.presentation!.nextAction };
-      else if (action) presentation.nextAction = { type: presentation.nextAction.type, label: action.buttonLabel };
-      if (action?.kind === 'reconcile') presentation.displayStatus = 'Status needs refresh';
-      if (!action && !laterStage && capture?.recovery && !['FINALIZED', 'SUBMITTED'].includes(capture.recovery.phase)) {
-        presentation.displayStatus = app.offline && ['LOCAL_ONLY', 'UPLOAD_QUEUED'].includes(capture.recovery.phase) ? 'Waiting for connection' : captureRecoveryLabel(capture.recovery.phase);
-      }
-    }
-    return { ...item, presentation };
-  }); }, [snapshot, library, app.proofCollection, app.savedRecordings, app.localCapture, app.captureStatus, app.uploadPercent, app.uploadProgressByProof, app.offline, app.session?.userId, app.apiBaseUrl]);
+    return selectRecoveryWorkspace({ proofs, invitations: snapshot.invites, captures: workspaceRecordings(app.savedRecordings, app.localCapture), photoDrafts: app.photoDrafts, orders: [], progress: app.uploadProgressByProof, userId: app.session?.userId ?? '', apiBaseUrl: app.apiBaseUrl, online: !app.offline, reconciled: app.workspaceReconciled, captureStatus: app.captureStatus }).rows;
+  }, [snapshot, app.proofCollection, app.pendingInvites, app.savedRecordings, app.localCapture, app.photoDrafts, app.captureStatus, app.uploadProgressByProof, app.offline, app.session?.userId, app.apiBaseUrl, app.workspaceReconciled]);
   const sortedRows = selectProofRows(presentedRows,library);
   const order = useRef<{ snapshot:typeof snapshot; filters:string; ids:string[] } | null>(null);
   const filterKey = JSON.stringify(library);
   if (!order.current || order.current.snapshot !== snapshot || order.current.filters !== filterKey) order.current = {snapshot,filters:filterKey,ids:sortedRows.map(row => row.proofId)};
-  const rows = order.current.ids.map(id => presentedRows.find(row => row.proofId === id)).filter((row):row is PresentedProof => Boolean(row));
+  const rows = order.current.ids.map(id => sortedRows.find(row => row.proofId === id)).filter((row):row is NonNullable<typeof row> => Boolean(row));
   const showPrepared = !MOBILE_TASK_UX_ENABLED && library.view !== 'completed' && !library.query.trim();
   const visiblePreparedIds = new Set(showPrepared ? preparedProofIds : []);
   const libraryRows = rows.filter(item => !visiblePreparedIds.has(item.proofId));
@@ -109,10 +92,10 @@ export function MyProofsScreen() {
     <WorkspaceHeader section="Proofs" />
     <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, { color:colors.textPrimary }]}>Proofs</Text></View><TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget></View>
     {!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Shipment evidence, organized and ready to review.</Text> : null}
-    <View style={[styles.libraryPanel,{backgroundColor:colors.surface,borderColor:colors.border}]}>
+    <View style={[styles.libraryPanel,{backgroundColor:colors.background,borderColor:colors.border}]}>
     <View style={styles.toolbar}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
-      {([{id:'all',label:'All'},{id:'attention',label:'Needs attention'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.accentSoft : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
+      {([{id:'all',label:'All'},{id:'attention',label:'Needs action'},{id:'progress',label:'In progress'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.accentSoft : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
     </ScrollView>
     <View style={styles.searchRow}>
       <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.inputBackground}]}><Ionicons name="search-outline" size={18} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search order, item, tracking…" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
@@ -127,26 +110,10 @@ export function MyProofsScreen() {
     {showPrepared ? <ReadyOrders onPreparedProofsChange={setPreparedProofIds} /> : null}
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
-    {libraryRows.map((item, index) => {
-      return <TutorialTarget key={item.proofId} name={index===0?"proofs":""}><FadeSlideIn index={index}>
-        <View style={[styles.row,{backgroundColor:colors.surface,borderColor:colors.border}]}>
-          <LiftPressable onPress={() => void open(item)} accessibilityRole="button" accessibilityLabel={`${item.transaction.itemTitle || 'Shipment Proof'}. ${item.presentation.displayStatus}. Open Proof`} style={styles.rowCopy}>
-            <View style={styles.recordHeading}>{item.thumbnailDerivativeId ? <RecordThumbnail key={`${app.session?.userId}:${item.proofId}:${item.thumbnailDerivativeId}`} proofId={item.proofId} derivativeId={item.thumbnailDerivativeId} /> : null}<View style={{flex:1,gap:5}}>
-            <Text style={[styles.rowTitle,{color:colors.textPrimary}]}>{item.transaction.itemTitle || 'Shipment Proof'}</Text>
-            {!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.meta,{color:colors.textSecondary}]}>{proofReference(item.proofId,item.transaction.externalReference)}</Text> : null}
-            </View><Ionicons name="chevron-forward" size={18} color={colors.textSecondary}/></View>
-            {!MOBILE_TASK_UX_ENABLED ? <><RecordSeal status={item.status}/><View style={styles.shipmentLine}><Ionicons name="navigate-outline" size={15} color={colors.textSecondary}/><Text style={[styles.meta,{color:colors.textSecondary,flexShrink:1}]}>Shipment: {shipmentRecordLabel(item.transaction.trackingNumber,item.presentation.shipmentStatus)}</Text></View></> : null}
-            {MOBILE_TASK_UX_ENABLED || item.presentation.needsAttention ? <StatusBadge label={item.presentation.displayStatus}/> : null}
-            {Object.prototype.hasOwnProperty.call(app.uploadProgressByProof, item.proofId) ? <View style={{ gap: 8 }}>
-              <ProgressState label="Recording upload" showLabel={false} percent={app.uploadProgressByProof[item.proofId]} />
-              {!MOBILE_TASK_UX_ENABLED ? <Text style={[typography.finePrint, { color: colors.textSecondary }]}>Upload continues while you work on the next Proof.</Text> : null}
-            </View> : null}
-            <Text style={[styles.meta,{color:colors.textSecondary}]}>{[item.transaction.provider, `Updated ${formatDate(item.updatedAt)}`].filter(Boolean).join(' · ')}</Text>
-          </LiftPressable>
-          {item.presentation.needsAttention ? <Button label={item.presentation.nextAction.label} variant="tertiary" onPress={() => void open(item,true)} loading={app.busy} /> : null}
-        </View>
-      </FadeSlideIn></TutorialTarget>;
-    })}
+    {libraryRows.map((item, index) => <TutorialTarget key={item.proofId} name={index===0?'proofs':''}><CompactProofRow
+      title={item.transaction.itemTitle || 'Shipment Proof'}
+      detail={presentedRows.find(row => row.proofId === item.proofId)?.taskDescription || `${item.presentation.displayStatus} · Updated ${formatDate(item.updatedAt)}`}
+      completed={item.presentation.completed} disabled={app.busy} onPress={() => void open(item, MOBILE_TASK_UX_ENABLED)} /></TutorialTarget>)}
     {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /></TutorialTarget> : null}
     </View>
     </View>
@@ -162,7 +129,7 @@ const styles = StyleSheet.create({
   heading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12},headingCopy:{gap:5},pageTitle:{...typography.pageTitle,fontSize:29,lineHeight:36},
   mobileTitle:{fontSize:24,lineHeight:31},
   eyebrow:{...typography.finePrint,fontFamily:'Inter-SemiBold',fontSize:10,lineHeight:15,letterSpacing:1.15},subtitle:{...typography.secondary,fontSize:14,marginTop:-8},
-  libraryPanel:{borderWidth:1,borderRadius:10,overflow:'hidden'},toolbar:{padding:14,gap:12},
+  libraryPanel:{gap:8},toolbar:{gap:12},
   tabs:{flexDirection:'row',gap:3},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:6,justifyContent:'center'},tabText:{...typography.secondaryStrong,fontSize:13,lineHeight:19},
   searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:48,flexDirection:'row',alignItems:'center',paddingHorizontal:10,borderWidth:1,borderRadius:6,gap:8},input:{flex:1,...typography.secondary,fontSize:14,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:6},
   tableHeading:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,paddingHorizontal:16,paddingVertical:10,borderTopWidth:1,borderBottomWidth:1},columnLabel:{...typography.finePrint,fontSize:12,lineHeight:18,letterSpacing:.35},listBody:{gap:0},

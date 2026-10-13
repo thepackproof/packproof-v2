@@ -3,11 +3,13 @@ export const mobileUxEvents = [
   "recommendation_displayed", "recommendation_selected", "capture_entered",
   "capture_durably_saved", "review_completed", "upload_recovery", "upload_intervention", "commitment", "finalization",
   "draft_started", "draft_left_before_capture",
+  "photo_requested", "photo_cancelled", "photo_intervention", "photo_upload_started", "photo_upload_acknowledged",
 ] as const;
 export type MobileUxEvent = typeof mobileUxEvents[number];
 export interface MobileUxMetric { count: number; totalDurationMs: number; durationSamples: number; maxDurationMs: number; }
 let startedAt = Date.now();
 const metrics = new Map<MobileUxEvent, MobileUxMetric>();
+const durations = new Map<MobileUxEvent, number[]>();
 let captureEntryStartedAt: number | null = null;
 let draftActive = false;
 
@@ -44,6 +46,7 @@ export function recordMobileUxEvent(name: MobileUxEvent, input?: { durationMs?: 
   const duration = input?.durationMs ?? (name === "capture_entered" && captureEntryStartedAt != null ? Date.now() - captureEntryStartedAt : undefined);
   if (name === "capture_entered") captureEntryStartedAt = null;
   const valid = typeof duration === "number" && Number.isFinite(duration) && duration >= 0 && duration <= 86_400_000;
+  if (valid) durations.set(name, [...(durations.get(name) ?? []).slice(-99), duration]);
   metrics.set(name, {
     count: Math.min(Number.MAX_SAFE_INTEGER, previous.count + 1),
     totalDurationMs: valid ? Math.min(Number.MAX_SAFE_INTEGER, previous.totalDurationMs + duration) : previous.totalDurationMs,
@@ -59,4 +62,10 @@ export function readMobileUxMetrics(): { startedAt: number; events: Record<Mobil
 }
 
 /** Call when signing out or changing the active server/account. */
-export function clearMobileUxMetrics(): void { metrics.clear(); captureEntryStartedAt = null; draftActive = false; startedAt = Date.now(); }
+export function clearMobileUxMetrics(): void { metrics.clear(); durations.clear(); captureEntryStartedAt = null; draftActive = false; startedAt = Date.now(); }
+
+/** Last 100 measured events in this session. No identifiers, persistence, transport or population claim. */
+export function readMobileUxPercentile(name: MobileUxEvent): { samples: number; p95Ms: number | null } {
+  const sample = [...(durations.get(name) ?? [])].sort((a, b) => a - b);
+  return { samples: sample.length, p95Ms: sample.length ? sample[Math.ceil(sample.length * .95) - 1] : null };
+}

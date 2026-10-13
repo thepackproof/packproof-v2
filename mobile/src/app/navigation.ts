@@ -1,4 +1,4 @@
-export type ProofsLibraryView = "all" | "attention" | "completed";
+export type ProofsLibraryView = "all" | "attention" | "progress" | "completed";
 
 export type ProofsSort = "newest" | "oldest" | "price_high" | "price_low";
 
@@ -38,7 +38,7 @@ export type AppRouteName =
 
 export type WorkspaceOrigin = "home" | "proofs" | "orders" | "station" | "activity";
 export type AccountSection = "developer" | "billing" | "notifications" | "profile" | "channels" | "recordings" | "appearance" | "help" | "privacy" | "advanced";
-export type ActivityFilter = "all" | "attention" | "uploading" | "completed";
+export type ActivityFilter = "all" | "attention" | "uploading" | "completed" | "notifications";
 export interface OrdersViewState { offsetY: number; query: string; filter?: "ready" | "started" | "completed" | "all"; }
 export interface AppRoute {
   name: AppRouteName;

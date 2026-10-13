@@ -26,7 +26,7 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
   const visible = detailed
     ? ordered.filter(entry => selected === "ALL" || entry.category === selected).map(entry => ({ key: entry.id, entry, entries: [entry], access: false }))
     : recordActivityGroups(entries, auditEvents);
-  return <View style={styles.root} accessibilityLabel="Proof activity">
+  return <View style={styles.root} accessibilityLabel="Proof history">
     <View style={styles.modeRow}>
       {[{ key: "MILESTONES", label: "Highlights" }, { key: "ALL", label: "Detailed history" }].map(mode => <PressableScale key={mode.key} accessibilityRole="button" accessibilityState={{ selected: mode.key === "MILESTONES" ? !detailed : detailed }} onPress={() => onFilter(mode.key)} style={styles.modeButton}>
         <Text style={[styles.filterLabel, { color: (mode.key === "MILESTONES" ? !detailed : detailed) ? colors.accentText : colors.textSecondary, fontWeight: (mode.key === "MILESTONES" ? !detailed : detailed) ? "700" : "400" }]}>{mode.label}</Text>
@@ -46,7 +46,7 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
       const toggleGroup = () => setExpandedGroups(current => { const next = new Set(current); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next; });
       const preserved = entry.eventType === "PROOF_FINALIZED";
       const afterCore = isShipmentAfterFinalization(entry.occurredAt, finalizedAt, entry.category);
-      const title = group.access ? `${group.entries.length} access ${group.entries.length === 1 ? "event" : "events"}` : humanChronologyTitle(entry.eventType, entry.title);
+      const title = group.access ? `Proof accessed ${group.entries.length} ${group.entries.length === 1 ? "time" : "times"}` : humanChronologyTitle(entry.eventType, entry.title);
       const previous = visible[index - 1]?.entry;
       const newDay = !previous || new Date(previous.occurredAt).toDateString() !== new Date(entry.occurredAt).toDateString();
       const integrity = /ATTEST|CAPTURE|INTEGRITY|MANIFEST|EVIDENCE/.test(entry.eventType);
@@ -86,14 +86,14 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 0 }, groupNote: { ...typography.caption, marginBottom: 16 }, accessDetails: { borderLeftWidth: 1, marginLeft: 12, paddingLeft: 12 }, accessRow: { minHeight: 48, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 8 }, modeRow: { flexDirection: "row", flexWrap: "wrap", gap: 20, marginBottom: 16 }, modeButton: { minHeight: 48, justifyContent: "center" }, filters: { flexDirection: "row", gap: 8, paddingBottom: 16 },
+  root: { gap: 0 }, groupNote: { ...typography.caption, marginBottom: 16 }, accessDetails: { borderLeftWidth: 1, marginLeft: 12, paddingLeft: 12 }, accessRow: { minHeight: 48, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 8 }, modeRow: { flexDirection: "row", flexWrap: "wrap", gap: 16, marginBottom: 8 }, modeButton: { minHeight: 48, justifyContent: "center" }, filters: { flexDirection: "row", gap: 8, paddingBottom: 16 },
   filter: { paddingHorizontal: 10, paddingVertical: 12, borderWidth: 1, borderRadius: 10, minHeight: 48, justifyContent: "center" },
   filterLabel: { ...typography.secondary }, empty: { gap: 12, paddingVertical: 24 },
-  entry: { gap: 10 }, dateRow: { marginLeft: 48, flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  date: { ...typography.caption }, time: { ...typography.caption }, eventRow: { flexDirection: "row", gap: 12 },
-  rail: { width: 40, alignItems: "center" }, node: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  line: { width: 1, flex: 1, minHeight: 22, marginTop: 5 }, cardColumn: { flex: 1, paddingBottom: 16 },
+  entry: { gap: 4 }, dateRow: { marginLeft: 40, flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  date: { ...typography.caption }, time: { ...typography.caption }, eventRow: { flexDirection: "row", gap: 8 },
+  rail: { width: 32, alignItems: "center" }, node: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  line: { width: 1, flex: 1, minHeight: 22, marginTop: 5 }, cardColumn: { flex: 1, paddingBottom: 8 },
   card: { borderRadius: 10, padding: 10, gap: 8, minHeight: 48 }, cardTop: { flexDirection: "row", gap: 6, alignItems: "center", flexWrap: "wrap" },
-  source: { ...typography.caption, flex: 1 }, preserved: { flexDirection: "row", gap: 4, alignItems: "center" }, title: { ...typography.bodyStrong },
+  source: { ...typography.caption, flex: 1 }, preserved: { flexDirection: "row", gap: 4, alignItems: "center" }, title: { ...typography.bodyStrong, fontSize: 15, lineHeight: 22 },
   body: { ...typography.body }, end: { flexDirection: "row", gap: 10, alignItems: "center", paddingTop: 8 }, endDot: { width: 6, height: 6, borderRadius: 3 },
 });

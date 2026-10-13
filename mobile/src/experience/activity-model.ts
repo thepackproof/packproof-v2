@@ -9,10 +9,10 @@ export interface ActivityCaptureState {
   recovery?: Pick<CaptureRecoveryState, "phase" | "submitRequested" | "lastError">;
 }
 
-/** Recovery grouping never turns scheduled automatic retries into a required user action. */
+/** Recovery grouping never turns scheduled retries into a required action. "completed" is the legacy Saved copies filter, not Proof finalization. */
 export function activityGroup(capture: ActivityCaptureState): "attention" | "uploading" | "completed" {
   const state = capture.recovery;
-  if (state?.phase === "FINALIZED") return "completed";
+  if (state?.phase === "FINALIZED" || state?.phase === "SUBMITTED") return "completed";
   if (!state || !activityRecordingUsable(capture) || ["NEEDS_ATTENTION", "NEEDS_SIGN_IN", "CONFIRMATION_NEEDED"].includes(state.phase)) return "attention";
   if (!state.submitRequested && state.phase === "LOCAL_ONLY") return "attention";
   if (state.lastError && !state.lastError.retryable) return "attention";

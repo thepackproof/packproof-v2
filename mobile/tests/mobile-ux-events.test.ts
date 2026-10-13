@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { clearMobileUxMetrics, mobileUxEvents, readMobileUxMetrics, readMobileUxIndicators, observeMobileDraftRoute, recordMobileUxEvent, startMobileCaptureEntry, type MobileUxEvent } from '../src/analytics/mobile-ux-events';
+import { readMobileUxPercentile } from '../src/analytics/mobile-ux-events';
 
 test('UX metrics retain only bounded named aggregates and approved numeric durations',()=>{
   clearMobileUxMetrics();
@@ -25,6 +26,13 @@ test('time to camera entry consumes only the deliberate task timer and clears ac
   clearMobileUxMetrics();
   recordMobileUxEvent('capture_entered');
   assert.equal(readMobileUxMetrics().events.capture_entered.durationSamples,0);
+});
+
+test('session p95 is bounded to recent measurements and never invents an empty baseline',()=>{
+  clearMobileUxMetrics();assert.deepEqual(readMobileUxPercentile('photo_upload_acknowledged'),{samples:0,p95Ms:null});
+  for(let durationMs=1;durationMs<=150;durationMs++)recordMobileUxEvent('photo_upload_acknowledged',{durationMs});
+  assert.deepEqual(readMobileUxPercentile('photo_upload_acknowledged'),{samples:100,p95Ms:145});
+  clearMobileUxMetrics();assert.equal(readMobileUxPercentile('photo_upload_acknowledged').samples,0);
 });
 
 test('invalid durations cannot corrupt aggregates and account reset clears all counts',()=>{

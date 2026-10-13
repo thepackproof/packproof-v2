@@ -11,7 +11,8 @@ export function nativeHomeInput(input:{proofs:ProofCollectionItem[];invitations:
     ...input,
     proofs:rows.map(row=>{
       const p=presentationForProof(row,row.role);
-      return {id:row.proofId,title:row.transaction.itemTitle||'Shipment Proof',status:row.status,authorized:Boolean(row.role || row.invitationId || row.accessKind==='RECEIVER'),createdAt:row.createdAt,updatedAt:row.updatedAt,completed:p.completed,continuationAfterFinalization:p.canContribute===true&&p.nextAction.type==='WORKFLOW_ACTION',
+      const copy = proofTaskCopy(p.nextAction.type, p.nextAction.label);
+      return {id:row.proofId,title:row.transaction.itemTitle||'Shipment Proof',status:row.status,authorized:Boolean(row.role || row.invitationId || row.accessKind==='RECEIVER'),createdAt:row.createdAt,updatedAt:row.updatedAt,completed:p.completed,actionLabel:copy.buttonLabel,actionReason:copy.reason,continuationAfterFinalization:p.canContribute===true&&p.nextAction.type==='WORKFLOW_ACTION',
         action:p.diagnostic?'unknown':p.nextAction.type==='ACCEPT_INVITATION'?'continue':!p.canContribute?'view':p.nextAction.type==='RECORD_PACKING'?'capture':p.nextAction.type==='REVIEW_CONFIRM'?'finalize':p.nextAction.type==='WORKFLOW_ACTION'?'continue':'view'};
     }),
     captures:captures.map(c=>({id:c.captureSessionId||c.uri,proofId:c.captureProofId!,authorized:true,usable:c.localFileAvailable!==false && c.encodedInspection?.playable!==false && c.recovery?.phase!=='RECORDING' && Number(c.byteSize)>0 && Number(c.durationMs)>0,
@@ -23,4 +24,15 @@ export function nativeHomeInput(input:{proofs:ProofCollectionItem[];invitations:
       reason:c.recovery?.phase==='RECORDING'?'This interrupted recording did not finish saving a playable video.':c.recovery?.lastError?.message})),
     orders:input.orders.map(o=>({id:o.transactionId,proofId:o.proofId,title:o.itemSummary,ready:orderPresentation(o).state==='ready',authorized:rows.some(p=>p.proofId===o.proofId&&p.role==='SELLER'),createdAt:o.orderedAt||''})),
   };
+}
+
+/** Keep the task context outside short controls; never infer eligibility from this copy. */
+export function proofTaskCopy(type: string, label: string): { buttonLabel: string; reason: string } {
+  if (type === 'ACCEPT_INVITATION') return { buttonLabel: 'Review invitation', reason: 'An invitation is waiting for your response.' };
+  if (type === 'RECORD_PACKING') return { buttonLabel: 'Continue capture', reason: 'Next: one continuous packing video' };
+  if (type === 'REVIEW_CONFIRM') return { buttonLabel: 'Review and confirm', reason: 'Review the recording and required declaration.' };
+  const item = /^Document item (.+)/i.exec(label);
+  if (item) return { buttonLabel: 'Continue capture', reason: `Front and back photos · Item ${item[1]}` };
+  if (type === 'WORKFLOW_ACTION') return { buttonLabel: /finaliz/i.test(label) ? 'Finalize Proof' : /pack|capture|photo|document/i.test(label) ? 'Continue capture' : 'Continue', reason: `Next: ${label}` };
+  return { buttonLabel: 'View Proof', reason: label || 'View the current evidence record.' };
 }
