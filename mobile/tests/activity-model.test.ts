@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { activityGroup, activityRecordingUsable, type ActivityCaptureState } from "../src/experience/activity-model.ts";
 import { resolveBackRoute, showsTabBar } from "../src/app/navigation.ts";
+import { captureRecoveryLabel, mayCleanUpCapture } from "../src/capture/recovery-model.ts";
 
 const capture = (phase: NonNullable<ActivityCaptureState["recovery"]>["phase"], submitRequested = true): ActivityCaptureState => ({ localFileAvailable: true, byteSize: 1024, durationMs: 1000, recovery: { phase, submitRequested } });
 
 test("normal retries, byte transfer, preservation and finalization remain in progress", () => {
-  for (const phase of ["UPLOAD_QUEUED", "UPLOADING", "BYTES_RECEIVED", "PRESERVATION_PENDING", "FINALIZATION_PENDING", "SUBMITTED"] as const) assert.equal(activityGroup(capture(phase)), "uploading");
+  for (const phase of ["UPLOAD_QUEUED", "UPLOADING", "BYTES_RECEIVED", "PRESERVATION_PENDING", "FINALIZATION_PENDING"] as const) assert.equal(activityGroup(capture(phase)), "uploading");
   const retry = capture("UPLOAD_QUEUED");
   retry.recovery!.lastError = { code: "NETWORK", message: "Connection lost", retryable: true };
   assert.equal(activityGroup(retry), "uploading");
@@ -43,9 +44,11 @@ test("a known unplayable completed file cannot be offered for evidence review", 
 });
 
 test("submission and finalization are separate milestones", () => {
-  assert.equal(activityGroup(capture("SUBMITTED")), "uploading");
+  assert.equal(activityGroup(capture("SUBMITTED")), "completed"); // Saved copies uses the legacy filter ID.
   assert.equal(activityGroup(capture("FINALIZATION_PENDING")), "uploading");
   assert.equal(activityGroup(capture("FINALIZED")), "completed");
+  assert.notEqual(captureRecoveryLabel("SUBMITTED"), captureRecoveryLabel("FINALIZED"));
+  assert.equal(mayCleanUpCapture(capture("SUBMITTED").recovery as Parameters<typeof mayCleanUpCapture>[0]), false);
 });
 
 test("persistent destinations do not compete with capture and return to Activity", () => {

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { sizes, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -16,6 +16,7 @@ export function AppHeader(props: {
   right?: ReactNode;
 }) {
   const { colors } = useTheme();
+  const largeText = useWindowDimensions().fontScale > 1.4;
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
@@ -32,8 +33,9 @@ export function AppHeader(props: {
           ) : null}
           {props.title ? <Text style={[styles.title, { color: colors.textPrimary }]}>{props.title}</Text> : null}
         </View>
-        {props.right ? <View style={styles.right}>{props.right}</View> : null}
+        {props.right && !largeText ? <View style={styles.right}>{props.right}</View> : null}
       </View>
+      {props.right && largeText ? <View style={styles.right}>{props.right}</View> : null}
       {props.subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{props.subtitle}</Text> : null}
     </View>
   );

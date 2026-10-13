@@ -48,6 +48,7 @@ export function selectProofRows(rows: PresentedProof[], library: ProofsLibrarySt
   const query = library.query.trim().toLocaleLowerCase();
   return rows.filter(row => {
     if (library.view === 'attention' && !row.presentation.needsAttention) return false;
+    if (library.view === 'progress' && row.presentation.completed) return false;
     if (library.view === 'completed' && !row.presentation.completed) return false;
     if (library.role !== 'all' && row.role.toLowerCase() !== library.role) return false;
     if (library.carrier && row.transaction.carrier !== library.carrier) return false;

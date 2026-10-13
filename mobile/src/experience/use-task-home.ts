@@ -1,3 +1,4 @@
+import { selectRecoveryWorkspace } from './recovery-workspace';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { usePackProof } from '../app/PackProofProvider';
@@ -44,16 +45,16 @@ export function useTaskHome() {
     const listener=AppState.addEventListener('change',state=>{if(state==='active')void refresh();});
     return ()=>{alive.current=false;generation.current++;refreshLock.current=false;listener.remove();};
   },[scope]);
-  const rows=useMemo(()=>workspaceProofRows({proofs:app.proofCollection,invitations:app.pendingInvites,recordings:app.savedRecordings,localCapture:app.localCapture,captureProofId:app.session?.captureProofId,captureStatus:app.captureStatus,uploadProgressByProof:app.uploadProgressByProof}),[app.proofCollection,app.pendingInvites,app.savedRecordings,app.localCapture,app.captureStatus,app.uploadProgressByProof]);
-  const model=selectTaskHome(nativeHomeInput({proofs:app.proofCollection,invitations:app.pendingInvites,captures:workspaceRecordings(app.savedRecordings,app.localCapture),orders,progress:app.uploadProgressByProof,userId:app.session?.userId??'',apiBaseUrl:app.apiBaseUrl,online:!app.offline,reconciled:app.workspaceReconciled,selection:app.selectedTask,interactions:app.readTaskInteractions()}));
+  const workspace=selectRecoveryWorkspace({proofs:app.proofCollection,invitations:app.pendingInvites,captures:workspaceRecordings(app.savedRecordings,app.localCapture),photoDrafts:app.photoDrafts,orders,progress:app.uploadProgressByProof,userId:app.session?.userId??'',apiBaseUrl:app.apiBaseUrl,online:!app.offline,reconciled:app.workspaceReconciled,selection:app.selectedTask,interactions:app.readTaskInteractions(),captureStatus:app.captureStatus});
+  const {rows,model}=workspace;
   const previous=useRef<HomeAction|null>(null);
   const recommendation=stableRecommendation(previous.current,model,interacting);
   previous.current=recommendation;
   const displayIdentity=actionIdentity(recommendation);
   useEffect(()=>{if(!loading)recordMobileUxEvent('recommendation_displayed');},[displayIdentity,loading]);
-  const attention=model.actions.map(action=>({action,proof:rows.find(p=>p.proofId===action.targetId)!})).filter(row=>Boolean(row.proof));
+  const attention=workspace.attention.map(proof=>({proof,action:proof.action!}));
   const attentionIds=new Set(attention.map(row=>row.proof.proofId));
-  const recent=recentWorkspaceProofs(rows.filter(p=>!attentionIds.has(p.proofId)));
+  const recent=recentWorkspaceProofs(rows.filter(p=>!attentionIds.has(p.proofId)),3);
   async function openProof(row:PresentedProof) {
     app.rememberTaskInteraction(row.proofId);
     if(row.accessKind==='RECEIVER'){app.openReceipt(row.proofId);return;}

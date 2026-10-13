@@ -1,3 +1,6 @@
+import { SavedPhotoDraft } from '../ui/SavedPhotoDraft';
+import { selectRecoveryWorkspace } from '../experience/recovery-workspace';
+import { CompactProofRow } from '../ui/CompactProofRow';
 import { useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Sharing from "expo-sharing";
@@ -38,35 +41,51 @@ export function ActivityScreen() {
     return () => { active = false; };
   }, [scope, generation]);
   const recordings = useMemo(() => workspaceRecordings(app.savedRecordings, app.localCapture).filter(capture => capture.captureUserId === app.session?.userId && capture.recovery?.apiBaseUrl.replace(/\/+$/, "") === app.apiBaseUrl.replace(/\/+$/, "")), [app.savedRecordings, app.localCapture, scope]);
+  const workspace = selectRecoveryWorkspace({ proofs: app.proofCollection, invitations: app.pendingInvites, captures: recordings, photoDrafts: app.photoDrafts, orders: [], progress: app.uploadProgressByProof, userId: app.session?.userId ?? '', apiBaseUrl: app.apiBaseUrl, online: !app.offline, reconciled: app.workspaceReconciled, captureStatus: app.captureStatus });
+  useEffect(() => { void app.run(app.syncWorkspace); }, [scope]);
   const selectedRecording = selectedSessionId ? recordings.find(capture => (capture.captureSessionId || capture.uri) === selectedSessionId || capture.recovery?.operationId === selectedSessionId) : undefined;
   const groups = [
-    { id: "attention", title: "Needs your attention" },
-    { id: "uploading", title: "In progress" },
-    { id: "completed", title: "Completed recordings" },
+    { id: "attention", title: "Saved recordings needing action" },
+    { id: "uploading", title: "Uploads" },
+    { id: "completed", title: "Saved recording copies" },
   ] as const;
   return <AppScreen bottomInset={false} initialOffsetY={selectedSessionId ? 0 : app.readWorkspaceOffset("activity")} onScrollOffset={offset => { if (!selectedSessionId) app.setWorkspaceOffset("activity", offset); }} resetScrollKey={`${filter}:${selectedSessionId ?? ""}`} onRefresh={() => { setGeneration(value => value + 1); void app.run(app.syncWorkspace); }} refreshing={app.busy}>
-    <WorkspaceHeader section="Activity" />
-    <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Activity</Text>
-    {!selectedSessionId ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} accessibilityRole="tablist" accessibilityLabel="Activity filters">
-      {([["all", "All"], ["attention", "Needs attention"], ["uploading", "In progress"], ["completed", "Completed"]] as const).map(([id, label]) => <PressableScale key={id} accessibilityRole="tab" accessibilityState={{ selected: filter === id }} onPress={() => app.go("activity", { activityFilter: id })} style={[styles.filter, { backgroundColor: filter === id ? colors.accentSoft : colors.surface }]}><Text style={[styles.text, { color: filter === id ? colors.accentText : colors.textSecondary }]}>{label}</Text></PressableScale>)}
+    <WorkspaceHeader section="Updates" />
+    <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Updates</Text>
+    {!selectedSessionId ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} accessibilityRole="tablist" accessibilityLabel="Update filters">
+      {([["all", "All"], ["attention", "Action needed"], ["uploading", "Uploading"], ["notifications", "Notifications"], ["completed", "Saved copies"]] as const).map(([id, label]) => <PressableScale key={id} accessibilityRole="tab" accessibilityState={{ selected: filter === id }} onPress={() => app.go("activity", { activityFilter: id })} style={[styles.filter, { backgroundColor: filter === id ? colors.accentSoft : colors.surface }]}><Text style={[styles.text, { color: filter === id ? colors.accentText : colors.textSecondary }]}>{label}</Text></PressableScale>)}
     </ScrollView> : null}
     <OfflineBanner visible={app.offline} /><ErrorBanner message={app.error} />
+    {!selectedSessionId && (filter === 'all' || filter === 'attention') ? <View style={styles.group}>
+      <Text accessibilityRole="header" style={[styles.heading,{color:colors.textPrimary}]}>Action needed · {workspace.attention.length}</Text>
+      {workspace.attention.map(row => <CompactProofRow key={row.proofId} title={row.transaction.itemTitle || 'Proof'} detail={row.taskDescription} disabled={app.busy} onPress={() => void app.openProofAction(row.proofId)} />)}
+      {!workspace.attention.length ? <Text style={[styles.text,{color:colors.textSecondary}]}>{app.workspaceReconciled ? 'No Proofs need action.' : 'Refresh your Proofs to check what needs action.'}</Text> : null}
+    </View> : null}
+    {!selectedSessionId && (filter === 'all' || filter === 'uploading') && workspace.photoDrafts.some(draft => draft.phase === 'SUBMITTING') ? <View style={styles.group}>
+      <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Photo submissions</Text>
+      {workspace.photoDrafts.filter(draft => draft.phase === 'SUBMITTING').map(draft => <SavedPhotoDraft key={draft.id} draft={draft} openProof />)}
+    </View> : null}
+    {!selectedSessionId && filter === 'completed' ? <View style={styles.group}>
+      <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Photo originals</Text>
+      {app.photoDrafts.length ? app.photoDrafts.map(draft => <SavedPhotoDraft key={draft.id} draft={draft} openProof />) : <Text style={[styles.text, { color: colors.textSecondary }]}>No photo originals saved on this device.</Text>}
+    </View> : null}
     {selectedSessionId ? <View style={styles.group}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Selected recording</Text>
-      {selectedRecording ? <View style={{ borderWidth: 2, borderColor: colors.accent, borderRadius: 14, padding: 2 }}><ActivityRecordingRow key={selectedSessionId} capture={selectedRecording} /></View> : <Text accessibilityLiveRegion="polite" style={[styles.text, { color: colors.textSecondary }]}>This recording is no longer available in the current account's local Activity. View all Activity to check its latest state.</Text>}
-      <Button label="View all Activity" variant="secondary" onPress={() => app.go("activity", { activityFilter: "all" })} />
-    </View> : groups.filter(section => filter === "all" || filter === section.id).map(section => {
-      const rows = recordings.filter(capture => activityGroup(capture) === section.id);
+      {selectedRecording ? <View style={{ borderWidth: 2, borderColor: colors.accent, borderRadius: 14, padding: 2 }}><ActivityRecordingRow key={selectedSessionId} capture={selectedRecording} /></View> : <Text accessibilityLiveRegion="polite" style={[styles.text, { color: colors.textSecondary }]}>This recording is no longer available in the current account's local Updates. View all Updates to check its latest state.</Text>}
+      <Button label="View all Updates" variant="secondary" onPress={() => app.go("activity", { activityFilter: "all" })} />
+    </View> : groups.filter(section => (filter === "all" && section.id !== "completed") || filter === section.id).map(section => {
+      const rows = recordings.filter(capture => activityGroup(capture) === section.id && (section.id !== 'attention' || !workspace.attention.some(row=>row.proofId===capture.captureProofId)));
+      if (!rows.length && (section.id === 'attention' || section.id === 'uploading' && workspace.photoDrafts.some(draft => draft.phase === 'SUBMITTING'))) return null;
       return <View key={section.id} style={styles.group}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{section.title}</Text>
         {rows.length ? rows.map(capture => <ActivityRecordingRow key={capture.recovery?.operationId ?? capture.uri} capture={capture} />) : <Text style={[styles.text, { color: colors.textSecondary }]}>{section.id === "attention" ? "No recordings need your action." : section.id === "uploading" ? "No uploads in progress." : "Finalized recordings will appear here."}</Text>}
       </View>;
     })}
-    {!selectedSessionId && (filter === "all" || filter === "completed") ? <View style={styles.group}>
+    {!selectedSessionId && (filter === "all" || filter === "notifications") ? <View style={styles.group}>
       <View style={styles.headingRow}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Notifications</Text><Button label="Preferences" variant="tertiary" onPress={() => app.go("account", { accountSection: "notifications" })} /></View>
       {notificationError ? <><Text style={[styles.text, { color: colors.textSecondary }]}>{notificationError}</Text><Button label="Retry notifications" variant="tertiary" onPress={() => setGeneration(value => value + 1)} /></> : null}
       {notificationsLoading ? <Text accessibilityLiveRegion="polite" style={[styles.text,{color:colors.textSecondary}]}>Loading recent updates…</Text> : null}
       {!notificationsLoading && !notificationError && !notifications.length ? <Text style={[styles.text, { color: colors.textSecondary }]}>Proof updates will appear here.</Text> : null}
-      {notifications.map(update => <View key={update.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.text, { color: colors.textSecondary }]}>Notification · {formatDateTime(update.createdAt)}</Text><Button label={update.title} variant="tertiary" onPress={() => void app.run(async () => { await app.openProof(update.proofId); await app.client.notificationRequest(`notifications/${encodeURIComponent(update.id)}/read`, "POST", {}).catch(() => undefined); })} /></View>)}
+      {notifications.map(update => <CompactProofRow key={update.id} title={update.title} detail={`${app.proofCollection.find(row=>row.proofId===update.proofId)?.transaction.itemTitle || 'Proof update'} · ${formatDateTime(update.createdAt)}`} disabled={app.busy} onPress={() => void app.run(async () => { await app.openProofAction(update.proofId); await app.client.notificationRequest(`notifications/${encodeURIComponent(update.id)}/read`, 'POST', {}).catch(() => undefined); })} />)}
     </View> : null}
   </AppScreen>;
 }

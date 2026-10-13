@@ -1,0 +1,21 @@
+import { afterEach, expect, it } from 'vitest';
+import request from 'supertest';
+import { auth, createHarness, login, type TestHarness } from './helpers.js';
+import { gradingCreationRequest } from '../../mobile/src/experience/grading-creation.js';
+let harness: TestHarness | undefined;
+afterEach(async () => { await harness?.close(); });
+it('mobile grading retries return the same Proof, transaction and item identities after a lost response', async () => {
+  harness = await createHarness();
+  const seller = await login(harness.app, 'grading-recovery-seller');
+  const input = gradingCreationRequest({ schema: 1, userId: seller, apiBaseUrl: 'https://unused.example', key: 'grading-recovery-key', itemCount: 2, itemTitle: 'Retained two-card request' });
+  const first = await request(harness.app).post('/proofs').set(auth(seller)).send(input);
+  expect(first.status).toBe(201);
+  const retry = await request(harness.app).post('/proofs').set(auth(seller)).send(input);
+  expect(retry.status).toBe(201);
+  expect(retry.body.proofId).toBe(first.body.proofId);
+  expect(retry.body.transactionId).toBe(first.body.transactionId);
+  expect(retry.body.assets.map((asset: {assetId: string}) => asset.assetId)).toEqual(first.body.assets.map((asset: {assetId: string}) => asset.assetId));
+  expect(retry.body.transaction.itemTitle).toBe(input.transaction.itemTitle);
+  const conflict = await request(harness.app).post('/proofs').set(auth(seller)).send({ ...input, transaction: { ...input.transaction, itemTitle: 'Changed after timeout' } });
+  expect(conflict.status).toBe(409);
+});

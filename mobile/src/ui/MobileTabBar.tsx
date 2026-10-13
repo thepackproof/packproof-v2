@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePackProof } from "../app/PackProofProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -9,18 +9,19 @@ import { PressableScale } from "./motion";
 const tabs = [
   { route: "home", label: "Home", icon: "home-outline" },
   { route: "proofs", label: "Proofs", icon: "document-text-outline" },
-  { route: "station", label: "Pack", icon: "videocam-outline" },
-  { route: "activity", label: "Activity", icon: "pulse-outline" },
+  { route: "station", label: "Capture", icon: "videocam-outline" },
+  { route: "activity", label: "Updates", icon: "pulse-outline" },
 ] as const;
 
 export function MobileTabBar() {
   const app = usePackProof();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  return <View accessibilityRole="tablist" accessibilityLabel="Main navigation" style={[styles.bar, { backgroundColor: colors.background, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, 6), paddingLeft: insets.left, paddingRight: insets.right }]}>
+  const {fontScale}=useWindowDimensions();
+  return <View accessibilityRole="tablist" accessibilityLabel="Main navigation" style={[styles.bar, fontScale>1.6 && {flexWrap:"wrap"}, { backgroundColor: colors.background, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, 6), paddingLeft: insets.left, paddingRight: insets.right }]}>
     {tabs.map(tab => {
       const selected = app.route.name === tab.route;
-      return <View key={tab.route} style={styles.tabSlot}><PressableScale accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected, disabled: app.busy }} disabled={app.busy} onPress={() => { if (!selected) app.go(tab.route); }} style={[styles.tab, selected && { backgroundColor: colors.accentSoft }]}>
+      return <View key={tab.route} style={[styles.tabSlot,fontScale>1.6 && {flexBasis:"48%",flexGrow:1}]}><PressableScale accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected, disabled: app.busy }} disabled={app.busy} onPress={() => { if (!selected) app.go(tab.route); }} style={[styles.tab, selected && { backgroundColor: colors.accentSoft }]}>
         <Ionicons name={tab.icon} size={22} color={selected ? colors.accentText : colors.textSecondary} />
         <Text style={[styles.label, { color: selected ? colors.accentText : colors.textSecondary }]}>{tab.label}</Text>
       </PressableScale></View>;

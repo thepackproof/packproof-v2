@@ -1011,6 +1011,7 @@ export class PackProofV2Client {
     workflowType?: string;
     itemCount?: number;
     itemTitle?: string;
+    transaction?: TransactionWriteInput;
   }): Promise<ProofView> {
     return this.request("/proofs", {
       method: "POST",

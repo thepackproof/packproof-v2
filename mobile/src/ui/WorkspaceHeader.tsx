@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import type { AccountSection, AppRouteName } from "../app/navigation";
@@ -33,6 +33,7 @@ const profileDestinations: Destination[] = [
 /** A phone-sized counterpart to the workstation sidebar. */
 export function WorkspaceHeader({ section }: { section: string }) {
   const app = usePackProof();
+  const largeText = useWindowDimensions().fontScale > 1.4;
   const { colors, scheme, setPreference } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   function navigate(destination: Destination) {
@@ -44,7 +45,7 @@ export function WorkspaceHeader({ section }: { section: string }) {
       <View style={styles.top}>
         {!MOBILE_TASK_UX_ENABLED ? <IconButton label="Open workspace menu" onPress={() => setMenuOpen(true)}><Ionicons name="menu-outline" size={24} color={colors.textPrimary} /></IconButton> : null}
         <View style={styles.brandSlot}><PressableScale accessibilityRole="button" accessibilityLabel="PackProof Home" onPress={() => app.go("home")} style={styles.brand}>
-          <View style={styles.mark}><Ionicons name="shield-outline" size={26} color={colors.logoBlue} /><View style={[styles.markDot, { backgroundColor: colors.logoGreen, borderColor: colors.background }]} /></View>
+          {!largeText ? <View style={styles.mark}><Ionicons name="shield-outline" size={26} color={colors.logoBlue} /><View style={[styles.markDot, { backgroundColor: colors.logoGreen, borderColor: colors.background }]} /></View> : null}
           <Text style={[styles.wordmark, { color: colors.textPrimary }]}>PackProof</Text>
         </PressableScale></View>
         <IconButton label={MOBILE_TASK_UX_ENABLED ? "Open profile menu" : "Open settings"} onPress={() => MOBILE_TASK_UX_ENABLED ? setMenuOpen(true) : app.go("account")}><Ionicons name="person-circle-outline" size={28} color={colors.textSecondary} /></IconButton>
