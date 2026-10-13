@@ -69,7 +69,7 @@ export function ShareProof({id,onClose}:{id:string;onClose:()=>void}) {
         <p className="help">{preview.disclosure.revocationNotice||revocationNotice}</p>
         <label className="declaration"><input type="checkbox" checked={reviewed} disabled={!!busy} onChange={event=>setReviewed(event.target.checked)}/><span>{sharingConsent}</span></label>
       </>}
-      <div className="modal-actions"><button disabled={busy==='create'} onClick={onClose}>Cancel</button>{preview?<><button disabled={!!busy} onClick={()=>void refresh()}>Refresh preview</button><button className="primary" disabled={!!busy||!reviewed} onClick={()=>void create()}>{busy==='create'?'Creating link…':'Create share link'}</button></>:<button className="primary" disabled={!!busy} onClick={()=>void refresh()}>Review latest preview</button>}</div>
+      <div className="modal-actions"><button disabled={busy==='create'} onClick={onClose}>Close preview</button>{preview?<><button disabled={!!busy} onClick={()=>void refresh()}>Refresh preview</button><button className="primary" disabled={!!busy||!reviewed} onClick={()=>void create()}>{busy==='create'?'Creating link…':'Create share link'}</button></>:<button className="primary" disabled={!!busy} onClick={()=>void refresh()}>Review latest preview</button>}</div>
     </>}
   </Modal>;
 }

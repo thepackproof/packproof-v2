@@ -23,7 +23,7 @@ export function initialProofRecordView(): ProofRecordViewState {
 export function recordProofStatus(status: string): string {
   const labels: Record<string, string> = {
     OPEN: "In progress", AWAITING_PARTICIPANT: "Waiting for buyer",
-    READY_FOR_EVIDENCE: "Recording needed", EVIDENCE_COMMITTED: "Finish saving", FINALIZED: "Proof saved",
+    READY_FOR_EVIDENCE: "Recording needed", EVIDENCE_COMMITTED: "Finish saving", FINALIZED: "Proof completed",
   };
   return labels[status] ?? "In progress";
 }
@@ -131,7 +131,7 @@ export function receiptAcknowledgment(record: ReceiptRecordSummary | null): stri
 
 export function recordCompletionState(status: string | null | undefined) {
   const finalized = status === "FINALIZED";
-  return { finalized, title: finalized ? "Proof saved" : "Your Proof is not finished yet", label: finalized ? "View Proof" : "Finish saving" };
+  return { finalized, title: finalized ? "Proof completed" : "Your Proof is not finished yet", label: finalized ? "View Proof" : "Finish saving" };
 }
 
 export type RecordActivityGroup = { key: string; entry: ChronologyEntry; entries: ChronologyEntry[]; access: boolean };

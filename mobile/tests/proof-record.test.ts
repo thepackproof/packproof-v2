@@ -77,7 +77,7 @@ test("ordinary Proof finalization guidance cannot be overwritten by a stale serv
 test("Proof completion labels reflect canonical state and do not expose internal enums", () => {
   assert.equal(recordProofStatus("READY_FOR_EVIDENCE"), "Recording needed");
   assert.equal(recordProofStatus("EVIDENCE_COMMITTED"), "Finish saving");
-  assert.equal(recordProofStatus("FINALIZED"), "Proof saved");
+  assert.equal(recordProofStatus("FINALIZED"), "Proof completed");
   assert.equal(recordProofStatus("UNKNOWN_STATE"), "In progress");
 });
 

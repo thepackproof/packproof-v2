@@ -59,7 +59,7 @@ export function deriveNextAction(input: NextActionInput): NextAction {
   if (status === "FINALIZED") {
     return {
       key: "completed",
-      label: "Proof saved",
+      label: "Proof completed",
       hint: "Evidence record secured. Later carrier observations do not change the sealed record.",
       kind: "success",
       enabled: false,

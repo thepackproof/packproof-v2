@@ -172,7 +172,7 @@ function ScopedSignatureProofScreen({ scope, currentScope }: { scope: string; cu
   if (!proofId || !app.session)
     return (
       <AppScreen>
-        <AppHeader title="Proof tools" onBack={app.goBack} />
+        <AppHeader title="Evidence details" onBack={app.goBack} />
       </AppScreen>
     );
   const videos =
@@ -206,7 +206,7 @@ function ScopedSignatureProofScreen({ scope, currentScope }: { scope: string; cu
   }
   return (
     <AppScreen scroll={false}>
-      <AppHeader title="Proof tools" onBack={app.goBack} />
+      <AppHeader title="Evidence details" onBack={app.goBack} />
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} accessibilityRole="tablist" accessibilityLabel="Proof tools">
           {proofTools.map(item => <PressableScale key={item.key} accessibilityRole="tab" accessibilityState={{ selected: tool === item.key }} onPress={() => selectTool(item.key)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: tool === item.key ? colors.accent : "transparent" }}>

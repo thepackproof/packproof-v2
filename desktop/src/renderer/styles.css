@@ -96,3 +96,25 @@
 .modal .sample-canonical .tracking-scans time{font-size:10px;color:var(--muted)}
 .modal .sample-canonical .scan-dot{width:6px;height:6px;background:var(--blue);border-radius:50%;margin-top:5px;flex-shrink:0}
 @media(max-width:600px){.modal .sample-canonical .sample-top{padding:12px}.modal .sample-canonical .sample-body{padding:10px}.modal .sample-canonical .proof-timeline-entry{grid-template-columns:24px minmax(0,1fr);gap:8px}.modal .sample-canonical .timeline-date{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}.modal .sample-canonical .tracking-identity dl>div{grid-template-columns:1fr;gap:3px}.modal .sample-canonical .document-toolbar{grid-template-columns:minmax(0,1fr)}.modal .sample-canonical .document-file-icon{display:none}.modal .sample-canonical .document-download{grid-column:1}.modal .sample-canonical .sample-source-note{padding:12px}}
+
+/* Customer flow: readable records and one next action, using the existing palette. */
+.app-layout .workspace-content{max-width:1280px;margin-inline:auto}
+.app-layout button{min-height:44px;font-size:14px}
+.app-layout input,.app-layout select,.modal input,.modal select{font-size:16px;min-height:44px}
+.app-layout th{font-size:12px;padding:16px}
+.app-layout td,.app-layout .table-link{font-size:15px}
+.app-layout td small,.app-layout .badge{font-size:13px;line-height:1.5}
+.app-layout .hero-station{min-height:0;padding:24px;background:var(--surface)}
+.app-layout .hero-station p{font-size:15px}
+.app-layout .metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.app-layout .metric-grid>button{min-height:100px}
+.app-layout .metric-grid>button span{font-size:14px}
+.app-layout .home-grid{grid-template-columns:minmax(0,1fr)}
+.app-layout .workspace-shortcuts,.intake-modes{display:flex;flex-wrap:wrap;gap:12px;margin-block:20px}
+.app-layout .journey-guide{font-size:14px;line-height:1.8;color:var(--muted)}
+.notification-history{list-style:none;padding:0;margin:0}
+.notification-history li{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--border);padding:12px 0}
+.notification-history time{font-size:13px;color:var(--muted)}
+.modal summary,.app-layout details>summary{padding-block:16px;cursor:pointer;font-size:15px}
+.modal details[open]>summary{margin-bottom:12px}
+@media(max-width:760px){.notification-history li{align-items:flex-start;flex-direction:column;gap:4px}.app-layout .metric-grid{grid-template-columns:1fr}.app-layout .workspace-content{padding:16px}}

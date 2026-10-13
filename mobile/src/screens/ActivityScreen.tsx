@@ -23,17 +23,18 @@ export function ActivityScreen() {
   const filter = app.route.activityFilter ?? "all";
   const selectedSessionId = app.route.activitySessionId;
   const [notifications, setNotifications] = useState<ProofNotification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const scope = `${app.apiBaseUrl}:${app.session?.userId ?? ""}`;
   useEffect(() => {
     let active = true;
-    setNotifications([]); setNotificationError(null);
+    setNotifications([]); setNotificationError(null); setNotificationsLoading(true);
     const account = app.session;
-    if (!account) return;
+    if (!account) { setNotificationsLoading(false); return; }
     void app.ensureAuth().then(() => { app.client.assertCaptureAccount(account.userId, account.apiBaseUrl); return app.client.notificationRequest<{ notifications: ProofNotification[] }>("notifications"); })
       .then(result => { app.client.assertCaptureAccount(account.userId, account.apiBaseUrl); if (active) setNotifications(result.notifications); })
-      .catch(() => { if (active) setNotificationError("Notifications could not be refreshed. Saved recordings remain available."); });
+      .catch(() => { if (active) setNotificationError("Notifications could not be refreshed. Saved recordings remain available."); }).finally(() => { if(active)setNotificationsLoading(false); });
     return () => { active = false; };
   }, [scope, generation]);
   const recordings = useMemo(() => workspaceRecordings(app.savedRecordings, app.localCapture).filter(capture => capture.captureUserId === app.session?.userId && capture.recovery?.apiBaseUrl.replace(/\/+$/, "") === app.apiBaseUrl.replace(/\/+$/, "")), [app.savedRecordings, app.localCapture, scope]);
@@ -63,7 +64,8 @@ export function ActivityScreen() {
     {!selectedSessionId && (filter === "all" || filter === "completed") ? <View style={styles.group}>
       <View style={styles.headingRow}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Notifications</Text><Button label="Preferences" variant="tertiary" onPress={() => app.go("account", { accountSection: "notifications" })} /></View>
       {notificationError ? <><Text style={[styles.text, { color: colors.textSecondary }]}>{notificationError}</Text><Button label="Retry notifications" variant="tertiary" onPress={() => setGeneration(value => value + 1)} /></> : null}
-      {!notificationError && !notifications.length ? <Text style={[styles.text, { color: colors.textSecondary }]}>Proof updates will appear here.</Text> : null}
+      {notificationsLoading ? <Text accessibilityLiveRegion="polite" style={[styles.text,{color:colors.textSecondary}]}>Loading recent updates…</Text> : null}
+      {!notificationsLoading && !notificationError && !notifications.length ? <Text style={[styles.text, { color: colors.textSecondary }]}>Proof updates will appear here.</Text> : null}
       {notifications.map(update => <View key={update.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.text, { color: colors.textSecondary }]}>Notification · {formatDateTime(update.createdAt)}</Text><Button label={update.title} variant="tertiary" onPress={() => void app.run(async () => { await app.openProof(update.proofId); await app.client.notificationRequest(`notifications/${encodeURIComponent(update.id)}/read`, "POST", {}).catch(() => undefined); })} /></View>)}
     </View> : null}
   </AppScreen>;

@@ -23,7 +23,7 @@ const PROOF_STATUS_LABELS: Record<string, string> = {
   AWAITING_PARTICIPANT: "Waiting for buyer",
   READY_FOR_EVIDENCE: "Recording needed",
   EVIDENCE_COMMITTED: "Finish saving",
-  FINALIZED: "Proof saved",
+  FINALIZED: "Proof completed",
 };
 
 export function proofStatusLabel(status: string | null | undefined): string {
@@ -103,7 +103,7 @@ export function humanProofStatus(input: {
   hasShipping?: boolean;
 }): string {
   // Carrier movement is shown separately; it never replaces the Proof lifecycle.
-  if (input.proofStatus === "FINALIZED") return "Proof saved";
+  if (input.proofStatus === "FINALIZED") return "Proof completed";
   if (input.captureBelongsToProof && input.hasLocalCapture && input.captureStatus && input.captureStatus !== "idle") {
     const capture = captureStatusLabel(input.captureStatus);
     if (capture) {

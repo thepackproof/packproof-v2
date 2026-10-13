@@ -2,7 +2,10 @@ import { classifyProofPresentation } from '../../../backend/src/domain/proof-pre
 import { normalizeShippingBarcode } from '../../../backend/src/capture/shipping-barcode';
 import type { FulfillmentQueueItem, ProofCollectionItem } from '../../../web/src/api/types';
 
-export const presentation = (proof: ProofCollectionItem) => proof.presentation ?? classifyProofPresentation(proof);
+export const presentation = (proof: ProofCollectionItem) => {
+  const state = proof.presentation ?? classifyProofPresentation(proof);
+  return {...state, nextAction:{...state.nextAction,label:state.nextAction.label.replace(/^Document item (.+)/,"Photograph front and back · item $1")}};
+};
 export function humanize(value: string | null | undefined): string {
   return value ? value.replace(/[_-]/g, ' ').toLowerCase().replace(/^\w/, character => character.toUpperCase()) : 'Not available';
 }

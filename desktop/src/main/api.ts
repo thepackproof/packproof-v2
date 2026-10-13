@@ -87,6 +87,7 @@ export class DesktopApi {
   getMe(signal?: AbortSignal): Promise<ProfileView> { return this.request('/me', { signal }); }
   updateProfile(input: { username?: string; displayName?: string }): Promise<ProfileView> { return this.request('/me/profile', { method: 'PATCH', body: input }); }
   getCapabilities(signal?: AbortSignal): Promise<DesktopCapabilities> { return this.request('/capabilities', { auth: false, signal }); }
+  listActivity():Promise<{notifications:import('../shared/contracts').WorkspaceUpdate[]}>{return this.request('/me/notifications');}
   async listProofs(input: { view?: 'all' | 'attention' | 'completed'; q?: string; signal?:AbortSignal; maxPages?:number } = {}): Promise<ProofCollectionItem[]> {
     const result = new Map<string, ProofCollectionItem>();
     let offset: number | null = 0;

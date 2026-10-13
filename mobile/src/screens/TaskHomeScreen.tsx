@@ -20,22 +20,24 @@ export function TaskHomeScreen() {
   function library(view: "all" | "attention" | "completed") {
     app.setProofsView(view); app.setProofsQuery(""); app.setProofsRoleFilter("all"); app.setProofsCarrierFilter(null); app.go("proofs");
   }
-  const action = home.recommendation;
+  const selected = home.recommendation;
+  const nextLabel = app.proofCollection.find(row => row.proofId === selected.targetId)?.presentation?.nextAction.label;
+  const action = selected.kind === "create_proof" ? {...selected, title:"Record a shipment", buttonLabel:"Record shipment"} : selected.kind === "continue_proof" && nextLabel ? {...selected, buttonLabel:nextLabel.replace(/^Document item (.+)/,"Photograph front and back · item $1"), reason:`Next: ${nextLabel.replace(/^Document item (.+)/,"Photograph front and back · item $1")}.`} : selected;
   return <AppScreen padded={false} bottomInset={false} restorationReady={!home.loading} initialOffsetY={app.readWorkspaceOffset("home")} onScrollOffset={offset => app.setWorkspaceOffset("home", offset)} onRefresh={() => void home.refresh()} refreshing={home.refreshing}>
     <View style={styles.content}>
       <WorkspaceHeader section="Home" />
-      <View onTouchStart={() => home.setInteracting(true)} onTouchEnd={() => home.setInteracting(false)} onTouchCancel={() => home.setInteracting(false)} style={[styles.next, { backgroundColor: colors.accentSoft, borderColor: colors.accentSoftBorder }]}>
+      <View onTouchStart={() => home.setInteracting(true)} onTouchEnd={() => home.setInteracting(false)} onTouchCancel={() => home.setInteracting(false)} style={[styles.next, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {home.loading ? <View accessibilityLabel="Loading your next action" accessibilityRole="progressbar" style={styles.placeholder}>
           <View style={[styles.line, { backgroundColor: colors.surfaceElevated, width: "38%" }]} /><View style={[styles.titleLine, { backgroundColor: colors.surfaceElevated }]} /><View style={[styles.line, { backgroundColor: colors.surfaceElevated }]} /><View style={[styles.buttonPlaceholder, { backgroundColor: colors.surfaceElevated }]} />
         </View> : <>
           <Text style={[styles.state, { color: colors.accentText }]}>{action.sourceFreshness === "device" ? "Saved on this device" : action.kind === "create_proof" ? "Ready when you are" : "Your next action"}</Text>
-          <Text accessibilityRole="header" style={[styles.actionTitle, { color: colors.textPrimary }]}>{firstProof ? "Create your first Proof" : action.title}</Text>
+          <Text accessibilityRole="header" style={[styles.actionTitle, { color: colors.textPrimary }]}>{firstProof ? "Record your first shipment" : action.title}</Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>{action.reason}</Text>
           <TutorialTarget name="capture"><PressableScale accessibilityRole="button" accessibilityLabel={action.buttonLabel} accessibilityState={{ disabled: app.busy, busy: app.busy }} disabled={app.busy} onFocus={() => home.setInteracting(true)} onBlur={() => home.setInteracting(false)} onPressIn={() => home.setInteracting(true)} onPressOut={() => home.setInteracting(false)} onPress={() => void home.runAction(action)} style={[styles.primaryAction, { backgroundColor: app.busy ? colors.disabledBackground : colors.primary }]}>{app.busy ? <ActivityIndicator color={colors.disabledText} /> : <Text style={[typography.button, { color: colors.textOnPrimary, textAlign: "center" }]}>{action.buttonLabel}</Text>}</PressableScale></TutorialTarget>
         </>}
       </View>
       {FIRST_PROOF_EXPERIENCE_ENABLED && !home.loading && action.kind === "create_proof" ? <Button label="See a sample Proof" variant="tertiary" onPress={() => app.go("sample")} /> : null}
-      {home.loading || action.kind !== "create_proof" ? <TutorialTarget name="create"><Button label="Create Proof" icon="add-outline" variant="secondary" disabled={app.busy} onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}
+      {home.loading || action.kind !== "create_proof" ? <TutorialTarget name="create"><Button label="Record shipment" icon="add-outline" variant="secondary" disabled={app.busy} onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}
       {app.offline ? <Text style={[styles.body, { color: colors.warningText }]}>Offline. Saved work remains on this device. Connect before creating a Proof.</Text> : null}
       {home.freshnessLabel ? <Text accessibilityLiveRegion="polite" style={[styles.meta, { color: colors.textMuted }]}>{home.freshnessLabel}</Text> : null}
       <ErrorBanner message={home.error} />

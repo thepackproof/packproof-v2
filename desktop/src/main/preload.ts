@@ -2,6 +2,7 @@ import {contextBridge,ipcRenderer} from 'electron';
 import type {PackProofDesktop,DesktopEvent} from '../shared/contracts';
 const call=(channel:string,...args:unknown[])=>ipcRenderer.invoke(`packproof:${channel}`,...args).then(result=>{if(!result?.ok)throw new Error(result?.error??'PackProof could not complete the request.');return result.value;});
 const api:PackProofDesktop={
+ activity:{list:()=>call('activity.list')},
  study:{scope:userId=>call('study.scope',userId),request:(userId,path,method,body)=>call('study.request',{userId,path,method,body})},
  rnd:{grants:(id,analysis)=>call('rnd.grants',id,analysis),createGrant:(id,analysis,input,key)=>call('rnd.createGrant',id,analysis,input,key),revokeGrant:(id,grant)=>call('rnd.revokeGrant',id,grant),annotations:id=>call('rnd.annotations',id),annotate:(id,input,key)=>call('rnd.annotate',id,input,key),exportArchive:(id,analysis)=>call('rnd.archive',id,analysis),source:(id,evidence)=>call('rnd.source',id,evidence),capabilities:()=>call('rnd.capabilities'),list:id=>call('rnd.list',id),consent:(id,granted,key)=>call('rnd.consent',id,granted,key),request:(id,input,key)=>call('rnd.request',id,input,key),export:(id,key)=>call('rnd.export',id,key),derivative:(id,input,key)=>call('rnd.derivative',id,input,key),artifact:(id,analysis,index)=>call('rnd.artifact',id,analysis,index),review:(id,analysis,input,key)=>call('rnd.review',id,analysis,input,key)},
  onboarding:{getOnboarding:()=>call('onboarding.get'),updateOnboarding:action=>call('onboarding.update',action)},
