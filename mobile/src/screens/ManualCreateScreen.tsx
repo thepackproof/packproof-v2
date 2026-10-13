@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { usePackProof } from "../app/PackProofProvider";
 import { AppHeader, SectionHeader } from "../ui/AppHeader";
 import { AppScreen } from "../ui/AppScreen";
-import { Ionicons } from "@expo/vector-icons";
-import { Button, IconButton } from "../ui/Button";
+import { Button } from "../ui/Button";
 import { FormField } from "../ui/FormField";
 import { DateField } from "../ui/DateField";
 import { ErrorBanner } from "../ui/EmptyState";
@@ -41,11 +40,11 @@ export function ManualCreateScreen() {
 
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title="New Proof" onBack={app.goBack} right={<IconButton label="Share Proof" onPress={() => Alert.alert("Share Proof", app.offline ? "Connect to create a share link. Your draft is kept." : "Create this Proof to get a share link. Your draft is kept.")}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton>} />
+      <AppHeader title="Record shipment" onBack={app.goBack} />
       <ErrorBanner message={app.error} />
       {app.manualDraftNeedsRecovery ? <View><Text style={{color:colors.textSecondary,fontSize:16,lineHeight:24}}>A previous creation still needs to be checked. Recover its submitted details before starting another Proof.</Text><Button label="Recover submitted draft" variant="secondary" onPress={app.recoverManualDraft}/></View> : null}
       {app.offline ? <Text accessibilityLiveRegion="polite" style={{color:colors.textSecondary}}>Connect before creating this Proof or starting capture. Your form stays open.</Text> : null}
-      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Record shipment evidence without connecting a store.</Text>
+      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Choose shipment → Record packing → Review and submit → Confirm saving → Share. A marketplace connection is optional.</Text>
       {app.intakeReview ? (
         <>
           <SectionHeader title="Review your order" />
@@ -54,6 +53,11 @@ export function ManualCreateScreen() {
           ))}
         </>
       ) : null}
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
+        <Button label="Enter details" variant="secondary" disabled onPress={() => {}} />
+        <Button label="Paste order or receipt" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("intake")} />
+        <Button label="Select an order" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("orders")} />
+      </View>
       <FormField
         label="What are you shipping?"
         value={form.itemTitle}
@@ -62,7 +66,6 @@ export function ManualCreateScreen() {
         maxLength={200}
       />
       <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Show the shipping label during your packing video. PackProof will try to read it for you.</Text>
-      <Button label="Paste order or receipt" variant="tertiary" onPress={() => app.go("intake")} />
       <Button
         label={showDetails ? "Hide optional details" : "Add optional details"}
         variant="tertiary"

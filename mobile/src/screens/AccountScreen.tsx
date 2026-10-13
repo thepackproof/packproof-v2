@@ -36,7 +36,7 @@ type DeletionRequest = { requestId: string; state: string; requestedAt: string; 
 const SECTION_TITLES: Record<AccountSection, string> = {
   advanced: "Advanced",
   developer: "Developer access",
-  billing: "Plan and billing", notifications: "Notifications", profile: "Profile", channels: "Integrations", recordings: "Uploads",
+  billing: "Plan and usage", notifications: "Notifications", profile: "Profile", channels: "Integrations", recordings: "Uploads",
   appearance: "Appearance", help: "Help & support", privacy: "Privacy & account",
 };
 const APPEARANCE_OPTIONS: Array<{ id: AppearancePreference; label: string; hint: string }> = [
@@ -144,12 +144,12 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <SectionHeader title="Account and billing" />
           <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
-            <AccountRow title="Plan and billing" detail="Plan, allowance, and invoices" icon="card-outline" onPress={() => openSection("billing")} />
+            <AccountRow title="Plan and usage" detail="Current plan and Proof usage" icon="card-outline" onPress={() => openSection("billing")} />
             <AccountRow title="Privacy and account" detail="Privacy, terms, and account deletion" icon="shield-checkmark-outline" onPress={() => openSection("privacy")} last />
           </View>
           <SectionHeader title="Capture preferences" />
           <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <AccountRow title="Notifications" detail="Upload completion and Proof updates" icon="notifications-outline" onPress={() => openSection("notifications")} />
+            <AccountRow title="Notifications" detail="Delivery preferences; history is in Activity" icon="notifications-outline" onPress={() => openSection("notifications")} />
             <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "System"} icon="contrast-outline" onPress={() => openSection("appearance")} last />
           </View>
           <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -162,7 +162,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           <AccountRow title="Profile" detail="Your name and username" icon="person-outline" onPress={() => openSection("profile")} />
           <AccountRow title="Integrations" detail={app.connectedAccounts.length ? "Manage connections and automatic orders" : "Connect your selling accounts"} icon="storefront-outline" onPress={() => openSection("channels")} />
           <AccountRow title="Uploads" detail={unfinished.length ? `${unfinished.length} ${unfinished.length === 1 ? "recording needs" : "recordings need"} attention` : retained.length ? `${retained.length} completed ${retained.length === 1 ? "copy" : "copies"} retained` : "No recordings stored here"} icon="cloud-upload-outline" onPress={() => openSection("recordings")} />
-          <AccountRow title="Plan and billing" detail="Your plan, Proof allowance, and invoices" icon="card-outline" onPress={() => openSection("billing")} />
+          <AccountRow title="Plan and usage" detail="Your plan, Proof allowance, and invoices" icon="card-outline" onPress={() => openSection("billing")} />
           <AccountRow title="Notifications" detail="Proof updates, delivery preferences and history" icon="notifications-outline" onPress={() => openSection("notifications")} />
           <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "Light"} icon="contrast-outline" onPress={() => openSection("appearance")} />
           <AccountRow title="Help & support" detail="Recording, recovery, and invitations" icon="help-circle-outline" onPress={() => openSection("help")} />
@@ -188,9 +188,11 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       </> : null}
 
       {section === "channels" ? <>
+        <Button label="Record shipment" variant="secondary" onPress={() => app.selectCreateProof()} />
+        <Text style={[styles.body,{color:colors.textSecondary}]}>Connections are optional. Enter shipment details to start recording.</Text>
         <View style={[styles.integrationNotice, { backgroundColor: colors.accentSoft }]}><Ionicons name="link-outline" size={20} color={colors.accentText} /><Text style={[styles.noticeCopy, { color: colors.textPrimary }]}>Marketplace authorization is separate from PackProof sign-in. Choose which selling accounts prepare orders automatically.</Text></View>
         {!channels.length && !app.busy ? <Text style={[styles.meta, { color: colors.textSecondary }]}>No sales channels are available right now. You can still record a shipment from Proofs.</Text> : null}
-        {MOBILE_TASK_UX_ENABLED && unavailableChannels.length > 0 ? <Button label={`${showUnavailable ? "Hide" : "Show"} coming soon (${unavailableChannels.length})`} variant="tertiary" onPress={() => setShowUnavailable(value => !value)} /> : null}
+        {MOBILE_TASK_UX_ENABLED && unavailableChannels.length > 0 ? <Button label={`${showUnavailable ? "Hide" : "Show"} currently unavailable channels (${unavailableChannels.length})`} variant="tertiary" onPress={() => setShowUnavailable(value => !value)} /> : null}
         <View style={styles.channelGrid}>{displayedChannels.map(channel => {
           const canConnect = salesChannelCanConnect(channel) && Boolean(channel.catalog?.capabilities.transactions || channel.catalog?.capabilities.fulfillment);
           const unavailable = channel.catalog?.enabled === false;

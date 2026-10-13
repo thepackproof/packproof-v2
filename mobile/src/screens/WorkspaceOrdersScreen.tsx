@@ -88,7 +88,7 @@ export function WorkspaceOrdersScreen({ station = false }: { station?: boolean }
     {taskPack ? <View style={styles.entrances}>
       <Button label="Scan shipment" icon="scan-outline" disabled={busy} onPress={() => { app.setScanPhase("camera"); app.setScanInput(""); app.go("scan"); }} />
       <Button label="Select existing Proof" icon="document-text-outline" variant="secondary" disabled={busy} onPress={() => { app.setProofsView("all"); app.setProofsQuery(""); app.go("proofs"); }} />
-      <Button label="Create new Proof" icon="add-outline" variant="secondary" disabled={busy} onPress={() => app.selectCreateProof()} />
+      <Button label="Record shipment" icon="add-outline" variant="secondary" disabled={busy} onPress={() => app.selectCreateProof()} />
       <Button label="View Orders" variant="tertiary" onPress={() => app.go("orders")} />
     </View> : <View style={styles.actions}><View style={styles.action}><Button label="Create Proof" icon="add-outline" disabled={busy} onPress={() => app.selectCreateProof()} /></View><View style={styles.action}><Button label="Refresh" icon="refresh-outline" variant="secondary" disabled={busy || loading} onPress={refreshQueue} /></View></View>}
     <OfflineBanner visible={app.offline} /><ErrorBanner message={app.error || error} />

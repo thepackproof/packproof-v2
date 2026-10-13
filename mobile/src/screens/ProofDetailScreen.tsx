@@ -1,3 +1,4 @@
+import { EvidencePackageButton } from "../ui/EvidencePackageButton";
 import { Coaching } from "../onboarding/Onboarding";
 import { ProofNotificationMute } from "../notifications/NotificationCenter";
 import { SelectedOrderHandoff } from "../intake/SelectedOrderHandoff";
@@ -283,6 +284,7 @@ export function ProofDetailScreen() {
         }
       />
 
+      {proof.status === "FINALIZED" ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId}/> : null}
       <ProofRecord
         key={proof.proofId}
         statusLabel={statusLabel}
@@ -339,7 +341,7 @@ export function ProofDetailScreen() {
       <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
         <ProofNotificationMute key={proof.proofId}/>
         {menuOpen && app.role === "SELLER" && proof.status === "READY_FOR_EVIDENCE" && proof.workflowType === "COMMERCE_SALE" && proof.participationPolicy === "COUNTERPARTY_OPTIONAL" && !captureBelongs ? <SelectedOrderHandoff key={proof.proofId} proofId={proof.proofId} transactionId={proof.transaction.transactionId} onManageDevices={() => { setMenuOpen(false); app.go("account", { accountSection: "channels" }); }} /> : null}
-        <MoreAction label="Evidence and claim tools" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
+        <MoreAction label="Evidence details" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
         <MoreAction label="Responses and corrections" variant="secondary" onPress={() => { setMenuOpen(false); app.go("supporting", { supportingSection: "responses" }); }} />
         <MoreAction label="Retention and preservation" variant="secondary" onPress={() => { setMenuOpen(false); app.go("supporting", { supportingSection: "retention" }); }} />
         {app.role === "SELLER" ? <MoreAction label="Private media copies" variant="secondary" onPress={() => { setMenuOpen(false); app.go("supporting", { supportingSection: "privacy" }); }} /> : null}

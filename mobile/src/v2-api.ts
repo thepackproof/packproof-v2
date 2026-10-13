@@ -1176,6 +1176,8 @@ export class PackProofV2Client {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/capture-sessions/${encodeURIComponent(sessionId)}/cancel`, { method: "POST", body: {} });
   }
 
+  evidencePackageUrl(proofId:string):string { return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/package`); }
+
   caseExportUrl(proofId: string, caseId: string): string {
     return joinUrl(this.options.baseUrl, `/proofs/${encodeURIComponent(proofId)}/signature/cases/${encodeURIComponent(caseId)}/export.html`);
   }

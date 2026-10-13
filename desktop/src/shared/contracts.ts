@@ -19,7 +19,9 @@ export type SharedProofPreview = Pick<PublicProofView,'proofId'|'status'|'eviden
 export interface SharedProofConsent { previewHash:string; originalsReviewed:true; expiresAt:string }
 export interface SharedProofLink { url:string; expiresAt:string|null }
 export interface DesktopEvent { type: 'queue'|'session'|'update'|'navigate'|'notification'|'system'; path?: string; title?: string; message?: string }
+export interface WorkspaceUpdate { id:string; proofId:string; title:string; createdAt:string }
 export interface PackProofDesktop {
+ activity:{list():Promise<{notifications:WorkspaceUpdate[]}>};
  study:{scope(userId:string):Promise<string>;request<T>(userId:string,path:'/consent'|'/timings/start'|'/timings',method:'GET'|'POST',body?:unknown):Promise<T>};
  rnd:RndTransport & {source(proofId:string,evidenceId:string):Promise<import('../../../web/src/rnd/types').SourcePreview>};
  onboarding:Transport;

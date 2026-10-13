@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Text } from "react-native";
 import { usePackProof } from "../app/PackProofProvider";
 import { AppScreen } from "../ui/AppScreen";
@@ -26,6 +26,9 @@ export function OrderIntakeScreen({
   const [text, setText] = useState(sharedText ?? ""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
+  const alive = useRef(true), inFlight = useRef(false);
+  const scope = `${app.apiBaseUrl}:${app.session?.userId ?? ""}`;
+  useEffect(() => { alive.current=true; return () => { alive.current=false; }; }, [scope]);
   return (
     <AppScreen>
       <AppHeader
@@ -53,19 +56,26 @@ export function OrderIntakeScreen({
       <Button
         label={busy ? "Reading order…" : "Review order details"}
         loading={busy}
-        disabled={!text.trim()}
+        disabled={!text.trim() || app.offline}
         onPress={() => {
+          if(inFlight.current)return;
+          const account=app.session;
+          if(!account)return;
+          inFlight.current=true;
           setBusy(true);
           setError(null);
           void app
             .ensureAuth()
-            .then(() => app.client.previewOrderIntake(text, sharedText != null ? "share" : "paste"))
+            .then(() => { app.client.assertCaptureAccount(account.userId,account.apiBaseUrl); if(!alive.current)throw new Error("Order entry was closed."); return app.client.previewOrderIntake(text, sharedText != null ? "share" : "paste"); })
             .then(async (preview) => {
+              app.client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+              if(!alive.current)return;
               await onConsumed();
-              app.beginIntakeReview(preview);
+              app.client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+              if(alive.current)app.beginIntakeReview(preview);
             })
-            .catch((e) => setError(e instanceof Error ? e.message : "Could not read order"))
-            .finally(() => setBusy(false));
+            .catch((e) => { if(alive.current)setError(e instanceof Error ? e.message : "Could not read order"); })
+            .finally(() => { inFlight.current=false; if(alive.current)setBusy(false); });
         }}
       />
       {onDeferred ? <Button label="Discard shared order" variant="tertiary" disabled={busy} onPress={() => {
