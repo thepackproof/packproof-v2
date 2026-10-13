@@ -40,9 +40,13 @@ health path and task count. A second always-on API task is optional and requires
 owner's cost approval; the default is the existing one-task capacity.
 
 The existing foundation template now retains database backups for 35 days and enables
-deletion protection. Before execution, review a CloudFormation change set: the database
-must be modified in place, never replaced. Enabling backups is not a restore drill;
-record the actual retention and latest restorable time after deployment.
+deletion protection. It also records the eBay startup-secret permission that already
+exists on the execution role so a foundation update cannot drop that permission.
+Verify the resolved policy matches the current live policy before execution.
+Review the CloudFormation change set and apply a stack policy that denies database
+replacement/deletion: backup retention is classified as conditional by CloudFormation,
+but the existing PostgreSQL instance must only be modified in place. Enabling backups
+is not a restore drill; record the actual retention and latest restorable time afterward.
 
 Complete the managed canary and final bake period, then read back the native ECS
 deployment as `SUCCESSFUL` with 100% production traffic. Verify `/meta`, `/ready`,

@@ -17,6 +17,7 @@ export function makeProductionPlan(snapshot, candidate, { taskCount = 1 } = {}) 
   if (!/^[a-z][a-z0-9-]{0,62}$/.test(namespace)) throw Error('INVALID_EXISTING_CREDENTIAL_NAMESPACE');
   const changes = { PACKPROOF_ENVIRONMENT: 'production', PACKPROOF_CREDENTIAL_NAMESPACE: namespace, PACKPROOF_DB_SSLMODE: 'verify-full' };
   const container = plan.update.primaryContainer;
+  if ((container.secrets ?? []).some(x => Object.hasOwn(changes, x.name))) throw Error('PRODUCTION_BINDING_COLLISION');
   for (const [name,value] of Object.entries(changes)) {
     const existing = container.environment.find(x => x.name === name);
     if (existing) existing.value = value;
