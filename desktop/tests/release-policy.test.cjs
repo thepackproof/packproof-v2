@@ -136,6 +136,28 @@ test('production promotion requires actual centralized reporting delivery eviden
   assert.throws(() => validateAcceptance(report, sourceCommit), /centralized-error-reporting-delivery/);
 });
 
+test('an explicit owner device waiver is bound to source, scope and accountable approval without claiming passed tests', () => {
+  const sourceCommit = 'e'.repeat(40);
+  const report = {
+    sourceCommit, platforms:'mac', approvedBy:'Synthetic owner', testedAt:'2026-10-13T18:00:00Z',
+    deviceCheckWaiver:{sourceCommit,platforms:'mac',approvedBy:'Synthetic owner',approvedAt:'2026-10-13T17:00:00Z',authorization:'Synthetic explicit device-check waiver for policy testing only',acknowledgesUnverifiedDeviceBehavior:true},
+    tests:requiredForScope('mac').map(id=>({id,status:['privacy-review','centralized-error-reporting-delivery'].includes(id)?'passed':'waived-device-check',evidence:'Synthetic test fixture; no real acceptance'})),
+  };
+  assert.equal(validateAcceptance(report,sourceCommit,'mac'),true);
+  const noWaiver=structuredClone(report);delete noWaiver.deviceCheckWaiver;
+  assert.throws(()=>validateAcceptance(noWaiver,sourceCommit,'mac'),/incomplete/);
+  for (const [key,value] of [['sourceCommit','f'.repeat(40)],['platforms','all'],['approvedBy','Another reviewer'],['approvedAt','invalid'],['authorization',' '],['acknowledgesUnverifiedDeviceBehavior',false]]) {
+    const invalid=structuredClone(report);invalid.deviceCheckWaiver[key]=value;
+    assert.throws(()=>validateAcceptance(invalid,sourceCommit,'mac'),/waiver/);
+  }
+  for (const id of ['privacy-review','centralized-error-reporting-delivery']) {
+    const invalid=structuredClone(report);invalid.tests.find(test=>test.id===id).status='waived-device-check';
+    assert.throws(()=>validateAcceptance(invalid,sourceCommit,'mac'),new RegExp(id));
+  }
+  const incomplete=structuredClone(report);incomplete.tests[0].evidence='';
+  assert.throws(()=>validateAcceptance(incomplete,sourceCommit,'mac'),/incomplete/);
+});
+
 test('publication rejects tampering after native signature verification', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'packproof-release-test-'));
   try {

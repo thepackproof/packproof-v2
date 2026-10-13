@@ -9,6 +9,10 @@ const required = [
   'recording-upload-soak', 'privacy-review', 'centralized-error-reporting-delivery',
 ];
 
+// An explicit owner exception records missing device evidence without inventing
+// passes. It never waives signing, hashes, privacy review or reporting delivery.
+const deviceChecks = new Set(required.filter(id => !['privacy-review', 'centralized-error-reporting-delivery'].includes(id)));
+
 function validatePlatformScope(value = 'all') {
   if (!['all', 'mac', 'windows'].includes(value)) throw new Error('Release platforms must be all, mac or windows.');
   return value;
@@ -30,6 +34,15 @@ function validateAcceptance(report, expectedCommit, value = 'all') {
   // Legacy records describe the original all-platform release only.
   if ((report.platforms === undefined ? 'all' : validatePlatformScope(report.platforms)) !== scope) throw new Error('Release acceptance platform scope does not match this promotion.');
   if (typeof report.approvedBy !== 'string' || !report.approvedBy.trim() || typeof report.testedAt !== 'string' || !Number.isFinite(Date.parse(report.testedAt))) throw new Error('Release acceptance requires an accountable reviewer and test date.');
+  const waiver = report.deviceCheckWaiver;
+  if (waiver !== undefined && (!waiver || typeof waiver !== 'object' || Array.isArray(waiver)
+    || waiver.sourceCommit !== expectedCommit || waiver.platforms !== scope
+    || waiver.approvedBy !== report.approvedBy
+    || typeof waiver.approvedAt !== 'string' || !Number.isFinite(Date.parse(waiver.approvedAt))
+    || typeof waiver.authorization !== 'string' || !waiver.authorization.trim()
+    || waiver.acknowledgesUnverifiedDeviceBehavior !== true)) {
+    throw new Error('Device-check waiver requires explicit accountable authorization for this source and platform scope.');
+  }
   const gates = requiredForScope(scope), tests = new Map();
   if (!Array.isArray(report.tests)) throw new Error('Release acceptance tests are required.');
   for (const test of report.tests) {
@@ -38,7 +51,8 @@ function validateAcceptance(report, expectedCommit, value = 'all') {
   }
   for (const id of gates) {
     const test = tests.get(id);
-    if (!test || test.status !== 'passed' || typeof test.evidence !== 'string' || !test.evidence.trim()) throw new Error(`Release acceptance incomplete: ${id}`);
+    const waived = test?.status === 'waived-device-check' && waiver && deviceChecks.has(id);
+    if (!test || (test.status !== 'passed' && !waived) || typeof test.evidence !== 'string' || !test.evidence.trim()) throw new Error(`Release acceptance incomplete: ${id}`);
   }
   if (tests.size !== gates.length || [...tests.keys()].some(id => !gates.includes(id))) throw new Error('Release acceptance tests do not match its platform scope.');
   return true;
