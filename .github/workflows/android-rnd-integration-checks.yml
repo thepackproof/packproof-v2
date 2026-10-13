@@ -97,7 +97,9 @@ jobs:
           for (const key of ['EXPO_PUBLIC_COGNITO_USER_POOL_ID','EXPO_PUBLIC_COGNITO_CLIENT_ID','EXPO_PUBLIC_COGNITO_REGION']) assert(values[key]);
           const config = require(path.resolve('mobile/app.config.js')).expo;
           assert.equal(config.android.package, 'com.packproof.mobile');
-          assert.equal(config.android.versionCode, 63);
+          const expectedVersionCode = Number(values.PACKPROOF_ANDROID_VERSION_CODE);
+          assert(Number.isSafeInteger(expectedVersionCode) && expectedVersionCode >= 62, 'Invalid production version code');
+          assert.equal(config.android.versionCode, expectedVersionCode);
           assert.equal(config.android.usesCleartextTraffic, false);
           assert.equal(config.extra.packproofResearch, false);
           assert.equal(config.extra.packproofResearchProduction, true);
@@ -127,7 +129,9 @@ jobs:
           const fs = require('node:fs');
           const gradle = fs.readFileSync('mobile/android/app/build.gradle','utf8');
           assert.match(gradle, /applicationId\s+["']com\.packproof\.mobile["']/);
-          assert.match(gradle, /versionCode\s+63\b/);
+          const expectedVersionCode = Number(process.env.PACKPROOF_ANDROID_VERSION_CODE);
+          assert(Number.isSafeInteger(expectedVersionCode) && expectedVersionCode >= 62, 'Invalid production version code');
+          assert.match(gradle, new RegExp(`versionCode\\s+${expectedVersionCode}\\b`));
           assert(!gradle.includes('com.packproof.mobile.research'));
           const receiptPath = `${process.env.RUNNER_TEMP}/android-production-identity.json`;
           const receipt = JSON.parse(fs.readFileSync(receiptPath,'utf8'));
