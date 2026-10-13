@@ -35,7 +35,7 @@ jobs:
       - name: Verify scope, provenance, installed harness and updater safeguards
         working-directory: desktop
         run: |
-          node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs tests/acceptance-kit.test.cjs tests/native-launch-harness.test.cjs tests/mac-installed-acceptance.test.cjs tests/mac-candidate-provenance.test.cjs
+          node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs tests/notarize-dmg.test.cjs tests/acceptance-kit.test.cjs tests/native-launch-harness.test.cjs tests/mac-installed-acceptance.test.cjs tests/mac-candidate-provenance.test.cjs
           npx --no-install vitest run tests/updates.test.ts
 
   installed:
