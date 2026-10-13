@@ -18,7 +18,7 @@ async function stapleAndValidate(file, { run = spawnSync, wait = ms => new Promi
     for (const operation of ['staple', 'validate']) {
       const result = run('xcrun', ['stapler', operation, file], { encoding: 'utf8' });
       if (result.status !== 0) {
-        failure = new Error(`Notarized disk-image ${operation} failed (exit ${result.status ?? 'unknown'}, attempt ${attempt}/3): ${safeDiagnostic(result, env)}`);
+        failure = new Error(`Notarized artifact ${operation} failed (exit ${result.status ?? 'unknown'}, attempt ${attempt}/3): ${safeDiagnostic(result, env)}`);
         break;
       }
       if (operation === 'validate') return attempt;
@@ -44,7 +44,7 @@ async function validateStapledArtifact(file, { run = spawnSync, wait = ms => new
 
 // This hook runs BEFORE artifactCreated and update-metadata hashing. Stapling changes bytes.
 module.exports = async function notarizeDiskImage(event) {
-  if (process.env.APP_ENV === 'development' || !process.env.APP_ENV || !event.file?.endsWith('.dmg')) return;
+  if (process.env.APP_ENV === 'development' || !process.env.APP_ENV || !/\.(dmg|pkg)$/.test(event.file || '')) return;
   if (process.platform !== 'darwin') throw new Error('Disk-image notarization requires macOS.');
   const env = process.env;
   const auth = env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER
@@ -60,3 +60,4 @@ module.exports = async function notarizeDiskImage(event) {
 };
 module.exports.stapleAndValidate = stapleAndValidate;
 module.exports.validateStapledArtifact = validateStapledArtifact;
+module.exports.safeDiagnostic = safeDiagnostic;

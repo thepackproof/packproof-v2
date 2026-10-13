@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const {Readable, Transform} = require('node:stream');
 const {pipeline} = require('node:stream/promises');
 const {execFileSync} = require('node:child_process');
-const appInputs = ['desktop/src', 'desktop/build', 'desktop/index.html', 'desktop/vite.config.ts', 'desktop/tsconfig.json', 'desktop/package.json', 'desktop/package-lock.json', 'desktop/electron-builder.config.cjs', 'desktop/scripts/build.mjs', 'desktop/scripts/release-policy.cjs', 'desktop/scripts/notarize-dmg.cjs', 'web', 'mobile/src', 'packages'];
+const appInputs = ['desktop/src', 'desktop/build', 'desktop/index.html', 'desktop/vite.config.ts', 'desktop/tsconfig.json', 'desktop/package.json', 'desktop/package-lock.json', 'desktop/electron-builder.config.cjs', 'desktop/scripts/build.mjs', 'desktop/scripts/release-policy.cjs', 'desktop/scripts/notarize-dmg.cjs', 'desktop/scripts/notarize-app.cjs', 'web', 'mobile/src', 'packages'];
 function insist(value, message) { if (!value) throw new Error(message); }
 function validateCandidate(candidate, arch) {
   insist(candidate?.repository === 'thepackproof/packproof-v2', 'Unexpected candidate repository.');

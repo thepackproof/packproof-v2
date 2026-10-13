@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { stapleAndValidate, validateStapledArtifact } = require('../scripts/notarize-dmg.cjs');
+const { notarizeApplication } = require('../scripts/notarize-app.cjs');
 
 test('a ticket propagation retry must staple and validate the same disk image successfully', async () => {
   const calls = [], waits = [];
@@ -61,4 +62,29 @@ test('invalid tickets fail immediately and successful validation does not wait',
   assert.equal(await validateStapledArtifact('/signed/PackProof.app', {
     run: () => ({status:0}), wait: async () => {throw new Error('unexpected wait');}, env:{},
   }), 1);
+});
+
+test('accepted application with a lost ticket connection retries the same app and requires validation', async () => {
+  const calls = [];
+  await notarizeApplication({ appPath:'/signed/PackProof.app' }, {
+    notarize: async () => { calls.push('notarize'); throw new Error('Failed to staple your application with code: 68\nNSURLErrorDomain Code=-1005'); },
+    staple: async app => calls.push(['staple',app]), validate: async app => calls.push(['validate',app]), env:{},
+  });
+  assert.deepEqual(calls,['notarize',['staple','/signed/PackProof.app'],['validate','/signed/PackProof.app']]);
+});
+
+test('rejected notarization or invalid ticket cannot be replaced with a staple retry', async () => {
+  for (const message of ['Failed to notarize via notarytool: Invalid', 'Failed to staple your application with code: 65', 'Unrelated network connection was lost']) {
+    await assert.rejects(notarizeApplication({appPath:'/signed/PackProof.app'}, {
+      notarize: async () => {throw new Error(message);},
+      staple: async () => {throw new Error('must not staple');}, validate: async () => {throw new Error('must not validate');}, env:{},
+    }), /Application notarization failed/);
+  }
+});
+
+test('a final application ticket validation failure still stops packaging', async () => {
+  await assert.rejects(notarizeApplication({appPath:'/signed/PackProof.app'}, {
+    notarize: async () => {}, staple: async () => {throw new Error('unexpected staple');},
+    validate: async () => {throw new Error('ticket invalid');}, env:{},
+  }), /ticket invalid/);
 });
