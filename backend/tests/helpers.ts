@@ -44,6 +44,8 @@ export async function createHarness(
     google?: import("../src/integrations/connected-accounts/providers/google.js").GoogleOAuthRuntime;
     facebook?: import("../src/integrations/connected-accounts/providers/facebook.js").FacebookOAuthRuntime;
     credentialStore?: MutableCredentialStore;
+    credentialNamespace?: string;
+    releaseIdentity?: import("../src/config.js").ReleaseIdentity;
     opened?: { db: Database; close: () => Promise<void> };
     ebayDeletionSignatureVerifier?: EbayDeletionSignatureVerifier;
     manifestSigning?: import("../src/integrity/signing-runtime.js").ManifestSigningRuntime;
@@ -74,6 +76,8 @@ export async function createHarness(
     corsOrigins: options.corsOrigins,
     manifestSigning: options.manifestSigning,
     credentialStore,
+    credentialNamespace: options.credentialNamespace,
+    releaseIdentity: options.releaseIdentity,
     integrations: options.integrations ?? createDefaultIntegrationRegistry(resolvedClock, {testFixtures: true}),
     ebay: options.ebay,
     shopify: options.shopify,

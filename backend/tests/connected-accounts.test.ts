@@ -227,6 +227,21 @@ describe("connected accounts", () => {
     expect(JSON.stringify(listed.body)).not.toMatch(/token|secret|client_secret/i);
   });
 
+  it("keeps new OAuth credentials in the existing namespace after production promotion", async () => {
+    harness = await createHarness(undefined, {
+      google: googleRuntime(), credentialNamespace: 'staging',
+      releaseIdentity: {service: 'packproof-v2-api', environment: 'production', commit: null, image: null, version: null},
+    });
+    await seedAppSecrets(harness);
+    const userId = await login(harness.app, 'promotion-seller');
+    const connected = await connectProvider(harness, userId, 'google', 'valid-google-code');
+    const rows = await harness.db.query<{credential_reference: string}>(
+      'SELECT credential_reference FROM connected_accounts WHERE id=$1', [connected.accountId]);
+    expect(rows.rows[0].credential_reference).toMatch(/^packproof\/staging\/integrations\/google\//);
+    const meta = await request(harness.app).get('/meta');
+    expect(meta.body.environment).toBe('production');
+  });
+
   it("rejects connect when the provider is disabled", async () => {
     harness = await createHarness();
     const userId = await login(harness.app, "seller-1");

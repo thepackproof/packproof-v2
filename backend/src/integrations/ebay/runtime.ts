@@ -12,7 +12,7 @@ export function createEbayRuntime(
   const deletionEndpoint = `${input.publicBaseUrl.replace(/\/$/, "")}/integrations/webhooks/ebay/account-deletion`;
   return {
     enabled: config.ebay.enabled,
-    packproofEnvironment: config.release.environment,
+    packproofEnvironment: config.credentialNamespace ?? config.release.environment,
     environment: config.ebay.environment,
     clientId: config.ebay.clientId,
     ruName: config.ebay.ruName,

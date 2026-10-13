@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: PackProof V2 staging RDS PostgreSQL, IAM, VPC, and ECS cluster. The API image is deployed onto this foundation.
+Description: PackProof V2 customer foundation with historical staging resource names. Production updates preserve customer resources.
 
 Parameters:
   EvidenceBucket:
@@ -172,11 +172,11 @@ Resources:
       StorageEncrypted: true
       MultiAZ: false
       PubliclyAccessible: false
-      BackupRetentionPeriod: 1
+      BackupRetentionPeriod: 35
       PreferredBackupWindow: "07:00-08:00"
       PreferredMaintenanceWindow: "sun:08:00-sun:09:00"
       AutoMinorVersionUpgrade: true
-      DeletionProtection: false
+      DeletionProtection: true
       MasterUsername: packproof
       ManageMasterUserPassword: true
       VPCSecurityGroups:

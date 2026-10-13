@@ -1,0 +1,26 @@
+# Use as inline CodeBuild buildspecOverride after exact-source review and CI.
+# Unique S3 source and IMAGE_TAG must be pinned; never uses the project's latest tag.
+version: 0.2
+phases:
+  pre_build:
+    on-failure: ABORT
+    commands:
+      - test "$AWS_DEFAULT_REGION" = us-east-1
+      - test "$(aws sts get-caller-identity --query Account --output text)" = 784514617543
+      - test "$REVIEWED_SOURCE_SHA" != "" && printf '%s' "$REVIEWED_SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
+      - test "$IMAGE_TAG" = "security-$REVIEWED_SOURCE_SHA"
+      - test -f backend/src/index.ts && test -f backend/migrations/075_onboarding.sql && test -f backend/migrations/076_first_experience_measurement.sql && test -f backend/certs/rds-us-east-1-bundle.pem && test -f backend/scripts/rnd-migrate.mjs && test -f config/rnd/research-build.json
+      - ECR=784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 784514617543.dkr.ecr.us-east-1.amazonaws.com
+  build:
+    on-failure: ABORT
+    commands:
+      - docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/Dockerfile .
+      - docker run --rm --entrypoint node "$ECR:$IMAGE_TAG" --input-type=module -e 'import {readFile} from "node:fs/promises"; import {migrationInventory} from "./dist/db/migrate.js"; const rows=await migrationInventory(); if(process.getuid()===0||rows.length!==86)process.exit(1); await readFile("certs/rds-us-east-1-bundle.pem"); console.log(JSON.stringify({nonRoot:true,migrationFiles:rows.length}));'
+      - docker run --rm --entrypoint sh "$ECR:$IMAGE_TAG" -c 'command -v ffmpeg && command -v ffprobe && command -v prlimit && apk info --installed "zlib>=1.3.2-r1" && (test -r /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf || test -r /usr/share/fonts/dejavu/DejaVuSans.ttf || test -r /usr/share/fonts/ttf-dejavu/DejaVuSans.ttf)'
+  post_build:
+    on-failure: ABORT
+    commands:
+      - test "$CODEBUILD_BUILD_SUCCEEDING" = 1
+      - docker push "$ECR:$IMAGE_TAG"
+      - aws ecr batch-get-image --region us-east-1 --repository-name packproof-v2-staging-api --image-ids "imageTag=$IMAGE_TAG" --query 'images[].imageId' --output json
