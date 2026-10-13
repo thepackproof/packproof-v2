@@ -29,7 +29,7 @@ describe('research evidence boundary',()=>{
  const signing:ManifestSigningRuntime={publicStatus:{mode:'SIGNED',algorithm:'ECDSA_SHA_256',keyId:'research-test-key',required:true,trustListSha256:null},trustList:{schema:'packproof.trust-list.v1',generatedAt:'2026-01-01T00:00:00Z',expiresAt:'2027-01-01T00:00:00Z',keys:[{keyId:'research-test-key',algorithm:'ECDSA_SHA_256',status:'ACTIVE',publicKeyPem:publicKey.export({type:'spki',format:'pem'}).toString()}]},signer:{async signManifest(i){return {algorithm:'ECDSA_SHA_256',keyId:'research-test-key',signedAt:new Date(now).toISOString(),signatureBase64:sign('sha256',Buffer.from(i.canonicalJson),privateKey).toString('base64')};}}};
  beforeAll(async()=>{h=await createHarness({now:()=>new Date(now)},{manifestSigning:signing});seller=await createUser(h);outsider=await createUser(h);deps={...h,rnd:enabledResearchConfig(),manifestSigning:signing};},30000);
  afterAll(async()=>h?.close());
- async function proof(finalize=true){const txn=await createTransaction(h.db,h.clock,seller,{itemTitle:'R&D synthetic fixture'});const p=await createOrGetProof(h.db,h.clock,seller,txn.transactionId);await recordConsent(deps,seller,p.proofId,'consent',{purpose:'EXPERIMENTAL_ANALYSIS',version:'packproof.research-consent.v1',granted:true});if(!finalize)return {id:p.proofId,evidenceId:''};const e=await commitFulfillmentAndAttest(h,seller,p.proofId);await finalizeProof(h.db,h.clock,seller,p.proofId,signing.signer);return {id:p.proofId,evidenceId:e.evidenceId};}
+ async function proof(finalize=true,actor=seller){const txn=await createTransaction(h.db,h.clock,actor,{itemTitle:'R&D synthetic fixture'});const p=await createOrGetProof(h.db,h.clock,actor,txn.transactionId);await recordConsent(deps,actor,p.proofId,'consent',{purpose:'EXPERIMENTAL_ANALYSIS',version:'packproof.research-consent.v1',granted:true});if(!finalize)return {id:p.proofId,evidenceId:''};const e=await commitFulfillmentAndAttest(h,actor,p.proofId);await finalizeProof(h.db,h.clock,actor,p.proofId,signing.signer);return {id:p.proofId,evidenceId:e.evidenceId};}
  it('defaults every feature off and prohibits customer qualification by flag',()=>{
   expect(rndConfigFromEnv({}).enabled).toBe(false);expect(rndConfigFromEnv({}).killSwitch).toBe(true);
   expect(()=>rndConfigFromEnv({PACKPROOF_ENV:'research',PACKPROOF_RND_ENABLED:'1',PACKPROOF_RND_KILL_SWITCH:'0',PACKPROOF_RND_PROOFPRINT_CUSTOMER_DISPLAY:'1'})).toThrow(/qualification/);
@@ -206,11 +206,13 @@ describe('research evidence boundary',()=>{
   } finally {await rm(directory,{recursive:true,force:true});}
  },90000);
  it('serializes per-tenant admission across proofs while original idempotent requests remain readable',async()=>{
-  const a=await proof(),b=await proof();let first:any;
-  for(let n=0;n<31;n++){const created=await requestAnalysis(deps,seller,a.id,`budget-${n}`,{feature:'verifiedcapture',scope:`budget-${n}`,evidenceIds:[a.evidenceId]});if(n===0)first=created;}
-  const outcomes=await Promise.allSettled([requestAnalysis(deps,seller,a.id,'last-a',{feature:'verifiedcapture',scope:'last-a',evidenceIds:[a.evidenceId]}),requestAnalysis(deps,seller,b.id,'last-b',{feature:'verifiedcapture',scope:'last-b',evidenceIds:[b.evidenceId]})]);
+  // This account's queue must start empty: earlier worker failure/retry cases
+  // intentionally retain jobs, and those must not consume this test's budget.
+  const budgetSeller=await createUser(h),a=await proof(true,budgetSeller),b=await proof(true,budgetSeller);let first:any;
+  for(let n=0;n<31;n++){const created=await requestAnalysis(deps,budgetSeller,a.id,`budget-${n}`,{feature:'verifiedcapture',scope:`budget-${n}`,evidenceIds:[a.evidenceId]});if(n===0)first=created;}
+  const outcomes=await Promise.allSettled([requestAnalysis(deps,budgetSeller,a.id,'last-a',{feature:'verifiedcapture',scope:'last-a',evidenceIds:[a.evidenceId]}),requestAnalysis(deps,budgetSeller,b.id,'last-b',{feature:'verifiedcapture',scope:'last-b',evidenceIds:[b.evidenceId]})]);
   expect(outcomes.filter(o=>o.status==='fulfilled')).toHaveLength(1);expect((outcomes.find(o=>o.status==='rejected') as PromiseRejectedResult).reason).toMatchObject({code:'RND_ADMISSION_LIMIT'});
-  expect(await requestAnalysis(deps,seller,a.id,'budget-0',{feature:'verifiedcapture',scope:'budget-0',evidenceIds:[a.evidenceId]})).toEqual(first);
+  expect(await requestAnalysis(deps,budgetSeller,a.id,'budget-0',{feature:'verifiedcapture',scope:'budget-0',evidenceIds:[a.evidenceId]})).toEqual(first);
  });
 
 });

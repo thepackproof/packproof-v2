@@ -47,6 +47,19 @@ jobs:
       - name: Install shared mobile dependencies
         run: npm ci
         working-directory: mobile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install actual research worker test dependencies
+        working-directory: .
+        run: |
+          python -m venv /tmp/packproof-vision-venv
+          /tmp/packproof-vision-venv/bin/pip install --require-hashes -r research/vision/requirements-linux-py312.lock
+          python -m venv /tmp/packproof-privacy-venv
+          /tmp/packproof-privacy-venv/bin/pip install -r research/privacy/requirements.lock.txt
+          /tmp/packproof-vision-venv/bin/python -c 'import cv2, pycolmap, rfc8785, scipy'
+          /tmp/packproof-privacy-venv/bin/python -c 'import cryptography, pymerkle, cv2, PIL'
+          npm ci --ignore-scripts --prefix research/privacy/zk
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -- --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/backend-tests.xml"
