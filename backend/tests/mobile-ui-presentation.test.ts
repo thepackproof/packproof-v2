@@ -69,7 +69,7 @@ describe("mobile UI status translation", () => {
     expect(proofStatusLabel("AWAITING_PARTICIPANT")).toBe("Waiting for buyer");
     expect(proofStatusLabel("READY_FOR_EVIDENCE")).toBe("Recording needed");
     expect(proofStatusLabel("EVIDENCE_COMMITTED")).toBe("Finish saving");
-    expect(proofStatusLabel("FINALIZED")).toBe("Proof saved");
+    expect(proofStatusLabel("FINALIZED")).toBe("Proof completed");
   });
 
   it("does not show raw backend enums in ordinary labels", () => {
@@ -92,7 +92,7 @@ describe("mobile UI status translation", () => {
         proofStatus: "FINALIZED",
         latestShipmentEventType: "IN_TRANSIT",
       }),
-    ).toBe("Proof saved");
+    ).toBe("Proof completed");
     expect(shipmentStatusLabel("CARRIER_ACCEPTED")).toBe("Package accepted");
     expect(shipmentStatusLabel("IN_TRANSIT")).toBe("In transit");
     expect(humanProofStatus({ proofStatus: "EVIDENCE_COMMITTED", latestShipmentEventType: "DELIVERED", hasShipping: true })).toBe("Finish saving");
