@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { checkReleaseEnvironment } = require('./release-policy.cjs');
+const { validateStapledArtifact } = require('./notarize-dmg.cjs');
 
 function command(executable, args, { quiet = false } = {}) {
   const result = spawnSync(executable, args, { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
@@ -36,15 +37,15 @@ async function main() {
     command('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
     const details = command('codesign', ['--display', '--verbose=4', app]);
     if (!details.includes(`TeamIdentifier=${process.env.APPLE_TEAM_ID}`) || !details.includes('runtime')) throw new Error('Application signing team or hardened runtime is incorrect');
-    command('xcrun', ['stapler', 'validate', app]);
+    await validateStapledArtifact(app);
     command('spctl', ['--assess', '--type', 'execute', '--verbose=4', app]);
     for (const file of files) {
       const full = path.join(output, file);
-      if (file.endsWith('.dmg')) command('xcrun', ['stapler', 'validate', full]);
+      if (file.endsWith('.dmg')) await validateStapledArtifact(full);
       if (file.endsWith('.pkg')) {
         const details = command('pkgutil', ['--check-signature', full]);
         if (!details.includes(`(${process.env.APPLE_TEAM_ID})`)) throw new Error('Installer signing team is incorrect');
-        command('xcrun', ['stapler', 'validate', full]);
+        await validateStapledArtifact(full);
         command('spctl', ['--assess', '--type', 'install', '--verbose=4', full]);
       }
     }
