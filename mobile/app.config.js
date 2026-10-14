@@ -178,9 +178,15 @@ module.exports = {
             useLegacyPackaging: false,
             // WorkManager persists this class name and recreates it by reflection.
             // Keep only the worker identity and constructor, including pending work
-            // from pre-R8 installations. Library consumer rules cover Expo/JNI.
+            // from pre-R8 installations. Expo's reflected Field annotation must
+            // retain its identity: renaming it breaks native record conversion
+            // (including the recovery journal's FileSystem WritingOptions).
+            // Upstream fix: https://github.com/expo/expo/pull/51206
             extraProguardRules: `-keep,allowoptimization class com.packproof.ordershare.OrderShareWorker {
   public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+-keep @interface expo.modules.kotlin.records.Field {
+  *;
 }`,
           },
         },

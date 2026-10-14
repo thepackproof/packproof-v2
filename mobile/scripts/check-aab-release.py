@@ -18,11 +18,19 @@ from pathlib import Path
 
 MAPPING_PATH = "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map"
 CLASS_MAPPING = re.compile(r"^([^\s:#]+) -> ([^\s:#]+):(?:\s*)$")
+REFLECTED_FIELD_ANNOTATION = "expo.modules.kotlin.records.Field"
 _spec = importlib.util.spec_from_file_location(
     "packproof_page_size", Path(__file__).with_name("check-apk-page-size.py")
 )
 _native = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_native)
+
+
+def check_reflection_annotation(class_names):
+    """Check compiler output, including the broken mapping observed in release 64."""
+    mapped_name = class_names.get(REFLECTED_FIELD_ANNOTATION)
+    return {"class": REFLECTED_FIELD_ANNOTATION, "mapped_name": mapped_name,
+            "preserved": mapped_name == REFLECTED_FIELD_ANNOTATION}
 
 
 def check_aab(path, required_abis=_native.RELEASE_ABIS):
@@ -39,6 +47,7 @@ def check_aab(path, required_abis=_native.RELEASE_ABIS):
             else:
                 mapping["bytes"] = len(data)
                 original_names = set()
+                class_names = {}
                 for line in data.decode("utf-8-sig").splitlines():
                     if not line.strip() or line.lstrip().startswith("#") or line[0].isspace():
                         continue  # comments and member mappings
@@ -49,6 +58,7 @@ def check_aab(path, required_abis=_native.RELEASE_ABIS):
                     if original in original_names:
                         raise ValueError(f"R8 mapping has a duplicate original class: {original}")
                     original_names.add(original)
+                    class_names[original] = renamed
                     mapping["class_count"] += 1
                     key = "identity_class_count" if original == renamed else "renamed_class_count"
                     mapping[key] += 1
@@ -56,6 +66,10 @@ def check_aab(path, required_abis=_native.RELEASE_ABIS):
                     result["errors"].append("R8 mapping is empty")
                 if not mapping["renamed_class_count"]:
                     result["errors"].append("R8 mapping has no renamed classes; release obfuscation is not demonstrated")
+                annotation = check_reflection_annotation(class_names)
+                result["expo_record_field_annotation"] = annotation
+                if not annotation["preserved"]:
+                    result["errors"].append("Expo record Field annotation is missing or renamed; native file/camera options can fail at runtime")
     except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, NotImplementedError) as error:
         result["errors"].append(f"Cannot inspect R8 mapping: {error}")
     result["passed"] = not result["errors"]
