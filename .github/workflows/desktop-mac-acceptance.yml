@@ -19,6 +19,10 @@ on:
         type: string
         default: ''
         description: Independently downloaded candidate 65 bundle SHA-256
+      existingFinalizedProof:
+        type: string
+        default: ''
+        description: Exact synthetic Proof title to verify remaining restart and sign-in checks
       platform:
         type: choice
         default: all
@@ -133,6 +137,7 @@ jobs:
           CANDIDATE_SOURCE_SHA: ${{ inputs.candidateSourceSha }}
           CANDIDATE_AAB_SHA256: ${{ inputs.candidateAabSha256 }}
           CANDIDATE_BUILD_RUN: ${{ inputs.candidateBuildRun }}
+          CUSTOMER_EXISTING_FINALIZED_PROOF: ${{ inputs.existingFinalizedProof }}
         with:
           api-level: 35
           target: google_apis_playstore

@@ -127,7 +127,15 @@ def enroll_emulated_fingerprint():
             adb('emu','finger','touch','1');time.sleep(.5);adb('emu','finger','remove')
     snapshot('biometric-enrollment-failure');raise RuntimeError('EMULATOR_BIOMETRIC_ENROLLMENT_UNFINISHED')
 def sign_in(credential):
-    fill('Email',credential['email']);fill('Password',credential['password']);adb('shell','input','keyevent','4');click('Sign in')
+    email=wait('Email')
+    # Sign-out retains the account identifier. Do not append a second copy.
+    if email.get('text','')!=credential['email']:
+        tap(email)
+        adb('shell','input','keyevent','KEYCODE_MOVE_END')
+        existing=email.get('text','')
+        if existing:adb('shell','input','keyevent',*(['KEYCODE_DEL']*len(existing)))
+        adb('shell','input','text',credential['email'])
+    fill('Password',credential['password']);adb('shell','input','keyevent','4');click('Sign in')
     wait('Create Proof',timeout=90)
 def open_camera_preview():
     deadline=time.time()+100
@@ -148,6 +156,14 @@ def open_camera_preview():
         index+=1
         time.sleep(1)
     raise RuntimeError('CAMERA_PREVIEW_NOT_REACHED')
+
+def verify_saved_proof(title,credential):
+    global current
+    current='relaunch-and-view-saved-proof'
+    adb('shell','am','force-stop','com.packproof.mobile');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1');wait('Proofs',timeout=90);click('Proofs');click('Completed');click(title,partial=True,timeout=90,scroll=True);wait('Proof');snapshot('08-relaunch-proof');passed(current,**backend('verify',title))
+    current='sign-out-and-sign-back-in-through-ui'
+    adb('shell','input','keyevent','4');click('Home');click('Open profile menu');click('Settings');click('Sign out',scroll=True);wait('Sign in');snapshot('09-signed-out');sign_in(credential);click('Proofs');click('Completed');click(title,partial=True,scroll=True);wait('Proof');snapshot('10-signed-back-in');passed(current,**backend('verify',title))
+
 try:
     adb('install','-r',str(pathlib.Path(os.environ['RUNNER_TEMP'])/'64.apk'))
     report['steps'].append({'id':current,'status':'passed'})
@@ -164,6 +180,20 @@ try:
     if os.environ.get('CUSTOMER_FLOW_CREDENTIALS'):
         credential=json.loads(os.environ['CUSTOMER_FLOW_CREDENTIALS'])['android']
         current='isolated-account-preflight';passed(current,**backend('preflight'))
+        existing=os.environ.get('CUSTOMER_EXISTING_FINALIZED_PROOF','')
+        if existing:
+            match=re.fullmatch(r'SYNTHETIC native flow Android (\d+) attempt (\d+)',existing)
+            if not match:raise RuntimeError('EXACT_SYNTHETIC_PROOF_TITLE_REQUIRED')
+            report['verificationScope']='remaining-finalized-proof-restart-and-sign-in-checks'
+            report['continuationOfRun']=match.group(1)
+            report['syntheticProofTitle']=existing
+            current='sign-in-customer-ui';sign_in(credential);passed(current)
+            current='open-existing-finalized-proof'
+            click('Proofs');click('Completed');click(existing,partial=True,timeout=90,scroll=True);wait('Proof');snapshot('existing-finalized-proof');passed(current,**backend('verify',existing))
+            verify_saved_proof(existing,credential)
+            report['remainingChecksPassed']=True
+            report['passed']=True
+            raise SystemExit(0)
         current='enroll-emulated-biometric'
         enroll_emulated_fingerprint();passed(current,physicalBiometricVerified=False)
         adb('shell','input','keyevent','3');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1')
@@ -199,10 +229,7 @@ try:
             time.sleep(5)
         else:raise RuntimeError('SERVER_FINALIZATION_NOT_CONFIRMED')
         snapshot('07-finalized-proof');passed(current,**backend('verify',title))
-        current='relaunch-and-view-saved-proof'
-        adb('shell','am','force-stop','com.packproof.mobile');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1');wait('Proofs',timeout=90);click('Proofs');click('Completed');click(title,partial=True,timeout=90,scroll=True);wait('Proof');snapshot('08-relaunch-proof');passed(current,**backend('verify',title))
-        current='sign-out-and-sign-back-in-through-ui'
-        adb('shell','input','keyevent','4');click('Home');click('Open profile menu');click('Settings');click('Sign out',scroll=True);wait('Sign in');snapshot('09-signed-out');sign_in(credential);click('Proofs');click('Completed');click(title,partial=True,scroll=True);wait('Proof');snapshot('10-signed-back-in');passed(current,**backend('verify',title))
+        verify_saved_proof(title,credential)
         report['fullSignedInFlow']=True
     report['passed']=True
 except Exception as error:
