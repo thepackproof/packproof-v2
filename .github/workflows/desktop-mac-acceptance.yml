@@ -15,7 +15,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: customer-flow-${{ github.ref }}
+  group: customer-flow-${{ github.ref }}-${{ inputs.platform }}
   cancel-in-progress: false
 jobs:
   mac:
