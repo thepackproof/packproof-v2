@@ -200,9 +200,9 @@ try:
         else:raise RuntimeError('SERVER_FINALIZATION_NOT_CONFIRMED')
         snapshot('07-finalized-proof');passed(current,**backend('verify',title))
         current='relaunch-and-view-saved-proof'
-        adb('shell','am','force-stop','com.packproof.mobile');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1');wait('Proofs',timeout=90);click('Proofs');click(title,partial=True,timeout=90,scroll=True);snapshot('08-relaunch-proof');passed(current,**backend('verify',title))
+        adb('shell','am','force-stop','com.packproof.mobile');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1');wait('Proofs',timeout=90);click('Proofs');click('Completed');click(title,partial=True,timeout=90,scroll=True);wait('Proof');snapshot('08-relaunch-proof');passed(current,**backend('verify',title))
         current='sign-out-and-sign-back-in-through-ui'
-        adb('shell','input','keyevent','4');click('Home');click('Open profile menu');click('Settings');click('Sign out',scroll=True);wait('Sign in');snapshot('09-signed-out');sign_in(credential);click('Proofs');click(title,partial=True,scroll=True);snapshot('10-signed-back-in');passed(current,**backend('verify',title))
+        adb('shell','input','keyevent','4');click('Home');click('Open profile menu');click('Settings');click('Sign out',scroll=True);wait('Sign in');snapshot('09-signed-out');sign_in(credential);click('Proofs');click('Completed');click(title,partial=True,scroll=True);wait('Proof');snapshot('10-signed-back-in');passed(current,**backend('verify',title))
         report['fullSignedInFlow']=True
     report['passed']=True
 except Exception as error:
