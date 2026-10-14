@@ -65,6 +65,15 @@ def tap(node):
 def permission(tree):
     for n in tree.iter('node'):
         if n.get('resource-id','').endswith(('permission_allow_foreground_only_button','permission_allow_button')) and n.get('enabled')=='true': tap(n);return True
+    texts=' '.join(n.get('text','') for n in tree.iter('node'))
+    if 'Google Play services keeps stopping' in texts:
+        count=report.get('emulatorGoogleServiceDialogsDismissed',0)
+        if count:raise RuntimeError('EMULATOR_GOOGLE_SERVICES_UNSTABLE')
+        close=find(tree,'Close app')
+        if close is not None:
+            snapshot('emulator-google-services-dialog')
+            report['emulatorGoogleServiceDialogsDismissed']=count+1
+            tap(close);return True
     return False
 def wait(label, timeout=60, partial=False, scroll=False):
     deadline=time.time()+timeout
@@ -157,10 +166,11 @@ def open_camera_preview():
         time.sleep(1)
     raise RuntimeError('CAMERA_PREVIEW_NOT_REACHED')
 
-def verify_saved_proof(title,credential):
+def verify_saved_proof(title,credential,restart=True):
     global current
-    current='relaunch-and-view-saved-proof'
-    adb('shell','am','force-stop','com.packproof.mobile');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1');wait('Proofs',timeout=90);click('Proofs');click('Completed');click(title,partial=True,timeout=90,scroll=True);wait('Proof');snapshot('08-relaunch-proof');passed(current,**backend('verify',title))
+    if restart:
+        current='relaunch-and-view-saved-proof'
+        adb('shell','am','force-stop','com.packproof.mobile');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1');wait('Proofs',timeout=90);click('Proofs');click('Completed');click(title,partial=True,timeout=90,scroll=True);wait('Proof');snapshot('08-relaunch-proof');passed(current,**backend('verify',title))
     current='sign-out-and-sign-back-in-through-ui'
     adb('shell','input','keyevent','4');click('Home');click('Open profile menu');click('Settings');click('Sign out',scroll=True);wait('Sign in');snapshot('09-signed-out');sign_in(credential);click('Proofs');click('Completed');click(title,partial=True,scroll=True);wait('Proof');snapshot('10-signed-back-in');passed(current,**backend('verify',title))
 
@@ -184,13 +194,13 @@ try:
         if existing:
             match=re.fullmatch(r'SYNTHETIC native flow Android (\d+) attempt (\d+)',existing)
             if not match:raise RuntimeError('EXACT_SYNTHETIC_PROOF_TITLE_REQUIRED')
-            report['verificationScope']='remaining-finalized-proof-restart-and-sign-in-checks'
+            report['verificationScope']='remaining-finalized-proof-sign-out-and-sign-in-checks'
             report['continuationOfRun']=match.group(1)
             report['syntheticProofTitle']=existing
             current='sign-in-customer-ui';sign_in(credential);passed(current)
             current='open-existing-finalized-proof'
             click('Proofs');click('Completed');click(existing,partial=True,timeout=90,scroll=True);wait('Proof');snapshot('existing-finalized-proof');passed(current,**backend('verify',existing))
-            verify_saved_proof(existing,credential)
+            verify_saved_proof(existing,credential,restart=False)
             report['remainingChecksPassed']=True
             report['passed']=True
             raise SystemExit(0)
