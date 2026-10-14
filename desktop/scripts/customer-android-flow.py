@@ -17,6 +17,12 @@ if report['artifactScope'] in ['published-bundle-test-signature','candidate-bund
     expected=os.environ['CANDIDATE_AAB_SHA256'] if report['artifactScope']=='candidate-bundle-test-signature' else '229f9238289a40da2f780dd6fe4bd2091ee45fff2946de4ed40e86cea6a3dfa4'
     if report['aabSha256']!=expected:raise RuntimeError('AAB_MISMATCH')
     with zipfile.ZipFile(aab_path) as a,zipfile.ZipFile(apk_path) as b:
+        config=json.loads(a.read('base/assets/app.config'))
+        if config['android']['package']!='com.packproof.mobile':raise RuntimeError('PACKAGE_IDENTITY_MISMATCH')
+        if report['artifactScope']=='candidate-bundle-test-signature':
+            if config['version']!='1.0.1' or config['android']['versionCode']!=65 or config['extra']['packproofBuildSha']!=report['sourceSha']:raise RuntimeError('CANDIDATE_IDENTITY_MISMATCH')
+        if config['extra']['packproofApiBaseUrl']!='https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' or config['extra']['packproofResearch'] is not False:raise RuntimeError('PRODUCTION_CONFIGURATION_MISMATCH')
+        report['packagedConfiguration']={'version':config['version'],'versionCode':config['android']['versionCode'],'sourceSha':config['extra']['packproofBuildSha'],'apiBaseUrl':config['extra']['packproofApiBaseUrl'],'research':config['extra']['packproofResearch']}
         verified=[]
         for entry in a.namelist():
             if entry.startswith(('base/assets/','base/lib/','base/dex/')) and not entry.endswith('/'):
@@ -62,12 +68,19 @@ def permission(tree):
     return False
 def wait(label, timeout=60, partial=False, scroll=False):
     deadline=time.time()+timeout
+    previous=None
+    down=True
     while time.time()<deadline:
         tree=tree_now()
         if permission(tree): continue
         n=find(tree,label,partial)
         if n is not None:return n
-        if scroll:adb('shell','input','swipe','540','1850','540','750','400')
+        disabled=any(any(label in v if partial else label==v for v in [node.get('text',''),node.get('content-desc','')]) for node in tree.iter('node'))
+        if scroll and not disabled:
+            visible=ET.tostring(tree,encoding='unicode')
+            if visible==previous:down=not down
+            previous=visible
+            adb('shell','input','swipe','540','1850' if down else '750','540','750' if down else '1850','400')
         time.sleep(1)
     raise RuntimeError('UI_CONTROL_NOT_REACHED')
 def click(label, **kwargs): tap(wait(label,**kwargs))
