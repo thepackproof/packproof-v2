@@ -1,4 +1,4 @@
-"""UI verification of the unchanged Google-signed production APK on a hosted emulator."""
+"""UI verification of published Android payloads with explicit installation provenance."""
 import hashlib, json, os, pathlib, re, subprocess, time, zipfile, xml.etree.ElementTree as ET
 out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'customer-android'
 out.mkdir(parents=True, exist_ok=True)
@@ -70,6 +70,20 @@ def backend(action,title=''):
     return json.loads(r.stdout)
 def passed(id,**details):
     report['steps'].append({'id':id,'outcome':'passed','details':details});print(id+': passed',flush=True)
+
+def save_runtime_diagnostics():
+    # Only this disposable test app's process; scrub credentials and token-shaped values.
+    pid=adb('shell','pidof','com.packproof.mobile').strip().split()[0]
+    log=adb('logcat','-d','--pid='+pid,'-v','threadtime')
+    raw=os.environ.get('CUSTOMER_FLOW_CREDENTIALS')
+    if raw:
+        for account in json.loads(raw).values():
+            for key in ['password','email']:
+                if account.get(key):log=log.replace(account[key],'[REDACTED]')
+    log=re.sub(r'https?://[^\s]+','[REDACTED_URL]',log)
+    log=re.sub(r'eyJ[A-Za-z0-9_.-]+','[REDACTED_TOKEN]',log)
+    log=re.sub(r'(?i)(authorization|access_token|refresh_token|id_token|password)[\s:=\"\x27]+[^\s,}]+',r'\1=[REDACTED]',log)
+    (out/'runtime-diagnostics.txt').write_text(log)
 def enroll_emulated_fingerprint():
     adb('shell','locksettings','set-pin','246813')
     adb('shell','am','start','-a','android.settings.BIOMETRIC_ENROLL','--ei','android.provider.extra.BIOMETRIC_AUTHENTICATORS_ALLOWED','15')
@@ -171,6 +185,8 @@ except Exception as error:
     report['passed']=False
     report['failure']={'step':current,'code':str(error) if str(error).isupper() else 'UI_STEP_FAILED'}
     try: snapshot('failure')
+    except Exception: pass
+    try: save_runtime_diagnostics()
     except Exception: pass
 finally:
     (out/'receipt.json').write_text(json.dumps(report,indent=2))
