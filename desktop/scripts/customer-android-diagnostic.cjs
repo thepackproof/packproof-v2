@@ -12,7 +12,7 @@ fs.writeFileSync(provider,source);
 const profiles=require(path.join(mobile,'eas.json')).build,layers=[];
 for(let key='production';key;key=profiles[key].extends)layers.unshift(profiles[key].env||{});
 const env={...process.env,...Object.assign({},...layers),EAS_BUILD_PROFILE:'production',EAS_BUILD_PLATFORM:'android',CI:'1'};
-const directory=path.join(temp,'diagnostic-js');
+const directory=path.join(mobile,'dist/customer-diagnostic-js');
 cp.execFileSync(process.execPath,[path.join(mobile,'node_modules/@expo/cli/build/bin/cli'),'export','--platform','android','--no-bytecode','--max-workers','2','--output-dir',directory],{cwd:mobile,env,stdio:'inherit'});
 const jsDirectory=path.join(directory,'_expo/static/js/android');
 const bundles=fs.readdirSync(jsDirectory).filter(p=>p.endsWith('.js'));
