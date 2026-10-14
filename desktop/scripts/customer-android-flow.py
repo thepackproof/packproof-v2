@@ -150,13 +150,15 @@ try:
         enroll_emulated_fingerprint();passed(current,physicalBiometricVerified=False)
         adb('shell','input','keyevent','3');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1')
         current='sign-in-customer-ui';sign_in(credential);snapshot('02-workspace');passed(current)
-        title='SYNTHETIC native flow Android '+os.environ['GITHUB_RUN_ID']
+        title='SYNTHETIC native flow Android '+os.environ['GITHUB_RUN_ID']+' attempt '+os.environ.get('GITHUB_RUN_ATTEMPT','1')
         report['syntheticProofTitle']=title
         current='create-proof-through-ui'
         click('Create Proof');click('Record a shipment',partial=True);fill('What are you shipping?',title);adb('shell','input','keyevent','4');click('Continue to camera',scroll=True)
-        open_camera_preview();snapshot('03-camera-preview');proof=backend('find',title)
+        proof=backend('find',title)
         if proof['status']!='READY_FOR_EVIDENCE':raise RuntimeError('INITIAL_PROOF_STATE_UNEXPECTED')
         passed(current,**proof)
+        current='open-native-camera'
+        open_camera_preview();snapshot('03-camera-preview');passed(current)
         current='record-continuous-synthetic-camera-video'
         click('Record packing',scroll=True);wait('Finish recording',timeout=90,scroll=True);time.sleep(8);snapshot('04-recording');click('Finish recording',scroll=True)
         wait('Review recording',timeout=120);snapshot('05-review');passed(current,syntheticCamera=True)
@@ -188,6 +190,9 @@ try:
 except Exception as error:
     report['passed']=False
     report['failure']={'step':current,'code':str(error) if str(error).isupper() else 'UI_STEP_FAILED'}
+    if report.get('syntheticProofTitle'):
+        try: report['failureBackendReadback']=backend('find',report['syntheticProofTitle'])
+        except Exception: pass
     try: snapshot('failure')
     except Exception: pass
     try: save_runtime_diagnostics()
