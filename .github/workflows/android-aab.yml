@@ -67,6 +67,7 @@ jobs:
           npm run test:intake
           npm run test:build-security
           npm run test:redesign
+          python3 -m unittest discover -s tests -p test_android_record_annotation.py
           node --test tests/font-assets.test.cjs
           node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/workspace-summary.test.ts
           node <<'NODE'
