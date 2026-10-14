@@ -20,7 +20,7 @@ if report['artifactScope']=='published-bundle-test-signature':
                 verified.append(entry)
         report['unchangedPublishedPayloads']=verified
     report['signingScope']='Disposable emulator test signature; production signing keys and Play settings unchanged'
-current = 'install-google-signed-apk'
+current = 'install-verified-apk'
 def adb(*args, binary=False):
     result=subprocess.run(['adb',*args],capture_output=True,timeout=90)
     if result.returncode: raise RuntimeError('ADB_OPERATION_FAILED')
@@ -95,13 +95,21 @@ def sign_in(credential):
     wait('Create Proof',timeout=90)
 def open_camera_preview():
     deadline=time.time()+100
+    opened=False
+    index=0
     while time.time()<deadline:
         tree=tree_now()
         if permission(tree):continue
         if find(tree,'Record packing') is not None:return
         n=find(tree,'Open camera')
-        if n is not None:tap(n)
+        if n is not None and not opened:tap(n);opened=True
+        elif n is not None and opened:
+            snapshot('camera-open-result')
+            texts=' '.join(n.get('text','') for n in tree.iter('node'))
+            if 'Something went wrong' in texts or 'Try again' in texts:raise RuntimeError('CAMERA_OPEN_REPORTED_ERROR')
         else:adb('shell','input','swipe','540','1850','540','750','400')
+        if index%3==0:snapshot('camera-transition-'+str(index))
+        index+=1
         time.sleep(1)
     raise RuntimeError('CAMERA_PREVIEW_NOT_REACHED')
 try:
