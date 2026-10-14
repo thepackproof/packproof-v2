@@ -2,6 +2,11 @@ name: Native customer flow verification
 on:
   workflow_dispatch:
     inputs:
+      platform:
+        type: choice
+        default: all
+        options: [all, mac, android]
+        description: Released platform to verify
       authenticated:
         type: boolean
         default: false
@@ -14,6 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mac:
+    if: inputs.platform != 'android'
     name: Signed Mac customer flow / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
@@ -54,6 +60,7 @@ jobs:
             ${{ runner.temp }}/customer-mac/
           retention-days: 30
   android:
+    if: inputs.platform != 'mac'
     name: Google-signed Android customer flow
     runs-on: ubuntu-latest
     timeout-minutes: 30

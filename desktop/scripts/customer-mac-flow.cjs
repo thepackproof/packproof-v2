@@ -20,7 +20,7 @@ async function launch() {
   proc=spawn(path.join(app,'Contents/MacOS/PackProof'),['--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream'],{env:childEnvironment(),stdio:'ignore'});
   for(let i=0;i<60;i++){try{const r=await fetch('http://127.0.0.1:9222/json/version');if(r.ok)break;}catch{}if(proc.exitCode!==null)throw new Error('NATIVE_APP_EXITED');await sleep(1000);}
   browser=await chromium.connectOverCDP('http://127.0.0.1:9222');
-  for(let i=0;i<30;i++){page=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().startsWith('packproof:'));if(page)break;await sleep(1000);}
+  for(let i=0;i<30;i++){page=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().startsWith('packproof-app://'));if(page)break;await sleep(1000);}
   if(!page)throw new Error('TRUSTED_RENDERER_NOT_FOUND');
   page.setDefaultTimeout(45000);
   await page.waitForFunction(()=>Boolean(window.packproof));
@@ -37,7 +37,48 @@ async function main(){
   if(process.env.CUSTOMER_FLOW_CREDENTIALS){
     const credential=JSON.parse(process.env.CUSTOMER_FLOW_CREDENTIALS)['mac-'+process.arch];
     if(!credential)throw new Error('ISOLATED_ACCOUNT_REQUIRED');
+    const reader=await require('./customer-backend-readback.cjs').createReader('mac-'+process.arch);
+    await step('isolated-account-preflight',()=>reader.preflight());
     await step('sign-in-customer-ui',async()=>{await page.getByLabel('Email address',{exact:true}).fill(credential.email);await page.getByLabel('Password',{exact:true}).fill(credential.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('navigation',{name:'Main navigation'}).waitFor({timeout:90000});await snapshot('02-workspace');return{isolatedTestAccount:true};});
+    const title=`SYNTHETIC native flow Mac ${process.arch} ${process.env.GITHUB_RUN_ID}`;
+    report.syntheticProofTitle=title;
+    let proofId;
+    await step('create-proof-through-ui',async()=>{
+      await sleep(2000);if(await page.getByRole('button',{name:'Skip',exact:true}).isVisible())await page.getByRole('button',{name:'Skip',exact:true}).click();
+      await page.getByRole('button',{name:'Record shipment',exact:true}).first().click();
+      await page.getByLabel('Item or shipment name',{exact:true}).fill(title);
+      await page.getByRole('button',{name:'Open camera',exact:true}).click();
+      await page.getByRole('button',{name:'Record packing',exact:true}).waitFor({timeout:90000});
+      const proof=await reader.find(title);proofId=proof.proofId;if(proof.status!=='READY_FOR_EVIDENCE')throw new Error('INITIAL_PROOF_STATE_UNEXPECTED');
+      await snapshot('03-camera-preview');return{proofId,status:proof.status};
+    });
+    await step('record-continuous-synthetic-camera-video',async()=>{
+      await page.getByRole('button',{name:'Record packing',exact:true}).click({timeout:90000});
+      await page.getByRole('button',{name:'Finished packing',exact:true}).waitFor();
+      await sleep(8000);await snapshot('04-recording');
+      await page.getByRole('button',{name:'Finished packing',exact:true}).click();
+      await page.getByRole('heading',{name:'Confirm your packing recording',exact:true}).waitFor();
+      await snapshot('05-review');return{syntheticCamera:true,physicalCameraVerified:false};
+    });
+    await step('confirm-and-upload-through-ui',async()=>{
+      await page.getByRole('checkbox',{name:'The item shown and attached in this Proof is the item I am shipping.',exact:true}).check();
+      await page.getByRole('button',{name:'Confirm & upload',exact:true}).click();
+      await page.getByRole('heading',{name:'Confirm your packing recording',exact:true}).waitFor({state:'hidden'});
+      await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Activity',exact:true}).click();
+      await snapshot('06-uploading');
+      await page.getByText('Secured by PackProof',{exact:true}).first().waitFor({timeout:240000});
+      await snapshot('07-upload-complete');return{nativeQueueCompleted:true};
+    });
+    await step('server-finalization-and-original-readback',()=>reader.verify(title,output));
+    async function openFinalizedProof(){await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Proofs',exact:true}).click();await page.getByRole('button',{name:title,exact:true}).click();await page.getByText('Finalized record · immutable',{exact:true}).waitFor();}
+    await step('view-finalized-proof-in-native-ui',async()=>{await openFinalizedProof();await snapshot('08-finalized-proof');return{proofId};});
+    await step('relaunch-restores-account-and-finalized-proof',async()=>{await quit();await launch();await page.getByRole('navigation',{name:'Main navigation'}).waitFor();await openFinalizedProof();await snapshot('09-relaunch-finalized');return{proofId,protectedSessionRestored:true};});
+    await step('sign-out-and-sign-back-in-through-ui',async()=>{
+      await page.locator('.profile-button').click();await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.getByRole('button',{name:'Sign in',exact:true}).waitFor();await snapshot('10-signed-out');
+      await page.getByLabel('Email address',{exact:true}).fill(credential.email);await page.getByLabel('Password',{exact:true}).fill(credential.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('navigation',{name:'Main navigation'}).waitFor();await openFinalizedProof();await snapshot('11-signed-back-in');return{proofId};
+    });
+    await step('final-independent-server-readback',()=>reader.verify(title,output));
+    report.fullSignedInFlow=true;
   }
   await step('verify-unchanged-installed-bytes',()=>assertBundleMatches(app,baseline));
   report.passed=true;
