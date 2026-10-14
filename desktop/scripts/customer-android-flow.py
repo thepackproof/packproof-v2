@@ -7,7 +7,7 @@ report['artifactScope']=os.environ.get('CUSTOMER_ANDROID_PACKAGE','play')
 apk_path=pathlib.Path(os.environ['RUNNER_TEMP'])/'64.apk'
 report['apkSha256']=hashlib.sha256(apk_path.read_bytes()).hexdigest()
 report['playDistributionFlowVerified']=False
-if report['artifactScope']=='published-bundle-test-signature':
+if report['artifactScope'] in ['published-bundle-test-signature','diagnostic-only']:
     aab_path=pathlib.Path(os.environ['RUNNER_TEMP'])/'64.aab'
     report['publishedAabSha256']=hashlib.sha256(aab_path.read_bytes()).hexdigest()
     if report['publishedAabSha256']!='229f9238289a40da2f780dd6fe4bd2091ee45fff2946de4ed40e86cea6a3dfa4':raise RuntimeError('PUBLISHED_AAB_MISMATCH')
@@ -16,6 +16,10 @@ if report['artifactScope']=='published-bundle-test-signature':
         for entry in a.namelist():
             if entry.startswith(('base/assets/','base/lib/','base/dex/')) and not entry.endswith('/'):
                 target=entry.removeprefix('base/dex/') if entry.startswith('base/dex/') else entry.removeprefix('base/')
+                if report['artifactScope']=='diagnostic-only' and entry=='base/assets/index.android.bundle':
+                    report['diagnosticBundleSha256']=hashlib.sha256(b.read(target)).hexdigest()
+                    report['releaseVerification']=False
+                    continue
                 if a.read(entry)!=b.read(target):raise RuntimeError('PUBLISHED_APP_PAYLOAD_CHANGED')
                 verified.append(entry)
         report['unchangedPublishedPayloads']=verified

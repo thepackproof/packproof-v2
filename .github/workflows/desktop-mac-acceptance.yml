@@ -5,7 +5,7 @@ on:
       androidPackage:
         type: choice
         default: play
-        options: [play, published-bundle-test-signature]
+        options: [play, published-bundle-test-signature, diagnostic-only]
         description: Keep Play-distributed and bundle-derived evidence separate
       platform:
         type: choice
@@ -92,7 +92,7 @@ jobs:
           echo "97a7f08a95938cdab1c1b91a911195cdfe7d119db6e0a2eb21c6e903a6fe88b3  $RUNNER_TEMP/64.apk" | sha256sum --check
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/64.apk"
       - name: Generate an isolated test installation from the unchanged published bundle
-        if: inputs.androidPackage == 'published-bundle-test-signature'
+        if: inputs.androidPackage != 'play'
         env:
           AAB_URL: ${{ secrets.CUSTOMER_FLOW_AAB_URL }}
         run: |
@@ -104,6 +104,11 @@ jobs:
           java -jar "$RUNNER_TEMP/bundletool.jar" build-apks --bundle="$RUNNER_TEMP/64.aab" --output="$RUNNER_TEMP/64.apks" --mode=universal --ks="$RUNNER_TEMP/test-signature.jks" --ks-key-alias=native-flow-test --ks-pass=pass:android --key-pass=pass:android
           unzip -p "$RUNNER_TEMP/64.apks" universal.apk > "$RUNNER_TEMP/64.apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/64.apk"
+      - name: Build temporary diagnostic JavaScript (never release evidence)
+        if: inputs.androidPackage == 'diagnostic-only'
+        run: |
+          npm ci --prefix mobile --no-audit --no-fund
+          node desktop/scripts/customer-android-diagnostic.cjs
       - name: Operate the released Android application
         uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808
         env:

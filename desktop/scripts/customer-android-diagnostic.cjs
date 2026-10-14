@@ -1,0 +1,26 @@
+'use strict';
+// Disposable runner only. This package is not a release or a production acceptance artifact.
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const root=path.resolve(__dirname,'../..'),mobile=path.join(root,'mobile'),temp=process.env.RUNNER_TEMP;
+if(!process.env.GITHUB_ACTIONS||!temp)throw Error('Disposable CI runner required');
+const provider=path.join(mobile,'src/app/PackProofProvider.tsx');
+let source=fs.readFileSync(provider,'utf8');
+const target='      const mapped = presentError(err);';
+if(source.split(target).length!==2)throw Error('Diagnostic insertion target changed');
+source=source.replace(target,`      console.error('PACKPROOF_FLOW_DIAGNOSTIC', JSON.stringify({name: (err as Error)?.name, code: (err as {code?:string})?.code, message: (err as Error)?.message, stack: (err as Error)?.stack}));\n${target}`);
+fs.writeFileSync(provider,source);
+const profiles=require(path.join(mobile,'eas.json')).build,layers=[];
+for(let key='production';key;key=profiles[key].extends)layers.unshift(profiles[key].env||{});
+const env={...process.env,...Object.assign({},...layers),EAS_BUILD_PROFILE:'production',EAS_BUILD_PLATFORM:'android',CI:'1'};
+const directory=path.join(temp,'diagnostic-js');
+cp.execFileSync(process.execPath,[path.join(mobile,'node_modules/@expo/cli/build/bin/cli'),'export','--platform','android','--no-bytecode','--max-workers','2','--output-dir',directory],{cwd:mobile,env,stdio:'inherit'});
+const jsDirectory=path.join(directory,'_expo/static/js/android');
+const bundles=fs.readdirSync(jsDirectory).filter(p=>p.endsWith('.js'));
+if(bundles.length!==1)throw Error('Ambiguous diagnostic bundle');
+const bundle=path.join(jsDirectory,bundles[0]);
+cp.execFileSync('python3',['-c',`import zipfile,sys\nwith zipfile.ZipFile(sys.argv[1]) as src, zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED) as dst:\n for item in src.infolist():\n  if item.filename.startswith('META-INF/'):continue\n  dst.writestr(item,open(sys.argv[3],'rb').read() if item.filename=='assets/index.android.bundle' else src.read(item.filename))`,path.join(temp,'64.apk'),path.join(temp,'diagnostic-unaligned.apk'),bundle],{stdio:'inherit'});
+const buildTools=path.join(process.env.ANDROID_HOME,'build-tools/36.0.0');
+cp.execFileSync(path.join(buildTools,'zipalign'),['-p','-f','4',path.join(temp,'diagnostic-unaligned.apk'),path.join(temp,'64.apk')],{stdio:'inherit'});
+cp.execFileSync(path.join(buildTools,'apksigner'),['sign','--ks',path.join(temp,'test-signature.jks'),'--ks-key-alias','native-flow-test','--ks-pass','pass:android','--key-pass','pass:android',path.join(temp,'64.apk')],{stdio:'inherit'});
+cp.execFileSync(path.join(buildTools,'apksigner'),['verify',path.join(temp,'64.apk')],{stdio:'inherit'});
+console.log('Diagnostic-only JavaScript inserted; native payloads retained. This is not a release verification build.');
