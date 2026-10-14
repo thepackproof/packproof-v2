@@ -84,6 +84,7 @@ try:
     for i in range(30):
         time.sleep(2)
         tree=snapshot('01-launch')
+        if any('Check that Google Play is enabled' in n.get('text','') for n in tree.iter('node')):raise RuntimeError('GOOGLE_PLAY_ENVIRONMENT_REQUIRED')
         if any(n.get('text')=='Sign in' or n.get('content-desc')=='Sign in' for n in tree.iter('node')): break
     else: raise RuntimeError('SIGN_IN_NOT_REACHED')
     report['steps'].append({'id':current,'status':'passed'})

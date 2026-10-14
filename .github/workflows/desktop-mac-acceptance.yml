@@ -91,7 +91,7 @@ jobs:
           CUSTOMER_FLOW_CREDENTIALS: ${{ inputs.authenticated && secrets.CUSTOMER_FLOW_CREDENTIALS || '' }}
         with:
           api-level: 35
-          target: google_apis
+          target: google_apis_playstore
           arch: x86_64
           profile: pixel_7
           disable-animations: true
