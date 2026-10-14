@@ -1,8 +1,25 @@
 """UI verification of the unchanged Google-signed production APK on a hosted emulator."""
-import json, os, pathlib, re, subprocess, time, xml.etree.ElementTree as ET
+import hashlib, json, os, pathlib, re, subprocess, time, zipfile, xml.etree.ElementTree as ET
 out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'customer-android'
 out.mkdir(parents=True, exist_ok=True)
 report = {'schema':'packproof.native-customer-flow.v1','platform':'android','version':'1.0.1 (64)','apkSha256':'97a7f08a95938cdab1c1b91a911195cdfe7d119db6e0a2eb21c6e903a6fe88b3','physicalDeviceChecks':'waived','syntheticCamera':True,'steps':[]}
+report['artifactScope']=os.environ.get('CUSTOMER_ANDROID_PACKAGE','play')
+apk_path=pathlib.Path(os.environ['RUNNER_TEMP'])/'64.apk'
+report['apkSha256']=hashlib.sha256(apk_path.read_bytes()).hexdigest()
+report['playDistributionFlowVerified']=False
+if report['artifactScope']=='published-bundle-test-signature':
+    aab_path=pathlib.Path(os.environ['RUNNER_TEMP'])/'64.aab'
+    report['publishedAabSha256']=hashlib.sha256(aab_path.read_bytes()).hexdigest()
+    if report['publishedAabSha256']!='229f9238289a40da2f780dd6fe4bd2091ee45fff2946de4ed40e86cea6a3dfa4':raise RuntimeError('PUBLISHED_AAB_MISMATCH')
+    with zipfile.ZipFile(aab_path) as a,zipfile.ZipFile(apk_path) as b:
+        verified=[]
+        for entry in a.namelist():
+            if entry.startswith(('base/assets/','base/lib/','base/dex/')) and not entry.endswith('/'):
+                target=entry.removeprefix('base/dex/') if entry.startswith('base/dex/') else entry.removeprefix('base/')
+                if a.read(entry)!=b.read(target):raise RuntimeError('PUBLISHED_APP_PAYLOAD_CHANGED')
+                verified.append(entry)
+        report['unchangedPublishedPayloads']=verified
+    report['signingScope']='Disposable emulator test signature; production signing keys and Play settings unchanged'
 current = 'install-google-signed-apk'
 def adb(*args, binary=False):
     result=subprocess.run(['adb',*args],capture_output=True,timeout=90)
@@ -96,7 +113,8 @@ try:
         time.sleep(2)
         tree=snapshot('01-launch')
         if any('Check that Google Play is enabled' in n.get('text','') for n in tree.iter('node')):raise RuntimeError('GOOGLE_PLAY_ENVIRONMENT_REQUIRED')
-        if any(n.get('text')=='Sign in' or n.get('content-desc')=='Sign in' for n in tree.iter('node')): break
+        if any(n.get('package')=='com.android.vending' and 'Sign in' in n.get('text','') for n in tree.iter('node')):raise RuntimeError('PLAY_STORE_ACCOUNT_REQUIRED')
+        if any(n.get('package')=='com.packproof.mobile' and n.get('class')=='android.widget.EditText' and n.get('content-desc')=='Email' for n in tree.iter('node')): break
     else: raise RuntimeError('SIGN_IN_NOT_REACHED')
     report['steps'].append({'id':current,'status':'passed'})
     if os.environ.get('CUSTOMER_FLOW_CREDENTIALS'):

@@ -2,6 +2,11 @@ name: Native customer flow verification
 on:
   workflow_dispatch:
     inputs:
+      androidPackage:
+        type: choice
+        default: play
+        options: [play, published-bundle-test-signature]
+        description: Keep Play-distributed and bundle-derived evidence separate
       platform:
         type: choice
         default: all
@@ -79,16 +84,31 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Download and verify the exact Play-signed universal APK
+        if: inputs.androidPackage == 'play'
         env:
           APK_URL: ${{ secrets.CUSTOMER_FLOW_APK_URL }}
         run: |
           node -e 'const fs=require("fs");fetch(process.env.APK_URL).then(async r=>{if(!r.ok)throw Error("APK download failed");fs.writeFileSync(process.env.RUNNER_TEMP+"/64.apk",Buffer.from(await r.arrayBuffer()));}).catch(()=>process.exit(1))'
           echo "97a7f08a95938cdab1c1b91a911195cdfe7d119db6e0a2eb21c6e903a6fe88b3  $RUNNER_TEMP/64.apk" | sha256sum --check
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/64.apk"
+      - name: Generate an isolated test installation from the unchanged published bundle
+        if: inputs.androidPackage == 'published-bundle-test-signature'
+        env:
+          AAB_URL: ${{ secrets.CUSTOMER_FLOW_AAB_URL }}
+        run: |
+          node -e 'const fs=require("fs");fetch(process.env.AAB_URL).then(async r=>{if(!r.ok)throw Error("AAB download failed");fs.writeFileSync(process.env.RUNNER_TEMP+"/64.aab",Buffer.from(await r.arrayBuffer()));}).catch(()=>process.exit(1))'
+          echo "229f9238289a40da2f780dd6fe4bd2091ee45fff2946de4ed40e86cea6a3dfa4  $RUNNER_TEMP/64.aab" | sha256sum --check
+          curl --fail --location --silent --show-error https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o "$RUNNER_TEMP/bundletool.jar"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum --check
+          keytool -genkeypair -keystore "$RUNNER_TEMP/test-signature.jks" -alias native-flow-test -keyalg RSA -keysize 2048 -validity 2 -dname 'CN=PackProof isolated emulator test' -storepass android -keypass android
+          java -jar "$RUNNER_TEMP/bundletool.jar" build-apks --bundle="$RUNNER_TEMP/64.aab" --output="$RUNNER_TEMP/64.apks" --mode=universal --ks="$RUNNER_TEMP/test-signature.jks" --ks-key-alias=native-flow-test --ks-pass=pass:android --key-pass=pass:android
+          unzip -p "$RUNNER_TEMP/64.apks" universal.apk > "$RUNNER_TEMP/64.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/64.apk"
       - name: Operate the released Android application
         uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808
         env:
           CUSTOMER_FLOW_CREDENTIALS: ${{ inputs.authenticated && secrets.CUSTOMER_FLOW_CREDENTIALS || '' }}
+          CUSTOMER_ANDROID_PACKAGE: ${{ inputs.androidPackage }}
         with:
           api-level: 35
           target: google_apis_playstore
