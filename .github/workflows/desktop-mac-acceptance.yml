@@ -5,8 +5,20 @@ on:
       androidPackage:
         type: choice
         default: play
-        options: [play, published-bundle-test-signature, diagnostic-only]
+        options: [play, published-bundle-test-signature, candidate-bundle-test-signature, diagnostic-only]
         description: Keep Play-distributed and bundle-derived evidence separate
+      candidateBuildRun:
+        type: string
+        default: ''
+        description: Successful main-branch Android AAB workflow run for candidate 65
+      candidateSourceSha:
+        type: string
+        default: ''
+        description: Exact main source revision of candidate 65
+      candidateAabSha256:
+        type: string
+        default: ''
+        description: Independently downloaded candidate 65 bundle SHA-256
       platform:
         type: choice
         default: all
@@ -95,9 +107,13 @@ jobs:
         if: inputs.androidPackage != 'play'
         env:
           AAB_URL: ${{ secrets.CUSTOMER_FLOW_AAB_URL }}
+          GH_TOKEN: ${{ github.token }}
+          CUSTOMER_ANDROID_PACKAGE: ${{ inputs.androidPackage }}
+          CANDIDATE_BUILD_RUN: ${{ inputs.candidateBuildRun }}
+          CANDIDATE_SOURCE_SHA: ${{ inputs.candidateSourceSha }}
+          CANDIDATE_AAB_SHA256: ${{ inputs.candidateAabSha256 }}
         run: |
-          node -e 'const fs=require("fs");fetch(process.env.AAB_URL).then(async r=>{if(!r.ok)throw Error("AAB download failed");fs.writeFileSync(process.env.RUNNER_TEMP+"/64.aab",Buffer.from(await r.arrayBuffer()));}).catch(()=>process.exit(1))'
-          echo "229f9238289a40da2f780dd6fe4bd2091ee45fff2946de4ed40e86cea6a3dfa4  $RUNNER_TEMP/64.aab" | sha256sum --check
+          node desktop/scripts/customer-android-bundle.cjs
           curl --fail --location --silent --show-error https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o "$RUNNER_TEMP/bundletool.jar"
           echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum --check
           keytool -genkeypair -keystore "$RUNNER_TEMP/test-signature.jks" -alias native-flow-test -keyalg RSA -keysize 2048 -validity 2 -dname 'CN=PackProof isolated emulator test' -storepass android -keypass android
@@ -114,6 +130,9 @@ jobs:
         env:
           CUSTOMER_FLOW_CREDENTIALS: ${{ inputs.authenticated && secrets.CUSTOMER_FLOW_CREDENTIALS || '' }}
           CUSTOMER_ANDROID_PACKAGE: ${{ inputs.androidPackage }}
+          CANDIDATE_SOURCE_SHA: ${{ inputs.candidateSourceSha }}
+          CANDIDATE_AAB_SHA256: ${{ inputs.candidateAabSha256 }}
+          CANDIDATE_BUILD_RUN: ${{ inputs.candidateBuildRun }}
         with:
           api-level: 35
           target: google_apis_playstore

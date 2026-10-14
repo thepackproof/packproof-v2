@@ -4,13 +4,18 @@ out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'customer-android'
 out.mkdir(parents=True, exist_ok=True)
 report = {'schema':'packproof.native-customer-flow.v1','platform':'android','version':'1.0.1 (64)','apkSha256':'97a7f08a95938cdab1c1b91a911195cdfe7d119db6e0a2eb21c6e903a6fe88b3','physicalDeviceChecks':'waived','syntheticCamera':True,'steps':[]}
 report['artifactScope']=os.environ.get('CUSTOMER_ANDROID_PACKAGE','play')
+if report['artifactScope']=='candidate-bundle-test-signature':
+    report['version']='1.0.1 (65)'
+    report['sourceSha']=os.environ['CANDIDATE_SOURCE_SHA']
+    report['buildRun']=os.environ['CANDIDATE_BUILD_RUN']
 apk_path=pathlib.Path(os.environ['RUNNER_TEMP'])/'64.apk'
 report['apkSha256']=hashlib.sha256(apk_path.read_bytes()).hexdigest()
 report['playDistributionFlowVerified']=False
-if report['artifactScope'] in ['published-bundle-test-signature','diagnostic-only']:
+if report['artifactScope'] in ['published-bundle-test-signature','candidate-bundle-test-signature','diagnostic-only']:
     aab_path=pathlib.Path(os.environ['RUNNER_TEMP'])/'64.aab'
-    report['publishedAabSha256']=hashlib.sha256(aab_path.read_bytes()).hexdigest()
-    if report['publishedAabSha256']!='229f9238289a40da2f780dd6fe4bd2091ee45fff2946de4ed40e86cea6a3dfa4':raise RuntimeError('PUBLISHED_AAB_MISMATCH')
+    report['aabSha256']=hashlib.sha256(aab_path.read_bytes()).hexdigest()
+    expected=os.environ['CANDIDATE_AAB_SHA256'] if report['artifactScope']=='candidate-bundle-test-signature' else '229f9238289a40da2f780dd6fe4bd2091ee45fff2946de4ed40e86cea6a3dfa4'
+    if report['aabSha256']!=expected:raise RuntimeError('AAB_MISMATCH')
     with zipfile.ZipFile(aab_path) as a,zipfile.ZipFile(apk_path) as b:
         verified=[]
         for entry in a.namelist():
@@ -22,7 +27,7 @@ if report['artifactScope'] in ['published-bundle-test-signature','diagnostic-onl
                     continue
                 if a.read(entry)!=b.read(target):raise RuntimeError('PUBLISHED_APP_PAYLOAD_CHANGED')
                 verified.append(entry)
-        report['unchangedPublishedPayloads']=verified
+        report['unchangedBundlePayloads']=verified
     report['signingScope']='Disposable emulator test signature; production signing keys and Play settings unchanged'
 current = 'install-verified-apk'
 def adb(*args, binary=False):
