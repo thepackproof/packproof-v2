@@ -52,7 +52,7 @@ def backend(action,title=''):
     if r.returncode:raise RuntimeError(r.stderr.strip() if re.fullmatch('[A-Z_0-9]+',r.stderr.strip()) else 'BACKEND_READBACK_FAILED')
     return json.loads(r.stdout)
 def passed(id,**details):
-    report['steps'].append({'id':id,'status':'passed',**details});print(id+': passed',flush=True)
+    report['steps'].append({'id':id,'outcome':'passed','details':details});print(id+': passed',flush=True)
 def enroll_emulated_fingerprint():
     adb('shell','locksettings','set-pin','246813')
     adb('shell','am','start','-a','android.settings.BIOMETRIC_ENROLL','--ei','android.provider.extra.BIOMETRIC_AUTHENTICATORS_ALLOWED','15')
@@ -76,6 +76,17 @@ def enroll_emulated_fingerprint():
 def sign_in(credential):
     fill('Email',credential['email']);fill('Password',credential['password']);adb('shell','input','keyevent','4');click('Sign in')
     wait('Create Proof',timeout=90)
+def open_camera_preview():
+    deadline=time.time()+100
+    while time.time()<deadline:
+        tree=tree_now()
+        if permission(tree):continue
+        if find(tree,'Record packing') is not None:return
+        n=find(tree,'Open camera')
+        if n is not None:tap(n)
+        else:adb('shell','input','swipe','540','1850','540','750','400')
+        time.sleep(1)
+    raise RuntimeError('CAMERA_PREVIEW_NOT_REACHED')
 try:
     adb('install','-r',str(pathlib.Path(os.environ['RUNNER_TEMP'])/'64.apk'))
     report['steps'].append({'id':current,'status':'passed'})
@@ -99,7 +110,7 @@ try:
         report['syntheticProofTitle']=title
         current='create-proof-through-ui'
         click('Create Proof');click('Record a shipment',partial=True);fill('What are you shipping?',title);adb('shell','input','keyevent','4');click('Continue to camera',scroll=True)
-        wait('Record packing',timeout=120,scroll=True);snapshot('03-camera-preview');proof=backend('find',title)
+        open_camera_preview();snapshot('03-camera-preview');proof=backend('find',title)
         if proof['status']!='READY_FOR_EVIDENCE':raise RuntimeError('INITIAL_PROOF_STATE_UNEXPECTED')
         passed(current,**proof)
         current='record-continuous-synthetic-camera-video'

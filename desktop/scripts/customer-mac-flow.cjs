@@ -14,7 +14,7 @@ const profile = path.join(os.homedir(),'Library/Application Support/PackProof');
 const report = {schema:'packproof.native-customer-flow.v1', platform:'darwin', arch:process.arch, sourceCommit:'92eae98722e888a3517653f787bdfecf5b4a5d58', harnessCommit:process.env.GITHUB_SHA, startedAt:new Date().toISOString(), physicalDeviceChecks:'waived', syntheticCamera:true, steps:[]};
 let current='initialization', browser, page, proc, mounted=false, owned=false;
 const mount = path.join(process.env.RUNNER_TEMP,'customer-mac-mount');
-async function step(id, fn) {current=id;const detail=await fn();report.steps.push({id,status:'passed',...detail});console.log(id+': passed');}
+async function step(id, fn) {current=id;const detail=await fn();report.steps.push({id,outcome:'passed',details:detail});console.log(id+': passed');}
 async function snapshot(name) {if(!page)return;await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});fs.writeFileSync(path.join(output,name+'.txt'),(await page.locator('body').innerText()).replace(/[A-Za-z0-9_-]{80,}/g,'[REDACTED]'));}
 async function launch() {
   proc=spawn(path.join(app,'Contents/MacOS/PackProof'),['--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream'],{env:childEnvironment(),stdio:'ignore'});
@@ -70,8 +70,9 @@ async function main(){
       await snapshot('07-upload-complete');return{nativeQueueCompleted:true};
     });
     await step('server-finalization-and-original-readback',()=>reader.verify(title,output));
-    async function openFinalizedProof(){await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Proofs',exact:true}).click();await page.getByRole('button',{name:title,exact:true}).click();await page.getByText('Finalized record · immutable',{exact:true}).waitFor();}
+    async function openFinalizedProof(){await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Proofs',exact:true}).click();await page.getByRole('button',{name:title,exact:true}).click();await page.getByText('Record integrity and access',{exact:true}).click();await page.getByText('Finalized record · immutable',{exact:true}).waitFor();}
     await step('view-finalized-proof-in-native-ui',async()=>{await openFinalizedProof();await snapshot('08-finalized-proof');return{proofId};});
+    await step('play-original-recording-through-native-session',async()=>{await page.getByRole('button',{name:/^Open Fulfillment capture$/i}).click();await page.locator('video.evidence-player').waitFor();await page.waitForFunction(()=>{const video=document.querySelector('video.evidence-player');return video&&video.readyState>=2&&video.currentTime>0&&!video.error;},null,{timeout:60000});await snapshot('08-original-playback');await page.getByRole('button',{name:'Close dialog',exact:true}).click();return{originalPlayback:true};});
     await step('relaunch-restores-account-and-finalized-proof',async()=>{await quit();await launch();await page.getByRole('navigation',{name:'Main navigation'}).waitFor();await openFinalizedProof();await snapshot('09-relaunch-finalized');return{proofId,protectedSessionRestored:true};});
     await step('sign-out-and-sign-back-in-through-ui',async()=>{
       await page.locator('.profile-button').click();await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.getByRole('button',{name:'Sign in',exact:true}).waitFor();await snapshot('10-signed-out');
