@@ -1,5 +1,5 @@
 """UI verification of the unchanged Google-signed production APK on a hosted emulator."""
-import json, os, pathlib, subprocess, time, xml.etree.ElementTree as ET
+import json, os, pathlib, re, subprocess, time, xml.etree.ElementTree as ET
 out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'customer-android'
 out.mkdir(parents=True, exist_ok=True)
 report = {'schema':'packproof.native-customer-flow.v1','platform':'android','version':'1.0.1 (64)','apkSha256':'97a7f08a95938cdab1c1b91a911195cdfe7d119db6e0a2eb21c6e903a6fe88b3','physicalDeviceChecks':'waived','syntheticCamera':True,'steps':[]}
@@ -17,6 +17,65 @@ def snapshot(name):
     (out/(name+'.xml')).write_text(ET.tostring(tree,encoding='unicode'))
     (out/(name+'.png')).write_bytes(adb('exec-out','screencap','-p',binary=True))
     return tree
+def tree_now():
+    adb('shell','uiautomator','dump','--compressed','/sdcard/customer-ui.xml')
+    return ET.fromstring(adb('shell','cat','/sdcard/customer-ui.xml'))
+def find(tree, label, partial=False):
+    matches=[]
+    for n in tree.iter('node'):
+        values=[n.get('text',''),n.get('content-desc','')]
+        if n.get('enabled')=='true' and any(label in v if partial else label==v for v in values): matches.append(n)
+    return next((n for n in matches if n.get('clickable')=='true'),matches[0] if matches else None)
+def tap(node):
+    bounds=[int(n) for n in re.findall(r'\d+',node.get('bounds',''))]
+    if len(bounds)!=4: raise RuntimeError('UI_BOUNDS_UNAVAILABLE')
+    adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2))
+def permission(tree):
+    for n in tree.iter('node'):
+        if n.get('resource-id','').endswith(('permission_allow_foreground_only_button','permission_allow_button')) and n.get('enabled')=='true': tap(n);return True
+    return False
+def wait(label, timeout=60, partial=False, scroll=False):
+    deadline=time.time()+timeout
+    while time.time()<deadline:
+        tree=tree_now()
+        if permission(tree): continue
+        n=find(tree,label,partial)
+        if n is not None:return n
+        if scroll:adb('shell','input','swipe','540','1850','540','750','400')
+        time.sleep(1)
+    raise RuntimeError('UI_CONTROL_NOT_REACHED')
+def click(label, **kwargs): tap(wait(label,**kwargs))
+def fill(label,value):
+    n=wait(label);tap(n);adb('shell','input','text',value.replace(' ','%s'))
+def backend(action,title=''):
+    r=subprocess.run(['node','desktop/scripts/customer-backend-readback.cjs','android',action,title,str(out)],capture_output=True,text=True,timeout=180)
+    if r.returncode:raise RuntimeError(r.stderr.strip() if re.fullmatch('[A-Z_0-9]+',r.stderr.strip()) else 'BACKEND_READBACK_FAILED')
+    return json.loads(r.stdout)
+def passed(id,**details):
+    report['steps'].append({'id':id,'status':'passed',**details});print(id+': passed',flush=True)
+def enroll_emulated_fingerprint():
+    adb('shell','locksettings','set-pin','246813')
+    adb('shell','am','start','-a','android.settings.BIOMETRIC_ENROLL','--ei','android.provider.extra.BIOMETRIC_AUTHENTICATORS_ALLOWED','15')
+    for i in range(35):
+        time.sleep(1);tree=tree_now()
+        texts=' '.join(n.get('text','') for n in tree.iter('node'))
+        if 'Fingerprint added' in texts or 'Fingerprint 1' in texts:
+            n=find(tree,'Done') or find(tree,'DONE')
+            if n is not None:tap(n)
+            snapshot('00-emulated-biometric-enrolled');return
+        edit=next((n for n in tree.iter('node') if n.get('class')=='android.widget.EditText'),None)
+        if edit is not None and ('PIN' in texts or 'pin' in texts):
+            tap(edit);adb('shell','input','text','246813');adb('shell','input','keyevent','66');continue
+        acted=False
+        for label in ['I agree','I AGREE','Next','NEXT','More','MORE','Fingerprint','Fingerprint unlock','Set up']:
+            n=find(tree,label)
+            if n is not None:tap(n);acted=True;break
+        if not acted and any(s in texts.lower() for s in ['touch','sensor','finger']):
+            adb('emu','finger','touch','1');time.sleep(.5);adb('emu','finger','remove')
+    snapshot('biometric-enrollment-failure');raise RuntimeError('EMULATOR_BIOMETRIC_ENROLLMENT_UNFINISHED')
+def sign_in(credential):
+    fill('Email',credential['email']);fill('Password',credential['password']);adb('shell','input','keyevent','4');click('Sign in')
+    wait('Create Proof',timeout=90)
 try:
     adb('install','-r',str(pathlib.Path(os.environ['RUNNER_TEMP'])/'64.apk'))
     report['steps'].append({'id':current,'status':'passed'})
@@ -28,6 +87,47 @@ try:
         if any(n.get('text')=='Sign in' or n.get('content-desc')=='Sign in' for n in tree.iter('node')): break
     else: raise RuntimeError('SIGN_IN_NOT_REACHED')
     report['steps'].append({'id':current,'status':'passed'})
+    if os.environ.get('CUSTOMER_FLOW_CREDENTIALS'):
+        credential=json.loads(os.environ['CUSTOMER_FLOW_CREDENTIALS'])['android']
+        current='isolated-account-preflight';passed(current,**backend('preflight'))
+        current='enroll-emulated-biometric'
+        enroll_emulated_fingerprint();passed(current,physicalBiometricVerified=False)
+        adb('shell','input','keyevent','3');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1')
+        current='sign-in-customer-ui';sign_in(credential);snapshot('02-workspace');passed(current)
+        title='SYNTHETIC native flow Android '+os.environ['GITHUB_RUN_ID']
+        report['syntheticProofTitle']=title
+        current='create-proof-through-ui'
+        click('Create Proof');click('Record a shipment',partial=True);fill('What are you shipping?',title);adb('shell','input','keyevent','4');click('Continue to camera',scroll=True)
+        wait('Record packing',timeout=120,scroll=True);snapshot('03-camera-preview');proof=backend('find',title)
+        if proof['status']!='READY_FOR_EVIDENCE':raise RuntimeError('INITIAL_PROOF_STATE_UNEXPECTED')
+        passed(current,**proof)
+        current='record-continuous-synthetic-camera-video'
+        click('Record packing',scroll=True);wait('Finish recording',timeout=90,scroll=True);time.sleep(8);snapshot('04-recording');click('Finish recording',scroll=True)
+        wait('Review recording',timeout=120);snapshot('05-review');passed(current,syntheticCamera=True)
+        current='biometric-confirmation-and-upload-through-ui'
+        click('Confirm and submit.',partial=True,timeout=120,scroll=True)
+        # The normal Android BiometricPrompt must be present before a virtual fingerprint is supplied.
+        deadline=time.time()+60
+        while time.time()<deadline:
+            tree=tree_now();text=' '.join(n.get('text','') for n in tree.iter('node'))
+            if any(n.get('package')=='com.android.systemui' and ('fingerprint' in n.get('text','').lower() or 'biometric' in n.get('resource-id','')) for n in tree.iter('node')):
+                snapshot('06-biometric-prompt');adb('emu','finger','touch','1');break
+            time.sleep(1)
+        else:raise RuntimeError('NATIVE_BIOMETRIC_PROMPT_NOT_REACHED')
+        passed(current,nativeBiometricPromptObserved=True,authenticationInput='emulated enrolled fingerprint')
+        current='server-finalization-and-original-readback'
+        deadline=time.time()+240
+        while time.time()<deadline:
+            state=backend('find',title)
+            if state['status']=='FINALIZED':break
+            time.sleep(5)
+        else:raise RuntimeError('SERVER_FINALIZATION_NOT_CONFIRMED')
+        snapshot('07-finalized-proof');passed(current,**backend('verify',title))
+        current='relaunch-and-view-saved-proof'
+        adb('shell','am','force-stop','com.packproof.mobile');adb('shell','monkey','-p','com.packproof.mobile','-c','android.intent.category.LAUNCHER','1');wait('Proofs',timeout=90);click('Proofs');click(title,partial=True,timeout=90,scroll=True);snapshot('08-relaunch-proof');passed(current,**backend('verify',title))
+        current='sign-out-and-sign-back-in-through-ui'
+        adb('shell','input','keyevent','4');click('Home');click('Open profile menu');click('Settings');click('Sign out',scroll=True);wait('Sign in');snapshot('09-signed-out');sign_in(credential);click('Proofs');click(title,partial=True,scroll=True);snapshot('10-signed-back-in');passed(current,**backend('verify',title))
+        report['fullSignedInFlow']=True
     report['passed']=True
 except Exception as error:
     report['passed']=False
