@@ -5,9 +5,9 @@ const root=path.resolve(__dirname,'../..'),mobile=path.join(root,'mobile'),temp=
 if(!process.env.GITHUB_ACTIONS||!temp)throw Error('Disposable CI runner required');
 const provider=path.join(mobile,'src/app/PackProofProvider.tsx');
 let source=fs.readFileSync(provider,'utf8');
-const target='      const mapped = presentError(err);';
+const target='\n      const mapped = presentError(err);';
 if(source.split(target).length!==2)throw Error('Diagnostic insertion target changed');
-source=source.replace(target,`      console.error('PACKPROOF_FLOW_DIAGNOSTIC', JSON.stringify({name: (err as Error)?.name, code: (err as {code?:string})?.code, message: (err as Error)?.message, stack: (err as Error)?.stack}));\n${target}`);
+source=source.replace(target,`\n      console.error('PACKPROOF_FLOW_DIAGNOSTIC', JSON.stringify({name: (err as Error)?.name, code: (err as {code?:string})?.code, message: (err as Error)?.message, stack: (err as Error)?.stack}));${target}`);
 fs.writeFileSync(provider,source);
 const profiles=require(path.join(mobile,'eas.json')).build,layers=[];
 for(let key='production';key;key=profiles[key].extends)layers.unshift(profiles[key].env||{});
