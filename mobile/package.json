@@ -34,7 +34,7 @@
     "test:research": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/research/*.test.ts",
     "test:vendor-security": "node --test tests/vendor-security-regressions.test.cjs tests/vendor-integrity.test.cjs tests/vendor-pem-security.test.cjs tests/vendor-http-security.test.cjs",
     "test:ux-recovery": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/photo-drafts.test.ts tests/grading-creation.test.ts tests/recovery-workspace.test.ts tests/task-home.test.ts tests/activity-model.test.ts tests/mobile-ux-events.test.ts",
-    "test:android-task-first": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/android-task-first-theme.test.ts tests/proof-entry.test.ts tests/proof-title.test.ts tests/manual-review.test.ts tests/task-home.test.ts tests/proof-navigation.test.ts tests/mobile-ux-events.test.ts"
+    "test:android-task-first": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/android-task-first-theme.test.ts tests/proof-entry.test.ts tests/proof-title.test.ts tests/manual-review.test.ts tests/recovery-presentation.test.ts tests/task-home.test.ts tests/proof-navigation.test.ts tests/mobile-ux-events.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
