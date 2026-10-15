@@ -21,7 +21,7 @@ import { PressableScale } from "../ui/motion";
 import { WorkspaceHeader } from "../ui/WorkspaceHeader";
 import { activityGroup, activityRecordingUsable } from "../experience/activity-model";
 import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
-import { recoveryPresentation, recordingRepresentedByTask, markNotificationAfterOpen } from "../experience/recovery-presentation";
+import { recoveryPresentation, recordingRepresentedByTask, recordingTaskSession, markNotificationAfterOpen } from "../experience/recovery-presentation";
 import { captureCompletionActive } from "../capture/completion";
 import { AppHeader } from "../ui/AppHeader";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -50,6 +50,11 @@ export function ActivityScreen() {
   const workspace = selectRecoveryWorkspace({ proofs: app.proofCollection, invitations: app.pendingInvites, captures: recordings, photoDrafts: app.photoDrafts, orders: [], progress: app.uploadProgressByProof, userId: app.session?.userId ?? '', apiBaseUrl: app.apiBaseUrl, online: !app.offline, reconciled: app.workspaceReconciled, captureStatus: app.captureStatus });
   useEffect(() => { void app.run(app.syncWorkspace); }, [scope]);
   const selectedRecording = selectedSessionId ? recordings.find(capture => (capture.captureSessionId || capture.uri) === selectedSessionId || capture.recovery?.operationId === selectedSessionId) : undefined;
+  function openAttentionTask(row: (typeof workspace.attention)[number]) {
+    const sessionId = ANDROID_TASK_FIRST_REBUILD ? recordingTaskSession(row, recordings) : null;
+    if (sessionId) app.go("activity", { activitySessionId: sessionId, activityFilter: "all" });
+    else void app.openProofAction(row.proofId);
+  }
   const groups = [
     { id: "attention", title: "Saved recordings needing action" },
     { id: "uploading", title: ANDROID_TASK_FIRST_REBUILD ? "In progress" : "Uploads" },
@@ -64,7 +69,7 @@ export function ActivityScreen() {
     <OfflineBanner visible={app.offline} /><ErrorBanner message={app.error} />
     {!selectedSessionId && (filter === 'all' || filter === 'attention') ? <View style={styles.group}>
       <Text accessibilityRole="header" style={[styles.heading,{color:colors.textPrimary}]}>{ANDROID_TASK_FIRST_REBUILD ? "Proofs needing action" : "Action needed"} · {workspace.attention.length}</Text>
-      {workspace.attention.map(row => <CompactProofRow key={row.proofId} title={ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle(row) : row.transaction.itemTitle || 'Proof'} detail={row.taskDescription} disabled={app.busy} onPress={() => void app.openProofAction(row.proofId)} />)}
+      {workspace.attention.map(row => <CompactProofRow key={row.proofId} title={ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle(row) : row.transaction.itemTitle || 'Proof'} detail={row.taskDescription} disabled={app.busy} onPress={() => openAttentionTask(row)} />)}
       {!workspace.attention.length ? <Text style={[styles.text,{color:colors.textSecondary}]}>{app.workspaceReconciled ? 'No Proofs need action.' : 'Refresh your Proofs to check what needs action.'}</Text> : null}
     </View> : null}
     {!selectedSessionId && (filter === 'all' || filter === 'uploading') && workspace.photoDrafts.some(draft => draft.phase === 'SUBMITTING') ? <View style={styles.group}>

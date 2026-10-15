@@ -7,6 +7,13 @@ export function recordingRepresentedByTask(capture: { captureProofId?: string; c
     && [capture.captureSessionId, capture.uri, capture.recovery?.operationId].includes(task.action?.sessionId));
 }
 
+/** Resolve the selector's exact original, never the first saved file sharing a
+ * Proof. If it disappeared, the normal domain route must re-evaluate the task. */
+export function recordingTaskSession(task: { proofId: string; action?: { sessionId?: string } }, captures: Array<{ captureProofId?: string; captureSessionId?: string; uri: string; recovery?: { operationId: string } }>): string | null {
+  const sessionId = task.action?.sessionId;
+  return sessionId && captures.some(capture => recordingRepresentedByTask(capture, [task])) ? sessionId : null;
+}
+
 /** Failed navigation leaves an update unread; read acknowledgement remains
  * best effort after the authorized destination actually opens. */
 export async function markNotificationAfterOpen(open: () => Promise<boolean>, markRead: () => Promise<unknown>): Promise<boolean> {

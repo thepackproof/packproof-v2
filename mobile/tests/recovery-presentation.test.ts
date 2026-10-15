@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { recoveryPresentation as present, recordingRepresentedByTask, markNotificationAfterOpen } from "../src/experience/recovery-presentation";
+import { recoveryPresentation as present, recordingRepresentedByTask, recordingTaskSession, markNotificationAfterOpen } from "../src/experience/recovery-presentation";
 import type { ActivityCaptureState } from "../src/experience/activity-model";
 
 const capture = (phase: NonNullable<ActivityCaptureState["recovery"]>["phase"], submitRequested = true): ActivityCaptureState => ({
@@ -16,6 +16,19 @@ test("Proof task deduplication keeps every other original on the same Proof disc
   assert.equal(recordingRepresentedByTask(second, tasks), false);
   assert.equal(recordingRepresentedByTask(second, [{ proofId: "proof-a", action: {} }]), false);
   assert.equal(recordingRepresentedByTask(first, [{ proofId: "other-proof", action: { sessionId: "capture-first" } }]), false);
+});
+
+test("a canonical task selecting the second original opens that exact recording despite array order", () => {
+  const first = { captureProofId: "proof-a", captureSessionId: "capture-z-interrupted", uri: "file:///first.mp4" };
+  const second = { captureProofId: "proof-a", captureSessionId: "capture-a-reviewable", uri: "file:///second.mp4" };
+  const task = { proofId: "proof-a", action: { sessionId: "capture-a-reviewable" } };
+  assert.equal(recordingTaskSession(task, [first, second]), second.captureSessionId);
+  assert.equal(recordingTaskSession(task, [second, first]), second.captureSessionId);
+  assert.equal(recordingRepresentedByTask(first, [task]), false);
+  assert.equal(recordingRepresentedByTask(second, [task]), true);
+  assert.equal(recordingTaskSession(task, [first]), null);
+  assert.equal(recordingTaskSession({ proofId: "proof-a", action: {} }, [first, second]), null);
+  assert.equal(recordingTaskSession({ proofId: "another-proof", action: task.action }, [first, second]), null);
 });
 
 test("failed or rejected notification navigation never marks the notification read", async () => {
