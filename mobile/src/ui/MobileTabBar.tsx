@@ -3,8 +3,9 @@ import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePackProof } from "../app/PackProofProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { typography } from "../theme/tokens";
+import { typography, taskFirstTypography } from "../theme/tokens";
 import { PressableScale } from "./motion";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 
 const tabs = [
   { route: "home", label: "Home", icon: "home-outline" },
@@ -18,12 +19,12 @@ export function MobileTabBar() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const {fontScale}=useWindowDimensions();
-  return <View accessibilityRole="tablist" accessibilityLabel="Main navigation" style={[styles.bar, fontScale>1.6 && {flexWrap:"wrap"}, { backgroundColor: colors.background, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, 6), paddingLeft: insets.left, paddingRight: insets.right }]}>
+  return <View accessibilityRole="tablist" accessibilityLabel="Main navigation" style={[styles.bar, fontScale>1.6 && {flexWrap:"wrap"}, { backgroundColor: ANDROID_TASK_FIRST_REBUILD ? colors.surface : colors.background, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, 6), paddingLeft: insets.left + (ANDROID_TASK_FIRST_REBUILD ? 4 : 0), paddingRight: insets.right + (ANDROID_TASK_FIRST_REBUILD ? 4 : 0) }]}>
     {tabs.map(tab => {
       const selected = app.route.name === tab.route;
       return <View key={tab.route} style={[styles.tabSlot,fontScale>1.6 && {flexBasis:"48%",flexGrow:1}]}><PressableScale accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected, disabled: app.busy }} disabled={app.busy} onPress={() => { if (!selected) app.go(tab.route); }} style={[styles.tab, selected && { backgroundColor: colors.accentSoft }]}>
-        <Ionicons name={tab.icon} size={22} color={selected ? colors.accentText : colors.textSecondary} />
-        <Text style={[styles.label, { color: selected ? colors.accentText : colors.textSecondary }]}>{tab.label}</Text>
+        <Ionicons name={ANDROID_TASK_FIRST_REBUILD && tab.route === "activity" ? "notifications-outline" : tab.icon} size={22} color={selected ? colors.accentText : colors.textSecondary} />
+        <Text style={[styles.label, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.caption, { color: selected ? colors.accentText : colors.textSecondary }]}>{tab.label}</Text>
       </PressableScale></View>;
     })}
   </View>;
