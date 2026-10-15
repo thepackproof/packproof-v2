@@ -13,6 +13,24 @@ export function freshProofDestination(proof:ProofView,userId:string): {route:'ca
   return {route:'proof'};
 }
 
+/** Shared tap-time owner for actionable entries. Cached list state is never an input. */
+export async function openFreshProofAction(proofId: string, owners: {
+  userId: string;
+  refreshProof: (proofId: string) => Promise<ProofView>;
+  assertCurrentAccount: () => void;
+  navigate: (route: 'capture' | 'finalize' | 'proof') => void;
+  openReceipt: (proofId: string) => void;
+  notice: (message: string) => void;
+}): Promise<void> {
+  owners.assertCurrentAccount();
+  const fresh = await owners.refreshProof(proofId);
+  owners.assertCurrentAccount();
+  const destination = freshProofDestination(fresh, owners.userId);
+  if (destination.route === 'receipt') owners.openReceipt(fresh.proofId);
+  else owners.navigate(destination.route);
+  if (destination.notice) owners.notice(destination.notice);
+}
+
 /** A local original permits playback, but only fresh canonical permission permits resuming its workflow. */
 export function savedCaptureDestination(proof:ProofView|null,userId:string): {route:'capture'|'finalize'|'proof'|'receipt';allowResume:boolean;reviewOnly:boolean;notice:string|null} {
   if(!proof)return {route:'capture',allowResume:false,reviewOnly:true,notice:'Offline review only. Your original remains on this device. Reconnect to check the current Proof before submitting or recording again.'};

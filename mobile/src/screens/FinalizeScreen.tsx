@@ -14,6 +14,9 @@ import { ConfirmationSheet } from "../ui/Sheets";
 import { InfoCard } from "../ui/ProofCard";
 import { ErrorBanner } from "../ui/EmptyState";
 import { FadeSlideIn } from "../ui/motion";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
+import { ManualReviewConfirmation } from "../ui/ManualReviewConfirmation";
+import { manualReviewBinding } from "../experience/manual-review";
 
 export function FinalizeScreen() {
   const app = usePackProof();
@@ -25,6 +28,32 @@ export function FinalizeScreen() {
   if (!proof || !txn) return null;
   const evidence = proof.evidence.find(row=>row.validationStatus === "COMMITTED" && row.evidenceType === "FULFILLMENT_CAPTURE" && row.submittedBy === app.session?.userId);
   const nativeConfirmation = (Platform.OS === "android" || Platform.OS === "ios") && app.role === "SELLER" && Boolean(evidence?.captureSessionId && evidence.captureClient === "NATIVE_CAMERA") && !recordedSellerAuthorization(proof,evidence?.evidenceId,app.session?.userId ?? "");
+  if (ANDROID_TASK_FIRST_REBUILD) {
+    const committedCount = proof.evidence.filter(row => row.validationStatus === "COMMITTED").length;
+    const binding = manualReviewBinding({ proofId: proof.proofId, originalId: evidence?.evidenceId ?? "",
+      accountId: app.session?.userId ?? "", apiBaseUrl: app.client.apiBaseUrl,
+      metadata: txn, reviewRevision: evidence?.captureSessionId ?? "" });
+    return <AppScreen extraBottom={24}>
+      <AppHeader title="Finish your Proof" onBack={app.goBack} />
+      <ErrorBanner message={app.error} />
+      <Text style={[styles.stageTitle, { color: colors.textPrimary }]}>{txn.itemTitle || "Your shipment"}</Text>
+      <Text style={[styles.note, { color: colors.textSecondary }]}>{committedCount
+        ? "Your evidence was received. A final confirmation remains before this Proof is finalized."
+        : "Review the required evidence before finishing this Proof."}</Text>
+      <View style={[styles.summary, { borderColor: colors.border }]}>
+        <Row label="Evidence received" value={`${committedCount} ${committedCount === 1 ? "file" : "files"}`} />
+        {txn.externalReference ? <Row label="Order" value={orderReferenceLabel(txn.externalReference)} /> : null}
+        {shippingSummary(txn.shipping ?? {}) ? <Row label="Shipping" value={shippingSummary(txn.shipping ?? {})} /> : null}
+      </View>
+      <Button label="Review evidence" variant="tertiary" onPress={() => app.go("proof")} />
+      <Text style={[styles.note, { color: colors.textSecondary }]}>{FINALIZE_DISCLOSURE}</Text>
+      {app.offline ? <Text accessibilityLiveRegion="polite" style={[styles.note, { color: colors.textSecondary }]}>Reconnect to confirm the latest status and finish this Proof.</Text> : null}
+      {nativeConfirmation
+        ? <ManualReviewConfirmation key={binding} binding={binding} onPress={() => void app.confirmCommittedProof()} disabled={app.offline} loading={app.busy} />
+        : <Button label="Finalize Proof" onPress={() => app.setConfirmFinalize(true)} disabled={app.busy || app.offline} haptic="medium" />}
+      <ConfirmationSheet visible={app.confirmFinalize} title="Finalize Proof" message={FINALIZE_DISCLOSURE} confirmLabel="Finalize PackProof" busy={app.busy} onConfirm={() => void app.finalizeProof()} onClose={() => app.setConfirmFinalize(false)} />
+    </AppScreen>;
+  }
   return (
     <AppScreen extraBottom={24}>
       <AppHeader title="Review and confirm" onBack={app.goBack} />
@@ -56,6 +85,7 @@ function Row(props: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  summary: { borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 12, gap: 12 },
   stage: { borderWidth: 1, borderRadius: 14, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 },
   stageIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   stageCheck: { fontSize: 24, fontWeight: "800" },

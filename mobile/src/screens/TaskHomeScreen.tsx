@@ -12,8 +12,14 @@ import { Button } from "../ui/Button";
 import { ErrorBanner } from "../ui/EmptyState";
 import { PressableScale } from "../ui/motion";
 import { WorkspaceHeader } from "../ui/WorkspaceHeader";
+import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
+import { AndroidTaskHomeScreen } from './AndroidTaskHomeScreen';
 
 export function TaskHomeScreen() {
+  return ANDROID_TASK_FIRST_REBUILD ? <AndroidTaskHomeScreen /> : <LegacyTaskHomeScreen />;
+}
+
+function LegacyTaskHomeScreen() {
   const app = usePackProof(), home = useTaskHome(), { colors } = useTheme();
   const experience = useFirstExperience();
   const {fontScale}=useWindowDimensions();
