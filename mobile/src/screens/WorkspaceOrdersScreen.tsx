@@ -8,7 +8,7 @@ import { formatDate } from "../copy/format";
 import { matchesOrderQuery, orderPresentation } from "../copy/orders";
 import { ReadyOrders } from "../intake/ReadyOrders";
 import { useTheme } from "../theme/ThemeProvider";
-import { typography } from "../theme/tokens";
+import { typography, taskFirstTypography } from "../theme/tokens";
 import { AppScreen } from "../ui/AppScreen";
 import { Button } from "../ui/Button";
 import { EmptyState, ErrorBanner, OfflineBanner } from "../ui/EmptyState";
@@ -16,6 +16,8 @@ import { PressableScale } from "../ui/motion";
 import { WorkspaceHeader } from "../ui/WorkspaceHeader";
 import type { FulfillmentQueueItem } from "../v2-api";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
+import { proofDisplayTitle } from "../copy/proof-title";
 
 type OrderFilter = "ready" | "started" | "completed" | "all";
 
@@ -83,6 +85,89 @@ export function WorkspaceOrdersScreen({ station = false }: { station?: boolean }
   const refreshQueue = () => { app.setError(null); setRefresh(value => value + 1); };
   const busy = app.busy || ["capturing", "preparing", "uploading"].includes(app.captureStatus);
 
+  if (ANDROID_TASK_FIRST_REBUILD) {
+    // This is a small presentation of the existing queue. Every tap delegates to
+    // a fresh authorized owner; cached labels never start a camera or recording.
+    const pendingOrders = items.filter(order => presentOrder(order).state !== "excluded");
+    const captureRows = pendingOrders.slice(0, 3);
+    const list = station ? captureRows : rows;
+    const showFilters = !station && items.length > 0;
+    function continueProof() {
+      app.setProofsView("all"); app.setProofsQuery(""); app.setProofsRoleFilter("all"); app.setProofsCarrierFilter(null);
+      app.go("proofs");
+    }
+    return <AppScreen key={scope} bottomInset={false} onRefresh={refreshQueue} refreshing={loading}
+      initialOffsetY={app.readOrdersView(station).offsetY} restorationReady={!loading}
+      onScrollOffset={offsetY => app.saveOrdersView(station, { offsetY })}
+      resetScrollKey={station ? "capture-landing" : `${filter}:${query}`}>
+      <WorkspaceHeader section={station ? "Capture" : "Orders"} />
+      <View style={styles.taskHeading}>
+        <Text accessibilityRole="header" style={[taskFirstTypography.pageTitle, { color: colors.textPrimary }]}>{station ? "Capture" : "Orders"}</Text>
+        <Text style={[taskFirstTypography.body, { color: colors.textSecondary }]}>{station ? "What are you documenting?" : "Choose an item to pack."}</Text>
+      </View>
+      {station ? <>
+        <View style={[styles.taskHero, { backgroundColor: colors.accentSoft, borderColor: colors.accentSoftBorder }]}>
+          <Text accessibilityRole="header" style={[taskFirstTypography.cardTitle, { color: colors.textPrimary }]}>Pack an item</Text>
+          <Text style={[taskFirstTypography.secondary, { color: colors.textSecondary }]}>Show the item, packing and seal in one continuous recording.</Text>
+          <Button label="Pack an item" icon="arrow-forward-outline" disabled={busy} onPress={() => app.selectCreateProof()} />
+        </View>
+        <View>
+          <CompactProofRow title="Continue a Proof" detail="Pick up at your next required step" disabled={busy} onPress={continueProof} />
+          <CompactProofRow title="Scan shipment" detail="Packing Station and linked orders" icon="scan-outline" disabled={busy}
+            onPress={() => { app.setScanPhase("camera"); app.setScanInput(""); app.go("scan"); }} />
+        </View>
+        <Button label="Receiving, returns and other capture" variant="tertiary" disabled={busy}
+          onPress={continueProof} accessibilityHint="Choose the existing Proof to see the receipt or return actions allowed for your role." />
+      </> : <Button label="Create Proof" icon="add-outline" disabled={busy} onPress={() => app.selectCreateProof()} />}
+      {app.offline ? <Text accessibilityLiveRegion="polite" style={[taskFirstTypography.secondary, { color: colors.warningText }]}>You’re offline. Saved orders may be out of date. Reconnect before starting a new recording.</Text> : null}
+      <ErrorBanner message={app.error || error} />
+      {station ? <View style={styles.taskSection}>
+        <Text accessibilityRole="header" style={[taskFirstTypography.rowTitle, { color: colors.textPrimary }]}>Shipment queue</Text>
+        <Button label="Orders" variant="tertiary" onPress={() => app.go("orders")} />
+      </View> : null}
+      {showFilters ? <>
+        <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Order filters">
+          {([["ready", "Needs fulfillment"], ["started", "Needs attention"], ["completed", "Completed"], ["all", "All orders"]] as const).map(([value, label]) =>
+            <PressableScale key={value} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: filter === value }}
+              onPress={() => { setFilter(value); app.saveOrdersView(station, { filter: value, offsetY: 0 }); }}
+              style={[styles.tab, { backgroundColor: filter === value ? colors.accentSoft : "transparent" }]}>
+              <Text style={[taskFirstTypography.secondaryStrong, { color: filter === value ? colors.accentText : colors.textSecondary }]}>{label}</Text>
+            </PressableScale>)}
+        </ScrollView>
+        <View style={[styles.search, { borderColor: colors.controlBorder, backgroundColor: colors.surface }]}>
+          <Ionicons name="search-outline" size={19} color={colors.textSecondary} />
+          <TextInput accessibilityLabel="Search orders" placeholder="Search order, item, or marketplace…" placeholderTextColor={colors.textSecondary}
+            autoCapitalize="none" autoCorrect={false} value={query}
+            onChangeText={value => { setQuery(value); app.saveOrdersView(station, { query: value, offsetY: 0 }); }}
+            style={[styles.searchInput, taskFirstTypography.body, { color: colors.textPrimary }]} />
+        </View>
+      </> : null}
+      {!station && !query.trim() && (filter === "ready" || filter === "all") ? <ReadyOrders onPreparedProofsChange={setPreparedProofIds} /> : null}
+      {loading ? <Text accessibilityLiveRegion="polite" style={[taskFirstTypography.secondary, { color: colors.textSecondary }]}>Loading orders…</Text> : null}
+      {!loading && error ? <Button label="Try loading orders again" variant="tertiary" onPress={refreshQueue} /> : null}
+      {list.length ? <View>{list.map(order => {
+        const state = presentOrder(order);
+        const completed = order.proofStatus === "FINALIZED" || finalizedProofIds.has(order.proofId);
+        const saved = !completed && pendingProofIds.has(order.proofId);
+        const status = completed ? "Finalized" : order.workflowState === "REMOVED_FROM_FULFILLMENT" ? "Removed from fulfillment" : state.label;
+        return <CompactProofRow key={order.proofId} title={proofDisplayTitle({ proofId: order.proofId, transaction: { itemTitle: order.itemSummary, externalReference: order.externalReference } })}
+          detail={[order.providerDisplay, status].filter(Boolean).join(" · ")} icon="cube-outline" completed={completed}
+          tone={saved ? "attention" : "neutral"} disabled={busy}
+          onPress={() => saved ? void app.openProofAction(order.proofId)
+            : state.state === "ready" ? void app.openOrder(order.proofId, station)
+              : void app.openProofDestination({ proofId: order.proofId, intent: completed || state.state === "excluded" ? "view" : "resume" })} />;
+      })}</View> : null}
+      {!loading && !error && !list.length && (!preparedProofIds.length || station) ? <View style={styles.taskEmpty}>
+        <Text style={[taskFirstTypography.secondary, { color: colors.textSecondary }]}>{station
+          ? items.length ? "No shipments are waiting to be packed. Your other orders are available in Orders." : "No imported orders yet. You can create a Proof without a selling account."
+          : query.trim() ? "No matching orders. Try another reference, item, or marketplace." : "No orders in this view. Create a Proof manually or connect a selling account."}</Text>
+        {query.trim() && !station ? <Button label="Clear search" variant="tertiary" onPress={() => { setQuery(""); app.saveOrdersView(station, { query: "", offsetY: 0 }); }} />
+          : <Button label="Connect a selling account" variant="tertiary" onPress={() => app.go("account", { accountSection: "channels" })} />}
+      </View> : null}
+      {station && pendingOrders.length > 3 ? <Button label={`View all ${pendingOrders.length} shipments`} variant="tertiary" onPress={() => app.go("orders")} /> : null}
+    </AppScreen>;
+  }
+
   return <AppScreen key={scope} bottomInset={!MOBILE_TASK_UX_ENABLED} onRefresh={refreshQueue} refreshing={loading} initialOffsetY={app.readOrdersView(station).offsetY} restorationReady={!loading} onScrollOffset={offsetY => app.saveOrdersView(station, { offsetY })} resetScrollKey={`${filter}:${query}`}>
     <WorkspaceHeader section={taskPack ? "Capture" : station ? "Packing Station" : "Orders"} />
     <View style={styles.heading}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow, { color: colors.textMuted }]}>{station ? "Fulfillment capture" : "Your workspace"}</Text> : null}<Text accessibilityRole="header" style={[styles.title, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, { color: colors.textPrimary }]}>{taskPack ? "Capture" : station ? "Packing Station" : "Orders"}</Text><Text style={[styles.copy, { color: colors.textSecondary }]}>{taskPack ? "Packing Station · scan or choose a shipment." : station ? "Select a shipment. Record its packing. Review and confirm." : "Synchronized orders, ready for the packing table."}</Text></View>
@@ -113,6 +198,9 @@ export function WorkspaceOrdersScreen({ station = false }: { station?: boolean }
 }
 
 const styles = StyleSheet.create({
+  taskHeading: { gap: 5 }, taskHero: { gap: 10, padding: 16, borderWidth: 1, borderRadius: 14 },
+  taskSection: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
+  taskEmpty: { gap: 8 },
   mobileTitle: { fontSize: 24, lineHeight: 31 }, entrances: { gap: 10 },
   heading: { gap: 8 }, eyebrow: { fontSize: 10, lineHeight: 15, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase" }, title: { ...typography.pageTitle }, copy: { ...typography.body }, meta: { ...typography.secondary }, cardTitle: { ...typography.bodyStrong, fontSize: 16, lineHeight: 23 },
   actions: { flexDirection: "row", gap: 12 }, action: { flex: 1 }, tabs: { flexDirection: "row", flexGrow: 0, flexShrink: 0, gap: 5 }, tab: { minHeight: 48, justifyContent: "center", paddingHorizontal: 13, paddingVertical: 10, borderRadius: 6 }, tabLabel: { ...typography.secondaryStrong },
