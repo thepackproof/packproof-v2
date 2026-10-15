@@ -1,7 +1,11 @@
 {
   "sourceSha": "fbc1821ce687f95052d1e11df46e3cb55bff4977",
+  "checkoutSha": "17968ba3792e00965ee813dac390601d529c13dd",
+  "headAndCheckoutTree": "002ce9d0c1dad425e8057af0d35c5c3fa588e71d",
+  "identicalTrackedSource": true,
   "workflowUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/38721481182",
-  "checkedAt": "2026-10-15T10:53:39.391Z",
+  "checkedAt": "2026-10-15T10:58:57.695Z",
+  "conclusion": "success",
   "jobs": [
     {
       "name": "PostgreSQL release invariants",
@@ -10,8 +14,8 @@
     },
     {
       "name": "Backend",
-      "status": "in_progress",
-      "conclusion": null
+      "status": "completed",
+      "conclusion": "success"
     },
     {
       "name": "Dependency audit (backend)",
@@ -58,5 +62,30 @@
       "status": "completed",
       "conclusion": "skipped"
     }
-  ]
+  ],
+  "testExecutions": {
+    "mobile": {
+      "passed": 492,
+      "failed": 0,
+      "skipped": 1
+    },
+    "backend": {
+      "passed": 1382,
+      "failed": 0,
+      "skipped": 14
+    },
+    "backendCredentialAndSessionGuards": {
+      "passed": 15
+    },
+    "webNode": {
+      "passed": 11
+    },
+    "webVitest": {
+      "passed": 353
+    },
+    "postgresReleaseInvariants": {
+      "passed": 9
+    }
+  },
+  "scope": "Counts include repeated cases across suites and are not unique-test totals. Native device acceptance NOT RUN."
 }
