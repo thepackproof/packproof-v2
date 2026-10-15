@@ -16,6 +16,8 @@ import { StatusBar } from "expo-status-bar";
 import { usePackProof } from "./PackProofProvider";
 import { isImmersiveRoute, showsTabBar } from "./navigation";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
+import { participantLinkEntry } from "../experience/proof-entry";
 import { MobileTabBar } from "../ui/MobileTabBar";
 import { ActivityScreen } from "../screens/ActivityScreen";
 import { typography } from "../theme/tokens";
@@ -203,10 +205,9 @@ function RootContent() {
       const id = linkedProofId, historyShareId = linkedHistoryShareId, userId = app.session.userId, api = app.apiBaseUrl;
       setLinkedProofId(null); setLinkedHistoryShareId(null); app.go("home");
       void app.run(async () => {
-        await app.openProof(id);
+        const opened = await app.openProofDestination(participantLinkEntry(id, historyShareId, ANDROID_TASK_FIRST_REBUILD));
         app.client.assertCaptureAccount(userId, api);
-        if (historyShareId) app.go("signature", { historyShareId });
-        await AsyncStorage.removeItem(pendingLinkKey(api)).catch(()=>undefined);
+        if (opened) await AsyncStorage.removeItem(pendingLinkKey(api)).catch(()=>undefined);
       });
     }
   }, [intakeNavigationReady, app.session?.userId, linkedProofId, linkedHistoryShareId]);

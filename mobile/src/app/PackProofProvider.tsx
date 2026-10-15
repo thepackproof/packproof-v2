@@ -2,10 +2,12 @@ import { gradingCreationKey, gradingCreationRequest, parseGradingCreation, type 
 import { listPhotoDrafts, persistPhotoDraft, readPhotoDraft, retainPhoto } from '../capture/photo-drafts';
 import { photoDraftContext, photoContextKey, submitPhotoDraft, type PhotoDraft, type PhotoDraftContext } from '../capture/photo-draft-model';
 import { recordMobileUxEvent } from '../analytics/mobile-ux-events';
-import { freshProofDestination, savedCaptureDestination } from "../experience/action-routing";
+import { freshProofDestination, openFreshProofAction, savedCaptureDestination } from "../experience/action-routing";
 import { presentationForProof } from "../copy/proof-list";
 import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
+import { handledActionSucceeded, openProofDestination, type ProofEntry } from "../experience/proof-entry";
 import { FIRST_PROOF_EXPERIENCE_ENABLED } from "../experience/first-proof";
 import { parseTaskIntent, taskIntent, taskIntentKey } from "../experience/task-intent";
 import { manualDraftMatches, type ManualOperation } from "../experience/manual-operation";
@@ -123,8 +125,9 @@ import {
 import { haptic } from "../theme/haptics";
 import type { LocalCaptureStatus } from "../copy/status";
 import {
-  DEFAULT_PROOFS_LIBRARY,
+  initialProofsLibrary,
   resolveBackRoute,
+  creationEntryRoute,
   type AppRoute,
   type AppRouteName,
   type WorkspaceOrigin,
@@ -195,7 +198,8 @@ export interface PackProofContextValue {
   readTaskInteractions: () => Record<string, number>;
   selectedTask: string | null;
   rememberTaskInteraction: (proofId: string) => void;
-  openProofAction: (proofId: string) => Promise<void>;
+  openProofAction: (proofId: string) => Promise<boolean>;
+  openProofDestination: (entry: ProofEntry) => Promise<boolean>;
   readProofsScrollOffset: () => number;
   readOrdersView: (batch: boolean) => OrdersViewState;
   saveOrdersView: (batch: boolean, value: Partial<OrdersViewState>) => void;
@@ -214,7 +218,7 @@ export interface PackProofContextValue {
   uploadProgressByProof: Record<string, number | null>;
   savedRecordings: LocalCapture[];
   captureReviewOnlyReason: string | null;
-  resumeSavedCapture: (capture: LocalCapture) => Promise<void>;
+  resumeSavedCapture: (capture: LocalCapture) => Promise<boolean>;
   cleanUpSavedCapture: (capture: LocalCapture) => Promise<void>;
   discardSavedCapture: (capture: LocalCapture) => Promise<void>;
   discardIncompleteEvidence: (evidenceId: string) => Promise<void>;
@@ -261,7 +265,7 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId">) => void;
+  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId" | "creationMode">) => void;
   goBack: () => void;
   setProofsView: (view: ProofsLibraryView) => void;
   setProofsQuery: (query: string) => void;
@@ -388,9 +392,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
       offsetY: value.offsetY === undefined ? current.offsetY : Number.isFinite(value.offsetY) ? Math.max(0, value.offsetY) : 0,
     };
   }, []);
-  const cacheRef = useRef(emptyProofsCache());
+  const cacheRef = useRef(emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)));
   const cacheScope = useRef<string | null>(null);
-  const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(DEFAULT_PROOFS_LIBRARY);
+  const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(() => initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
   // Scroll is native interaction state, not application state. Publishing every
   // offset would rerender every context consumer during an Android fling.
   const proofsScrollOffset = useRef(0);
@@ -521,9 +525,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (hydrated) versionReporter.update(session, client);
   }, [client, hydrated, session, versionReporter]);
 
-  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId">) => {
+  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId" | "creationMode">) => {
     if (name === "create" || name === "manual") startMobileCaptureEntry();
     if (name === "scan" && !MOBILE_TASK_UX_ENABLED) name = "create";
+    name = creationEntryRoute(name, ANDROID_TASK_FIRST_REBUILD, options?.creationMode);
     if (name === "scan") { setScanPhase("camera"); setScanResult(null); setScanInput(""); }
     if (name === "complete") name = "proof";
     if (MOBILE_TASK_UX_ENABLED && name === "account" && options?.accountSection === "recordings") {name="activity";options={activityFilter:"all"};}
@@ -549,7 +554,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if(name==='sample'&&current&&!current.needsReauthentication)void recordNativeStudyFlowEvent(studyClient.current,current.userId,'help_opened','sample');
     if (current) void saveProofsCache(current.apiBaseUrl,current.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(() => undefined);
     if(current && !['auth','sample','receipt','invitation'].includes(name)) {
-      const intent=taskIntent(name,current.proofId,FIRST_PROOF_EXPERIENCE_ENABLED?1:0,{historyShareId:options?.historyShareId});
+      const intent=taskIntent(name,current.proofId,FIRST_PROOF_EXPERIENCE_ENABLED?1:0,{historyShareId:options?.historyShareId,creationMode:options?.creationMode});
       if(intent)void AsyncStorage.setItem(taskIntentKey(current.apiBaseUrl,current.userId),JSON.stringify(intent)).catch(()=>undefined);
       else if(name==='home')void AsyncStorage.removeItem(taskIntentKey(current.apiBaseUrl,current.userId)).catch(()=>undefined);
     }
@@ -558,6 +563,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       ...(name === "account" ? { accountSection: options?.accountSection } : {}),
       ...(name === "supporting" ? { supportingSection: options?.supportingSection } : {}),
       ...(name === "signature" ? { historyShareId: options?.historyShareId } : {}),
+      ...(name === "create" ? { creationMode: options?.creationMode } : {}),
     });
   }, []);
 
@@ -636,17 +642,17 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (cacheScope.current === key) return;
     proofRecordViews.current.clear();
     workspaceOffsets.current={home:0,activity:0};activityFilterMemory.current="all"; setWorkspaceFreshAt(null); setWorkspaceReconciled(false); setSelectedTask(null); taskInteractions.current={}; clearMobileUxMetrics(); setScanResult(null);setScanCandidates([]);setScanInput("");setScanPhase("camera");
-    setProofsLibrary({...DEFAULT_PROOFS_LIBRARY}); proofsScrollOffset.current = 0;
+    setProofsLibrary(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)); proofsScrollOffset.current = 0;
     setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]); setPhotoDrafts([]); setCaptureReviewOnlyReason(null);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
       await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
-      await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
+      await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
       await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
       await revokeIntakeDevice(client, sessionRef.current.userId).catch(() => forgetIntakeDevice(client, sessionRef.current!.userId));
     }
     cacheScope.current = key;
-    const cached = await loadProofsCache(current.apiBaseUrl,current.userId);
+    const cached = await loadProofsCache(current.apiBaseUrl,current.userId,initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
     if (cacheScope.current !== key) return;
     cacheRef.current = cached; setProofsLibrary(cached.library); proofsScrollOffset.current = cached.offsetY;
     manualTransaction.current=cached.manualOperation??null;
@@ -1061,7 +1067,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       else if(['capture','finalize'].includes(intent.route))await value.openProofAction(intent.proofId);
       return;
     }
-    go(intent.route);
+    go(intent.route,{creationMode:intent.creationMode});
     } catch(error) {
       if(isAuthenticationFailure(error)||sessionRef.current?.userId!==account.userId||sessionRef.current.apiBaseUrl!==account.apiBaseUrl)throw error;
       go('proofs');
@@ -1386,29 +1392,42 @@ export function PackProofProvider(props: { children: ReactNode }) {
     readTaskInteractions: () => taskInteractions.current,
     readWorkspaceOffset: name => workspaceOffsets.current[name],
     setWorkspaceOffset: (name,offset) => {workspaceOffsets.current[name]=Number.isFinite(offset)?Math.max(0,offset):0;},
+    openProofDestination: async entry => {
+      const owner=sessionRef.current;
+      if(!owner)return false;
+      return openProofDestination(entry, {
+        resume: proofId => value.openProofAction(proofId),
+        view: openProof,
+        assertCurrentAccount: () => client.assertCaptureAccount(owner.userId,owner.apiBaseUrl),
+        historyShare: historyShareId => go('signature',{historyShareId}),
+      });
+    },
     openProofAction: async proofId => {
       const invitation=pendingInvites.find(row=>row.proofId===proofId);
-      if(invitation) {value.openInvitation(invitation);return;}
+      if(invitation) {value.openInvitation(invitation);return true;}
       const row=proofCollection.find(row=>row.proofId===proofId);
-      if(row?.accessKind==="RECEIVER") {value.openReceipt(proofId);return;}
+      if(row?.accessKind==="RECEIVER") {value.openReceipt(proofId);return true;}
       rememberTaskInteraction(proofId); startMobileCaptureEntry();
-      if (offline) { await run(() => openProof(proofId)); return; }
+      if (offline) return handledActionSucceeded(run, () => openProof(proofId));
       if (photoDrafts.some(draft => draft.proofId === proofId && draft.phase !== 'COMPLETE' && draft.userId === sessionRef.current?.userId && draft.apiBaseUrl === sessionRef.current?.apiBaseUrl.replace(/\/+$/, ''))) {
-        await run(() => openProof(proofId)); return;
+        return handledActionSucceeded(run, () => openProof(proofId));
       }
       const saved=savedRecordings.find(c=>c.captureProofId===proofId && !["FINALIZED","SUBMITTED"].includes(c.recovery?.phase??""));
       if(saved) {
-        if(saved.recovery?.phase==="RECORDING") {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});return;}
-        if(!await localCaptureExists(saved.uri)) {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});setError("The original recording is not available. Review recovery options.");return;}
-        await value.resumeSavedCapture(saved);return;
+        if(saved.recovery?.phase==="RECORDING") {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});return true;}
+        if(!await localCaptureExists(saved.uri)) {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});setError("The original recording is not available. Review recovery options.");return true;}
+        return value.resumeSavedCapture(saved);
       }
-      await run(async()=>{
-        const current=sessionRef.current;if(!current)return;
-        const fresh=await refreshProof(proofId);
-        client.assertCaptureAccount(current.userId,current.apiBaseUrl);
-        const destination=freshProofDestination(fresh,current.userId);
-        if(destination.route==="receipt")value.openReceipt(fresh.proofId);else go(destination.route);
-        if(destination.notice)setError(destination.notice);
+      return handledActionSucceeded(run, async()=>{
+        const current=sessionRef.current;if(!current)return false;
+        await openFreshProofAction(proofId, {
+          userId: current.userId,
+          refreshProof,
+          assertCurrentAccount: () => client.assertCaptureAccount(current.userId,current.apiBaseUrl),
+          navigate: go,
+          openReceipt: value.openReceipt,
+          notice: setError,
+        });
       });
     },
     busy,
@@ -1443,7 +1462,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     savedRecordings,
     photoDrafts: photoDrafts.filter(row => row.userId === session?.userId && row.apiBaseUrl === session?.apiBaseUrl.replace(/\/+$/, "")),
     captureReviewOnlyReason,
-    resumeSavedCapture: async capture => run(async () => {
+    resumeSavedCapture: async capture => handledActionSucceeded(action => run(action,{localReview:true}), async () => {
       const current = sessionRef.current;
       if (!current || capture.captureUserId !== current.userId || capture.recovery?.apiBaseUrl !== client.apiBaseUrl)
         throw new Error("Sign in to the original account to open this recording.");
@@ -1498,7 +1517,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       await persistCapture(null, null);
       setCaptureStatus("idle"); setUploadPercent(null); go("home");
       void recoveryTickRef.current();
-    },{localReview:true}),
+    }),
     discardSavedCapture: async capture => run(() => discardSavedRecording(capture)),
     discardIncompleteEvidence: async evidenceId => run(async () => {
       const current = sessionRef.current;
@@ -1699,11 +1718,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
         if (sessionRef.current) {
           await saveCaptureRecovery(sessionRef.current);
           await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
-          await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
+          await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
           await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
         }
-        cacheScope.current = null; cacheRef.current = emptyProofsCache();
-        setProofsLibrary({...DEFAULT_PROOFS_LIBRARY});
+        cacheScope.current = null; cacheRef.current = emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
+        setProofsLibrary(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
         tokenRef.current = null;
         sessionRef.current = null;
         await clearCachedState();

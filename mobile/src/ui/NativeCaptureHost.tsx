@@ -35,6 +35,7 @@ import {
 } from "../capture";
 import { Button } from "./Button";
 import { useTheme } from "../theme/ThemeProvider";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 
 const packingRecipe = [
   {
@@ -336,47 +337,31 @@ function CameraSession({
     if (!request.remoteControl || !request.captureSessionId) return;
     return registerRemoteCaptureStop(request.captureSessionId, stop);
   }, [request.remoteControl, request.captureSessionId]);
-  return (
-    <Modal
-      visible
-      animationType={reducedMotion ? "none" : "slide"}
-      onRequestClose={() => recordingRef.current ? Alert.alert("Finish this recording?", "Keep recording or finish and review what you recorded.", [{text:"Keep recording",style:"cancel"},{text:"Finish recording",onPress:stop}]) : saving ? undefined : onFinish(null)}
-    >
-      <ScrollView
-        style={{ flex: 1, backgroundColor: colors.background }}
-        contentContainerStyle={[
-          styles.root,
-          {
-            backgroundColor: colors.background,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
-          },
-        ]}
-      >
-        <View style={styles.heading}>
-          <Text accessibilityLiveRegion="polite" style={[styles.title, { color: colors.textPrimary }]}>
+  const timerLabel = `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= Math.max(0, (request.recordingLimits?.maxRecordingSeconds ?? 300) * 1000 - 30000) ? " · under 30 seconds left" : ""}`;
+  const heading = <View style={styles.heading}>
+          {!ANDROID_TASK_FIRST_REBUILD || !recording ? <Text accessibilityLiveRegion="polite" style={[styles.title, { color: colors.textPrimary }]}>
             {recording
               ? request.stageType
                 ? "Recording receipt / return"
-                : "Recording packing"
-              : "Record packing"}
-          </Text>
+                : ANDROID_TASK_FIRST_REBUILD ? "Recording" : "Recording packing"
+              : ANDROID_TASK_FIRST_REBUILD ? "Ready to record" : "Record packing"}
+          </Text> : null}
           <Text style={{ color: colors.textSecondary }}>
             {request.orderLabel}
           </Text>
           {request.compatibilityWorkflow ? <Text style={{ color: colors.textSecondary }}>
             Grading workflow recording · the existing grading recipe and participant checks apply.
           </Text> : null}
-          <Text
+          {!ANDROID_TASK_FIRST_REBUILD ? <Text
             accessibilityLiveRegion="none"
             style={{ color: colors.textSecondary }}
           >
             {recording
-              ? `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= Math.max(0, (request.recordingLimits?.maxRecordingSeconds ?? 300) * 1000 - 30000) ? " · under 30 seconds left" : ""}`
+              ? timerLabel
               : !ready ? "Opening camera…" : "Camera ready · recording has no sound"}
-          </Text>
-        </View>
-        <View style={[styles.camera, { height: Math.max(160, Math.min(300, viewport.height * 0.38)) }]}>
+          </Text> : null}
+        </View>;
+  const preview = <View style={[styles.camera, ANDROID_TASK_FIRST_REBUILD ? styles.taskPreview : { height: Math.max(160, Math.min(300, viewport.height * 0.38)) }]}>
           {useUnified ? <UnifiedCameraView
             maxRecordingBytes={request.recordingLimits?.maxRecordingBytes}
             maxRecordingSeconds={request.recordingLimits?.maxRecordingSeconds}
@@ -426,18 +411,19 @@ function CameraSession({
               <Text style={{color:colors.textPrimary,fontWeight:'600'}}>{scanFeedback.label}</Text>
             </View>
           </Animated.View> : null}
-        </View>
-        <View style={styles.controls}>
-          {recording ? (
+        </View>;
+  const recordingAction = <>{recording ? (
             <Button label="Finish recording" loading={saving} onPress={stop}
               accessibilityHint="Finish this continuous recording and review the saved video." />
           ) : (
-            <Button label={request.stageType ? "Record this stage" : "Record packing"}
+            <Button label={request.stageType ? "Record this stage" : ANDROID_TASK_FIRST_REBUILD ? "Start recording" : "Record packing"}
               disabled={!ready || saving} onPress={() => void start()} />
-          )}
+          )}</>;
+  const guidanceControls = <>
+          {ANDROID_TASK_FIRST_REBUILD && !recording ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>{!ready ? "Opening camera…" : "Camera ready · recording has no sound"}</Text> : null}
           {saving ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>Finishing the recording. Keep PackProof open until saving is confirmed.</Text> : null}
           {request.researchNotice ? <Text style={{ color: colors.textSecondary }}>{request.researchNotice}</Text> : null}
-          {useUnified ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
+          {useUnified && (!ANDROID_TASK_FIRST_REBUILD || recording || Boolean(codeStatus || enginePrompt || matchConfirmation || shipping || shippingError)) ? <View accessibilityLiveRegion="polite" style={{gap:6}}>
             <Text style={{color:shipping?.status==='BOUND'?colors.accentText:colors.textSecondary}}>
               {identifiersEnabled ? (codeStatus ?? 'Pack normally. Item and shipping codes are read during recording.') : request.captureContext ? (enginePrompt || (matchConfirmation ? 'Shipping label matched' : 'Pack normally. We’ll tell you if we need something.')) : detectingShipping ? 'Reading tracking number…'
                 : shipping?.status==='BOUND' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')}`
@@ -445,7 +431,7 @@ function CameraSession({
                 : shipping?.status==='UNAVAILABLE' ? 'Keep recording. We’ll check the label at review.'
                 : shipping?.status==='CONFLICT' ? 'This label differs from the order’s tracking. Check it at review.'
                 : shipping?.status==='NEEDS_CONFIRMATION' ? `Tracking number read · ${shortenedTracking(shipping.trackingNumber ?? '')} · check at review`
-                : 'Show the shipping label during this recording.'}
+                : ANDROID_TASK_FIRST_REBUILD && !request.stageType && !request.compatibilityWorkflow ? 'Show the label if available.' : 'Show the shipping label during this recording.'}
             </Text>
             {shippingError ? <Text style={{color:colors.error}}>{shippingError}</Text> : null}
           </View> : null}
@@ -465,11 +451,13 @@ function CameraSession({
           <Text style={{ color: colors.textSecondary }}>
             {recipe === receivingRecipe
               ? "Keep the unopened package in view as you open it. Show the contents and their visible condition."
-              : "Keep the item and package in view as you pack and seal it. Show the shipping label during the recording."}
+              : ANDROID_TASK_FIRST_REBUILD && !request.compatibilityWorkflow
+                ? "Keep the item and package in view as you pack and seal. Show the label if available."
+                : "Keep the item and package in view as you pack and seal it. Show the shipping label during the recording."}
           </Text>
           {coach ? <Coaching kind="camera"/> : null}
           <Button
-            label={coach ? "Hide guidance" : "Show guidance"}
+            label={coach ? "Hide guidance" : ANDROID_TASK_FIRST_REBUILD ? "How to record" : "Show guidance"}
             variant="tertiary"
             onPress={() => {request.onGuidanceChanged?.(!coach);setCoach(!coach);}}
           />
@@ -480,16 +468,48 @@ function CameraSession({
               disabled={saving}
               onPress={() => onFinish(null)}
             />
-          ) : null}
+          ) : null}</>;
+  return (
+    <Modal
+      visible
+      animationType={reducedMotion ? "none" : "slide"}
+      onRequestClose={() => recordingRef.current ? Alert.alert("Finish this recording?", "Keep recording or finish and review what you recorded.", [{text:"Keep recording",style:"cancel"},{text:"Finish recording",onPress:stop}]) : saving ? undefined : onFinish(null)}
+    >
+      {ANDROID_TASK_FIRST_REBUILD ? <View style={[styles.taskRoot, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <ScrollView style={[styles.taskScrollable, { maxHeight: viewport.height * 0.2 }]}>{heading}</ScrollView>
+        {preview}
+        <ScrollView style={[styles.taskScrollable, { maxHeight: viewport.height * 0.22 }]} contentContainerStyle={styles.controls}>{guidanceControls}</ScrollView>
+        <View style={[styles.taskAction, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+          {recording ? <Text accessibilityLiveRegion="none" style={{ color: colors.textPrimary, fontSize: 14, lineHeight: 20 }}>{timerLabel}</Text> : null}
+          {recordingAction}
         </View>
-      </ScrollView>
+      </View> : (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={[
+          styles.root,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+          },
+        ]}
+      >
+        {heading}
+        {preview}
+        <View style={styles.controls}>{recordingAction}{guidanceControls}</View>
+      </ScrollView>)}
     </Modal>
   );
 }
 const styles = StyleSheet.create({
   root: { flexGrow: 1 },
+  taskRoot: { flex: 1, minHeight: 0 },
+  taskPreview: { flex: 1, minHeight: 0 },
+  taskScrollable: { flexGrow: 0, flexShrink: 1 },
+  taskAction: { flexShrink: 0, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, gap: 8 },
   heading: { padding: 16, gap: 6 },
-  title: { fontSize: 19, fontWeight: "600" },
+  title: { fontSize: ANDROID_TASK_FIRST_REBUILD ? 22 : 19, fontWeight: ANDROID_TASK_FIRST_REBUILD ? "800" : "600" },
   camera: { minHeight: 160, backgroundColor: "#23262D", overflow: "hidden" },
   frame: {
     position: "absolute",

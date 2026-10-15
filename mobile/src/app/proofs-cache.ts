@@ -6,15 +6,15 @@ import type { ProofCollectionItem, ProofView } from '../v2-api';
 import { DEFAULT_PROOFS_LIBRARY, type ProofsLibraryState } from './navigation';
 export const proofsCacheKey = (api:string,user:string) => `packproof.proofs:v1:${encodeURIComponent(api.replace(/\/+$/,''))}:${user}`;
 export type ProofsCache = { draft?:ContextForm; manualOperation?:ManualOperation; fetchedAt?:string|null; interactions?:Record<string,number>; library:ProofsLibraryState; offsetY:number; rows:ProofCollectionItem[]; records:Record<string,ProofView> };
-export const emptyProofsCache = ():ProofsCache => ({library:{...DEFAULT_PROOFS_LIBRARY},offsetY:0,rows:[],records:{}});
-export async function loadProofsCache(api:string,user:string):Promise<ProofsCache> {
+export const emptyProofsCache = (defaults:ProofsLibraryState=DEFAULT_PROOFS_LIBRARY):ProofsCache => ({library:{...defaults},offsetY:0,rows:[],records:{}});
+export async function loadProofsCache(api:string,user:string,defaults:ProofsLibraryState=DEFAULT_PROOFS_LIBRARY):Promise<ProofsCache> {
   try {
     const parsed = JSON.parse((await AsyncStorage.getItem(proofsCacheKey(api,user))) || 'null');
-    if (!parsed) return emptyProofsCache();
+    if (!parsed) return emptyProofsCache(defaults);
     const operation=parsed.manualOperation;
     const manualOperation=operation&&typeof operation.fingerprint==='string'&&typeof operation.key==='string'&&/^[A-Za-z0-9_-]{8,128}$/.test(operation.key)&&operation.form&&Object.keys(EMPTY_FORM).every(key=>typeof operation.form[key]==='string')&&operation.request&&typeof operation.request==='object'?{fingerprint:operation.fingerprint,key:operation.key,form:operation.form as ContextForm,request:operation.request,...(typeof operation.id==='string'?{id:operation.id}:{})}:undefined;
-    return { manualOperation, draft:parsed.draft && typeof parsed.draft==='object'?Object.fromEntries(Object.keys(EMPTY_FORM).map(key=>[key,typeof parsed.draft[key]==='string'?parsed.draft[key]:''])) as unknown as ContextForm:undefined, fetchedAt:typeof parsed.fetchedAt==='string'?parsed.fetchedAt:null, interactions:Object.fromEntries(Object.entries(parsed.interactions??{}).filter(([,v])=>typeof v==='number'&&Number.isFinite(v)).slice(-200)) as Record<string,number>, library:{...DEFAULT_PROOFS_LIBRARY,...parsed.library,view:['all','attention','progress','completed'].includes(parsed.library?.view) ? parsed.library.view : DEFAULT_PROOFS_LIBRARY.view},offsetY:Number.isFinite(parsed.offsetY)?Math.max(0,parsed.offsetY):0,rows:Array.isArray(parsed.rows)?parsed.rows:[],records:parsed.records && typeof parsed.records==='object'?parsed.records:{}};
-  } catch {return emptyProofsCache();}
+    return { manualOperation, draft:parsed.draft && typeof parsed.draft==='object'?Object.fromEntries(Object.keys(EMPTY_FORM).map(key=>[key,typeof parsed.draft[key]==='string'?parsed.draft[key]:''])) as unknown as ContextForm:undefined, fetchedAt:typeof parsed.fetchedAt==='string'?parsed.fetchedAt:null, interactions:Object.fromEntries(Object.entries(parsed.interactions??{}).filter(([,v])=>typeof v==='number'&&Number.isFinite(v)).slice(-200)) as Record<string,number>, library:{...defaults,...parsed.library,view:['all','attention','progress','completed'].includes(parsed.library?.view) ? parsed.library.view : defaults.view},offsetY:Number.isFinite(parsed.offsetY)?Math.max(0,parsed.offsetY):0,rows:Array.isArray(parsed.rows)?parsed.rows:[],records:parsed.records && typeof parsed.records==='object'?parsed.records:{}};
+  } catch {return emptyProofsCache(defaults);}
 }
 export async function saveProofsCache(api:string,user:string,value:ProofsCache) { await AsyncStorage.setItem(proofsCacheKey(api,user),JSON.stringify(value)); }
 export async function clearProofsCache(api:string,user:string) { await AsyncStorage.removeItem(proofsCacheKey(api,user)); }
