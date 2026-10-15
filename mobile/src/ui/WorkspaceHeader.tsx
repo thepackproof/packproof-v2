@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import type { AccountSection, AppRouteName } from "../app/navigation";
 import { useTheme } from "../theme/ThemeProvider";
-import { typography } from "../theme/tokens";
+import { typography, taskFirstTypography } from "../theme/tokens";
 import { IconButton, Button } from "./Button";
 import { BottomSheet } from "./Sheets";
 import { PressableScale } from "./motion";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
+import { Logo } from "./Logo";
 
 type Destination = { label: string; icon: keyof typeof Ionicons.glyphMap; route: AppRouteName; section?: AccountSection };
 const destinations: Destination[] = [
@@ -36,37 +38,43 @@ export function WorkspaceHeader({ section }: { section: string }) {
   const largeText = useWindowDimensions().fontScale > 1.4;
   const { colors, scheme, setPreference } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const profileTrigger = useRef<View>(null);
+  const taskNavigation = ANDROID_TASK_FIRST_REBUILD || MOBILE_TASK_UX_ENABLED;
   function navigate(destination: Destination) {
     setMenuOpen(false);
     app.go(destination.route, destination.section ? { accountSection: destination.section } : undefined);
   }
   return <>
-    <View style={[styles.header, { borderBottomColor: colors.border }, MOBILE_TASK_UX_ENABLED && styles.compact]}>
-      <View style={styles.top}>
-        {!MOBILE_TASK_UX_ENABLED ? <IconButton label="Open workspace menu" onPress={() => setMenuOpen(true)}><Ionicons name="menu-outline" size={24} color={colors.textPrimary} /></IconButton> : null}
+    <View style={[styles.header, { borderBottomColor: colors.border }, taskNavigation && styles.compact, ANDROID_TASK_FIRST_REBUILD && [styles.taskHeader, { backgroundColor: colors.surface }]]}>
+      <View style={[styles.top, ANDROID_TASK_FIRST_REBUILD && styles.taskTop]}>
+        {!taskNavigation ? <IconButton label="Open workspace menu" onPress={() => setMenuOpen(true)}><Ionicons name="menu-outline" size={24} color={colors.textPrimary} /></IconButton> : null}
         <View style={styles.brandSlot}><PressableScale accessibilityRole="button" accessibilityLabel="PackProof Home" onPress={() => app.go("home")} style={styles.brand}>
-          {!largeText ? <View style={styles.mark}><Ionicons name="shield-outline" size={26} color={colors.logoBlue} /><View style={[styles.markDot, { backgroundColor: colors.logoGreen, borderColor: colors.background }]} /></View> : null}
-          <Text style={[styles.wordmark, { color: colors.textPrimary }]}>PackProof</Text>
+          {ANDROID_TASK_FIRST_REBUILD ? <Logo size={28} /> : !largeText ? <View style={styles.mark}><Ionicons name="shield-outline" size={26} color={colors.logoBlue} /><View style={[styles.markDot, { backgroundColor: colors.logoGreen, borderColor: colors.background }]} /></View> : null}
+          <Text style={[styles.wordmark, ANDROID_TASK_FIRST_REBUILD && styles.taskWordmark, { color: colors.textPrimary }]}>PackProof</Text>
         </PressableScale></View>
-        <IconButton label={MOBILE_TASK_UX_ENABLED ? "Open profile menu" : "Open settings"} onPress={() => MOBILE_TASK_UX_ENABLED ? setMenuOpen(true) : app.go("account")}><Ionicons name="person-circle-outline" size={28} color={colors.textSecondary} /></IconButton>
+        <IconButton focusRef={profileTrigger} label={taskNavigation ? "Open profile menu" : "Open settings"} onPress={() => taskNavigation ? setMenuOpen(true) : app.go("account")}>
+          {ANDROID_TASK_FIRST_REBUILD ? <View style={[styles.avatar, { backgroundColor: colors.accentSoft }]}><Ionicons name="person-outline" size={19} color={colors.accentText} /></View> : <Ionicons name="person-circle-outline" size={28} color={colors.textSecondary} />}
+        </IconButton>
       </View>
-      {!MOBILE_TASK_UX_ENABLED ? <View style={styles.breadcrumb}><Text style={[styles.eyebrow, { color: colors.textSecondary }]}>WORKSPACE</Text><Text style={[styles.section, { color: colors.textSecondary }]}>/  {section}</Text></View> : null}
+      {!taskNavigation ? <View style={styles.breadcrumb}><Text style={[styles.eyebrow, { color: colors.textSecondary }]}>WORKSPACE</Text><Text style={[styles.section, { color: colors.textSecondary }]}>/  {section}</Text></View> : null}
     </View>
-    <BottomSheet visible={menuOpen} title={MOBILE_TASK_UX_ENABLED ? "Your profile" : "Your workspace"} onClose={() => setMenuOpen(false)}>
+    <BottomSheet visible={menuOpen} title={taskNavigation ? "Your profile" : "Your workspace"} onClose={() => setMenuOpen(false)} returnFocusRef={profileTrigger}>
       <View style={styles.menu}>
-        {(MOBILE_TASK_UX_ENABLED ? profileDestinations : destinations).map(destination => {
+        {ANDROID_TASK_FIRST_REBUILD ? <Text style={[taskFirstTypography.bodyStrong, styles.identity, { color: colors.textPrimary }]}>{app.session?.displayName || app.session?.username || "Your account"}</Text> : null}
+        {(taskNavigation ? profileDestinations : destinations).map(destination => {
           const selected = destination.label === section;
-          return <PressableScale key={destination.label} accessibilityRole="button" accessibilityLabel={destination.label} accessibilityState={{ selected }} onPress={() => navigate(destination)} style={[styles.menuRow, { backgroundColor: selected ? colors.accentSoft : "transparent" }]}>
+          return <PressableScale key={destination.label} accessibilityRole="button" accessibilityLabel={destination.label} accessibilityState={{ selected }} onPress={() => navigate(destination)} style={[styles.menuRow, ANDROID_TASK_FIRST_REBUILD && [styles.taskMenuRow, { borderBottomColor: colors.divider }], { backgroundColor: selected ? colors.accentSoft : "transparent" }]}>
             <Ionicons name={destination.icon} size={21} color={selected ? colors.accentText : colors.textSecondary} />
-            <Text style={[styles.menuText, { color: selected ? colors.accentText : colors.textPrimary }]}>{destination.label}</Text>
+            <Text style={[styles.menuText, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.rowTitle, { color: selected ? colors.accentText : colors.textPrimary }]}>{destination.label}</Text>
+            {ANDROID_TASK_FIRST_REBUILD ? <Ionicons name="chevron-forward" size={17} color={colors.textSecondary} /> : null}
           </PressableScale>;
         })}
-        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        {!ANDROID_TASK_FIRST_REBUILD ? <View style={[styles.footer, { borderTopColor: colors.border }]}>
           <Button label={scheme === "dark" ? "Light appearance" : "Dark appearance"} variant="tertiary" icon={scheme === "dark" ? "sunny-outline" : "moon-outline"} onPress={() => { void setPreference(scheme === "dark" ? "light" : "dark").catch(() => app.setError("Appearance changed for this session but could not be saved.")); }} />
           <View style={styles.connection}><View style={[styles.dot, { backgroundColor: app.offline ? colors.warningText : colors.successText }]} /><Text style={[typography.finePrint, { color: colors.textSecondary }]}>{app.offline ? "Offline · saved records available" : "Device online"}</Text></View>
           <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{app.session?.displayName || app.session?.username || "Your account"}</Text>
           <Button label="Close menu" variant="secondary" onPress={() => setMenuOpen(false)} />
-        </View>
+        </View> : null}
       </View>
     </BottomSheet>
   </>;
@@ -75,6 +83,12 @@ export function WorkspaceHeader({ section }: { section: string }) {
 const styles = StyleSheet.create({
   header: { gap: 12, paddingBottom: 14, borderBottomWidth: 1 },
   compact: { gap: 0, paddingBottom: 0, borderBottomWidth: 0 },
+  taskHeader: { marginHorizontal: -16, paddingHorizontal: 16, borderBottomWidth: 1 },
+  taskTop: { minHeight: 56 },
+  taskWordmark: { ...taskFirstTypography.rowTitle, fontSize: 17, lineHeight: 24, flexShrink: 1 },
+  avatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  identity: { marginBottom: 12 },
+  taskMenuRow: { minHeight: 53, paddingHorizontal: 0, borderBottomWidth: 1, borderRadius: 0 },
   top: { flexDirection: "row", alignItems: "center", gap: 4 },
   brandSlot: { flex: 1 },
   brand: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9 },

@@ -1,3 +1,6 @@
+import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
+import { AndroidIntegrations } from '../ui/AndroidIntegrations';
+import { taskFirstTypography } from '../theme/tokens';
 import { ReplayTutorial } from "../onboarding/Onboarding";
 import { BillingPanel } from "../billing/BillingPanel";
 import { DeveloperAccessPanel } from "../developer/DeveloperAccessPanel";
@@ -129,7 +132,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
   return (
     <AppScreen key={section ?? "account"} bottomInset={!MOBILE_TASK_UX_ENABLED} extraBottom={24}>
       <WorkspaceHeader section={section ? SECTION_TITLES[section] : "Settings"} />
-      <View style={styles.heading}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Your workspace</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, { color: colors.textPrimary }]}>{section ? SECTION_TITLES[section] : "Settings"}</Text>{!MOBILE_TASK_UX_ENABLED || section === "channels" ? <Text style={[styles.body, { color: colors.textSecondary }]}>{section === "channels" ? "Connect accounts to bring supported orders into Pack. Manual creation is always available." : section === "recordings" ? "Recordings, upload progress, and retained local copies." : section ? "Manage your PackProof preferences." : "Your account, connections, and workspace preferences."}</Text> : null}</View>
+      <View style={styles.heading}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Your workspace</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color: colors.textPrimary }]}>{section ? SECTION_TITLES[section] : "Settings"}</Text>{!MOBILE_TASK_UX_ENABLED || (section === "channels" && !ANDROID_TASK_FIRST_REBUILD) ? <Text style={[styles.body, { color: colors.textSecondary }]}>{section === "channels" ? "Connect accounts to bring supported orders into Pack. Manual creation is always available." : section === "recordings" ? "Recordings, upload progress, and retained local copies." : section ? "Manage your PackProof preferences." : "Your account, connections, and workspace preferences."}</Text> : null}</View>
       {section ? <Button label="Back to settings" variant="tertiary" icon="chevron-back" onPress={() => app.go("account")} /> : null}
       <OfflineBanner visible={app.offline} />
       <ErrorBanner message={app.error} />
@@ -149,12 +152,12 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
           </View>
           <SectionHeader title="Capture preferences" />
           <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <AccountRow title="Notifications" detail="Delivery preferences; history is in Activity" icon="notifications-outline" onPress={() => openSection("notifications")} />
+            <AccountRow title="Notifications" detail={ANDROID_TASK_FIRST_REBUILD ? "Delivery preferences; history is in Updates" : "Delivery preferences; history is in Activity"} icon="notifications-outline" onPress={() => openSection("notifications")} />
             <AccountRow title="Appearance" detail={APPEARANCE_OPTIONS.find(option => option.id === theme.preference)?.label ?? "System"} icon="contrast-outline" onPress={() => openSection("appearance")} last />
           </View>
           <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <AccountRow title="Integrations" detail="Connected accounts and supported orders" icon="storefront-outline" onPress={() => openSection("channels")} />
-            <AccountRow title="Activity" detail="Uploads, recovery, and completion events" icon="pulse-outline" onPress={() => app.go("activity")} />
+            <AccountRow title={ANDROID_TASK_FIRST_REBUILD ? "Updates" : "Activity"} detail="Uploads, recovery, and completion events" icon="pulse-outline" onPress={() => app.go("activity")} />
             <AccountRow title="Support" detail="Capture guidance and account help" icon="help-circle-outline" onPress={() => openSection("help")} />
             <AccountRow title="Advanced" detail="Developer access and remote station" icon="options-outline" onPress={() => openSection("advanced")} last />
           </View>
@@ -187,7 +190,8 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
         {profileChanged ? <Button label="Save changes" onPress={() => void app.saveProfile()} loading={app.busy} /> : null}
       </> : null}
 
-      {section === "channels" ? <>
+      {section === "channels" && ANDROID_TASK_FIRST_REBUILD ? <AndroidIntegrations key={`${app.apiBaseUrl}:${session.userId}`} channels={channels} renderAccounts={channel => channel.accounts.map((entry, index) => <ChannelAccount key={entry.account?.id ?? entry.connection?.connectionId ?? index} entry={entry} providerDisplay={channel.providerDisplay} />)} /> : null}
+      {section === "channels" && !ANDROID_TASK_FIRST_REBUILD ? <>
         <Button label="Record shipment" variant="secondary" onPress={() => app.selectCreateProof()} />
         <Text style={[styles.body,{color:colors.textSecondary}]}>Connections are optional. Enter shipment details to start recording.</Text>
         <View style={[styles.integrationNotice, { backgroundColor: colors.accentSoft }]}><Ionicons name="link-outline" size={20} color={colors.accentText} /><Text style={[styles.noticeCopy, { color: colors.textPrimary }]}>Marketplace authorization is separate from PackProof sign-in. Choose which selling accounts prepare orders automatically.</Text></View>
@@ -249,10 +253,10 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
 
       {section === "help" ? <><ReplayTutorial/>
         <SectionHeader title="Make a recording" />
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Choose an order, then record the item and package as you pack and seal it. Show the shipping label during that same recording. Review your video and confirm the shipping statement.</Text>
+        <Text style={[styles.body, { color: colors.textSecondary }]}>{ANDROID_TASK_FIRST_REBUILD ? "Choose Pack an item, or select a linked order. Keep the item and package in view as you pack and seal. Show the label if available, then review and confirm the required statement." : "Choose an order, then record the item and package as you pack and seal it. Show the shipping label during that same recording. Review your video and confirm the shipping statement."}</Text>
         <SectionHeader title="Find unfinished work" />
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Open Uploads to review or finish saving a recording on this device. A saved local video is different from a completed Proof; the app shows the current state.</Text>
-        <Button label="Open uploads" variant="secondary" onPress={() => openSection("recordings")} />
+        <Text style={[styles.body, { color: colors.textSecondary }]}>{ANDROID_TASK_FIRST_REBUILD ? "Open Updates" : "Open Uploads"} to review or finish saving a recording on this device. A saved local video is different from a completed Proof; the app shows the current state.</Text>
+        <Button label={ANDROID_TASK_FIRST_REBUILD ? "Open Updates" : "Open uploads"} variant="secondary" onPress={() => ANDROID_TASK_FIRST_REBUILD ? app.go("activity") : openSection("recordings")} />
         <SectionHeader title="Open an invitation" />
         <Text style={[styles.body, { color: colors.textSecondary }]}>Invitations appear in Proofs. If you were given an invitation ID, you can enter it here.</Text>
         <Button label={showInvitation ? "Hide invitation entry" : "Enter invitation ID"} variant="tertiary" onPress={() => setShowInvitation(!showInvitation)} />
@@ -333,16 +337,16 @@ const styles = StyleSheet.create({
   heading: { gap: 8 },
   eyebrow: { fontSize: 10, lineHeight: 15, letterSpacing: 1.5, fontWeight: "700", textTransform: "uppercase" },
   pageTitle: { ...typography.pageTitle },
-  identity: { gap: spacing.md, padding: spacing.lg, borderWidth: 1, borderRadius: 10, flexDirection: "row", alignItems: "center" },
+  identity: { gap: spacing.md, padding: ANDROID_TASK_FIRST_REBUILD ? 12 : spacing.lg, borderWidth: ANDROID_TASK_FIRST_REBUILD ? 0 : 1, borderRadius: 10, flexDirection: "row", alignItems: "center" },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 17, fontWeight: "700" },
-  name: { ...typography.sectionTitle },
-  cardTitle: { ...typography.cardTitle },
-  meta: { ...typography.secondary },
+  name: { ...(ANDROID_TASK_FIRST_REBUILD ? taskFirstTypography.rowTitle : typography.sectionTitle) },
+  cardTitle: { ...(ANDROID_TASK_FIRST_REBUILD ? taskFirstTypography.rowTitle : typography.cardTitle) },
+  meta: { ...(ANDROID_TASK_FIRST_REBUILD ? taskFirstTypography.secondary : typography.secondary) },
   body: { ...typography.body },
   bodyStrong: { ...typography.bodyStrong },
   menu: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
-  menuRow: { minHeight: 64, padding: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md },
+  menuRow: { minHeight: ANDROID_TASK_FIRST_REBUILD ? 60 : 64, padding: ANDROID_TASK_FIRST_REBUILD ? 12 : spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md },
   rowCopy: { flex: 1, gap: spacing.xs },
   appearance: { gap: spacing.sm },
   appearanceRow: { minHeight: 64, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md },

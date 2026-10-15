@@ -73,6 +73,7 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const profiles = require('./eas.json').build;
+          if (profiles.production.env?.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST !== 'true') throw new Error('Production Android task-first experience must be explicitly enabled');
           const environmentLayers = [];
           for (let name = 'production'; name; name = profiles[name].extends) {
             environmentLayers.unshift(profiles[name].env || {});

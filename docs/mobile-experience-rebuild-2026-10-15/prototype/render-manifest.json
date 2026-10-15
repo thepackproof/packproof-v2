@@ -1,0 +1,38 @@
+{
+  "revision": "G1-2026-10-15-r1",
+  "date": "2026-10-15",
+  "prototype_sha256": "bf8227135610f54c266b6f20b3bc5a6cabb50f213d10f2382b17e0c84335e724",
+  "source_baseline": "e71461caae5075adaa7b741a3ceec3cd2d9b7d3a",
+  "rendering": "Static WeasyPrint HTML/CSS document render with explicit print compatibility; not browser or Android screenshots",
+  "frames": {
+    "core": 63,
+    "states": 88,
+    "total": 151
+  },
+  "artifacts": [
+    {
+      "file": "PackProof_G1_Copy_Sheet.pdf",
+      "pages": 1,
+      "bytes": 3870,
+      "sha256": "906ef6ade95ce3b36cc59fbaff0f38e178d23d951ee72d93b236c55265ac312e"
+    },
+    {
+      "file": "PackProof_G1_Screen_Atlas.pdf",
+      "pages": 16,
+      "bytes": 4423369,
+      "sha256": "96a777d79bf3fc262077a728a0f2d92a27b8eb1ad0877e4350d91ee434252f6a"
+    },
+    {
+      "file": "PackProof_G1_State_Atlas.pdf",
+      "pages": 22,
+      "bytes": 5154065,
+      "sha256": "76b30e25d8edf8bc7b14051670eb3dbc70dec451eb78a2fce482d06e21fa0a9d"
+    },
+    {
+      "file": "PackProof_S01-S09_Design_Comparison.pdf",
+      "pages": 9,
+      "bytes": 3195091,
+      "sha256": "22d042603ce8239504b65fc98ac7f84f89354ca83d01a441948cbae93146bbf4"
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import { FormField } from "../ui/FormField";
 import { DateField } from "../ui/DateField";
 import { ErrorBanner } from "../ui/EmptyState";
 import { spacing, typography } from "../theme/tokens";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 
 const COMMON_CURRENCIES = ["USD", "CAD", "EUR", "GBP", "AUD"] as const;
 
@@ -40,11 +41,11 @@ export function ManualCreateScreen() {
 
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title="Record shipment" onBack={app.goBack} />
+      <AppHeader title={ANDROID_TASK_FIRST_REBUILD ? "What are you packing?" : "Record shipment"} onBack={app.goBack} />
       <ErrorBanner message={app.error} />
       {app.manualDraftNeedsRecovery ? <View><Text style={{color:colors.textSecondary,fontSize:16,lineHeight:24}}>A previous creation still needs to be checked. Recover its submitted details before starting another Proof.</Text><Button label="Recover submitted draft" variant="secondary" onPress={app.recoverManualDraft}/></View> : null}
       {app.offline ? <Text accessibilityLiveRegion="polite" style={{color:colors.textSecondary}}>Connect before creating this Proof or starting capture. Your form stays open.</Text> : null}
-      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Choose shipment → Record packing → Review and submit → Confirm saving → Share. A marketplace connection is optional.</Text>
+      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>{ANDROID_TASK_FIRST_REBUILD ? "A short name helps you find this Proof later." : "Choose shipment → Record packing → Review and submit → Confirm saving → Share. A marketplace connection is optional."}</Text>
       {app.intakeReview ? (
         <>
           <SectionHeader title="Review your order" />
@@ -53,19 +54,26 @@ export function ManualCreateScreen() {
           ))}
         </>
       ) : null}
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
+      {!ANDROID_TASK_FIRST_REBUILD ? <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
         <Button label="Enter details" variant="secondary" disabled onPress={() => {}} />
         <Button label="Paste order or receipt" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("intake")} />
         <Button label="Select an order" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("orders")} />
-      </View>
+      </View> : null}
       <FormField
-        label="What are you shipping?"
+        label={ANDROID_TASK_FIRST_REBUILD ? "Item or shipment" : "What are you shipping?"}
+        placeholder={ANDROID_TASK_FIRST_REBUILD ? "e.g. Vintage game console" : undefined}
         value={form.itemTitle}
         onChangeText={(value) => setForm({ ...form, itemTitle: value })}
         autoCapitalize="sentences"
         maxLength={200}
       />
-      <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>Show the shipping label during your packing video. PackProof will try to read it for you.</Text>
+      <Text style={{ color: colors.textSecondary, fontSize: ANDROID_TASK_FIRST_REBUILD ? 14 : 16, lineHeight: ANDROID_TASK_FIRST_REBUILD ? 20 : 24 }}>{ANDROID_TASK_FIRST_REBUILD ? "No selling account or tracking number needed. You’ll review your recording and confirm with your device before submitting." : "Show the shipping label during your packing video. PackProof will try to read it for you."}</Text>
+      {ANDROID_TASK_FIRST_REBUILD ? <Button
+        disabled={!form.itemTitle.trim() || app.offline || app.manualDraftNeedsRecovery}
+        label="Continue to camera"
+        onPress={() => void app.createManualProof()}
+        loading={app.busy}
+      /> : null}
       <Button
         label={showDetails ? "Hide optional details" : "Add optional details"}
         variant="tertiary"
@@ -73,6 +81,7 @@ export function ManualCreateScreen() {
       />
       {showDetails ? (
         <>
+          {ANDROID_TASK_FIRST_REBUILD ? <Button label="Paste order or receipt" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("intake")} /> : null}
           <FormField
             label="Description"
             value={form.itemDescription}
@@ -164,12 +173,15 @@ export function ManualCreateScreen() {
           <Text style={[styles.help, { color: colors.textSecondary }]}>The label’s ship date is not proof of carrier acceptance. PackProof records the carrier’s first acceptance scan separately when tracking is available.</Text>
         </>
       ) : null}
-      <Button
+      {!ANDROID_TASK_FIRST_REBUILD ? <Button
         disabled={!form.itemTitle.trim() || app.offline || app.manualDraftNeedsRecovery}
         label="Continue to camera"
         onPress={() => void app.createManualProof()}
         loading={app.busy}
-      />
+      /> : <>
+        <Button label="Choose a linked order instead" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("orders")} />
+        <Button label="More ways to create" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("create", { creationMode: "options" })} />
+      </>}
     </AppScreen>
   );
 }

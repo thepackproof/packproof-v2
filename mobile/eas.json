@@ -31,7 +31,8 @@
       "extends": "shipping-integration",
       "environment": "production",
       "env": {
-        "PACKPROOF_ANDROID_VERSION_CODE": "65",
+        "PACKPROOF_ANDROID_VERSION_CODE": "67",
+        "EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST": "true",
         "EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION": "true",
         "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
         "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
@@ -44,7 +45,8 @@
         "buildType": "apk"
       },
       "env": {
-        "PACKPROOF_ANDROID_VERSION_CODE": "57",
+        "PACKPROOF_ANDROID_VERSION_CODE": "66",
+        "EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST": "true",
         "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
         "EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE": "true"
       }

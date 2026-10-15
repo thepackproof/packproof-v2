@@ -14,6 +14,7 @@ import {
 import { useTheme } from "../theme/ThemeProvider";
 import { radii, spacing, typography } from "../theme/tokens";
 import { PressableScale } from "./motion";
+import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
 
 const tileDownloads = new Map<string, Promise<string>>();
 
@@ -108,10 +109,11 @@ function ScanMap({ point, zoom, onZoom, height, onOpenLink }: {
   </View>;
 }
 
-export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshError, sync, registration, selectedId: controlledSelectedId, onSelect }: {
+export function ProofTrackingPanel({ events, carrier, trackingNumber, trackingSource, refreshError, sync, registration, selectedId: controlledSelectedId, onSelect }: {
   events: ShipmentEventView[];
   carrier?: string | null;
   trackingNumber?: string | null;
+  trackingSource?: string | null;
   refreshError?: string | null;
   sync?: ProofView["shipmentSync"];
   registration?: NonNullable<ProofView["captureShipping"]>["registration"];
@@ -124,6 +126,7 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const selectedId = controlledSelectedId === undefined ? localSelectedId : controlledSelectedId;
   const [expanded, setExpanded] = useState(false);
+  const [reportsExpanded, setReportsExpanded] = useState(false);
   const [zoom, setZoom] = useState(MAP_DEFAULT_ZOOM);
   const [linkError, setLinkError] = useState<string | null>(null);
   const ordered = useMemo(() => [...events].sort((a, b) => (Date.parse(b.occurredAt) || 0) - (Date.parse(a.occurredAt) || 0)), [events]);
@@ -157,16 +160,22 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
     return <View style={styles.emptyState}>
       <View style={styles.emptyCopy}>
         <Text accessibilityRole={state.kind === 'failed' ? 'alert' : 'header'} style={[styles.emptyTitle, {color:colors.textPrimary}]}>{missingLabel ? 'No tracking added' : state.title}</Text>
-        <Text style={[styles.emptyDetail,{color:colors.textSecondary}]}>{missingLabel ? 'Tracking is optional. You can capture and finalize evidence without it.' : state.detail}</Text>
+        <Text style={[styles.emptyDetail,{color:colors.textSecondary}]}>{missingLabel ? ANDROID_TASK_FIRST_REBUILD ? 'Tracking is optional.' : 'Tracking is optional. You can capture and finalize evidence without it.' : state.detail}</Text>
       </View>
       {carrier || trackingNumber ? <View style={[styles.emptyIdentity, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {carrier ? <Text style={[styles.note, { color: colors.textSecondary }]}>{carrier}</Text> : null}
         {trackingNumber ? <Text selectable style={[styles.bodyStrong, { color: colors.textPrimary }]}>{trackingNumber}</Text> : null}
+        {ANDROID_TASK_FIRST_REBUILD && trackingSource ? <Text style={[styles.caption, { color: colors.textSecondary }]}>{trackingSource}</Text> : null}
       </View> : null}
     </View>;
   }
 
   return <View style={styles.panel}>
+    {ANDROID_TASK_FIRST_REBUILD ? <View style={styles.compactIdentity}>
+      <Text accessibilityRole="header" style={[styles.bodyStrong, { color: colors.textPrimary }]}>{carrier || selected.carrier || 'Carrier not provided'}</Text>
+      {trackingNumber ? <Text selectable style={[styles.bodyStrong, { color: colors.textPrimary }]}>{trackingNumber}</Text> : null}
+      {trackingSource ? <Text style={[styles.caption, { color: colors.textSecondary }]}>{trackingSource}</Text> : null}
+    </View> : null}
     <View style={styles.heading}>
       <View style={[styles.status, { backgroundColor: colors.shipmentSoft, borderColor: colors.shipmentSoft }]}><View style={[styles.statusDot, { backgroundColor: colors.shipmentText }]} /><Text style={[styles.note, { color: colors.shipmentText }]}>{shipmentEventLabel(selected.eventType)}</Text></View>
     </View>
@@ -174,6 +183,8 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
     {latestReceived ? <Text style={[styles.note, { color: colors.textSecondary }]}>Latest report received {formatDateTime(latestReceived)}</Text> : null}
     {testData && <Text style={[styles.notice, { backgroundColor: colors.warningSoft, color: colors.warningText }]}>Test tracking data · simulated shipment events, not real carrier evidence.</Text>}
     {stale && <Text style={[styles.note, { color: colors.textSecondary }]}>This selected report is more than 48 hours old. It is historical context, not a current location.</Text>}
+    {ANDROID_TASK_FIRST_REBUILD ? <PressableScale accessibilityRole="button" accessibilityState={{ expanded: reportsExpanded }} onPress={() => setReportsExpanded(value => !value)} style={styles.textButton}><Text style={[styles.link, { color: colors.accentText }]}>{reportsExpanded ? 'Hide carrier reports and map' : `Carrier reports and map · ${ordered.length}`}</Text></PressableScale> : null}
+    {!ANDROID_TASK_FIRST_REBUILD || reportsExpanded ? <>
     <View style={[styles.mapCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       <View style={styles.mapHeading}>
         <View style={[styles.locationIcon, { backgroundColor: colors.shipmentSoft }]}><Ionicons name="location-outline" size={26} color={colors.shipmentText} /></View>
@@ -200,6 +211,7 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
         </PressableScale>;
       }) : <Text style={[styles.note, { color: colors.textSecondary }]}>No shipment observations recorded yet.</Text>}
     </View>
+    </> : null}
     <Modal visible={expanded && canMap} animationType={reducedMotion ? "none" : "slide"} onRequestClose={() => setExpanded(false)} presentationStyle="fullScreen">
       <View style={[styles.modal, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.modalHeading}><Text accessibilityRole="header" style={[styles.sectionTitle, { flex: 1, color: colors.textPrimary }]}>Reported shipment location</Text><PressableScale accessibilityRole="button" accessibilityLabel="Close shipment map" onPress={() => setExpanded(false)} style={styles.mapControl}><Ionicons name="close" size={26} color={colors.textPrimary} /></PressableScale></View>
@@ -216,6 +228,7 @@ export function ProofTrackingPanel({ events, carrier, trackingNumber, refreshErr
 }
 
 const styles = StyleSheet.create({
+  compactIdentity: { gap: 6 },
   panel: { gap: spacing.lg },
   emptyState: { paddingVertical: 12, gap: 12 },
   emptyIcon: { width: 86, height: 86, borderRadius: 43, alignItems: "center", justifyContent: "center" },

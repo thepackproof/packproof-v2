@@ -1,0 +1,125 @@
+{
+  "baseline": "e71461caae5075adaa7b741a3ceec3cd2d9b7d3a",
+  "check_count": 17,
+  "checks": [
+    {
+      "name": "Android attestation Kotlin",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111391033",
+      "completed_at": "2026-10-14T21:28:14Z"
+    },
+    {
+      "name": "Signed Android release AAB",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639558919/job/116111356391",
+      "completed_at": "2026-10-14T21:31:30Z"
+    },
+    {
+      "name": "rnd-release-policy / policy",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300542",
+      "completed_at": "2026-10-14T21:21:10Z"
+    },
+    {
+      "name": "Web",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300476",
+      "completed_at": "2026-10-14T21:22:04Z"
+    },
+    {
+      "name": "Backend",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300422",
+      "completed_at": "2026-10-14T21:42:09Z"
+    },
+    {
+      "name": "PostgreSQL release invariants",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300214",
+      "completed_at": "2026-10-14T21:22:10Z"
+    },
+    {
+      "name": "Dependency audit (backend)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300201",
+      "completed_at": "2026-10-14T21:21:11Z"
+    },
+    {
+      "name": "Dependency audit (web)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300151",
+      "completed_at": "2026-10-14T21:21:11Z"
+    },
+    {
+      "name": "Mobile",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300080",
+      "completed_at": "2026-10-14T21:21:57Z"
+    },
+    {
+      "name": "Dependency audit (mobile)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300073",
+      "completed_at": "2026-10-14T21:21:21Z"
+    },
+    {
+      "name": "Source secrets and release tooling",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111300049",
+      "completed_at": "2026-10-14T21:21:26Z"
+    },
+    {
+      "name": "Deployment scripts",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639559014/job/116111299819",
+      "completed_at": "2026-10-14T21:21:12Z"
+    },
+    {
+      "name": "rnd-release-policy / policy",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639558919/job/116111298874",
+      "completed_at": "2026-10-14T21:21:06Z"
+    },
+    {
+      "name": "Mobile consent, recovery and receipt integration",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639558780/job/116111298757",
+      "completed_at": "2026-10-14T21:21:29Z"
+    },
+    {
+      "name": "CodeQL",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639558903/job/116111298641",
+      "completed_at": "2026-10-14T21:25:29Z"
+    },
+    {
+      "name": "Receipt API and isolated PostgreSQL migrations",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639558780/job/116111298614",
+      "completed_at": "2026-10-14T21:23:06Z"
+    },
+    {
+      "name": "Production Android identity and native receipts",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/38639558780/job/116111298295",
+      "completed_at": "2026-10-14T21:26:43Z"
+    }
+  ]
+}

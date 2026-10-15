@@ -191,7 +191,42 @@ export const darkColors: ThemeColors = {
   statusBar: "#141D2A",
 };
 
-export function colorsForScheme(scheme: ColorScheme): ThemeColors {
+/** Frozen G1 palette. This is presentation data, not a change to Proof states. */
+export const taskFirstLightColors: ThemeColors = {
+  ...lightColors,
+  background: "#F5F8FC", surface: "#FFFFFF", surfaceElevated: "#FFFFFF", surfacePressed: "#EDF2F8",
+  textPrimary: "#192A3E", textSecondary: "#53657B", textMuted: "#53657B", textOnPrimary: "#FFFFFF",
+  border: "#DCE4EE", divider: "#DCE4EE", controlBorder: "#71849A",
+  accent: "#1D68BD", accentPressed: "#18599F", accentSoft: "#E8F1FC", accentSoftBorder: "#DCE4EE", accentText: "#1D68BD",
+  primary: "#1D68BD", primaryHover: "#18599F", primaryPressed: "#18599F", fab: "#1D68BD",
+  success: "#177965", successText: "#177965", successSoft: "#E7F5F0", successSoftBorder: "#B6DECF",
+  warning: "#89500C", warningText: "#89500C", warningSoft: "#FFF3DD", warningSoftBorder: "#DFC79D",
+  error: "#B23650", errorMuted: "#B23650", errorSoft: "#FFEDF0",
+  inputBackground: "#FFFFFF", disabledBackground: "#EDF2F8", disabledText: "#53657B",
+  shipment: "#177965", shipmentText: "#177965", shipmentSoft: "#E7F5F0",
+  commerce: "#1D68BD", proof: "#1D68BD",
+  navigationBar: "#FFFFFF", statusBar: "#FFFFFF",
+};
+
+export const taskFirstDarkColors: ThemeColors = {
+  ...darkColors,
+  background: "#111C2B", surface: "#192738", surfaceElevated: "#192738", surfacePressed: "#223247",
+  textPrimary: "#EDF4FC", textSecondary: "#ACBDCF", textMuted: "#ACBDCF", textOnPrimary: "#081D36",
+  border: "#314358", divider: "#314358", controlBorder: "#71849A",
+  // Lighter text on the approved blue tint keeps small selected labels above 4.5:1.
+  accent: "#4B9AF0", accentPressed: "#3988DD", accentSoft: "#203A57", accentSoftBorder: "#314358", accentText: "#6BAEFF",
+  primary: "#4B9AF0", primaryHover: "#3988DD", primaryPressed: "#3988DD", fab: "#4B9AF0",
+  success: "#43C8AC", successText: "#43C8AC", successSoft: "#183E3B", successSoftBorder: "#2B675C",
+  warning: "#F1B754", warningText: "#F1B754", warningSoft: "#3D3222", warningSoftBorder: "#745D36",
+  error: "#F5909B", errorMuted: "#F5909B", errorSoft: "#432B37",
+  inputBackground: "#192738", disabledBackground: "#223247", disabledText: "#ACBDCF",
+  shipment: "#43C8AC", shipmentText: "#43C8AC", shipmentSoft: "#183E3B",
+  commerce: "#4B9AF0", proof: "#4B9AF0",
+  navigationBar: "#192738", statusBar: "#192738",
+};
+
+export function colorsForScheme(scheme: ColorScheme, taskFirst = false): ThemeColors {
+  if (taskFirst) return scheme === "dark" ? taskFirstDarkColors : taskFirstLightColors;
   return scheme === "dark" ? darkColors : lightColors;
 }
 
@@ -267,6 +302,22 @@ export const typography = {
   finePrint: { fontFamily: "Inter", fontSize: 12, lineHeight: 18, fontWeight: "400" as const },
   button: { fontFamily: "Inter-SemiBold", fontSize: 16, lineHeight: 20, fontWeight: "600" as const },
   greeting: { fontFamily: "Inter-SemiBold", fontSize: 22, lineHeight: 30, fontWeight: "600" as const },
+} as const;
+
+/** Native sp targets for G1. No fixed heights or font-scale caps accompany these. */
+export const taskFirstTypography = {
+  pageTitle: { fontFamily: "Inter-Bold", fontSize: 27, lineHeight: 33, fontWeight: "700" as const, letterSpacing: -0.6 },
+  sectionTitle: { fontFamily: "Inter-Bold", fontSize: 20, lineHeight: 26, fontWeight: "700" as const, letterSpacing: -0.3 },
+  cardTitle: { fontFamily: "Inter-Bold", fontSize: 19, lineHeight: 25, fontWeight: "700" as const, letterSpacing: -0.3 },
+  rowTitle: { fontFamily: "Inter-Bold", fontSize: 14, lineHeight: 20, fontWeight: "700" as const },
+  body: { fontFamily: "Inter", fontSize: 15, lineHeight: 23, fontWeight: "400" as const },
+  bodyStrong: { fontFamily: "Inter-SemiBold", fontSize: 15, lineHeight: 23, fontWeight: "600" as const },
+  secondary: { fontFamily: "Inter", fontSize: 13, lineHeight: 20, fontWeight: "400" as const },
+  secondaryStrong: { fontFamily: "Inter-SemiBold", fontSize: 13, lineHeight: 20, fontWeight: "600" as const },
+  caption: { fontFamily: "Inter-SemiBold", fontSize: 12, lineHeight: 18, fontWeight: "600" as const },
+  finePrint: { fontFamily: "Inter", fontSize: 12, lineHeight: 18, fontWeight: "400" as const },
+  button: { fontFamily: "Inter-Bold", fontSize: 14, lineHeight: 20, fontWeight: "700" as const },
+  greeting: { fontFamily: "Inter-Bold", fontSize: 27, lineHeight: 33, fontWeight: "700" as const, letterSpacing: -0.6 },
 } as const;
 
 export const sizes = {

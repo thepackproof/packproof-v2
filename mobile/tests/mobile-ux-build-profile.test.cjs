@@ -13,20 +13,22 @@ function config(overrides={}) {
     cwd:path.resolve(__dirname,'..'),encoding:'utf8',env:{...process.env,...review.env,EAS_BUILD_PROFILE:'mobile-ux-review',EAS_BUILD_PLATFORM:'android',EAS_BUILD:'true',EAS_BUILD_GIT_COMMIT_HASH:sha,EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE:'false',...overrides},
   });
 }
-test('internal review inherits authenticated shipping runtime and signing while creating version 57 APK only',()=>{
+test('internal review inherits authenticated shipping runtime and signing while creating version 66 APK only',()=>{
   assert.equal(review.distribution,'internal');assert.equal(review.android.buildType,'apk');
   assert.equal(review.android.keystoreName,profiles.build['internal-staging'].android.keystoreName);
   assert.equal(review.android.credentialsSource,'remote');
-  assert.equal(review.env.PACKPROOF_ANDROID_VERSION_CODE,'57');
+  assert.equal(review.env.PACKPROOF_ANDROID_VERSION_CODE,'66');
+  assert.ok(Number(profiles.build.production.env.PACKPROOF_ANDROID_VERSION_CODE)>Number(review.env.PACKPROOF_ANDROID_VERSION_CODE), 'Production release advances the frozen review build');
   assert.equal(review.env.EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING,'true');
   assert.equal(review.env.EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX,'true');
+  assert.equal(review.env.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST,'true');
   assert.equal(review.env.EXPO_PUBLIC_PACKPROOF_AUTH_MODE,'cognito');
   assert.equal(profiles.submit['mobile-ux-review'],undefined);
   assert.equal(profiles.build['shipping-integration'].env.PACKPROOF_ANDROID_VERSION_CODE,'56');
 });
 test('internal review config has worker source identity and keeps release authentication and media guards',()=>{
   const result=config();assert.equal(result.status,0,result.stderr);const app=JSON.parse(result.stdout);
-  assert.equal(app.android.versionCode,57);assert.equal(app.android.package,'com.packproof.mobile');
+  assert.equal(app.android.versionCode,66);assert.equal(app.android.package,'com.packproof.mobile');
   assert.equal(app.android.allowBackup,false);assert.equal(app.android.usesCleartextTraffic,false);
   assert.equal(app.extra.packproofBuildSha,sha);assert.equal(app.extra.packproofMobileTaskUx,true);assert.equal(app.extra.packproofInternalReview,true);
   for(const overrides of [{EAS_BUILD_GIT_COMMIT_HASH:''},{EXPO_PUBLIC_PACKPROOF_AUTH_MODE:'dev'},{EXPO_PUBLIC_PACKPROOF_API_BASE_URL:'http://localhost:3000'},{EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE:'true'}]) assert.notEqual(config(overrides).status,0);

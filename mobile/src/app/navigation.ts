@@ -47,6 +47,8 @@ export interface AppRoute {
   historyShareId?: string;
   activityFilter?: ActivityFilter;
   activitySessionId?: string;
+  /** Explicit secondary entry for grading/import; default creation is manual. */
+  creationMode?: "options";
 }
 
 export interface ProofsLibraryState {
@@ -64,6 +66,16 @@ export const DEFAULT_PROOFS_LIBRARY: ProofsLibraryState = {
   role: "all",
   carrier: null,
 };
+
+/** New Android accounts start with the complete catalog; remembered filters win. */
+export function initialProofsLibrary(taskFirst: boolean): ProofsLibraryState {
+  return { ...DEFAULT_PROOFS_LIBRARY, view: taskFirst ? 'all' : DEFAULT_PROOFS_LIBRARY.view };
+}
+
+/** Composition only: no draft, operation or capture state is changed here. */
+export function creationEntryRoute(name: AppRouteName, taskFirst: boolean, mode?: AppRoute['creationMode']): AppRouteName {
+  return taskFirst && name === 'create' && mode !== 'options' ? 'manual' : name;
+}
 
 /** Preserve workspace destinations while remapping retired session routes. */
 export function normalizeRouteName(name: string): AppRouteName {

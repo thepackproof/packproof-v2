@@ -1,0 +1,953 @@
+{
+  "artifact": "/workspace/scratch/ba2747541260/packproof-v2/mobile/android/app/build/outputs/apk/release/app-release.apk",
+  "artifact_type": "apk",
+  "sha256": "9b02b11a30e9bdea1ca3c5cebcebefb1556c29a151ddc50f3d34d4a6527a416b",
+  "page_size": 16384,
+  "required_abis": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "libraries": [
+    {
+      "path": "lib/arm64-v8a/libbarhopper_v3.so",
+      "abi": "arm64-v8a",
+      "bytes": 4946720,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 3670016,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libc++_shared.so",
+      "abi": "arm64-v8a",
+      "bytes": 1292904,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 8617984,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libexpo-modules-core.so",
+      "abi": "arm64-v8a",
+      "bytes": 1188032,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 9912320,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libfbjni.so",
+      "abi": "arm64-v8a",
+      "bytes": 177000,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 11108352,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libgifimage.so",
+      "abi": "arm64-v8a",
+      "bytes": 318992,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 11288576,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libhermes.so",
+      "abi": "arm64-v8a",
+      "bytes": 2259008,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 11616256,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libhermestooling.so",
+      "abi": "arm64-v8a",
+      "bytes": 156144,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 13877248,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libimage_processing_util_jni.so",
+      "abi": "arm64-v8a",
+      "bytes": 29008,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 14041088,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libimagepipeline.so",
+      "abi": "arm64-v8a",
+      "bytes": 8760,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 14073856,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libjsi.so",
+      "abi": "arm64-v8a",
+      "bytes": 417384,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 14090240,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libnative-filters.so",
+      "abi": "arm64-v8a",
+      "bytes": 23712,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 14516224,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libnative-imagetranscoder.so",
+      "abi": "arm64-v8a",
+      "bytes": 585376,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 14548992,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libreactnative.so",
+      "abi": "arm64-v8a",
+      "bytes": 6562560,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 15138816,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libstatic-webp.so",
+      "abi": "arm64-v8a",
+      "bytes": 501856,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 21708800,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/arm64-v8a/libsurface_util_jni.so",
+      "abi": "arm64-v8a",
+      "bytes": 4832,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 22216704,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libbarhopper_v3.so",
+      "abi": "armeabi-v7a",
+      "bytes": 3244440,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 22233088,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libc++_shared.so",
+      "abi": "armeabi-v7a",
+      "bytes": 872872,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 25493504,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libfbjni.so",
+      "abi": "armeabi-v7a",
+      "bytes": 119456,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 26378240,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libgifimage.so",
+      "abi": "armeabi-v7a",
+      "bytes": 184380,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 26509312,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libhermes.so",
+      "abi": "armeabi-v7a",
+      "bytes": 1507148,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 26705920,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libhermestooling.so",
+      "abi": "armeabi-v7a",
+      "bytes": 90784,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 28213248,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libimage_processing_util_jni.so",
+      "abi": "armeabi-v7a",
+      "bytes": 20380,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 28311552,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libimagepipeline.so",
+      "abi": "armeabi-v7a",
+      "bytes": 5876,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 28344320,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libjsi.so",
+      "abi": "armeabi-v7a",
+      "bytes": 296904,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 28360704,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libnative-filters.so",
+      "abi": "armeabi-v7a",
+      "bytes": 12588,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 28672000,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libnative-imagetranscoder.so",
+      "abi": "armeabi-v7a",
+      "bytes": 341072,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 28688384,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libreactnative.so",
+      "abi": "armeabi-v7a",
+      "bytes": 4777336,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 29032448,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libstatic-webp.so",
+      "abi": "armeabi-v7a",
+      "bytes": 367592,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 33816576,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/armeabi-v7a/libsurface_util_jni.so",
+      "abi": "armeabi-v7a",
+      "bytes": 3440,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 34193408,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libbarhopper_v3.so",
+      "abi": "x86",
+      "bytes": 6122368,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 34209792,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libc++_shared.so",
+      "abi": "x86",
+      "bytes": 1254988,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 40337408,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libfbjni.so",
+      "abi": "x86",
+      "bytes": 166480,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 41598976,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libgifimage.so",
+      "abi": "x86",
+      "bytes": 281448,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 41779200,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libhermes.so",
+      "abi": "x86",
+      "bytes": 2784236,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 42074112,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libhermestooling.so",
+      "abi": "x86",
+      "bytes": 150148,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 44859392,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libimage_processing_util_jni.so",
+      "abi": "x86",
+      "bytes": 38292,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 45023232,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libimagepipeline.so",
+      "abi": "x86",
+      "bytes": 7040,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 45072384,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libjsi.so",
+      "abi": "x86",
+      "bytes": 431896,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 45088768,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libnative-filters.so",
+      "abi": "x86",
+      "bytes": 22040,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 45531136,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libnative-imagetranscoder.so",
+      "abi": "x86",
+      "bytes": 664736,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 45563904,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libreactnative.so",
+      "abi": "x86",
+      "bytes": 6867648,
+      "bits": 32,
+      "elf_16kb": false,
+      "load_alignments": [
+        4096,
+        4096,
+        4096
+      ],
+      "loads_congruent_16kb": false,
+      "zip_compressed": false,
+      "zip_payload_offset": 46235648,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libstatic-webp.so",
+      "abi": "x86",
+      "bytes": 550092,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 53116928,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86/libsurface_util_jni.so",
+      "abi": "x86",
+      "bytes": 3712,
+      "bits": 32,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 53673984,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libbarhopper_v3.so",
+      "abi": "x86_64",
+      "bytes": 5909280,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 53690368,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libc++_shared.so",
+      "abi": "x86_64",
+      "bytes": 1252080,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 59604992,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libexpo-modules-core.so",
+      "abi": "x86_64",
+      "bytes": 1152720,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 60866560,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libfbjni.so",
+      "abi": "x86_64",
+      "bytes": 172952,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 62029824,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libgifimage.so",
+      "abi": "x86_64",
+      "bytes": 302952,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 62210048,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libhermes.so",
+      "abi": "x86_64",
+      "bytes": 2283176,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 62521344,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libhermestooling.so",
+      "abi": "x86_64",
+      "bytes": 152704,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 64815104,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libimage_processing_util_jni.so",
+      "abi": "x86_64",
+      "bytes": 48104,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 64978944,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libimagepipeline.so",
+      "abi": "x86_64",
+      "bytes": 8464,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 65028096,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libjsi.so",
+      "abi": "x86_64",
+      "bytes": 421384,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 65044480,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libnative-filters.so",
+      "abi": "x86_64",
+      "bytes": 30528,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 65470464,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libnative-imagetranscoder.so",
+      "abi": "x86_64",
+      "bytes": 720432,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 65503232,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libreactnative.so",
+      "abi": "x86_64",
+      "bytes": 6716488,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 66224128,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libstatic-webp.so",
+      "abi": "x86_64",
+      "bytes": 560968,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 72941568,
+      "zip_16kb": true
+    },
+    {
+      "path": "lib/x86_64/libsurface_util_jni.so",
+      "abi": "x86_64",
+      "bytes": 4928,
+      "bits": 64,
+      "elf_16kb": true,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "loads_congruent_16kb": true,
+      "zip_compressed": false,
+      "zip_payload_offset": 73515008,
+      "zip_16kb": true
+    }
+  ],
+  "errors": [],
+  "native_library_count": 58,
+  "native64_count": 30,
+  "native32_count": 28,
+  "packaged_abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86",
+    "x86_64"
+  ],
+  "all64_elf_pass": true,
+  "all64_zip_pass": true,
+  "passed": true
+}

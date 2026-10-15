@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import type { ReactNode, RefObject } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { radii, sizes, spacing, typography } from "../theme/tokens";
+import { radii, sizes, spacing, typography, taskFirstTypography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { haptic, type HapticKind } from "../theme/haptics";
 import { PressableScale } from "./motion";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "success" | "destructive";
 
@@ -37,6 +38,7 @@ export function Button(props: {
       accessibilityState={{ disabled, busy: Boolean(props.loading) }}
       style={[
         styles.base,
+        ANDROID_TASK_FIRST_REBUILD && styles.taskFirst,
         {
           backgroundColor: palette.background,
           borderWidth: palette.borderWidth,
@@ -45,12 +47,12 @@ export function Button(props: {
         disabled ? { backgroundColor: colors.disabledBackground, borderColor: colors.border, opacity: 1 } : null,
       ]}
     >
-      {props.loading ? (
+      {props.loading && !ANDROID_TASK_FIRST_REBUILD ? (
         <ActivityIndicator color={disabled ? colors.disabledText : palette.foreground} />
       ) : (
         <View style={styles.labelRow}>
-          {props.icon ? <Ionicons name={props.icon} size={18} color={disabled ? colors.disabledText : palette.foreground} /> : null}
-          <Text style={[styles.label, { color: disabled ? colors.disabledText : palette.foreground }]}>{props.label}</Text>
+          {props.loading ? <ActivityIndicator color={colors.disabledText} /> : props.icon ? <Ionicons name={props.icon} size={18} color={disabled ? colors.disabledText : palette.foreground} /> : null}
+          <Text style={[styles.label, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.button, { color: disabled ? colors.disabledText : palette.foreground }]}>{props.label}</Text>
         </View>
       )}
     </PressableScale>
@@ -62,8 +64,21 @@ export function IconButton(props: {
   onPress: () => void;
   disabled?: boolean;
   children: ReactNode;
+  focusRef?: RefObject<View | null>;
 }) {
   const { colors } = useTheme();
+  if (ANDROID_TASK_FIRST_REBUILD && props.focusRef) {
+    return <Pressable
+      ref={props.focusRef}
+      onPress={props.onPress}
+      disabled={props.disabled}
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      hitSlop={8}
+      style={({ pressed }) => [styles.icon, pressed && { backgroundColor: colors.surfacePressed }, props.disabled && { opacity: 0.45 }]}
+    ><View pointerEvents="none">{props.children}</View></Pressable>;
+  }
   return (
     <PressableScale
       onPress={props.onPress}
@@ -108,6 +123,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, maxWidth: "100%" },
+  taskFirst: { borderRadius: 10, paddingHorizontal: 16 },
   label: { ...typography.button, textAlign: "center", flexShrink: 1 },
   icon: {
     minWidth: sizes.touch,

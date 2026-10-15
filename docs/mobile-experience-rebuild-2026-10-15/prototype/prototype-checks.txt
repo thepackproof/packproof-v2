@@ -1,0 +1,62 @@
+PASS Manual first Proof: three decisions to recording; consent, authorization and distinct server milestones
+PASS Editing item metadata invalidates consent and requires fresh authorization
+PASS Retake requires an explicit repeat-packing choice and resets consent
+PASS Back from review preserves the saved original and returns to review from Home
+PASS Back during recording warns, retains a partial take and prevents complete submission
+PASS failed: retry retains the same original/job through received and finalized states
+PASS interrupted: retry retains the same original/job through received and finalized states
+PASS Offline saved original is queued until explicit connectivity recovery
+PASS Unknown acknowledgment checks the existing job and does not request re-recording
+PASS Home, Proofs, Capture resume and Updates resolve a failed upload to the same next step
+PASS Known scan preserves the existing saved upload and resumes that exact task
+PASS Starting a new Proof keeps an existing recoverable source discoverable
+PASS Offline new creation explains eligibility limitation before recording
+PASS Selecting an imported order preserves any existing recoverable local original
+PASS Scan with denied camera presents recovery and a manual fallback
+PASS Unknown scan offers usable manual and existing-Proof fallbacks
+PASS Waiting buyer sees no seller action task, unrelated seller records, capture or share permission
+PASS permission-denied: preflight blocks recording, explains the reason and permits explicit recovery
+PASS no-storage: preflight blocks recording, explains the reason and permits explicit recovery
+PASS policy-blocked: preflight blocks recording, explains the reason and permits explicit recovery
+PASS Unavailable secure signing blocks recording and exposes signing help
+PASS Empty History does not fabricate activity or technical events
+PASS Tracking form is closed at rest and saving tracking cannot finalize evidence
+PASS Two ordinary history events have expandable labeled details
+PASS Proof search and status filter survive viewer return; waiting is not Needs action
+PASS Empty Capture keeps manual entry usable without blank search/filter controls
+PASS Profile menu exposes all six groups and supports Escape dismissal
+PASS Modal keyboard trap wraps and authorization cancel restores invoking control
+PASS Integrations are optional and unavailable provider details preserve manual creation
+PASS Advanced receipt, account deletion and other capture capabilities are reachable
+PASS Loading and error fixtures offer explicit recovery without false success
+PASS Opening pending uploads with no durable recording shows an empty state, not a transfer
+PASS Design viewport controls expose all required review widths without changing the journey
+PASS Upload stages expose a polite status announcement and motion has a reduced-motion override
+PASS home: loading/error states preserve the source and recover without false completion
+PASS proofs: loading/error states preserve the source and recover without false completion
+PASS capture: loading/error states preserve the source and recover without false completion
+PASS camera: loading/error states preserve the source and recover without false completion
+PASS review: loading/error states preserve the source and recover without false completion
+PASS evidence: loading/error states preserve the source and recover without false completion
+PASS shipment: loading/error states preserve the source and recover without false completion
+PASS history: loading/error states preserve the source and recover without false completion
+PASS updates: loading/error states preserve the source and recover without false completion
+PASS integrations: loading/error states preserve the source and recover without false completion
+PASS Local Profile/Settings menus remain reachable when remote loading/error is inapplicable
+PASS Explicit empty-state controls reset coherent design fixtures and actions match their labels
+PASS Offline review cannot secure-authorize or submit, and reconnect preserves its original
+PASS Offline tracking cannot claim a newly saved tracking association
+PASS Offline recovery/reconciliation cannot invent receipt or advance a failed upload
+PASS OAuth pending cancellation leaves no connected success and manual Proof remains available
+PASS integration-canceled: explicit reauthorization required before connected status
+PASS integration-error: explicit reauthorization required before connected status
+PASS integration-expired: explicit reauthorization required before connected status
+PASS Buyer permissions remain restrictive through errors, retry and offline cached views
+PASS All 12 surfaces have named controls and at most one active primary action (light, 1× text)
+PASS All 12 surfaces have named controls and at most one active primary action (light, 1.3× text)
+PASS All 12 surfaces have named controls and at most one active primary action (light, 2× text)
+PASS All 12 surfaces have named controls and at most one active primary action (dark, 1× text)
+PASS All 12 surfaces have named controls and at most one active primary action (dark, 1.3× text)
+PASS All 12 surfaces have named controls and at most one active primary action (dark, 2× text)
+
+60/60 DOM checks passed.

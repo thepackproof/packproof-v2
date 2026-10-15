@@ -1,3 +1,5 @@
+import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
+import { proofDisplayTitle } from '../copy/proof-title';
 import { selectRecoveryWorkspace } from '../experience/recovery-workspace';
 import { CompactProofRow } from '../ui/CompactProofRow';
 import { TutorialTarget } from "../onboarding/Onboarding";
@@ -11,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePackProof } from '../app/PackProofProvider';
 import { localProofWork, mergeProofInvitations, presentationForProof, selectProofRows, type PresentedProof } from '../copy/proof-list';
 import { formatDate } from '../copy/format';
-import { typography } from '../theme/tokens';
+import { typography, taskFirstTypography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { AppScreen } from '../ui/AppScreen';
 import { WorkspaceHeader } from '../ui/WorkspaceHeader';
@@ -65,7 +67,11 @@ export function MyProofsScreen() {
   const changed = sortedRows.map(row=>row.proofId).join("|") !== order.current.ids.join("|") || app.proofCollection.map(row => `${row.proofId}:${row.updatedAt}:${row.presentation?.displayStatus}`).join('|') !== snapshot.rows.map(row => `${row.proofId}:${row.updatedAt}:${row.presentation?.displayStatus}`).join('|');
   async function refresh() { await app.run(app.syncWorkspace); setRequestedRefresh(true); }
   async function open(item: PresentedProof, act = false) {
-    if (MOBILE_TASK_UX_ENABLED && act) { await app.openProofAction(item.proofId); return; }
+    if (MOBILE_TASK_UX_ENABLED && act) {
+      if (ANDROID_TASK_FIRST_REBUILD) await app.openProofDestination({ proofId: item.proofId, intent: 'resume' });
+      else await app.openProofAction(item.proofId);
+      return;
+    }
     if (item.accessKind === "RECEIVER") { app.openReceipt(item.proofId); return; }
     if (item.invitationId) {
       const invitation = app.pendingInvites.find(row => row.invitationId === item.invitationId);
@@ -87,20 +93,23 @@ export function MyProofsScreen() {
     });
   }
   const noMatches = Boolean(library.query.trim() || library.role !== 'all' || library.carrier);
-  const emptyTitle = noMatches ? 'No search matches' : library.view === 'attention' ? 'Nothing needs your attention' : library.view === 'completed' ? 'No completed Proofs yet' : 'No Proofs yet';
+  const emptyTitle = noMatches ? 'No search matches' : library.view === 'attention' ? 'Nothing needs your attention' : library.view === 'completed' ? 'No completed Proofs yet' : ANDROID_TASK_FIRST_REBUILD && library.view === 'progress' ? 'No Proofs in progress' : ANDROID_TASK_FIRST_REBUILD ? 'Your first Proof starts here' : 'No Proofs yet';
+  const filterTabs = (<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
+      {([{id:'all',label:'All'},{id:'attention',label:'Needs action'},{id:'progress',label:'In progress'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.accentSoft : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
+    </ScrollView>);
+  const searchControl = (<View style={styles.searchRow}>
+      <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.inputBackground}]}><Ionicons name="search-outline" size={18} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search order, item, tracking…" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
+      <PressableScale onPress={() => setFilterOpen(true)} accessibilityRole="button" accessibilityLabel="Filters" style={[styles.filter,{borderColor:colors.controlBorder}]}><Ionicons name="options-outline" size={22} color={colors.textPrimary}/></PressableScale>
+    </View>);
   return <AppScreen key={app.session?.userId} bottomInset={!MOBILE_TASK_UX_ENABLED} restorationReady={!loading} resetScrollKey={filterKey} onRefresh={() => void refresh()} refreshing={app.busy} initialOffsetY={app.readProofsScrollOffset()} onScrollOffset={app.setProofsScrollOffset}>
     <WorkspaceHeader section="Proofs" />
-    <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, { color:colors.textPrimary }]}>Proofs</Text></View><TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget></View>
+    <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color:colors.textPrimary }]}>Proofs</Text></View>{!ANDROID_TASK_FIRST_REBUILD ? <TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}</View>
+    {ANDROID_TASK_FIRST_REBUILD ? <Text style={[taskFirstTypography.body, {color:colors.textSecondary}]}>Your records, all in one place.</Text> : null}
     {!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Shipment evidence, organized and ready to review.</Text> : null}
     <View style={[styles.libraryPanel,{backgroundColor:colors.background,borderColor:colors.border}]}>
     <View style={styles.toolbar}>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
-      {([{id:'all',label:'All'},{id:'attention',label:'Needs action'},{id:'progress',label:'In progress'},{id:'completed',label:'Completed'}] as const).map(option => <TutorialTarget key={option.id} name={option.id==='attention'?'attention':option.id==='completed'?'status':'all'}><PressableScale onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{ selected:library.view === option.id }} style={[styles.tab, { backgroundColor: library.view === option.id ? colors.accentSoft : 'transparent' }]}><Text style={[styles.tabText,{color:library.view === option.id ? colors.accentText : colors.textSecondary}]}>{option.label}</Text></PressableScale></TutorialTarget>)}
-    </ScrollView>
-    <View style={styles.searchRow}>
-      <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.inputBackground}]}><Ionicons name="search-outline" size={18} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search order, item, tracking…" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
-      <PressableScale onPress={() => setFilterOpen(true)} accessibilityRole="button" accessibilityLabel="Filters" style={[styles.filter,{borderColor:colors.controlBorder}]}><Ionicons name="options-outline" size={22} color={colors.textPrimary}/></PressableScale>
-    </View>
+    {ANDROID_TASK_FIRST_REBUILD ? <>{searchControl}{filterTabs}</> : <>{filterTabs}{searchControl}</>}
+
     </View>
     {!MOBILE_TASK_UX_ENABLED ? <View style={[styles.tableHeading,{backgroundColor:colors.surfaceElevated,borderColor:colors.border}]}><Text style={[styles.columnLabel,{color:colors.textMuted}]}>SHIPMENT RECORDS</Text><Text style={[styles.columnLabel,{color:colors.textMuted}]}>{loading ? 'LOADING' : `${visibleCount} IN VIEW`}</Text></View> : null}
     <View style={styles.listBody}>
@@ -111,10 +120,10 @@ export function MyProofsScreen() {
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
     {libraryRows.map((item, index) => <TutorialTarget key={item.proofId} name={index===0?'proofs':''}><CompactProofRow
-      title={item.transaction.itemTitle || 'Shipment Proof'}
+      title={ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle(item) : item.transaction.itemTitle || 'Shipment Proof'}
       detail={presentedRows.find(row => row.proofId === item.proofId)?.taskDescription || `${item.presentation.displayStatus} · Updated ${formatDate(item.updatedAt)}`}
       completed={item.presentation.completed} disabled={app.busy} onPress={() => void open(item, MOBILE_TASK_UX_ENABLED)} /></TutorialTarget>)}
-    {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : () => app.setProofsView('all')} /></TutorialTarget> : null}
+    {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : ANDROID_TASK_FIRST_REBUILD && library.view === 'progress' ? 'Other records are still available in All.' : ANDROID_TASK_FIRST_REBUILD ? 'Create a record of how you pack your item. No selling account connection needed.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : ANDROID_TASK_FIRST_REBUILD ? 'Create Proof' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : library.view === 'all' && ANDROID_TASK_FIRST_REBUILD ? () => app.selectCreateProof() : () => app.setProofsView('all')} /></TutorialTarget> : null}
     </View>
     </View>
     <BottomSheet visible={filterOpen} title="Filters" onClose={() => setFilterOpen(false)}>
