@@ -1,6 +1,6 @@
 # S01–S09 design changes and explicit deviations
 
-The original references are in the founder-supplied master plan. They are intentionally not copied into this public repository because they contain personal identifiers. The before column below describes the visual observation; it does not claim the runtime source reproduces it. Proposed layouts are in the interactive prototype. Exact anonymized, installed-build before/after screenshots remain a native review deliverable.
+The original references are in the founder-supplied master plan. They are intentionally not copied into this public repository because they contain personal identifiers. The private review packet includes a nine-page annotated comparison with identifiers redacted from the supplied references. The before column below describes the visual observation; it does not claim the runtime source reproduces it. Proposed layouts are in the interactive prototype and static comparison PDF. Exact anonymized, installed-build before/after screenshots remain a native review deliverable.
 
 | Reference | Before: observed reference | Proposed design | Source qualification |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ The original references are in the founder-supplied master plan. They are intent
 ## Approval decision record
 
 Decision: PENDING.
-Reviewed revision: to be identified by the review commit and prototype version.
+Reviewed revision: `G1-2026-10-15-r1`; HTML SHA-256 `bf8227135610f54c266b6f20b3bc5a6cabb50f213d10f2382b17e0c84335e724`.
 Founder: no approval recorded.
 Required review: complete manual journey + saved-original recovery; light/dark; large text; all primary/secondary destinations.
 Acceptable response: explicit G1 approved for the reviewed revision, or changes required.

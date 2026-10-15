@@ -1,0 +1,235 @@
+{
+  "artifact": "PackProof G1 design simulation",
+  "coverage": {
+    "home": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "proofs": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "capture": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "camera": {
+      "standard": "modeled",
+      "empty": "N/A: no empty remote dataset; route prerequisites or local navigation remain in force",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "review": {
+      "standard": "modeled",
+      "empty": "N/A: no empty remote dataset; route prerequisites or local navigation remain in force",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "evidence": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "shipment": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "history": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "updates": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    },
+    "profile": {
+      "standard": "modeled",
+      "empty": "N/A: no empty remote dataset; route prerequisites or local navigation remain in force",
+      "loading": "N/A: local navigation shell; account data belongs to its destination",
+      "error": "N/A: local navigation shell; failed remote account data belongs to its destination",
+      "offline": "Modeled: local menu remains available; no remote operation is implied"
+    },
+    "settings": {
+      "standard": "modeled",
+      "empty": "N/A: no empty remote dataset; route prerequisites or local navigation remain in force",
+      "loading": "N/A: local navigation shell; account data belongs to its destination",
+      "error": "N/A: local navigation shell; failed remote account data belongs to its destination",
+      "offline": "Modeled: local menu remains available; no remote operation is implied"
+    },
+    "integrations": {
+      "standard": "modeled",
+      "empty": "modeled",
+      "loading": "modeled",
+      "error": "modeled",
+      "offline": "modeled"
+    }
+  },
+  "copy": {
+    "home": {
+      "title": "Home",
+      "loading": [
+        "Loading your Proofs…",
+        "Checking which task needs your attention."
+      ],
+      "error": [
+        "We couldn’t load your Proofs",
+        "Saved recordings on this device are protected. Try again when your connection is available."
+      ],
+      "offline": "You’re offline. Showing saved task details; the latest server status is unavailable. Saved recordings stay on this device."
+    },
+    "proofs": {
+      "title": "Proofs",
+      "loading": [
+        "Loading your Proofs…",
+        "Your saved records remain protected."
+      ],
+      "error": [
+        "We couldn’t load your Proofs",
+        "Try again to refresh the catalog. No saved recording is removed."
+      ],
+      "offline": "You’re offline. Showing cached Proofs; recent changes may be missing."
+    },
+    "capture": {
+      "title": "Capture",
+      "loading": [
+        "Loading capture options…",
+        "Waiting for the current server capabilities. No recording has started."
+      ],
+      "error": [
+        "Capture options are unavailable",
+        "We couldn’t check the available workflows. Try again before you begin packing."
+      ],
+      "offline": "You’re offline. You can review saved captures. New Proofs need an online eligibility check."
+    },
+    "camera": {
+      "title": "Packing Proof",
+      "loading": [
+        "Preparing the camera…",
+        "No recording has started."
+      ],
+      "error": [
+        "The camera couldn’t start",
+        "Your item details are kept. Try again before you begin packing."
+      ],
+      "offline": "A new capture needs an online eligibility check."
+    },
+    "review": {
+      "title": "Review",
+      "loading": [
+        "Opening your recording…",
+        "The original remains saved on this device."
+      ],
+      "error": [
+        "We couldn’t open this recording",
+        "Your original remains saved. Try opening it again; you do not need to re-record for this viewing error."
+      ],
+      "offline": "Your original is saved here. You can review it offline; reconnect before secure confirmation and submission."
+    },
+    "evidence": {
+      "title": "Proof evidence",
+      "loading": [
+        "Loading evidence…",
+        "Checking the latest server record. Local media remains protected."
+      ],
+      "error": [
+        "Evidence is temporarily unavailable",
+        "We couldn’t refresh this Proof. Your saved original is unchanged."
+      ],
+      "offline": "You’re offline. Showing saved evidence details and last confirmed status. New server changes are not available."
+    },
+    "shipment": {
+      "title": "Shipment",
+      "loading": [
+        "Loading shipment details…",
+        "Waiting for the saved tracking association."
+      ],
+      "error": [
+        "Shipment details are unavailable",
+        "We couldn’t refresh tracking. This does not change your evidence or finalization status."
+      ],
+      "offline": "You’re offline. Showing saved shipment details; carrier updates are unavailable."
+    },
+    "history": {
+      "title": "History",
+      "loading": [
+        "Loading history…",
+        "Waiting for the authorized event list. No events are inferred."
+      ],
+      "error": [
+        "History is temporarily unavailable",
+        "We couldn’t load the event list. This does not mean the Proof has no activity."
+      ],
+      "offline": "You’re offline. Showing cached events; recent activity may be missing."
+    },
+    "updates": {
+      "title": "Updates",
+      "loading": [
+        "Loading updates…",
+        "Checking for new authorized events."
+      ],
+      "error": [
+        "Updates are unavailable",
+        "We couldn’t refresh your notifications. Check an existing saved Proof or try again."
+      ],
+      "offline": "You’re offline. Showing saved alerts; new notifications may be delayed."
+    },
+    "integrations": {
+      "title": "Integrations",
+      "loading": [
+        "Loading selling accounts…",
+        "Checking provider availability and saved connection status."
+      ],
+      "error": [
+        "Selling accounts are unavailable",
+        "We couldn’t load the provider list. You can create a Proof without connecting a selling account."
+      ],
+      "offline": "You’re offline. Showing cached connection details; authorization and order refresh need a connection."
+    }
+  },
+  "scenarios": {
+    "fresh": "Fresh seller · no Proofs",
+    "resume": "Resume · recording required",
+    "offline": "Offline · saved recording",
+    "failed": "Failed upload · safe retry",
+    "interrupted": "Interrupted upload · durable source",
+    "unknown-ack": "Unknown acknowledgement",
+    "finalized": "Server-finalized Proof",
+    "waiting": "Buyer / waiting on seller",
+    "policy-blocked": "Policy blocked · allowance",
+    "permission-denied": "Camera permission denied",
+    "no-storage": "Not enough storage",
+    "signing-unavailable": "Secure signing unavailable",
+    "history-empty": "History · no events",
+    "history-unavailable": "History · unavailable",
+    "integration-authorizing": "Shopify · authorization pending",
+    "integration-canceled": "Shopify · connection canceled",
+    "integration-error": "Shopify · connection failed",
+    "integration-expired": "Shopify · authorization expired",
+    "loading": "Loading records",
+    "error": "Unable to load records",
+    "orders": "Linked orders · compact queue",
+    "capture-interrupted": "Recording interrupted"
+  }
+}
