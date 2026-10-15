@@ -153,6 +153,8 @@ jobs:
       - run: npm run test:ux-recovery
       - name: Verify Android task-first entry, presentation and review build guards
         run: npm run test:android-task-first
+      - name: Verify internal Android review build identity and guards
+        run: npm run test:local-review-build
       - run: npm run test:first-proof
       - run: npm run test:identifiers
       - run: npm run test:api
