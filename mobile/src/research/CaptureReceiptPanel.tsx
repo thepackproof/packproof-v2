@@ -51,7 +51,7 @@ export function CaptureReceiptPanel() {
     <ReceiptConsent />
     <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '600' }}>Capture receipts</Text>
     <Text style={muted}>These optional signed records describe the final file and its server-recorded camera session. They do not verify the sensor, physical scene, item authenticity or incremental recording continuity. The original recording remains your evidence.</Text>
-    {review?.captureReceipts.length === 0 ? <Text style={muted}>No optional capture receipt has been received for this Proof. Ordinary saved evidence remains available above.</Text> : null}
+    {review?.captureReceipts.length === 0 ? <Text style={muted}>No optional capture receipt has been received for this Proof. Ordinary saved evidence remains available in the Evidence tab.</Text> : null}
     {review?.captureReceipts.map(row => <View key={row.receipt.intentId} style={{ gap: 6 }}>
       <Text style={{ color: colors.textPrimary }}>Final-file receipt received · {row.receipt.receivedAt}</Text>
       <Text style={muted}>Coverage: final file only. Server reports {row.receipt.assurance.signatureVerification === 'BOUND_CLIENT_AND_SERVER_SIGNATURES' ? 'bound device and server signatures' : 'a server signature'}. Signature trust is independently checked with the exported bundle.</Text>

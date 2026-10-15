@@ -8,14 +8,18 @@ import { recordActivityEvents, recordActivityGroups, recordEventFilters } from "
 import { useTheme } from "../theme/ThemeProvider";
 import { typography } from "../theme/tokens";
 import { FadeSlideIn, PressableScale } from "./motion";
+import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
+import { proofHistoryActor } from '../experience/proof-detail-model';
 
-export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter, onFilter, onSelect }: {
+export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter, onFilter, onSelect, proof, userId }: {
   entries: ChronologyEntry[];
   auditEvents?: ProofView["events"];
   finalizedAt?: string | null;
   filter: string;
   onFilter: (category: string) => void;
   onSelect: (entry: ChronologyEntry) => void;
+  proof?: Pick<ProofView, 'events' | 'participants'>;
+  userId?: string;
 }) {
   const { colors } = useTheme();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -55,6 +59,23 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
       const tone = preserved ? colors.successText : integrity ? colors.integrityText : shipment || participant ? colors.shipmentText : colors.accentText;
       const soft = preserved ? colors.successSoft : integrity ? colors.integritySoft : shipment || participant ? colors.shipmentSoft : colors.accentSoft;
       const icon = preserved ? "shield-checkmark-outline" : /ATTEST/.test(entry.eventType) ? "finger-print-outline" : /CAPTURE|EVIDENCE/.test(entry.eventType) ? "videocam-outline" : integrity ? "lock-closed-outline" : participant ? "person-outline" : shipment ? "location-outline" : entry.category === "COMMERCE" ? "storefront-outline" : "cube-outline";
+      if (ANDROID_TASK_FIRST_REBUILD) {
+        const actor = proof && userId ? proofHistoryActor(proof, entry, userId) : null;
+        return <View key={group.key}>
+          {newDay ? <Text accessibilityRole="header" style={[styles.compactDate, { color: colors.textSecondary }]}>{formatDate(entry.occurredAt) || 'Time unavailable'}</Text> : null}
+          <PressableScale onPress={() => group.access ? toggleGroup() : onSelect(entry)} accessibilityRole="button" accessibilityState={group.access ? { expanded } : undefined} accessibilityLabel={`${title}. ${formatDate(entry.occurredAt)}, ${formatTime(entry.occurredAt)}${actor ? `. ${actor}` : ''}. View event details.`} style={[styles.compactEvent, { borderBottomColor: colors.divider }]}>
+            <View style={[styles.node, { borderColor: tone, backgroundColor: soft }]}><Ionicons name={icon} size={18} color={tone} /></View>
+            <View style={styles.compactCopy}>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+              <Text style={[styles.time, { color: colors.textSecondary }]}>{[formatTime(entry.occurredAt), actor, detailed ? chronologyCategoryLabel(entry.category, entry.source, entry.provider, entry.eventType) : null].filter(Boolean).join(' · ')}</Text>
+              {detailed && entry.description ? <Text style={[styles.body, { color: colors.textSecondary }]}>{entry.description}</Text> : null}
+              {detailed && afterCore ? <Text style={[styles.time, { color: colors.textSecondary }]}>Shipment update · separate from the frozen core</Text> : null}
+            </View>
+            <Ionicons name={group.access && expanded ? 'chevron-down' : 'chevron-forward'} size={16} color={colors.textSecondary} />
+          </PressableScale>
+          {group.access && expanded ? <View style={[styles.accessDetails, { borderColor: colors.divider }]}>{group.entries.map(access => <PressableScale key={access.id} accessibilityRole="button" accessibilityLabel={`Access event at ${access.occurredAt}. View exact details.`} onPress={() => onSelect(access)} style={styles.accessRow}><View style={styles.compactCopy}><Text style={[styles.body, { color: colors.textPrimary }]}>{humanChronologyTitle(access.eventType, access.title)}</Text><Text style={[styles.time, { color: colors.textSecondary }]}>{formatDate(access.occurredAt)} · {formatTime(access.occurredAt)}</Text></View><Ionicons name="chevron-forward" size={16} color={colors.textSecondary} /></PressableScale>)}</View> : null}
+        </View>;
+      }
       return <FadeSlideIn key={group.key} index={index} style={styles.entry}>
         <View style={styles.dateRow}>
           {newDay ? <Text style={[styles.date, { color: colors.textSecondary }]}>{formatDate(entry.occurredAt) || "Time unavailable"}</Text> : null}
@@ -86,6 +107,9 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
 }
 
 const styles = StyleSheet.create({
+  compactDate: { ...typography.secondaryStrong, paddingTop: 16, paddingBottom: 4 },
+  compactEvent: { minHeight: 64, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1 },
+  compactCopy: { flex: 1, minWidth: 0, gap: 4 },
   root: { gap: 0 }, groupNote: { ...typography.caption, marginBottom: 16 }, accessDetails: { borderLeftWidth: 1, marginLeft: 12, paddingLeft: 12 }, accessRow: { minHeight: 48, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 8 }, modeRow: { flexDirection: "row", flexWrap: "wrap", gap: 16, marginBottom: 8 }, modeButton: { minHeight: 48, justifyContent: "center" }, filters: { flexDirection: "row", gap: 8, paddingBottom: 16 },
   filter: { paddingHorizontal: 10, paddingVertical: 12, borderWidth: 1, borderRadius: 10, minHeight: 48, justifyContent: "center" },
   filterLabel: { ...typography.secondary }, empty: { gap: 12, paddingVertical: 24 },
