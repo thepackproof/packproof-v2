@@ -1,3 +1,5 @@
+import { selectRecoveryWorkspace, type RecoveryWorkspaceInput } from './recovery-workspace';
+
 /** An entry intent selects an existing owner; it never grants capture authority. */
 export type ProofEntry =
   | { proofId: string; intent: 'resume' | 'view' }
@@ -16,6 +18,18 @@ export interface ProofEntryOwners {
 export function participantLinkEntry(proofId: string, historyShareId: string | null | undefined, taskFirst: boolean): ProofEntry {
   if (historyShareId) return { proofId, intent: 'historyShare', historyShareId };
   return { proofId, intent: taskFirst ? 'resume' : 'view' };
+}
+
+/** Use the same exact original chosen by Home, never the first unscoped array row. */
+export function proofEntryRecording(input: RecoveryWorkspaceInput, proofId: string) {
+  const workspace = selectRecoveryWorkspace(input);
+  const action = workspace.model.actions.find(row => row.targetId === proofId) ?? null;
+  const pending = workspace.captures.filter(capture => capture.captureProofId === proofId && !['FINALIZED', 'SUBMITTED'].includes(capture.recovery?.phase ?? ''));
+  const capture = action?.sessionId
+    ? pending.find(row => (row.captureSessionId || row.uri) === action.sessionId) ?? null
+    : pending[0] ?? null;
+  // Selection remains guidance: the existing resume owner checks fresh authority.
+  return { capture, action };
 }
 
 /** Observe an existing handled-error owner without changing its error policy. */

@@ -7,7 +7,8 @@ import { presentationForProof } from "../copy/proof-list";
 import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
 import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
-import { handledActionSucceeded, openProofDestination, type ProofEntry } from "../experience/proof-entry";
+import { handledActionSucceeded, openProofDestination, proofEntryRecording, type ProofEntry } from "../experience/proof-entry";
+import { workspaceRecordings } from "../copy/workspace-summary";
 import { FIRST_PROOF_EXPERIENCE_ENABLED } from "../experience/first-proof";
 import { parseTaskIntent, taskIntent, taskIntentKey } from "../experience/task-intent";
 import { manualDraftMatches, type ManualOperation } from "../experience/manual-operation";
@@ -644,6 +645,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     workspaceOffsets.current={home:0,activity:0};activityFilterMemory.current="all"; setWorkspaceFreshAt(null); setWorkspaceReconciled(false); setSelectedTask(null); taskInteractions.current={}; clearMobileUxMetrics(); setScanResult(null);setScanCandidates([]);setScanInput("");setScanPhase("camera");
     setProofsLibrary(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)); proofsScrollOffset.current = 0;
     setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]); setPhotoDrafts([]); setCaptureReviewOnlyReason(null);
+    setConnections([]); setConnectedAccounts([]); setConnectedProviders([]);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
       await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
@@ -672,6 +674,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
         }
       : next;
     await restoreProofsContext(stored);
+    if (sessionRef.current?.userId !== stored.userId || sessionRef.current.apiBaseUrl !== stored.apiBaseUrl) {
+      // A previous-account response may have finished while scoped restoration awaited storage.
+      setConnections([]); setConnectedAccounts([]); setConnectedProviders([]);
+    }
     tokenRef.current = stored.token || null;
     sessionRef.current = stored;
     await (stored.needsReauthentication ? stopNativeIntakeSession() : orderShare?.setActiveAccount(stored.userId))?.catch(() => undefined);
@@ -1408,16 +1414,22 @@ export function PackProofProvider(props: { children: ReactNode }) {
       const row=proofCollection.find(row=>row.proofId===proofId);
       if(row?.accessKind==="RECEIVER") {value.openReceipt(proofId);return true;}
       rememberTaskInteraction(proofId); startMobileCaptureEntry();
-      if (offline) return handledActionSucceeded(run, () => openProof(proofId));
+      if (offline && !ANDROID_TASK_FIRST_REBUILD) return handledActionSucceeded(run, () => openProof(proofId));
       if (photoDrafts.some(draft => draft.proofId === proofId && draft.phase !== 'COMPLETE' && draft.userId === sessionRef.current?.userId && draft.apiBaseUrl === sessionRef.current?.apiBaseUrl.replace(/\/+$/, ''))) {
         return handledActionSucceeded(run, () => openProof(proofId));
       }
-      const saved=savedRecordings.find(c=>c.captureProofId===proofId && !["FINALIZED","SUBMITTED"].includes(c.recovery?.phase??""));
+      const selection = ANDROID_TASK_FIRST_REBUILD ? proofEntryRecording({
+        proofs: proofCollection, invitations: pendingInvites, captures: workspaceRecordings(savedRecordings, localCapture),
+        photoDrafts, orders: [], progress: uploadProgressByProof, userId: sessionRef.current?.userId ?? '',
+        apiBaseUrl, online: !offline, reconciled: workspaceReconciled, captureStatus,
+      }, proofId) : null;
+      const saved = selection ? selection.capture : savedRecordings.find(c=>c.captureProofId===proofId && !["FINALIZED","SUBMITTED"].includes(c.recovery?.phase??""));
       if(saved) {
-        if(saved.recovery?.phase==="RECORDING") {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});return true;}
+        if(selection?.action?.kind === 'review_upload' || saved.recovery?.phase==="RECORDING") {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});return true;}
         if(!await localCaptureExists(saved.uri)) {go("activity",{activityFilter:"attention",activitySessionId:saved.captureSessionId||saved.uri});setError("The original recording is not available. Review recovery options.");return true;}
         return value.resumeSavedCapture(saved);
       }
+      if (offline) return handledActionSucceeded(run, () => openProof(proofId));
       return handledActionSucceeded(run, async()=>{
         const current=sessionRef.current;if(!current)return false;
         await openFreshProofAction(proofId, {
@@ -2411,50 +2423,88 @@ export function PackProofProvider(props: { children: ReactNode }) {
         await client.connectTrustedDemo(proof.transactionId);
         await refreshProof(proof.proofId);
       }),
-    loadConnections: async () =>
-      run(async () => {
+    loadConnections: async () => {
+      const owner = sessionRef.current;
+      if (!owner) return;
+      return run(async () => {
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         const result = await client.listIntegrationConnections("commerce");
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         setConnections(result.connections);
-      }),
-    setCommerceAutomation: async (connectionId, enabled) =>
-      run(async () => {
+      });
+    },
+    setCommerceAutomation: async (connectionId, enabled) => {
+      const owner = sessionRef.current;
+      if (!owner) return;
+      return run(async () => {
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         await client.setCommerceAutomation(connectionId, enabled);
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         const result = await client.listIntegrationConnections("commerce");
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         setConnections(result.connections);
-      }),
-    syncCommerceConnection: async (connectionId) =>
-      run(async () => {
+      });
+    },
+    syncCommerceConnection: async (connectionId) => {
+      const owner = sessionRef.current;
+      if (!owner) return;
+      return run(async () => {
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         await client.syncCommerceConnection(connectionId);
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         const result = await client.listIntegrationConnections("commerce");
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         setConnections(result.connections);
         await refreshProofCollection();
-      }),
-    loadConnectedAccounts: async () =>
-      run(async () => {
+      });
+    },
+    loadConnectedAccounts: async () => {
+      const owner = sessionRef.current;
+      if (!owner) return;
+      return run(async () => {
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         const result = await client.listConnectedAccounts();
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         setConnectedAccounts(result.accounts);
         setConnectedProviders(result.providers);
-      }),
-    connectConnectedAccount: async (provider, extra) =>
-      run(async () => {
+      });
+    },
+    connectConnectedAccount: async (provider, extra) => {
+      const owner = sessionRef.current;
+      if (!owner) return;
+      return run(async () => {
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         const started = await client.startConnectedAccountConnect(provider, { ...extra, surface: Platform.OS === "ios" ? "ios" : "android" });
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         await Linking.openURL(started.authorizationUrl);
-      }),
-    reauthorizeConnectedAccount: async (accountId) =>
-      run(async () => {
+      });
+    },
+    reauthorizeConnectedAccount: async (accountId) => {
+      const owner = sessionRef.current;
+      if (!owner) return;
+      return run(async () => {
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         const started = await client.reauthorizeConnectedAccount(accountId, Platform.OS === "ios" ? "ios" : "android");
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         await Linking.openURL(started.authorizationUrl);
-      }),
-    disconnectConnectedAccount: async (accountId) =>
-      run(async () => {
+      });
+    },
+    disconnectConnectedAccount: async (accountId) => {
+      const owner = sessionRef.current;
+      if (!owner) return;
+      return run(async () => {
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         await client.disconnectConnectedAccount(accountId);
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         const [result, commerce] = await Promise.all([
           client.listConnectedAccounts(), client.listIntegrationConnections("commerce"),
         ]);
+        client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
         setConnectedAccounts(result.accounts);
         setConnectedProviders(result.providers);
         setConnections(commerce.connections);
-      }),
+      });
+    },
     ensureAuth: ensureFreshCognitoToken,
     persistStation: async (next) => {
       const current = sessionRef.current;

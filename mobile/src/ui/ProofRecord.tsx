@@ -1,3 +1,7 @@
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
+import { proofDisplayTitle } from "../copy/proof-title";
+import { proofTrackingSource } from "../experience/proof-detail-model";
+import { hasRemainingShipmentScope, REMAINING_SHIPMENT_LABEL } from '../copy/fulfillment-scope';
 import { ResearchPanel } from "../research/ResearchPanel";
 import { isNativeAttestationMethod } from "../attestation/authorization";
 import { TrackingIntake } from "./TrackingIntake";
@@ -5,7 +9,7 @@ import { proofReference, shipmentRecordLabel } from "../copy/evidence-record";
 import { RecordSeal } from "./RecordSeal";
 import { RemainingShipmentNotice } from "./RemainingShipmentNotice";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -36,11 +40,16 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   actionInContent?: boolean;
 }) {
   const app = usePackProof(), { colors, reducedMotion } = useTheme();
+  // Compact windows and large accessibility sizes keep the full header in the scroll area.
+  const { fontScale, height, width } = useWindowDimensions();
+  const fixedHeader = ANDROID_TASK_FIRST_REBUILD && fontScale <= 1.4 && height >= 680 && width >= 320;
   const proof = app.proof!, txn = app.transactionDetail ?? proof.transaction;
+  const recordTitle = ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle({ proofId: proof.proofId, transaction: txn }) : txn.itemTitle || "Your item";
   const saved = useRef(app.readProofRecordView(proof.proofId));
   // Old view state may refer to the removed receipt tab; its workflow now lives in More actions.
   const [tab, setTab] = useState<ProofRecordTab>(saved.current.tab === "Receipt" ? "Evidence" : saved.current.tab), [filter, setFilter] = useState(saved.current.timelineFilter);
-  const [filesExpanded, setFilesExpanded] = useState(proof.status === "FINALIZED");
+  const [filesExpanded, setFilesExpanded] = useState(ANDROID_TASK_FIRST_REBUILD || proof.status === "FINALIZED");
+  const [participantsExpanded, setParticipantsExpanded] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(saved.current.detailsExpanded ?? false);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(saved.current.selectedEvidenceId ?? null);
   const [selectedEvidenceStageId, setSelectedEvidenceStageId] = useState<string | null>(saved.current.selectedEvidenceStageId ?? null);
@@ -156,7 +165,23 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     if (next) scroll.current[tab]?.scrollTo({ y: 0, animated: !reducedMotion });
   }
 
+  const recordHeader = (
+    <View style={[styles.top, { borderBottomColor: colors.divider }]}>
+      <Text accessibilityRole="header" accessibilityLabel={recordTitle} numberOfLines={fixedHeader ? 2 : undefined} style={[styles.title, { color: colors.textPrimary }]}>{recordTitle}</Text>
+      <Text selectable style={[styles.note,{color:colors.textSecondary}]}>{proofReference(proof.proofId, txn.externalReference)}</Text>
+      {!ANDROID_TASK_FIRST_REBUILD ? <RemainingShipmentNotice value={proof} /> : null}
+      {ANDROID_TASK_FIRST_REBUILD && hasRemainingShipmentScope(proof) ? <Text style={[styles.note, { color: colors.warningText }]}>{REMAINING_SHIPMENT_LABEL}</Text> : null}
+      <View style={styles.headerMeta}>
+        <Text accessibilityLiveRegion="polite" style={[styles.note,{color:(ANDROID_TASK_FIRST_REBUILD ? presentation.completed && !presentation.diagnostic && !presentation.canContribute : proof.status === "FINALIZED") ? colors.successText : colors.textSecondary}]}>{ANDROID_TASK_FIRST_REBUILD ? statusLabel : proof.status === "FINALIZED" ? "Finalized · evidence locked" : statusLabel}</Text>
+        <PressableScale accessibilityRole="button" accessibilityLabel="Order details" accessibilityState={{ expanded: detailsExpanded }} onPress={toggleDetails} style={styles.detailsToggle}>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Details</Text><Ionicons name={detailsExpanded ? "chevron-up" : "chevron-down"} size={15} color={colors.textSecondary} />
+        </PressableScale>
+      </View>
+    </View>
+  );
+
   return <View style={[styles.record,{backgroundColor:colors.background}]}>
+    {fixedHeader ? recordHeader : null}
     <View style={[styles.tabBorder, { backgroundColor: colors.surface }]}>
       <ScrollView ref={tabScroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Proof record views">
         {tabs.map(({ key, label }) => <View key={key} style={styles.tabSlot} onLayout={event => { tabPositions.current[key] = { x: event.nativeEvent.layout.x, width: event.nativeEvent.layout.width }; if (tab === key) { positionIndicator(key, false); tabScroll.current?.scrollTo({ x: Math.max(0, event.nativeEvent.layout.x - 12), animated: false }); } }}><PressableScale accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === key }} onPress={() => selectTab(key)} style={[styles.tab, { backgroundColor: 'transparent' }]}>
@@ -169,20 +194,11 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
       {tabs.map(({ key: panelTab }) => (
       <View key={panelTab} style={[styles.panel, { display: panelTab === tab ? "flex" : "none" }]} importantForAccessibility={panelTab === tab ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={panelTab !== tab}>
       <RestoringScrollView ref={value => { scroll.current[panelTab] = value; }} contentContainerStyle={styles.body} initialOffsetY={saved.current.offsets[panelTab]} restorationReady={panelTab === tab && (panelTab !== "Evidence" || !hasVideo || !bookmarksLoading)} onScrollOffset={offset => { if (panelTab === tab) saveOffset(panelTab, offset); }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={app.busy} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />}>
-    <View style={[styles.top, { borderBottomColor: colors.divider }]}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
-      <Text selectable style={[styles.note,{color:colors.textSecondary}]}>{proofReference(proof.proofId, txn.externalReference)}</Text>
-      <RemainingShipmentNotice value={proof} />
-      <View style={styles.headerMeta}>
-        <Text accessibilityLiveRegion="polite" style={[styles.note,{color:proof.status === "FINALIZED" ? colors.successText : colors.textSecondary}]}>{proof.status === "FINALIZED" ? "Finalized · evidence locked" : statusLabel}</Text>
-        <PressableScale accessibilityRole="button" accessibilityLabel="Order details" accessibilityState={{ expanded: detailsExpanded }} onPress={toggleDetails} style={styles.detailsToggle}>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Details</Text><Ionicons name={detailsExpanded ? "chevron-up" : "chevron-down"} size={15} color={colors.textSecondary} />
-        </PressableScale>
-      </View>
-    </View>
+    {!fixedHeader ? recordHeader : null}
         {detailsExpanded ? <View style={[styles.details, { borderBottomColor: colors.divider }]}>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>Order details</Text>
           <Text style={[styles.note, { color: colors.textSecondary }]}>{corrections.sourceLabel}</Text>
+          {ANDROID_TASK_FIRST_REBUILD ? <RemainingShipmentNotice value={proof} /> : null}
           <Text selectable style={[styles.text, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
           {txn.externalReference ? <Text selectable style={[styles.note, { color: colors.textSecondary }]}>Order {txn.externalReference}</Text> : null}
           {summaryLine ? <Text style={[styles.note, { color: colors.textSecondary }]}>{summaryLine}</Text> : null}
@@ -208,15 +224,16 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
             {bookmarkError ? <Text style={[styles.note, { color: colors.textSecondary }]}>Saved bookmarks could not be loaded. Pull down to refresh; the original recording remains available.</Text> : null}
           </> : null}
           <IdentifierDetails value={proof.identifiers} />
-          <ResearchPanel />
-          <View style={[styles.details,{borderBottomColor:colors.divider}]}>
+          {!ANDROID_TASK_FIRST_REBUILD ? <ResearchPanel /> : null}
+          {ANDROID_TASK_FIRST_REBUILD ? <Button label={participantsExpanded ? "Hide participants" : `Participants · ${proof.participants.length}`} variant="tertiary" onPress={() => setParticipantsExpanded(value => !value)} /> : null}
+          {!ANDROID_TASK_FIRST_REBUILD || participantsExpanded ? <View style={[styles.details,{borderBottomColor:colors.divider}]}>
             <Text style={[styles.heading,{color:colors.textPrimary}]}>Participants</Text>
             {proof.participants.map(person => <Text key={person.participantId} style={[styles.note,{color:colors.textSecondary}]}>{person.userId === app.session?.userId ? "You · " : ""}{person.role === "SELLER" ? "Seller" : person.role === "BUYER" ? "Buyer" : person.role} · Joined {formatDateTime(person.joinedAt)}</Text>)}
-          </View>
+          </View> : null}
         </> : null}
-        {panelTab === "Timeline" ? <ProofRecordTimeline entries={proof.chronology ?? []} auditEvents={proof.events} finalizedAt={proof.finalizedAt} filter={filter} onFilter={selectFilter} onSelect={entry => { app.setSelectedEvent(entry); app.go("event"); }} /> : null}
+        {panelTab === "Timeline" ? <ProofRecordTimeline proof={proof} userId={app.session?.userId} entries={proof.chronology ?? []} auditEvents={proof.events} finalizedAt={proof.finalizedAt} filter={filter} onFilter={selectFilter} onSelect={entry => { app.setSelectedEvent(entry); app.go("event"); }} /> : null}
         {panelTab === "Tracking" ? <>
-          <ProofTrackingPanel events={reports} carrier={shipping?.carrier} trackingNumber={shipping?.trackingNumber} selectedId={selectedShipmentId} onSelect={selectShipment} sync={proof.shipmentSync} registration={proof.captureShipping?.registration} refreshError={trackingError} />
+          <ProofTrackingPanel events={reports} carrier={shipping?.carrier} trackingNumber={shipping?.trackingNumber} trackingSource={proofTrackingSource(proof, shipping?.trackingNumber)} selectedId={selectedShipmentId} onSelect={selectShipment} sync={proof.shipmentSync} registration={proof.captureShipping?.registration} refreshError={trackingError} />
           <TrackingIntake compact/>
           {detailsExpanded && proof.captureShipping?.observations.length ? <Text style={[styles.note, { color: colors.textSecondary }]}>A shipping code was read during recording. Its observation time and source are retained with the Proof.</Text> : null}
           {proof.shipmentSync?.available ? <Button label="Update tracking" variant="secondary" loading={app.busy} onPress={refreshTracking} /> : null}

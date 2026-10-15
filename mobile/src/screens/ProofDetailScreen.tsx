@@ -46,6 +46,11 @@ import { ErrorBanner, OfflineBanner } from "../ui/EmptyState";
 import { InfoCard } from "../ui/ProofCard";
 import { ProofRecord } from "../ui/ProofRecord";
 import { ProofRecordSkeleton } from "../ui/Skeleton";
+import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
+import { proofDetailModel } from '../experience/proof-detail-model';
+import { workspaceRecordings } from '../copy/workspace-summary';
+import { ResearchPanel } from '../research/ResearchPanel';
+import { researchEnabled } from '../research/isolation';
 
 
 export function ProofDetailScreen() {
@@ -54,6 +59,7 @@ export function ProofDetailScreen() {
   const { colors } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [workflowDetailsOpen, setWorkflowDetailsOpen] = useState(false);
+  const [evidenceTechnicalOpen, setEvidenceTechnicalOpen] = useState(false);
   const proof = app.proof;
   const txn = app.transactionDetail ?? proof?.transaction;
   if (!proof || !txn || !app.session) {
@@ -66,10 +72,17 @@ export function ProofDetailScreen() {
   }
 
   const grading = isGradingWorkflow(proof.workflowType);
+  const taskFirst = ANDROID_TASK_FIRST_REBUILD && !grading;
+  const detail = taskFirst ? proofDetailModel({
+    proof, userId: app.session.userId, apiBaseUrl: app.apiBaseUrl,
+    captures: workspaceRecordings(app.savedRecordings, app.localCapture), photoDrafts: app.photoDrafts,
+    progress: app.uploadProgressByProof, captureStatus: app.captureStatus,
+    online: !app.offline, reconciled: !app.offline,
+  }) : null;
   const committed = (proof.evidence ?? []).filter((item) => item.validationStatus === "COMMITTED");
   const pending = (proof.evidence ?? []).filter((item) => item.validationStatus === "PENDING");
   const captureBelongs = app.session.captureProofId === proof.proofId;
-  const presentation = presentationForProof(proof, app.role, localProofWork(captureBelongs ? app.localCapture : null, app.captureStatus, app.uploadPercent));
+  const presentation = detail?.presentation ?? presentationForProof(proof, app.role, localProofWork(captureBelongs ? app.localCapture : null, app.captureStatus, app.uploadPercent));
   const localAction = deriveNextAction({
     role: app.role,
     proofStatus: proof.status,
@@ -120,6 +133,20 @@ export function ProofDetailScreen() {
     .join(" • ");
 
   function handlePrimary() {
+    if (taskFirst) {
+      const action = detail?.action;
+      if (!action) return;
+      if (action.kind === 'reconcile') { void app.run(async () => { await app.refreshProof(proof!.proofId); }); return; }
+      if (action.kind === 'review_upload') { app.go('activity', { activityFilter: 'attention', activitySessionId: action.sessionId }); return; }
+      if (action.kind === 'review_evidence') {
+        const capture = detail?.captures.find(row => row.captureProofId === proof!.proofId && (row.captureSessionId || row.uri) === action.sessionId);
+        if (capture) void app.resumeSavedCapture(capture);
+        else app.setError('This saved recording changed. Refresh the Proof to check its next step.');
+        return;
+      }
+      void app.openProofAction(proof!.proofId);
+      return;
+    }
     if (!grading && presentation.nextAction.type === "WORKFLOW_ACTION") { app.openReceipt(proof!.proofId); return; }
     if (grading && serverAction) {
       if (serverAction.type === "FINALIZE") {
@@ -264,14 +291,18 @@ export function ProofDetailScreen() {
         }
       />
 
-      {proof.status === "FINALIZED" ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId}/> : null}
+      {!ANDROID_TASK_FIRST_REBUILD && proof.status === "FINALIZED" ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId}/> : null}
       {otherPhotoDrafts.map(draft => <SavedPhotoDraft key={draft.id} draft={draft} />)}
       <ProofRecord
         key={proof.proofId}
         statusLabel={statusLabel}
         summaryLine={summaryLine}
         actionInContent={usesImageCapture}
-        action={showActionCard || (!grading && isCompletedAction(localAction) && (app.role === "SELLER" || app.role === "BUYER")) || (app.localCapture && app.session.captureProofId && !captureBelongs) ? <>
+        action={taskFirst ? (detail?.action ? <View style={styles.action}>
+          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your next step</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{detail.action.reason}</Text>
+          <Button label={detail.action.buttonLabel} onPress={handlePrimary} loading={app.busy} disabled={app.offline && detail.action.kind === 'reconcile'} />
+        </View> : null) : showActionCard || (!grading && isCompletedAction(localAction) && (app.role === "SELLER" || app.role === "BUYER")) || (app.localCapture && app.session.captureProofId && !captureBelongs) ? <>
 {showActionCard && (actionTitle || actionHint) ? (
         <View style={styles.action}>
           {!usesImageCapture ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{actionHint || actionTitle}</Text> : null}
@@ -295,6 +326,7 @@ export function ProofDetailScreen() {
       />
 
       <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
+        {ANDROID_TASK_FIRST_REBUILD && proof.status === 'FINALIZED' ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId} /> : null}
         <ProofNotificationMute key={proof.proofId}/>
         {menuOpen && app.role === "SELLER" && proof.status === "READY_FOR_EVIDENCE" && proof.workflowType === "COMMERCE_SALE" && proof.participationPolicy === "COUNTERPARTY_OPTIONAL" && !captureBelongs ? <SelectedOrderHandoff key={proof.proofId} proofId={proof.proofId} transactionId={proof.transaction.transactionId} onManageDevices={() => { setMenuOpen(false); app.go("account", { accountSection: "channels" }); }} /> : null}
         <MoreAction label="Evidence details" variant="secondary" onPress={() => { setMenuOpen(false); app.go("signature"); }} />
@@ -348,6 +380,10 @@ export function ProofDetailScreen() {
           />
         ) : null}
         {grading || Boolean(proof.assets?.length || proof.observations?.length || proof.continuityObservations?.length) ? <MoreAction label="Items and custody details" variant="secondary" onPress={() => { setMenuOpen(false); setWorkflowDetailsOpen(true); }} /> : null}
+        {ANDROID_TASK_FIRST_REBUILD && researchEnabled() ? <>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>Advanced</Text>
+          <MoreAction label="Evidence technical details" onPress={() => { setMenuOpen(false); setEvidenceTechnicalOpen(true); }} />
+        </> : null}
         <MoreAction
           label="Technical details"
           variant="tertiary"
@@ -357,6 +393,11 @@ export function ProofDetailScreen() {
           }}
         />
       </BottomSheet>
+
+      {ANDROID_TASK_FIRST_REBUILD ? <BottomSheet visible={evidenceTechnicalOpen} title="Evidence technical details" onClose={() => setEvidenceTechnicalOpen(false)}>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>Optional capture receipts describe file and session binding. Your original recording remains the evidence.</Text>
+        {evidenceTechnicalOpen ? <ResearchPanel /> : null}
+      </BottomSheet> : null}
 
       <BottomSheet visible={workflowDetailsOpen} title="Items and custody details" onClose={() => setWorkflowDetailsOpen(false)}>
         <View style={styles.workflowDetails}>
