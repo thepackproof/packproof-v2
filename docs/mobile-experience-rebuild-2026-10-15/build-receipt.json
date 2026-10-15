@@ -1,0 +1,38 @@
+{
+  "schema": "packproof.local-review-build.v1",
+  "createdAt": "2026-10-15T10:47:27.711Z",
+  "sourceSha": "fbc1821ce687f95052d1e11df46e3cb55bff4977",
+  "file": "packproof-1.0.1-66-fbc1821ce687-local-review-debug-signed.apk",
+  "sha256": "9b02b11a30e9bdea1ca3c5cebcebefb1556c29a151ddc50f3d34d4a6527a416b",
+  "bytes": 84401399,
+  "package": "com.packproof.mobile",
+  "versionName": "1.0.1",
+  "versionCode": 66,
+  "profile": "mobile-ux-review",
+  "variant": "release",
+  "signing": "generated local debug key; not Play release signing",
+  "signerSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+  "installationScope": "Clean spare Android device or emulator only. Does not upgrade a differently signed Play install. Do not uninstall the existing app or clear its media.",
+  "distribution": "Local artifact only; no installation, upload, store submission or release performed.",
+  "buildInputs": {
+    "androidTaskFirst": true,
+    "dotenvLoaded": false,
+    "nativeProjectRegenerated": true
+  },
+  "runtime": {
+    "node": "v22.14.0",
+    "java": "openjdk version \"17.0.20.1\" 2026-08-18",
+    "androidBuildTools": "36.0.0",
+    "abis": [
+      "arm64-v8a",
+      "x86_64"
+    ]
+  },
+  "deviceVerification": "NOT RUN",
+  "sourceShaInBundle": true,
+  "sourceShaInConfig": true,
+  "internalReviewMarker": true,
+  "credentialsPackaged": false,
+  "bundleBytes": 2799384,
+  "pageSize16kbPassed": true
+}

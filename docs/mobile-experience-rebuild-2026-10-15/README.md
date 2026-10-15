@@ -1,8 +1,8 @@
-# PackProof mobile experience rebuild — G0/G1 review
+# PackProof mobile experience rebuild — review packet
 
-**Status: design review, awaiting explicit G1 founder approval. No production UI implementation or release.**
+**Current status: G1 approved; Android code slices are in draft PRs and the internal APK is built. Native acceptance and G4 release authorization remain open.**
 
-This packet executes the pre-implementation portion of the 15 October 2026 master plan. The controlling document requires a clickable design and explicit written `G1 approved` before production screens are changed. This is a separate design fixture, not a new evidence pipeline, Android build, or claim that the complete development plan is finished.
+Start with [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md), [INTERNAL_BUILD.md](INTERNAL_BUILD.md) and the current [NATIVE_ACCEPTANCE_MATRIX.md](NATIVE_ACCEPTANCE_MATRIX.md). The founder's “Excellent, proceed” approved the frozen G1 revision and authorized implementation. The prototype and earlier G0/G1 documents below remain historical design evidence; they are not native acceptance results or a claim that the full plan is complete.
 
 ## Review order
 
@@ -10,7 +10,7 @@ This packet executes the pre-implementation portion of the 15 October 2026 maste
 2. Run the manual first-Proof journey: create, identify item, continuous recording simulation, review, explicit declaration/signing simulation, upload, received, server-finalized.
 3. Run saved-original recovery: an interrupted upload retains its local original; retry/reconcile the existing Proof without re-recording. Compare a truly interrupted recording with an intact recording whose upload was interrupted.
 4. Review all destinations, then repeat in dark theme and large type. The design controls are outside the simulated phone.
-5. Record `G1 approved` for this exact revision, or list changes. G1 approval authorizes the next implementation slices; G4 public release remains separate.
+5. G1 approval is recorded in `IMPLEMENTATION_STATUS.md`. G4 public release remains separate and requires the exact native build and acceptance evidence.
 
 ## Evidence and scope
 
@@ -44,13 +44,13 @@ The source baseline is verified. Its equivalence to the installed Android binary
 | Gate | Current result | Missing evidence |
 | --- | --- | --- |
 | G0 | Source audit and automated baseline complete; device baseline incomplete | Installed build identity and anonymized matching S01–S09 reproduction/real task recordings. |
-| G1 | Reviewable design candidate | Founder review of two complete journeys, annotated state coverage and deviations, and explicit written approval. Review prototype verification for remaining scope and renderer/device limitations; this candidate is not a gate-completion certificate. |
-| G2 | Not started | Approved production slices, internal APK, full parity and integrity regression. |
-| G3 | Not started | Physical Android matrix, TalkBack, two-device recovery and five unassisted users. |
+| G1 | Approved for the frozen revision | See the approval record and unchanged prototype hash in `IMPLEMENTATION_STATUS.md`. |
+| G2 | Code slices and automated checks ready for review; not signed off | See exact artifact evidence in `VERIFICATION_REPORT.md`; native journey and production-equivalent optional receipt parity remain open. |
+| G3 | NOT RUN | Physical Android matrix, TalkBack, native screenshot comparison, two-device recovery and five unassisted users. |
 | G4 | Not authorized | Exact-build founder approval, rollout/rollback rehearsal and release dossier. |
 
-No native build, store submission, backend modification, billing change, iOS adaptation, desktop migration or public PackProof website change is part of this commit.
+No store submission, backend modification, billing change, iOS adaptation, desktop migration or public PackProof website deployment is part of this rebuild.
 
-## Next authorized work after G1
+## Remaining acceptance work
 
-Implement shared mobile composition and route/title adapters, then the manual Proof slice, saved-original recovery, order/scan, evidence/history/shipment, and account/integrations. Retain existing domain and capture services. Each slice needs targeted tests and native evidence before the next release gate. No fixed schedule is claimed before device findings are resolved.
+Execute the current native matrix on physical Android, collect the five complete journey videos, establish and approve the native screenshot baseline, complete accessibility and unassisted usability, and rehearse compatible UI-only rollback. Resolve defects and production-equivalent receipt parity before requesting G4 approval for an exact artifact. No fixed schedule or native result is inferred from compilation or model tests.

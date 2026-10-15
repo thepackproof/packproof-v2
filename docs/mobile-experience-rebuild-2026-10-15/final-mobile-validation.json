@@ -1,0 +1,183 @@
+{
+  "sourceShaAtStart": "fbc1821ce687f95052d1e11df46e3cb55bff4977",
+  "dirtyAtStart": false,
+  "node": "v22.14.0",
+  "results": [
+    {
+      "suite": "typecheck",
+      "exitCode": 0,
+      "durationSeconds": 7.13,
+      "log": "typecheck.log",
+      "tests": 0,
+      "pass": 0,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:build-security",
+      "exitCode": 0,
+      "durationSeconds": 1.43,
+      "log": "test-build-security.log",
+      "tests": 58,
+      "pass": 58,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:ios",
+      "exitCode": 0,
+      "durationSeconds": 1.34,
+      "log": "test-ios.log",
+      "tests": 99,
+      "pass": 98,
+      "fail": 0,
+      "skipped": 1,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:proof-record",
+      "exitCode": 0,
+      "durationSeconds": 0.38,
+      "log": "test-proof-record.log",
+      "tests": 25,
+      "pass": 25,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:study-timing",
+      "exitCode": 0,
+      "durationSeconds": 0.67,
+      "log": "test-study-timing.log",
+      "tests": 28,
+      "pass": 28,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:intake",
+      "exitCode": 0,
+      "durationSeconds": 0.35,
+      "log": "test-intake.log",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:redesign",
+      "exitCode": 0,
+      "durationSeconds": 0.34,
+      "log": "test-redesign.log",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:recovery",
+      "exitCode": 0,
+      "durationSeconds": 1.0,
+      "log": "test-recovery.log",
+      "tests": 29,
+      "pass": 29,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:ux-recovery",
+      "exitCode": 0,
+      "durationSeconds": 0.51,
+      "log": "test-ux-recovery.log",
+      "tests": 50,
+      "pass": 50,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:first-proof",
+      "exitCode": 0,
+      "durationSeconds": 0.42,
+      "log": "test-first-proof.log",
+      "tests": 29,
+      "pass": 29,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:identifiers",
+      "exitCode": 0,
+      "durationSeconds": 0.34,
+      "log": "test-identifiers.log",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:api",
+      "exitCode": 0,
+      "durationSeconds": 4.38,
+      "log": "test-api.log",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:android-task-first",
+      "exitCode": 0,
+      "durationSeconds": 1.21,
+      "log": "test-android-task-first.log",
+      "tests": 110,
+      "pass": 110,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "test:local-review-build",
+      "exitCode": 0,
+      "durationSeconds": 0.33,
+      "log": "test-local-review-build.log",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    {
+      "suite": "navigation-share-cache",
+      "exitCode": 0,
+      "durationSeconds": 0.27,
+      "log": "navigation-share-cache.log",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    }
+  ],
+  "allPassed": true,
+  "sourceShaAtEnd": "fbc1821ce687f95052d1e11df46e3cb55bff4977",
+  "dirtyAtEnd": false,
+  "sameCleanSource": true,
+  "scope": "Local CI-equivalent mobile model/contract/source tests; not native device acceptance. Counts include tests repeated across suites.",
+  "totals": {
+    "tests": 493,
+    "pass": 492,
+    "fail": 0,
+    "skipped": 1
+  }
+}

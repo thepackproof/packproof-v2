@@ -6,11 +6,15 @@ G1 implementation was authorized by the founder's **“Excellent, proceed”** r
 
 The existing `mobile-ux-review` profile now requests version **1.0.1 (66)**, explicitly enables the approved Android composition, and requests internal distribution and APK output. It retains package `com.packproof.mobile`, HTTPS/Cognito authentication, account-bound local evidence protection and its existing remote signing configuration. The production profile remains versionCode 65. No production identity, signing credential or backend trust policy changed.
 
-The local build procedure uses the Expo-generated **debug key with the release build variant**. The JavaScript bundle is embedded, so a completed artifact does not need a Metro server. It is intended for a **clean spare Android device or emulator**. It cannot upgrade a Play installation signed with a different certificate. Do not uninstall an existing PackProof app, clear its storage or delete pending evidence to make room for this build. This procedure never installs the APK or changes an existing app.
+The local build procedure uses the Expo-generated **debug key with the release build variant**. The JavaScript bundle is embedded, so a completed artifact does not need a Metro server. It is intended for a **clean spare ARM64 Android device or x86_64 emulator**. It cannot upgrade a Play installation signed with a different certificate. Do not uninstall an existing PackProof app, clear its storage or delete pending evidence to make room for this build. This procedure never installs the APK or changes an existing app.
+
+Only ARM64 and x86_64 are review targets. The resulting APK also contains incomplete 32-bit dependency libraries: `armeabi-v7a` and `x86` omit the required `libexpo-modules-core.so`. Those remnants do not establish 32-bit support; do not call this a universal APK or install it on a 32-bit device. See the per-ABI inventory in the verification report.
 
 There is no pre-existing ordinary side-by-side review package in this source. The research and camera-spike packages have different feature and policy semantics; they are not substitutes for this build.
 
 The review profile retains its existing difference from production: the production-only capture-receipt flag is off. This limitation must be included in the G2 parity dossier. Neither a successful compile nor this profile demonstrates production capture-receipt runtime parity.
+
+A read-only protocol audit found no APK certificate allowlist in ordinary Proof confirmation: the server verifies the account/Proof/media-bound P-256 signature and explicitly treats the biometric/hardware claim as client-asserted, not independently verified. Certificate/Play checks belong to separately gated research platform assurance. Thus debug signing alone is not an identified ordinary-completion blocker in current source. Valid authentication, backend policy, strong biometrics and actual device completion remain required and unverified; this is not a claim about deployed backend configuration or release-signing trust.
 
 ## Reproduction
 

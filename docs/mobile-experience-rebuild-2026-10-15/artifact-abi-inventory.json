@@ -1,0 +1,78 @@
+{
+  "sourceSha": "fbc1821ce687f95052d1e11df46e3cb55bff4977",
+  "artifactSha256": "9b02b11a30e9bdea1ca3c5cebcebefb1556c29a151ddc50f3d34d4a6527a416b",
+  "reviewTargets": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "deviceVerification": "NOT RUN",
+  "limitations": "armeabi-v7a and x86 contain incomplete dependency libraries and must not be used. This is not a universal APK.",
+  "libraries": {
+    "arm64-v8a": [
+      "libbarhopper_v3.so",
+      "libc++_shared.so",
+      "libexpo-modules-core.so",
+      "libfbjni.so",
+      "libgifimage.so",
+      "libhermes.so",
+      "libhermestooling.so",
+      "libimage_processing_util_jni.so",
+      "libimagepipeline.so",
+      "libjsi.so",
+      "libnative-filters.so",
+      "libnative-imagetranscoder.so",
+      "libreactnative.so",
+      "libstatic-webp.so",
+      "libsurface_util_jni.so"
+    ],
+    "armeabi-v7a": [
+      "libbarhopper_v3.so",
+      "libc++_shared.so",
+      "libfbjni.so",
+      "libgifimage.so",
+      "libhermes.so",
+      "libhermestooling.so",
+      "libimage_processing_util_jni.so",
+      "libimagepipeline.so",
+      "libjsi.so",
+      "libnative-filters.so",
+      "libnative-imagetranscoder.so",
+      "libreactnative.so",
+      "libstatic-webp.so",
+      "libsurface_util_jni.so"
+    ],
+    "x86": [
+      "libbarhopper_v3.so",
+      "libc++_shared.so",
+      "libfbjni.so",
+      "libgifimage.so",
+      "libhermes.so",
+      "libhermestooling.so",
+      "libimage_processing_util_jni.so",
+      "libimagepipeline.so",
+      "libjsi.so",
+      "libnative-filters.so",
+      "libnative-imagetranscoder.so",
+      "libreactnative.so",
+      "libstatic-webp.so",
+      "libsurface_util_jni.so"
+    ],
+    "x86_64": [
+      "libbarhopper_v3.so",
+      "libc++_shared.so",
+      "libexpo-modules-core.so",
+      "libfbjni.so",
+      "libgifimage.so",
+      "libhermes.so",
+      "libhermestooling.so",
+      "libimage_processing_util_jni.so",
+      "libimagepipeline.so",
+      "libjsi.so",
+      "libnative-filters.so",
+      "libnative-imagetranscoder.so",
+      "libreactnative.so",
+      "libstatic-webp.so",
+      "libsurface_util_jni.so"
+    ]
+  }
+}
