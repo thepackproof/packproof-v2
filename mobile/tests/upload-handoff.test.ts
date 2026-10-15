@@ -125,7 +125,10 @@ test('malformed S3 hyphen runs complete within a bounded worker deadline', () =>
   const loaderUrl=new URL('../../backend/node_modules/tsx/dist/loader.mjs',import.meta.url).href;
   const result=spawnSync(process.execPath,['--import',loaderUrl,'--input-type=module','-e',`
     import assert from 'node:assert/strict';
-    import {useDirectUpload} from ${JSON.stringify(moduleUrl)};
+    import {createRequire} from 'node:module';
+    import {fileURLToPath} from 'node:url';
+    // The existing tsx require hook preserves this real TS module on Node 22 and 24.
+    const {useDirectUpload}=createRequire(import.meta.url)(fileURLToPath(${JSON.stringify(moduleUrl)}));
     const target={method:'PUT',headers:{}};
     for (const host of ['s3-'+ '-'.repeat(100000)+'.amazonaws.com.attacker.test', 's3-'+ '-'.repeat(100000)+'x!.amazonaws.com'])
       assert.equal(useDirectUpload({...target,url:'https://'+host+'/original'},'https://api.example.test'),false);
