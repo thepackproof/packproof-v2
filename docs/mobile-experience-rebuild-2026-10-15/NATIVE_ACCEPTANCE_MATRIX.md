@@ -6,12 +6,14 @@ Prepared 2026-10-15 against the approved G1 design and the attached master imple
 
 Complete a separate run record for each artifact and device combination. Never copy results from one source SHA, policy configuration or signed artifact onto another.
 
+Emulator runs are supplemental. The controlling plan requires physical Android acceptance; emulator screenshots or model tests cannot mark the physical-device rows PASS.
+
 | Field | Value to record |
 | --- | --- |
 | Run ID / operator / UTC date | NOT RUN / unassigned / — |
-| Source commit / clean tree | Pending final artifact freeze |
-| Artifact filename / SHA-256 | Pending artifact receipt |
-| App version / Android versionCode | Planned review versionCode 66; verify installed value |
+| Source commit / clean tree | fbc1821ce687f95052d1e11df46e3cb55bff4977; clean before/after build |
+| Artifact filename / SHA-256 | See `build-receipt.json` and `VERIFICATION_REPORT.md`; installed run NOT RUN |
+| App version / Android versionCode | APK verified 1.0.1 (66); installed value NOT RUN |
 | Signing scope / package ID | Local review: generated debug signing, `com.packproof.mobile`; verify receipt |
 | Backend environment / policy configuration | Record non-secret environment label and required policy flags; no credentials |
 | Device model / Android API / physical or emulator | NOT RUN |
@@ -20,7 +22,7 @@ Complete a separate run record for each artifact and device combination. Never c
 | Evidence | Redacted video, screenshots, approved diagnostic output, observed server outcome |
 | Overall result / defects | NOT RUN; no acceptance claimed |
 
-The local review artifact is for a **clean spare device or emulator**. Its debug signing cannot replace a Play-installed app with a different signing key. Do not uninstall a production app or clear its storage to make room for this test: it may contain irreplaceable local recordings. The review profile disables optional research receipt functionality while the production profile enables it. A production-equivalent, authorized internal artifact and receipt-enabled run are required before G4; a receipt-disabled review alone cannot establish parity.
+The local review artifact is for a **clean spare ARM64 device or x86_64 emulator**. Its debug signing cannot replace a Play-installed app with a different signing key. Do not uninstall a production app or clear its storage to make room for this test: it may contain irreplaceable local recordings. The review profile disables optional research receipt functionality while the production profile enables it. A production-equivalent, authorized internal artifact and receipt-enabled run are required before G4; a receipt-disabled review alone cannot establish parity.
 
 ## Fixture preparation and evidence rules
 
@@ -72,7 +74,19 @@ Every row below starts **NOT RUN**. To mark PASS, append a result record contain
 
 ## Required recording and screenshot evidence
 
-Record complete, uncut task videos for (1) first manual Proof, (2) existing Proof resume, (3) order/scan Packing Station and (4) offline plus force-stop recovery. Associate the start/end app identity and server outcome with each run. Produce before/after screenshots matching S01–S09 on actual native builds, including both themes and the specified large-type/width cases. Existing G1 HTML/static atlases are design evidence only.
+Record five distinct, complete and uncut physical-device videos: V01 first manual Proof; V02 existing Proof resume; V03 order/scan Packing Station; V04 offline plus force-stop recovery; V05 invited buyer/counterparty-stage lifecycle. V05 uses A11/B10 with A02 as seller setup, follows the authorized participant through the applicable required stage and server outcome, and preserves the finalized root. The plan's packet lists four recordings while its final checklist calls for five; the fifth existing journey is the conservative evidence interpretation, not a new product flow or double-counted seller recording. All five remain NOT RUN.
+
+Associate start/end app identity and the observed server outcome with each run. Produce before/after screenshots matching S01–S09 on actual native builds, including both themes and the specified large-type/width cases. Existing G1 HTML/static atlases are design evidence only.
+
+Supplement the A/B records with the following plan-specific evidence:
+
+- At 360 dp and 1.0 font scale, show the primary resumable action and distinct manual Create Proof route in the first viewport; count at most three deliberate in-app decisions to manual recording, excluding required device permission/consent.
+- Attach native component/screen fixtures in both themes, at 200% text, and relevant error/offline/empty states. Record 4.5:1 body and 3:1 large-text/meaningful-control contrast, 48 dp targets, and reduced-motion behavior without lost focus or capture interruption.
+- Extend TalkBack and keyboard/switch checks to resume, order/scan, participant stage, evidence/history/shipment and account/integrations, using their existing run IDs.
+- Change permitted material metadata during review and verify old confirmation is not reused. Switch evidence tabs and verify selected original, playback/scroll context and required steps remain correct.
+- Extend the G0 capability ledger with current authorized routes, existing owners, run evidence and restrictions for receiving/return/witness/grading/photos/batch/orders/integrations/export/claims/API/account-billing/privacy/deletion. Do not test destructive actions on real accounts. Unavailable integrations must leave manual creation reachable.
+
+**Native screenshot-diff CI is NOT IMPLEMENTED.** No approved native baseline or native screenshot comparison job exists yet. Capture and approve actual native fixtures, then add the explicit CI comparison gate required by the plan. Passing current source/model CI does not satisfy that requirement. All supplementary native evidence above is NOT RUN.
 
 ## G3 — unassisted usability
 
@@ -108,6 +122,7 @@ Any evidence loss, false finalization, hidden required declaration, unauthorized
 | B01–B15 signed native results | NOT RUN |
 | Production-equivalent optional receipt parity | NOT RUN |
 | Native accessibility and responsive atlas | NOT RUN |
+| Approved native screenshot baseline and CI difference gate | NOT IMPLEMENTED / baseline NOT RUN |
 | Two-device concurrency and rollback rehearsal | NOT RUN |
 | Five-user unassisted usability | NOT RUN |
 | Measured G0/after performance comparison | NOT RUN |

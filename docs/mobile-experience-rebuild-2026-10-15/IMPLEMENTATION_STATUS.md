@@ -35,6 +35,6 @@ All surfaces retain their existing authorization, evidence, upload, preservation
 
 ## Verification and release status
 
-At the end of the UI slices, mobile TypeScript and 110 targeted task-first tests pass. The local native attestation, order-share and unified-camera Kotlin modules compile. These results do not establish native layout, camera operation, biometric signing, lifecycle recovery or release readiness.
+The final clean-source run at `fbc1821ce687f95052d1e11df46e3cb55bff4977` passed mobile TypeScript and all 15 validation groups: 492 passing test executions, no failures and one expected generated-iOS-project skip. Counts include tests repeated across suites. The 110 targeted task-first tests and eight local review build guards are included in that total. These results do not establish native layout, camera operation, biometric signing, lifecycle recovery or release readiness.
 
-The build procedure and artifact restrictions are in [INTERNAL_BUILD.md](INTERNAL_BUILD.md). [NATIVE_ACCEPTANCE_MATRIX.md](NATIVE_ACCEPTANCE_MATRIX.md) records the remaining device, accessibility, recovery, five-user and G4 gates without fabricated results. Exact final source/test/build evidence is recorded separately after the clean-source run.
+The build procedure and artifact restrictions are in [INTERNAL_BUILD.md](INTERNAL_BUILD.md). [NATIVE_ACCEPTANCE_MATRIX.md](NATIVE_ACCEPTANCE_MATRIX.md) records the remaining device, accessibility, recovery, five-user and G4 gates without fabricated results. [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) records exact source/test/build evidence and [PR #95](https://github.com/thepackproof/packproof-v2/pull/95) contains the build procedure and final dossier.

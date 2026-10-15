@@ -1,0 +1,62 @@
+{
+  "sourceSha": "fbc1821ce687f95052d1e11df46e3cb55bff4977",
+  "workflowUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/38721481182",
+  "checkedAt": "2026-10-15T10:53:39.391Z",
+  "jobs": [
+    {
+      "name": "PostgreSQL release invariants",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Backend",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "name": "Dependency audit (backend)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Source secrets and release tooling",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Dependency audit (web)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Deployment scripts",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Mobile",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Dependency audit (mobile)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "rnd-release-policy / policy",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Web",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Android attestation Kotlin",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ]
+}
