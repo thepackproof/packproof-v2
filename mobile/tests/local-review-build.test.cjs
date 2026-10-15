@@ -17,7 +17,7 @@ test('local review loads inherited HTTPS authentication without changing product
   assert.equal(profile.env.EXPO_PUBLIC_PACKPROOF_AUTH_MODE, 'cognito');
   assert.equal(profile.env.PACKPROOF_ANDROID_VERSION_CODE, '66');
   assert.equal(profile.env.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST, 'true');
-  assert.equal(config.build.production.env.PACKPROOF_ANDROID_VERSION_CODE, '65');
+  assert.equal(config.build.production.env.PACKPROOF_ANDROID_VERSION_CODE, '67');
 });
 
 test('local review rejects store output, stale versions and inherited profile loops', () => {

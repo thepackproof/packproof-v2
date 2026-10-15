@@ -18,7 +18,7 @@ test('internal review inherits authenticated shipping runtime and signing while 
   assert.equal(review.android.keystoreName,profiles.build['internal-staging'].android.keystoreName);
   assert.equal(review.android.credentialsSource,'remote');
   assert.equal(review.env.PACKPROOF_ANDROID_VERSION_CODE,'66');
-  assert.ok(Number(review.env.PACKPROOF_ANDROID_VERSION_CODE)>Number(profiles.build.production.env.PACKPROOF_ANDROID_VERSION_CODE));
+  assert.ok(Number(profiles.build.production.env.PACKPROOF_ANDROID_VERSION_CODE)>Number(review.env.PACKPROOF_ANDROID_VERSION_CODE), 'Production release advances the frozen review build');
   assert.equal(review.env.EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING,'true');
   assert.equal(review.env.EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX,'true');
   assert.equal(review.env.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST,'true');
