@@ -7,6 +7,10 @@ import { Button } from "./Button";
 import { ProgressState } from "./EvidenceCard";
 import { StatusBadge, statusTone } from "./StatusBadge";
 import { radii, spacing, typography } from "../theme/tokens";
+import { useState } from "react";
+import type { LocalCapture } from "../capture";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
+import { recoveryPresentation } from "../experience/recovery-presentation";
 
 /** Recovery stays on the recording card; the provider owns the durable work. */
 export function UploadRecoveryCards() {
@@ -23,6 +27,7 @@ export function UploadRecoveryCards() {
     ...orphaned.map(item => ({ key: item.evidenceId, capture: undefined, evidenceId: item.evidenceId })),
   ];
   rows.sort((left, right) => left.key.localeCompare(right.key));
+  if (ANDROID_TASK_FIRST_REBUILD) return <>{rows.map(row => <AndroidUploadRecoveryRow key={row.key} capture={row.capture} evidenceId={row.evidenceId} />)}</>;
   return <>{rows.map(({key, capture, evidenceId}) => {
     const committed = proof.evidence.some(item => item.evidenceId === evidenceId && item.validationStatus === "COMMITTED") || !!proof.commerceStages?.some(stage => stage.evidence.some(item => item.evidenceId === evidenceId && item.committedAt));
     const state = capture?.recovery;
@@ -49,7 +54,40 @@ export function UploadRecoveryCards() {
     </View>;
   })}</>;
 }
+
+/** The Proof already owns its next-step action. This quiet summary opens the
+ * exact recording in Updates without adding a competing resume/discard pair. */
+function AndroidUploadRecoveryRow({ capture, evidenceId }: { capture?: LocalCapture; evidenceId?: string }) {
+  const app = usePackProof(), { colors } = useTheme();
+  const [details, setDetails] = useState(false);
+  const proof = app.proof!, state = capture?.recovery;
+  const live = Boolean(state && captureCompletionActive(state.operationId) && state.phase === "UPLOADING");
+  const progress = app.uploadProgressByProof[proof.proofId];
+  const view = capture ? recoveryPresentation(capture, { offline: app.offline, active: live, proofFinalized: proof.status === "FINALIZED" }) : null;
+  const committed = proof.evidence.some(item => item.evidenceId === evidenceId && item.validationStatus === "COMMITTED")
+    || !!proof.commerceStages?.some(stage => stage.evidence.some(item => item.evidenceId === evidenceId && item.committedAt));
+  function discard() {
+    Alert.alert("Discard incomplete upload?", "Close this incomplete upload before removing its local recording? Committed evidence is protected.", [
+      { text: "Keep recording", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: () => { if (capture) void app.discardSavedCapture(capture); else if (evidenceId) void app.discardIncompleteEvidence(evidenceId); } },
+    ]);
+  }
+  return <View style={[styles.taskSummary, { borderColor: colors.border }]} accessibilityLabel="Recording upload status">
+    <Text accessibilityLiveRegion="polite" style={[styles.title, { color: colors.textPrimary }]}>{view?.title ?? "Original unavailable here"}</Text>
+    <Text style={[styles.message, { color: colors.textSecondary }]}>{view?.message ?? "This upload needs the original recording on the device used to capture it."}</Text>
+    {live ? <ProgressState label="Recording upload" percent={typeof progress === "number" && Number.isFinite(progress) && progress < 100 ? progress : null} /> : null}
+    {state ? <Button label="View recording status" variant="tertiary" disabled={app.busy} onPress={() => app.go("activity", { activitySessionId: capture!.captureSessionId || state.operationId, activityFilter: "all" })} />
+      : <>
+        <Button label={details ? "Hide recovery options" : "Recovery options"} variant="tertiary" onPress={() => setDetails(!details)} />
+        {details ? <View style={{ gap: 8 }}>
+          {capture ? <Button label="Review saved recording" variant="secondary" disabled={app.busy} onPress={() => void app.resumeSavedCapture(capture)} /> : null}
+          {!committed ? <Button label="Discard incomplete upload" variant="tertiary" disabled={app.busy} onPress={discard} /> : null}
+        </View> : null}
+      </>}
+  </View>;
+}
 const styles = StyleSheet.create({
+  taskSummary: { borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 12, gap: 8 },
   card: {borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.md},
   title: {...typography.cardTitle}, message: {...typography.secondary}, detail: {...typography.finePrint},
 });
