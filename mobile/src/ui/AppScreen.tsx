@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { RestoringScrollView, type RestoringScrollViewHandle } from "./RestoringScrollView";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 
 export function AppScreen(props: {
   children: ReactNode;
@@ -41,7 +42,7 @@ export function AppScreen(props: {
     paddingLeft: insets.left,
     paddingRight: insets.right,
   };
-  const paddingBottom = spacing.lg + (props.extraBottom ?? 0);
+  const paddingBottom = (ANDROID_TASK_FIRST_REBUILD ? spacing.xxl : spacing.lg) + (props.extraBottom ?? 0);
   const contentStyle = [
     styles.content,
     props.padded === false ? null : styles.padded,

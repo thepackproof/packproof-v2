@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { parseAppearancePreference, resolveColorScheme } from "./appearance";
 import { APPEARANCE_STORAGE_KEY } from "./appearance";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
+import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 import {
   colorsForScheme,
   shadowsFor,
@@ -89,7 +90,7 @@ export function ThemeProvider(props: { children: ReactNode }) {
       hydrated: hydrated && (fontsLoaded || Boolean(fontError)),
       preference,
       scheme,
-      colors: colorsForScheme(scheme),
+      colors: colorsForScheme(scheme, ANDROID_TASK_FIRST_REBUILD),
       shadows: shadowsFor(scheme),
       reducedMotion,
       setPreference,
