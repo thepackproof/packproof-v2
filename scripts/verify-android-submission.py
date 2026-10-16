@@ -51,7 +51,10 @@ def verify_build(value, selection):
     }.items():
         require(build.get(key) == expected, f"Unexpected EAS {key}")
     require(str(build.get("appBuildVersion")) == str(selection["versionCode"]), "Wrong EAS version code")
-    require(build.get("project", {}).get("id") == PROJECT_ID, "Wrong EAS project")
+    # EAS CLI 24.4.2 omits project from its build JSON. The signed bundle's
+    # embedded project ID is mandatory below; reject contradictory metadata.
+    if build.get("project") is not None:
+        require(build["project"].get("id") == PROJECT_ID, "Wrong EAS project")
 
 
 def verify_config(config, selection):
