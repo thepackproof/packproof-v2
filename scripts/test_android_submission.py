@@ -30,10 +30,20 @@ CONFIG = {"version": "1.0.1", "android": {"package": release.APP_ID, "versionCod
 class AndroidSubmission(unittest.TestCase):
     def test_only_explicit_production_selection_is_accepted(self):
         release.verify_selection(SELECTION)
-        for bad in [{"sourceSha": "latest"}, {"aabSha256": ""}, {"versionCode": 67}, {"package": "other.app"},
+        release.verify_selection({**SELECTION, "versionCode": 69})
+        for bad in [{"sourceSha": "latest"}, {"aabSha256": ""}, {"versionCode": 67}, {"versionCode": 70}, {"versionCode": "69"}, {"package": "other.app"},
                     {"track": "internal"}, {"releaseStatus": "draft"}, {"changesNotSentForReview": True}, {"archiveRunId": "100"}]:
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 release.verify_selection({**SELECTION, **bad})
+
+    def test_authorized_69_requires_its_own_build_and_embedded_identity(self):
+        selection = {**SELECTION, "versionCode": 69}
+        release.verify_selection(selection)
+        release.verify_build({**BUILD, "appBuildVersion": "69"}, selection)
+        config = copy.deepcopy(CONFIG); config["android"]["versionCode"] = 69
+        release.verify_config(config, selection)
+        with self.assertRaises(ValueError): release.verify_build(BUILD, selection)
+        with self.assertRaises(ValueError): release.verify_config(CONFIG, selection)
 
     def test_requires_successful_exact_main_archive(self):
         release.verify_run(RUN, SELECTION)

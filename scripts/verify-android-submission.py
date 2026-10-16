@@ -25,7 +25,7 @@ def verify_selection(selection):
                          ("easBuildId", r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")]:
         require(bool(re.fullmatch(pattern, str(selection.get(key, "")))), f"Invalid {key}")
     require(type(selection.get("archiveRunId")) is int and selection["archiveRunId"] > 0, "Invalid archive run")
-    require(selection.get("version") == "1.0.1" and selection.get("versionCode") == 68, "Only the authorized Android 68 release is supported")
+    require(selection.get("version") == "1.0.1" and type(selection.get("versionCode")) is int and selection.get("versionCode") in (68, 69), "Only the authorized Android 68 and 69 releases are supported")
     require(selection.get("package") == APP_ID, "Wrong Android package")
     require(selection.get("track") == "production" and selection.get("releaseStatus") == "completed", "Wrong Play destination")
     require(selection.get("changesNotSentForReview") is False, "Release must be sent for Play review")
