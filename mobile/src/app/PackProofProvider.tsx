@@ -379,6 +379,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [batchPacking, setBatchPacking] = useState(false);
   const [receiptProofId, setReceiptProofId] = useState<string | null>(null);
   const [route, setRoute] = useState<AppRoute>({ name: "boot" });
+  const routeRef = useRef<AppRoute>(route); routeRef.current = route;
+  const accountReturn = useRef<AppRoute>({ name: "home" });
+  const captureReturn = useRef<{ route: AppRoute; proofId: string | null } | null>(null);
+  const captureNavigationLock = useRef(false);
   const workspaceOrigin = useRef<WorkspaceOrigin>("home");
   const activityFilterMemory=useRef<AppRoute["activityFilter"]>("all");
   const ordersViews = useRef<Record<"orders" | "station", OrdersViewState>>({
@@ -463,7 +467,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const recoveryTickRef = useRef<() => Promise<void>>(async () => {});
   const recoveryTickBusy = useRef(false);
   const [uploadProgressByProof, setUploadProgressByProof] = useState<Record<string, number | null>>({});
-  const [captureStatus, setCaptureStatus] = useState<LocalCaptureStatus>("idle");
+  const [captureStatus, updateCaptureStatus] = useState<LocalCaptureStatus>("idle");
+  const setCaptureStatus = useCallback((status: LocalCaptureStatus) => {
+    captureNavigationLock.current = status === "capturing";
+    updateCaptureStatus(status);
+  }, []);
   const [localCapture, setLocalCapture] = useState<LocalCapture | null>(null);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [scanResult, setScanResult] = useState<PackingStationResolveView | null>(null);
@@ -526,7 +534,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (hydrated) versionReporter.update(session, client);
   }, [client, hydrated, session, versionReporter]);
 
-  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId" | "creationMode">) => {
+  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId" | "creationMode" | "returnToCapture">) => {
+    if (captureNavigationLock.current) { setError("Finish or cancel this take in the camera before leaving. Your Proof stays selected."); return; }
     if (name === "create" || name === "manual") startMobileCaptureEntry();
     if (name === "scan" && !MOBILE_TASK_UX_ENABLED) name = "create";
     name = creationEntryRoute(name, ANDROID_TASK_FIRST_REBUILD, options?.creationMode);
@@ -559,13 +568,21 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if(intent)void AsyncStorage.setItem(taskIntentKey(current.apiBaseUrl,current.userId),JSON.stringify(intent)).catch(()=>undefined);
       else if(name==='home')void AsyncStorage.removeItem(taskIntentKey(current.apiBaseUrl,current.userId)).catch(()=>undefined);
     }
-    setRoute({ name,
+    if (name === "account" && routeRef.current.name !== "account") accountReturn.current = routeRef.current;
+    else if (name === "account" && options?.accountSection && !routeRef.current.accountSection) accountReturn.current = { name: "account" };
+    if (name === "capture" && routeRef.current.name !== "capture" && !routeRef.current.returnToCapture) {
+      captureReturn.current = { proofId: sessionRef.current?.proofId ?? null, route: routeRef.current.name === "manual"
+        ? { name: "editPurchase", returnToCapture: true } : routeRef.current };
+    }
+    const nextRoute: AppRoute = { name,
       ...(name === "activity" ? {activityFilter: options?.activityFilter,activitySessionId:options?.activitySessionId} : {}),
       ...(name === "account" ? { accountSection: options?.accountSection } : {}),
       ...(name === "supporting" ? { supportingSection: options?.supportingSection } : {}),
       ...(name === "signature" ? { historyShareId: options?.historyShareId } : {}),
       ...(name === "create" ? { creationMode: options?.creationMode } : {}),
-    });
+      ...(name === "editPurchase" ? { returnToCapture: options?.returnToCapture } : {}),
+    };
+    routeRef.current = nextRoute; setRoute(nextRoute);
   }, []);
 
   useEffect(() => {
@@ -592,8 +609,17 @@ export function PackProofProvider(props: { children: ReactNode }) {
   }, [proof]);
 
   const goBack = useCallback(() => {
-    go(resolveBackRoute(route.name, workspaceOrigin.current));
-  }, [go, route.name]);
+    const current = routeRef.current;
+    if (current.name === "account") {
+      const destination = current.accountSection ? accountReturn.current : { name: workspaceOrigin.current };
+      go(destination.name, destination); return;
+    }
+    if (current.name === "capture" && captureReturn.current && captureReturn.current.proofId === sessionRef.current?.proofId) {
+      const destination = captureReturn.current.route; go(destination.name, destination); return;
+    }
+    if (current.name === "editPurchase" && current.returnToCapture) { go("capture"); return; }
+    go(resolveBackRoute(current.name, workspaceOrigin.current));
+  }, [go]);
 
   useEffect(() => {
     if (route.name !== "invite" || !proof || proof.status === "FINALIZED") {
@@ -676,6 +702,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     await restoreProofsContext(stored);
     if (sessionRef.current?.userId !== stored.userId || sessionRef.current.apiBaseUrl !== stored.apiBaseUrl) {
       // A previous-account response may have finished while scoped restoration awaited storage.
+      accountReturn.current = { name: "home" }; captureReturn.current = null; workspaceOrigin.current = "home";
       setConnections([]); setConnectedAccounts([]); setConnectedProviders([]);
     }
     tokenRef.current = stored.token || null;
@@ -1031,6 +1058,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   }
 
   async function openProof(proofId: string): Promise<void> {
+    if (captureNavigationLock.current) throw new Error("Finish or cancel the current take before opening another Proof.");
     rememberTaskInteraction(proofId);
     const current = sessionRef.current;
     if (current) {
@@ -1409,6 +1437,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       });
     },
     openProofAction: async proofId => {
+      if (captureNavigationLock.current) { setError("Finish or cancel the current take before opening another Proof."); return false; }
       const invitation=pendingInvites.find(row=>row.proofId===proofId);
       if(invitation) {value.openInvitation(invitation);return true;}
       const row=proofCollection.find(row=>row.proofId===proofId);
@@ -2057,7 +2086,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setTransactionDetail(updated);
         setEditForm(formFromTransaction(updated));
         await refreshProof(proof.proofId);
-        go("proof");
+        go(routeRef.current.returnToCapture ? "capture" : "proof");
       }),
     saveShippingDetails: async () =>
       run(async () => {
@@ -2072,7 +2101,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         go("proof");
       }),
     startCaptureIntent: async token => {
-      if(intakeCaptureLock.current)return;
+      if(intakeCaptureLock.current || captureNavigationLock.current)return;
       const chosenAccount=sessionRef.current;
       if(chosenAccount)void beginNativeFirstProof(client,chosenAccount.userId,'deep_link');
       intakeCaptureLock.current=true;
@@ -2134,9 +2163,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
           go("capture");
           setProof(await client.getProof(accepted.proofId));
         });
-      } finally { intakeCaptureLock.current = false; }
+      } finally { intakeCaptureLock.current = false; if(captureNavigationLock.current)setCaptureStatus("retry"); }
     },
     startCapture: async () => {
+      if(captureNavigationLock.current)return;
       const chosenAccount=sessionRef.current;
       if(chosenAccount&&proof&&!isGradingWorkflow(proof.workflowType))void nativeStudyForNewCapture(client,chosenAccount.userId,proof.proofId);
       await run(async () => {
@@ -2150,16 +2180,19 @@ export function PackProofProvider(props: { children: ReactNode }) {
           );
         setCaptureStatus("capturing");
         const captureInput = { proofId: proof.proofId, userId: sessionRef.current!.userId, orderLabel: proof.transaction.itemTitle || "Packing this order" };
-        const captured = isGradingWorkflow(proof.workflowType)
-          ? await recordGradingPackingEvidence(captureInput)
-          : await recordPackingEvidence({ client, ...captureInput });
+        const captured = await (isGradingWorkflow(proof.workflowType)
+          ? recordGradingPackingEvidence(captureInput)
+          : recordPackingEvidence({ client, ...captureInput })).catch(error => {
+            setCaptureStatus(localCapture ? "captured" : "idle"); throw error;
+          });
         if (!captured) {
           setCaptureStatus(localCapture ? "captured" : "idle");
           return;
         }
         void haptic("medium");
         await queueRetiredUpload(proof.proofId);
-        await persistCapture(captured, newIdempotencyKey());
+        try { await persistCapture(captured, newIdempotencyKey()); }
+        catch (error) { setCaptureStatus("retry"); throw error; }
         if (localCapture && localCapture.uri !== captured.uri && !localCapture.uploadEvidenceId) {
           if(localCapture.studyTimingRef&&localCapture.studyTimingRef!==captured.studyTimingRef)(await nativeStudyForCapture(client,sessionRef.current!.userId,localCapture.studyTimingRef))?.end('cancelled','cancelled');
           await discardLocalCapture(localCapture.uri);
@@ -2167,7 +2200,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         setCaptureStatus("captured");
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);
-      });},
+      }).finally(() => { if(captureNavigationLock.current)setCaptureStatus("retry"); });},
     discardCapture: async () => run(async () => {
       if (localCapture) await discardSavedRecording(localCapture);
     }),

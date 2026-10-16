@@ -5,6 +5,8 @@ import { saveSession } from '../auth/session';
 import { summary, canonicalProof } from './fixtures';
 import type { LocalRecordingSummary } from '../capture-queue';
 
+vi.mock('../screens/PackingStationScreen', () => ({ PackingStationScreen: (props: { onCaptureActive: (active:boolean)=>void }) => <section aria-label="Capture fixture"><button onClick={()=>props.onCaptureActive(true)}>Start test take</button><button onClick={()=>props.onCaptureActive(false)}>Finish test take</button></section> }));
+
 const queue = vi.hoisted(() => ({ list: vi.fn(async (): Promise<LocalRecordingSummary[]> => []) }));
 vi.mock('../capture-queue', async original => ({ ...await original<typeof import('../capture-queue')>(), listRecoverableRecordings: queue.list, resumeLocalRecordings: vi.fn(async () => undefined) }));
 vi.mock('../analytics/study-capture', async original => ({ ...await original<typeof import('../analytics/study-capture')>(), flushStudyTimings: vi.fn(async () => undefined) }));
@@ -35,36 +37,36 @@ function mockApi(detail: () => Promise<Response>) {
 }
 it('continues the existing authorized incomplete Proof without creating another root', async () => {
   const detail = vi.fn(async () => json(ready)); mockApi(detail); render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Record packing' }));
   await waitFor(() => expect(window.location.pathname).toBe(`/proofs/${summary.proofId}/capture`));
   expect(detail).toHaveBeenCalled();
 });
 it('revalidates a wide-screen next task and opens a newly finalized record instead of capture', async () => {
   mockApi(async () => json({ ...ready, status: 'FINALIZED', finalizedAt: '2026-10-11T00:00:00Z' })); render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Record packing' }));
   await waitFor(() => expect(window.location.pathname).toBe(`/proofs/${summary.proofId}`));
   expect(window.location.pathname.endsWith('/capture')).toBe(false);
 });
 it('routes failed upload recovery to the desktop upload screen rather than its notifications page', async () => {
   queue.list.mockResolvedValue([{ key: 'saved', proofId: summary.proofId, kind: 'station', file: new Blob(['fixture'], { type: 'video/webm' }), available: true, accepted: true, committed: false, finalized: false, preserved: false, retryStopped: true }]);
   mockApi(async () => json(ready)); render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review upload' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Resolve upload' }));
   await waitFor(() => expect(window.location.pathname).toBe('/uploads'));
 });
 it('discards a late recommended-task response after sign-out', async () => {
   let finish!: (value: Response) => void;
   const detail = vi.fn(() => new Promise<Response>(resolve => { finish = resolve; }));
   mockApi(detail); render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Record packing' }));
   await waitFor(() => expect(detail).toHaveBeenCalledOnce());
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   finish(json(ready));
   await waitFor(() => expect(window.location.pathname).toBe('/'));
-  expect(screen.queryByRole('button', { name: 'Continue Proof' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Record packing' })).not.toBeInTheDocument();
 });
 it('keeps a failed fresh authorization check on Home without opening the old camera target', async () => {
   mockApi(async () => json({ error: { code: 'PARTICIPANT_NOT_AUTHORIZED', message: 'Unavailable' } }, 403)); render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Record packing' }));
   expect(await screen.findByText('This Proof is not available.')).toBeInTheDocument();
   expect(window.location.pathname.endsWith('/capture')).toBe(false);
 });
@@ -73,13 +75,28 @@ it('does not open a late camera task while sign-out checks saved local work', as
   let finishLocalCheck!: (value: LocalRecordingSummary[]) => void;
   const detail = vi.fn(() => new Promise<Response>(resolve => { finishDetail = resolve; }));
   mockApi(detail); render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Record packing' }));
   await waitFor(() => expect(detail).toHaveBeenCalledOnce());
   queue.list.mockImplementation(() => new Promise(resolve => { finishLocalCheck = resolve; }));
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   finishDetail(json(ready));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Continue Proof' })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Record packing' })).toBeEnabled());
   expect(window.location.pathname).toBe('/app');
   finishLocalCheck([]);
   await waitFor(() => expect(window.location.pathname).toBe('/'));
+});
+
+it('wide-screen Home and browser Back cannot abandon a live take; finishing unlocks navigation', async()=>{
+  mockApi(async()=>json(ready));render(<App/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Record packing'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Start test take'}));
+  const path=window.location.pathname;
+  fireEvent.click(screen.getByRole('link',{name:'Home'}));
+  expect(window.location.pathname).toBe(path);
+  expect(screen.getByRole('status')).toHaveTextContent(/Finish recording/);
+  window.history.replaceState({},'', '/app');fireEvent.popState(window);
+  expect(window.location.pathname).toBe(path);
+  fireEvent.click(screen.getByRole('button',{name:'Finish test take'}));
+  fireEvent.click(screen.getByRole('link',{name:'Home'}));
+  await waitFor(()=>expect(window.location.pathname).toBe('/app'));
 });

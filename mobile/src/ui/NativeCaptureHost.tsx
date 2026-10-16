@@ -473,7 +473,7 @@ function CameraSession({
     <Modal
       visible
       animationType={reducedMotion ? "none" : "slide"}
-      onRequestClose={() => recordingRef.current ? Alert.alert("Finish this recording?", "Keep recording or finish and review what you recorded.", [{text:"Keep recording",style:"cancel"},{text:"Finish recording",onPress:stop}]) : saving ? undefined : onFinish(null)}
+      onRequestClose={() => recordingRef.current ? Alert.alert("Leave this recording?", "Finish to review this take, or cancel it as interrupted. An interrupted take is kept for recovery; a new recording starts a separate take.", [{text:"Keep recording",style:"cancel"},{text:"Finish and review",onPress:stop},{text:"Cancel take",style:"destructive",onPress:()=>{ interrupted.current = true; request.onRecordingInterrupted?.(); stop(); }}]) : saving ? undefined : onFinish(null)}
     >
       {ANDROID_TASK_FIRST_REBUILD ? <View style={[styles.taskRoot, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView style={[styles.taskScrollable, { maxHeight: viewport.height * 0.2 }]}>{heading}</ScrollView>

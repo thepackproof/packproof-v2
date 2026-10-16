@@ -23,7 +23,7 @@ const model = (value = proof(), captures: LocalCapture[] = [], overrides: Partia
 });
 
 test('detail ordinary task uses full current evidence, not a status-only catalog assumption', () => {
-  assert.equal(model().action?.buttonLabel, 'Continue capture');
+  assert.equal(model().action?.buttonLabel, 'Record packing');
   const supplementary = proof({ status: 'EVIDENCE_COMMITTED', evidence: [{ validationStatus: 'COMMITTED', evidenceType: 'SELLER_EVIDENCE' }] as ProofView['evidence'] });
   assert.equal(model(supplementary).action?.kind, 'continue_proof');
   const packed = proof({ status: 'EVIDENCE_COMMITTED', evidence: [{ validationStatus: 'COMMITTED', evidenceType: 'FULFILLMENT_CAPTURE' }] as ProofView['evidence'] });

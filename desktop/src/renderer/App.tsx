@@ -65,7 +65,7 @@ export function App() {
   const navigate=useCallback((next:Page)=>{
     ++taskEpoch.current;
     if(busyRef.current){setNotice('Finish or preserve the current recording before leaving the Packing Station.');return;}
-    setPage(next==='notifications'?'uploads':next);setDetailId(null);setSearch('');setPageIndex(0);setNotice('');
+    setPage(next==='notifications'?'uploads':next);setDetailId(null);setNotice('');
   },[]);
   const refresh=useCallback(async()=>{
     const owner=sessionRef.current?.userId;if(!owner)return;

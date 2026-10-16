@@ -111,6 +111,7 @@ test('session commit clears previous-account integration results completed durin
   const lists: Record<string, unknown[]> = { connections: [], accounts: [], providers: [] };
   let visibleSession: unknown;
   const persist = productionClosure('persist', {
+    accountReturn: {current:{name:"account"}}, captureReturn:{current:null}, workspaceOrigin:{current:"activity"},
     IS_RELEASE_CLIENT: false, currentRuntime: () => ({}), sessionRef, tokenRef,
     restoreProofsContext: async () => {
       // A's already-started request resolves while session restoration awaits storage.

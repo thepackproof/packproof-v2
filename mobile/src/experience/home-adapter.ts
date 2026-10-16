@@ -20,19 +20,17 @@ export function nativeHomeInput(input:{proofs:ProofCollectionItem[];invitations:
     jobs:captures.filter(c=>c.recovery?.submitRequested || ['NEEDS_ATTENTION','NEEDS_SIGN_IN','RECORDING','DISCARD_PENDING'].includes(c.recovery?.phase??'')).map(c=>({id:c.captureSessionId||c.uri,proofId:c.captureProofId!,authorized:true,
       active:c.recovery?.phase==='UPLOADING' && typeof input.progress[c.captureProofId!]==='number' && input.progress[c.captureProofId!]!<100 && input.online,
       waiting:!input.online && Boolean(c.recovery?.submitRequested),
-      intervention:['NEEDS_SIGN_IN','NEEDS_ATTENTION','RECORDING'].includes(c.recovery?.phase??'') || Boolean(c.recovery?.lastError && !c.recovery.lastError.retryable),
+      intervention:['NEEDS_SIGN_IN','NEEDS_ATTENTION'].includes(c.recovery?.phase??'') || Boolean(c.recovery?.lastError && !c.recovery.lastError.retryable),
       reason:c.recovery?.phase==='RECORDING'?'This interrupted recording did not finish saving a playable video.':c.recovery?.lastError?.message})),
     orders:input.orders.map(o=>({id:o.transactionId,proofId:o.proofId,title:o.itemSummary,ready:orderPresentation(o).state==='ready',authorized:rows.some(p=>p.proofId===o.proofId&&p.role==='SELLER'),createdAt:o.orderedAt||''})),
   };
 }
 
-/** Keep the task context outside short controls; never infer eligibility from this copy. */
+/** Presentation uses the server's action label; copy never invents a recipe or authorizes capture. */
 export function proofTaskCopy(type: string, label: string): { buttonLabel: string; reason: string } {
   if (type === 'ACCEPT_INVITATION') return { buttonLabel: 'Review invitation', reason: 'An invitation is waiting for your response.' };
-  if (type === 'RECORD_PACKING') return { buttonLabel: 'Continue capture', reason: 'Next: one continuous packing video' };
+  if (type === 'RECORD_PACKING') return { buttonLabel: 'Record packing', reason: 'Record the item, packing and seal in one continuous take.' };
   if (type === 'REVIEW_CONFIRM') return { buttonLabel: 'Review and confirm', reason: 'Review the recording and required declaration.' };
-  const item = /^Document item (.+)/i.exec(label);
-  if (item) return { buttonLabel: 'Continue capture', reason: `Front and back photos · Item ${item[1]}` };
-  if (type === 'WORKFLOW_ACTION') return { buttonLabel: /finaliz/i.test(label) ? 'Finalize Proof' : /pack|capture|photo|document/i.test(label) ? 'Continue capture' : 'Continue', reason: `Next: ${label}` };
+  if (type === 'WORKFLOW_ACTION') return { buttonLabel: label || 'View required task', reason: 'Continue the required step for this Proof.' };
   return { buttonLabel: 'View Proof', reason: label || 'View the current evidence record.' };
 }

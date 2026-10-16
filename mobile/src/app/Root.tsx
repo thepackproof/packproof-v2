@@ -115,7 +115,7 @@ function RootContent() {
   }, [completionVisible, theme.reducedMotion]);
 
   useEffect(() => {
-    if (!ready || !app.session || ["auth", "account", "sample"].includes(app.route.name)) return;
+    if (!ready || !app.session || ["auth", "account", "sample"].includes(app.route.name) || app.route.name === "editPurchase" && app.route.returnToCapture) return;
     if (app.route.name === "station" && app.session?.stationActive && app.localCapture && app.session.stationProofId === app.localCapture.captureProofId) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       if (Keyboard.isVisible()) { Keyboard.dismiss(); return true; }

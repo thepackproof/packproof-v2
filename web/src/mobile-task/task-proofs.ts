@@ -10,6 +10,6 @@ export function taskProofs(input: ProofCollectionItem[]): HomeInput['proofs'] {
   return input.map(proof => {
     const view = taskPresentation(proof);
     const action: HomeInput['proofs'][number]['action'] = view.diagnostic ? 'unknown' : proof.accessKind === 'RECEIVER' || proof.invitationId ? 'continue' : !view.canContribute ? 'view' : view.nextAction.type === 'REVIEW_CONFIRM' ? 'finalize' : view.nextAction.type === 'RECORD_PACKING' ? 'capture' : view.nextAction.type === 'WORKFLOW_ACTION' ? 'continue' : 'view';
-    return { id: proof.proofId, title: proof.transaction.itemTitle || 'Shipment Proof', status: proof.status, authorized: true, action, continuationAfterFinalization: !!view.canContribute && view.nextAction.type === 'WORKFLOW_ACTION', createdAt: proof.createdAt, updatedAt: proof.updatedAt, completed: proof.status === 'FINALIZED' && !!proof.finalizedAt };
+    return { id: proof.proofId, title: proof.transaction.itemTitle || 'Shipment Proof', status: proof.status, authorized: true, action, continuationAfterFinalization: !!view.canContribute && view.nextAction.type === 'WORKFLOW_ACTION', createdAt: proof.createdAt, updatedAt: proof.updatedAt, actionLabel: view.nextAction.label, actionReason: view.nextAction.type === 'RECORD_PACKING' ? 'Record the item, packing and seal in one continuous take.' : view.nextAction.label, completed: proof.status === 'FINALIZED' && !!proof.finalizedAt };
   });
 }

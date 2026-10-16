@@ -19,7 +19,7 @@ export function PhotoCaptureFlow() {
   if (!context) return <Text style={[styles.copy, { color: colors.textSecondary }]}>This capture step is waiting for the required participant. You can review the current record below.</Text>;
   const slots = captureSlots(context.recipe);
   const draft = app.photoDrafts.find(row => photoContextKey(row) === photoContextKey(context) && row.phase !== 'COMPLETE');
-  const next = slots.find(slot => !draft?.slots.some(row => row.slot === slot.slot));
+  const next = slots.find(slot => slot.required && !draft?.slots.some(row => row.slot === slot.slot));
   const remaining = draft ? photoDraftRemaining(draft) : slots.filter(s => s.required).length;
   const started = draft?.phase === 'SUBMITTING';
   const busy = app.busy || taking;
@@ -42,10 +42,10 @@ export function PhotoCaptureFlow() {
     {next && !started ? <><Text style={[styles.copy, { color: colors.textSecondary }]}>Keep the full item in frame. Choose Use photo in the camera to continue.</Text><Button label="Open camera" icon="camera-outline" loading={taking} disabled={app.busy} onPress={() => void take(next.slot)} /></> : null}
     {draft?.slots.map(row => <View key={row.uploadKey} style={[styles.photo, { borderColor: colors.divider }]}>
       <Image source={{ uri: row.uri }} accessibilityLabel={`${comparisonSlotLabel(row.slot)} selected photo`} style={styles.thumbnail} />
-      <View style={styles.photoCopy}><Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{comparisonSlotLabel(row.slot)} ✓</Text><Text style={[styles.copy, { color: colors.textSecondary }]}>{row.sha256 ? 'Uploaded · server recorded' : 'Saved on device'}</Text></View>
+      <View style={styles.photoCopy}><Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{comparisonSlotLabel(row.slot)} ✓</Text><Text style={[styles.copy, { color: colors.textSecondary }]}>{row.sha256 ? 'Uploaded · task acceptance pending' : 'Saved on device'}</Text></View>
       {!started ? <Button label="Retake" variant="tertiary" disabled={busy} onPress={() => void take(row.slot)} /> : null}
     </View>)}
-    {!remaining && draft ? <><Button label={started ? 'Resume upload' : 'Save photos'} disabled={busy || app.offline} loading={app.busy} onPress={() => void app.commitGradingCapture(draft)} /><Text style={[styles.copy, { color: colors.textSecondary }]}>{app.offline ? 'Reconnect to submit. Your selected photos remain on this device.' : 'Originals stay on this device while PackProof checks and records them. This does not finalize your Proof.'}</Text></> : null}
+    {!remaining && draft ? <><Button label={started ? 'Check photo submission' : 'Submit item photos'} disabled={busy || app.offline} loading={app.busy} onPress={() => void app.commitGradingCapture(draft)} /><Text style={[styles.copy, { color: colors.textSecondary }]}>{app.offline ? 'Reconnect to submit. Your selected photos remain on this device.' : 'Originals stay on this device while PackProof checks and records them. This does not finalize your Proof.'}</Text></> : null}
     {error ? <><Text accessibilityRole="alert" style={[styles.copy, { color: colors.error }]}>{error}</Text><Button label="Open device settings" variant="tertiary" onPress={() => void Linking.openSettings()} /></> : null}
   </View>;
 }

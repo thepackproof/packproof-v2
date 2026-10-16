@@ -18,10 +18,10 @@ const recording = (extra: Partial<LocalRecordingSummary> = {}): LocalRecordingSu
 const homeInput = () => ({ proofs: [draft, second], recordings: [], usable: new Set<string>(), queue: [], online: true, reconciled: true });
 const homeProps = () => ({ ...homeInput(), loading: false, recordingsLoaded: true, error: null, refreshedAt: "2026-10-09T12:00:00Z", busy: false, notice: null, interactions: {}, onGo: vi.fn(), onRetry: vi.fn(), onAction: vi.fn(), onOpen: vi.fn() });
 
-it("ranks verified usable saved evidence ahead of upload intervention and excludes corrupt or interrupted segments", () => {
+it("ranks upload intervention ahead of verified usable saved evidence and excludes corrupt or interrupted segments", () => {
   const saved = recording({ accepted: false });
   const input = { ...homeInput(), recordings: [saved, recording({ key: "failed", proofId: second.proofId, retryStopped: true })], usable: new Set([saved.key]) };
-  expect(mobileHomeState(input).recommendation).toMatchObject({ kind: "review_evidence", targetId: draft.proofId, sessionId: saved.key });
+  expect(mobileHomeState(input).recommendation).toMatchObject({ kind: "review_upload", targetId: second.proofId, sessionId: "failed" });
   expect(mobileHomeState({ ...input, recordings: [{ ...saved, interrupted: true }] }).recommendation.kind).toBe("review_upload");
   expect(mobileHomeState({ ...input, usable: new Set() }).recommendation.kind).toBe("review_upload");
 });
@@ -81,7 +81,7 @@ it("does not flash first-account copy while loading and labels cached completion
   expect(screen.getByText("Finding your next task…")).toBeInTheDocument();
   view.rerender(<MobileHomeScreen {...props} error="Cannot refresh" proofs={[{ ...draft, status: "FINALIZED", finalizedAt: "2026-10-09T10:00:00Z" }]} />);
   expect(screen.getByText(/Cached completion is not a new verification/)).toBeInTheDocument();
-  expect(within(screen.getByRole("region", { name: "Workspace summary" })).getByRole("button", { name: /Completed/ })).toHaveTextContent("1");
+  expect(screen.queryByRole("region", { name: "Workspace summary" })).not.toBeInTheDocument();
 });
 it("keeps all four primary labels visible and secondary destinations in profile navigation", () => {
   Object.defineProperties(HTMLDialogElement.prototype, { close: { configurable: true, value() { this.removeAttribute("open"); } }, showModal: { configurable: true, value() { this.setAttribute("open", ""); } } });

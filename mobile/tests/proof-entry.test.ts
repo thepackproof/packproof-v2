@@ -200,7 +200,7 @@ const recoveryInput = (captures: LocalCapture[]): RecoveryWorkspaceInput => ({
   invitations: [], captures, orders: [], progress: {}, userId: 'seller', apiBaseUrl: 'https://api.example', online: true, reconciled: true,
 });
 
-test('Home, list resume and deep-link resume select the same completed original when the first array item is interrupted', async () => {
+test('Home, list resume and deep-link resume select the same interrupted original before a completed take', async () => {
   const input = recoveryInput([saved('first-interrupted', 'RECORDING'), saved('chosen-review')]);
   const homeAction = selectRecoveryWorkspace(input).model.recommendation;
   const resumed: string[] = [];
@@ -208,14 +208,14 @@ test('Home, list resume and deep-link resume select the same completed original 
     assertCurrentAccount: () => {}, view: async () => { throw new Error('unexpected viewer'); }, historyShare: () => {},
     resume: async (id: string) => {
       const selected = proofEntryRecording(input, id);
-      assert.equal(selected.action?.kind, 'review_evidence');
+      assert.equal(selected.action?.kind, 'review_upload');
       resumed.push(selected.capture!.captureSessionId!);
       return true;
     },
   };
   await openProofDestination({ proofId: 'proof_current', intent: 'resume' }, owners);
   await openProofDestination(participantLinkEntry('proof_current', null, true), owners);
-  assert.equal(homeAction.sessionId, 'chosen-review');
+  assert.equal(homeAction.sessionId, 'first-interrupted');
   assert.deepEqual(resumed, [homeAction.sessionId, homeAction.sessionId]);
 });
 

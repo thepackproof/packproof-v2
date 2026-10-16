@@ -75,3 +75,9 @@
 .workspace-shell.mobile-task-shell.capture-active .ws-tools-heading { display:none; }
 .workspace-shell.mobile-task-shell :is(button,a):active { opacity:.82; }
 @media (prefers-reduced-motion: reduce) { .mobile-task-shell * { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+
+/* Capture/task accessibility: content grows without horizontal clipping. */
+.workspace-shell.mobile-task-shell .task-next-card h1 { font-size:1.35rem; line-height:1.25; overflow-wrap:anywhere; }
+.task-next-card .btn { white-space:normal; height:auto; min-height:48px; max-width:100%; margin-bottom:12px; }
+.task-section-heading { flex-wrap:wrap; }
+@media (max-width:360px) { .task-next-card { padding:12px; } .task-mobile-tabs a { min-width:0; overflow-wrap:anywhere; } }

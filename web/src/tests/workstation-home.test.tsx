@@ -57,41 +57,41 @@ const local = (extra: Partial<LocalRecordingSummary> = {}): LocalRecordingSummar
 it('keeps the desktop workspace sections while prioritizing an incomplete Proof', async () => {
   const p = adaptive(); render(<HomeScreen {...p} />);
   const hero = screen.getByRole('region', { name: 'Recommended action' });
-  await userEvent.click(within(hero).getByRole('button', { name: 'Continue Proof' }));
+  await userEvent.click(within(hero).getByRole('button', { name: 'Record packing' }));
   expect(p.onTaskAction).toHaveBeenCalledWith(expect.objectContaining({ kind: 'continue_proof', targetId: summary.proofId }));
   expect(screen.getByRole('heading', { name: 'Recent Proofs' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Workspace status' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Fulfillment queue' })).toBeInTheDocument();
   expect(within(hero).getByRole('button', { name: 'Create Proof' })).toBeInTheDocument();
 });
-it('puts a usable saved review ahead of a failed upload and both ahead of new packing', async () => {
+it('puts a failed upload ahead of saved review and new packing', async () => {
   const p = adaptive();
   const second = { ...summary, proofId: 'second' };
   const view = render(<HomeScreen {...p} proofs={[summary, second]} recordings={[local({ accepted: false }), local({ key: 'failed', proofId: 'second', retryStopped: true })]} pendingUploadCount={2} />);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Review evidence' })).toBeInTheDocument());
-  fireEvent.click(screen.getByRole('button', { name: 'Review evidence' }));
-  expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'review_evidence', sessionId: 'saved' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Resolve upload' })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Resolve upload' }));
+  expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'review_upload', sessionId: 'failed', targetId: 'second' }));
   view.rerender(<HomeScreen {...p} recordings={[local({ retryStopped: true })]} pendingUploadCount={1} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Review upload' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resolve upload' }));
   expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'review_upload', sessionId: 'saved' }));
 });
 it('leaves healthy uploads passive and never offers capture for a viewer-only row', () => {
   const p = adaptive(), second = { ...summary, proofId: 'second' };
   const view = render(<HomeScreen {...p} proofs={[summary, second]} recordings={[local({ active: true })]} pendingUploadCount={1} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Record packing' }));
   expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ targetId: second.proofId }));
   view.rerender(<HomeScreen {...p} proofs={[{ ...summary, role: 'BUYER' }]} />);
-  expect(screen.queryByRole('button', { name: 'Continue Proof' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Record packing' })).not.toBeInTheDocument();
 });
 it('keeps a focused valid target stable, then drops it when permissions change', () => {
   const p = adaptive(), second = { ...summary, proofId: 'second', createdAt: '2026-10-01T00:00:00Z' };
   const view = render(<HomeScreen {...p} proofs={[summary, second]} />);
-  fireEvent.focus(screen.getByRole('button', { name: 'Continue Proof' }));
+  fireEvent.focus(screen.getByRole('button', { name: 'Record packing' }));
   view.rerender(<HomeScreen {...p} proofs={[summary, second]} taskSelection='second' />);
-  fireEvent.click(screen.getByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Record packing' }));
   expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ targetId: summary.proofId }));
   view.rerender(<HomeScreen {...p} proofs={[{ ...summary, role: 'BUYER' }, second]} taskSelection='second' />);
-  fireEvent.click(screen.getByRole('button', { name: 'Continue Proof' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Record packing' }));
   expect(p.onTaskAction).toHaveBeenLastCalledWith(expect.objectContaining({ targetId: second.proofId }));
 });
 it('keeps populated unknown or unreconciled work separate from an empty-account claim', () => {

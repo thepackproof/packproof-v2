@@ -24,7 +24,7 @@ describe('desktop Home shares task priority without changing queue ownership', (
     const first = desktopHomeState(state());
     expect(first.recommendation).toMatchObject({ kind: 'continue_proof', targetId: summary.proofId });
     const selected = desktopHomeState({ ...state(), selection: second.proofId });
-    expect(selected.recommendation.targetId).toBe(second.proofId);
+    expect(selected.recommendation.targetId).toBe(summary.proofId);
     expect(stableRecommendation(first.recommendation, selected, true).targetId).toBe(summary.proofId);
     expect(stableRecommendation(first.recommendation, desktopHomeState({ ...state(), proofs: [second] }), true).targetId).toBe(second.proofId);
   });
