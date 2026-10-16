@@ -2,6 +2,7 @@ import { Coaching } from "../onboarding/Onboarding";
 import { registerRemoteCaptureStop } from "../capture/remote-control";
 import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
 import { haptic } from "../theme/haptics";
+import { captureFeedbackGate } from '../theme/capture-feedback';
 import { cinematicForScheme } from "../theme/cinematic";
 import { recordingLimitCopy } from "../capture/limits";
 import { UnifiedCameraView, isUnifiedCameraAvailable, isIdentifierScannerAvailable, type UnifiedCameraViewRef, type UnifiedBarcodeDetection } from "../../modules/packproof-unified-camera";
@@ -134,6 +135,7 @@ function CameraSession({
   request: Request;
   onFinish: (result: LocalCapture | null) => void;
 }) {
+  const { colors, scheme, reducedMotion } = useTheme();
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
   useEffect(() => {
@@ -173,7 +175,7 @@ function CameraSession({
     ]);
     animation.start();
     return () => animation.stop();
-  }, [scanFeedback]);
+  }, [scanFeedback, reducedMotion, scanPulse]);
   function signalShippingRead(key:string, label:string, conflict=false) {
     if (!mounted.current || !recordingRef.current || notified.current.has(`${key}:${conflict}`)) return;
     notified.current.add(`${key}:${conflict}`);
@@ -226,7 +228,6 @@ function CameraSession({
     request.stageType && request.stageType !== "RETURN_PACKING"
       ? receivingRecipe
       : packingRecipe;
-  const { colors, scheme, reducedMotion } = useTheme();
   const accents = cinematicForScheme(scheme);
   const insets = useSafeAreaInsets();
   const viewport = useWindowDimensions();
@@ -276,6 +277,7 @@ function CameraSession({
     started.current = Date.now();
     recordingRef.current = true;
     setRecording(true);
+    const releaseFeedbackSilence = captureFeedbackGate.silence();
     try {
       const video = useUnified
         ? await unifiedCamera.current!.startRecording(request.captureSessionId!, false)
@@ -309,6 +311,7 @@ function CameraSession({
           : "Recording failed. Try the camera again.",
       );
     } finally {
+      releaseFeedbackSilence();
       recordingRef.current = false;
       setRecording(false);
       setSaving(false);
@@ -371,7 +374,7 @@ function CameraSession({
             torchEnabled={false}
             identifierCaptureEnabled={identifiersEnabled && isIdentifierScannerAvailable()}
             onReady={()=>{setReady(true);request.onCameraReady?.();}}
-            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;request.onRecordingStarted?.(new Date(nativeEvent.startedAtUnixMs)); void haptic("medium");}}
+            onRecordingStarted={({nativeEvent})=>{started.current=nativeEvent.startedAtUnixMs;request.onRecordingStarted?.(new Date(nativeEvent.startedAtUnixMs));}}
             onBarcodeDetected={({nativeEvent})=>{void detected(nativeEvent);}}
             onCaptureError={({nativeEvent})=>{
               if (recordingRef.current) {
