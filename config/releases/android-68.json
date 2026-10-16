@@ -1,0 +1,12 @@
+{
+  "package": "com.packproof.mobile",
+  "version": "1.0.1",
+  "versionCode": 68,
+  "sourceSha": "d94305a6a3a303b0d171f37e4d12e954e06da624",
+  "archiveRunId": 38844730624,
+  "easBuildId": "c022e140-daab-43fa-bebd-02d81ab01148",
+  "aabSha256": "058ba541fdb0c40b9c7e835b5ab66d15ffeead3e3b61a5b1b62d0971047cf2f7",
+  "track": "production",
+  "releaseStatus": "completed",
+  "changesNotSentForReview": false
+}
