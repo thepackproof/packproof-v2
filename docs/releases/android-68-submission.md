@@ -22,3 +22,9 @@ The complete application [CI run 38843272896](https://github.com/thepackproof/pa
 `config/releases/android-68.json` is the explicit submission request. The submission workflow rechecks this exact artifact, confirms unchanged application inputs and applies the existing distribution policy before using the existing Expo credential. It submits by build ID to the existing app-associated Google service account. Its result and verification receipts are retained in the **Submit verified Android 68 to Google Play** workflow.
 
 Physical-device capture, upgrade, 200% font scaling and usability acceptance were not performed in this environment. Automated tests and artifact inspection do not constitute physical-device evidence. Desktop production publication remains separate.
+
+## Submission outcome
+
+[Production submission attempt 38845963306](https://github.com/thepackproof/packproof-v2/actions/runs/38845963306) passed source, distribution-policy, bundle, checksum, signature and native verification, then stopped before uploading because no Google Service Account key is assigned for Play submissions. The Expo organization credential inventory also contains no Google Service Account keys. No Play submission or live rollout is established.
+
+The signed build above remains ready. It can be retried after the existing publishing account is configured for EAS Submit, or uploaded through an authenticated Google Play Console session. A new application build is not required to resolve this account-access blocker.
