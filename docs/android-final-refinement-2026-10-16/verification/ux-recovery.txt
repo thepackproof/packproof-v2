@@ -1,0 +1,70 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-mobile@0.1.0 test:ux-recovery
+> node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/photo-drafts.test.ts tests/grading-creation.test.ts tests/recovery-workspace.test.ts tests/task-home.test.ts tests/activity-model.test.ts tests/mobile-ux-events.test.ts tests/capture-navigation.test.ts
+
+✔ normal retries, byte transfer, preservation and finalization remain in progress (7.842602ms)
+✔ reviewable local work and blocked recovery require action but do not claim completion (0.379272ms)
+✔ missing originals, interrupted captures and unknown recovery stay actionable (0.18574ms)
+✔ validated completed media remains reviewable after an unexpected stop (0.193812ms)
+✔ a known unplayable completed file cannot be offered for evidence review (0.213442ms)
+✔ submission and finalization are separate milestones (0.296407ms)
+✔ persistent destinations do not compete with capture and return to Activity (0.279751ms)
+✔ camera Back returns to saved item information on the same Proof, then camera again (56.222587ms)
+✔ Activity profile integration Back returns to Activity; nested Settings returns to Settings (18.122968ms)
+✔ Home, Back and another route cannot abandon an active capture (13.743877ms)
+✔ a camera return context cannot be reused for a different Proof (15.370589ms)
+✔ returning to a workspace cancels a pending record response without cancelling capture guards (14.843334ms)
+✔ a restored grading request keeps its transaction identity and exact submitted details (2.347798ms)
+✔ invalid or foreign creation journals cannot silently create another Proof (0.542908ms)
+✔ UX metrics retain only bounded named aggregates and approved numeric durations (1.507883ms)
+✔ time to camera entry consumes only the deliberate task timer and clears across accounts (0.173241ms)
+✔ session p95 is bounded to recent measurements and never invents an empty baseline (0.490259ms)
+✔ invalid durations cannot corrupt aggregates and account reset clears all counts (0.220993ms)
+✔ draft exits are observed once across preparation routes and never inferred at account reset (0.294504ms)
+✔ photo scope includes account, API, Proof, item, transfer, recipe and actor action (1.378979ms)
+✔ retaking preserves the previous source and selects a new stable upload identity (0.770992ms)
+✔ retaking cannot change a started submission or mix in another recipe slot (0.379031ms)
+✔ the complete flow persists before sending bytes and requires acknowledged workflow completion (1.392219ms)
+✔ incomplete selection and a missing original never submit a workflow action (0.645523ms)
+✔ upload failure retains draft and retry uses the same identities (1.275423ms)
+✔ lost commit response reconciles server evidence without uploading it again (1.106017ms)
+✔ lost action response can replay its original key after the next item advances (0.687236ms)
+✔ changed item or role cannot start a fresh submission (0.415506ms)
+✔ incomplete server acknowledgment does not show completion or apply a workflow action (3.66861ms)
+✔ account switch during upload stops before commitment or UI success (0.299471ms)
+✔ a persist failure before network submission is fail-closed (0.199661ms)
+✔ three actionable Proofs and no recordings produces three tasks and zero uploads everywhere (13.85879ms)
+✔ cached action counts agree with destination filters but navigation still requires fresh authorization (0.527545ms)
+✔ waiting buyer and authoritative completed Proofs are not misclassified as actionable (0.350288ms)
+✔ grading copy preserves the server action without guessing its photo recipe (0.92224ms)
+✔ local photo recovery comes before new capture and never crosses accounts (0.857102ms)
+✔ pending photo submissions count as uploads and finalized local-only drafts do not demand new capture (0.333343ms)
+✔ submitted recordings are saved copies rather than an upload still in progress (0.188715ms)
+✔ front and back advance to submission and accepted photos stop advertising recovery (0.811032ms)
+✔ a failed recording takes priority over a complete photo draft on another Proof (0.534916ms)
+✔ empty and completed-only accounts recommend manual creation without a marketplace (1.342513ms)
+✔ empty requires reconciled online history and absence of all authorized local and order work (0.508968ms)
+✔ submission continuation does not promise a second consent or premature completion (0.365742ms)
+✔ pristine linked orders enter rank five while a manual draft remains rank three (1.075662ms)
+✔ every actionable rank wins in exact order, without mutating input (0.495487ms)
+✔ passive uploads and retry backoff never displace a draft or count as attention (0.256937ms)
+✔ attention counts unique records while active transfer counts unique jobs (8.155854ms)
+✔ permissions, invalid targets and finalized records exclude capture actions (0.207883ms)
+✔ unknown or inconsistent completion requests reconciliation, never completed (0.212811ms)
+✔ offline permits usable local review but defers server-only work and counts waiting separately (0.369417ms)
+✔ corrupt and interrupted captures never become review evidence (0.16584ms)
+✔ urgency precedes recency; selection and fixture order cannot override priority (0.372712ms)
+✔ focused manual creation survives newly actionable work and refreshes offline explanation (0.189095ms)
+✔ focused recommendation stays stable only while valid; another device completion invalidates it (0.188414ms)
+✔ native adapter removes foreign account/server recordings and keeps automatic retries passive (1.062572ms)
+✔ tap-time routing uses refreshed permissions/state and never stale capture or finalization actions (0.738633ms)
+✔ saved capture resume requires fresh capture permission; offline permits playback only (0.449067ms)
+ℹ tests 57
+ℹ suites 0
+ℹ pass 57
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 759.9499

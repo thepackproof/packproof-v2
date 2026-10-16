@@ -3,6 +3,7 @@ import { listPhotoDrafts, persistPhotoDraft, readPhotoDraft, retainPhoto } from 
 import { photoDraftContext, photoContextKey, submitPhotoDraft, type PhotoDraft, type PhotoDraftContext } from '../capture/photo-draft-model';
 import { recordMobileUxEvent } from '../analytics/mobile-ux-events';
 import { freshProofDestination, openFreshProofAction, savedCaptureDestination } from "../experience/action-routing";
+import { createProofRequestGate, loadProofSnapshot, SupersededProofRequest } from '../experience/proof-request';
 import { presentationForProof } from "../copy/proof-list";
 import { clearMobileUxMetrics, observeMobileDraftRoute, startMobileCaptureEntry } from "../analytics/mobile-ux-events";
 import { MOBILE_TASK_UX_ENABLED } from "../experience/mobile-ux";
@@ -383,6 +384,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const accountReturn = useRef<AppRoute>({ name: "home" });
   const captureReturn = useRef<{ route: AppRoute; proofId: string | null } | null>(null);
   const captureNavigationLock = useRef(false);
+  const proofRequests = useRef(createProofRequestGate());
   const workspaceOrigin = useRef<WorkspaceOrigin>("home");
   const activityFilterMemory=useRef<AppRoute["activityFilter"]>("all");
   const ordersViews = useRef<Record<"orders" | "station", OrdersViewState>>({
@@ -556,6 +558,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setConfirmFinalize(false);
     }
     if (name === "home" || name === "proofs" || name === "orders" || name === "station" || name === "activity") {
+      proofRequests.current.invalidate();
       workspaceOrigin.current = name;
       setBatchPacking(name === "station");
     }
@@ -687,7 +690,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
     setProofCollection(cached.rows);
     setWorkspaceFreshAt(cached.fetchedAt ?? null); taskInteractions.current=cached.interactions ?? {}; setCreateForm(cached.draft ?? EMPTY_FORM);
   }
-  async function persist(next: CachedClientState): Promise<void> {
+  async function persist(next: CachedClientState, assertCurrent: () => void = () => {}, publish?: () => void): Promise<void> {
+    assertCurrent();
     const runtime = currentRuntime(IS_RELEASE_CLIENT ? null : next);
     const stored: CachedClientState = IS_RELEASE_CLIENT
       ? {
@@ -700,6 +704,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         }
       : next;
     await restoreProofsContext(stored);
+    assertCurrent();
     if (sessionRef.current?.userId !== stored.userId || sessionRef.current.apiBaseUrl !== stored.apiBaseUrl) {
       // A previous-account response may have finished while scoped restoration awaited storage.
       accountReturn.current = { name: "home" }; captureReturn.current = null; workspaceOrigin.current = "home";
@@ -708,8 +713,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     tokenRef.current = stored.token || null;
     sessionRef.current = stored;
     await (stored.needsReauthentication ? stopNativeIntakeSession() : orderShare?.setActiveAccount(stored.userId))?.catch(() => undefined);
+    assertCurrent();
+    publish?.();
     setSession(stored.needsReauthentication ? null : stored);
     await saveCachedState(stored);
+    assertCurrent();
     await saveCaptureRecovery(stored);
   }
 
@@ -1038,34 +1046,31 @@ export function PackProofProvider(props: { children: ReactNode }) {
     }
   }
 
-  async function refreshProof(proofId: string): Promise<ProofView> {
+  async function refreshProof(proofId: string, assertSelected = proofRequests.current.begin()): Promise<ProofView> {
     const account=sessionRef.current;
     if(!account)throw new Error("Sign in to view this Proof.");
-    const fresh=await client.getProof(proofId);
-    client.assertCaptureAccount(account.userId,account.apiBaseUrl);
-    const [txn,nextManifest,integrity]=await Promise.all([
-      client.getTransaction(fresh.transactionId),fresh.status==="FINALIZED"?client.getManifest(proofId):Promise.resolve(null),client.getShipmentIntegrity(proofId),
-    ]);
-    client.assertCaptureAccount(account.userId,account.apiBaseUrl);
-    setProof(fresh);setTransactionDetail(txn);setEditForm(formFromTransaction(txn));setManifest(nextManifest);setShipmentIntegrity(integrity);
+    const assertCurrent = () => { assertSelected(); client.assertCaptureAccount(account.userId,account.apiBaseUrl); };
+    const { proof: fresh, transaction: txn, manifest: nextManifest, integrity } = await loadProofSnapshot(proofId, client, assertCurrent);
+    await persist({...sessionRef.current!,proofId:fresh.proofId,transactionId:fresh.transactionId}, assertCurrent, () => {
+      setProof(fresh);setTransactionDetail(txn);setEditForm(formFromTransaction(txn));setManifest(nextManifest);setShipmentIntegrity(integrity);
+    });
+    assertCurrent();
     const records={...cacheRef.current.records,[fresh.proofId]:fresh};
     const keep=Object.entries(records).sort((a,b)=>Date.parse(b[1].updatedAt)-Date.parse(a[1].updatedAt)).slice(0,30);
     cacheRef.current={...cacheRef.current,records:Object.fromEntries(keep)};
     void saveProofsCache(account.apiBaseUrl,account.userId,{...cacheRef.current,offsetY:proofsScrollOffset.current}).catch(()=>undefined);
-    await persist({...sessionRef.current!,proofId:fresh.proofId,transactionId:fresh.transactionId});
-    client.assertCaptureAccount(account.userId,account.apiBaseUrl);
     setOffline(false);return fresh;
   }
 
   async function openProof(proofId: string): Promise<void> {
     if (captureNavigationLock.current) throw new Error("Finish or cancel the current take before opening another Proof.");
     rememberTaskInteraction(proofId);
-    const current = sessionRef.current;
-    if (current) {
-      await persist({ ...current, proofId });
-    }
-    try { await refreshProof(proofId); }
+    const assertSelected = proofRequests.current.begin();
+    const account = sessionRef.current;
+    const assertCurrent = () => { assertSelected(); if (account) client.assertCaptureAccount(account.userId,account.apiBaseUrl); };
+    try { await refreshProof(proofId, assertSelected); }
     catch (error) {
+      assertCurrent();
       if (error instanceof ApiError && [403,404,410].includes(error.status)) {
         const records = {...cacheRef.current.records}; delete records[proofId];
         cacheRef.current = {...cacheRef.current,records,rows:cacheRef.current.rows.filter(row=>row.proofId!==proofId)};
@@ -1074,8 +1079,13 @@ export function PackProofProvider(props: { children: ReactNode }) {
       }
       const cached = cacheRef.current.records[proofId];
       if (!isNetworkFailure(error) || !cached) throw error;
-      setProof(cached); setTransactionDetail(cached.transaction); setOffline(true);
+      await persist({ ...sessionRef.current!, proofId, transactionId: cached.transactionId }, assertCurrent, () => {
+        setProof(cached); setTransactionDetail(cached.transaction); setManifest(null); setShipmentIntegrity(null);
+      });
+      assertCurrent();
+      setOffline(true);
     }
+    assertCurrent();
     go("proof");
   }
 
@@ -1118,6 +1128,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if (route.name !== "auth" && !options?.localReview) await ensureFreshCognitoToken();
       await action();
     } catch (err) {
+      if (err instanceof SupersededProofRequest) return;
       if(actionAccount && (sessionRef.current?.userId!==actionAccount.userId || sessionRef.current.apiBaseUrl!==actionAccount.apiBaseUrl))return;
       if (isNetworkFailure(err)) {
         setOffline(true);
@@ -1459,12 +1470,14 @@ export function PackProofProvider(props: { children: ReactNode }) {
         return value.resumeSavedCapture(saved);
       }
       if (offline) return handledActionSucceeded(run, () => openProof(proofId));
+      const assertSelected = proofRequests.current.begin();
       return handledActionSucceeded(run, async()=>{
+        assertSelected();
         const current=sessionRef.current;if(!current)return false;
         await openFreshProofAction(proofId, {
           userId: current.userId,
-          refreshProof,
-          assertCurrentAccount: () => client.assertCaptureAccount(current.userId,current.apiBaseUrl),
+          refreshProof: id => refreshProof(id, assertSelected),
+          assertCurrentAccount: () => { assertSelected(); client.assertCaptureAccount(current.userId,current.apiBaseUrl); },
           navigate: go,
           openReceipt: value.openReceipt,
           notice: setError,

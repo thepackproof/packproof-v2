@@ -1,0 +1,65 @@
+name: Android refinement review APK
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/android-refinement-review.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-refinement-review-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: github.head_ref == 'ux/android-final-refinement-2026-10-16' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REVIEW_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: mobile
+      - name: Verify Phase 1 and existing mobile contracts
+        working-directory: mobile
+        run: |
+          npm run typecheck
+          npm run test:final-refinement
+          npm run test:android-task-first
+          npm run test:ux-recovery
+          npm run test:recovery
+          npm run test:proof-record
+          npm run test:local-review-build
+      - name: Build exact-source internal APK
+        run: |
+          sdkmanager 'build-tools;36.0.0' 'platforms;android-36'
+          node mobile/scripts/build-local-review.cjs --expected-sha "$REVIEW_SOURCE_SHA" --out "$RUNNER_TEMP/packproof-review" --workers 2
+      - name: Upload review artifact and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-refinement-review-${{ env.REVIEW_SOURCE_SHA }}
+          path: ${{ runner.temp }}/packproof-review/
+          if-no-files-found: warn
+          retention-days: 14

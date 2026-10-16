@@ -48,7 +48,7 @@ test('an action chosen from a stale recording-needed card uses the freshly final
   const result = await enter(participantLinkEntry('proof_current', null, true), fixture({ status: 'FINALIZED', finalizedAt: '2026-10-15' }));
   assert.ok(result.calls.includes('route:proof'));
   assert.ok(!result.calls.includes('route:capture'));
-  assert.match(result.notices[0], /already been finalized/);
+  assert.deepEqual(result.notices, []);
 });
 
 test('buyer, removed participant and unknown server state cannot route into seller capture', async () => {

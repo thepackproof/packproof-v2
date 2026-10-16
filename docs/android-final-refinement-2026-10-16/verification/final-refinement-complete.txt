@@ -1,0 +1,28 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-mobile@0.1.0 test:final-refinement
+> node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/final-refinement.test.ts tests/proof-request-provider.test.ts
+
+✔ F1.01 opening a finalized root record is ordinary read-only navigation (2.037017ms)
+✔ F1.02 workflow supporting copy comes from the same server requirement (0.218199ms)
+✔ F1.08 generic participant events never invent a buyer role (0.189095ms)
+✔ F1.08 a historical actor role survives later participant changes (0.272971ms)
+✔ F1.04 a mismatched server record cannot be substituted into a tapped Proof (0.584861ms)
+✔ F1.02 lists render a repeated task only once and preserve distinct upload states (1.110843ms)
+✔ F1.08 event role belongs to the historic event, not its viewer or a related entity (0.282435ms)
+✔ F1.04 removed membership cannot start capture even if server presentation is stale (0.193601ms)
+✔ F1.04 delayed Proof A cannot replace B, including after its secondary reads start (0.649198ms)
+✔ F1.04 changing tabs invalidates a pending Proof request (0.232591ms)
+✔ F1.04 mixed transaction and manifest identities cannot be published (0.310628ms)
+✔ F1.07 notifications require exact Proof and account identities (0.229906ms)
+✔ provider keeps B selected when the earlier A network response arrives last (51.62719ms)
+✔ provider cancels an older selection during native account synchronization before publishing it (17.613479ms)
+✔ provider cannot publish a prior account response after sign-out (13.472574ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 657.818435

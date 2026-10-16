@@ -9,7 +9,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { typography } from "../theme/tokens";
 import { FadeSlideIn, PressableScale } from "./motion";
 import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
-import { proofHistoryActor } from '../experience/proof-detail-model';
+import { proofHistoryActor, proofHistoryTitle } from '../experience/proof-detail-model';
 
 export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter, onFilter, onSelect, proof, userId }: {
   entries: ChronologyEntry[];
@@ -50,7 +50,7 @@ export function ProofRecordTimeline({ entries, auditEvents, finalizedAt, filter,
       const toggleGroup = () => setExpandedGroups(current => { const next = new Set(current); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next; });
       const preserved = entry.eventType === "PROOF_FINALIZED";
       const afterCore = isShipmentAfterFinalization(entry.occurredAt, finalizedAt, entry.category);
-      const title = group.access ? `Proof accessed ${group.entries.length} ${group.entries.length === 1 ? "time" : "times"}` : humanChronologyTitle(entry.eventType, entry.title);
+      const title = group.access ? `Proof accessed ${group.entries.length} ${group.entries.length === 1 ? "time" : "times"}` : proofHistoryTitle(proof, entry);
       const previous = visible[index - 1]?.entry;
       const newDay = !previous || new Date(previous.occurredAt).toDateString() !== new Date(entry.occurredAt).toDateString();
       const integrity = /ATTEST|CAPTURE|INTEGRITY|MANIFEST|EVIDENCE/.test(entry.eventType);

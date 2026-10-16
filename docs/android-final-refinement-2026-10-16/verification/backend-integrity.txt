@@ -1,0 +1,19 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-backend@0.1.0 test
+> vitest run tests/finalize-requirements.test.ts tests/proof-package.test.ts tests/seller-attestation-authorization.test.ts tests/mobile-attestation-authorization.test.ts tests/evidence-record-updates.test.ts
+
+
+ RUN  v4.1.11 /workspace/scratch/4b68122ed991/packproof-refinement/backend
+
+
+ Test Files  5 passed (5)
+      Tests  38 passed (38)
+   Start at  11:54:28
+   Duration  27.38s (transform 2.32s, setup 0ms, import 3.45s, tests 23.28s, environment 0ms)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

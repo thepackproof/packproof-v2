@@ -1,6 +1,7 @@
 import type { ProofCollectionItem, ProofView } from '../v2-api';
 import { presentationForProof } from '../copy/proof-list';
 import { proofDisplayTitle } from '../copy/proof-title';
+import { humanChronologyTitle } from '../copy/chronology';
 import { selectRecoveryWorkspace, type RecoveryWorkspaceInput } from './recovery-workspace';
 
 /**
@@ -14,10 +15,10 @@ export function proofDetailModel(input: Pick<RecoveryWorkspaceInput,
   const { proof } = input;
   const role = proof.participants.find(person => person.userId === input.userId && person.status === 'JOINED')?.role ?? '';
   const presentation = presentationForProof(proof, role);
-  const row: ProofCollectionItem = {
+  const row: ProofCollectionItem & { workflowHint?: string } = {
     proofId: proof.proofId, transactionId: proof.transactionId, role,
     status: proof.status, workflowType: proof.workflowType, createdAt: proof.createdAt,
-    updatedAt: proof.updatedAt, finalizedAt: proof.finalizedAt, presentation,
+    updatedAt: proof.updatedAt, finalizedAt: proof.finalizedAt, presentation, workflowHint: proof.nextAction?.hint,
     transaction: {
       itemTitle: proofDisplayTitle(proof), externalReference: proof.transaction.externalReference,
       transactionDate: proof.transaction.transactionDate, carrier: proof.transaction.shipping?.carrier ?? null,
@@ -35,11 +36,25 @@ export function proofDetailModel(input: Pick<RecoveryWorkspaceInput,
 
 /** Never infer or expose an actor from free-form history descriptions. */
 export function proofHistoryActor(proof: Pick<ProofView, 'events' | 'participants'>, event: { id: string; relatedEntityId?: string | null }, userId: string): string | null {
-  const actor = proof.events?.find(row => row.eventId === event.id || row.eventId === event.relatedEntityId)?.actorUserId;
+  const audit = proof.events?.find(row => row.eventId === event.id);
+  const actor = audit?.actorUserId;
   if (!actor) return null;
   if (actor === userId) return 'You';
-  const role = proof.participants.find(person => person.userId === actor && person.status === 'JOINED')?.role;
+  // Only use the event's role when it explicitly describes this actor. An
+  // invitation's role describes its recipient, not necessarily its author.
+  const role = audit?.data?.userId === actor && audit.eventType === 'PARTICIPANT_JOINED'
+    ? audit.data.role : proof.participants.find(person => person.userId === actor && person.status === 'JOINED')?.role;
   return role === 'SELLER' ? 'Seller' : role === 'BUYER' ? 'Buyer' : null;
+}
+
+/** Roles in event titles come from that event, never from the current viewer. */
+export function proofHistoryTitle(proof: Pick<ProofView, 'events'> | undefined, event: { id: string; eventType: string; title: string }): string {
+  const audit = proof?.events?.find(row => row.eventId === event.id && row.eventType === event.eventType);
+  if (event.eventType === 'PARTICIPANT_JOINED') {
+    if (audit?.data.role === 'SELLER') return 'Seller joined';
+    if (audit?.data.role === 'BUYER') return 'Buyer joined';
+  }
+  return humanChronologyTitle(event.eventType, event.title);
 }
 
 /** Match this exact displayed number; an imported transaction is not field provenance. */

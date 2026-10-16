@@ -26,7 +26,7 @@ import { ProgressState } from '../ui/EvidenceCard';
 import { FadeSlideIn, LiftPressable, PressableScale } from '../ui/motion';
 import type { ProofCollectionItem, InvitationInboxView } from '../v2-api';
 import { MOBILE_TASK_UX_ENABLED } from '../experience/mobile-ux';
-import { nativeHomeInput } from '../experience/home-adapter';
+import { nativeHomeInput, proofListDetail } from '../experience/home-adapter';
 import { selectTaskHome } from '../experience/task-home';
 import { workspaceRecordings } from '../copy/workspace-summary';
 import { captureRecoveryLabel } from '../capture/recovery-model';
@@ -123,7 +123,7 @@ export function MyProofsScreen() {
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
     {libraryRows.map((item, index) => <TutorialTarget key={item.proofId} name={index===0?'proofs':''}><CompactProofRow
       title={ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle(item) : item.transaction.itemTitle || 'Shipment Proof'}
-      detail={`${item.presentation.displayStatus} · ${item.presentation.nextAction.label}`}
+      detail={proofListDetail(item.presentation.displayStatus, item.presentation.nextAction.label)}
       completed={item.presentation.completed} disabled={app.busy} onPress={() => void open(item, MOBILE_TASK_UX_ENABLED)} /></TutorialTarget>)}
     {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : ANDROID_TASK_FIRST_REBUILD && library.view === 'progress' ? 'Other records are still available in All.' : ANDROID_TASK_FIRST_REBUILD ? 'Create a record of how you pack your item. No selling account connection needed.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : ANDROID_TASK_FIRST_REBUILD ? 'Create Proof' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : library.view === 'all' && ANDROID_TASK_FIRST_REBUILD ? () => app.selectCreateProof() : () => app.setProofsView('all')} /></TutorialTarget> : null}
     </View>

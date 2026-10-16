@@ -24,6 +24,7 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
   const app = usePackProof(), { colors } = useTheme();
   const [downloading, setDownloading] = useState(false), [downloadError, setDownloadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false), [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
   const [playbackAttempt, setPlaybackAttempt] = useState(0), [retrying, setRetrying] = useState(false);
   const playbackPosition = useRef(initialTime);
   const [imageRatio, setImageRatio] = useState(1);
@@ -76,9 +77,9 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
       </View>
       {video ? <OriginalVideo key={playbackAttempt} uri={uri} token={token} active={active} bookmarks={bookmarks} labelOffsetMs={labelOffsetMs} initialTime={playbackPosition.current} onTime={seconds => { playbackPosition.current = seconds; onTime?.(seconds); }} onRetry={() => void retryPlayback()} retrying={retrying} /> : picture ? <View style={styles.canvas}>
         <PressableScale onPress={() => setExpanded(true)} accessibilityRole="button" accessibilityLabel="Expand original image">
-          <Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={[styles.image, { aspectRatio: imageRatio, maxHeight: dimensions.height * 0.6 }]} onLoad={event => { const { width, height } = event.nativeEvent.source; if (width > 0 && height > 0) setImageRatio(width / height); }} resizeMode="contain" accessibilityLabel={title} onError={() => setImageError(true)} />
+          <Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={[styles.image, { aspectRatio: imageRatio, maxHeight: dimensions.height * 0.6 }]} onLoadStart={() => { setImageLoading(true); setImageError(false); }} onLoadEnd={() => setImageLoading(false)} onLoad={event => { const { width, height } = event.nativeEvent.source; if (width > 0 && height > 0) setImageRatio(width / height); }} resizeMode="contain" accessibilityLabel={title} onError={() => { setImageLoading(false); setImageError(true); }} />
         </PressableScale>
-        {imageError ? <Text style={[styles.meta, { color: colors.error }]}>The image could not load. Refresh the Proof or save the original to view it.</Text> : <Text style={[styles.meta, { color: colors.textSecondary }]}>Tap the image to expand.</Text>}
+        {imageError ? <Text accessibilityRole="alert" style={[styles.meta, { color: colors.error }]}>The image could not load. Refresh the Proof or save the original to view it.</Text> : <Text accessibilityLiveRegion="polite" style={[styles.meta, { color: colors.textSecondary }]}>{imageLoading ? 'Loading original image…' : 'Tap the image to expand.'}</Text>}
       </View> : <View style={styles.canvas}><Text style={[styles.meta, { color: colors.textSecondary }]}>Save the original to open this file on your device.</Text><Button label="Save original" variant="secondary" loading={downloading} onPress={() => void download()} /></View>}
     </View>
     {downloadError ? <Text accessibilityRole="alert" style={[styles.meta, { color: colors.error }]}>{downloadError}</Text> : null}
@@ -88,7 +89,7 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
 
 function OriginalVideo({ uri, token, active, bookmarks, labelOffsetMs, initialTime, onTime, onRetry, retrying }: { uri: string; token: string; active: boolean; bookmarks: EvidenceAnchor[]; labelOffsetMs?: number; initialTime: number; onTime?: (seconds: number) => void; onRetry: () => void; retrying: boolean }) {
   const { colors } = useTheme();
-  const [selected, setSelected] = useState<string | null>(null), [error, setError] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null), [error, setError] = useState(false), [loading, setLoading] = useState(true);
   const restored = useRef(false), timeCallback = useRef(onTime);
   timeCallback.current = onTime;
   const player = useVideoPlayer({ uri, headers: { Authorization: `Bearer ${token}` } }, video => { video.loop = false; video.timeUpdateEventInterval = 0.5; });
@@ -100,11 +101,12 @@ function OriginalVideo({ uri, token, active, bookmarks, labelOffsetMs, initialTi
         player.currentTime = Math.max(0, Math.min(initialTime, player.duration || initialTime));
       }
     };
-    const subscription = player.addListener("statusChange", ({ status }) => { setError(status === "error"); restore(); });
+    const updateStatus = () => { setError(player.status === 'error'); setLoading(player.status === 'idle' || player.status === 'loading'); restore(); };
+    const subscription = player.addListener("statusChange", updateStatus);
     const position = player.addListener("timeUpdate", ({ currentTime }) => {
       if (restored.current && Number.isFinite(currentTime)) timeCallback.current?.(currentTime);
     });
-    restore();
+    updateStatus();
     return () => { subscription.remove(); position.remove(); };
   }, [player]);
   useEffect(() => { if (!active) player.pause(); }, [active, player]);
@@ -115,6 +117,7 @@ function OriginalVideo({ uri, token, active, bookmarks, labelOffsetMs, initialTi
   const scannerBookmark = Number.isFinite(labelOffsetMs) && labelOffsetMs! >= 0 && !bookmarks.some(anchor => anchor.sourceType === "SCANNER_TRIGGERED" && Math.abs(anchor.startMs - labelOffsetMs!) < 1000);
   return <View style={styles.canvas}>
     <VideoView player={player} style={styles.video} nativeControls allowsFullscreen contentFit="contain" accessibilityLabel="Original evidence recording" />
+    {loading ? <View accessibilityLiveRegion="polite" style={styles.stack}><ActivityIndicator accessibilityLabel="Loading original recording" color={colors.accent} /><Text style={[styles.meta, { color: colors.textSecondary }]}>Loading original recording…</Text></View> : !error ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Original recording ready. Use the playback controls to review it.</Text> : null}
     {error ? <View style={styles.stack}><Text accessibilityRole="alert" style={[styles.meta, { color: colors.error }]}>The original recording could not load. Check your connection and retry.</Text><Button label="Retry original playback" variant="secondary" onPress={onRetry} loading={retrying} /></View> : null}
     {bookmarks.length || scannerBookmark ? <View style={styles.bookmarks} accessibilityLabel="Original recording bookmarks">
       {bookmarks.map(anchor => <PressableScale key={anchor.anchorId} accessibilityRole="button" accessibilityState={{ selected: selected === anchor.anchorId }} accessibilityLabel={`Play ${anchor.label} at ${elapsedLabel(anchor.startMs)}`} onPress={() => seek(anchor.anchorId, anchor.startMs)} style={[styles.bookmark, { backgroundColor: colors.accentSoft, borderColor: selected === anchor.anchorId ? colors.accent : colors.accentSoftBorder }]}>

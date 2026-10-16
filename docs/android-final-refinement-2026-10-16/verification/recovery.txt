@@ -1,0 +1,42 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-mobile@0.1.0 test:recovery
+> node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-limits.test.ts tests/capture-recovery.test.ts tests/upload-handoff.test.ts
+
+✔ capture uses the accepted account limits and cannot widen the platform limits (1.591289ms)
+✔ unknown or malformed account limits stop acquisition rather than inventing allowance (0.585672ms)
+✔ older native binaries cannot record beyond a restricted account allowance (0.301224ms)
+✔ write intents precede effects; cleanup requires both authoritative receipts (4.185959ms)
+✔ UX commitment and finalization count observed successful transitions without repeat counts (1.296975ms)
+✔ lost commit response resumes exact evidence without another upload (0.77573ms)
+✔ lost declaration response recovers accepted signature even after local challenge expiry (0.448025ms)
+✔ an accepted iOS declaration survives a lost response without duplicate consent or another upload (0.739194ms)
+✔ pending durability keeps a truthful phase and local bytes; later retry finalizes (0.925715ms)
+✔ explicit compatible server mode finishes canonical submission and retains the local original (0.854718ms)
+✔ strict, missing, malformed, or incompatible capability declarations cannot bypass preservation (1.742446ms)
+✔ compatibility still requires canonical finalization of this exact recording (0.784893ms)
+✔ unavailable capability endpoint cannot opt into compatibility (0.332642ms)
+✔ account change after initialize stops upload and retains original account journal (0.250207ms)
+✔ expired unaccepted declaration requires explicit new confirmation without retake (0.327283ms)
+✔ bounded retry jitter and account checks prevent retry storms or cross-account disclosure (0.158829ms)
+✔ a stage recording requires its own finalized receipt rather than the frozen root receipt (0.57037ms)
+✔ new capture rejects malformed, incompatible or unsigned server capability paths before acquisition (0.280612ms)
+✔ a single-use gateway receipt skips retransmission after a lost upload-completion response (0.284068ms)
+✔ changed order context keeps the original and requires fresh consent without replaying stale authorization (0.426923ms)
+✔ renewed upload cannot replace the saved evidence identity (0.158519ms)
+✔ persisted discard intent prevents upload after restart (0.177037ms)
+✔ missing original stops automatic retries while preserving identity (0.2852ms)
+✔ preparation yields without sending bytes; another recording can prepare while the first upload is stalled (80.558118ms)
+✔ an existing evidence identity uses resumable delivery and keeps the same original (27.052388ms)
+✔ permission/transport selection and completion cannot manufacture a saved Proof (0.478912ms)
+✔ queued work is distinct from an interrupted upload or a live transfer (15.335576ms)
+✔ direct S3 upload preserves service endpoint forms and rejects lookalike suffixes (0.446673ms)
+✔ malformed S3 hyphen runs complete within a bounded worker deadline (184.702911ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 842.51203

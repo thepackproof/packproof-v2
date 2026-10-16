@@ -111,10 +111,10 @@ test('native adapter removes foreign account/server recordings and keeps automat
 });
 
 test('tap-time routing uses refreshed permissions/state and never stale capture or finalization actions',()=>{
-  const current={proofId:'p',status:'READY_FOR_EVIDENCE',workflowType:'COMMERCE_SALE',finalizedAt:null,participants:[{userId:'seller',role:'SELLER'}],evidence:[]} as unknown as ProofView;
+  const current={proofId:'p',status:'READY_FOR_EVIDENCE',workflowType:'COMMERCE_SALE',finalizedAt:null,participants:[{userId:'seller',role:'SELLER',status:'JOINED'}],evidence:[]} as unknown as ProofView;
   assert.equal(freshProofDestination(current,'seller').route,'capture');
   assert.equal(freshProofDestination({...current,status:'FINALIZED',finalizedAt:'2026-10-09'},'seller').route,'proof');
-  assert.match(freshProofDestination({...current,status:'FINALIZED'},'seller').notice!,/already been finalized/);
+  assert.equal(freshProofDestination({...current,status:'FINALIZED'},'seller').notice,undefined);
   assert.equal(freshProofDestination(current,'unrelated-user').route,'proof');
   assert.equal(freshProofDestination({...current,status:'UNKNOWN' as any},'seller').route,'proof');
   assert.equal(freshProofDestination({...current,status:'EVIDENCE_COMMITTED',evidence:[{validationStatus:'COMMITTED',evidenceType:'FULFILLMENT_CAPTURE'}]} as ProofView,'seller').route,'finalize');
@@ -125,7 +125,7 @@ test('tap-time routing uses refreshed permissions/state and never stale capture 
 });
 
 test('saved capture resume requires fresh capture permission; offline permits playback only',()=>{
-  const current={proofId:'p',status:'READY_FOR_EVIDENCE',workflowType:'COMMERCE_SALE',finalizedAt:null,participants:[{userId:'seller',role:'SELLER'}],evidence:[]} as unknown as ProofView;
+  const current={proofId:'p',status:'READY_FOR_EVIDENCE',workflowType:'COMMERCE_SALE',finalizedAt:null,participants:[{userId:'seller',role:'SELLER',status:'JOINED'}],evidence:[]} as unknown as ProofView;
   assert.deepEqual(savedCaptureDestination(current,'seller'),{route:'capture',allowResume:true,reviewOnly:false,notice:null});
   const offline=savedCaptureDestination(null,'seller');
   assert.equal(offline.route,'capture');assert.equal(offline.reviewOnly,true);assert.equal(offline.allowResume,false);assert.match(offline.notice!,/Offline review only/);
