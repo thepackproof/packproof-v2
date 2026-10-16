@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const here=path.dirname(fileURLToPath(import.meta.url));
+const root=path.resolve(here,'../../..');
+const target=process.argv[2];
+if(!target)throw new Error('Pass an output HTML path');
+let html=fs.readFileSync(path.join(here,'review.template.html'),'utf8');
+const statement=fs.readFileSync(path.join(root,'mobile/src/attestation/statement.ts'),'utf8').match(/SELLER_SHIPPING_STATEMENT = "([^"]+)"/)[1];
+html=html.replaceAll('__SELLER_STATEMENT__',statement.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+const assets={FONT:['web/public/fonts/Inter-variable.ttf','font/ttf'],POSTER:['web/public/sample-packing-poster.jpg','image/jpeg'],VIDEO:['web/public/sample-packing.mp4','video/mp4'],SYMBOL:['web/public/brand/packproof-symbol.svg','image/svg+xml'],WORDMARK:['web/public/brand/packproof-wordmark.svg','image/svg+xml'],HISTORICAL:['docs/proof-navigation-2026-09-08/acceptance/screenshots/proof-unrecorded-390.jpg','image/jpeg']};
+for(const [key,[file,mime]] of Object.entries(assets))html=html.replaceAll(`__${key}__`,`data:${mime};base64,${fs.readFileSync(path.join(root,file)).toString('base64')}`);
+html=html.replace('/*__MODEL__*/',fs.readFileSync(path.join(here,'model.mjs'),'utf8').replace(/^export /gm,''));
+fs.mkdirSync(path.dirname(path.resolve(target)),{recursive:true});fs.writeFileSync(target,html);
+console.log(JSON.stringify({file:path.resolve(target),bytes:Buffer.byteLength(html),networkDependencies:0}));

@@ -1,0 +1,12 @@
+PASS all seven scenarios render with exactly three in-Proof destinations
+PASS photo acceptance advances locally, then waits for item-step acknowledgment
+PASS ordinary journey requires declaration and waits for artifact plus finalization acknowledgments
+PASS creating the same demo order resumes its existing saved record
+PASS offline keeps local original and offers a safe connection check
+PASS wrong-Proof completion event leaves visible state unchanged
+PASS Home is guarded while recording and interruption is disclosed
+PASS case packet includes an issue control, explicit source selection and preserved notes
+PASS tools on an empty record do not invent saved sources
+PASS charcoal, 200% text and reduced motion controls remain available
+PASS standalone review has no external assets or template placeholders
+11 DOM interaction checks passed. Layout, video decoding and native behavior are not validated by jsdom.

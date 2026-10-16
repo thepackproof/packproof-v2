@@ -1,0 +1,43 @@
+✔ light ink on paper normal text contrast (1.1627ms)
+✔ light ink on canvas normal text contrast (0.1038ms)
+✔ light secondary on paper normal text contrast (0.0524ms)
+✔ light secondary on canvas normal text contrast (0.0728ms)
+✔ light action on paper normal text contrast (0.111ms)
+✔ light success on success-tint normal text contrast (0.0701ms)
+✔ light attention on attention-tint normal text contrast (0.1204ms)
+✔ light danger on danger-tint normal text contrast (0.2211ms)
+✔ light control boundaries on paper (0.4148ms)
+✔ light control boundaries on canvas (0.5459ms)
+✔ dark ink on paper normal text contrast (0.0913ms)
+✔ dark ink on canvas normal text contrast (0.0389ms)
+✔ dark secondary on paper normal text contrast (0.0277ms)
+✔ dark secondary on canvas normal text contrast (0.0239ms)
+✔ dark action on paper normal text contrast (0.0218ms)
+✔ dark success on success-tint normal text contrast (0.022ms)
+✔ dark attention on attention-tint normal text contrast (0.0361ms)
+✔ dark danger on danger-tint normal text contrast (0.3053ms)
+✔ dark control boundaries on paper (0.0459ms)
+✔ dark control boundaries on canvas (0.0399ms)
+✔ primary action uses readable white text in both themes (0.0841ms)
+✔ ordinary sales never invent a required photo task (2.4947ms)
+✔ grading front/back acceptance advances only after durable local acceptance (0.546ms)
+✔ partial item acknowledgment is file specific (0.5691ms)
+✔ file commitment cannot silently accept the grading workflow step (0.3141ms)
+✔ local recording is never server success (0.2086ms)
+✔ required declaration is explicit and false by default (0.0848ms)
+✔ transfer, artifact acknowledgment and finalization are separate (0.1739ms)
+✔ late callback remains on its Proof and session (0.1023ms)
+✔ participant wait does not negate saved evidence (0.4188ms)
+✔ offline originals and remote persistence are independent (0.3214ms)
+✔ offline transfer never advances through artificial progress (0.2928ms)
+✔ interruptions stop recording and disclose continuity loss (0.1632ms)
+✔ finalized recordings and photos cannot be silently replaced (0.1272ms)
+✔ unknown response exposes reconciliation, preserving the original (0.6167ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 35
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 101.6839
