@@ -1,6 +1,8 @@
 # Android Phase 1 refinement review
 
-Phase 1 source changes are implemented for the October 16 plan. Local automated checks pass. Native build and physical-device acceptance remain open, so this is **NOT READY for release or Phase 2 acceptance**. Sections 7.1 and 6.2 of the supplied plan require review and acceptance before proceeding to visual polish.
+Phase 1 source changes are implemented for the October 16 plan. Local automated checks pass. Physical-device acceptance remains open, so this is **NOT READY for release or Phase 2 acceptance**. Sections 7.1 and 6.2 of the supplied plan require review and acceptance before proceeding to visual polish. Publication and current build results are tracked in [draft PR #102](https://github.com/thepackproof/packproof-v2/pull/102).
+
+The [change manifest](CHANGE-MANIFEST.md) maps task IDs to modified files and before/after behavior. The [device review worksheet](DEVICE-REVIEW.md) provides the outstanding native reproduction steps and result fields.
 
 ## Changes and task status
 
@@ -42,7 +44,7 @@ Results in `verification/` record actual local runs, not device acceptance. Coun
 
 The dedicated `Android refinement review APK` workflow uses the exact pull-request head and existing internal-review builder. It checks package identity, source SHA in native config and bundle, local debug signing and 16 KB alignment. It produces an APK plus receipt and logs. A successful build is not device validation.
 
-The existing internal profile is version 1.0.1 / 66 with local debug signing. It is intended for a clean spare device or emulator. It cannot upgrade the differently signed Play installation. Do not uninstall the current app or clear its saved evidence to install it. The implementation was verified locally at commit `4593ae7`, with provider regression evidence added at `6c67aae`. The founder explicitly authorized publication of the review branch and its internal APK build on October 16. Build status is pending. This authorization does not include merge, production deployment or store submission. The CI receipt records the exact published source commit.
+The existing internal profile is version 1.0.1 / 66 with local debug signing. It is intended for a clean spare device or emulator. It cannot upgrade the differently signed Play installation. Do not uninstall the current app or clear its saved evidence to install it. The implementation was verified locally at commit `4593ae7`, with provider regression evidence added at `6c67aae`. The founder explicitly authorized publication of the review branch and its internal APK build on October 16. The exact same source tree was published as `a8d085c91755917ecb4286b705e4a0f3608fd1ab`; `bd95df7ec1894ba12526fce7b8aa9c4b88297a99` then corrected SDK setup to use the supported platform-tools package. The first build stopped before compilation on the obsolete default tools package. Current workflow results and the downloadable receipt are linked from PR #102. This authorization does not include merge, production deployment or store submission. The CI receipt records the exact published source commit.
 
 ## Required Gate 1 review
 
