@@ -1,0 +1,128 @@
+name: Submit verified Android 68 to Google Play
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-submit-68.yml'
+      - 'scripts/verify-android-submission.py'
+      - 'scripts/test_android_submission.py'
+      - 'config/releases/android-68.json'
+  push:
+    branches: [main]
+    paths: ['config/releases/android-68.json']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packproof-android-production-68
+  cancel-in-progress: false
+
+jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+
+  verify-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s scripts -p test_android_submission.py
+      - run: node --test scripts/rnd-release-guard.test.mjs
+
+  submit:
+    if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    needs: [verify-source, rnd-release-policy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read the explicit release selection
+        run: |
+          python3 <<'PY'
+          import importlib.util, json, os
+          spec = importlib.util.spec_from_file_location('release', 'scripts/verify-android-submission.py')
+          release = importlib.util.module_from_spec(spec); spec.loader.exec_module(release)
+          selection = json.load(open('config/releases/android-68.json'))
+          release.verify_selection(selection)
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              for key, name in [('sourceSha', 'EXPECTED_SOURCE_SHA'), ('archiveRunId', 'ARCHIVE_RUN_ID'), ('easBuildId', 'EAS_BUILD_ID')]:
+                  output.write(f'{name}={selection[key]}\n')
+          PY
+      - name: Verify successful main build and unchanged application inputs
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_SOURCE_SHA" HEAD
+          git diff --exit-code "$EXPECTED_SOURCE_SHA" HEAD -- mobile packages config/rnd .github/workflows/android-aab.yml .github/actions/expo-auth
+          mkdir -p dist/android-68
+          gh api "repos/$GH_REPO/actions/runs/$ARCHIVE_RUN_ID" > dist/android-68/archive-run.json
+          python3 scripts/verify-android-submission.py --selection config/releases/android-68.json --run-json dist/android-68/archive-run.json
+          gh run download "$ARCHIVE_RUN_ID" --repo "$GH_REPO" --name packproof-1.0.1-68-aab --dir dist/android-68/archive
+      - name: Inspect exact bundle, source, checksum, signature and native release guards
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-android-submission.py --selection config/releases/android-68.json --run-json dist/android-68/archive-run.json \
+            --build-json dist/android-68/archive/eas-build.json --aab dist/android-68/archive/packproof-1.0.1-68.aab \
+            --checksums dist/android-68/archive/SHA256SUMS > dist/android-68/submission-verification.json
+          python3 mobile/scripts/check-aab-release.py dist/android-68/archive/packproof-1.0.1-68.aab > dist/android-68/native-verification.json
+          cat dist/android-68/submission-verification.json
+      - run: npm ci
+        working-directory: mobile
+      - name: Authenticate with existing Expo credential
+        uses: ./.github/actions/expo-auth
+      - name: Configure only the authorized production submission
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const selection = JSON.parse(fs.readFileSync('config/releases/android-68.json', 'utf8'));
+          const config = JSON.parse(fs.readFileSync('mobile/eas.json', 'utf8'));
+          config.submit['android-production-68'] = {android: {
+            applicationId: selection.package, track: selection.track,
+            releaseStatus: selection.releaseStatus, changesNotSentForReview: selection.changesNotSentForReview,
+          }};
+          fs.writeFileSync('mobile/eas.json', JSON.stringify(config, null, 2) + '\n');
+          NODE
+      - name: Submit the selected build to Google Play production
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@24.4.2 submit --platform android --profile android-production-68 --id "$EAS_BUILD_ID" --non-interactive --wait | tee ../dist/android-68/submission-result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packproof-android-68-submission-receipts
+          if-no-files-found: warn
+          retention-days: 90
+          path: |
+            config/releases/android-68.json
+            dist/android-68/archive-run.json
+            dist/android-68/submission-verification.json
+            dist/android-68/native-verification.json
+            dist/android-68/submission-result.txt
