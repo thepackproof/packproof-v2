@@ -45,6 +45,9 @@ class AndroidSubmission(unittest.TestCase):
 
     def test_requires_exact_store_build_identity(self):
         release.verify_build([BUILD], SELECTION)
+        cli_receipt = {key: value for key, value in BUILD.items() if key != "project"}
+        release.verify_build(cli_receipt, SELECTION)
+        release.verify_build({**cli_receipt, "project": None}, SELECTION)
         for key in BUILD:
             with self.subTest(key=key), self.assertRaises((ValueError, AttributeError)):
                 release.verify_build({**BUILD, key: {} if key == "project" else "wrong"}, SELECTION)
