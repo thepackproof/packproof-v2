@@ -1,0 +1,122 @@
+✖ F1.01 opening a finalized root record is ordinary read-only navigation (3.783741ms)
+✖ F1.02 workflow supporting copy comes from the same server requirement (0.482557ms)
+✖ F1.08 generic participant events never invent a buyer role (0.30532ms)
+✖ F1.08 a historical actor role survives later participant changes (0.260072ms)
+✖ F1.04 a mismatched server record cannot be substituted into a tapped Proof (0.522187ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 0
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 276.12333
+
+✖ failing tests:
+
+test at mobile/tests/final-refinement.test.ts:2:1452
+✖ F1.01 opening a finalized root record is ordinary read-only navigation (3.783741ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   notice: 'This Proof has already been finalized. The current record is open.',
+      route: 'proof'
+    }
+  
+      at TestContext.<anonymous> (/workspace/scratch/4b68122ed991/packproof-refinement/mobile/tests/final-refinement.test.ts:11:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { route: 'proof', notice: 'This Proof has already been finalized. The current record is open.' },
+    expected: { route: 'proof' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at mobile/tests/final-refinement.test.ts:2:1673
+✖ F1.02 workflow supporting copy comes from the same server requirement (0.482557ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+      buttonLabel: 'Document item 1 of 1',
+  +   reason: 'Continue the required step for this Proof.'
+  -   reason: 'Capture the front and back of this item.'
+    }
+  
+      at TestContext.<anonymous> (/workspace/scratch/4b68122ed991/packproof-refinement/mobile/tests/final-refinement.test.ts:14:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { buttonLabel: 'Document item 1 of 1', reason: 'Continue the required step for this Proof.' },
+    expected: { buttonLabel: 'Document item 1 of 1', reason: 'Capture the front and back of this item.' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at mobile/tests/final-refinement.test.ts:2:2021
+✖ F1.08 generic participant events never invent a buyer role (0.30532ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'Buyer joined'
+  - 'Participant joined'
+  
+      at TestContext.<anonymous> (/workspace/scratch/4b68122ed991/packproof-refinement/mobile/tests/final-refinement.test.ts:19:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Buyer joined',
+    expected: 'Participant joined',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at mobile/tests/final-refinement.test.ts:2:2390
+✖ F1.08 a historical actor role survives later participant changes (0.260072ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  null !== 'Seller'
+  
+      at TestContext.<anonymous> (/workspace/scratch/4b68122ed991/packproof-refinement/mobile/tests/final-refinement.test.ts:24:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: 'Seller',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at mobile/tests/final-refinement.test.ts:2:2780
+✖ F1.04 a mismatched server record cannot be substituted into a tapped Proof (0.522187ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (/workspace/scratch/4b68122ed991/packproof-refinement/mobile/tests/final-refinement.test.ts:28:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /requested Proof/,
+    operator: 'rejects',
+    diff: 'simple'
+  }

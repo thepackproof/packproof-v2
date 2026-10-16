@@ -25,7 +25,7 @@ test('waiting buyer and authoritative completed Proofs are not misclassified as 
   const result=selectRecoveryWorkspace(f);assert.equal(result.attention.length,0);assert.equal(result.model.counts.completed,1);
 });
 test('grading copy preserves the server action without guessing its photo recipe',()=>{
-  assert.deepEqual(proofTaskCopy('WORKFLOW_ACTION','Document item 1 of 3'),{buttonLabel:'Document item 1 of 3',reason:'Continue the required step for this Proof.'});
+  assert.deepEqual(proofTaskCopy('WORKFLOW_ACTION','Document item 1 of 3'),{buttonLabel:'Document item 1 of 3',reason:'Capture the front and back of this item.'});
   assert.equal(proofTaskCopy('RECORD_PACKING','Record packing').buttonLabel,'Record packing');
 });
 test('local photo recovery comes before new capture and never crosses accounts',()=>{

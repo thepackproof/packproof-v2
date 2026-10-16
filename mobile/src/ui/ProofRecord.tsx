@@ -197,6 +197,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     {!fixedHeader ? recordHeader : null}
         {detailsExpanded ? <View style={[styles.details, { borderBottomColor: colors.divider }]}>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>Order details</Text>
+          {proof.status === 'FINALIZED' ? <Text style={[styles.note, { color: colors.textSecondary }]}>Finalized · Read-only. The original evidence and finalization manifest cannot be changed. Any later receipt or return is recorded separately.</Text> : null}
           <Text style={[styles.note, { color: colors.textSecondary }]}>{corrections.sourceLabel}</Text>
           {ANDROID_TASK_FIRST_REBUILD ? <RemainingShipmentNotice value={proof} /> : null}
           <Text selectable style={[styles.text, { color: colors.textPrimary }]}>{txn.itemTitle || "Your item"}</Text>
@@ -219,7 +220,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
             {sellerAttestation ? <View style={styles.info}>
               <StatusBadge label="Attestation recorded" tone="success" semantic="integrity" />
               <Text style={[styles.attestationStatement, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
-              <Text style={[styles.finePrint, { color: colors.textSecondary }]}>Recorded {formatDateTime(sellerAttestation.createdAt)} · Biometric signature verified</Text>
+              <Text style={[styles.finePrint, { color: colors.textSecondary }]}>Recorded {formatDateTime(sellerAttestation.createdAt)} · Signing-key signature verified by the server. Device authentication method reported by the app; not independently verified.</Text>
             </View> : null}
             {bookmarkError ? <Text style={[styles.note, { color: colors.textSecondary }]}>Saved bookmarks could not be loaded. Pull down to refresh; the original recording remains available.</Text> : null}
           </> : null}

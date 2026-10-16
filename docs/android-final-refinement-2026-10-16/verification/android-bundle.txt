@@ -1,0 +1,55 @@
+Using src/app as the root directory for Expo Router.
+Starting Metro Bundler
+| (node:30) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:31) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:46) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:33) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:49) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:29) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Android ./index.ts ▓░░░░░░░░░░░░░░░  9.2% ( 68/327)
+Android ./index.ts ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 74.4% (765/887)
+ WARN  Attempted to import the module "/workspace/scratch/cb84b950deef/packproof-release-r2/mobile/node_modules/@noble/hashes/crypto.js" which is not listed in the "exports" of "/workspace/scratch/cb84b950deef/packproof-release-r2/mobile/node_modules/@noble/hashes" under the requested subpath "./crypto.js". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+Android ./index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (1097/1097)
+Android Bundled 11681ms index.ts (1097 modules)
+Android ./index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (1097/1097)
+
+› Assets (25):
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf (70.3 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf (66.2 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/EvilIcons.ttf (13.5 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf (56.2 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf (166 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Brands.ttf (134 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Regular.ttf (33.7 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Solid.ttf (203 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Brands.ttf (209 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Regular.ttf (68 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Solid.ttf (424 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.ttf (314 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.ttf (57 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf (443 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf (1.15 MB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf (357 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.ttf (49.4 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.ttf (54.1 kB)
+../../../cb84b950deef/packproof-release-r2/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Zocial.ttf (25.8 kB)
+../web/public/sample-packing.mp4 (2.66 MB)
+assets/fonts/Inter-Bold.ttf (343 kB)
+assets/fonts/Inter-Regular.ttf (342 kB)
+assets/fonts/Inter-SemiBold.ttf (343 kB)
+assets/packproof-symbol-reversed.png (9.49 kB)
+assets/packproof-symbol.png (11 kB)
+
+› android bundles (1):
+_expo/static/js/android/index-42a5db67ebea8ded0d4c6295f99392ef.hbc (4.4 MB)
+
+› Files (1):
+metadata.json (1.72 kB)
+
+Exported: dist/refinement

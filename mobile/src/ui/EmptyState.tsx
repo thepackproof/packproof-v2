@@ -35,7 +35,7 @@ export function OfflineBanner(props: { visible: boolean; message?: string }) {
       accessibilityRole="alert"
     >
       <Ionicons name="cloud-offline-outline" size={16} color={colors.warningText} />
-      <Text style={[styles.bannerText, { color: colors.warningText }]}>{props.message ?? "Offline"}</Text>
+      <Text style={[styles.bannerText, { flex: 1, minWidth: 0, color: colors.warningText }]}>{props.message ?? "Offline"}</Text>
     </View>
   );
 }
@@ -69,6 +69,7 @@ const styles = StyleSheet.create({
   title: { ...typography.cardTitle, textAlign: "center" },
   body: { ...typography.secondary, textAlign: "center", maxWidth: 360 },
   banner: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  bannerCopy: { flex: 1, gap: 4 },
-  bannerText: { ...typography.secondaryStrong, flex: 1 },
+  bannerCopy: { flex: 1, minWidth: 0, gap: 4 },
+  bannerText: { ...typography.secondaryStrong },
   technical: { ...typography.caption },
 });

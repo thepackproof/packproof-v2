@@ -1,0 +1,21 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-mobile@0.1.0 test:local-review-build
+> node --test tests/local-review-build.test.cjs tests/mobile-ux-build-profile.test.cjs
+
+✔ local review build refuses ambiguous source and output identity (0.971464ms)
+✔ local review loads inherited HTTPS authentication without changing production profile (0.307214ms)
+✔ local review rejects store output, stale versions and inherited profile loops (0.432462ms)
+✔ actual review config must retain source, role flags and media protections (0.347474ms)
+✔ internal review inherits authenticated shipping runtime and signing while creating version 66 APK only (0.717391ms)
+✔ internal review config has worker source identity and keeps release authentication and media guards (271.351346ms)
+✔ review worker binds Metro to its source and uses APK validation without changing store AAB checks (1.795216ms)
+✔ native startup bars match dark task UX and retain the light rollback composition (105.235807ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 451.686114

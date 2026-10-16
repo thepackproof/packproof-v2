@@ -10,19 +10,19 @@ function productionConfig(overrides = {}) {
     cwd: path.resolve(__dirname, '..'), encoding: 'utf8',
     env: {...process.env, EAS_BUILD_PROFILE: 'production', EAS_BUILD_PLATFORM: 'android', EAS_BUILD: 'true',
       EAS_BUILD_GIT_COMMIT_HASH: 'ab'.repeat(20), EXPO_PUBLIC_PACKPROOF_BUILD_SHA: 'cd'.repeat(20),
-      PACKPROOF_ANDROID_VERSION_CODE: '68', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
+      PACKPROOF_ANDROID_VERSION_CODE: '69', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
       EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'cognito', EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'https://api.example.com',
       EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION: 'true', EXPO_PUBLIC_PACKPROOF_RND: 'false', EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true', EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true', ...overrides},
   });
 }
 
-test('production profile pins store AAB 68 and retains the existing runtime and upload key', () => {
+test('production profile pins store AAB 69 and retains the existing runtime and upload key', () => {
   const config = require('../eas.json');
   const production = config.build.production;
   assert.ok(production, 'Android production profile is required');
   assert.equal(production.extends, 'shipping-integration');
   assert.equal(production.environment, 'production');
-  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '68');
+  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '69');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST, 'true');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX, 'true');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION, 'true');
@@ -42,7 +42,7 @@ test('production config binds worker source, authenticated release guards and UX
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.version, '1.0.1');
-  assert.equal(app.android.versionCode, 68);
+  assert.equal(app.android.versionCode, 69);
   assert.equal(app.android.package, 'com.packproof.mobile');
   assert.equal(app.extra.eas.projectId, '0196c3f7-cb3a-472c-99be-825558f227e8');
   assert.equal(app.android.allowBackup, false);
@@ -96,7 +96,7 @@ test('signed AAB workflow resolves production identity before dispatch and freez
       env: {...process.env, EAS_BUILD: '', EAS_BUILD_PROFILE: '', EAS_BUILD_GIT_COMMIT_HASH: '',
         EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false', GITHUB_OUTPUT: output}});
     assert.equal(result.status, 0, result.stderr);
-    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-68(?:\n|$)/);
+    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-69(?:\n|$)/);
   } finally {
     fs.rmSync(temporary, {recursive: true, force: true});
   }

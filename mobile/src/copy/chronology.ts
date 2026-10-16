@@ -57,7 +57,7 @@ export function chronologyCategoryLabel(
 export function humanChronologyTitle(eventType: string, fallbackTitle: string): string {
   switch (eventType.toUpperCase()) {
     case "EVIDENCE_COMMITTED":
-      return "Packing video recorded";
+      return "Evidence committed";
     case "TRACKING_ASSOCIATED":
       return "Tracking number added";
     case "ATTESTATION_COMMITTED":
@@ -69,9 +69,9 @@ export function humanChronologyTitle(eventType: string, fallbackTitle: string): 
     case "PROOF_FINALIZED":
       return "Packing record sealed";
     case "PARTICIPANT_JOINED":
-      return "Buyer joined";
+      return "Participant joined";
     case "PARTICIPANT_INVITED":
-      return "Buyer invited";
+      return "Participant invited";
     default:
       return fallbackTitle;
   }

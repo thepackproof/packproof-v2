@@ -1,0 +1,38 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @packproof/v2-mobile@0.1.0 test:proof-record
+> node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts
+
+✔ timeline orders reported times without rewriting canonical events and keeps category counts (2.485857ms)
+✔ only valid bookmarks for the exact root original become replay chapters (0.404731ms)
+✔ corrections remove superseded chapters while preserving source history (0.233021ms)
+✔ receipt acknowledgment is derived from receipt stages, never carrier delivery or returns (0.249125ms)
+✔ new proof view state starts independent tab offsets (0.217739ms)
+✔ activity highlights keep shipment and evidence milestones while detailed history retains every access (0.463569ms)
+✔ ordinary Proof finalization guidance cannot be overwritten by a stale server capture instruction (0.294994ms)
+✔ Proof completion labels reflect canonical state and do not expose internal enums (0.812876ms)
+✔ the same Proof includes committed receipt and return originals without mixing stage identities (0.533133ms)
+✔ completion never celebrates local or uploaded states as a saved Proof (0.310278ms)
+✔ access grouping preserves exact events and separates actor, link, source and UTC window (0.726726ms)
+✔ correction policy protects imported and captured facts, including stale deep links (0.355806ms)
+✔ visible map tiles are reused for seven days and stale or invalid file timestamps expire (0.936451ms)
+✔ tracking uses explicit provider coordinates and never substitutes a place name or empty value (0.799265ms)
+✔ map requests cover the viewport and correctly place the reported point at its center (0.319962ms)
+✔ tile indexes wrap at the antimeridian and remain bounded near the map poles (0.382957ms)
+✔ map links retain reported coordinates, searches escape locations, and stale reports use a strict 48-hour boundary (0.194152ms)
+✔ tracking empty and failure copy does not invent carrier movement (9.596936ms)
+✔ a fresh screen leaves native scrolling uncontrolled (1.222112ms)
+✔ saved position waits for geometry and async content without saving initial zero events (0.261955ms)
+✔ restoration clamps to available content and runs only once after later layout changes (0.161203ms)
+✔ a drag cancels delayed restoration permanently and preserves the user's new position (0.19907ms)
+✔ a new gesture also releases acknowledgement gating if native restoration has not completed (0.406453ms)
+✔ native pixel rounding is accepted while stale positions are ignored (0.154062ms)
+✔ returning to a saved tab gets a new one-shot restoration with short content clamped to zero (0.350718ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 263.893585
