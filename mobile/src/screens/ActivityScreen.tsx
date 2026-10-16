@@ -61,13 +61,14 @@ export function ActivityScreen() {
     { id: "completed", title: "Saved recording copies" },
   ] as const;
   return <AppScreen bottomInset={false} initialOffsetY={selectedSessionId ? 0 : app.readWorkspaceOffset("activity")} onScrollOffset={offset => { if (!selectedSessionId) app.setWorkspaceOffset("activity", offset); }} resetScrollKey={`${filter}:${selectedSessionId ?? ""}`} onRefresh={() => { setGeneration(value => value + 1); void app.run(app.syncWorkspace); }} refreshing={app.busy}>
-    {ANDROID_TASK_FIRST_REBUILD && selectedSessionId ? <AppHeader title="Recording details" onBack={() => app.go("activity", { activityFilter: "all" })} /> : <WorkspaceHeader section="Updates" />}
-    {!ANDROID_TASK_FIRST_REBUILD || !selectedSessionId ? <Text accessibilityRole="header" style={[styles.title, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color: colors.textPrimary }]}>Updates</Text> : null}
+    {ANDROID_TASK_FIRST_REBUILD && selectedSessionId ? <AppHeader title="Recording details" onBack={() => app.go("activity", { activityFilter: "all" })} /> : <WorkspaceHeader section={ANDROID_TASK_FIRST_REBUILD ? "Activity" : "Updates"} />}
+    {!ANDROID_TASK_FIRST_REBUILD || !selectedSessionId ? <Text accessibilityRole="header" style={[styles.title, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color: colors.textPrimary }]}>{ANDROID_TASK_FIRST_REBUILD ? "Activity" : "Updates"}</Text> : null}
     {!selectedSessionId ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} accessibilityRole="tablist" accessibilityLabel="Update filters">
       {([["all", "All"], ["attention", "Action needed"], ["uploading", ANDROID_TASK_FIRST_REBUILD ? "In progress" : "Uploading"], ["notifications", ANDROID_TASK_FIRST_REBUILD ? "For you" : "Notifications"], ["completed", "Saved copies"]] as const).map(([id, label]) => <PressableScale key={id} accessibilityRole="tab" accessibilityState={{ selected: filter === id }} onPress={() => app.go("activity", { activityFilter: id })} style={[styles.filter, { backgroundColor: filter === id ? colors.accentSoft : colors.surface }]}><Text style={[styles.text, { color: filter === id ? colors.accentText : colors.textSecondary }]}>{label}</Text></PressableScale>)}
     </ScrollView> : null}
     <OfflineBanner visible={app.offline} /><ErrorBanner message={app.error} />
-    {!selectedSessionId && (filter === 'all' || filter === 'attention') ? <View style={styles.group}>
+    {ANDROID_TASK_FIRST_REBUILD && !selectedSessionId ? <Button label="View tasks in Proofs" variant="tertiary" onPress={() => {app.setProofsView('attention');app.go('proofs');}} /> : null}
+    {!ANDROID_TASK_FIRST_REBUILD && !selectedSessionId && (filter === 'all' || filter === 'attention') ? <View style={styles.group}>
       <Text accessibilityRole="header" style={[styles.heading,{color:colors.textPrimary}]}>{ANDROID_TASK_FIRST_REBUILD ? "Proofs needing action" : "Action needed"} · {workspace.attention.length}</Text>
       {workspace.attention.map(row => <CompactProofRow key={row.proofId} title={ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle(row) : row.transaction.itemTitle || 'Proof'} detail={row.taskDescription} disabled={app.busy} onPress={() => openAttentionTask(row)} />)}
       {!workspace.attention.length ? <Text style={[styles.text,{color:colors.textSecondary}]}>{app.workspaceReconciled ? 'No Proofs need action.' : 'Refresh your Proofs to check what needs action.'}</Text> : null}
@@ -86,7 +87,7 @@ export function ActivityScreen() {
       {!ANDROID_TASK_FIRST_REBUILD || !selectedRecording ? <Button label="View all Updates" variant="secondary" onPress={() => app.go("activity", { activityFilter: "all" })} /> : null}
     </View> : groups.filter(section => (filter === "all" && section.id !== "completed") || filter === section.id).map(section => {
       const rows = recordings.filter(capture => activityGroup(capture) === section.id && (section.id !== 'attention' || (ANDROID_TASK_FIRST_REBUILD
-        ? !recordingRepresentedByTask(capture, workspace.attention)
+        ? true
         : !workspace.attention.some(row=>row.proofId===capture.captureProofId))));
       if (!rows.length && (section.id === 'attention' || section.id === 'uploading' && workspace.photoDrafts.some(draft => draft.phase === 'SUBMITTING'))) return null;
       return <View key={section.id} style={styles.group}><Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{section.title}</Text>

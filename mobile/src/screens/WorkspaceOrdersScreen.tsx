@@ -121,7 +121,7 @@ export function WorkspaceOrdersScreen({ station = false }: { station?: boolean }
       </> : <Button label="Create Proof" icon="add-outline" disabled={busy} onPress={() => app.selectCreateProof()} />}
       {app.offline ? <Text accessibilityLiveRegion="polite" style={[taskFirstTypography.secondary, { color: colors.warningText }]}>You’re offline. Saved orders may be out of date. Reconnect before starting a new recording.</Text> : null}
       <ErrorBanner message={app.error || error} />
-      {station ? <View style={styles.taskSection}>
+      {station && (loading || error || list.length > 0) ? <View style={styles.taskSection}>
         <Text accessibilityRole="header" style={[taskFirstTypography.rowTitle, { color: colors.textPrimary }]}>Shipment queue</Text>
         <Button label="Orders" variant="tertiary" onPress={() => app.go("orders")} />
       </View> : null}
@@ -157,7 +157,7 @@ export function WorkspaceOrdersScreen({ station = false }: { station?: boolean }
             : state.state === "ready" ? void app.openOrder(order.proofId, station)
               : void app.openProofDestination({ proofId: order.proofId, intent: completed || state.state === "excluded" ? "view" : "resume" })} />;
       })}</View> : null}
-      {!loading && !error && !list.length && (!preparedProofIds.length || station) ? <View style={styles.taskEmpty}>
+      {!station && !loading && !error && !list.length && !preparedProofIds.length ? <View style={styles.taskEmpty}>
         <Text style={[taskFirstTypography.secondary, { color: colors.textSecondary }]}>{station
           ? items.length ? "No shipments are waiting to be packed. Your other orders are available in Orders." : "No imported orders yet. You can create a Proof without a selling account."
           : query.trim() ? "No matching orders. Try another reference, item, or marketplace." : "No orders in this view. Create a Proof manually or connect a selling account."}</Text>

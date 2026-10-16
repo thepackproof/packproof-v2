@@ -1,7 +1,8 @@
-import type { ComponentProps } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, type ComponentProps } from "react";
+import { Alert, BackHandler, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePackProof } from "../app/PackProofProvider";
+import { formFromTransaction } from "../copy/forms";
 import { recordCorrectionState } from "../copy/record-context";
 import { typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
@@ -17,9 +18,25 @@ export function EditPurchaseScreen() {
   const context = recordCorrectionState(app.proof, app.transactionDetail ?? app.proof?.transaction, app.role, Boolean(app.localCapture && app.session?.captureProofId === app.proof?.proofId));
   const locked = !context.canCorrectOrder;
   const form = app.editForm;
+  const back = () => {
+    if(app.busy)return;
+    const saved = app.transactionDetail ?? app.proof?.transaction;
+    if (app.route.returnToCapture && saved && JSON.stringify(form) !== JSON.stringify(formFromTransaction(saved))) {
+      Alert.alert("Unsaved item information", "Save your changes before returning to the camera, or discard these edits.", [
+        { text: "Keep editing", style: "cancel" },
+        { text: "Save and continue", onPress: () => void app.savePurchaseDetails() },
+        { text: "Discard edits", style: "destructive", onPress: () => { app.setEditForm(formFromTransaction(saved)); app.goBack(); } },
+      ]);
+    } else app.goBack();
+  };
+  useEffect(() => {
+    if(!app.route.returnToCapture)return;
+    const listener=BackHandler.addEventListener("hardwareBackPress",()=>{back();return true;});
+    return ()=>listener.remove();
+  }, [form, app.busy, app.route.returnToCapture]);
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title={locked ? "Order details" : "Correct order details"} onBack={app.goBack} />
+      <AppHeader title={app.route.returnToCapture ? "Item information" : locked ? "Order details" : "Correct order details"} onBack={back} />
       <Text style={[styles.lock, { color: colors.textSecondary }]}>
         {locked ? <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} /> : null} {context.reason}
       </Text>
@@ -31,7 +48,7 @@ export function EditPurchaseScreen() {
       <ContextField locked={locked} label="Currency" value={form.currency} onChangeText={(value) => app.setEditForm({ ...form, currency: value })} autoCapitalize="characters" />
       <ContextField locked={locked} label="Order reference" value={form.externalReference} onChangeText={(value) => app.setEditForm({ ...form, externalReference: value })} />
       <ContextField locked={locked} label="Transaction date (YYYY-MM-DD)" value={form.transactionDate} onChangeText={(value) => app.setEditForm({ ...form, transactionDate: value })} />
-      {locked ? null : <Button label="Save corrections" onPress={() => void app.savePurchaseDetails()} loading={app.busy} />}
+      {locked ? null : <Button label={app.route.returnToCapture ? "Save and continue to camera" : "Save corrections"} onPress={() => void app.savePurchaseDetails()} loading={app.busy} />}
     </AppScreen>
   );
 }

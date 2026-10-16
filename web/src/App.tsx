@@ -402,7 +402,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   }, [mobileTask, route.name, session?.userId, session?.apiBaseUrl]);
 
   useEffect(() => {
-    if (!mobileTask || !captureActive) return;
+    if (!captureActive) return;
     const path = window.location.pathname + window.location.search, state = window.history.state;
     const protect = (event: PopStateEvent) => { event.stopImmediatePropagation(); window.history.pushState(state, "", path); setTaskNotice("Finish recording to save your footage before leaving capture."); };
     window.addEventListener("popstate", protect, true);
@@ -515,7 +515,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   }
 
   function go(path: string) {
-    if (captureActive && mobileTask) { setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
+    if (captureActiveRef.current) { setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
     if (mobileTask && (path === "/new" || path.startsWith("/new?") || path.endsWith("/capture"))) startMobileCaptureEntry();
     if(firstExperience && session){if(path==='/new'||path.startsWith('/new?'))void selectFirstProofStudy(api,session.userId,'home');else if(path.endsWith('/capture'))void selectFirstProofStudy(api,session.userId,'order');else if(path==='/sample-proof')void recordStudyInteraction(api,session.userId,'help_opened');}
     if (path === "/" && !isLegalRoute(route)) path = "/app";
@@ -536,11 +536,13 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   }
 
   function goBack(fallback: string) {
+    if (captureActiveRef.current) { setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
     if (window.history.state?.ppFrom) { saveNavigationContext(); window.history.back(); }
     else go(fallback);
   }
 
   async function openMobileTask(target: string | ProofCollectionItem | HomeAction, preferredRecording?: LocalRecordingSummary) {
+    if (captureActiveRef.current) { setTaskNotice("Finish recording before opening another Proof."); return; }
     if (!session || taskPending.current || signOutPending.current) return;
     if (typeof target !== "string" && "kind" in target && target.kind === "create_proof") { go("/new"); return; }
     const id = typeof target === "string" ? target : "proofId" in target ? target.proofId : target.targetId;
@@ -1217,6 +1219,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       ) : null}
 
       {route.name === "capture-launch" ? <CaptureLaunchScreen api={api} onBound={bound=>{setCaptureEngineSession(bound);go(`/proofs/${encodeURIComponent(bound.context.proofId)}/capture`);}} /> : null}
+      {captureActive && taskNotice ? <div role="status" className="task-notice">{taskNotice}</div> : null}
       {route.name === "intake-handoff" ? <IntakeLinkFallback onQueue={() => go("/proofs?filter=attention")} /> : null}
       {route.name === "station" && !(mobileTask && !route.proofId && !route.reference && !route.tools && !recordings.some(row => row.kind === "station" && !row.finalized)) ? (
         <PackingStationScreen

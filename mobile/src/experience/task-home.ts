@@ -4,10 +4,10 @@ export interface HomeCapture { id:string; proofId:string; usable:boolean; needsR
 export interface HomeJob { id:string; proofId:string; authorized:boolean; active:boolean; waiting:boolean; intervention:boolean; reason?:string; }
 export interface HomeOrder { id:string; proofId:string; title:string; ready:boolean; authorized:boolean; createdAt:string; }
 export type HomeActionKind = 'review_evidence'|'review_upload'|'continue_proof'|'finalize_proof'|'start_packing'|'create_proof'|'reconcile';
-export interface HomeAction { kind:HomeActionKind; targetId:string|null; sessionId?:string; title:string; reason:string; buttonLabel:string; count:number; sourceFreshness:'server'|'cached'|'device'|'unknown'; rank:number; }
+export interface HomeAction { kind:HomeActionKind; targetId:string|null; sessionId?:string; title:string; reason:string; buttonLabel:string; count:number; sourceFreshness:'server'|'cached'|'device'|'unknown'; rank:number; updatedAt?:string; }
 export interface HomeInput { proofs:HomeProof[]; captures:HomeCapture[]; jobs:HomeJob[]; orders:HomeOrder[]; online:boolean; reconciled:boolean; selection?:string|null; interactions?:Record<string,number>; }
 const known = new Set(['OPEN','AWAITING_PARTICIPANT','READY_FOR_EVIDENCE','EVIDENCE_COMMITTED','FINALIZED']);
-const time = (value:string) => Number.isFinite(Date.parse(value)) ? Date.parse(value) : Number.MAX_SAFE_INTEGER;
+const time = (value:string) => Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
 export const actionIdentity = (action:HomeAction) => `${action.kind}:${action.targetId ?? ''}:${action.sessionId ?? ''}`;
 
 export function selectTaskHome(input:HomeInput) {
@@ -16,11 +16,11 @@ export function selectTaskHome(input:HomeInput) {
   const actions:HomeAction[]=[];
   const attentionIds=new Set<string>();
   const readyOrders=new Set(input.orders.filter(o=>o.authorized&&o.ready).map(o=>o.proofId));
-  const add = (p:HomeProof, kind:HomeActionKind, rank:number, buttonLabel:string, reason:string, sessionId?:string) => {attentionIds.add(p.id);actions.push({kind,rank,buttonLabel,reason,targetId:p.id,title:p.title || 'Shipment Proof',sessionId,count:1,sourceFreshness:sessionId?'device':fresh});};
+  const add = (p:HomeProof, kind:HomeActionKind, rank:number, buttonLabel:string, reason:string, sessionId?:string) => {attentionIds.add(p.id);actions.push({kind,rank,updatedAt:p.updatedAt,buttonLabel,reason,targetId:p.id,title:p.title || 'Shipment Proof',sessionId,count:1,sourceFreshness:sessionId?'device':fresh});};
   const jobs = [...new Map(input.jobs.filter(j=>j.authorized && proofs.has(j.proofId)).map(j=>[j.id,j])).values()];
   for (const p of proofs.values()) {
     if (!known.has(p.status) || p.action==='unknown' || (p.status==='FINALIZED' && !p.completed)) {
-      add(p,'reconcile',7,'Refresh Proof','The current state needs to be checked with PackProof.');
+      add(p,'reconcile',0.75,'Refresh Proof','The current state needs to be checked with PackProof.');
       continue;
     }
     // A finalized root never receives capture or upload recommendations. Later stages use their own workflow.
@@ -29,11 +29,13 @@ export function selectTaskHome(input:HomeInput) {
       continue;
     }
     const captures = input.captures.filter(c=>c.authorized && c.proofId===p.id);
-    const review = captures.filter(c=>c.usable && c.needsReview && !c.interrupted).sort((a,b)=>a.id.localeCompare(b.id));
-    if (review.length) { add(p,'review_evidence',1,'Review evidence','Evidence saved on device. Review it before submission.',review[0].id); continue; }
+    // Failure/recovery wins over review, including multiple local sessions on one Proof.
     const failure = jobs.filter(j=>j.proofId===p.id && j.intervention).sort((a,b)=>a.id.localeCompare(b.id));
-    if (failure.length) { add(p,'review_upload',2,'Review upload',failure[0].reason || 'Your saved work needs an action to continue.',failure[0].id); continue; }
-    if (captures.some(c=>c.interrupted || !c.usable)) { add(p,'review_upload',2,'Review recovery','An interrupted recording needs review before a new recording can start.',captures[0]?.id); continue; }
+    if (failure.length) { add(p,'review_upload',0,'Resolve upload',failure[0].reason || 'Your saved work needs an action to continue.',failure[0].id); continue; }
+    const interrupted = captures.filter(c=>c.interrupted || !c.usable).sort((a,b)=>a.id.localeCompare(b.id));
+    if (interrupted.length) { add(p,'review_upload',0.5,'Review recovery','An interrupted recording needs review before a new recording can start.',interrupted[0].id); continue; }
+    const review = captures.filter(c=>c.usable && c.needsReview && !c.interrupted).sort((a,b)=>a.id.localeCompare(b.id));
+    if (review.length) { add(p,'review_evidence',1,'Review recording','Recording saved on this device. Review it before submission.',review[0].id); continue; }
     if (jobs.some(j=>j.proofId===p.id) || captures.length) continue; // Normal coordinator work stays passive.
     if (["capture","continue","finalize"].includes(p.action) || readyOrders.has(p.id))attentionIds.add(p.id);
     if (!input.online || !input.reconciled) continue;
@@ -46,7 +48,7 @@ export function selectTaskHome(input:HomeInput) {
     if (!order.authorized || !order.ready || !p || p.completed || p.status==='FINALIZED' || !known.has(p.status) || p.action==='unknown' || actions.some(a=>a.targetId===p.id) || jobs.some(j=>j.proofId===p.id) || input.captures.some(c=>c.authorized&&c.proofId===p.id)) continue;
     add({...p,title:order.title},'start_packing',5,'Start packing','This shipment is ready for packing evidence.');
   }
-  actions.sort((a,b)=>a.rank-b.rank || Number(b.targetId===input.selection)-Number(a.targetId===input.selection) || (input.interactions?.[b.targetId!] ?? 0)-(input.interactions?.[a.targetId!] ?? 0) || time(proofs.get(a.targetId!)!.createdAt)-time(proofs.get(b.targetId!)!.createdAt) || a.targetId!.localeCompare(b.targetId!) || (a.sessionId??'').localeCompare(b.sessionId??''));
+  actions.sort(compareHomeActions);
   for (const action of actions) action.count=actions.filter(other=>other.kind===action.kind).length;
   // Orphaned local work still prevents an empty-account claim, even if its server row is unavailable.
   const empty = input.online && input.reconciled && proofs.size===0 && !input.captures.some(c=>c.authorized) && !input.jobs.some(j=>j.authorized) && !input.orders.some(o=>o.authorized);
@@ -58,4 +60,9 @@ export function selectTaskHome(input:HomeInput) {
 export function stableRecommendation(previous:HomeAction|null,next:ReturnType<typeof selectTaskHome>,interacting:boolean):HomeAction {
   if(interacting && previous?.kind==='create_proof')return next.creation;
   return interacting && previous ? next.actions.find(a=>actionIdentity(a)===actionIdentity(previous)) ?? next.recommendation : next.recommendation;
+}
+
+/** Urgency, newest relevant update, then stable identity; reading never raises priority. */
+export function compareHomeActions(a: HomeAction, b: HomeAction): number {
+  return a.rank-b.rank || time(b.updatedAt || '')-time(a.updatedAt || '') || (a.targetId || '').localeCompare(b.targetId || '') || (a.sessionId || '').localeCompare(b.sessionId || '');
 }

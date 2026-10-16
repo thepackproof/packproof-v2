@@ -44,8 +44,6 @@ export function AndroidTaskHomeScreen() {
         </View> : <>
           <Text style={[styles.eyebrow, { color: colors.accentText }]}>{creating ? 'PACK IT. RECORD IT.' : 'YOUR NEXT STEP'}</Text>
           <Text accessibilityRole="header" style={[styles.focusTitle, { color: colors.textPrimary }]}>{title}</Text>
-          <Text style={[type.secondary, { color: colors.textSecondary }]}>{creating
-            ? 'Keep a clear record of how you packed your item.' : action.reason}</Text>
           <TutorialTarget name="capture"><PressableScale accessibilityRole="button" accessibilityLabel={action.buttonLabel}
             accessibilityState={{ disabled: app.busy, busy: app.busy }} disabled={app.busy}
             onFocus={() => home.setInteracting(true)} onBlur={() => home.setInteracting(false)}
@@ -54,6 +52,8 @@ export function AndroidTaskHomeScreen() {
             style={[styles.primary, { backgroundColor: app.busy ? colors.disabledBackground : colors.primary }]}>
             {app.busy ? <ActivityIndicator color={colors.disabledText} /> : null}<Text style={[type.button, { color: app.busy ? colors.disabledText : colors.textOnPrimary, textAlign: 'center', flexShrink: 1, minWidth: 0 }]}>{action.buttonLabel}</Text>
           </PressableScale></TutorialTarget>
+          <Text style={[type.secondary, { color: colors.textSecondary }]}>{creating
+            ? 'Keep a clear record of how you packed your item.' : action.reason}</Text>
         </>}
       </View>
       {home.loading || !creating ? <TutorialTarget name="create"><Button label="Create a new Proof" icon="add-outline"

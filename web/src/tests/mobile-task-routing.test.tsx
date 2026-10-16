@@ -49,7 +49,7 @@ it("navigates Home to Pack and starts manual creation in one tap without integra
 it("revalidates a recommended target and opens the finalized record instead of camera", async () => {
   const fetch = mockApi(true);
   render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: "Continue Proof" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Record packing" }));
   await waitFor(() => expect(window.location.pathname).toBe(`/proofs/${summary.proofId}`));
   expect(screen.getByText("This Proof is already finalized. Its current record is ready to view.")).toBeInTheDocument();
   expect(fetch.mock.calls.some(([input]) => String(input).endsWith(`/proofs/${summary.proofId}`))).toBe(true);

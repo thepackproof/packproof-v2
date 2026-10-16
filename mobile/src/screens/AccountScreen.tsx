@@ -89,7 +89,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
     void app.loadConnectedAccounts().catch(() => undefined);
   }, []);
   useEffect(() => {
-    const listener = BackHandler.addEventListener("hardwareBackPress", () => { if(Keyboard.isVisible()) { Keyboard.dismiss(); return true; } if(section) app.go("account"); else app.goBack(); return true; });
+    const listener = BackHandler.addEventListener("hardwareBackPress", () => { if(Keyboard.isVisible()) { Keyboard.dismiss(); return true; } app.goBack(); return true; });
     return () => listener.remove();
   }, [section, app.go, app.goBack]);
   useEffect(() => {
@@ -133,7 +133,7 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
     <AppScreen key={section ?? "account"} bottomInset={!MOBILE_TASK_UX_ENABLED} extraBottom={24}>
       <WorkspaceHeader section={section ? SECTION_TITLES[section] : "Settings"} />
       <View style={styles.heading}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Your workspace</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color: colors.textPrimary }]}>{section ? SECTION_TITLES[section] : "Settings"}</Text>{!MOBILE_TASK_UX_ENABLED || (section === "channels" && !ANDROID_TASK_FIRST_REBUILD) ? <Text style={[styles.body, { color: colors.textSecondary }]}>{section === "channels" ? "Connect accounts to bring supported orders into Pack. Manual creation is always available." : section === "recordings" ? "Recordings, upload progress, and retained local copies." : section ? "Manage your PackProof preferences." : "Your account, connections, and workspace preferences."}</Text> : null}</View>
-      {section ? <Button label="Back to settings" variant="tertiary" icon="chevron-back" onPress={() => app.go("account")} /> : null}
+      {section ? <Button label="Back" variant="tertiary" icon="chevron-back" onPress={app.goBack} /> : null}
       <OfflineBanner visible={app.offline} />
       <ErrorBanner message={app.error} />
 

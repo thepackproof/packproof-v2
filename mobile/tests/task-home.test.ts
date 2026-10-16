@@ -36,7 +36,7 @@ test('pristine linked orders enter rank five while a manual draft remains rank t
 test('every actionable rank wins in exact order, without mutating input',()=>{
   const state=input({proofs:[proof('review'),proof('failed'),proof('draft'),proof('final',{action:'finalize',status:'EVIDENCE_COMMITTED'}),proof('order',{action:'view'})],captures:[capture('saved','review')],jobs:[job('bad','failed')],orders:[{id:'order',proofId:'order',title:'Order',ready:true,authorized:true,createdAt:'2026-01-01'}]});
   const original=JSON.stringify(state);
-  assert.deepEqual(selectTaskHome(state).actions.map(a=>a.rank),[1,2,3,4,5]);
+  assert.deepEqual(selectTaskHome(state).actions.map(a=>a.rank),[0,1,3,4,5]);
   assert.equal(JSON.stringify(state),original);
   state.captures=[];state.proofs=state.proofs.filter(p=>p.id!=='review');assert.equal(selectTaskHome(state).recommendation.kind,'review_upload');
   state.jobs=[];state.proofs=state.proofs.filter(p=>p.id!=='failed');assert.equal(selectTaskHome(state).recommendation.kind,'continue_proof');
@@ -72,12 +72,16 @@ test('corrupt and interrupted captures never become review evidence',()=>{
     assert.equal(selectTaskHome(input({proofs:[proof('a')],captures:[capture('c','a',patch)]})).recommendation.kind,'review_upload');
   }
 });
-test('tie ordering is explicit selection, last interaction, oldest actionable, stable identifier',()=>{
-  const state=input({proofs:[proof('z',{createdAt:'2026-02-01'}),proof('b'),proof('a')]});
-  assert.equal(selectTaskHome(state).recommendation.targetId,'a');
-  state.interactions={b:200,z:100};assert.equal(selectTaskHome(state).recommendation.targetId,'b');
-  state.selection='z';assert.equal(selectTaskHome(state).recommendation.targetId,'z');
+test('urgency precedes recency; selection and fixture order cannot override priority',()=>{
+  const state=input({proofs:[proof('z',{updatedAt:'2026-02-01'}),proof('b'),proof('a')]});
+  assert.equal(selectTaskHome(state).recommendation.targetId,'z');
+  state.interactions={b:200,z:100};state.selection='a';
+  assert.equal(selectTaskHome(state).recommendation.targetId,'z');
+  state.jobs=[job('failed','b')];
+  assert.equal(selectTaskHome(state).recommendation.targetId,'b');
   assert.deepEqual(selectTaskHome({...state,proofs:[...state.proofs].reverse()}).actions,selectTaskHome(state).actions);
+  state.jobs=[];state.proofs=state.proofs.filter(p=>p.id!=='z');
+  assert.equal(selectTaskHome(state).recommendation.targetId,'a');
 });
 test('focused manual creation survives newly actionable work and refreshes offline explanation',()=>{
   const previous=selectTaskHome(input()).recommendation;

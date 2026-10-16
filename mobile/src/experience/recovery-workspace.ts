@@ -3,7 +3,7 @@ import type { PhotoDraft } from '../capture/photo-draft-model';
 import { photoDraftRemaining } from '../capture/photo-draft-model';
 import { activityGroup } from './activity-model';
 import { nativeHomeInput } from './home-adapter';
-import { selectTaskHome, type HomeAction } from './task-home';
+import { selectTaskHome, compareHomeActions, type HomeAction } from './task-home';
 import { workspaceProofRows } from '../copy/workspace-summary';
 import type { LocalCaptureStatus } from '../copy/status';
 
@@ -27,22 +27,28 @@ export function selectRecoveryWorkspace(input: RecoveryWorkspaceInput) {
     const proof = base.proofs.find(row => row.id === draft.proofId && row.authorized);
     if (!proof || proof.completed && draft.phase === 'LOCAL_ONLY') continue;
     const remaining = photoDraftRemaining(draft);
-    const action: HomeAction = { kind: 'continue_proof', targetId: draft.proofId, rank: 0, count: 1, sourceFreshness: 'device',
-      title: proof.title, buttonLabel: 'Resume photos', reason: draft.phase === 'SUBMITTING' ? 'Saved photo submission needs to be checked.' :
+    const action: HomeAction = { kind: 'continue_proof', targetId: draft.proofId, rank: draft.phase === 'SUBMITTING' ? 0.25 : remaining ? 2.5 : 1.1, updatedAt: draft.updatedAt, count: 1, sourceFreshness: 'device',
+      title: proof.title, buttonLabel: draft.phase === 'SUBMITTING' ? 'Check photo submission' : remaining ? 'Resume item photos' : 'Review and submit photos', reason: draft.phase === 'SUBMITTING' ? 'Saved photo submission needs to be checked.' :
         remaining ? `${draft.slots.length} saved on device · ${remaining} ${remaining === 1 ? 'photo' : 'photos'} remaining` : 'Photos saved on device · ready to review' };
     for (const target of [model, classified]) {
-      target.actions = target.actions.filter(row => row.targetId !== draft.proofId);
-      target.actions.unshift(action);
+      const current = target.actions.find(row => row.targetId === draft.proofId);
+      if (!current || compareHomeActions(action, current) < 0) {
+        target.actions = target.actions.filter(row => row.targetId !== draft.proofId);
+        target.actions.push(action);
+      }
     }
   }
-  if (model.actions.some(row => row.rank === 0)) model.recommendation = model.actions.find(row => row.rank === 0)!;
+  for (const target of [model, classified]) {
+    target.actions.sort(compareHomeActions);
+    if (target.actions.length) target.recommendation = target.actions[0];
+  }
   const actions = new Map(classified.actions.map(action => [action.targetId, action]));
   const rows = workspaceProofRows({ proofs: input.proofs, invitations: input.invitations, recordings: captures,
     localCapture: null, captureStatus: input.captureStatus ?? 'idle', uploadProgressByProof: input.progress }).map(row => {
     const action = actions.get(row.proofId);
     const capture = captures.find(c => c.captureProofId === row.proofId && !['FINALIZED', 'SUBMITTED'].includes(c.recovery?.phase ?? ''));
     return { ...row, presentation: { ...row.presentation, needsAttention: Boolean(action),
-      displayStatus: action?.kind === 'reconcile' ? 'Status needs refresh' : row.presentation.displayStatus,
+      displayStatus: action?.kind === 'reconcile' ? 'Status needs refresh' : photoDrafts.some(draft => draft.proofId === row.proofId) ? action?.reason || row.presentation.displayStatus : row.presentation.displayStatus,
       nextAction: action ? { ...row.presentation.nextAction, label: action.buttonLabel } : row.presentation.nextAction },
       taskDescription: action?.reason ?? (capture ? 'Upload pending · original retained on device' : row.presentation.displayStatus),
       action };

@@ -42,6 +42,8 @@ export type ActivityFilter = "all" | "attention" | "uploading" | "completed" | "
 export interface OrdersViewState { offsetY: number; query: string; filter?: "ready" | "started" | "completed" | "all"; }
 export interface AppRoute {
   name: AppRouteName;
+  /** Return from saved item information to the same capture. */
+  returnToCapture?: boolean;
   accountSection?: AccountSection;
   supportingSection?: "responses" | "retention" | "privacy";
   historyShareId?: string;
