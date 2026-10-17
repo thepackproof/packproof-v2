@@ -23,3 +23,7 @@ At preparation, Play Console requires sign-in. Submission and live availability 
 Physical force-stop, native media survival, accessibility, live finalization and usability cohorts remain unverified. No historical test result is changed by the owner's release authorization.
 
 Rollback: preserve journals and originals; do not uninstall, clear app data or rewrite manifests. If needed, issue a higher-version compatible recovery build with the restoration feature disabled.
+
+## Signed candidate result
+
+The signed production version 70 AAB is built and verified. Play publication remains blocked by incomplete sign-in. See the [exact artifact and publication record](../releases/android-70-prepared.md).
