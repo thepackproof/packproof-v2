@@ -1,4 +1,4 @@
-import { photoRetryDue, recoverPhotoSubmission } from '../capture/photo-submission-recovery';
+import { photoAcknowledgmentForSelection, photoRetryDue, recoverPhotoSubmission } from '../capture/photo-submission-recovery';
 import { assertRecordingReplacement, assertContinuousRecording } from '../capture/recording-review';
 import { gradingCreationKey, gradingCreationRequest, parseGradingCreation, type GradingCreation } from '../experience/grading-creation';
 import { listPhotoDrafts, persistPhotoDraft, readPhotoDraft, retainPhoto, withPhotoDraftLock } from '../capture/photo-drafts';
@@ -1447,7 +1447,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             assertAccount();
             if (acknowledged.proof.proofId !== updated.proofId) throw new Error('The workflow response belongs to another Proof. Your originals are retained.');
             // A background acknowledgment may update this Proof, but must never select it over another one.
-            setProof(current => current?.proofId === updated.proofId && sessionRef.current?.proofId === updated.proofId ? acknowledged.proof : current);
+            setProof(current => photoAcknowledgmentForSelection(current, acknowledged.proof, sessionRef.current?.proofId));
           },
         }),
       }, manual));

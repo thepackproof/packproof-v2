@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recoverPhotoSubmission, photoRetryDue } from '../src/capture/photo-submission-recovery';
+import { recoverPhotoSubmission, photoRetryDue, photoAcknowledgmentForSelection } from '../src/capture/photo-submission-recovery';
 import { submitPhotoDraft, replacePhotoSlot, type PhotoDraft, type PhotoSubmissionPorts } from '../src/capture/photo-draft-model';
 import { withRequestTimeout } from '../src/request-timeout';
 import type { ProofView } from '../src/v2-api';
@@ -20,6 +20,19 @@ function fixture() {
   const run=(manual=false)=>recoverPhotoSubmission(structuredClone(saved),{assertAccount,read:async()=>structuredClone(saved),persist,submit:d=>submitPhotoDraft(d,ports),now:()=>now},manual);
   return {ports,proof,calls,run,get:()=>structuredClone(saved),set:(d:PhotoDraft)=>{saved=structuredClone(d);},advance:()=>{now+=60_000;},switchAccount:()=>{account=false;}};
 }
+
+test('late photo acknowledgment cannot roll back a newer same-Proof workflow view',()=>{
+ const current={proofId:'A',version:4},old={proofId:'A',version:3},next={proofId:'A',version:5};
+ assert.equal(photoAcknowledgmentForSelection(current,old,'A'),current);
+ assert.equal(photoAcknowledgmentForSelection(current,next,'A'),next);
+});
+
+test('photo acknowledgment never selects its Proof over the current destination',()=>{
+ const current={proofId:'B',version:4},reply={proofId:'A',version:5};
+ assert.equal(photoAcknowledgmentForSelection(current,reply,'B'),current);
+ assert.equal(photoAcknowledgmentForSelection({...current,proofId:'A'},reply,'B')?.version,4);
+ assert.equal(photoAcknowledgmentForSelection(null,reply,'A'),null);
+});
 test('automatic recovery never submits merely selected photos',async()=>{const f=fixture();await f.run();assert.equal(f.get().phase,'LOCAL_ONLY');assert.deepEqual(f.calls,[]);});
 test('a deliberate save automatically commits both photos and applies the same item action',async()=>{const f=fixture();const done=await f.run(true);assert.equal(done.phase,'COMPLETE');assert.equal(f.get().retry,undefined);assert.deepEqual(f.calls.filter(c=>c.startsWith('apply:')),['apply:stable-action']);assert.equal(f.proof.nextAction?.captureRecipe,'PACKING_STANDARD_V1');});
 test('restart after a lost commit receipt reuses persisted identities and does not resend committed bytes',async()=>{

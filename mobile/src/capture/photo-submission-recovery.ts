@@ -1,6 +1,12 @@
 import { photoContextKey, photoDraftReady, type PhotoDraft } from './photo-draft-model';
 
 export const PHOTO_AUTOMATIC_ATTEMPTS = 3;
+
+/** A late item acknowledgment must not roll back a newer view or select another Proof. */
+export function photoAcknowledgmentForSelection<T extends { proofId: string; version: number }>(current: T | null, acknowledged: T, selectedProofId: string | null | undefined): T | null {
+  return current?.proofId === acknowledged.proofId && selectedProofId === acknowledged.proofId && acknowledged.version >= current.version
+    ? acknowledged : current;
+}
 export function photoRetryDue(draft: PhotoDraft, now = Date.now()): boolean {
   return draft.phase === 'SUBMITTING' && (!draft.retry ||
     (draft.retry.retryable && draft.retry.attempts < PHOTO_AUTOMATIC_ATTEMPTS && draft.retry.nextAttemptAt <= now));
