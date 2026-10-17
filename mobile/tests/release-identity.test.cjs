@@ -10,20 +10,21 @@ function productionConfig(overrides = {}) {
     cwd: path.resolve(__dirname, '..'), encoding: 'utf8',
     env: {...process.env, EAS_BUILD_PROFILE: 'production', EAS_BUILD_PLATFORM: 'android', EAS_BUILD: 'true',
       EAS_BUILD_GIT_COMMIT_HASH: 'ab'.repeat(20), EXPO_PUBLIC_PACKPROOF_BUILD_SHA: 'cd'.repeat(20),
-      PACKPROOF_ANDROID_VERSION_CODE: '69', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
+      PACKPROOF_ANDROID_VERSION_CODE: '70', EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false',
       EXPO_PUBLIC_PACKPROOF_AUTH_MODE: 'cognito', EXPO_PUBLIC_PACKPROOF_API_BASE_URL: 'https://api.example.com',
-      EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION: 'true', EXPO_PUBLIC_PACKPROOF_RND: 'false', EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true', EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true', ...overrides},
+      EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION: 'true', EXPO_PUBLIC_PACKPROOF_RND: 'false', EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true', EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION: 'true', EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true', ...overrides},
   });
 }
 
-test('production profile pins store AAB 69 and retains the existing runtime and upload key', () => {
+test('production profile pins store AAB 70 and retains the existing runtime and upload key', () => {
   const config = require('../eas.json');
   const production = config.build.production;
   assert.ok(production, 'Android production profile is required');
   assert.equal(production.extends, 'shipping-integration');
   assert.equal(production.environment, 'production');
-  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '69');
+  assert.equal(production.env.PACKPROOF_ANDROID_VERSION_CODE, '70');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST, 'true');
+  assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION, 'true');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX, 'true');
   assert.equal(production.env.EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION, 'true');
   const shipping = config.build[production.extends];
@@ -42,7 +43,7 @@ test('production config binds worker source, authenticated release guards and UX
   assert.equal(result.status, 0, result.stderr);
   const app = JSON.parse(result.stdout);
   assert.equal(app.version, '1.0.1');
-  assert.equal(app.android.versionCode, 69);
+  assert.equal(app.android.versionCode, 70);
   assert.equal(app.android.package, 'com.packproof.mobile');
   assert.equal(app.extra.eas.projectId, '0196c3f7-cb3a-472c-99be-825558f227e8');
   assert.equal(app.android.allowBackup, false);
@@ -50,6 +51,7 @@ test('production config binds worker source, authenticated release guards and UX
   assert.equal(app.extra.packproofBuildSha, 'ab'.repeat(20));
   assert.equal(app.extra.packproofMobileTaskUx, true);
   assert.equal(app.extra.packproofFirstProofExperience, true);
+  assert.equal(app.extra.packproofExperienceRestoration, true);
   assert.equal(app.extra.packproofResearchProduction, true);
   assert.equal(app.extra.packproofResearchProfile, 'capture-receipts-v1');
   assert.equal(Object.hasOwn(app.extra, 'packproofInternalReview'), false);
@@ -96,7 +98,7 @@ test('signed AAB workflow resolves production identity before dispatch and freez
       env: {...process.env, EAS_BUILD: '', EAS_BUILD_PROFILE: '', EAS_BUILD_GIT_COMMIT_HASH: '',
         EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE: 'false', GITHUB_OUTPUT: output}});
     assert.equal(result.status, 0, result.stderr);
-    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-69(?:\n|$)/);
+    assert.match(fs.readFileSync(output, 'utf8'), /(?:^|\n)artifact=packproof-1\.0\.1-70(?:\n|$)/);
   } finally {
     fs.rmSync(temporary, {recursive: true, force: true});
   }
@@ -119,6 +121,31 @@ test('signed AAB workflow rejects false or missing task-first flag even when the
         throw new Error(`Unexpected workflow dependency ${name}`);
       };
       assert.throws(() => new Function('require', script)(dependency), /Production Android task-first experience must be explicitly enabled/);
+      assert.equal(outputWritten, false);
+    }
+  } finally {
+    for (const name of Object.keys(process.env)) if (!(name in env)) delete process.env[name];
+    Object.assign(process.env, env);
+  }
+});
+
+test('signed AAB workflow rejects false or missing restoration flag even when the runner environment enables it', () => {
+  const workflow = require('js-yaml').load(fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/android-aab.yml'), 'utf8'));
+  const script = workflow.jobs.build.steps.find(step => step.id === 'release').run.match(/node <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)[1];
+  const env = {...process.env};
+  try {
+    process.env.EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION = 'true';
+    for (const value of ['false', undefined]) {
+      const config = structuredClone(require('../eas.json'));
+      if (value === undefined) delete config.build.production.env.EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION;
+      else config.build.production.env.EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION = value;
+      let outputWritten = false;
+      const dependency = name => {
+        if (name === 'fs') return {appendFileSync() { outputWritten = true; }};
+        if (name === './eas.json') return config;
+        throw new Error(`Unexpected workflow dependency ${name}`);
+      };
+      assert.throws(() => new Function('require', script)(dependency), /Production Android restoration must be explicitly enabled/);
       assert.equal(outputWritten, false);
     }
   } finally {

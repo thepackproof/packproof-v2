@@ -1,5 +1,7 @@
 # Acceptance ledger
 
+**Subsequent release authorization:** The owner explicitly authorized Android Play production release on October 17. See [production release record](PRODUCTION-RELEASE.md). The historical gate results below remain unchanged; authorization is not a physical-device or usability test pass.
+
 October 17 Revision 2 decision: design direction and continued implementation approved; visual foundation frozen. The required completion-indicator correction and exact-draft Home reconciliation are implemented in [REVISION-3.md](REVISION-3.md). Native and human gates below remain outstanding.
 
 The following statuses are scoped. Passing an existing source test or a demonstration fixture is **not** full acceptance of a plan test that also requires native, server or human evidence.
