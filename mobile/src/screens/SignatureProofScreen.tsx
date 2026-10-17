@@ -58,7 +58,7 @@ function ScopedSignatureProofScreen({ scope, currentScope }: { scope: string; cu
   const app = usePackProof(),
     { colors } = useTheme(),
     proofId = app.proof?.proofId;
-  const [tool, setTool] = useState<ProofTool>("replay");
+  const [tool, setTool] = useState<ProofTool>(app.route.signatureTool ?? "replay");
   const [returnToAnswer, setReturnToAnswer] = useState(false);
   const toolOffsets = useRef<Record<ProofTool, number>>({ replay: 0, ask: 0, case: 0, compare: 0, history: 0 });
   function selectTool(next: ProofTool) {

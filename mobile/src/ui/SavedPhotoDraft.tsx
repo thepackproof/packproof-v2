@@ -14,8 +14,8 @@ export function SavedPhotoDraft({ draft, openProof = false }: { draft: PhotoDraf
   const complete = draft.phase === 'COMPLETE';
   return <View style={{ gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.divider }}>
     <Text accessibilityRole="header" style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}>{complete ? 'Saved photo originals' : 'Photos retained on this device'}</Text>
-    <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21 }}>{complete ? 'The server recorded these photos. Local copies are retained.' : draft.phase === 'SUBMITTING' ? 'Check the previous submission before starting another capture. Retrying uses the same photos and request.' : 'These photos belong to an earlier step. They have not been submitted. You can keep or export them.'}</Text>
-    {draft.phase === 'SUBMITTING' ? <Button label="Check photo save" disabled={app.busy || app.offline} onPress={() => void app.commitGradingCapture(draft)} /> : null}
+    <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21 }}>{complete ? 'The server recorded these photos. Local copies are retained.' : draft.phase === 'SUBMITTING' ? (draft.retry?.message ?? 'The same submission is checked automatically when connected. Your photos and request identity are kept.') : 'These photos belong to an earlier step. They have not been submitted. You can keep or export them.'}</Text>
+    {draft.phase === 'SUBMITTING' ? <Button label="Check photo save" loading={app.photoSubmissionId === draft.id} disabled={app.busy || app.offline || app.photoSubmissionId === draft.id} onPress={() => void app.commitGradingCapture(draft)} /> : null}
     {openProof ? <Button label="Open Proof" variant="secondary" disabled={app.busy} onPress={() => void app.run(() => app.openProof(draft.proofId))} /> : null}
     <Button label={expanded ? 'Hide originals' : `View originals · ${draft.slots.length}`} variant="tertiary" onPress={() => setExpanded(!expanded)} />
     {expanded ? draft.slots.map(slot => <View key={slot.uploadKey} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>

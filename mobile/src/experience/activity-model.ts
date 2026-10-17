@@ -19,7 +19,7 @@ export function activityGroup(capture: ActivityCaptureState): "attention" | "upl
   return "uploading";
 }
 
-/** Unexpected stop is reviewable only after a completed native recording was validated. */
+/** Playback alone cannot establish a complete continuous take after interruption. */
 export function activityRecordingUsable(capture: ActivityCaptureState): boolean {
-  return Boolean(capture.recovery && capture.recovery.phase !== "RECORDING" && capture.localFileAvailable !== false && capture.encodedInspection?.playable !== false && Number(capture.byteSize) > 0 && Number(capture.durationMs) > 0);
+  return Boolean(!capture.interrupted && capture.recovery && capture.recovery.phase !== "RECORDING" && capture.localFileAvailable !== false && capture.encodedInspection?.playable !== false && Number(capture.byteSize) > 0 && Number(capture.durationMs) > 0);
 }

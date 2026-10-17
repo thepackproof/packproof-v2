@@ -25,7 +25,7 @@ def verify_selection(selection):
                          ("easBuildId", r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")]:
         require(bool(re.fullmatch(pattern, str(selection.get(key, "")))), f"Invalid {key}")
     require(type(selection.get("archiveRunId")) is int and selection["archiveRunId"] > 0, "Invalid archive run")
-    require(selection.get("version") == "1.0.1" and type(selection.get("versionCode")) is int and selection.get("versionCode") in (68, 69), "Only the authorized Android 68 and 69 releases are supported")
+    require(selection.get("version") == "1.0.1" and type(selection.get("versionCode")) is int and selection.get("versionCode") in (68, 69, 70), "Only the authorized Android 68, 69 and 70 releases are supported")
     require(selection.get("package") == APP_ID, "Wrong Android package")
     require(selection.get("track") == "production" and selection.get("releaseStatus") == "completed", "Wrong Play destination")
     require(selection.get("changesNotSentForReview") is False, "Release must be sent for Play review")
@@ -70,6 +70,8 @@ def verify_config(config, selection):
         "packproofResearchProfile": "capture-receipts-v1",
     }.items():
         require(extra.get(key) == expected and type(extra.get(key)) is type(expected), f"Unexpected embedded {key}")
+    if selection["versionCode"] == 70:
+        require(extra.get("packproofExperienceRestoration") is True, "Android 70 must enable the approved restoration")
     require(extra.get("packproofInternalReview") is not True, "Internal review build cannot be published")
     require(extra.get("eas", {}).get("projectId") == PROJECT_ID, "Wrong embedded EAS project")
 

@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { useDirectUpload } from '../src/capture/upload-transport';
 import { uploadCompletionConfirmed } from '../src/capture/upload-outcome';
 import { recoverCaptureCompletion } from '../src/capture/recover-completion';
+import { assertContinuousRecording } from '../src/capture/recording-review';
 import { sameCaptureAccount } from '../src/capture/recovery-model';
 import { localProofWork } from '../src/copy/proof-list';
 import { captureMeasurement, measuredUploadState } from '../src/analytics/capture-measurement';
@@ -23,6 +24,7 @@ function harness() {
   const proof = { proofId:'proof_A', status:'READY_FOR_EVIDENCE', evidence:[] as {evidenceId:string;validationStatus:string}[] };
   const capture: LocalCapture = {uri:'file:///original-A.mp4',contentType:'video/mp4',byteSize:12000,captureSessionId:'cap_A',captureProofId:'proof_A',captureUserId:'seller'};
   const modules: Record<string, unknown> = {
+    './recording-review': { assertContinuousRecording },
     '../research/capture': { async closeResearchSession() {} },
     '../capture': {
       async bindRecordedCapture(_client: unknown, value:LocalCapture) { value.captureSha256 = 'digest'; },
@@ -85,6 +87,12 @@ test('an existing evidence identity uses resumable delivery and keeps the same o
   await h.started; h.finishUpload(); await completing;
   assert.equal(h.calls.includes('direct'),false);assert.equal(h.calls.includes('resumable'),true);
   assert.equal(h.capture.uploadEvidenceId,'evidence_A');assert.equal(h.capture.uri,'file:///original-A.mp4');
+});
+
+test('interrupted original stays untouched and cannot enter upload preparation', async () => {
+  const h=harness();h.capture.interrupted=true;
+  await assert.rejects(h.api.prepareSavedCapture(h.input),/interrupted/);
+  assert.deepEqual(h.calls,[]);assert.equal(h.capture.uri,'file:///original-A.mp4');assert.equal(h.capture.recovery,undefined);
 });
 
 test('permission/transport selection and completion cannot manufacture a saved Proof', () => {

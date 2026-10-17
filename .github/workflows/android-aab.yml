@@ -63,6 +63,7 @@ jobs:
           npm run test:proof-record
           npm run test:recovery
           npm run test:ux-recovery
+          npm run test:experience-restoration
           npm run test:research
           npm run test:intake
           npm run test:build-security
@@ -74,6 +75,7 @@ jobs:
           const fs = require('fs');
           const profiles = require('./eas.json').build;
           if (profiles.production.env?.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST !== 'true') throw new Error('Production Android task-first experience must be explicitly enabled');
+          if (profiles.production.env?.EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION !== 'true') throw new Error('Production Android restoration must be explicitly enabled');
           const environmentLayers = [];
           for (let name = 'production'; name; name = profiles[name].extends) {
             environmentLayers.unshift(profiles[name].env || {});
@@ -83,6 +85,7 @@ jobs:
           if (expo.android.package !== 'com.packproof.mobile') throw new Error('Unexpected Android package');
           if (!/^\d+\.\d+(?:\.\d+)?$/.test(expo.version) || !Number.isSafeInteger(expo.android.versionCode)) throw new Error('Invalid release identity');
           if (expo.extra.packproofMobileTaskUx !== true || expo.extra.packproofInternalReview) throw new Error('Production UX configuration is incorrect');
+          if (expo.extra.packproofExperienceRestoration !== true) throw new Error('Production restoration configuration is incorrect');
           if (expo.extra.packproofFirstProofExperience !== true) throw new Error('Production first Proof experience is not enabled');
           if (expo.extra.packproofResearch !== false || expo.extra.packproofResearchProduction !== true || expo.extra.packproofResearchProfile !== 'capture-receipts-v1') throw new Error('Production capture receipt profile is incorrect');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact=packproof-${expo.version}-${expo.android.versionCode}\n`);

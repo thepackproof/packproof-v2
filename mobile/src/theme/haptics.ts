@@ -1,5 +1,6 @@
 import { systemHapticsEnabled } from "../../modules/packproof-unified-camera";
 import { Platform } from "react-native";
+import { emitCaptureSafeFeedback } from './capture-feedback';
 
 export type HapticKind = "none" | "selection" | "light" | "medium" | "success" | "error";
 
@@ -18,12 +19,11 @@ export async function haptic(kind: HapticKind): Promise<void> {
   if (kind === "none") {
     return;
   }
-  if (!(await systemHapticsEnabled())) return;
-  const Haptics = await nativeHaptics();
-  if (!Haptics) {
-    return;
-  }
   try {
+    await emitCaptureSafeFeedback(async () => {
+      if (!(await systemHapticsEnabled())) return null;
+      return nativeHaptics();
+    }, async Haptics => {
     switch (kind) {
       case "selection":
         await Haptics.selectionAsync();
@@ -43,6 +43,7 @@ export async function haptic(kind: HapticKind): Promise<void> {
       default:
         return;
     }
+    });
   } catch {
     // Haptics are optional on emulators and devices without vibrator support.
   }

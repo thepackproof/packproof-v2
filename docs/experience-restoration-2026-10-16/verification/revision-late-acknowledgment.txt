@@ -1,0 +1,21 @@
+Γ£ö late photo acknowledgment cannot roll back a newer same-Proof workflow view (2.0984ms)
+Γ£ö photo acknowledgment never selects its Proof over the current destination (0.1114ms)
+Γ£ö automatic recovery never submits merely selected photos (0.8343ms)
+Γ£ö a deliberate save automatically commits both photos and applies the same item action (1.7338ms)
+Γ£ö restart after a lost commit receipt reuses persisted identities and does not resend committed bytes (0.7137ms)
+Γ£ö restart after a lost workflow response replays only its action key after the item advances (0.5946ms)
+Γ£ö real timeout helper releases the pending item step; late completion cannot mark the draft complete (7.2266ms)
+Γ£ö automatic retry is bounded and manual checking restarts the same durable intent (1.4542ms)
+Γ£ö permission failures pause automatic retries and retain originals (0.3141ms)
+Γ£ö a response from another Proof cannot advance or initialize a photo submission (0.3353ms)
+Γ£ö retry refuses a changed server upload identity for the same capture attempt (0.2757ms)
+Γ£ö account changes do not write retry success or continue the old command (0.2275ms)
+Γ£ö replacement rejects reused attempt IDs, reused files, and committed originals (0.4014ms)
+Γä╣ tests 13
+Γä╣ suites 0
+Γä╣ pass 13
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 231.9862

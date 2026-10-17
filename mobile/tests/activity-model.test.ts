@@ -29,9 +29,9 @@ test("missing originals, interrupted captures and unknown recovery stay actionab
   assert.equal(activityGroup({}), "attention");
 });
 
-test("validated completed media remains reviewable after an unexpected stop", () => {
+test("playable interrupted media requires inspection rather than continuous-evidence submission", () => {
   const recovered = { ...capture("LOCAL_ONLY", false), interrupted: true };
-  assert.equal(activityRecordingUsable(recovered), true);
+  assert.equal(activityRecordingUsable(recovered), false);
   assert.equal(activityGroup(recovered), "attention");
   assert.equal(activityRecordingUsable({ ...recovered, recovery: { phase: "RECORDING", submitRequested: false } }), false);
 });

@@ -31,7 +31,7 @@ class AndroidSubmission(unittest.TestCase):
     def test_only_explicit_production_selection_is_accepted(self):
         release.verify_selection(SELECTION)
         release.verify_selection({**SELECTION, "versionCode": 69})
-        for bad in [{"sourceSha": "latest"}, {"aabSha256": ""}, {"versionCode": 67}, {"versionCode": 70}, {"versionCode": "69"}, {"package": "other.app"},
+        for bad in [{"sourceSha": "latest"}, {"aabSha256": ""}, {"versionCode": 67}, {"versionCode": 71}, {"versionCode": "69"}, {"package": "other.app"},
                     {"track": "internal"}, {"releaseStatus": "draft"}, {"changesNotSentForReview": True}, {"archiveRunId": "100"}]:
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 release.verify_selection({**SELECTION, **bad})
@@ -41,6 +41,20 @@ class AndroidSubmission(unittest.TestCase):
         release.verify_selection(selection)
         release.verify_build({**BUILD, "appBuildVersion": "69"}, selection)
         config = copy.deepcopy(CONFIG); config["android"]["versionCode"] = 69
+        release.verify_config(config, selection)
+        with self.assertRaises(ValueError): release.verify_build(BUILD, selection)
+        with self.assertRaises(ValueError): release.verify_config(CONFIG, selection)
+
+    def test_authorized_70_requires_restoration_and_exact_identity(self):
+        selection = {**SELECTION, "versionCode": 70}
+        release.verify_selection(selection)
+        release.verify_build({**BUILD, "appBuildVersion": "70"}, selection)
+        config = copy.deepcopy(CONFIG); config["android"]["versionCode"] = 70
+        for value in [None, False, 1, "true"]:
+            config["extra"]["packproofExperienceRestoration"] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                release.verify_config(config, selection)
+        config["extra"]["packproofExperienceRestoration"] = True
         release.verify_config(config, selection)
         with self.assertRaises(ValueError): release.verify_build(BUILD, selection)
         with self.assertRaises(ValueError): release.verify_config(CONFIG, selection)

@@ -126,7 +126,7 @@ function main(argv = process.argv.slice(2)) {
     profile: 'mobile-ux-review', variant: 'release', signing: 'generated local debug key; not Play release signing', signerSha256,
     installationScope: 'Clean spare Android device or emulator only. Does not upgrade a differently signed Play install. Do not uninstall the existing app or clear its media.',
     distribution: 'Local artifact only; no installation, upload, store submission or release performed.',
-    buildInputs: { androidTaskFirst: true, dotenvLoaded: false, nativeProjectRegenerated: true },
+    buildInputs: { experienceRestoration: env.EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION === 'true', androidTaskFirst: true, dotenvLoaded: false, nativeProjectRegenerated: true },
     runtime: { node: process.version, java: javaVersion.stderr.trim().split('\n')[0], androidBuildTools: '36.0.0', abis: ['arm64-v8a', 'x86_64'] },
     deviceVerification: 'NOT RUN', ...inspection, pageSize16kbPassed: true };
   fs.writeFileSync(path.join(options.out, 'build-receipt.json'), JSON.stringify(receipt, null, 2) + '\n');

@@ -11,6 +11,22 @@ import {
 import { motion, shouldUseLargeMotion } from "../theme/motion";
 import { useTheme } from "../theme/ThemeProvider";
 
+/** Presentation-only acknowledgment. Never remounts children or advances domain state. */
+export function StateTransition({ eventKey, children, style }: { eventKey: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const { reducedMotion } = useTheme();
+  const previous = useRef(eventKey);
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const changed = previous.current !== eventKey; previous.current = eventKey;
+    opacity.stopAnimation();
+    if (reducedMotion || !changed) { opacity.setValue(1); return; }
+    opacity.setValue(0.7);
+    const animation=Animated.timing(opacity,{toValue:1,duration:220,useNativeDriver:true});
+    animation.start(); return () => animation.stop();
+  },[eventKey,reducedMotion,opacity]);
+  return <Animated.View style={[style,{opacity}]}>{children}</Animated.View>;
+}
+
 type PressableScaleProps = Omit<PressableProps, "style" | "children"> & {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;

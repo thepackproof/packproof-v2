@@ -1,4 +1,6 @@
 import { useFonts } from "expo-font";
+import { EXPERIENCE_RESTORATION_REVIEW } from '../experience/restoration-review';
+import { restorationColors } from './restoration-colors';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Appearance, type ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -90,7 +92,7 @@ export function ThemeProvider(props: { children: ReactNode }) {
       hydrated: hydrated && (fontsLoaded || Boolean(fontError)),
       preference,
       scheme,
-      colors: colorsForScheme(scheme, ANDROID_TASK_FIRST_REBUILD),
+      colors: EXPERIENCE_RESTORATION_REVIEW ? restorationColors(scheme) : colorsForScheme(scheme, ANDROID_TASK_FIRST_REBUILD),
       shadows: shadowsFor(scheme),
       reducedMotion,
       setPreference,

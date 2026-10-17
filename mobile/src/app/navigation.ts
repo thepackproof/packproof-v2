@@ -47,6 +47,7 @@ export interface AppRoute {
   accountSection?: AccountSection;
   supportingSection?: "responses" | "retention" | "privacy";
   historyShareId?: string;
+  signatureTool?: 'replay' | 'ask' | 'case' | 'compare' | 'history';
   activityFilter?: ActivityFilter;
   activitySessionId?: string;
   /** Explicit secondary entry for grading/import; default creation is manual. */

@@ -68,16 +68,18 @@ export function useTaskHome() {
     recordMobileUxEvent('recommendation_selected');
     try {
       if(action.kind==='create_proof') {app.selectCreateProof();return;}
-      if(action.kind==='reconcile'){await refresh();return;}
       if(!action.targetId)return;
       app.rememberTaskInteraction(action.targetId);
+      // openProof fetches the exact authorized snapshot, manifest and integrity;
+      // a workspace-list refresh alone cannot fulfill this recommendation.
+      if(action.kind==='reconcile'){await app.run(()=>app.openProof(action.targetId!));return;}
       if(action.kind==='review_upload') {app.go('activity',{activityFilter:'attention',activitySessionId:action.sessionId});return;}
       if(action.kind==='review_evidence') {
         const capture=workspaceRecordings(latest.current.savedRecordings,latest.current.localCapture).find(c=>(c.captureSessionId||c.uri)===action.sessionId && c.captureProofId===action.targetId);
         if(!capture){app.setError('This recording changed. Refresh to check its next step.');await refresh();return;}
         await app.resumeSavedCapture(capture);return;
       }
-      await app.openProofAction(action.targetId);
+      await app.openProofAction(action.targetId, action.photoDraftId);
     } finally {actionBusy.current=false;setInteracting(false);}
   }
   const freshnessLabel=app.workspaceReconciled&&!app.offline ? (app.workspaceFreshAt?`Updated ${new Date(app.workspaceFreshAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`:'Current workspace') : app.workspaceFreshAt ? `Cached records · last updated ${new Date(app.workspaceFreshAt).toLocaleString()}` : 'Waiting for workspace reconciliation';

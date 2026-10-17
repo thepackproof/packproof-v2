@@ -4,11 +4,11 @@ export interface HomeCapture { id:string; proofId:string; usable:boolean; needsR
 export interface HomeJob { id:string; proofId:string; authorized:boolean; active:boolean; waiting:boolean; intervention:boolean; reason?:string; }
 export interface HomeOrder { id:string; proofId:string; title:string; ready:boolean; authorized:boolean; createdAt:string; }
 export type HomeActionKind = 'review_evidence'|'review_upload'|'continue_proof'|'finalize_proof'|'start_packing'|'create_proof'|'reconcile';
-export interface HomeAction { kind:HomeActionKind; targetId:string|null; sessionId?:string; title:string; reason:string; buttonLabel:string; count:number; sourceFreshness:'server'|'cached'|'device'|'unknown'; rank:number; updatedAt?:string; }
+export interface HomeAction { kind:HomeActionKind; targetId:string|null; sessionId?:string; photoDraftId?:string; title:string; reason:string; buttonLabel:string; count:number; sourceFreshness:'server'|'cached'|'device'|'unknown'; rank:number; updatedAt?:string; }
 export interface HomeInput { proofs:HomeProof[]; captures:HomeCapture[]; jobs:HomeJob[]; orders:HomeOrder[]; online:boolean; reconciled:boolean; selection?:string|null; interactions?:Record<string,number>; }
 const known = new Set(['OPEN','AWAITING_PARTICIPANT','READY_FOR_EVIDENCE','EVIDENCE_COMMITTED','FINALIZED']);
 const time = (value:string) => Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
-export const actionIdentity = (action:HomeAction) => `${action.kind}:${action.targetId ?? ''}:${action.sessionId ?? ''}`;
+export const actionIdentity = (action:HomeAction) => `${action.kind}:${action.targetId ?? ''}:${action.sessionId ?? ''}:${action.photoDraftId ?? ''}`;
 
 export function selectTaskHome(input:HomeInput) {
   const proofs = new Map(input.proofs.filter(p=>p.authorized).map(p=>[p.id,p]));

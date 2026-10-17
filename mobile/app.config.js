@@ -200,6 +200,7 @@ module.exports = {
       packproofResearchProduction: isProductionResearch,
       packproofResearchProfile: isProductionResearch ? "capture-receipts-v1" : null,
       packproofApiBaseUrl: apiBaseUrl || (isRelease ? STAGING_API_BASE_URL : ""),
+      packproofExperienceRestoration: env("EXPO_PUBLIC_PACKPROOF_EXPERIENCE_RESTORATION") === "true",
       packproofFirstProofExperience: env("EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE") === "true",
       ...(buildSourceSha ? { packproofBuildSha: buildSourceSha } : {}),
       ...(isProductionRelease ? { packproofMobileTaskUx: mobileTaskUxEnabled } : {}),

@@ -1,4 +1,5 @@
 import { SavedPhotoDraft } from '../ui/SavedPhotoDraft';
+import { RetainedRecordingInspection } from '../ui/RetainedRecordingInspection';
 import { selectRecoveryWorkspace } from '../experience/recovery-workspace';
 import { CompactProofRow } from '../ui/CompactProofRow';
 import { useEffect, useMemo, useState } from "react";
@@ -132,7 +133,7 @@ function LegacyRecordingRow({ capture }: { capture: LocalCapture }) {
     <Text accessibilityLiveRegion="polite" style={[styles.text, { color: colors.textSecondary }]}>{label}</Text>
     <Text style={[styles.meta, { color: colors.textMuted }]}>{formatBytes(capture.byteSize)} · {formatDateTime(state.updatedAt)}{capture.captureStageId ? " · Receipt or return stage" : ""}</Text>
     {typeof progress === "number" && Number.isFinite(progress) && progress < 100 && state.phase === "UPLOADING" ? <ProgressState label="Uploading" percent={progress} /> : null}
-    {!invalid && capture.interrupted ? <Text style={[styles.text, { color: colors.warningText }]}>Recording ended unexpectedly. Review the saved video before confirming it.</Text> : null}
+    {invalid ? <RetainedRecordingInspection capture={capture} /> : null}
     {state.lastError && !passive ? <Text style={[styles.text, { color: colors.warningText }]}>{formatUserFacingError(state.lastError)}</Text> : null}
     {!invalid && !passive && !["FINALIZED", "SUBMITTED"].includes(state.phase) ? <Button label={state.phase === "LOCAL_ONLY" ? "Review evidence" : "Review upload"} loading={app.busy} onPress={() => void app.resumeSavedCapture(capture)} /> : null}
     {invalid ? <Text style={[styles.text, { color: colors.textSecondary }]}>This recording cannot be resumed as continuous evidence. Review its details before discarding it and starting a new take.</Text> : null}
@@ -178,7 +179,7 @@ function AndroidRecordingRow({ capture, focused }: { capture: LocalCapture; focu
     <Text style={[taskFirstTypography.body, { color: colors.textSecondary }]}>{view.message}</Text>
     {view.live ? <ProgressState label="Uploading your recording" percent={typeof progress === "number" && Number.isFinite(progress) && progress < 100 ? progress : null} /> : null}
     {state.lastError && activityGroup(capture) === "attention" ? <Text accessibilityRole="alert" style={[taskFirstTypography.secondary, { color: colors.warningText }]}>{formatUserFacingError(state.lastError)}</Text> : null}
-    {capture.interrupted && activityRecordingUsable(capture) ? <Text style={[taskFirstTypography.secondary, { color: colors.warningText }]}>Recording ended unexpectedly. Review the saved video before confirming it.</Text> : null}
+    {!activityRecordingUsable(capture) ? <RetainedRecordingInspection capture={capture} /> : null}
     {view.actionLabel ? <Button label={view.actionLabel} loading={app.busy} onPress={primaryAction} /> : null}
     {capture.captureProofId && view.action !== "view" ? <Button label="View Proof" variant="tertiary" disabled={app.busy} onPress={() => void app.run(() => app.openProof(capture.captureProofId!))} /> : null}
     {view.action !== "details" || details ? <Button label={details ? "Hide file and recovery options" : "File and recovery options"} variant="tertiary" onPress={() => setDetails(value => !value)} /> : null}
