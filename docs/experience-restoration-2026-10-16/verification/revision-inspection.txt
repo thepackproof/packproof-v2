@@ -1,0 +1,11 @@
+Γ£ö the focused Activity recovery destination exposes inspection for the selected interrupted take (56.4254ms)
+Γ£ö inspection opens the exact surviving original without a submit or capture command (5.18ms)
+Γ£ö missing media never offers a surviving-video playback control (3.437ms)
+Γä╣ tests 3
+Γä╣ suites 0
+Γä╣ pass 3
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 483.3749

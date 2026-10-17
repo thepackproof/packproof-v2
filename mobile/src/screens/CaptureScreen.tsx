@@ -183,7 +183,7 @@ export function CaptureScreen() {
         : "This recording was interrupted before a playable video was confirmed. Any surviving bytes stay on this device. This take cannot be submitted as a completed continuous recording."}</Text>
       {capture.localFileAvailable !== false ? <>
         <Button label={inspectSurviving ? "Hide surviving video" : "Inspect surviving video"} variant="secondary" onPress={() => setInspectSurviving(!inspectSurviving)} />
-        {inspectSurviving ? <VideoReview key={capture.uri} uri={capture.uri} accessibilityLabel="Surviving interrupted recording. Inspect only; this is not accepted continuous packing evidence." /> : null}
+        {inspectSurviving ? <VideoReview key={capture.uri} uri={capture.uri} inspection accessibilityLabel="Surviving interrupted recording. Inspect only; this is not accepted continuous packing evidence." /> : null}
         <Text style={[styles.note, { color: colors.textSecondary }]}>Playback depends on the surviving file. A playable clip does not establish a complete packing sequence.</Text>
       </> : null}
       <Button label="Keep draft and return" variant="secondary" onPress={app.goBack} disabled={app.busy} />

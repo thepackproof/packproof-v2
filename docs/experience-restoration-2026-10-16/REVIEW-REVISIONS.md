@@ -35,12 +35,16 @@ October 17 logs are `verification/revision-*.txt`; October 16 logs remain histor
 | Native targeted regressions | 105 passed | Real photo protocol/retry controller, completion coordinator with native I/O ports, provider navigation callbacks, identity/retake guards and native contrast. Camera/filesystem hardware is not exercised. |
 | Prototype lifecycle and CSS contrast | 40 passed | 19 fixture lifecycle tests, 21 actual CSS token contrast checks. |
 | Prototype DOM | 19 passed | Eight scenarios, recovery/discard/reopen, automatic/held photo acknowledgments, motion, Home and tools. No layout or video decoding claim. |
-| Mobile TypeScript | 808 files, zero errors | Temporary dependency-resolution paths use existing installed packages. Production tsconfig is unchanged; clean-install CI is the independent check. |
+| Recovery entry/selection regression | 75 passed | Activity, Home, exact recording selection and incomplete-media presentation; overlaps some scenarios in the 105-test set. |
+| Actual recovery component bodies | 3 passed | Focused Activity exposes inspection of the exact retained URI; missing files offer no playback control. Native UI ports are substituted. |
+| Mobile TypeScript | 809 files, zero errors | Temporary dependency-resolution paths use existing installed packages. Production tsconfig is unchanged; clean-install CI is the independent check. |
 | Browser rendering | Unavailable | Browser runtime failed to start. No new rendered screenshot or visual sign-off. |
 | Android hardware | Unavailable | ADB could not start its daemon. No physical force-stop, codec, offline-file, TalkBack or frame-time result. |
 | Formative/fresh-user studies | Not run | Both required cohorts remain outstanding. |
 
 The PR workflow builds its exact head SHA after standard mobile gates. The artifact receipt checks package, signer, source SHA, 16 KB alignment and packaged credentials, and records the restoration flag. Inspect the actual run/receipt; configuring a build does not establish build success.
+
+Restarted interrupted takes route through the existing account-scoped Activity recovery destination. That destination now offers inspection directly, without invoking the completed-recording resume command. Unplayable surviving files show an honest playback failure and remain available to the existing export/discard controls. A playable fragment is not classified as continuous evidence.
 
 ## Remaining work and compatibility
 

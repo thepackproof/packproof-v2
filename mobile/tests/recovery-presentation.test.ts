@@ -75,6 +75,7 @@ test("missing or incomplete originals expose recovery options without resume", (
   for (const original of [
     { ...capture("LOCAL_ONLY"), localFileAvailable: false },
     capture("RECORDING"),
+    { ...capture("LOCAL_ONLY", false), interrupted: true, encodedInspection: { playable: true } },
     { ...capture("LOCAL_ONLY"), encodedInspection: { playable: false } },
     { ...capture("LOCAL_ONLY"), durationMs: 0 },
   ]) {
