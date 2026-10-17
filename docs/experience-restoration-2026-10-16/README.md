@@ -2,7 +2,7 @@
 
 ## Current status: October 17 review revisions
 
-The founder conditionally approved continued implementation and withheld release approval. The five targeted corrections and Android review slice are implemented; see [REVIEW-REVISIONS.md](REVIEW-REVISIONS.md) for current changes, verification and remaining gates. Capture / Evidence / Tools, warmer paper and returning Home are included. The slice is enabled only by the internal Android restoration flag; store profiles remain unchanged.
+The founder approved the Revision 2 design direction and continued implementation, with the completion-indicator correction required. The visual foundation is frozen. That correction, executable Home save checks and small presentation fixes are implemented; see [REVISION-3.md](REVISION-3.md) for current evidence and [REVIEW-REVISIONS.md](REVIEW-REVISIONS.md) for the earlier corrections. The Android slice is enabled only by the internal restoration flag; store profiles remain unchanged. Physical Android, usability and named-build release gates remain open.
 
 **The remainder of this file is the historical October 16 checkpoint.** Its G1-pending status and test counts describe that earlier revision, not the current one. No device, formative-study or release gate is claimed complete.
 

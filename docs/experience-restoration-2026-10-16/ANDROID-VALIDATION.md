@@ -15,6 +15,9 @@ Use designated test accounts/Proofs. Record device/OS, source/APK SHA-256, accou
 | P4 | Stall upload/API, go offline, reconnect | Bounded timeout, at most three automatic attempts, then actionable Check state. Reopening resumes intent. Pending evidence is never called complete. |
 | P5 | Retake accepted local photo; race retake with Save | New file/key, prior original retained. Submission lock prevents replacement or stale receipt application. |
 | P6 | Switch account/API or select B while A responds | No cross-account write/disclosure; A never replaces B. Reopening A reconciles A only. |
+| P7 | Hold item acknowledgment after both files commit; timeout, terminate, reopen | No completed Item photos indicator or next-task permission before the item acknowledgment. Its exact original action receipt advances the step once. |
+| H1 | Home Check photo submission with multiple item drafts and incomplete Proofs | Observe the actual recovery request for the recommended draft/action key and exact Proof. Its returned state appears without another tap. Local-only drafts are never silently submitted. |
+| H2 | Home Refresh Proof; lost response, repeated taps and account change during check | Observe full snapshot/manifest/integrity requests for the named Proof. No duplicate command or cross-account navigation. Offline/failed checking never claims confirmation. |
 | E1 | Bytes complete, commit pending, finalization pending, then server confirmation | Truthful distinct states; verify original hash/manifest/durability. Completed copy follows authoritative success. |
 | E2 | Notification/deep links and evidence tools | Exact Proof/account; originals, History, Shipment, Order details, share/export/retention remain reachable. |
 | V1 | First and returning Home, 3+ incomplete Proofs and invitation | One accurate recommended action, item titles, separate incoming work and participant work. |

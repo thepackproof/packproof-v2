@@ -202,7 +202,7 @@ export interface PackProofContextValue {
   readTaskInteractions: () => Record<string, number>;
   selectedTask: string | null;
   rememberTaskInteraction: (proofId: string) => void;
-  openProofAction: (proofId: string) => Promise<boolean>;
+  openProofAction: (proofId: string, photoDraftId?: string) => Promise<boolean>;
   openProofDestination: (entry: ProofEntry) => Promise<boolean>;
   readProofsScrollOffset: () => number;
   readOrdersView: (batch: boolean) => OrdersViewState;
@@ -1509,7 +1509,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         historyShare: historyShareId => go('signature',{historyShareId}),
       });
     },
-    openProofAction: async proofId => {
+    openProofAction: async (proofId, photoDraftId) => {
       if (captureNavigationLock.current) { setError("Finish or cancel the current take before opening another Proof."); return false; }
       const invitation=pendingInvites.find(row=>row.proofId===proofId);
       if(invitation) {value.openInvitation(invitation);return true;}
@@ -1517,8 +1517,25 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if(row?.accessKind==="RECEIVER") {value.openReceipt(proofId);return true;}
       rememberTaskInteraction(proofId); startMobileCaptureEntry();
       if (offline && !ANDROID_TASK_FIRST_REBUILD) return handledActionSucceeded(run, () => openProof(proofId));
-      if (photoDrafts.some(draft => draft.proofId === proofId && draft.phase !== 'COMPLETE' && draft.userId === sessionRef.current?.userId && draft.apiBaseUrl === sessionRef.current?.apiBaseUrl.replace(/\/+$/, ''))) {
-        return handledActionSucceeded(run, () => openProof(proofId));
+      const owner = sessionRef.current ? { userId: sessionRef.current.userId, apiBaseUrl: sessionRef.current.apiBaseUrl } : null;
+      const candidates = photoDrafts.filter(draft => draft.proofId === proofId && draft.phase !== 'COMPLETE' && draft.userId === owner?.userId && draft.apiBaseUrl === owner?.apiBaseUrl.replace(/\/+$/, ''));
+      const draft = photoDraftId ? candidates.find(row => row.id === photoDraftId) : candidates.find(row => row.phase === 'SUBMITTING') ?? candidates[0];
+      if (photoDraftId && !draft) {
+        setError('This photo task changed. Refresh the Proof to check its next step.');
+        return false;
+      }
+      if (draft && owner) {
+        const assertSelected = proofRequests.current.begin();
+        return handledActionSucceeded(run, async () => {
+          assertSelected();
+          client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
+          // Previously persisted submission intent authorizes this idempotent retry.
+          // Merely opening locally accepted photos never submits them.
+          if (draft.phase === 'SUBMITTING') await processPhotoSubmission(draft, true);
+          assertSelected();
+          client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
+          await openProof(proofId);
+        });
       }
       const selection = ANDROID_TASK_FIRST_REBUILD ? proofEntryRecording({
         proofs: proofCollection, invitations: pendingInvites, captures: workspaceRecordings(savedRecordings, localCapture),

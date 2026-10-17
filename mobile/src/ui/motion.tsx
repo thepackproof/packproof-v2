@@ -16,19 +16,15 @@ export function StateTransition({ eventKey, children, style }: { eventKey: strin
   const { reducedMotion } = useTheme();
   const previous = useRef(eventKey);
   const opacity = useRef(new Animated.Value(1)).current;
-  const offset = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const changed = previous.current !== eventKey; previous.current = eventKey;
-    opacity.stopAnimation(); offset.stopAnimation();
-    if (reducedMotion || !changed) { opacity.setValue(1); offset.setValue(0); return; }
-    opacity.setValue(0.7); offset.setValue(6);
-    const animation=Animated.parallel([
-      Animated.timing(opacity,{toValue:1,duration:220,useNativeDriver:true}),
-      Animated.timing(offset,{toValue:0,duration:260,easing:Easing.out(Easing.cubic),useNativeDriver:true}),
-    ]);
+    opacity.stopAnimation();
+    if (reducedMotion || !changed) { opacity.setValue(1); return; }
+    opacity.setValue(0.7);
+    const animation=Animated.timing(opacity,{toValue:1,duration:220,useNativeDriver:true});
     animation.start(); return () => animation.stop();
-  },[eventKey,reducedMotion,opacity,offset]);
-  return <Animated.View style={[style,{opacity,transform:[{translateY:offset}]}]}>{children}</Animated.View>;
+  },[eventKey,reducedMotion,opacity]);
+  return <Animated.View style={[style,{opacity}]}>{children}</Animated.View>;
 }
 
 type PressableScaleProps = Omit<PressableProps, "style" | "children"> & {

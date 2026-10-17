@@ -1,0 +1,25 @@
+PASS all eight scenarios render with Capture / Evidence / Tools
+PASS ordinary photo save automatically advances after the explicit sample acknowledgments
+PASS missing photo acknowledgment exposes timeout and retry, including after reopening
+PASS accepted local photo retakes receive distinct IDs and preserve the earlier original
+PASS stopped take cannot be abandoned by Back to capture or a new camera request
+PASS Home and My Proofs return to the same unaccepted take
+PASS simulated close and reopen restores a stopped take for inspection
+PASS active capture navigation is guarded and interruption exposes playable sample media
+PASS retaking an interrupted take explicitly retains the old clip under its identity
+PASS discard requires a second confirmation and does not remove other originals
+PASS retake of an accepted recording retains the earlier unsubmitted original
+PASS declaration, artifact acknowledgment, and Proof finalization remain distinct
+PASS recording start, stop, task completion, and server confirmation have distinct motion cues
+PASS returning Home names several unfinished Proofs and a separate incoming task
+PASS incoming task opens its exact Proof without fabricating receipt evidence
+PASS offline recovery and other-Proof callbacks never advance save state
+PASS packet context and notes survive preview; empty records do not invent sources
+PASS warm/neutral comparison, charcoal, 200% text and reduced motion controls remain available
+PASS item photos remain pending after local acceptance and file commitment, including reopen and timeout
+PASS Home Check save status reconciles the recommended Proof without fabricating commitment
+PASS Home Check photo save executes the pending item check for that Proof
+PASS one unfinished Proof uses singular copy; long labels retain wrapping at 200 percent
+PASS offline Home status checks retain the pending error and original
+PASS standalone review uses no external assets and retains its sample-only disclosure
+24 DOM interaction checks passed; 0 failed. Layout, decoding and physical-device behavior are not validated by jsdom.

@@ -1,5 +1,7 @@
 # October 17 pre-approval corrections
 
+This records the first correction pass. The later Revision 2 design approval and its required follow-through are in [REVISION-3.md](REVISION-3.md).
+
 The founder approved the visual direction conditionally for continued implementation and explicitly withheld final release approval. This revision preserves the existing typography, spacing, primary-action hierarchy, document surfaces and completed state. It does not claim the whole master plan or its device/usability gates are complete.
 
 ## Requested corrections

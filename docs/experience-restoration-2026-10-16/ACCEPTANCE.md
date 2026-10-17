@@ -1,5 +1,7 @@
 # Acceptance ledger
 
+October 17 Revision 2 decision: design direction and continued implementation approved; visual foundation frozen. The required completion-indicator correction and exact-draft Home reconciliation are implemented in [REVISION-3.md](REVISION-3.md). Native and human gates below remain outstanding.
+
 The following statuses are scoped. Passing an existing source test or a demonstration fixture is **not** full acceptance of a plan test that also requires native, server or human evidence.
 
 | Plan test | Current evidence | Remaining requirement |

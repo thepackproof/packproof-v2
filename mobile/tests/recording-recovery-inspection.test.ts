@@ -64,3 +64,19 @@ test('the journey cannot celebrate a raw FINALIZED status when the validated pre
  assert.match(text(Journey({...props,completed:false})),/Check current status/);
  assert.match(text(Journey({...props,completed:true})),/Evidence saved to PackProof/);
 });
+
+test('state acknowledgments keep content stationary and settle immediately with reduced motion',()=>{
+ const refs:any[]=[],effects:Array<()=>unknown>=[],timings:any[]=[];let cursor=0,reducedMotion=false;
+ class Value {constructor(public value:number){} setValue(v:number){this.value=v;} stopAnimation(){} }
+ const Transition=component('../src/ui/motion.tsx','StateTransition',{
+  useTheme:()=>({reducedMotion}),useRef:(value:unknown)=>refs[cursor++]??(refs[cursor-1]={current:value}),
+  useEffect:(effect:()=>unknown)=>effects.push(effect),
+  Animated:{View:'AnimatedView',Value,timing:(value:Value,options:any)=>{timings.push({value,options});return {start(){},stop(){}};}},
+ });
+ const child={retainedPlayer:true};
+ function render(key:string){cursor=0;const result=Transition({eventKey:key,children:child});effects.splice(0).forEach(f=>f());return result;}
+ const first=render('pending');assert.equal(timings.length,0);assert.equal(first.props.children[0],child);
+ const changed=render('confirmed');assert.equal(timings.length,1);assert.equal(timings[0].options.toValue,1);
+ assert.equal(changed.props.style[1].transform,undefined);assert.equal(changed.props.children[0],child);
+ reducedMotion=true;const reduced=render('next-task');assert.equal(timings.length,1);assert.equal(reduced.props.style[1].opacity.value,1);
+});

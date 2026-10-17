@@ -106,7 +106,9 @@ export function transition(input, event) {
       record.pendingTake={id:record.activeTakeId,label:'Interrupted packing take',local:event.mediaAvailable!==false,committed:false,interrupted:true}; break;
     case 'UNKNOWN_RESPONSE':
       record.error='The response did not arrive. Check the server before retrying this same recording.'; break;
-    case 'RECONCILE': record.error=null; break;
+    case 'RECONCILE':
+      if (record.offline) return input;
+      record.error=null; break;
     default: return input;
   }
   return record;

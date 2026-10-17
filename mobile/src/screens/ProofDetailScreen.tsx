@@ -146,7 +146,7 @@ export function ProofDetailScreen() {
         else app.setError('This saved recording changed. Refresh the Proof to check its next step.');
         return;
       }
-      void app.openProofAction(proof!.proofId);
+      void app.openProofAction(proof!.proofId, action.photoDraftId);
       return;
     }
     if (!grading && presentation.nextAction.type === "WORKFLOW_ACTION") { app.openReceipt(proof!.proofId); return; }

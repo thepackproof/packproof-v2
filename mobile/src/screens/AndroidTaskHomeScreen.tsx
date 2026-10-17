@@ -36,7 +36,7 @@ export function AndroidTaskHomeScreen() {
         <Text accessibilityRole="header" style={[type.pageTitle, { color: colors.textPrimary }]}>{EXPERIENCE_RESTORATION_REVIEW ? home.empty ? "Before it leaves your hands." : "Welcome back." : "Home"}</Text>
         <Text style={[type.body, { color: colors.textSecondary }]}>Your packing, clearly documented.</Text>
       </View>
-      <StateTransition eventKey={[action.kind,action.targetId,action.sessionId].join(':')}><View style={[styles.focus, { backgroundColor: EXPERIENCE_RESTORATION_REVIEW ? colors.surface : colors.accentSoft, borderColor: colors.accentSoftBorder }, EXPERIENCE_RESTORATION_REVIEW ? {borderWidth:0,borderLeftWidth:3,borderLeftColor:colors.accent,borderRadius:0,paddingLeft:18} : null]}
+      <StateTransition eventKey={[action.kind,action.targetId,action.sessionId,action.photoDraftId].join(':')}><View style={[styles.focus, { backgroundColor: EXPERIENCE_RESTORATION_REVIEW ? colors.surface : colors.accentSoft, borderColor: colors.accentSoftBorder }, EXPERIENCE_RESTORATION_REVIEW ? {borderWidth:0,borderLeftWidth:3,borderLeftColor:colors.accent,borderRadius:0,paddingLeft:18} : null]}
         onTouchStart={() => home.setInteracting(true)} onTouchEnd={() => home.setInteracting(false)}
         onTouchCancel={() => home.setInteracting(false)}>
         {home.loading ? <View style={styles.loading} accessibilityRole="progressbar" accessibilityLabel="Loading your next action">

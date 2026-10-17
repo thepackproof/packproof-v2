@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {makeRecord,requiredViews,derive,fileState,transition,scenario,reopenRecord} from './model.mjs';
 const event=(r,type,fields={})=>({proofId:r.id,sessionId:r.sessionId,type,...fields});
 
+test('offline reconciliation cannot clear an unresolved save response',()=>{
+ let r=scenario('recovery');r=transition(r,event(r,'UNKNOWN_RESPONSE'));
+ assert.equal(transition(r,event(r,'RECONCILE')),r);
+ r=transition(r,event(r,'OFFLINE',{value:false}));r=transition(r,event(r,'RECONCILE'));
+ assert.equal(r.error,null);assert.equal(r.finalized,false);assert.equal(r.recording.committed,false);
+});
+
 test('ordinary sales never invent a required photo task',()=>assert.deepEqual(requiredViews(makeRecord()),[]));
 test('grading front/back acceptance advances only after durable local acceptance',()=>{
   let r=makeRecord('grading','GRADING_SUBMISSION');
