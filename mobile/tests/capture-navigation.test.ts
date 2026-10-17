@@ -43,3 +43,11 @@ test('returning to a workspace cancels a pending record response without cancell
  const n=navigation({name:'proof'});const pending=n.proofRequests.current.begin();n.go('home');
  assert.throws(pending,SupersededProofRequest);assert.equal(n.routeRef.current.name,'home');
 });
+
+test('Evidence tools preserve the requested destination and exact selected Proof',()=>{
+ for(const signatureTool of ['ask','compare','case','history']) {
+  const n=navigation({name:'proof'});n.go('signature',{signatureTool});
+  assert.equal(n.routeRef.current.signatureTool,signatureTool);
+  assert.equal(n.sessionRef.current.proofId,'selected-proof');n.back();assert.equal(n.routeRef.current.name,'proof');
+ }
+});

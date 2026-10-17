@@ -1,3 +1,4 @@
+import { requiresRecordingRecovery } from '../capture/recording-review';
 import { nativeStudyForCapture } from "../analytics/native-study";
 import { researchProductionEnabled } from '../research/isolation';
 import { ReceiptConsent } from '../research/ReceiptConsent';
@@ -49,12 +50,13 @@ export function CaptureScreen() {
   const [showLabelDetails, setShowLabelDetails] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [showRecordingOptions, setShowRecordingOptions] = useState(false);
+  const [inspectSurviving, setInspectSurviving] = useState(false);
   const openedPreview = useRef<string | null>(null);
   const capture = app.localCapture;
   const reviewOnly=Boolean(app.captureReviewOnlyReason);
   const belongs = app.session?.captureProofId === (app.proof?.proofId??capture?.captureProofId);
   const inFlight = ["preparing", "uploading", "uploaded", "committed"].includes(app.captureStatus);
-  const incomplete = capture?.recovery?.phase === "RECORDING" || capture?.localFileAvailable === false;
+  const incomplete = requiresRecordingRecovery(capture);
   const reviewing = Boolean(capture) && belongs && !inFlight && !incomplete;
   const sellerAttestation = (Platform.OS === "android" || Platform.OS === "ios") && app.role === "SELLER" && !isGradingWorkflow(app.proof?.workflowType);
   const ordinaryCapture = Boolean(capture?.captureSessionId) && !capture?.captureStageId && !isGradingWorkflow(app.proof?.workflowType);
@@ -179,6 +181,12 @@ export function CaptureScreen() {
       <Text accessibilityRole="alert" style={[styles.note, { color: colors.textSecondary }]}>{capture.localFileAvailable === false
         ? "The original recording is not available on this device. Check the device used to record, or discard the incomplete upload before recording again."
         : "This recording was interrupted before a playable video was confirmed. Any surviving bytes stay on this device. This take cannot be submitted as a completed continuous recording."}</Text>
+      {capture.localFileAvailable !== false ? <>
+        <Button label={inspectSurviving ? "Hide surviving video" : "Inspect surviving video"} variant="secondary" onPress={() => setInspectSurviving(!inspectSurviving)} />
+        {inspectSurviving ? <VideoReview key={capture.uri} uri={capture.uri} accessibilityLabel="Surviving interrupted recording. Inspect only; this is not accepted continuous packing evidence." /> : null}
+        <Text style={[styles.note, { color: colors.textSecondary }]}>Playback depends on the surviving file. A playable clip does not establish a complete packing sequence.</Text>
+      </> : null}
+      <Button label="Keep draft and return" variant="secondary" onPress={app.goBack} disabled={app.busy} />
       <Button label="Discard incomplete recording" onPress={discardRecording} disabled={app.busy} variant="destructive" />
       <Text style={[styles.note, { color: colors.textSecondary }]}>After discarding, open the camera to record a new continuous take. Saved segments are never joined together.</Text>
     </View> : null}
@@ -253,7 +261,7 @@ export function CaptureScreen() {
         ? <ManualReviewConfirmation key={confirmationBinding} binding={confirmationBinding} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked || app.offline} />
         : <Button label={app.captureStatus === "retry" ? "Try again" : "Use recording"} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} haptic="medium" />) : null}
       {!reviewOnly ? <Button label="Retake recording" onPress={() => Alert.alert("Replace this local take?", "The current take stays on this device until the new recording is saved. Then the new take replaces it and the previous unsubmitted local take is removed. Record the entire sequence again; segments are never joined.", [
-        { text: "Keep this recording", style: "cancel" }, { text: "Open camera", onPress: () => void app.startCapture() },
+        { text: "Keep this recording", style: "cancel" }, { text: "Open camera", onPress: () => void app.startCapture({ replaceUri: capture.uri }) },
       ])} variant="secondary" disabled={app.busy || Boolean(capture.uploadEvidenceId)} /> : null}
       {sellerAttestation && /biometric|fingerprint|enroll|lock/i.test(app.error ?? "") ? <Button label="Open biometric settings"
         onPress={() => void (Platform.OS === "android" ? Linking.sendIntent("android.settings.BIOMETRIC_ENROLL").catch(() => Linking.openSettings()) : Linking.openSettings())} variant="tertiary" disabled={app.busy} /> : null}

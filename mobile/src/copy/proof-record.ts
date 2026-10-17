@@ -6,6 +6,7 @@ import type { NextAction } from "./next-action";
 export type ProofRecordTab = "Evidence" | "Timeline" | "Tracking" | "Receipt";
 export interface ProofRecordViewState {
   tab: ProofRecordTab;
+  journey?: 'Capture' | 'Evidence' | 'Tools';
   timelineFilter: string;
   detailsExpanded?: boolean;
   selectedEvidenceId?: string | null;

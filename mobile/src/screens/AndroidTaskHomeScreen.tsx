@@ -1,3 +1,5 @@
+import { EXPERIENCE_RESTORATION_REVIEW } from '../experience/restoration-review';
+import { StateTransition } from '../ui/motion';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { usePackProof } from '../app/PackProofProvider';
 import { proofDisplayTitle } from '../copy/proof-title';
@@ -20,21 +22,21 @@ export function AndroidTaskHomeScreen() {
   const proof = app.proofCollection.find(row => row.proofId === action.targetId);
   const title = creating ? (home.empty ? 'Create your first Proof' : 'Create a Proof')
     : proof ? proofDisplayTitle(proof) : action.title;
-  const attention = home.attention.filter(row => row.proof.proofId !== action.targetId).slice(0, 3);
+  const attention = home.attention.filter(row => row.proof.proofId !== action.targetId && (!EXPERIENCE_RESTORATION_REVIEW || !app.pendingInvites.some(i=>i.proofId===row.proof.proofId))).slice(0, 3);
   function showAttention() {
     app.setProofsView('attention'); app.setProofsQuery(''); app.setProofsRoleFilter('all');
     app.setProofsCarrierFilter(null); app.go('proofs');
   }
-  return <AppScreen padded={false} bottomInset={false} restorationReady={!home.loading}
+  return <AppScreen background={EXPERIENCE_RESTORATION_REVIEW ? colors.surface : undefined} padded={false} bottomInset={false} restorationReady={!home.loading}
     initialOffsetY={app.readWorkspaceOffset('home')} onScrollOffset={offset => app.setWorkspaceOffset('home', offset)}
     onRefresh={() => void home.refresh()} refreshing={home.refreshing}>
     <View style={styles.content}>
       <WorkspaceHeader section="Home" />
       <View style={styles.heading}>
-        <Text accessibilityRole="header" style={[type.pageTitle, { color: colors.textPrimary }]}>Home</Text>
+        <Text accessibilityRole="header" style={[type.pageTitle, { color: colors.textPrimary }]}>{EXPERIENCE_RESTORATION_REVIEW ? home.empty ? "Before it leaves your hands." : "Welcome back." : "Home"}</Text>
         <Text style={[type.body, { color: colors.textSecondary }]}>Your packing, clearly documented.</Text>
       </View>
-      <View style={[styles.focus, { backgroundColor: colors.accentSoft, borderColor: colors.accentSoftBorder }]}
+      <StateTransition eventKey={[action.kind,action.targetId,action.sessionId].join(':')}><View style={[styles.focus, { backgroundColor: EXPERIENCE_RESTORATION_REVIEW ? colors.surface : colors.accentSoft, borderColor: colors.accentSoftBorder }, EXPERIENCE_RESTORATION_REVIEW ? {borderWidth:0,borderLeftWidth:3,borderLeftColor:colors.accent,borderRadius:0,paddingLeft:18} : null]}
         onTouchStart={() => home.setInteracting(true)} onTouchEnd={() => home.setInteracting(false)}
         onTouchCancel={() => home.setInteracting(false)}>
         {home.loading ? <View style={styles.loading} accessibilityRole="progressbar" accessibilityLabel="Loading your next action">
@@ -42,7 +44,7 @@ export function AndroidTaskHomeScreen() {
           <View style={[styles.placeholder, { backgroundColor: colors.surfaceElevated }]} />
           <View style={[styles.placeholderButton, { backgroundColor: colors.surfaceElevated }]} />
         </View> : <>
-          <Text style={[styles.eyebrow, { color: colors.accentText }]}>{creating ? 'PACK IT. RECORD IT.' : 'YOUR NEXT STEP'}</Text>
+          <Text style={[styles.eyebrow, { color: colors.accentText }]}>{creating ? 'PACK IT. RECORD IT.' : EXPERIENCE_RESTORATION_REVIEW ? 'RECOMMENDED NEXT ACTION' : 'YOUR NEXT STEP'}</Text>
           <Text accessibilityRole="header" style={[styles.focusTitle, { color: colors.textPrimary }]}>{title}</Text>
           <TutorialTarget name="capture"><PressableScale accessibilityRole="button" accessibilityLabel={action.buttonLabel}
             accessibilityState={{ disabled: app.busy, busy: app.busy }} disabled={app.busy}
@@ -55,7 +57,7 @@ export function AndroidTaskHomeScreen() {
           <Text style={[type.secondary, { color: colors.textSecondary }]}>{creating
             ? 'Keep a clear record of how you packed your item.' : action.reason}</Text>
         </>}
-      </View>
+      </View></StateTransition>
       {home.loading || !creating ? <TutorialTarget name="create"><Button label="Create a new Proof" icon="add-outline"
         variant="secondary" disabled={app.busy} onPress={() => app.selectCreateProof()} /></TutorialTarget>
         : <Button label="See capture options" variant="tertiary" onPress={() => app.go('station')} />}
@@ -70,6 +72,10 @@ export function AndroidTaskHomeScreen() {
         label={home.counts.uploading > 0 ? `${home.counts.uploading} ${home.counts.uploading === 1 ? 'upload' : 'uploads'} in progress`
           : `${home.counts.waiting} ${home.counts.waiting === 1 ? 'upload' : 'uploads'} waiting${app.offline ? ' for connection' : ''}`}
         variant="tertiary" onPress={() => app.go('activity', { activityFilter: 'uploading' })} /> : null}
+      {EXPERIENCE_RESTORATION_REVIEW && app.pendingInvites.length ? <View style={{gap:8,borderTopWidth:1,borderTopColor:colors.divider,paddingTop:18}}>
+        <Text accessibilityRole="header" style={[type.rowTitle,{color:colors.textPrimary}]}>Incoming tasks · {app.pendingInvites.length}</Text>
+        {app.pendingInvites.map(invite=><CompactProofRow key={invite.invitationId} title={app.proofCollection.find(p=>p.proofId===invite.proofId)?.transaction.itemTitle || 'Incoming Proof invitation'} detail="Review the invitation before accepting the requested work." disabled={app.busy} onPress={()=>app.openInvitation(invite)} />)}
+      </View> : null}
       {attention.length ? <TutorialTarget name="attention"><View>
         <View style={styles.sectionHeading}><Text accessibilityRole="header" style={[type.rowTitle, styles.sectionTitle, { color: colors.textPrimary }]}>Also needs your attention</Text>
           <Button label="View all" variant="tertiary" onPress={showAttention} /></View>

@@ -1,0 +1,48 @@
+Γ£ö light ink on paper normal text contrast (0.7855ms)
+Γ£ö light ink on canvas normal text contrast (0.0869ms)
+Γ£ö light secondary on paper normal text contrast (0.0522ms)
+Γ£ö light secondary on canvas normal text contrast (0.045ms)
+Γ£ö light action on paper normal text contrast (0.0567ms)
+Γ£ö light success on success-tint normal text contrast (0.0421ms)
+Γ£ö light attention on attention-tint normal text contrast (0.0834ms)
+Γ£ö light danger on danger-tint normal text contrast (0.0376ms)
+Γ£ö light control boundaries on paper (0.6953ms)
+Γ£ö light control boundaries on canvas (0.2072ms)
+Γ£ö dark ink on paper normal text contrast (0.072ms)
+Γ£ö dark ink on canvas normal text contrast (0.0333ms)
+Γ£ö dark secondary on paper normal text contrast (0.0253ms)
+Γ£ö dark secondary on canvas normal text contrast (0.0204ms)
+Γ£ö dark action on paper normal text contrast (0.0203ms)
+Γ£ö dark success on success-tint normal text contrast (0.0198ms)
+Γ£ö dark attention on attention-tint normal text contrast (0.0193ms)
+Γ£ö dark danger on danger-tint normal text contrast (0.0193ms)
+Γ£ö dark control boundaries on paper (0.0194ms)
+Γ£ö dark control boundaries on canvas (0.0194ms)
+Γ£ö primary action uses readable white text in both themes (0.0454ms)
+Γ£ö ordinary sales never invent a required photo task (2.3539ms)
+Γ£ö grading front/back acceptance advances only after durable local acceptance (1.6384ms)
+Γ£ö partial item acknowledgment is file specific (0.5072ms)
+Γ£ö file commitment cannot silently accept the grading workflow step (0.3061ms)
+Γ£ö local recording is never server success (0.2615ms)
+Γ£ö required declaration is explicit and false by default (0.0917ms)
+Γ£ö transfer, artifact acknowledgment and finalization are separate (0.1805ms)
+Γ£ö late callback remains on its Proof and session (0.1161ms)
+Γ£ö participant wait does not negate saved evidence (0.353ms)
+Γ£ö offline originals and remote persistence are independent (0.9894ms)
+Γ£ö offline transfer never advances through artificial progress (0.1834ms)
+Γ£ö interruptions stop recording and disclose continuity loss (0.1084ms)
+Γ£ö finalized recordings and photos cannot be silently replaced (0.0728ms)
+Γ£ö unknown response exposes reconciliation, preserving the original (0.0546ms)
+Γ£ö stopping durably associates a pending take; reopening cannot reset it (0.1697ms)
+Γ£ö interruption exposes surviving media but cannot be accepted as continuous evidence (0.1261ms)
+Γ£ö discard needs confirmation and exact pending artifact identity (0.0833ms)
+Γ£ö photo replacement uses a unique capture ID; a stale commit cannot apply to its replacement (0.0848ms)
+Γ£ö photo timeout and reopening retain item request identity and never fabricate completion (0.1534ms)
+Γä╣ tests 40
+Γä╣ suites 0
+Γä╣ pass 40
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 91.575

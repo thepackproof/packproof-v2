@@ -47,9 +47,9 @@ Run the plan's formative five-person round, resolve findings, then the fresh ten
 
 G0 source discovery: complete, with installed/device gaps disclosed.
 
-G1 direction: **pending founder review of the concrete candidate**.
+G1 direction: **conditionally approved by founder review on October 17, 2026**. Requested targeted corrections are implemented; this does not grant release approval.
 
-G2 real Android slice and formative findings: **pending**.
+G2 real Android slice and formative findings: **source slice implemented; device demonstration and five-person formative findings pending**. See REVIEW-REVISIONS.md and ANDROID-VALIDATION.md.
 
 G3 migration, native quality and fresh-user acceptance: **pending**.
 

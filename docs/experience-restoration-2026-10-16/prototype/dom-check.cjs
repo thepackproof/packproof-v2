@@ -1,56 +1,44 @@
-const fs=require('node:fs'),assert=require('node:assert/strict');
-const path=require('node:path');
+const fs=require('node:fs'),assert=require('node:assert/strict'),path=require('node:path');
 const {createRequire}=require('node:module');
-const webRequire=createRequire(path.resolve(__dirname,'../../../web/package.json'));
-const {JSDOM}=webRequire('jsdom');
+const {JSDOM}=createRequire(path.resolve(__dirname,'../../../web/package.json'))('jsdom');
 const html=fs.readFileSync(process.argv[2],'utf8');
-const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://localhost/'});
-const w=dom.window,d=w.document;
-w.structuredClone=structuredClone;
-w.matchMedia=()=>({matches:false,addEventListener(){}});
-w.HTMLDialogElement.prototype.showModal=function(){this.open=true};
-w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'))};
-const js=d.querySelector('script[type=module]').textContent;
-w.eval(js);
+let dom,w,d,checks=0,failures=0;
+function fresh(){dom=new JSDOM(html,{runScripts:'outside-only',url:'http://localhost/'});w=dom.window;d=w.document;w.structuredClone=structuredClone;w.matchMedia=()=>({matches:false,addEventListener(){}});w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'))};w.eval(d.querySelector('script[type=module]').textContent);}
 const click=s=>{const e=d.querySelector(s);assert.ok(e,`Missing ${s}`);assert.equal(e.disabled,false,`Disabled ${s}`);e.click()};
-const change=(s,value)=>{const e=d.querySelector(s);if(e.type==='checkbox')e.checked=value;else e.value=value;e.dispatchEvent(new w.Event('change',{bubbles:true}))};
+const change=(s,value)=>{const e=d.querySelector(s);assert.ok(e,`Missing ${s}`);if(e.type==='checkbox')e.checked=value;else e.value=value;e.dispatchEvent(new w.Event('change',{bubbles:true}))};
 const text=()=>d.querySelector('#app').textContent;
-let checks=0;
-function check(name,fn){fn();checks++;console.log('PASS '+name)}
-check('all seven scenarios render with exactly three in-Proof destinations',()=>{
- for(const s of ['start','photos','review','upload','recovery','saved','tools']){click(`[data-scene="${s}"]`);assert.ok(text().length>100);if(s!=='start')assert.equal(d.querySelectorAll('.destinations button').length,3)}
+const scene=s=>click(`[data-scene="${s}"]`);
+const action=s=>click(`[data-action="${s}"]`);
+const sim=s=>click(`[data-sim="${s}"]`);
+const begin=()=>{action('create');action('create-sale');action('camera');action('shutter');};
+const stopped=()=>{begin();action('stop');};
+function check(name,fn){fresh();try{fn();checks++;console.log('PASS '+name);}catch(error){failures++;console.error('FAIL '+name+': '+error.message);}finally{dom.window.close();}}
+check('all eight scenarios render with Capture / Evidence / Tools',()=>{
+ for(const s of ['start','returning','photos','review','upload','recovery','saved','tools']){scene(s);assert.ok(text().length>100);if(!['start','returning'].includes(s))assert.deepEqual([...d.querySelectorAll('.destinations button')].map(b=>b.textContent),['Capture','Evidence','Tools']);}
 });
-check('photo acceptance advances locally, then waits for item-step acknowledgment',()=>{
- click('[data-scene="photos"]');assert.match(text(),/Back photo/);click('[data-action="camera"]');click('[data-action="shutter"]');click('[data-action="accept-photo"]');
- assert.match(text(),/Item photos captured/);assert.match(text(),/Saved on this device/);click('[data-action="save-photos"]');assert.match(text(),/Finishing the item step/);click('[data-sim="photo-task"]');assert.match(text(),/Record the packing/);
+check('ordinary photo save automatically advances after the explicit sample acknowledgments',()=>{scene('photos');action('camera');action('shutter');action('accept-photo');assert.match(text(),/Item photos captured/);action('save-photos');assert.match(text(),/Record the packing/);assert.match(text(),/Item photos complete/);});
+check('missing photo acknowledgment exposes timeout and retry, including after reopening',()=>{
+ scene('photos');change('#hold-photo-ack',true);action('camera');action('shutter');action('accept-photo');action('save-photos');assert.match(text(),/Finishing the item step/);const ids=[...d.querySelectorAll('[data-file-id]')].map(e=>e.dataset.fileId);sim('photo-timeout');assert.match(text(),/response did not arrive/);sim('reopen');assert.deepEqual([...d.querySelectorAll('[data-file-id]')].map(e=>e.dataset.fileId),ids);change('#hold-photo-ack',false);action('check-photos');assert.match(text(),/Record the packing/);
 });
-check('ordinary journey requires declaration and waits for artifact plus finalization acknowledgments',()=>{
- click('[data-scene="review"]');assert.equal(d.querySelector('#declaration').checked,false);assert.equal(d.querySelector('[data-action="submit"]').disabled,true);change('#declaration',true);click('[data-action="submit"]');
- click('[data-sim="transferred"]');assert.match(text(),/Finishing save/);assert.doesNotMatch(text(),/Evidence saved/);click('[data-sim="artifact"]');assert.match(text(),/Finishing save/);click('[data-sim="finalize"]');assert.match(text(),/Evidence saved/);assert.match(text(),/Waiting for|Recipient participation/);
+check('accepted local photo retakes receive distinct IDs and preserve the earlier original',()=>{
+ scene('photos');const old=d.querySelector('[data-file-id]').dataset.fileId;click('[data-action="replace-photo"][data-view="FRONT"]');action('shutter');action('accept-photo');const ids=[...d.querySelectorAll('[data-file-id]')].map(e=>e.dataset.fileId);assert.equal(new Set(ids).size,ids.length);assert.ok(ids.includes(old));assert.notEqual(ids[0],old);assert.match(text(),/Earlier local originals/);
 });
-check('creating the same demo order resumes its existing saved record',()=>{
- click('[data-action="home"]');click('[data-action="create"]');click('[data-action="create-sale"]');assert.match(text(),/Evidence saved/);
+check('stopped take cannot be abandoned by Back to capture or a new camera request',()=>{
+ stopped();action('leave-camera');assert.equal(d.querySelector('#sheet').open,true);assert.match(d.querySelector('#sheet').textContent,/Keep this stopped take/);action('keep-leave');assert.match(text(),/Review your saved take/);const id=d.querySelector('[data-file-id]').dataset.fileId;action('resume-take');assert.ok(d.querySelector('video[controls]'));action('leave-camera');action('keep-leave');assert.equal(d.querySelector('[data-file-id]').dataset.fileId,id);
 });
-check('offline keeps local original and offers a safe connection check',()=>{
- click('[data-scene="recovery"]');assert.match(text(),/Waiting for connection/);assert.equal(d.querySelector('[data-sim="transferred"]'),null);click('[data-action="reconnect"]');assert.ok(d.querySelector('[data-sim="transferred"]'));
-});
-check('wrong-Proof completion event leaves visible state unchanged',()=>{
- click('[data-scene="review"]');const old=text();click('[data-sim="wrong-proof"]');assert.equal(text(),old);
-});
-check('Home is guarded while recording and interruption is disclosed',()=>{
- click('[data-scene="start"]');click('[data-action="create"]');click('[data-action="create-sale"]');click('[data-action="camera"]');click('[data-action="shutter"]');click('[data-action="home"]');assert.equal(d.querySelector('#sheet').open,true);assert.match(text(),/Stop recording/);click('[data-action="interrupt-leave"]');assert.match(text(),/Recording interrupted/);
-});
-check('case packet includes an issue control, explicit source selection and preserved notes',()=>{
- click('[data-scene="tools"]');click('[data-action="packet"]');assert.equal(d.querySelector('[data-action="preview-packet"]').disabled,true);change('#issue','Reported condition / return difference');d.querySelector('#notes').value='The outer box was intact.';click('[data-action="preview-packet"]');assert.match(text(),/The outer box was intact/);click('[data-action="edit-packet"]');assert.equal(d.querySelector('#notes').value,'The outer box was intact.');
-});
-check('tools on an empty record do not invent saved sources',()=>{
- click('[data-scene="start"]');click('[data-action="create"]');click('[data-action="create-sale"]');click('[data-tab="Tools"]');click('[data-action="packet"]');assert.match(text(),/A saved original is needed/);assert.equal(d.querySelector('[data-action="preview-packet"]'),null);click('[data-action="tools-back"]');click('[data-action="compare"]');assert.match(text(),/No eligible packing and receiving pair/);
-});
-check('charcoal, 200% text and reduced motion controls remain available',()=>{
- change('#theme','dark');change('#text-scale','2');change('#motion',true);assert.equal(d.documentElement.dataset.theme,'dark');assert.equal(d.documentElement.style.getPropertyValue('--scale'),'2');assert.ok(d.documentElement.classList.contains('reduce-motion'));
-});
-check('standalone review has no external assets or template placeholders',()=>{
- assert.doesNotMatch(html,/__(?:FONT|POSTER|VIDEO|SYMBOL|WORDMARK|HISTORICAL)__/);assert.equal(d.querySelectorAll('[src^="http"],[href^="http"]').length,0);
-});
-console.log(`${checks} DOM interaction checks passed. Layout, video decoding and native behavior are not validated by jsdom.`);
-dom.window.close();
+check('Home and My Proofs return to the same unaccepted take',()=>{stopped();action('home');action('keep-leave');assert.match(text(),/Welcome back/);click('[data-action="open-proof"][data-proof="demo-sale"]');assert.match(text(),/Review your saved take/);action('resume-take');assert.ok(d.querySelector('video'));});
+check('simulated close and reopen restores a stopped take for inspection',()=>{stopped();sim('reopen');assert.match(text(),/Review your saved take/);action('resume-take');assert.ok(d.querySelector('video[controls]'));action('accept-recording');assert.match(text(),/Ready to save/);});
+check('active capture navigation is guarded and interruption exposes playable sample media',()=>{begin();action('home');assert.equal(d.querySelector('#sheet').open,true);action('interrupt-leave');assert.match(text(),/Recording interrupted/);assert.ok(d.querySelector('video[controls]'));assert.equal(d.querySelector('[data-action="accept-recording"]'),null);action('keep-recovery');click('[data-action="open-proof"]');assert.match(text(),/Recording interrupted/);});
+check('retaking an interrupted take explicitly retains the old clip under its identity',()=>{begin();sim('interrupt');const old=d.querySelector('.media-id').textContent;action('preserve-retake');action('confirm-retake');action('shutter');action('stop');action('accept-recording');click('[data-tab="Evidence"]');assert.match(text(),/Earlier local originals/);assert.ok(text().includes(old.replace('Take ','')));assert.ok(d.querySelectorAll('video').length>=2);});
+check('discard requires a second confirmation and does not remove other originals',()=>{stopped();action('leave-camera');action('discard-take');assert.match(d.querySelector('#sheet').textContent,/Discard this local take/);action('resume-take');assert.ok(d.querySelector('video'));action('leave-camera');action('discard-take');action('confirm-discard');assert.match(text(),/Record the packing/);assert.equal(d.querySelector('#app [data-action="resume-take"]'),null);});
+check('retake of an accepted recording retains the earlier unsubmitted original',()=>{scene('review');action('retake-recording');action('confirm-retake');action('shutter');action('stop');action('accept-recording');click('[data-tab="Evidence"]');assert.match(text(),/Earlier local originals/);assert.equal(d.querySelectorAll('video').length,2);});
+check('declaration, artifact acknowledgment, and Proof finalization remain distinct',()=>{scene('review');assert.equal(d.querySelector('#declaration').checked,false);assert.equal(d.querySelector('[data-action="submit"]').disabled,true);change('#declaration',true);action('submit');sim('transferred');assert.match(text(),/Finishing save/);sim('artifact');assert.match(text(),/Proof finalization is still pending/);sim('finalize');assert.match(text(),/Evidence saved/);assert.match(text(),/Recipient participation/);});
+check('recording start, stop, task completion, and server confirmation have distinct motion cues',()=>{begin();assert.equal(d.querySelector('[data-transition]').dataset.transition,'cue-record-start');action('stop');assert.equal(d.querySelector('[data-transition]').dataset.transition,'cue-record-stop');action('accept-recording');assert.equal(d.querySelector('[data-transition]').dataset.transition,'cue-task');change('#declaration',true);action('submit');sim('transferred');sim('artifact');assert.equal(d.querySelector('[data-transition]').dataset.transition,'cue-confirmed');});
+check('returning Home names several unfinished Proofs and a separate incoming task',()=>{scene('returning');assert.match(text(),/3 Proofs in progress/);assert.match(text(),/Amazing Spider-Man #1/);assert.match(text(),/Signed first edition/);assert.match(text(),/Incoming tasks/);click('[data-action="open-proof"][data-proof="demo-grading"]');assert.match(text(),/Amazing Spider-Man #1/);assert.match(text(),/Back photo/);});
+check('incoming task opens its exact Proof without fabricating receipt evidence',()=>{scene('returning');click('[data-action="open-proof"][data-proof="demo-incoming"]');assert.match(text(),/Incoming trading card/);assert.match(text(),/has not been accepted/);assert.equal(d.querySelector('video'),null);});
+check('offline recovery and other-Proof callbacks never advance save state',()=>{scene('recovery');assert.equal(d.querySelector('[data-sim="transferred"]'),null);const old=text();sim('wrong-proof');assert.equal(text(),old);action('reconnect');assert.ok(d.querySelector('[data-sim="transferred"]'));});
+check('packet context and notes survive preview; empty records do not invent sources',()=>{scene('tools');action('packet');assert.equal(d.querySelector('[data-action="preview-packet"]').disabled,true);change('#issue','Reported wrong item');d.querySelector('#notes').value='Outer box intact.';action('preview-packet');assert.match(text(),/Outer box intact/);action('edit-packet');assert.equal(d.querySelector('#notes').value,'Outer box intact.');scene('start');action('create');action('create-sale');click('[data-tab="Tools"]');action('packet');assert.match(text(),/A saved original is needed/);});
+check('warm/neutral comparison, charcoal, 200% text and reduced motion controls remain available',()=>{change('#paper','neutral');assert.equal(d.documentElement.dataset.paper,'neutral');change('#paper','warm');change('#theme','dark');change('#text-scale','2');change('#motion',true);assert.equal(d.documentElement.dataset.theme,'dark');assert.equal(d.documentElement.style.getPropertyValue('--scale'),'2');assert.ok(d.documentElement.classList.contains('reduce-motion'));assert.match(html,/\.reduce-motion \.screen-enter \*\{animation:none!important/);});
+check('standalone review uses no external assets and retains its sample-only disclosure',()=>{assert.doesNotMatch(html,/__(?:FONT|POSTER|VIDEO|SYMBOL|WORDMARK|HISTORICAL)__/);assert.equal(d.querySelectorAll('[src^="http"],[href^="http"]').length,0);assert.match(d.body.textContent,/working interaction prototype, not the native app/);});
+console.log(`${checks} DOM interaction checks passed; ${failures} failed. Layout, decoding and physical-device behavior are not validated by jsdom.`);
+process.exitCode=failures?1:0;

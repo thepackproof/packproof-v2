@@ -1,3 +1,5 @@
+import { EXPERIENCE_RESTORATION_REVIEW } from '../experience/restoration-review';
+import { RestorationJourney } from '../ui/RestorationJourney';
 import { SavedPhotoDraft } from '../ui/SavedPhotoDraft';
 import { photoDraftContext, photoContextKey } from '../capture/photo-draft-model';
 import { PhotoCaptureFlow } from '../ui/PhotoCaptureFlow';
@@ -234,6 +236,32 @@ export function ProofDetailScreen() {
     }
     return null;
   }
+  const actionContent = (taskFirst ? (detail?.action ? <View style={styles.action}>
+          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your next step</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{detail.action.reason}</Text>
+          <Button label={detail.action.buttonLabel} onPress={handlePrimary} loading={app.busy} disabled={app.offline && detail.action.kind === 'reconcile'} />
+        </View> : null) : showActionCard || (!grading && isCompletedAction(localAction) && (app.role === "SELLER" || app.role === "BUYER")) || (app.localCapture && app.session.captureProofId && !captureBelongs) ? <>
+{showActionCard && (actionTitle || actionHint) ? (
+        <View style={styles.action}>
+          {!usesImageCapture ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{actionHint || actionTitle}</Text> : null}
+          {usesImageCapture ? (
+            <PhotoCaptureFlow />
+          ) : (
+            renderPrimaryButton()
+          )}
+        </View>
+      ) : !grading && isCompletedAction(localAction) && app.role === "BUYER" ? (
+        <Button label="Document receipt or return" onPress={() => app.openReceipt(proof.proofId)} />
+      ) : null}
+{app.localCapture && app.session.captureProofId && !captureBelongs ? (
+        <Button
+          label="Return to saved recording"
+          variant="secondary"
+          onPress={() => void app.run(() => app.openProof(app.session!.captureProofId!))}
+        />
+      ) : null}
+        </> : null);
+
   const humanRows = [
     { label: "State", value: proofStatusLabel(proof.status) },
     { label: "Your role", value: yourRole },
@@ -277,7 +305,7 @@ export function ProofDetailScreen() {
         right={
           <View style={styles.headerActions}>
             {presentation.share.available ? (width < 390 || fontScale > 1.3 ? <IconButton label="Share Proof" onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : <Button label="Share" icon="share-outline" variant="tertiary" onPress={() => void app.shareProofLink()} />) : null}
-            <IconButton label="More actions" onPress={() => setMenuOpen(true)}><Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} /></IconButton>
+            <IconButton label="Proof details" onPress={() => setMenuOpen(true)}><Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} /></IconButton>
           </View>
         }
       />
@@ -293,37 +321,16 @@ export function ProofDetailScreen() {
 
       {!ANDROID_TASK_FIRST_REBUILD && proof.status === "FINALIZED" ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId}/> : null}
       {otherPhotoDrafts.map(draft => <SavedPhotoDraft key={draft.id} draft={draft} />)}
+      {EXPERIENCE_RESTORATION_REVIEW ? <RestorationJourney key={proof.proofId} action={actionContent}
+        renderEvidence={tab=><ProofRecord key={proof.proofId} statusLabel={statusLabel} summaryLine={summaryLine} action={null} embeddedTab={tab} />} /> : (
       <ProofRecord
         key={proof.proofId}
         statusLabel={statusLabel}
         summaryLine={summaryLine}
         actionInContent={usesImageCapture}
-        action={taskFirst ? (detail?.action ? <View style={styles.action}>
-          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your next step</Text>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{detail.action.reason}</Text>
-          <Button label={detail.action.buttonLabel} onPress={handlePrimary} loading={app.busy} disabled={app.offline && detail.action.kind === 'reconcile'} />
-        </View> : null) : showActionCard || (!grading && isCompletedAction(localAction) && (app.role === "SELLER" || app.role === "BUYER")) || (app.localCapture && app.session.captureProofId && !captureBelongs) ? <>
-{showActionCard && (actionTitle || actionHint) ? (
-        <View style={styles.action}>
-          {!usesImageCapture ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{actionHint || actionTitle}</Text> : null}
-          {usesImageCapture ? (
-            <PhotoCaptureFlow />
-          ) : (
-            renderPrimaryButton()
-          )}
-        </View>
-      ) : !grading && isCompletedAction(localAction) && app.role === "BUYER" ? (
-        <Button label="Document receipt or return" onPress={() => app.openReceipt(proof.proofId)} />
-      ) : null}
-{app.localCapture && app.session.captureProofId && !captureBelongs ? (
-        <Button
-          label="Return to saved recording"
-          variant="secondary"
-          onPress={() => void app.run(() => app.openProof(app.session!.captureProofId!))}
-        />
-      ) : null}
-        </> : null}
+        action={actionContent}
       />
+      )}
 
       <BottomSheet visible={menuOpen} title="More actions" onClose={() => setMenuOpen(false)}>
         {ANDROID_TASK_FIRST_REBUILD && proof.status === 'FINALIZED' ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId} /> : null}

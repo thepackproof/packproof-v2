@@ -1,5 +1,13 @@
 # Experience restoration implementation checkpoint
 
+## Current status: October 17 review revisions
+
+The founder conditionally approved continued implementation and withheld release approval. The five targeted corrections and Android review slice are implemented; see [REVIEW-REVISIONS.md](REVIEW-REVISIONS.md) for current changes, verification and remaining gates. Capture / Evidence / Tools, warmer paper and returning Home are included. The slice is enabled only by the internal Android restoration flag; store profiles remain unchanged.
+
+**The remainder of this file is the historical October 16 checkpoint.** Its G1-pending status and test counts describe that earlier revision, not the current one. No device, formative-study or release gate is claimed complete.
+
+## Historical October 16 checkpoint
+
 The October 16 restoration plan is **not fully implemented or release ready**. This branch completes source discovery, a reviewable design candidate and independent capture-feedback safety work. The candidate is deliberately isolated from production navigation and theme selection while the plan's G1 visual-direction review is pending.
 
 ## Baseline and authority

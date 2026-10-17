@@ -11,6 +11,13 @@ const accountPrefix = (api: string, user: string) => `${prefix}${hash(JSON.strin
 const storageKey = (context: PhotoDraftContext) => `${accountPrefix(context.apiBaseUrl, context.userId)}${hash(photoContextKey(context))}`;
 const locks = new Map<string, Promise<unknown>>();
 
+export async function withPhotoDraftLock<T>(context: PhotoDraftContext, action: () => Promise<T>): Promise<T> {
+  const key=storageKey(context), previous=locks.get(key) ?? Promise.resolve();
+  const operation=previous.catch(() => undefined).then(action);
+  locks.set(key,operation);
+  try { return await operation; } finally { if (locks.get(key)===operation) locks.delete(key); }
+}
+
 export async function readPhotoDraft(context: PhotoDraftContext): Promise<PhotoDraft | null> {
   const raw = await AsyncStorage.getItem(storageKey(context));
   if (!raw) return null;
@@ -36,8 +43,7 @@ export async function persistPhotoDraft(draft: PhotoDraft): Promise<void> {
 }
 export async function retainPhoto(context: PhotoDraftContext, input: { slot: string; uri: string; contentType: string }): Promise<PhotoDraft> {
   const key = storageKey(context);
-  const previous = locks.get(key) ?? Promise.resolve();
-  const operation = previous.catch(() => undefined).then(async () => {
+  return withPhotoDraftLock(context, async () => {
     if (!FileSystem.documentDirectory) throw new Error('Device storage is unavailable. Keep this photo open and try again.');
     const now = new Date().toISOString();
     const draft = await readPhotoDraft(context) ?? { ...context, schema: 1 as const, id: newIdempotencyKey(), actionKey: newIdempotencyKey(),
@@ -54,6 +60,4 @@ export async function retainPhoto(context: PhotoDraftContext, input: { slot: str
     await persistPhotoDraft(next);
     return next;
   });
-  locks.set(key, operation);
-  try { return await operation; } finally { if (locks.get(key) === operation) locks.delete(key); }
 }

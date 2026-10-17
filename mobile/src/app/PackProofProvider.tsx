@@ -1,5 +1,7 @@
+import { photoRetryDue, recoverPhotoSubmission } from '../capture/photo-submission-recovery';
+import { assertRecordingReplacement, assertContinuousRecording } from '../capture/recording-review';
 import { gradingCreationKey, gradingCreationRequest, parseGradingCreation, type GradingCreation } from '../experience/grading-creation';
-import { listPhotoDrafts, persistPhotoDraft, readPhotoDraft, retainPhoto } from '../capture/photo-drafts';
+import { listPhotoDrafts, persistPhotoDraft, readPhotoDraft, retainPhoto, withPhotoDraftLock } from '../capture/photo-drafts';
 import { photoDraftContext, photoContextKey, submitPhotoDraft, type PhotoDraft, type PhotoDraftContext } from '../capture/photo-draft-model';
 import { recordMobileUxEvent } from '../analytics/mobile-ux-events';
 import { freshProofDestination, openFreshProofAction, savedCaptureDestination } from "../experience/action-routing";
@@ -267,7 +269,7 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId" | "creationMode">) => void;
+  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "signatureTool" | "activityFilter" | "activitySessionId" | "creationMode">) => void;
   goBack: () => void;
   setProofsView: (view: ProofsLibraryView) => void;
   setProofsQuery: (query: string) => void;
@@ -323,6 +325,7 @@ export interface PackProofContextValue {
   shareProofLink: () => Promise<void>;
   runWorkflowAction: (action: ProofWorkflowAction, body?: Record<string, unknown>) => Promise<void>;
   photoDrafts: PhotoDraft[];
+  photoSubmissionId: string | null;
   retainGradingPhoto: (context: PhotoDraftContext, photo: { slot: string; uri: string; contentType: string }) => Promise<void>;
   commitGradingCapture: (draft: PhotoDraft) => Promise<void>;
   identifyReference: (reference: string) => Promise<void>;
@@ -330,7 +333,7 @@ export interface PackProofContextValue {
   savePurchaseDetails: () => Promise<void>;
   saveShippingDetails: () => Promise<void>;
   startCaptureIntent: (token:string) => Promise<void>;
-  startCapture: () => Promise<void>;
+  startCapture: (options?: { replaceUri: string }) => Promise<void>;
   startIntakeCapture: (input: { snapshotId: string; handoffId?: string }) => Promise<void>;
   discardCapture: () => Promise<void>;
   submitCapture: () => Promise<void>;
@@ -461,6 +464,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
   const [savedRecordings, setSavedRecordings] = useState<LocalCapture[]>([]);
   const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
   const photoSubmissionBusy = useRef(false);
+  const [photoSubmissionId, setPhotoSubmissionId] = useState<string | null>(null);
+  const photoTickRef = useRef<() => Promise<void>>(async () => {});
   const gradingCreateBusy = useRef(false);
   const [gradingCreation, setGradingCreation] = useState<GradingCreation | null>(null);
   const [captureReviewOnlyReason,setCaptureReviewOnlyReason] = useState<string|null>(null);
@@ -536,7 +541,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (hydrated) versionReporter.update(session, client);
   }, [client, hydrated, session, versionReporter]);
 
-  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "activityFilter" | "activitySessionId" | "creationMode" | "returnToCapture">) => {
+  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "signatureTool" | "activityFilter" | "activitySessionId" | "creationMode" | "returnToCapture">) => {
     if (captureNavigationLock.current) { setError("Finish or cancel this take in the camera before leaving. Your Proof stays selected."); return; }
     if (name === "create" || name === "manual") startMobileCaptureEntry();
     if (name === "scan" && !MOBILE_TASK_UX_ENABLED) name = "create";
@@ -581,7 +586,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       ...(name === "activity" ? {activityFilter: options?.activityFilter,activitySessionId:options?.activitySessionId} : {}),
       ...(name === "account" ? { accountSection: options?.accountSection } : {}),
       ...(name === "supporting" ? { supportingSection: options?.supportingSection } : {}),
-      ...(name === "signature" ? { historyShareId: options?.historyShareId } : {}),
+      ...(name === "signature" ? { historyShareId: options?.historyShareId, signatureTool: options?.signatureTool } : {}),
       ...(name === "create" ? { creationMode: options?.creationMode } : {}),
       ...(name === "editPurchase" ? { returnToCapture: options?.returnToCapture } : {}),
     };
@@ -1411,6 +1416,63 @@ export function PackProofProvider(props: { children: ReactNode }) {
     return () => sub.remove();
   }, [route.name]);
 
+
+  async function processPhotoSubmission(requested: PhotoDraft, manual = false) {
+    if (photoSubmissionBusy.current || captureNavigationLock.current) return;
+    const owner = sessionRef.current;
+    if (!owner || requested.userId !== owner.userId || requested.apiBaseUrl !== owner.apiBaseUrl.replace(/\/+$/, '')) throw new Error('Return to the original account to submit these photos.');
+    if (offline || recoveryConnection.current === false) throw new Error('Reconnect to submit. Your photos remain saved on this device.');
+    photoSubmissionBusy.current = true; setPhotoSubmissionId(requested.id);
+    const assertAccount = () => client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
+    const persistDraft = async (updated: PhotoDraft) => {
+      assertAccount(); await persistPhotoDraft(updated); assertAccount();
+      setPhotoDrafts(rows => [...rows.filter(row => photoContextKey(row) !== photoContextKey(updated)), { ...updated, slots: updated.slots.map(slot => ({ ...slot })) }]);
+    };
+    const startedAt = Date.now();
+    try {
+      recordMobileUxEvent('photo_upload_started');
+      const result = await withPhotoDraftLock(requested, () => recoverPhotoSubmission(requested, {
+        assertAccount, read: () => readPhotoDraft(requested), persist: persistDraft,
+        submit: draft => submitPhotoDraft(draft, {
+          assertAccount, getProof: () => client.getProof(draft.proofId), persist: persistDraft,
+          fileExists: localCaptureExists,
+          initialize: slot => client.initializeEvidenceUpload(draft.proofId, { contentType: slot.contentType,
+            evidenceType: captureEvidenceType({ workflowType: 'GRADING_SUBMISSION', captureRecipe: draft.recipe, nextActionType: draft.actionType }), idempotencyKey: slot.uploadKey }),
+          upload: (slot, target) => uploadCaptureFile({ baseUrl: owner.apiBaseUrl, target: target as Parameters<typeof uploadCaptureFile>[0]['target'], fileUri: slot.uri, contentType: slot.contentType, timeoutMs: 120_000, stallTimeoutMs: 30_000 }),
+          commit: evidenceId => client.commitEvidence(draft.proofId, evidenceId),
+          apply: async (updated, action) => {
+            const acknowledged = await client.runProofAction(updated.proofId, action, {
+              assetId: updated.assetId ?? undefined, transferId: updated.transferId ?? undefined, recipe: updated.recipe,
+              evidence: updated.slots.map(slot => ({ slot: slot.slot, evidenceId: slot.evidenceId })), idempotencyKey: updated.actionKey });
+            assertAccount();
+            if (acknowledged.proof.proofId !== updated.proofId) throw new Error('The workflow response belongs to another Proof. Your originals are retained.');
+            // A background acknowledgment may update this Proof, but must never select it over another one.
+            setProof(current => current?.proofId === updated.proofId && sessionRef.current?.proofId === updated.proofId ? acknowledged.proof : current);
+          },
+        }),
+      }, manual));
+      assertAccount();
+      if (result.phase === 'COMPLETE') {
+        recordMobileUxEvent('photo_upload_acknowledged', { durationMs: Date.now() - startedAt });
+        recordMobileUxEvent('commitment'); void haptic('success');
+        await refreshProofCollection(); assertAccount();
+      }
+    } finally { photoSubmissionBusy.current = false; setPhotoSubmissionId(null); }
+  }
+  photoTickRef.current = async () => {
+    const owner = sessionRef.current;
+    if (!hydrated || !owner || !tokenRef.current || owner.needsReauthentication || offline || recoveryConnection.current === false ||
+        AppState.currentState !== 'active' || busy || photoSubmissionBusy.current || captureNavigationLock.current) return;
+    const next = photoDrafts.find(draft => draft.userId === owner.userId && draft.apiBaseUrl === owner.apiBaseUrl.replace(/\/+$/, '') && photoRetryDue(draft));
+    if (next) await processPhotoSubmission(next).catch(() => undefined); // The durable draft displays the bounded retry or intervention reason.
+  };
+  useEffect(() => {
+    void photoTickRef.current();
+    const timer = setInterval(() => { void photoTickRef.current(); }, 2_000);
+    const wake = AppState.addEventListener('change', state => { if (state === 'active') void photoTickRef.current(); });
+    return () => { clearInterval(timer); wake.remove(); };
+  }, [hydrated, session?.userId, session?.apiBaseUrl, offline, photoDrafts.length]);
+
   async function finishSignIn(input: {
     token: string;
     subject: string;
@@ -2004,42 +2066,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       setPhotoDrafts(rows => [...rows.filter(row => photoContextKey(row) !== photoContextKey(draft)), draft]);
       recordMobileUxEvent('capture_durably_saved');
     },
-    commitGradingCapture: async requested => {
-      if (photoSubmissionBusy.current) return;
-      photoSubmissionBusy.current = true;
-      try { await run(async () => {
-        const owner = sessionRef.current;
-        if (!owner || requested.userId !== owner.userId || requested.apiBaseUrl !== owner.apiBaseUrl.replace(/\/+$/, '')) throw new Error('Return to the original account to submit these photos.');
-        const assertAccount = () => client.assertCaptureAccount(owner.userId, owner.apiBaseUrl);
-        const draft = await readPhotoDraft(requested);
-        assertAccount();
-        if (!draft || draft.id !== requested.id) throw new Error('Refresh the saved photo draft before submitting.');
-        if (offline) throw new Error('Reconnect to submit. Your photos remain saved on this device.');
-        const evidenceType = captureEvidenceType({ workflowType: 'GRADING_SUBMISSION', captureRecipe: draft.recipe, nextActionType: draft.actionType });
-        const photoStartedAt = Date.now(); recordMobileUxEvent('photo_upload_started');
-        await submitPhotoDraft(draft, {
-          assertAccount,
-          getProof: () => client.getProof(draft.proofId),
-          persist: async updated => {
-            await persistPhotoDraft(updated); assertAccount();
-            setPhotoDrafts(rows => [...rows.filter(row => photoContextKey(row) !== photoContextKey(updated)), { ...updated, slots: updated.slots.map(slot => ({ ...slot })) }]);
-          },
-          fileExists: localCaptureExists,
-          initialize: slot => client.initializeEvidenceUpload(draft.proofId, { contentType: slot.contentType, evidenceType, idempotencyKey: slot.uploadKey }),
-          upload: (slot, target) => uploadCaptureFile({ baseUrl: owner.apiBaseUrl, target: target as Parameters<typeof uploadCaptureFile>[0]['target'], fileUri: slot.uri, contentType: slot.contentType }),
-          commit: evidenceId => client.commitEvidence(draft.proofId, evidenceId),
-          apply: async (updated, action) => {
-            await client.runProofAction(updated.proofId, action, { assetId: updated.assetId ?? undefined, transferId: updated.transferId ?? undefined, recipe: updated.recipe,
-              evidence: updated.slots.map(slot => ({ slot: slot.slot, evidenceId: slot.evidenceId })), idempotencyKey: updated.actionKey });
-          },
-        });
-        recordMobileUxEvent('photo_upload_acknowledged', { durationMs: Date.now() - photoStartedAt });
-        recordMobileUxEvent('commitment');
-        void haptic('success');
-        await refreshProof(draft.proofId);
-        await refreshProofCollection();
-      }); } finally { photoSubmissionBusy.current = false; }
-    },
+    photoSubmissionId,
+    commitGradingCapture: async requested => run(() => processPhotoSubmission(requested, true)),
     identifyReference: async (reference: string) => {
       if(scanInFlight.current)return;
       scanInFlight.current=true;
@@ -2178,7 +2206,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         });
       } finally { intakeCaptureLock.current = false; if(captureNavigationLock.current)setCaptureStatus("retry"); }
     },
-    startCapture: async () => {
+    startCapture: async options => {
       if(captureNavigationLock.current)return;
       const chosenAccount=sessionRef.current;
       if(chosenAccount&&proof&&!isGradingWorkflow(proof.workflowType))void nativeStudyForNewCapture(client,chosenAccount.userId,proof.proofId);
@@ -2191,6 +2219,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           throw new Error(
             "Finish or discard your saved recording on its original Proof before recording another shipment.",
           );
+        assertRecordingReplacement(localCapture, proof.proofId, options?.replaceUri);
         setCaptureStatus("capturing");
         const captureInput = { proofId: proof.proofId, userId: sessionRef.current!.userId, orderLabel: proof.transaction.itemTitle || "Packing this order" };
         const captured = await (isGradingWorkflow(proof.workflowType)
@@ -2232,6 +2261,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
             throw new Error(
               "This recording belongs to another Proof. Open its original Proof to resume.",
             );
+          assertContinuousRecording(localCapture);
           const available = await localCaptureExists(localCapture.uri);
           if (!available) {
             localCapture.localFileAvailable = false;

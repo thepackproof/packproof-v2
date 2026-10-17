@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "build:android:internal": "node scripts/assert-release-allowed.cjs && npx --yes eas-cli@24.4.2 build --platform android --profile internal-staging --non-interactive",
     "test:api": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/native-api-contract.test.ts tests/commerce-connections.test.ts",
-    "test:experience-restoration": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-feedback.test.ts && node --test ../docs/experience-restoration-2026-10-16/prototype/model.test.mjs",
+    "test:experience-restoration": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/capture-feedback.test.ts tests/photo-submission-recovery.test.ts tests/recording-review.test.ts tests/restoration-theme.test.ts && node --test ../docs/experience-restoration-2026-10-16/prototype/model.test.mjs ../docs/experience-restoration-2026-10-16/prototype/contrast.test.mjs",
     "test:client-version": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/client-version.test.ts",
     "test:camera-spike": "node --experimental-strip-types --test tests/camera-spike-model.test.ts",
     "test:proof-record": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test tests/proof-record.test.ts tests/proof-tracking.test.ts tests/scroll-restoration.test.ts",

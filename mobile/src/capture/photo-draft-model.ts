@@ -13,6 +13,7 @@ export interface PhotoDraft extends PhotoDraftContext {
   schema: 1; id: string; actionKey: string; updatedAt: string;
   phase: 'LOCAL_ONLY' | 'SUBMITTING' | 'COMPLETE';
   slots: PhotoDraftSlot[]; retainedUris: string[];
+  retry?: { attempts: number; nextAttemptAt: number; retryable: boolean; message: string };
 }
 export function photoContextKey(context: PhotoDraftContext): string {
   return JSON.stringify([context.apiBaseUrl.replace(/\/+$/, ''), context.userId, context.proofId,
@@ -37,6 +38,9 @@ export function replacePhotoSlot(draft: PhotoDraft, slot: PhotoDraftSlot, now: s
   if (draft.phase !== 'LOCAL_ONLY') throw new Error('This photo submission has started. Resume its saved upload before taking another photo.');
   if (!captureSlots(draft.recipe).some(s => s.slot === slot.slot)) throw new Error('This photo does not belong to the required item view.');
   const previous = draft.slots.find(row => row.slot === slot.slot);
+  if (slot.evidenceId || slot.sha256 || slot.committedAt || previous?.evidenceId || previous?.sha256 ||
+      draft.slots.some(row => row.uploadKey === slot.uploadKey || row.uri === slot.uri) || draft.retainedUris.includes(slot.uri))
+    throw new Error('A retake needs a new local file and capture identity. A submitted original cannot be replaced.');
   return { ...draft, updatedAt: now, slots: [...draft.slots.filter(row => row.slot !== slot.slot), slot],
     retainedUris: [...new Set([...draft.retainedUris, ...(previous ? [previous.uri] : [])])] };
 }
@@ -60,6 +64,7 @@ export async function submitPhotoDraft(initial: PhotoDraft, ports: PhotoSubmissi
   if (draft.phase === 'COMPLETE') return draft;
   if (!photoDraftReady(draft)) throw new Error('Complete each required photo before saving.');
   const proof = await guard(ports.getProof());
+  if (proof.proofId !== draft.proofId) throw new Error('The response belongs to another Proof. Your photos are retained.');
   const context = photoDraftContext(proof, draft.userId, draft.apiBaseUrl);
   const alreadyCommitted = draft.slots.every(slot => slot.evidenceId && proof.evidence.some(e =>
     e.evidenceId === slot.evidenceId && e.validationStatus === 'COMMITTED' && validHash(e.sha256)));
@@ -84,6 +89,8 @@ export async function submitPhotoDraft(initial: PhotoDraft, ports: PhotoSubmissi
     if (replayOnly) throw new Error('The previous photo receipt could not be confirmed. Retry after refreshing.');
     if (!await guard(ports.fileExists(slot.uri))) throw new Error('A selected photo is unavailable on this device. The other photos are retained.');
     const target = await guard(ports.initialize(slot));
+    if (slot.evidenceId && slot.evidenceId !== target.evidenceId)
+      throw new Error('The upload identity changed. Your original photo is retained; refresh before continuing.');
     slot = { ...slot, evidenceId: target.evidenceId };
     draft.slots[index] = slot;
     await guard(ports.persist(draft));
@@ -95,7 +102,7 @@ export async function submitPhotoDraft(initial: PhotoDraft, ports: PhotoSubmissi
     await guard(ports.persist(draft));
   }
   await guard(ports.apply(draft, action));
-  draft = { ...draft, phase: 'COMPLETE', updatedAt: new Date().toISOString() };
+  draft = { ...draft, phase: 'COMPLETE', retry: undefined, updatedAt: new Date().toISOString() };
   await guard(ports.persist(draft));
   return draft;
 }

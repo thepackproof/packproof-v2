@@ -1,3 +1,4 @@
+import { assertContinuousRecording } from './recording-review';
 import { closeResearchSession } from "../research/capture";
 import { bindRecordedCapture, inspectCaptureShipping, persistCaptureMetadata, uploadCaptureFile, uploadCaptureResumable, type LocalCapture } from "../capture";
 import { authorizeSellerCapture } from "../attestation/seller-attestation";
@@ -36,6 +37,7 @@ function initializeRecovery(input: SavedCaptureInput) {
 /** Only preparation and deliberate authorization block the screen. No video bytes are sent here. */
 export async function prepareSavedCapture(input: SavedCaptureInput): Promise<void> {
   const { capture, client, userId } = input;
+  assertContinuousRecording(capture);
   const state = initializeRecovery(input);
   const wasSubmitted = state.submitRequested;
   const proofId = state.proofId;

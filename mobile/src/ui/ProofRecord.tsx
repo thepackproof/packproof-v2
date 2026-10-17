@@ -33,11 +33,12 @@ import { RestoringScrollView, type RestoringScrollViewHandle } from "./Restoring
 
 const tabs: Array<{ key: ProofRecordTab; label: string }> = [{ key: "Evidence", label: "Evidence" }, { key: "Timeline", label: "History" }, { key: "Tracking", label: "Shipment" }];
 
-export function ProofRecord({ statusLabel, summaryLine, action, actionInContent = false }: {
+export function ProofRecord({ statusLabel, summaryLine, action, actionInContent = false, embeddedTab }: {
   statusLabel: string;
   summaryLine?: string;
   action: ReactNode;
   actionInContent?: boolean;
+  embeddedTab?: ProofRecordTab;
 }) {
   const app = usePackProof(), { colors, reducedMotion } = useTheme();
   // Compact windows and large accessibility sizes keep the full header in the scroll area.
@@ -119,6 +120,7 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
     fade.stopAnimation(); fade.setValue(reducedMotion ? 1 : 0.5);
     Animated.timing(fade, { toValue: 1, duration: reducedMotion ? 0 : motion.duration.fast, useNativeDriver: true }).start();
   }
+  useEffect(() => { if (embeddedTab && embeddedTab !== tab) selectTab(embeddedTab); }, [embeddedTab]);
   function selectEvidence(evidence: RecordEvidence) {
     const evidenceId = evidence.evidenceId;
     saved.current = { ...saved.current, selectedEvidenceId: evidenceId, selectedEvidenceStageId: evidence.stageId ?? null };
@@ -181,20 +183,23 @@ export function ProofRecord({ statusLabel, summaryLine, action, actionInContent 
   );
 
   return <View style={[styles.record,{backgroundColor:colors.background}]}>
-    {fixedHeader ? recordHeader : null}
-    <View style={[styles.tabBorder, { backgroundColor: colors.surface }]}>
+    {fixedHeader && !embeddedTab ? recordHeader : null}
+    {!embeddedTab ? <View style={[styles.tabBorder, { backgroundColor: colors.surface }]}>
       <ScrollView ref={tabScroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Proof record views">
         {tabs.map(({ key, label }) => <View key={key} style={styles.tabSlot} onLayout={event => { tabPositions.current[key] = { x: event.nativeEvent.layout.x, width: event.nativeEvent.layout.width }; if (tab === key) { positionIndicator(key, false); tabScroll.current?.scrollTo({ x: Math.max(0, event.nativeEvent.layout.x - 12), animated: false }); } }}><PressableScale accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === key }} onPress={() => selectTab(key)} style={[styles.tab, { backgroundColor: 'transparent' }]}>
           <Text style={[styles.tabLabel, { color: tab === key ? colors.accentText : colors.textSecondary }]}>{label}</Text>
         </PressableScale></View>)}
         <Animated.View pointerEvents="none" accessible={false} style={[styles.tabIndicator, { backgroundColor: colors.accentSoft, opacity: indicatorVisible, transform: [{ translateX: indicatorX }, { scaleX: indicatorScale }] }]} />
       </ScrollView>
-    </View>
+    </View> : null}
     <Animated.View style={[styles.panel, { opacity: fade }]}>
       {tabs.map(({ key: panelTab }) => (
       <View key={panelTab} style={[styles.panel, { display: panelTab === tab ? "flex" : "none" }]} importantForAccessibility={panelTab === tab ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={panelTab !== tab}>
       <RestoringScrollView ref={value => { scroll.current[panelTab] = value; }} contentContainerStyle={styles.body} initialOffsetY={saved.current.offsets[panelTab]} restorationReady={panelTab === tab && (panelTab !== "Evidence" || !hasVideo || !bookmarksLoading)} onScrollOffset={offset => { if (panelTab === tab) saveOffset(panelTab, offset); }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={<RefreshControl refreshing={app.busy} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />}>
-    {!fixedHeader ? recordHeader : null}
+    {!fixedHeader && !embeddedTab ? recordHeader : null}
+        {embeddedTab ? <PressableScale accessibilityRole="button" accessibilityLabel="Order details" accessibilityState={{ expanded: detailsExpanded }} onPress={toggleDetails} style={styles.detailsToggle}>
+          <Text style={[styles.subtitle, { color: colors.accentText }]}>Order details</Text><Ionicons name={detailsExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.accentText} />
+        </PressableScale> : null}
         {detailsExpanded ? <View style={[styles.details, { borderBottomColor: colors.divider }]}>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>Order details</Text>
           {proof.status === 'FINALIZED' ? <Text style={[styles.note, { color: colors.textSecondary }]}>Finalized · Read-only. The original evidence and finalization manifest cannot be changed. Any later receipt or return is recorded separately.</Text> : null}

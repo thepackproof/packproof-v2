@@ -1,3 +1,4 @@
+import { StateTransition } from './motion';
 import { Coaching } from "../onboarding/Onboarding";
 import { registerRemoteCaptureStop } from "../capture/remote-control";
 import {evaluate,guidance,type Observation} from "../../../backend/src/capture/core";
@@ -341,7 +342,7 @@ function CameraSession({
     return registerRemoteCaptureStop(request.captureSessionId, stop);
   }, [request.remoteControl, request.captureSessionId]);
   const timerLabel = `● Recording · ${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}${elapsed >= Math.max(0, (request.recordingLimits?.maxRecordingSeconds ?? 300) * 1000 - 30000) ? " · under 30 seconds left" : ""}`;
-  const heading = <View style={styles.heading}>
+  const heading = <StateTransition eventKey={recording ? saving ? "stopping" : "recording" : "ready"}><View style={styles.heading}>
           {!ANDROID_TASK_FIRST_REBUILD || !recording ? <Text accessibilityLiveRegion="polite" style={[styles.title, { color: colors.textPrimary }]}>
             {recording
               ? request.stageType
@@ -363,7 +364,7 @@ function CameraSession({
               ? timerLabel
               : !ready ? "Opening camera…" : "Camera ready · recording has no sound"}
           </Text> : null}
-        </View>;
+        </View></StateTransition>;
   const preview = <View style={[styles.camera, ANDROID_TASK_FIRST_REBUILD ? styles.taskPreview : { height: Math.max(160, Math.min(300, viewport.height * 0.38)) }]}>
           {useUnified ? <UnifiedCameraView
             maxRecordingBytes={request.recordingLimits?.maxRecordingBytes}

@@ -516,6 +516,8 @@ export async function uploadCaptureFile(input: {
   fileUri: string;
   contentType: string;
   onProgress?: (percent: number) => void;
+  timeoutMs?: number;
+  stallTimeoutMs?: number;
 }): Promise<void> {
   if (input.target.received) { input.onProgress?.(100); return; }
   const exists = await localCaptureExists(input.fileUri);
@@ -555,7 +557,7 @@ export async function uploadCaptureFile(input: {
       signal.addEventListener("abort", cancel);
       let watchdog: ReturnType<typeof setInterval> | undefined;
       const stalled = new Promise<never>((_resolve, reject) => {
-        watchdog = setInterval(() => { if (Date.now() - lastProgressAt >= 90_000) { cancel(); reject(new ApiError("UPLOAD_INTERRUPTED", "Upload stopped making progress. Your original is saved for retry.", 408)); } }, 5000);
+        watchdog = setInterval(() => { if (Date.now() - lastProgressAt >= (input.stallTimeoutMs ?? 90_000)) { cancel(); reject(new ApiError("UPLOAD_INTERRUPTED", "Upload stopped making progress. Your original is saved for retry.", 408)); } }, 5000);
       });
       try {
         return await Promise.race([task.uploadAsync(), stalled]);
@@ -563,10 +565,11 @@ export async function uploadCaptureFile(input: {
         clearInterval(watchdog);
         signal.removeEventListener("abort", cancel);
       }
-    }, 10 * 60_000);
+    }, input.timeoutMs ?? 10 * 60_000);
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new Error(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
+    throw new ApiError((error as { code?: string })?.code === 'REQUEST_TIMEOUT' ? 'REQUEST_TIMEOUT' : 'UPLOAD_INTERRUPTED',
+      error instanceof Error ? `Upload failed: ${error.message}` : 'Upload failed. Your original is saved for retry.', 408);
   }
   if (!result || result.status < 200 || result.status >= 300) {
     throw new ApiError(

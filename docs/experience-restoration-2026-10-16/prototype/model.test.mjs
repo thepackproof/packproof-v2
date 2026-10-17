@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeRecord,requiredViews,derive,fileState,transition,scenario} from './model.mjs';
+import {makeRecord,requiredViews,derive,fileState,transition,scenario,reopenRecord} from './model.mjs';
 const event=(r,type,fields={})=>({proofId:r.id,sessionId:r.sessionId,type,...fields});
 
 test('ordinary sales never invent a required photo task',()=>assert.deepEqual(requiredViews(makeRecord()),[]));
@@ -73,4 +73,34 @@ test('finalized recordings and photos cannot be silently replaced',()=>{
 test('unknown response exposes reconciliation, preserving the original',()=>{
   let r=scenario('upload');r=transition(r,event(r,'UNKNOWN_RESPONSE'));assert.equal(derive(r).action,'Check save status');
   assert.equal(r.recording.local,true);assert.equal(r.finalized,false);
+});
+
+test('stopping durably associates a pending take; reopening cannot reset it',()=>{
+ let r=makeRecord();r=transition(r,event(r,'RECORD_START'));r=transition(r,event(r,'RECORD_STOP'));
+ const id=r.pendingTake.id;assert.equal(derive(r).kind,'clip-review');assert.equal(transition(r,event(r,'RECORD_START')),r);
+ r=reopenRecord(JSON.parse(JSON.stringify(r)));assert.equal(r.pendingTake.id,id);assert.equal(derive(r).kind,'clip-review');
+ r=transition(r,event(r,'RECORD_ACCEPTED',{durable:true}));assert.equal(r.recording.id,id);assert.equal(r.pendingTake,null);
+});
+test('interruption exposes surviving media but cannot be accepted as continuous evidence',()=>{
+ let r=makeRecord();r=transition(r,event(r,'RECORD_START'));r=reopenRecord(r);
+ assert.equal(r.pendingTake.local,true);assert.equal(r.pendingTake.interrupted,true);assert.equal(transition(r,event(r,'RECORD_ACCEPTED',{durable:true})),r);
+ const id=r.pendingTake.id;r=transition(r,event(r,'PRESERVE_TAKE',{confirmed:true}));assert.equal(r.retainedTakes[0].id,id);
+ r=transition(r,event(r,'RECORD_START'));assert.notEqual(r.activeTakeId,id);assert.equal(r.retainedTakes.length,1);
+});
+test('discard needs confirmation and exact pending artifact identity',()=>{
+ let r=makeRecord();r=transition(r,event(r,'RECORD_START'));r=transition(r,event(r,'RECORD_STOP'));
+ assert.equal(transition(r,event(r,'DISCARD_TAKE',{artifactId:r.pendingTake.id})),r);
+ assert.equal(transition(r,event(r,'DISCARD_TAKE',{artifactId:'another',confirmed:true})),r);
+ r=transition(r,event(r,'DISCARD_TAKE',{artifactId:r.pendingTake.id,confirmed:true}));assert.equal(r.pendingTake,null);assert.equal(derive(r).kind,'packing');
+});
+test('photo replacement uses a unique capture ID; a stale commit cannot apply to its replacement',()=>{
+ let r=makeRecord('demo-grading','GRADING_SUBMISSION');r=transition(r,event(r,'PHOTO_ACCEPTED',{view:'FRONT',durable:true}));const old=r.photos[0].id;
+ r=transition(r,event(r,'PHOTO_ACCEPTED',{view:'FRONT',durable:true}));assert.notEqual(r.photos[0].id,old);assert.equal(r.retainedPhotos[0].id,old);
+ r=transition(r,event(r,'PHOTO_COMMIT_ACK',{ids:[old]}));assert.equal(r.photos[0].committed,false);
+});
+test('photo timeout and reopening retain item request identity and never fabricate completion',()=>{
+ let r=makeRecord('demo-grading','GRADING_SUBMISSION');for(const view of ['FRONT','BACK'])r=transition(r,event(r,'PHOTO_ACCEPTED',{view,durable:true}));
+ r=transition(r,event(r,'PHOTO_SUBMIT'));const id=r.photoSubmission.id;r=transition(r,event(r,'PHOTO_COMMIT_ACK',{ids:r.photos.map(p=>p.id)}));
+ r=transition(r,event(r,'PHOTO_TASK_TIMEOUT'));r=reopenRecord(r);assert.equal(r.photoSubmission.id,id);assert.equal(r.photoTaskAccepted,false);assert.equal(derive(r).kind,'photos-finishing');
+ r=transition(r,event(r,'PHOTO_TASK_ACK'));assert.equal(derive(r).kind,'packing');
 });
