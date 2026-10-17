@@ -12,7 +12,7 @@ import { UploadRecoveryCards } from './UploadRecoveryCards';
 
 type Destination='Capture'|'Evidence'|'Tools';
 /** The review slice composes existing command and evidence owners; it owns no evidence state. */
-export function RestorationJourney({action,renderEvidence}:{action:ReactNode;renderEvidence:(tab:ProofRecordTab)=>ReactNode}) {
+export function RestorationJourney({action,completed,renderEvidence}:{action:ReactNode;completed:boolean;renderEvidence:(tab:ProofRecordTab)=>ReactNode}) {
   const app=usePackProof(),{colors}=useTheme(),proof=app.proof!;
   const initial=app.readProofRecordView(proof.proofId);
   const [destination,setDestination]=useState<Destination>(initial.tab==='Timeline'||initial.tab==='Tracking'?'Evidence':initial.journey??'Capture');
@@ -41,7 +41,7 @@ export function RestorationJourney({action,renderEvidence}:{action:ReactNode;ren
       {renderEvidence(evidenceTab)}
     </View>:<ScrollView contentContainerStyle={styles.body}>
       {destination==='Capture'?<StateTransition eventKey={eventKey} style={styles.task}>
-        {proof.status==='FINALIZED'?<>
+        {completed?<>
           <Ionicons name="checkmark-circle-outline" size={54} color={colors.successText} />
           <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={[styles.title,{color:colors.textPrimary}]}>Evidence saved to PackProof.</Text>
           <Text style={[typography.body,{color:colors.textSecondary}]}>Your Proof is finalized. Inspect each original and its availability in Evidence.</Text>

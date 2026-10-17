@@ -51,3 +51,16 @@ test('missing media never offers a surviving-video playback control',()=>{
  });
  assert.equal(Inspect({capture:{...original,localFileAvailable:false}}),null);
 });
+
+test('the journey cannot celebrate a raw FINALIZED status when the validated presentation is incomplete',()=>{
+ const Journey=component('../src/ui/RestorationJourney.tsx','RestorationJourney',{
+  usePackProof:()=>({proof:{proofId:'A',status:'FINALIZED',transaction:{}},photoDrafts:[],savedRecordings:[],readProofRecordView:()=>({tab:'Evidence',journey:'Capture'})}),
+  useTheme,useState:(v:unknown)=>[v,()=>{}],proofDisplayTitle:()=> 'Item',typography:{},styles:{},
+  View:'View',Text:'Text',ScrollView:'Scroll',Button:'Button',PressableScale:'Press',StateTransition:'Transition',UploadRecoveryCards:'Recovery',Ionicons:'Icon',
+ });
+ const text=(value:any):string=>Array.isArray(value)?value.map(text).join(' '):value&&typeof value==='object'?text(value.props?.children):typeof value==='string'?value:'';
+ const props={action:'Check current status',renderEvidence:()=>null};
+ assert.doesNotMatch(text(Journey({...props,completed:false})),/Evidence saved to PackProof/);
+ assert.match(text(Journey({...props,completed:false})),/Check current status/);
+ assert.match(text(Journey({...props,completed:true})),/Evidence saved to PackProof/);
+});

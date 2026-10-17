@@ -36,7 +36,7 @@ October 17 logs are `verification/revision-*.txt`; October 16 logs remain histor
 | Prototype lifecycle and CSS contrast | 40 passed | 19 fixture lifecycle tests, 21 actual CSS token contrast checks. |
 | Prototype DOM | 19 passed | Eight scenarios, recovery/discard/reopen, automatic/held photo acknowledgments, motion, Home and tools. No layout or video decoding claim. |
 | Recovery entry/selection regression | 75 passed | Activity, Home, exact recording selection and incomplete-media presentation; overlaps some scenarios in the 105-test set. |
-| Actual recovery component bodies | 3 passed | Focused Activity exposes inspection of the exact retained URI; missing files offer no playback control. Native UI ports are substituted. |
+| Actual recovery/journey component bodies | 4 passed | Focused Activity exposes the exact retained URI; missing files offer no playback. Completion follows the validated presentation, not a raw status string. Native UI ports are substituted. |
 | Photo recovery and late acknowledgment follow-up | 13 passed | Includes two new assertions that a delayed same-Proof response cannot roll back a newer version and cannot select another Proof. |
 | Mobile TypeScript | 809 files, zero errors | Temporary dependency-resolution paths use existing installed packages. Production tsconfig is unchanged; clean-install CI is the independent check. |
 | Browser rendering | Unavailable | Browser runtime failed to start. No new rendered screenshot or visual sign-off. |

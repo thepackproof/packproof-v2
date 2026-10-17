@@ -321,7 +321,7 @@ export function ProofDetailScreen() {
 
       {!ANDROID_TASK_FIRST_REBUILD && proof.status === "FINALIZED" ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId}/> : null}
       {otherPhotoDrafts.map(draft => <SavedPhotoDraft key={draft.id} draft={draft} />)}
-      {EXPERIENCE_RESTORATION_REVIEW ? <RestorationJourney key={proof.proofId} action={actionContent}
+      {EXPERIENCE_RESTORATION_REVIEW ? <RestorationJourney key={proof.proofId} action={actionContent} completed={presentation.completed && !presentation.diagnostic}
         renderEvidence={tab=><ProofRecord key={proof.proofId} statusLabel={statusLabel} summaryLine={summaryLine} action={null} embeddedTab={tab} />} /> : (
       <ProofRecord
         key={proof.proofId}
