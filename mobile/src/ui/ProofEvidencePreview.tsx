@@ -1,3 +1,4 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Modal, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -116,7 +117,7 @@ function OriginalVideo({ uri, token, active, bookmarks, labelOffsetMs, initialTi
   }
   const scannerBookmark = Number.isFinite(labelOffsetMs) && labelOffsetMs! >= 0 && !bookmarks.some(anchor => anchor.sourceType === "SCANNER_TRIGGERED" && Math.abs(anchor.startMs - labelOffsetMs!) < 1000);
   return <View style={styles.canvas}>
-    <VideoView player={player} style={styles.video} nativeControls allowsFullscreen contentFit="contain" accessibilityLabel="Original evidence recording" />
+    <VideoView player={player} style={[styles.video,SIGNAL_ENABLED&&{height:250,borderRadius:16,backgroundColor:"#18221F"}]} nativeControls allowsFullscreen contentFit="contain" accessibilityLabel="Original evidence recording" />
     {loading ? <View accessibilityLiveRegion="polite" style={styles.stack}><ActivityIndicator accessibilityLabel="Loading original recording" color={colors.accent} /><Text style={[styles.meta, { color: colors.textSecondary }]}>Loading original recording…</Text></View> : !error ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Original recording ready. Use the playback controls to review it.</Text> : null}
     {error ? <View style={styles.stack}><Text accessibilityRole="alert" style={[styles.meta, { color: colors.error }]}>The original recording could not load. Check your connection and retry.</Text><Button label="Retry original playback" variant="secondary" onPress={onRetry} loading={retrying} /></View> : null}
     {bookmarks.length || scannerBookmark ? <View style={styles.bookmarks} accessibilityLabel="Original recording bookmarks">

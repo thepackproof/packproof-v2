@@ -1,3 +1,4 @@
+import {SIGNAL_ENABLED,SignalSheet} from "../signal/Signal";
 import {RndWebPanel} from "../rnd/RndWebPanel";
 import { MediaPrivacyTools } from "../components/MediaPrivacyTools";
 import { EvidenceResponsePanel } from "../components/EvidenceResponsePanel";
@@ -83,6 +84,7 @@ export function ProofScreen(props: {
     return () => { active = false; window.removeEventListener("packproof:records-updated", refresh); };
   }, [props.api, props.currentUserId, props.proof?.proofId]);
   const menuTrigger = useRef<HTMLButtonElement>(null);
+  const [signalSharing,setSignalSharing]=useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const opensEvidenceTools = new URLSearchParams(location.search).has("historyShare") || new URLSearchParams(location.search).has("snapshot") || /(?:anchor|evidence)=/.test(location.hash);
   const [detailed, setDetailed] = useViewState(`proof.${window.location.pathname}.detailed`, opensEvidenceTools);
@@ -163,6 +165,7 @@ export function ProofScreen(props: {
 
   function reviewSharing() {
     setMenuOpen(false);
+    if(SIGNAL_ENABLED){setSignalSharing(true);return;}
     const sharing = document.getElementById("sharing");
     const details = sharing?.closest("details");
     if (details) details.open = true;
@@ -363,6 +366,7 @@ export function ProofScreen(props: {
         <summary>Evidence tools</summary>
         <SignatureWorkbench userId={props.currentUserId} key={`${proof.proofId}.${props.currentUserId}.${props.api.recoveryScope}`} api={props.api} proof={proof} />
       </details>}
+      {props.api && presentation?.share.available && SIGNAL_ENABLED && <SignalSheet open={signalSharing} title="Share your Proof" onClose={()=>setSignalSharing(false)}>{signalSharing&&<PrivacySharePanel key={`${props.api.recoveryScope}:${props.currentUserId}:${proof.proofId}`} api={props.api} proof={proof} currentUserId={props.currentUserId} compact/>}<button className="btn btn-tertiary" onClick={()=>setSignalSharing(false)}>Back to Proof</button></SignalSheet>}
       {props.api && presentation?.share.available && <details className="proof-supporting-tools">
         <summary>Share Proof</summary>
         <div id="sharing" data-context-anchor="sharing"><PrivacySharePanel key={proof.proofId} api={props.api} proof={proof} currentUserId={props.currentUserId} /></div>

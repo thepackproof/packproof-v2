@@ -1,3 +1,5 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {SignalHomeScreen} from "./SignalHomeScreen";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +21,7 @@ import { MOBILE_TASK_UX_ENABLED } from '../experience/mobile-ux';
 import { TaskHomeScreen } from './TaskHomeScreen';
 
 export function WorkspaceHomeScreen() {
-  return MOBILE_TASK_UX_ENABLED ? <TaskHomeScreen /> : <LegacyWorkspaceHomeScreen />;
+  return SIGNAL_ENABLED ? <SignalHomeScreen /> : MOBILE_TASK_UX_ENABLED ? <TaskHomeScreen /> : <LegacyWorkspaceHomeScreen />;
 }
 
 function LegacyWorkspaceHomeScreen() {

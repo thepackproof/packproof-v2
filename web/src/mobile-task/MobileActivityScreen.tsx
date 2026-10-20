@@ -1,3 +1,6 @@
+import {SIGNAL_ENABLED,SignalBadge} from '../signal/Signal';
+import {useSignalReceipt} from '../signal/useSignalReceipt';
+import type {ProofCollectionItem} from '../api/types';
 import { useEffect, useRef, useState } from "react";
 import type { PackProofApi } from "../api/client";
 import type { InvitationInboxView } from "../api/types";
@@ -6,7 +9,7 @@ import { useBrowserOnline } from "../components/WorkstationHeader";
 import { NotificationCenter } from "../components/NotificationCenter";
 import { recordMobileUxEvent } from "../../../mobile/src/analytics/mobile-ux-events";
 
-export function MobileActivityScreen(props: { api: PackProofApi; userId: string; recordings: LocalRecordingSummary[]; recordingsLoaded: boolean; invitations: InvitationInboxView[]; error: string | null; onRefresh: () => void; onChange: (rows: LocalRecordingSummary[]) => void; onOpen: (id: string, recording?: LocalRecordingSummary) => void; onInvitation: (id: string) => void; onCreate: () => void }) {
+export function MobileActivityScreen(props: { proofs?:ProofCollectionItem[]; api: PackProofApi; userId: string; recordings: LocalRecordingSummary[]; recordingsLoaded: boolean; invitations: InvitationInboxView[]; error: string | null; onRefresh: () => void; onChange: (rows: LocalRecordingSummary[]) => void; onOpen: (id: string, recording?: LocalRecordingSummary) => void; onInvitation: (id: string) => void; onCreate: () => void }) {
   const online = useBrowserOnline();
   const [busy, setBusy] = useState<string | null>(null), [error, setError] = useState<string | null>(null);
   const pending = useRef(false), mounted = useRef(true);
@@ -30,6 +33,7 @@ export function MobileActivityScreen(props: { api: PackProofApi; userId: string;
     } catch (caught) { if (mounted.current) setError(caught instanceof Error ? caught.message : "Upload recovery could not finish. Your recording was kept."); }
     finally { pending.current = false; if (mounted.current) setBusy(null); }
   }
+  if(SIGNAL_ENABLED)return <main className="page task-stack mobile-activity-page"><span className="signal-mono">THE LATEST ON YOUR RECORDS.</span><div className="task-section-heading"><h1>Activity</h1><button className="btn btn-tertiary" onClick={props.onRefresh}>Refresh</button></div>{(props.error||error)&&<p className="signal-note" role="alert">{error||props.error}</p>}{!props.recordingsLoaded&&<p role="status">Checking saved recordings…</p>}<section className="signal-activity-feed" aria-label="Recording updates">{props.recordings.map(row=><SignalActivityRow key={row.key} row={row} api={props.api} proof={props.proofs?.find(proof=>proof.proofId===row.proofId)} online={online} busy={!!busy} onOpen={()=>props.onOpen(row.proofId,row)} onRetry={()=>void retry(row)}/>)}{props.recordingsLoaded&&!props.recordings.length&&<p>Your recording updates will appear here.</p>}</section>{props.invitations.length>0&&<section><h2>Invitations</h2>{props.invitations.map(invitation=><button key={invitation.invitationId} className="btn btn-secondary" onClick={()=>props.onInvitation(invitation.invitationId)}>{invitation.transaction.itemTitle||'Review invitation'}</button>)}</section>}<details className="settings-detail"><summary>Proof updates</summary><NotificationCenter api={props.api} onOpen={props.onOpen}/></details><p className="signal-note">Every event stays with its Proof.</p></main>;
   return <main className="page task-stack mobile-activity-page"><div className="task-section-heading"><h1 className="page-title">Activity</h1><button className="text-link" onClick={props.onRefresh}>Refresh</button></div>
     {(props.error || error) && <p className="task-notice" role="alert">{error || props.error}</p>}
     {!props.recordingsLoaded && <p role="status">Checking saved recordings…</p>}
@@ -42,4 +46,11 @@ export function MobileActivityScreen(props: { api: PackProofApi; userId: string;
     <details className="settings-detail"><summary>Notifications</summary><NotificationCenter api={props.api} onOpen={props.onOpen} /></details>
     <p className="note">Local recordings stay associated with this account. Keep this browser’s data until preservation is confirmed.</p>
   </main>;
+}
+
+function SignalActivityRow({row,api,proof,online,busy,onOpen,onRetry}:{row:LocalRecordingSummary;api:PackProofApi;proof?:ProofCollectionItem;online:boolean;busy:boolean;onOpen:()=>void;onRetry:()=>void}){
+ const confirmed=useSignalReceipt(api,row.proofId,proof?.updatedAt||row.key,!!(row.finalized&&row.preserved));
+ const paused=row.accepted&&!confirmed&&(!online||row.retryStopped||!!row.errorMessage&&!row.retryScheduled);
+ const title=confirmed?'Proof saved to PackProof':row.submitted?'Recording received':row.interrupted?'Recording interrupted · retained':!row.accepted?'Recording saved on this device':paused?'Upload paused':row.committed?'Confirming your Proof':row.active?'Uploading recording':'Waiting to upload';
+ return <article className="signal-activity-event"><span className="signal-event-icon" aria-hidden="true">{confirmed?'✓':row.active?'↑':'◷'}</span><div><button className="signal-event-title" disabled={busy} onClick={onOpen}>{title}</button><p>{proof?.transaction.itemTitle||row.label||'Packing recording'}</p><SignalBadge state={confirmed?'saved':row.active?'uploading':'local'}>{confirmed?'Saved to PackProof':paused?'Your recording is retained':row.proofId}</SignalBadge>{row.updatedAt&&<time className="signal-mono" dateTime={row.updatedAt}>{new Date(row.updatedAt).toLocaleString()}</time>}{row.errorMessage&&<p>{row.errorMessage}</p>}{paused&&row.accepted&&!row.active&&<button className="btn btn-secondary" disabled={busy||!online} onClick={onRetry}>Resume upload</button>}</div></article>;
 }

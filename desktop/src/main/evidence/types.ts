@@ -1,7 +1,9 @@
-export type EvidenceState = 'AUTHORIZING' | 'RECORDING' | 'INTERRUPTED' | 'LOCAL' | 'HASHING' | 'WAITING_FOR_NETWORK' | 'WAITING_FOR_AUTH' | 'READY' | 'UPLOADING' | 'VERIFYING' | 'COMMITTING' | 'FINALIZING' | 'COMPLETE' | 'RETRYING' | 'FAILED' | 'DISCARDED';
+export type EvidenceState = 'AUTHORIZING' | 'RECORDING' | 'REVIEW' | 'INTERRUPTED' | 'LOCAL' | 'HASHING' | 'WAITING_FOR_NETWORK' | 'WAITING_FOR_AUTH' | 'READY' | 'UPLOADING' | 'VERIFYING' | 'COMMITTING' | 'FINALIZING' | 'SUBMITTED' | 'COMPLETE' | 'RETRYING' | 'FAILED' | 'DISCARDED';
 
 export interface BarcodeDetection { value: string; format?: string; detectedAtMs: number; confirmed?: boolean; notThisPackage?: boolean }
+export interface TakeReplacement { originalId:string; decision:'pending'|'accepted'|'kept-original' }
 export interface CaptureInput {
+  replaceId?: string;
   proofId: string;
   label?: string;
   mimeType: string;
@@ -36,7 +38,7 @@ export interface EvidenceTransport {
   uploadPart(input: UploadIdentity & { partNumber: number; bytes: Buffer; sha256: string }, signal: AbortSignal): Promise<UploadReceipt>;
   completeUpload(input: UploadIdentity & UploadReceipt, signal: AbortSignal): Promise<UploadReceipt>;
   commitUpload(input: UploadIdentity & UploadReceipt, signal: AbortSignal): Promise<UploadReceipt>;
-  attestAndFinalize(input: UploadIdentity & { captureSessionId: string; statement: string }, signal: AbortSignal): Promise<void>;
+  attestAndFinalize(input: UploadIdentity & { captureSessionId: string; statement: string }, signal: AbortSignal): Promise<{durable:boolean}>;
   discardUpload?(input: UploadContext & { evidenceId?: string; captureSessionId?: string }, signal: AbortSignal): Promise<void>;
 }
 export interface CaptureMetadata {
@@ -69,6 +71,9 @@ export interface EvidenceJobView {
   maxRecordingBytes: number;
   maxRecordingSeconds: number;
   localCopyAvailable: boolean;
+  recordedDurationMs?: number;
+  replacement?: TakeReplacement;
+  supersededBy?: string;
 }
 export interface EvidenceEngineOptions {
   rootDir: string;

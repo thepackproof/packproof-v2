@@ -52,7 +52,7 @@ export function selectProofRows(rows: PresentedProof[], library: ProofsLibrarySt
     if (library.view === 'completed' && !row.presentation.completed) return false;
     if (library.role !== 'all' && row.role.toLowerCase() !== library.role) return false;
     if (library.carrier && row.transaction.carrier !== library.carrier) return false;
-    return !query || [row.transaction.itemTitle, row.transaction.externalReference, row.transaction.trackingNumber, row.transaction.carrier, row.transaction.provider, row.role].filter(Boolean).join(' ').toLocaleLowerCase().includes(query);
+    return !query || [row.proofId, row.transaction.itemTitle, row.transaction.externalReference, row.transaction.trackingNumber, row.transaction.carrier, row.transaction.provider, row.role].filter(Boolean).join(' ').toLocaleLowerCase().includes(query);
   }).sort((a,b) => {
     if (library.view !== 'completed' && a.presentation.needsAttention !== b.presentation.needsAttention) return a.presentation.needsAttention ? -1 : 1;
     const at = Date.parse((library.view === 'completed' ? a.finalizedAt : a.updatedAt) || a.createdAt) || 0;

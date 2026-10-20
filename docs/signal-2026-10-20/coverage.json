@@ -1,0 +1,501 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "figmaFileKey": "4AtxdZJxHvpWVF3cCX14Z0",
+  "designRead": "All 27 node contexts and source screenshots retrieved; original SVG artwork exported read-only. The design API supplied no revision ID.",
+  "status": "Implemented; integrated visual and physical-device acceptance NOT EXECUTED.",
+  "platformOrder": [
+    "web",
+    "android",
+    "ios",
+    "desktop"
+  ],
+  "states": [
+    {
+      "id": "01",
+      "nodeId": "2:294",
+      "name": "Home empty",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-294",
+      "source": {
+        "android": "mobile/src/screens/SignalHomeScreen.tsx",
+        "ios": "mobile/src/screens/SignalHomeScreen.tsx",
+        "web": "web/src/mobile-task/MobileHomeScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Authenticated account with no Proofs or local jobs.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "02",
+      "nodeId": "2:295",
+      "name": "Proof library: local",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-295",
+      "source": {
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "web": "web/src/mobile-task/MobileProofRows.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Account-owned local take, not yet submitted.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "03",
+      "nodeId": "2:296",
+      "name": "Item name",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-296",
+      "source": {
+        "android": "mobile/src/screens/ManualCreateScreen.tsx",
+        "ios": "mobile/src/screens/ManualCreateScreen.tsx",
+        "web": "web/src/screens/CreateProofScreen.tsx",
+        "desktop": "desktop/src/renderer/NewProof.tsx"
+      },
+      "realState": "Required item name and optional details collapsed.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "04",
+      "nodeId": "2:297",
+      "name": "Packing guide",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-297",
+      "source": {
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Authorized Proof; camera starts only after explicit Start.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "05",
+      "nodeId": "2:298",
+      "name": "Recording",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-298",
+      "source": {
+        "android": "mobile/src/ui/NativeCaptureHost.tsx",
+        "ios": "mobile/src/ui/NativeCaptureHost.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Actual camera feed and capture-owner elapsed duration.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "06",
+      "nodeId": "2:299",
+      "name": "Leave recording",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-299",
+      "source": {
+        "android": "mobile/src/ui/NativeCaptureHost.tsx",
+        "ios": "mobile/src/ui/NativeCaptureHost.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Confirmation over the still-mounted recorder.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "07",
+      "nodeId": "2:300",
+      "name": "Review unchecked",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-300",
+      "source": {
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Playable continuous take; declaration unchecked.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "08",
+      "nodeId": "2:301",
+      "name": "Review checked",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-301",
+      "source": {
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Same take and checked canonical declaration; existing native biometric authorization remains required.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "09",
+      "nodeId": "2:302",
+      "name": "Uploading",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-302",
+      "source": {
+        "android": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "ios": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Exact account/Proof/take operation reports actual transport progress.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "10",
+      "nodeId": "2:303",
+      "name": "Upload paused",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-303",
+      "source": {
+        "android": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "ios": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Exact operation has a recoverable network, authorization or retry state.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "11",
+      "nodeId": "2:304",
+      "name": "Saved receipt",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-304",
+      "source": {
+        "android": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "ios": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Canonical FINALIZED plus matching committed evidence and evidence/finalization preservation receipts.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "12",
+      "nodeId": "2:305",
+      "name": "Evidence record",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-305",
+      "source": {
+        "android": "mobile/src/ui/SignalProofRecord.tsx",
+        "ios": "mobile/src/ui/SignalProofRecord.tsx",
+        "web": "web/src/components/WorkspaceProofRecord.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Authorized original recording, canonical identifiers, declaration and history.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "13",
+      "nodeId": "2:306",
+      "name": "Activity: saved",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-306",
+      "source": {
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "web": "web/src/mobile-task/MobileActivityScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Real completion with matching receipts; no synthetic event history.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "14",
+      "nodeId": "2:307",
+      "name": "Recovered take",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-307",
+      "source": {
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Persisted account-owned recording recovered after leaving or restarting.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "15",
+      "nodeId": "2:308",
+      "name": "Share Proof",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-308",
+      "source": {
+        "android": "mobile/src/screens/SharingScreen.tsx",
+        "ios": "mobile/src/screens/SharingScreen.tsx",
+        "web": "web/src/components/PrivacySharePanel.tsx",
+        "desktop": "desktop/src/renderer/ShareProof.tsx"
+      },
+      "realState": "Existing privacy preview and explicit consent issue a real expiring grant.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "16",
+      "nodeId": "2:309",
+      "name": "Fullscreen viewer",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-309",
+      "source": {
+        "android": "mobile/src/ui/VideoReview.tsx",
+        "ios": "mobile/src/ui/VideoReview.tsx",
+        "web": "web/src/components/WorkspaceProofRecord.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Actual original uses contain aspect ratio and platform fullscreen controls.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "17",
+      "nodeId": "2:310",
+      "name": "Home: saved",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-310",
+      "source": {
+        "android": "mobile/src/screens/SignalHomeScreen.tsx",
+        "ios": "mobile/src/screens/SignalHomeScreen.tsx",
+        "web": "web/src/mobile-task/MobileHomeScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Latest finalized Proof independently checked for matching receipts.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "18",
+      "nodeId": "2:311",
+      "name": "Retake",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=2-311",
+      "source": {
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "web": "web/src/screens/PackingStationScreen.tsx",
+        "desktop": "desktop/src/renderer/PackingStation.tsx"
+      },
+      "realState": "Explicit original/replacement choice; original bytes retained.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "19",
+      "nodeId": "8:1329",
+      "name": "Home: paused",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=8-1329",
+      "source": {
+        "android": "mobile/src/screens/SignalHomeScreen.tsx",
+        "ios": "mobile/src/screens/SignalHomeScreen.tsx",
+        "web": "web/src/mobile-task/MobileHomeScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Latest account-owned paused operation and matching Proof.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "20",
+      "nodeId": "8:1411",
+      "name": "Home: uploading",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=8-1411",
+      "source": {
+        "android": "mobile/src/screens/SignalHomeScreen.tsx",
+        "ios": "mobile/src/screens/SignalHomeScreen.tsx",
+        "web": "web/src/mobile-task/MobileHomeScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Latest account-owned active operation; leaving progress does not stop upload.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "21",
+      "nodeId": "8:1494",
+      "name": "Link copied",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=8-1494",
+      "source": {
+        "android": "mobile/src/screens/SharingScreen.tsx",
+        "ios": "mobile/src/screens/SharingScreen.tsx",
+        "web": "web/src/components/PrivacySharePanel.tsx",
+        "desktop": "desktop/src/renderer/ShareProof.tsx"
+      },
+      "realState": "Feedback follows successful actual clipboard write.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "22",
+      "nodeId": "8:1626",
+      "name": "Proof library: saved",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=8-1626",
+      "source": {
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "web": "web/src/mobile-task/MobileProofRows.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Canonical record passes strict matching receipt predicate.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "23",
+      "nodeId": "12:1441",
+      "name": "Proof library: paused",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=12-1441",
+      "source": {
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "web": "web/src/mobile-task/MobileProofRows.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Paused operation joined to its exact Proof.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "24",
+      "nodeId": "12:1587",
+      "name": "Proof library: uploading",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=12-1587",
+      "source": {
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "web": "web/src/mobile-task/MobileProofRows.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Active operation reports real progress on its own row.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "25",
+      "nodeId": "12:1733",
+      "name": "Activity: local",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=12-1733",
+      "source": {
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "web": "web/src/mobile-task/MobileActivityScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Real local recording and existing journal timestamp.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "26",
+      "nodeId": "12:1831",
+      "name": "Activity: paused",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=12-1831",
+      "source": {
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "web": "web/src/mobile-task/MobileActivityScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Real paused operation with recoverable action and timestamp.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    },
+    {
+      "id": "27",
+      "nodeId": "12:1911",
+      "name": "Activity: uploading",
+      "designUrl": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=12-1911",
+      "source": {
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "web": "web/src/mobile-task/MobileActivityScreen.tsx",
+        "desktop": "desktop/src/renderer/SignalDesktop.tsx"
+      },
+      "realState": "Real active operation and existing journal timestamp.",
+      "implementation": "integrated",
+      "fixture": null,
+      "applicationScreenshot": null,
+      "visualComparison": "not_executed",
+      "deviceAcceptance": "not_executed"
+    }
+  ]
+}

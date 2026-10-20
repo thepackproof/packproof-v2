@@ -7,7 +7,7 @@ import { SharingCode } from "./SharingCode";
 import { recordStudyInteraction } from "../analytics/study-capture";
 
 type Preview = SharedProofView & { disclosure: NonNullable<SharedProofView["disclosure"]> };
-export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProofApi; proof: CanonicalProof; currentUserId?: string }) {
+export function PrivacySharePanel({ api, proof, currentUserId,compact=false }: { api: PackProofApi; proof: CanonicalProof; currentUserId?: string;compact?:boolean }) {
   const cacheKey = `packproof.view.share.${api.recoveryScope}.${currentUserId || ""}.${proof.proofId}.SHARED_PROOF`;
   function cachedGrant(): AccessLinkView | null {
     try {
@@ -33,7 +33,7 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   // A refreshed record must be previewed again before a new grant is approved.
   useEffect(() => { setPreview(null); }, [proof.updatedAt]);
-  async function run(fn: () => Promise<void>) {
+  async function run(fn: () => Promise<unknown>) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError(null);
     try { await fn(); }
@@ -62,6 +62,7 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
     if (navigator.onLine === false) throw new Error("Connect to create a share link. Your Proof and saved recordings stay unchanged.");
     const result = await api.featureRequest<Preview>(proof.proofId, "disclosure/preview", "POST", { purpose: "SHARED_PROOF", ...(includeIdentifiers?{itemIdentifiersReviewed:true}:{}) });
     if (active.current) { setPreview(result); }
+    return result;
   }
   async function loadMedia(id: string) {
     const media = preview?.evidence?.find(item => item.evidenceId === id);
@@ -70,6 +71,21 @@ export function PrivacySharePanel({ api, proof, currentUserId }: { api: PackProo
       ? api.featureDownload(proof.proofId, `lifecycle/stages/${media.stageId}/evidence/${id}`)
       : api.getEvidenceBlob(proof.proofId, id);
   }
+  async function copySignalLink(){
+    let link=grant;
+    if(link)await validateGrant();
+    else{
+      const reviewed=await prepare();
+      if(!active.current)return;
+      link=await api.featureRequest<AccessLinkView>(proof.proofId,'disclosure/grants','POST',{purpose:'SHARED_PROOF',originalsReviewed:true,previewHash:reviewed.disclosure.viewHash,expiresAt:new Date(Date.now()+days*86400000).toISOString()});
+      if(!active.current)return;
+      rememberGrant(link);
+    }
+    if(!active.current||!link.url)throw new Error('The viewing link is unavailable. Reopen sharing to try again.');
+    await navigator.clipboard.writeText(link.url);
+    if(active.current)setNotice('Link copied.');
+  }
+  if(compact)return <section className="signal-share"><p>Let someone see the recording and its details.</p><div className="signal-note"><strong>{proof.transaction.itemTitle||'Packing record'}</strong><p className="signal-mono">{proof.transaction.externalReference||proof.proofId}</p></div><p className="signal-small">↗ View-only Proof link · {grant?.expiresAt?`Expires ${new Date(grant.expiresAt).toLocaleDateString()}`:'Expires in 7 days'}</p><p className="signal-small">Anyone with the link can view the shared record and its saved updates. Review recordings for private information before sharing.</p>{error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}<button className="btn" disabled={busy} onClick={()=>void run(copySignalLink)}>{busy?'Preparing link…':notice==='Link copied.'?'✓ Link copied':'Copy Proof link'}</button>{grant?.url&&<details><summary>View link</summary><input aria-label="Proof link" readOnly value={grant.url} onFocus={event=>event.currentTarget.select()}/></details>}</section>;
   return <section className="section stack share-proof-panel" aria-label="Share Proof">
     <h2>Share Proof</h2>
     <p className="note">Anyone with the link can view the shared record. Review recordings for private information before sharing.</p>

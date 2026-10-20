@@ -1,3 +1,4 @@
+import {SIGNAL_ENABLED} from '../../../web/src/signal/Signal';
 import { useEffect, useRef, useState } from 'react';
 import type { SharedProofLink, SharedProofPreview } from '../shared/contracts';
 import { Badge, ErrorNotice, Icon, Modal } from './components';
@@ -38,7 +39,7 @@ export function ShareProof({id,onClose}:{id:string;onClose:()=>void}) {
   useEffect(()=>{active.current=true;void refresh();return()=>{active.current=false;generation.current++;};},[id]);
   async function create(){
     if(lock.current||!preview||!reviewed)return;lock.current=true;setBusy('create');setError('');
-    try{const result=await window.packproof.proofs.share(id,{previewHash:preview.disclosure.viewHash,originalsReviewed:true,expiresAt:new Date(Date.now()+days*86400_000).toISOString()});if(active.current){setLink(result);setMedia(null);}}
+    try{const result=await window.packproof.proofs.share(id,{previewHash:preview.disclosure.viewHash,originalsReviewed:true,expiresAt:new Date(Date.now()+days*86400_000).toISOString()});if(active.current){setLink(result);setMedia(null);if(SIGNAL_ENABLED){try{await navigator.clipboard.writeText(result.url);if(active.current)setNotice('Proof link copied.');}catch{if(active.current)setNotice('Select the Proof link below and copy it.');}}}}
     catch(reason){if(active.current){setError(errorMessage(reason));setPreview(null);setReviewed(false);setMedia(null);}}
     finally{lock.current=false;if(active.current)setBusy(null);}
   }
@@ -48,17 +49,17 @@ export function ShareProof({id,onClose}:{id:string;onClose:()=>void}) {
     catch(reason){if(active.current)setError(errorMessage(reason));}
     finally{lock.current=false;if(active.current)setBusy(null);}
   }
-  return <Modal title={link?'Share this Proof':'Review sharing'} close={()=>{if(busy!=='create')onClose();}}>
+  return <Modal title={SIGNAL_ENABLED?'Share this Proof':link?'Share this Proof':'Review sharing'} close={()=>{if(busy!=='create')onClose();}}>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
     {notice&&<p role="status">{notice}</p>}
     {link?<>
-      <div className="notice success">Share link created.</div>
+      <div className="notice success">{SIGNAL_ENABLED?'Your view-only Proof link is ready.':'Share link created.'}</div>
       <p>{preview?.disclosure.sharingNotice||sharingNotice}</p>
       <label>Proof link<input value={link.url} readOnly onFocus={event=>event.target.select()}/></label>
       <p className="help">{link.expiresAt?`Access expires ${dateTime(link.expiresAt)}.`:'Check the link expiry in PackProof.'}</p>
       <p className="help">{preview?.disclosure.revocationNotice||revocationNotice}</p>
       <p className="help">Manage or revoke this link from Share Proof → Manage shared links on the PackProof website.</p>
-      <div className="modal-actions"><button onClick={()=>void window.packproof.system.openExternal(link.url).catch(reason=>setError(errorMessage(reason)))}>Open link</button><button className="primary" onClick={()=>void navigator.clipboard.writeText(link.url).then(()=>setNotice('Share link copied.')).catch(()=>setNotice('Select the link above and copy it.'))}>Copy link</button></div>
+      <div className="modal-actions"><button onClick={()=>void window.packproof.system.openExternal(link.url).catch(reason=>setError(errorMessage(reason)))}>Open link</button><button className="primary" onClick={()=>void navigator.clipboard.writeText(link.url).then(()=>setNotice('Share link copied.')).catch(()=>setNotice('Select the link above and copy it.'))}>Copy Proof link</button></div>
     </>:<>
       <p>{preview?.disclosure.sharingNotice||sharingNotice}</p>
       {busy==='preview'&&<p role="status">Loading the current recipient preview…</p>}
@@ -69,7 +70,7 @@ export function ShareProof({id,onClose}:{id:string;onClose:()=>void}) {
         <p className="help">{preview.disclosure.revocationNotice||revocationNotice}</p>
         <label className="declaration"><input type="checkbox" checked={reviewed} disabled={!!busy} onChange={event=>setReviewed(event.target.checked)}/><span>{sharingConsent}</span></label>
       </>}
-      <div className="modal-actions"><button disabled={busy==='create'} onClick={onClose}>Close preview</button>{preview?<><button disabled={!!busy} onClick={()=>void refresh()}>Refresh preview</button><button className="primary" disabled={!!busy||!reviewed} onClick={()=>void create()}>{busy==='create'?'Creating link…':'Create share link'}</button></>:<button className="primary" disabled={!!busy} onClick={()=>void refresh()}>Review latest preview</button>}</div>
+      <div className="modal-actions"><button disabled={busy==='create'} onClick={onClose}>Close preview</button>{preview?<><button disabled={!!busy} onClick={()=>void refresh()}>Refresh preview</button><button className="primary" disabled={!!busy||!reviewed} onClick={()=>void create()}>{busy==='create'?'Creating link…':SIGNAL_ENABLED?'Copy Proof link':'Create share link'}</button></>:<button className="primary" disabled={!!busy} onClick={()=>void refresh()}>Review latest preview</button>}</div>
     </>}
   </Modal>;
 }

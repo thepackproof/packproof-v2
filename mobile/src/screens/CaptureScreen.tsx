@@ -1,3 +1,6 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {SignalText,SignalSteps,SignalGuide,SignalBadge} from "../ui/Signal";
+import {BottomSheet} from "../ui/Sheets";
 import { requiresRecordingRecovery } from '../capture/recording-review';
 import { nativeStudyForCapture } from "../analytics/native-study";
 import { researchProductionEnabled } from '../research/isolation';
@@ -32,11 +35,14 @@ import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 import { manualReviewBinding } from "../experience/manual-review";
 import { ManualReviewConfirmation } from "../ui/ManualReviewConfirmation";
 
+const TASK_UI = SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD;
+
 export function CaptureScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const txn = app.transactionDetail ?? app.proof?.transaction;
+  const [retakeOpen,setRetakeOpen]=useState(false);
   const [labels, setLabels] = useState<CaptureShippingReview | null>(null);
   const [inspection, setInspection] = useState<EncodedVideoInspection | null>(null);
   const [checkingLabel, setCheckingLabel] = useState(false);
@@ -62,7 +68,7 @@ export function CaptureScreen() {
   const ordinaryCapture = Boolean(capture?.captureSessionId) && !capture?.captureStageId && !isGradingWorkflow(app.proof?.workflowType);
 
   useEffect(() => {
-    if ((researchProductionEnabled() && (!ANDROID_TASK_FIRST_REBUILD || isGradingWorkflow(app.proof?.workflowType))) || reviewOnly || !app.proof || capture || inFlight || app.busy || openedPreview.current === app.proof.proofId) return;
+    if (SIGNAL_ENABLED || (researchProductionEnabled() && (!TASK_UI || isGradingWorkflow(app.proof?.workflowType))) || reviewOnly || !app.proof || capture || inFlight || app.busy || openedPreview.current === app.proof.proofId) return;
     openedPreview.current = app.proof.proofId;
     // Selection opens the preview only. Native Record packing remains intentional.
     void app.startCapture();
@@ -142,9 +148,9 @@ export function CaptureScreen() {
   }
 
   const unresolved = labels?.observations.filter(labelNeedsReview) ?? [];
-  const labelBlocked = (ordinaryCapture && (checkingLabel || Boolean(labelError) || !labels || labels.reviewRequired || inspection?.playable === false)) || identifierBlocked || identifiers?.reviewRequired === true;
+  const labelBlocked = capture?.replacement?.decision === "pending" || (ordinaryCapture && (checkingLabel || Boolean(labelError) || !labels || labels.reviewRequired || inspection?.playable === false)) || identifierBlocked || identifiers?.reviewRequired === true;
   const progressLabel = captureProgressLabel(app.captureStatus, app.uploadPercent);
-  const title = incomplete ? "Interrupted recording" : inFlight ? "Saving your evidence" : reviewing ? (ANDROID_TASK_FIRST_REBUILD ? "Review your recording" : "Review recording") : "Ready to pack";
+  const title = incomplete ? "Interrupted recording" : inFlight ? "Saving your evidence" : reviewing ? (TASK_UI ? "Review your recording" : "Review recording") : "Ready to pack";
   const confirmationBinding = manualReviewBinding({
     proofId: app.proof?.proofId ?? "", originalId: `${capture?.captureSessionId ?? ""}:${capture?.uri ?? ""}:${capture?.captureSha256 ?? ""}`,
     accountId: app.session?.userId ?? "", apiBaseUrl: app.client.apiBaseUrl,
@@ -161,21 +167,24 @@ export function CaptureScreen() {
   return <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={[
     styles.root, { paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 16) },
   ]}>
-    <AppHeader title={title} onBack={() => { if (!app.busy) app.goBack(); }} right={!ANDROID_TASK_FIRST_REBUILD && !reviewOnly && app.role === "SELLER" && app.proof?.proofId ? <IconButton label="Share Proof" disabled={app.busy} onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : undefined} />
-    {txn ? <View style={{ gap: spacing.xs }}>
+    <AppHeader title={SIGNAL_ENABLED ? txn?.itemTitle || "Packing record" : title} onBack={() => { if (!app.busy) app.goBack(); }} right={!TASK_UI && !reviewOnly && app.role === "SELLER" && app.proof?.proofId ? <IconButton label="Share Proof" disabled={app.busy} onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : undefined} />
+    {!SIGNAL_ENABLED && txn ? <View style={{ gap: spacing.xs }}>
       <Text style={[styles.item, { color: colors.textPrimary }]}>{txn.itemTitle || "Your shipment"}</Text>
       {txn.externalReference ? <Text style={[styles.note, { color: colors.textSecondary }]}>Order {txn.externalReference}</Text> : null}
       <RemainingShipmentNotice value={app.proof} />
     </View> : null}
+    {SIGNAL_ENABLED && !incomplete && <SignalSteps step={inFlight?3:capture?2:1}/>}
+    {SIGNAL_ENABLED && reviewing && <SignalText kind="title">Review your take.</SignalText>}
+    {SIGNAL_ENABLED && incomplete && <><SignalBadge>Recording interrupted</SignalBadge><SignalText kind="title">Your take{'\n'}is still here.</SignalText><SignalText muted>It ended early. Any surviving footage stays on this device.</SignalText></>}
     <ErrorBanner message={app.error} />
     {researchProductionEnabled() && app.proof && app.session && !capture && !inFlight && !reviewOnly && !isGradingWorkflow(app.proof.workflowType) ? <>
-      {ANDROID_TASK_FIRST_REBUILD ? <Button label={showReceipt ? "Hide optional capture receipt" : "Optional capture receipt"} variant="tertiary" disabled={receiptBusy} onPress={() => setShowReceipt(!showReceipt)} /> : null}
-      {!ANDROID_TASK_FIRST_REBUILD || showReceipt ? <ReceiptConsent key={`${app.client.apiBaseUrl}:${app.session.userId}:${app.proof.proofId}`} onBusy={setReceiptBusy} /> : null}
+      {TASK_UI ? <Button label={showReceipt ? "Hide optional capture receipt" : "Optional capture receipt"} variant="tertiary" disabled={receiptBusy} onPress={() => setShowReceipt(!showReceipt)} /> : null}
+      {!TASK_UI || showReceipt ? <ReceiptConsent key={`${app.client.apiBaseUrl}:${app.session.userId}:${app.proof.proofId}`} onBusy={setReceiptBusy} /> : null}
     </> : null}
     {capture && !belongs ? <Button label="Return to saved recording" onPress={() => {
       if (app.session?.captureProofId) void app.run(() => app.openProof(app.session!.captureProofId!)); else app.goBack();
     }} /> : null}
-    {app.offline && capture ? <Text accessibilityLiveRegion={ANDROID_TASK_FIRST_REBUILD ? "polite" : undefined} style={[styles.note, { color: colors.textSecondary }]}>{ANDROID_TASK_FIRST_REBUILD && reviewing ? "Your recording is saved here. Review it now; reconnect to securely confirm and submit." : OFFLINE_CAPTURE_MESSAGE}</Text> : null}
+    {app.offline && capture ? <Text accessibilityLiveRegion={TASK_UI ? "polite" : undefined} style={[styles.note, { color: colors.textSecondary }]}>{TASK_UI && reviewing ? "Your recording is saved here. Review it now; reconnect to securely confirm and submit." : OFFLINE_CAPTURE_MESSAGE}</Text> : null}
     {inFlight ? <ProgressState label={progressLabel} percent={app.captureStatus === "uploading" && (app.uploadPercent ?? 0) < 100 ? app.uploadPercent : null} /> : null}
     {incomplete && capture && belongs ? <View style={styles.preview}>
       <Text accessibilityRole="alert" style={[styles.note, { color: colors.textSecondary }]}>{capture.localFileAvailable === false
@@ -187,24 +196,25 @@ export function CaptureScreen() {
         <Text style={[styles.note, { color: colors.textSecondary }]}>Playback depends on the surviving file. A playable clip does not establish a complete packing sequence.</Text>
       </> : null}
       <Button label="Keep draft and return" variant="secondary" onPress={app.goBack} disabled={app.busy} />
+      {capture.replacement?.decision==='pending' && <Button label="Keep previous take" variant="secondary" onPress={()=>void app.chooseCaptureTake('original')} disabled={app.busy}/>}
       <Button label="Discard incomplete recording" onPress={discardRecording} disabled={app.busy} variant="destructive" />
       <Text style={[styles.note, { color: colors.textSecondary }]}>After discarding, open the camera to record a new continuous take. Saved segments are never joined together.</Text>
     </View> : null}
     {reviewing && capture ? <View style={styles.preview}>
       <VideoReview key={capture.uri} uri={capture.uri} compact />
-      {ANDROID_TASK_FIRST_REBUILD ? <Text style={[styles.note, { color: colors.textSecondary }]}>
+      {TASK_UI ? <Text style={[styles.note, { color: colors.textSecondary }]}>
         {formatDuration(capture.durationMs)} · {capture.recovery?.phase === "LOCAL_ONLY" || (!capture.recovery && !capture.uploadEvidenceId)
           ? "Recording saved on this device. Not uploaded yet."
           : capture.recovery ? captureRecoveryLabel(capture.recovery.phase) : "Saved on this device. Upload pending."}
       </Text> : null}
       {capture.researchNotice ? <Text style={[styles.note, { color: colors.textSecondary }]}>{capture.research?.unavailableReason ?? capture.researchNotice}</Text> : null}
       {reviewOnly ? <><Text accessibilityRole="alert" style={[styles.note,{color:colors.textSecondary}]}>{app.captureReviewOnlyReason}</Text><Button label="Check current Proof" onPress={()=>void app.resumeSavedCapture(capture)} disabled={app.busy||app.offline} variant="secondary" /></> : null}
-      {!ANDROID_TASK_FIRST_REBUILD && !reviewOnly && labelBlocked ? <Text accessibilityLiveRegion="polite" style={[styles.note, { color: colors.textSecondary }]}>{checkingLabel
+      {!TASK_UI && !reviewOnly && labelBlocked ? <Text accessibilityLiveRegion="polite" style={[styles.note, { color: colors.textSecondary }]}>{checkingLabel
         ? "Checking required recording details before confirmation…"
         : "Resolve the recording checks below before confirming. Your local original is kept."}</Text> : null}
-      {!ANDROID_TASK_FIRST_REBUILD && !reviewOnly ? (sellerAttestation ? <SellerAttestation compact onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} />
+      {!TASK_UI && !reviewOnly ? (sellerAttestation ? <SellerAttestation compact onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} />
         : <Button label={app.captureStatus === "retry" ? "Try again" : "Use recording"} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} haptic="medium" />) : null}
-      {!ANDROID_TASK_FIRST_REBUILD ? <Text style={[styles.note, { color: colors.textSecondary }]}>
+      {!TASK_UI ? <Text style={[styles.note, { color: colors.textSecondary }]}>
         {formatDuration(capture.durationMs)} recording{capture.interrupted ? " · interrupted recording" : ""}
       </Text> : null}
       {capture.interrupted ? <Text accessibilityRole="alert" style={[styles.note, { color: colors.textSecondary }]}>
@@ -232,8 +242,8 @@ export function CaptureScreen() {
               ])} />
           </View>;
         })}
-        {ANDROID_TASK_FIRST_REBUILD && inspection?.frames.length ? <Button label={showLabelDetails ? "Hide label frames" : "View label frames"} variant="tertiary" onPress={() => setShowLabelDetails(!showLabelDetails)} /> : null}
-        {inspection?.frames.length && (!ANDROID_TASK_FIRST_REBUILD || showLabelDetails) ? <ScrollView horizontal contentContainerStyle={{ gap: spacing.sm }}>
+        {TASK_UI && inspection?.frames.length ? <Button label={showLabelDetails ? "Hide label frames" : "View label frames"} variant="tertiary" onPress={() => setShowLabelDetails(!showLabelDetails)} /> : null}
+        {inspection?.frames.length && (!TASK_UI || showLabelDetails) ? <ScrollView horizontal contentContainerStyle={{ gap: spacing.sm }}>
           {inspection.frames.map(frame => <View key={frame.uri} style={{ width: 136, gap: spacing.xs }}>
             <Image source={{ uri: frame.uri }} resizeMode="contain" style={{ width: 136, height: 86, backgroundColor: colors.surface }} accessibilityLabel={`Video frame near ${Math.round(frame.requestedOffsetMs / 1000)} seconds`} />
             <Text style={[styles.note, { color: colors.textSecondary }]}>Video frame · near {Math.round(frame.requestedOffsetMs / 1000)}s</Text>
@@ -256,25 +266,25 @@ export function CaptureScreen() {
         </View>)}
         <IdentifierDetails value={identifiers} />
       </View> : null}
-      {!ANDROID_TASK_FIRST_REBUILD ? <Text style={[styles.note, { color: colors.textSecondary }]}>{capture.recovery ? captureRecoveryLabel(capture.recovery.phase) : "Saved on this device. Upload pending."}</Text> : null}
-      {ANDROID_TASK_FIRST_REBUILD && !reviewOnly ? (sellerAttestation
+      {!TASK_UI ? <Text style={[styles.note, { color: colors.textSecondary }]}>{capture.recovery ? captureRecoveryLabel(capture.recovery.phase) : "Saved on this device. Upload pending."}</Text> : null}
+      {(SIGNAL_ENABLED || TASK_UI) && !reviewOnly ? (sellerAttestation
         ? <ManualReviewConfirmation key={confirmationBinding} binding={confirmationBinding} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked || app.offline} />
         : <Button label={app.captureStatus === "retry" ? "Try again" : "Use recording"} onPress={() => void app.submitCapture()} loading={app.busy} disabled={labelBlocked} haptic="medium" />) : null}
-      {!reviewOnly ? <Button label="Retake recording" onPress={() => Alert.alert("Replace this local take?", "The current take stays on this device until the new recording is saved. Then the new take replaces it and the previous unsubmitted local take is removed. Record the entire sequence again; segments are never joined.", [
-        { text: "Keep this recording", style: "cancel" }, { text: "Open camera", onPress: () => void app.startCapture({ replaceUri: capture.uri }) },
-      ])} variant="secondary" disabled={app.busy || Boolean(capture.uploadEvidenceId)} /> : null}
+      {capture.replacement?.decision==='pending' && <View style={{gap:12}}><SignalText kind="heading">Choose your take</SignalText><SignalText kind="small" muted>Your previous take is still saved. Review this complete recording before choosing.</SignalText><Button label="Use this take" disabled={app.busy || capture.interrupted || inspection?.playable===false} onPress={()=>void app.chooseCaptureTake('replacement')}/><Button label="Keep previous take" variant="secondary" disabled={app.busy} onPress={()=>void app.chooseCaptureTake('original')}/></View>}
+      {!reviewOnly && capture.replacement?.decision!=='pending' ? <Button label="Record another take" onPress={()=>setRetakeOpen(true)} variant="tertiary" disabled={app.busy || Boolean(capture.uploadEvidenceId) || capture.recovery?.submitRequested} /> : null}
       {sellerAttestation && /biometric|fingerprint|enroll|lock/i.test(app.error ?? "") ? <Button label="Open biometric settings"
         onPress={() => void (Platform.OS === "android" ? Linking.sendIntent("android.settings.BIOMETRIC_ENROLL").catch(() => Linking.openSettings()) : Linking.openSettings())} variant="tertiary" disabled={app.busy} /> : null}
-      {!reviewOnly && ANDROID_TASK_FIRST_REBUILD ? <Button label={showRecordingOptions ? "Hide recording options" : "Recording options"} variant="tertiary" onPress={() => setShowRecordingOptions(!showRecordingOptions)} /> : null}
-      {!reviewOnly && (!ANDROID_TASK_FIRST_REBUILD || showRecordingOptions) ? <Button label="Discard recording" onPress={discardRecording} variant="tertiary" disabled={app.busy} /> : null}
+      {!reviewOnly && TASK_UI ? <Button label={showRecordingOptions ? "Hide recording options" : "Recording options"} variant="tertiary" onPress={() => setShowRecordingOptions(!showRecordingOptions)} /> : null}
+      {!reviewOnly && (!TASK_UI || showRecordingOptions) ? <Button label="Discard recording" onPress={discardRecording} variant="tertiary" disabled={app.busy} /> : null}
     </View> : null}
-    {!capture && !inFlight ? <Button label="Open camera" onPress={() => void app.startCapture()} loading={app.busy} disabled={receiptBusy} /> : null}
+    {!capture && !inFlight ? SIGNAL_ENABLED ? <SignalGuide onStart={()=>void app.startCapture({autoStart:true})} busy={app.busy} disabled={receiptBusy || app.offline}/> : <Button label="Open camera" onPress={() => void app.startCapture()} loading={app.busy} disabled={receiptBusy} /> : null}
     {!capture && /camera permission|permission denied/i.test(app.error ?? "") ? <Button label="Open camera settings" variant="secondary" disabled={app.busy} onPress={() => void Linking.openSettings()} /> : null}
-    {!ANDROID_TASK_FIRST_REBUILD ? <Button label="Back" onPress={app.goBack} variant="tertiary" disabled={app.busy} /> : null}
+    {!TASK_UI ? <Button label="Back" onPress={app.goBack} variant="tertiary" disabled={app.busy} /> : null}
+    <BottomSheet visible={retakeOpen} title="Record another take?" onClose={()=>setRetakeOpen(false)}><View style={{gap:20}}><SignalText muted>Your current take will stay saved on this device. After recording, choose which take to keep.</SignalText><Button label="Record another take" onPress={()=>{setRetakeOpen(false);if(capture)void app.startCapture({replaceUri:capture.uri,autoStart:true});}}/><Button label="Keep reviewing" variant="secondary" onPress={()=>setRetakeOpen(false)}/></View></BottomSheet>
   </ScrollView>;
 }
 const styles = StyleSheet.create({
-  root: { flexGrow: 1, paddingHorizontal: 16, gap: 12 },
+  root: { flexGrow: 1, paddingHorizontal: SIGNAL_ENABLED?24:16, gap: SIGNAL_ENABLED?24:12 },
   title: { ...typography.pageTitle }, item: { ...typography.cardTitle }, note: { ...typography.secondary },
   preview: { gap: spacing.md }, labelReview: { gap: spacing.sm },
   observation: { borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: spacing.sm },

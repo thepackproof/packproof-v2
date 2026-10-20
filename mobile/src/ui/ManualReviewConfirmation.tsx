@@ -1,3 +1,5 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {signalType} from "../theme/signal";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,10 +29,10 @@ export function ManualReviewConfirmation({ binding, onPress, disabled = false, l
       <Ionicons name={checked ? "checkbox" : "square-outline"} size={26} color={checked ? colors.primary : colors.textSecondary} />
       <View style={styles.copy}>
         <Text style={[styles.statement, { color: colors.textPrimary }]}>{SELLER_SHIPPING_STATEMENT}</Text>
-        <Text style={[styles.hint, { color: colors.textSecondary }]}>Declaration version {SELLER_SHIPPING_STATEMENT_VERSION} · Applies to this recording and item.</Text>
+        {!SIGNAL_ENABLED && <Text style={[styles.hint, { color: colors.textSecondary }]}>Declaration version {SELLER_SHIPPING_STATEMENT_VERSION} · Applies to this recording and item.</Text>}
       </View>
     </Pressable>
-    <Button label="Confirm and submit" icon="finger-print-outline" disabled={!allowed} loading={loading}
+    <Button label={SIGNAL_ENABLED?"Save to PackProof":"Confirm and submit"} icon={SIGNAL_ENABLED?"arrow-forward":"finger-print-outline"} disabled={!allowed} loading={loading}
       accessibilityHint="Confirm with your device’s secure biometric prompt before submission."
       onPress={() => { if (allowed) onPress(); }} haptic="medium" />
     <Text style={[styles.hint, { color: colors.textSecondary }]}>You’ll confirm with your device’s secure signing step. PackProof never receives your fingerprint or face data.</Text>
@@ -39,8 +41,8 @@ export function ManualReviewConfirmation({ binding, onPress, disabled = false, l
 
 const styles = StyleSheet.create({
   root: { gap: 12 },
-  declaration: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 12, minHeight: 48, borderWidth: 1, borderRadius: 12 },
+  declaration: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: SIGNAL_ENABLED?24:12, minHeight: 76, borderWidth: 1, borderRadius: 12 },
   copy: { flex: 1, minWidth: 0, gap: 6 },
-  statement: { fontSize: 15, lineHeight: 23, fontWeight: "600" },
-  hint: { fontSize: 13, lineHeight: 20 },
+  statement: { ...signalType.small },
+  hint: { ...signalType.caption },
 });

@@ -1,3 +1,5 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {SignalProofRecord} from "../ui/SignalProofRecord";
 import { EXPERIENCE_RESTORATION_REVIEW } from '../experience/restoration-review';
 import { RestorationJourney } from '../ui/RestorationJourney';
 import { SavedPhotoDraft } from '../ui/SavedPhotoDraft';
@@ -74,7 +76,7 @@ export function ProofDetailScreen() {
   }
 
   const grading = isGradingWorkflow(proof.workflowType);
-  const taskFirst = ANDROID_TASK_FIRST_REBUILD && !grading;
+  const taskFirst = (SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD) && !grading;
   const detail = taskFirst ? proofDetailModel({
     proof, userId: app.session.userId, apiBaseUrl: app.apiBaseUrl,
     captures: workspaceRecordings(app.savedRecordings, app.localCapture), photoDrafts: app.photoDrafts,
@@ -304,7 +306,7 @@ export function ProofDetailScreen() {
         onBack={app.goBack}
         right={
           <View style={styles.headerActions}>
-            {presentation.share.available ? (width < 390 || fontScale > 1.3 ? <IconButton label="Share Proof" onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : <Button label="Share" icon="share-outline" variant="tertiary" onPress={() => void app.shareProofLink()} />) : null}
+            {!SIGNAL_ENABLED && presentation.share.available ? (width < 390 || fontScale > 1.3 ? <IconButton label="Share Proof" onPress={() => void app.shareProofLink()}><Ionicons name="share-outline" size={22} color={colors.textPrimary} /></IconButton> : <Button label="Share" icon="share-outline" variant="tertiary" onPress={() => void app.shareProofLink()} />) : null}
             <IconButton label="Proof details" onPress={() => setMenuOpen(true)}><Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} /></IconButton>
           </View>
         }
@@ -321,7 +323,7 @@ export function ProofDetailScreen() {
 
       {!ANDROID_TASK_FIRST_REBUILD && proof.status === "FINALIZED" ? <EvidencePackageButton key={`${app.session.userId}:${proof.proofId}`} proofId={proof.proofId}/> : null}
       {otherPhotoDrafts.map(draft => <SavedPhotoDraft key={draft.id} draft={draft} />)}
-      {EXPERIENCE_RESTORATION_REVIEW ? <RestorationJourney key={proof.proofId} action={actionContent} completed={presentation.completed && !presentation.diagnostic}
+      {SIGNAL_ENABLED && !grading ? <SignalProofRecord action={actionContent}/> : EXPERIENCE_RESTORATION_REVIEW ? <RestorationJourney key={proof.proofId} action={actionContent} completed={presentation.completed && !presentation.diagnostic}
         renderEvidence={tab=><ProofRecord key={proof.proofId} statusLabel={statusLabel} summaryLine={summaryLine} action={null} embeddedTab={tab} />} /> : (
       <ProofRecord
         key={proof.proofId}

@@ -1,7 +1,7 @@
 import type { LocalCapture } from '../capture';
 
 export function requiresRecordingRecovery(capture: LocalCapture | null | undefined): boolean {
-  return Boolean(capture && (capture.interrupted || capture.recovery?.phase === 'RECORDING' || capture.localFileAvailable === false));
+  return Boolean(capture && (capture.interrupted || capture.encodedInspection?.playable===false || capture.recovery?.phase === 'RECORDING' || capture.localFileAvailable === false));
 }
 
 /** A camera-open request cannot silently replace an already retained take. */
@@ -11,10 +11,13 @@ export function assertRecordingReplacement(capture: LocalCapture | null, proofId
     throw new Error('Return to the original Proof to review the saved recording.');
   if (capture.uri !== confirmedUri)
     throw new Error('Your recording is kept. Review it or explicitly choose Retake before opening another recording.');
+  if(capture.replacement?.decision==='pending')throw new Error('Choose which take to keep before recording another.');
   if (capture.uploadEvidenceId || capture.recovery?.submitRequested)
     throw new Error('This recording has entered submission. Check its existing save before recording again.');
 }
 
-export function assertContinuousRecording(capture: LocalCapture): void {
+export function assertContinuousRecording(capture: LocalCapture, related:LocalCapture[]=[]): void {
+  if(capture.supersededBy || related.some(row=>row.captureUserId===capture.captureUserId && row.captureProofId===capture.captureProofId && row.recovery?.apiBaseUrl===capture.recovery?.apiBaseUrl && row.replacement?.originalUri===capture.uri && row.replacement.decision!=='kept-original'))throw new Error('Choose which take to keep before submitting this original.');
+  if(capture.replacement && capture.replacement.decision!=='accepted')throw new Error('Choose which take to keep before submitting.');
   if (requiresRecordingRecovery(capture)) throw Object.assign(new Error('This interrupted take is kept for inspection. Record a new continuous take before submitting.'), { code: 'CAPTURE_ORIGINAL_INTERRUPTED' });
 }

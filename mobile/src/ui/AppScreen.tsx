@@ -1,3 +1,4 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
 import { useEffect, useRef, type ReactNode } from "react";
 import {
   RefreshControl,
@@ -91,5 +92,5 @@ export function AppScreen(props: {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { flexGrow: 1, gap: spacing.lg },
-  padded: { paddingHorizontal: spacing.lg },
+  padded: { paddingHorizontal: SIGNAL_ENABLED ? 24 : spacing.lg },
 });

@@ -1,3 +1,5 @@
+import { signalColors } from '../../../mobile/src/theme/signal';
+import { SIGNAL_ENABLED } from '../signal/Signal';
 import {
   createContext,
   useCallback,
@@ -36,7 +38,7 @@ function systemScheme(): ColorScheme {
 }
 
 function applyCssVars(scheme: ColorScheme) {
-  const colors = colorsForScheme(scheme);
+  const colors = SIGNAL_ENABLED ? signalColors(scheme) : colorsForScheme(scheme);
   const root = document.documentElement;
   const vars: Record<string, string> = {
     "--navy": colors.textPrimary,
@@ -127,7 +129,7 @@ export function ThemeProvider(props: { children: ReactNode }) {
     () => ({
       preference,
       scheme,
-      colors: colorsForScheme(scheme),
+      colors: SIGNAL_ENABLED ? signalColors(scheme) : colorsForScheme(scheme),
       shadows: shadowsFor(scheme),
       setPreference,
     }),

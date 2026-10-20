@@ -1,3 +1,4 @@
+import { SIGNAL_ENABLED } from '../signal/Signal';
 import { useEffect, useState } from "react";
 
 /** Composition-only rollback; never changes capture databases, journals, or evidence. */
@@ -13,5 +14,5 @@ export function useMobileTaskExperience() {
     update();
     return () => media.removeEventListener("change", update);
   }, []);
-  return compact && mobileTaskExperienceEnabled();
+  return SIGNAL_ENABLED || compact && mobileTaskExperienceEnabled();
 }

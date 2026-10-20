@@ -1,3 +1,5 @@
+import {inspectRecordedVideo} from '../../modules/packproof-unified-camera';
+import {SIGNAL_ENABLED} from "../experience/signal";
 import { photoAcknowledgmentForSelection, photoRetryDue, recoverPhotoSubmission } from '../capture/photo-submission-recovery';
 import { assertRecordingReplacement, assertContinuousRecording } from '../capture/recording-review';
 import { gradingCreationKey, gradingCreationRequest, parseGradingCreation, type GradingCreation } from '../experience/grading-creation';
@@ -269,7 +271,7 @@ export interface PackProofContextValue {
   confirmFinalize: boolean;
   client: PackProofV2Client;
   role: string | undefined;
-  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "signatureTool" | "activityFilter" | "activitySessionId" | "creationMode">) => void;
+  go: (name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "signatureTool" | "activityFilter" | "activitySessionId" | "creationMode" | "signalSubmission">) => void;
   goBack: () => void;
   setProofsView: (view: ProofsLibraryView) => void;
   setProofsQuery: (query: string) => void;
@@ -333,7 +335,8 @@ export interface PackProofContextValue {
   savePurchaseDetails: () => Promise<void>;
   saveShippingDetails: () => Promise<void>;
   startCaptureIntent: (token:string) => Promise<void>;
-  startCapture: (options?: { replaceUri: string }) => Promise<void>;
+  chooseCaptureTake: (choice: "original" | "replacement", capture?:LocalCapture) => Promise<void>;
+  startCapture: (options?: { replaceUri?: string; autoStart?: boolean }) => Promise<void>;
   startIntakeCapture: (input: { snapshotId: string; handoffId?: string }) => Promise<void>;
   discardCapture: () => Promise<void>;
   submitCapture: () => Promise<void>;
@@ -402,9 +405,9 @@ export function PackProofProvider(props: { children: ReactNode }) {
       offsetY: value.offsetY === undefined ? current.offsetY : Number.isFinite(value.offsetY) ? Math.max(0, value.offsetY) : 0,
     };
   }, []);
-  const cacheRef = useRef(emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)));
+  const cacheRef = useRef(emptyProofsCache(initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD)));
   const cacheScope = useRef<string | null>(null);
-  const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(() => initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
+  const [proofsLibrary, setProofsLibrary] = useState<ProofsLibraryState>(() => initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD));
   // Scroll is native interaction state, not application state. Publishing every
   // offset would rerender every context consumer during an Android fling.
   const proofsScrollOffset = useRef(0);
@@ -541,11 +544,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (hydrated) versionReporter.update(session, client);
   }, [client, hydrated, session, versionReporter]);
 
-  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "signatureTool" | "activityFilter" | "activitySessionId" | "creationMode" | "returnToCapture">) => {
+  const go = useCallback((name: AppRouteName, options?: Pick<AppRoute, "accountSection" | "supportingSection" | "historyShareId" | "signatureTool" | "activityFilter" | "activitySessionId" | "creationMode" | "signalSubmission" | "returnToCapture">) => {
     if (captureNavigationLock.current) { setError("Finish or cancel this take in the camera before leaving. Your Proof stays selected."); return; }
     if (name === "create" || name === "manual") startMobileCaptureEntry();
     if (name === "scan" && !MOBILE_TASK_UX_ENABLED) name = "create";
-    name = creationEntryRoute(name, ANDROID_TASK_FIRST_REBUILD, options?.creationMode);
+    name = creationEntryRoute(name, SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD, options?.creationMode);
     if (name === "scan") { setScanPhase("camera"); setScanResult(null); setScanInput(""); }
     if (name === "complete") name = "proof";
     if (MOBILE_TASK_UX_ENABLED && name === "account" && options?.accountSection === "recordings") {name="activity";options={activityFilter:"all"};}
@@ -677,18 +680,18 @@ export function PackProofProvider(props: { children: ReactNode }) {
     if (cacheScope.current === key) return;
     proofRecordViews.current.clear();
     workspaceOffsets.current={home:0,activity:0};activityFilterMemory.current="all"; setWorkspaceFreshAt(null); setWorkspaceReconciled(false); setSelectedTask(null); taskInteractions.current={}; clearMobileUxMetrics(); setScanResult(null);setScanCandidates([]);setScanInput("");setScanPhase("camera");
-    setProofsLibrary(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)); proofsScrollOffset.current = 0;
+    setProofsLibrary(initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD)); proofsScrollOffset.current = 0;
     setProofCollection([]); setProof(null); setTransactionDetail(null); setSavedRecordings([]); setPhotoDrafts([]); setCaptureReviewOnlyReason(null);
     setConnections([]); setConnectedAccounts([]); setConnectedProviders([]);
     if (sessionRef.current && `${sessionRef.current.apiBaseUrl}:${sessionRef.current.userId}` !== key) {
       await clearNativeIntakeSession(client, sessionRef.current.userId).catch(() => undefined);
       await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
-      await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
+      await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD)),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
       await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
       await revokeIntakeDevice(client, sessionRef.current.userId).catch(() => forgetIntakeDevice(client, sessionRef.current!.userId));
     }
     cacheScope.current = key;
-    const cached = await loadProofsCache(current.apiBaseUrl,current.userId,initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
+    const cached = await loadProofsCache(current.apiBaseUrl,current.userId,initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD));
     if (cacheScope.current !== key) return;
     cacheRef.current = cached; setProofsLibrary(cached.library); proofsScrollOffset.current = cached.offsetY;
     manualTransaction.current=cached.manualOperation??null;
@@ -1209,6 +1212,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
               recovery:{version:1,operationId:newIdempotencyKey(),apiBaseUrl:next.apiBaseUrl,userId:next.userId,proofId:next.captureProofId,phase:"NEEDS_ATTENTION",evidenceIdempotencyKey:next.evidenceIdempotencyKey,submitRequested:true,needsSellerAttestation:true,attempt:0,nextRetryAt:null,updatedAt:new Date().toISOString(),lastError:{code:"CAPTURE_LOCAL_FILE_MISSING",message:"Upload could not be completed. The original is not available on this device.",retryable:false}}};
             await persistCaptureMetadata(restored);
           }
+          if(restored?.replacement?.decision==='kept-original'){
+            const original=journals.find(row=>row.uri===restored!.replacement!.originalUri);
+            if(original){restored=original;await persistCapture(original,original.recovery?.evidenceIdempotencyKey||newIdempotencyKey());}
+          }
           if (restored && restored.captureUserId === next.userId) {
             if (restored.recovery?.phase === "UPLOADING") { restored.recovery.phase = "UPLOAD_QUEUED"; await persistCaptureMetadata(restored); }
             setLocalCapture(restored); setCaptureStatus("retry");
@@ -1516,7 +1523,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       const row=proofCollection.find(row=>row.proofId===proofId);
       if(row?.accessKind==="RECEIVER") {value.openReceipt(proofId);return true;}
       rememberTaskInteraction(proofId); startMobileCaptureEntry();
-      if (offline && !ANDROID_TASK_FIRST_REBUILD) return handledActionSucceeded(run, () => openProof(proofId));
+      if (offline && !(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD)) return handledActionSucceeded(run, () => openProof(proofId));
       const owner = sessionRef.current ? { userId: sessionRef.current.userId, apiBaseUrl: sessionRef.current.apiBaseUrl } : null;
       const candidates = photoDrafts.filter(draft => draft.proofId === proofId && draft.phase !== 'COMPLETE' && draft.userId === owner?.userId && draft.apiBaseUrl === owner?.apiBaseUrl.replace(/\/+$/, ''));
       const draft = photoDraftId ? candidates.find(row => row.id === photoDraftId) : candidates.find(row => row.phase === 'SUBMITTING') ?? candidates[0];
@@ -1537,7 +1544,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
           await openProof(proofId);
         });
       }
-      const selection = ANDROID_TASK_FIRST_REBUILD ? proofEntryRecording({
+      const selection = (SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD) ? proofEntryRecording({
         proofs: proofCollection, invitations: pendingInvites, captures: workspaceRecordings(savedRecordings, localCapture),
         photoDrafts, orders: [], progress: uploadProgressByProof, userId: sessionRef.current?.userId ?? '',
         apiBaseUrl, online: !offline, reconciled: workspaceReconciled, captureStatus,
@@ -1648,7 +1655,8 @@ export function PackProofProvider(props: { children: ReactNode }) {
       await persistCaptureMetadata(capture);
       assertOriginalAccount();
       await persistCapture(null, null);
-      setCaptureStatus("idle"); setUploadPercent(null); go("home");
+      setCaptureStatus("idle"); setUploadPercent(null);
+      if(SIGNAL_ENABLED && capture.recovery)go("submission",{signalSubmission:{userId:current.userId,apiBaseUrl:current.apiBaseUrl,proofId:capture.captureProofId!,operationId:capture.recovery.operationId,uri:capture.uri}});else go("home");
       void recoveryTickRef.current();
     }),
     discardSavedCapture: async capture => run(() => discardSavedRecording(capture)),
@@ -1851,11 +1859,11 @@ export function PackProofProvider(props: { children: ReactNode }) {
         if (sessionRef.current) {
           await saveCaptureRecovery(sessionRef.current);
           await clearIntakeQueueCache(sessionRef.current.apiBaseUrl, sessionRef.current.userId).catch(() => undefined);
-          await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD)),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
+          await saveProofsCache(sessionRef.current.apiBaseUrl,sessionRef.current.userId,{...emptyProofsCache(initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD)),draft:cacheRef.current.draft,manualOperation:cacheRef.current.manualOperation}).catch(() => undefined);
           await clearSharedLinkCache(AsyncStorage,sessionRef.current.apiBaseUrl,sessionRef.current.userId).catch(() => undefined);
         }
-        cacheScope.current = null; cacheRef.current = emptyProofsCache(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
-        setProofsLibrary(initialProofsLibrary(ANDROID_TASK_FIRST_REBUILD));
+        cacheScope.current = null; cacheRef.current = emptyProofsCache(initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD));
+        setProofsLibrary(initialProofsLibrary(SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD));
         tokenRef.current = null;
         sessionRef.current = null;
         await clearCachedState();
@@ -2223,6 +2231,34 @@ export function PackProofProvider(props: { children: ReactNode }) {
         });
       } finally { intakeCaptureLock.current = false; if(captureNavigationLock.current)setCaptureStatus("retry"); }
     },
+    chooseCaptureTake: async (choice,selectedCapture) => run(async()=>{
+      const candidate=selectedCapture??localCapture,account=sessionRef.current;
+      if(!candidate?.replacement || candidate.replacement.decision!=='pending' || !account || candidate.captureUserId!==account.userId || candidate.recovery?.apiBaseUrl!==client.apiBaseUrl || candidate.recovery.submitRequested)throw new Error('Reopen this take in its original account before choosing.');
+      const recordings=await listAccountCaptures(account.apiBaseUrl,account.userId);
+      const original=recordings.find(row=>row.uri===candidate.replacement!.originalUri && row.captureSessionId===candidate.replacement!.originalSessionId && row.captureProofId===candidate.captureProofId);
+      if(!original || original.recovery?.submitRequested || original.uploadEvidenceId || original.supersededBy)throw new Error('The previous take is unavailable for replacement. Both journals are kept for recovery.');
+      client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+      if(sessionRef.current?.proofId!==original.captureProofId){
+        if(offline)throw new Error("Open the original Proof before choosing a take while offline.");
+        await refreshProof(original.captureProofId!);
+      }
+      if(choice==='replacement'){
+        const accepted={...candidate,replacement:{...candidate.replacement,decision:'accepted' as const}};
+        assertContinuousRecording(accepted);
+        if(accepted.captureSessionId){const inspection=accepted.encodedInspection??await inspectRecordedVideo(accepted.captureSessionId,[]);if(!inspection?.playable||!(inspection.durationMs>0))throw new Error('This new take has not been confirmed playable. Your previous take is retained.');accepted.encodedInspection=inspection;}
+        if(!await localCaptureExists(accepted.uri))throw new Error('This take is unavailable. Keep the previous take.');
+        client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+        await persistCaptureMetadata(accepted); // Durable choice precedes any old-take housekeeping.
+        await persistCapture(accepted,accepted.recovery!.evidenceIdempotencyKey);
+        original.supersededBy=accepted.uri;await persistCaptureMetadata(original);
+      }else{
+        await persistCaptureMetadata({...candidate,replacement:{...candidate.replacement,decision:'kept-original'}});
+        original.supersededBy=undefined;await persistCaptureMetadata(original);
+        await persistCapture(original,original.recovery?.evidenceIdempotencyKey||newIdempotencyKey());
+      }
+      client.assertCaptureAccount(account.userId,account.apiBaseUrl);
+      setSavedRecordings(await listAccountCaptures(account.apiBaseUrl,account.userId));setCaptureStatus('captured');go('capture');
+    }),
     startCapture: async options => {
       if(captureNavigationLock.current)return;
       const chosenAccount=sessionRef.current;
@@ -2241,7 +2277,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
         const captureInput = { proofId: proof.proofId, userId: sessionRef.current!.userId, orderLabel: proof.transaction.itemTitle || "Packing this order" };
         const captured = await (isGradingWorkflow(proof.workflowType)
           ? recordGradingPackingEvidence(captureInput)
-          : recordPackingEvidence({ client, ...captureInput })).catch(error => {
+          : recordPackingEvidence({ client, ...captureInput,autoStart:options?.autoStart })).catch(error => {
             setCaptureStatus(localCapture ? "captured" : "idle"); throw error;
           });
         if (!captured) {
@@ -2249,13 +2285,12 @@ export function PackProofProvider(props: { children: ReactNode }) {
           return;
         }
         void haptic("medium");
+        if(localCapture && localCapture.uri!==captured.uri && options?.replaceUri===localCapture.uri)captured.replacement={originalUri:localCapture.uri,originalSessionId:localCapture.captureSessionId,decision:"pending"};
+        if(captured.replacement)await persistCaptureMetadata(captured);
         await queueRetiredUpload(proof.proofId);
         try { await persistCapture(captured, newIdempotencyKey()); }
         catch (error) { setCaptureStatus("retry"); throw error; }
-        if (localCapture && localCapture.uri !== captured.uri && !localCapture.uploadEvidenceId) {
-          if(localCapture.studyTimingRef&&localCapture.studyTimingRef!==captured.studyTimingRef)(await nativeStudyForCapture(client,sessionRef.current!.userId,localCapture.studyTimingRef))?.end('cancelled','cancelled');
-          await discardLocalCapture(localCapture.uri);
-        }
+        // Previous takes remain on disk until an explicit choice and later cleanup.
         setCaptureStatus("captured");
         const fresh = await client.getProof(proof.proofId);
         setProof(fresh);
@@ -2278,7 +2313,10 @@ export function PackProofProvider(props: { children: ReactNode }) {
             throw new Error(
               "This recording belongs to another Proof. Open its original Proof to resume.",
             );
-          assertContinuousRecording(localCapture);
+          const selectingAccount=sessionRef.current;
+          const related=await listAccountCaptures(selectingAccount.apiBaseUrl,selectingAccount.userId);
+          client.assertCaptureAccount(selectingAccount.userId,selectingAccount.apiBaseUrl);
+          assertContinuousRecording(localCapture,related);
           const available = await localCaptureExists(localCapture.uri);
           if (!available) {
             localCapture.localFileAvailable = false;
@@ -2308,7 +2346,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
               assertAccount();
               // The account journal owns the original now. Releasing the screen never deletes it.
               if (sessionRef.current?.captureUri === uri) await persistCapture(null, null);
-              setCaptureStatus("idle"); setUploadPercent(null); go("home");
+              setCaptureStatus("idle"); setUploadPercent(null); if(SIGNAL_ENABLED && localCapture.recovery)go("submission",{signalSubmission:{userId,apiBaseUrl:client.apiBaseUrl,proofId:proof.proofId,operationId:localCapture.recovery.operationId,uri}});else go("home");
             } catch (error) { setCaptureStatus("retry"); throw error; }
             return;
           }

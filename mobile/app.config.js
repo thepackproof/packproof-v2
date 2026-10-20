@@ -27,10 +27,10 @@ const isProductionResearch = env("EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION") === "tr
 const isCameraSpike = env("EXPO_PUBLIC_PACKPROOF_CAMERA_SPIKE") === "true";
 const isProductionRelease = easProfile === "production";
 const isPlayRelease = ["internal-staging", "shipping-integration", "production"].includes(easProfile);
-const isMobileUxReview = easProfile === "mobile-ux-review";
-const isIosSimulatorReview = easProfile === "ios-simulator";
+const isMobileUxReview = ["mobile-ux-review", "signal-review"].includes(easProfile);
+const isIosSimulatorReview = ["ios-simulator", "signal-ios-simulator"].includes(easProfile);
 const isAndroidRelease = isPlayRelease || isMobileUxReview;
-const isIosRelease = ["ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
+const isIosRelease = ["ios-simulator", "signal-ios-simulator", "ios-device", "ios-testflight"].includes(easProfile);
 const isRelease = isAndroidRelease || isIosRelease;
 // Match the native default theme before JavaScript restores a saved preference.
 const mobileTaskUxEnabled = env("EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX", "true") !== "false";
@@ -85,6 +85,8 @@ if (isRelease) {
   }
 }
 
+const signalEnabled = process.env.EXPO_PUBLIC_PACKPROOF_SIGNAL !== 'false';
+
 module.exports = {
   expo: {
     name: isResearch ? "PackProof Research" : isCameraSpike ? "PackProof Camera Test" : "PackProof",
@@ -96,13 +98,13 @@ module.exports = {
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     androidStatusBar: {
-      backgroundColor: mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
-      barStyle: mobileTaskUxEnabled ? "light-content" : "dark-content",
+      backgroundColor: signalEnabled ? "#F3F5F4" : mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
+      barStyle: signalEnabled ? "dark-content" : mobileTaskUxEnabled ? "light-content" : "dark-content",
       translucent: false,
     },
     androidNavigationBar: {
-      backgroundColor: mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
-      barStyle: mobileTaskUxEnabled ? "light-content" : "dark-content",
+      backgroundColor: signalEnabled ? "#F3F5F4" : mobileTaskUxEnabled ? "#141D2A" : "#E9EEF4",
+      barStyle: signalEnabled ? "dark-content" : mobileTaskUxEnabled ? "light-content" : "dark-content",
     },
     icon: "./assets/icon.png",
     scheme: isResearch ? "packproof-research" : isCameraSpike ? "packproof-camera-test" : ["packproof-v2", "packproof"],

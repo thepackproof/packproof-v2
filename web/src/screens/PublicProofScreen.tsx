@@ -1,3 +1,4 @@
+import {SIGNAL_ENABLED} from "../signal/Signal";
 import { useEffect, useState } from "react";
 import { ApiError } from "../api/types";
 import { withRequestTimeout } from "../api/timeout";
@@ -127,7 +128,7 @@ export function PublicProofScreen(props: {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${SIGNAL_ENABLED?" signal-shell":""}`}>
       <header className="topbar">
         <Brand />
       </header>

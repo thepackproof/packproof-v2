@@ -31,7 +31,8 @@
       "extends": "shipping-integration",
       "environment": "production",
       "env": {
-        "PACKPROOF_ANDROID_VERSION_CODE": "70",
+        "PACKPROOF_ANDROID_VERSION_CODE": "71",
+        "EXPO_PUBLIC_PACKPROOF_SIGNAL": "true",
         "EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST": "true",
         "EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION": "true",
         "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
@@ -108,6 +109,18 @@
         "EXPO_PUBLIC_PACKPROOF_RND": "true",
         "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "http://127.0.0.1:3000",
         "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "dev"
+      }
+    },
+    "signal-review": {
+      "extends": "mobile-ux-review",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_SIGNAL": "true"
+      }
+    },
+    "signal-ios-simulator": {
+      "extends": "ios-simulator",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_SIGNAL": "true"
       }
     }
   },

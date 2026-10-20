@@ -1,3 +1,6 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {signal,signalType} from "../theme/signal";
+import {StatusBar} from "expo-status-bar";
 import { StateTransition } from './motion';
 import { Coaching } from "../onboarding/Onboarding";
 import { registerRemoteCaptureStop } from "../capture/remote-control";
@@ -16,6 +19,9 @@ import { useEffect, useRef, useState } from "react";
 import { recordMobileUxEvent } from "../analytics/mobile-ux-events";
 import {
   AppState,
+  Pressable,
+  AccessibilityInfo,
+  findNodeHandle,
   Animated,
   Alert,
   Image,
@@ -136,7 +142,12 @@ function CameraSession({
   request: Request;
   onFinish: (result: LocalCapture | null) => void;
 }) {
-  const { colors, scheme, reducedMotion } = useTheme();
+  const theme=useTheme();
+  const {scheme,reducedMotion}=theme;
+  const colors=SIGNAL_ENABLED?{...theme.colors,background:signal.camera,textPrimary:"#FFFFFF",textSecondary:signal.cameraMuted}:theme.colors;
+  const [leaveOpen,setLeaveOpen]=useState(false);
+  const leaveHeading=useRef<Text>(null);
+  useEffect(()=>{if(leaveOpen){const frame=requestAnimationFrame(()=>{const target=findNodeHandle(leaveHeading.current);if(target)AccessibilityInfo.setAccessibilityFocus(target);});return()=>cancelAnimationFrame(frame);}},[leaveOpen]);
   const camera = useRef<CameraView>(null);
   const unifiedCamera = useRef<UnifiedCameraViewRef>(null);
   useEffect(() => {
@@ -365,7 +376,7 @@ function CameraSession({
               : !ready ? "Opening camera…" : "Camera ready · recording has no sound"}
           </Text> : null}
         </View></StateTransition>;
-  const preview = <View style={[styles.camera, ANDROID_TASK_FIRST_REBUILD ? styles.taskPreview : { height: Math.max(160, Math.min(300, viewport.height * 0.38)) }]}>
+  const preview = <View style={[styles.camera, SIGNAL_ENABLED ? {flex:1,minHeight:160,borderRadius:16,marginHorizontal:24} : ANDROID_TASK_FIRST_REBUILD ? styles.taskPreview : { height: Math.max(160, Math.min(300, viewport.height * 0.38)) }]}>
           {useUnified ? <UnifiedCameraView
             maxRecordingBytes={request.recordingLimits?.maxRecordingBytes}
             maxRecordingSeconds={request.recordingLimits?.maxRecordingSeconds}
@@ -477,9 +488,9 @@ function CameraSession({
     <Modal
       visible
       animationType={reducedMotion ? "none" : "slide"}
-      onRequestClose={() => recordingRef.current ? Alert.alert("Leave this recording?", "Finish to review this take, or cancel it as interrupted. An interrupted take is kept for recovery; a new recording starts a separate take.", [{text:"Keep recording",style:"cancel"},{text:"Finish and review",onPress:stop},{text:"Cancel take",style:"destructive",onPress:()=>{ interrupted.current = true; request.onRecordingInterrupted?.(); stop(); }}]) : saving ? undefined : onFinish(null)}
+      onRequestClose={()=>{if(leaveOpen)setLeaveOpen(false);else if(recordingRef.current)setLeaveOpen(true);else if(!saving)onFinish(null);}}
     >
-      {ANDROID_TASK_FIRST_REBUILD ? <View style={[styles.taskRoot, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      {SIGNAL_ENABLED ? <View style={{flex:1,backgroundColor:signal.camera,paddingTop:insets.top,paddingBottom:insets.bottom}}><StatusBar style="light"/><View style={{flex:1,gap:16}} accessibilityElementsHidden={leaveOpen} importantForAccessibility={leaveOpen?"no-hide-descendants":"auto"}><View style={{flexDirection:"row",alignItems:"center",gap:16,paddingHorizontal:24,paddingVertical:16}}><Pressable accessibilityRole="button" accessibilityLabel="Leave recording" disabled={saving} onPress={()=>recordingRef.current?setLeaveOpen(true):onFinish(null)} style={{width:48,height:48,alignItems:"center",justifyContent:"center"}}><Ionicons name="close" size={26} color="#FFFFFF"/></Pressable><View style={{flex:1,gap:4}}><Text style={[signalType.small,{color:"#FFFFFF"}]}>{request.orderLabel}</Text><Text style={[signalType.mono,{color:signal.cameraMuted}]}>{request.proofId}</Text></View></View><View style={{flexDirection:"row",justifyContent:"space-between",paddingHorizontal:24}}><Text style={[signalType.caption,{color:recording?signal.recording:signal.cameraMuted}]}>{recording?"● LIVE RECORDING":saving?"SAVING TAKE":"CAMERA READY"}</Text><Text style={[signalType.mono,{color:"#FFFFFF"}]}>{timerLabel}</Text></View>{preview}<ScrollView style={{flexGrow:0,maxHeight:viewport.height*.17}} contentContainerStyle={{paddingHorizontal:24,gap:8}}>{guidanceControls}{error&&<Text accessibilityRole="alert" style={[signalType.small,{color:signal.recording}]}>{error}</Text>}</ScrollView><View style={{alignItems:"center",padding:20,gap:12}}>{recording?<Pressable accessibilityRole="button" accessibilityLabel="Stop recording and review take" accessibilityState={{disabled:saving,busy:saving}} disabled={saving} onPress={stop} style={{width:80,height:80,borderRadius:40,borderColor:"#FFFFFF",borderWidth:5,alignItems:"center",justifyContent:"center"}}><View style={{width:24,height:24,backgroundColor:signal.recording,borderRadius:4}}/></Pressable>:recordingAction}<Text style={[signalType.caption,{color:signal.cameraMuted}]}>{recording?"Tap to finish your take":saving?"Keeping your original recording…":"Recording has no sound"}</Text></View></View>{leaveOpen&&<View style={[StyleSheet.absoluteFill,{justifyContent:"flex-end",backgroundColor:"#11191699"}]} accessibilityViewIsModal onAccessibilityEscape={()=>setLeaveOpen(false)}><Pressable style={StyleSheet.absoluteFill} accessible={false} onPress={()=>setLeaveOpen(false)}/><View style={{backgroundColor:theme.colors.surface,borderTopLeftRadius:24,borderTopRightRadius:24,padding:24,paddingBottom:Math.max(insets.bottom,24),gap:20}}><View style={{height:4,width:36,borderRadius:2,alignSelf:"center",backgroundColor:theme.colors.border}}/><Text ref={leaveHeading} accessibilityRole="header" style={[signalType.heading,{color:theme.colors.textPrimary}]}>Stop and save this take?</Text><Text style={[signalType.body,{color:theme.colors.textSecondary}]}>Leaving ends this recording. We’ll keep the footage captured so far on this device for you to review.</Text><Button label="Keep recording" onPress={()=>setLeaveOpen(false)}/><Button label="Stop and save take" variant="secondary" disabled={saving} onPress={()=>{setLeaveOpen(false);interrupted.current=true;request.onRecordingInterrupted?.();stop();}}/></View></View>}</View> : ANDROID_TASK_FIRST_REBUILD ? <View style={[styles.taskRoot, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView style={[styles.taskScrollable, { maxHeight: viewport.height * 0.2 }]}>{heading}</ScrollView>
         {preview}
         <ScrollView style={[styles.taskScrollable, { maxHeight: viewport.height * 0.22 }]} contentContainerStyle={styles.controls}>{guidanceControls}</ScrollView>

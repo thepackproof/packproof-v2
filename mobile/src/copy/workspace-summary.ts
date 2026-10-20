@@ -6,7 +6,8 @@ import { orderPresentation } from './orders';
 
 /** One retained recording can also be the active recording; count it only once. */
 export function workspaceRecordings(saved: LocalCapture[], current: LocalCapture | null): LocalCapture[] {
-  return [...new Map([...saved, ...(current ? [current] : [])].map(capture => [capture.uri, capture])).values()];
+  const unique=[...new Map([...saved, ...(current ? [current] : [])].map(capture => [capture.uri, capture])).values()];
+  return unique.filter(capture=>!capture.supersededBy && capture.replacement?.decision!=='kept-original' && !unique.some(candidate=>candidate.captureUserId===capture.captureUserId && candidate.captureProofId===capture.captureProofId && candidate.recovery?.apiBaseUrl===capture.recovery?.apiBaseUrl && candidate.replacement?.originalUri===capture.uri && candidate.replacement.decision!=='kept-original'));
 }
 
 export function pendingWorkspaceRecordings(saved: LocalCapture[], current: LocalCapture | null): number {

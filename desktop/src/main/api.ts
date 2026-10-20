@@ -1,3 +1,4 @@
+import type {SignalRecovery} from '../../../mobile/src/experience/signal/receipt';
 import {buildRndRequest,type RndOperationId,type RndInput,type RndOutput} from '../../../packages/evidence-contracts/generated-client.mjs';
 import type {RndCapabilities,RndSnapshot,Feature,ReviewerAnnotation,DerivativeGrant} from '../../../web/src/rnd/types';
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
@@ -110,6 +111,8 @@ export class DesktopApi {
   getOnboarding():Promise<OnboardingState>{return this.request('/me/onboarding');}
   studyRequest<T>(path:'/consent'|'/timings/start'|'/timings',method:'GET'|'POST',body?:unknown):Promise<T>{return this.request(`/study${path}`,{method,body});}
   updateOnboarding(action:Action):Promise<OnboardingState>{return this.request('/me/onboarding',{method:'POST',body:action});}
+  getThumbnail(proofId:string,derivativeId:string,signal?:AbortSignal):Promise<Response> { return this.response(`/proofs/${id(proofId)}/disclosure/thumbnails/${id(derivativeId)}/media`,{signal}); }
+  getRecovery(proofId:string,signal?:AbortSignal):Promise<SignalRecovery> { return this.request(`/proofs/${id(proofId)}/recovery`,{signal}); }
   getProof(proofId: string, signal?: AbortSignal): Promise<CanonicalProof> { return this.request(`/proofs/${id(proofId)}`, { signal }); }
   /** Transaction idempotency reopens the same canonical Proof after a lost response. */
   createProof(input: TransactionWriteInput, expectedUserId?:string): Promise<CanonicalProof> { if(expectedUserId)this.assertAccount(expectedUserId); return this.request('/proofs', { method: 'POST', body: { workflowType: 'COMMERCE_SALE', transaction: input } }); }

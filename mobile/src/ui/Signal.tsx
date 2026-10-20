@@ -1,0 +1,40 @@
+import {useSignalReceipt} from '../experience/signal/use-receipt';
+import type {ReactNode} from 'react';
+import {Image, StyleSheet, Text, View, type StyleProp, type TextStyle} from 'react-native';
+import {Ionicons} from '@expo/vector-icons';
+import {useTheme} from '../theme/ThemeProvider';
+import {signal,signalType} from '../theme/signal';
+import {PressableScale} from './motion';
+import {Button} from './Button';
+import {RecordThumbnail} from './RecordThumbnail';
+import {proofDisplayTitle} from '../copy/proof-title';
+import {presentationForProof} from '../copy/proof-list';
+import type {ProofCollectionItem} from '../v2-api';
+export function SignalText({children,kind='body',muted=false,style}:{children:ReactNode;kind?:keyof typeof signalType;muted?:boolean;style?:StyleProp<TextStyle>}){
+  const {colors}=useTheme();return <Text accessibilityRole={['display','title','heading'].includes(kind)?'header':undefined} style={[signalType[kind],{color:muted?colors.textSecondary:colors.textPrimary},style]}>{children}</Text>;
+}
+export function SignalSteps({step}:{step:1|2|3}){
+  const {colors}=useTheme();return <View style={s.steps} accessibilityLabel={`Step ${step} of 3: ${['Record','Review','Save'][step-1]}`}>{['Record','Review','Save'].map((label,i)=><View key={label} style={[s.step,{borderTopColor:i+1===step?colors.primary:i+1<step?colors.textPrimary:colors.border}]}><SignalText kind="caption" muted={i+1!==step}>{i+1<step?'✓':i+1} {label}</SignalText></View>)}</View>;
+}
+export function SignalParcel({sealed=false,height=184}:{sealed?:boolean;height?:number}){
+  return <View style={{height,overflow:'hidden',alignItems:'center',justifyContent:'center'}} accessible={false}><Image source={sealed?require('../../assets/signal/sealed.png'):require('../../assets/signal/parcel.png')} resizeMode="contain" style={{width:'100%',height:sealed?280:height}} /></View>;
+}
+export function SignalBadge({state='local',children}:{state?:'local'|'uploading'|'saved'|'attention';children:ReactNode}){
+  const {colors}=useTheme();const backgroundColor=state==='saved'?signal.mint:state==='uploading'?colors.accentSoft:colors.surfacePressed,color=state==='saved'?signal.mintInk:state==='uploading'?colors.accentText:colors.textSecondary;
+  return <View style={[s.badge,{backgroundColor}]}><Text style={[signalType.caption,{color}]}>●  {children}</Text></View>;
+}
+export function SignalRow({proof,onPress,disabled,detail}:{proof:ProofCollectionItem;onPress:()=>void;disabled?:boolean;detail?:string}){
+  const {colors}=useTheme();const state=presentationForProof(proof);const saved=useSignalReceipt(proof.proofId,proof.updatedAt,state.completed);const uploading=state.nextAction.type==='RESUME_UPLOAD'&&!state.needsAttention;
+  return <PressableScale accessibilityRole="button" accessibilityLabel={`${proofDisplayTitle(proof)}. ${detail||state.displayStatus}`} accessibilityState={{disabled}} disabled={disabled} onPress={onPress} style={[s.row,{borderBottomColor:colors.border}]}><RecordThumbnail proofId={proof.proofId} derivativeId={proof.thumbnailDerivativeId}/><View style={{flex:1,gap:8,minWidth:0}}><SignalText kind="strong">{proofDisplayTitle(proof)}</SignalText><SignalText kind="mono" muted>{proof.transaction.externalReference || proof.proofId}</SignalText><SignalBadge state={saved?'saved':uploading?'uploading':state.needsAttention?'attention':'local'}>{saved?'Saved to PackProof':state.completed?'Proof finalized':detail||state.displayStatus}</SignalBadge></View><Ionicons name="chevron-forward" size={20} color={colors.textSecondary}/></PressableScale>;
+}
+export function SignalGuide({onStart,busy,disabled}:{onStart:()=>void;busy?:boolean;disabled?:boolean}){
+  const {colors}=useTheme();return <View style={{gap:20}}><SignalText kind="title">From item{'\n'}to sealed box.</SignalText><SignalText muted>Keep the packing process in one continuous recording.</SignalText><SignalParcel height={212}/>{[['Show the item','Make its condition easy to see.'],['Pack it on camera','Keep the item and box in view.'],['Finish with the seal','Show the closed parcel before stopping.']].map(([title,body])=><View key={title} style={{flexDirection:'row',gap:20}}><Ionicons name="checkmark" color={colors.primary} size={24}/><View style={{flex:1,gap:4}}><SignalText kind="strong">{title}</SignalText><SignalText kind="small" muted>{body}</SignalText></View></View>)}<View style={{marginTop:20,gap:12}}><Button label="Start recording" icon="arrow-forward" loading={busy} disabled={disabled} onPress={onStart}/><SignalText kind="caption" muted style={{textAlign:'center'}}>Camera recording has no sound.</SignalText></View></View>;
+}
+export function SignalProgress({percent,confirming,paused=false}:{percent:number|null;confirming:boolean;paused?:boolean}){
+ const {colors}=useTheme();const value=percent==null?null:Math.min(100,Math.max(0,Math.round(percent)));
+ return <View style={{gap:24}}><SignalText kind="title">{paused?'Your take is safe.':confirming?'Confirming your Proof.':'Saving your Proof.'}</SignalText><SignalText muted>{paused?'Uploading is paused. Your recording stays on this device.':confirming?'Your recording reached the server. We’re checking the saved record.':'Your packing record is on its way.'}</SignalText><View style={{flexDirection:'row',alignItems:'flex-end',gap:24}}><SignalText kind="display" style={{fontSize:76,lineHeight:80}}>{paused||confirming||value==null?'…':`${value}%`}</SignalText><SignalText kind="mono" muted>{paused?'UPLOAD PAUSED':confirming?'CONFIRMING':'UPLOADING'}</SignalText></View><View accessibilityRole="progressbar" accessibilityLabel={paused?'Upload paused':confirming?'Waiting for server confirmation':'Recording upload'} accessibilityValue={value!==null&&!confirming?{min:0,max:100,now:value}:undefined} style={{height:6,backgroundColor:colors.border,borderRadius:3,overflow:'hidden'}}>{value!=null&&!confirming&&<View style={{height:6,width:`${value}%`,backgroundColor:colors.primary}}/>}</View>{[['Recording on this device','Original retained'],[paused?'Waiting to reconnect':confirming?'Recording transferred':'Uploading recording',value!==null&&!confirming?`${value}% complete`:'Your recording stays on this device.'],['Waiting for confirmation','We’ll confirm when the record is saved.']].map(([title,body],i)=><View key={i} style={{flexDirection:'row',gap:16}}><View style={{width:36,height:36,borderRadius:18,backgroundColor:colors.surfacePressed,alignItems:'center',justifyContent:'center'}}><SignalText kind="small">{i===0?'✓':i+1}</SignalText></View><View style={{flex:1,gap:4}}><SignalText kind="strong">{title}</SignalText><SignalText kind="small" muted>{body}</SignalText></View></View>)}</View>;
+}
+export function SignalReceipt({title,proofId,savedAt,duration,onView,onHome}:{title:string;proofId:string;savedAt:string;duration:string;onView:()=>void;onHome:()=>void}){
+ return <View style={{gap:24}}><View style={s.receipt}><SignalText kind="mono" style={s.mintText}>✓  SAVED TO PACKPROOF</SignalText><SignalText kind="receipt" style={s.mintText}>Proof{'\n'}saved.</SignalText><SignalParcel sealed height={140}/><View style={{borderTopWidth:1,borderColor:'#073D2E33',paddingTop:16,gap:12}}><SignalText kind="subheading" style={s.mintText}>{title}</SignalText><SignalText kind="mono" style={s.mintText}>{proofId}</SignalText><SignalText kind="small" style={s.mintText}>{duration} · Original recording</SignalText><SignalText kind="small" style={s.mintText}>{new Date(savedAt).toLocaleString()}</SignalText></View></View><SignalText muted>Your recording and packing confirmation are together in this Proof.</SignalText><Button label="View your Proof" icon="arrow-forward" onPress={onView}/><Button label="Back to Home" variant="tertiary" onPress={onHome}/></View>;
+}
+const s=StyleSheet.create({steps:{flexDirection:'row',gap:8,marginBottom:12},step:{flex:1,borderTopWidth:3,paddingTop:8},badge:{alignSelf:'flex-start',paddingHorizontal:8,paddingVertical:6,borderRadius:999},row:{flexDirection:'row',gap:16,paddingVertical:20,borderBottomWidth:1,alignItems:'center'},receipt:{backgroundColor:signal.mint,borderRadius:16,padding:20,gap:16},mintText:{color:signal.mintInk}});

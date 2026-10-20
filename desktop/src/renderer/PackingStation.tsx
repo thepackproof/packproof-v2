@@ -1,3 +1,5 @@
+import {SIGNAL_ENABLED,SignalSteps,SignalGuide,SignalBadge} from '../../../web/src/signal/Signal';
+import type {CaptureReview,UploadView} from '../shared/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserIdentifierDecoder } from '../../../web/src/capture/identifier-decoder';
 import type { CanonicalProof, DesktopSettings, Detection, FulfillmentQueueItem, CaptureAllowanceView } from '../shared/contracts';
@@ -7,12 +9,15 @@ import type {StudyApi,StationStudyTimer} from '../../../web/src/analytics/study-
 import {selectDesktopStudy,desktopStudyEvent,bindDesktopStudyJob} from './study';
 
 type Phase = 'ready'|'starting'|'recording'|'saving'|'review';
-export function PackingStation({proofId, orders, settings, chooseProof, onBusy, onSaved, onSettings,onCreate,onSelect,studyApi,userId,appVersion}: {
+export function PackingStation({proofId, orders, settings, chooseProof, onBusy, onSaved, onSettings,onCreate,onSelect,studyApi,userId,appVersion,reviewId,onHome,onQueued}: {
+  reviewId?:string|null;onHome?:()=>void;onQueued?:(job:UploadView)=>void;
   onCreate?:()=>void;onSelect?:()=>void;
   studyApi?:StudyApi|null;userId?:string;appVersion?:string;
   proofId:string|null;orders:FulfillmentQueueItem[];settings:DesktopSettings;
   chooseProof:(id:string)=>void;onBusy:(busy:boolean)=>void;onSaved:()=>void;onSettings:(settings:DesktopSettings)=>void;
 }) {
+  const [cameraEnabled,setCameraEnabled]=useState(!SIGNAL_ENABLED),[autoStart,setAutoStart]=useState(false),[review,setReview]=useState<CaptureReview|null>(null),[reviewPlayable,setReviewPlayable]=useState(false),[retake,setRetake]=useState(false),[leave,setLeave]=useState(false);
+  const replacementId=useRef<string|undefined>(undefined),leaveAfterStop=useRef(false);
   const [proof,setProof]=useState<CanonicalProof|null>(null);
   const [allowance,setAllowance]=useState<CaptureAllowanceView|null>(null);
   const [allowanceError,setAllowanceError]=useState('');
@@ -90,6 +95,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
 
   // Preview owns a single camera stream. Changes are disabled throughout recording and review.
   useEffect(()=>{
+    if(!cameraEnabled)return;
     let cancelled=false;
     const enumerate=async()=>{const list=await navigator.mediaDevices.enumerateDevices();if(!cancelled)setDevices(list);return list;};
     const open=async()=>{
@@ -122,7 +128,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
     const changed=()=>void enumerate().catch(()=>{});
     navigator.mediaDevices?.addEventListener('devicechange',changed);
     return()=>{cancelled=true;navigator.mediaDevices?.removeEventListener('devicechange',changed);stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;};
-  },[settings.cameraId,settings.microphoneId,settings.audio,settings.resolution,settings.frameRate,previewNonce]);
+  },[settings.cameraId,settings.microphoneId,settings.audio,settings.resolution,settings.frameRate,previewNonce,cameraEnabled]);
 
   useEffect(()=>{
     const unload=(event:BeforeUnloadEvent)=>{if(phaseRef.current!=='ready'){event.preventDefault();event.returnValue='';}};
@@ -179,7 +185,7 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
       const mimeType=['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'].find(type=>MediaRecorder.isTypeSupported(type));
       if(!mimeType)throw new Error('This camera cannot record a supported video format.');
       const camera=stream.current.getVideoTracks()[0]?.label||'Selected camera';
-      const native=await window.packproof.capture.begin({proofId:proof.proofId,label:proof.transaction.externalReference||proof.transaction.itemTitle||'Shipment recording',mimeType,camera,expectedTracking:expected||undefined});
+      const native=await window.packproof.capture.begin({replaceId:replacementId.current,proofId:proof.proofId,label:proof.transaction.externalReference||proof.transaction.itemTitle||'Shipment recording',mimeType,camera,expectedTracking:expected||undefined});
       captureId.current=native.id;limit.current={bytes:native.maxRecordingBytes,seconds:native.maxRecordingSeconds};
       if(studyApi&&userId)bindDesktopStudyJob(studyApi,userId,native.id,study.current);
       const mediaRecorder=new MediaRecorder(stream.current,{mimeType,videoBitsPerSecond:settings.resolution==='1080p'?5_000_000:3_000_000,audioBitsPerSecond:96_000});
@@ -200,9 +206,14 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
       mediaRecorder.onerror=()=>{void window.packproof.system.report?.('RECORDING_FAILED').catch(()=>{});stopRef.current('The camera encoder stopped unexpectedly. Any staged evidence has been preserved.');};
       mediaRecorder.onstop=()=>{
         void writeChain.current.then(async()=>{
-          if(interruption.current){await window.packproof.capture.interrupt(native.id,interruption.current);setError(interruption.current);captureId.current=null;updatePhase('ready');onSaved();}
+          if(SIGNAL_ENABLED){
+            if(interruption.current)await window.packproof.capture.interrupt(native.id,interruption.current);
+            else await window.packproof.capture.stage(native.id,{attestation:false,durationMs:Math.round(elapsedFinal.current),startedAt:captureStartedAt.current,endedAt:captureEndedAt.current,detections:detectionsRef.current.slice(0,500)});
+            setCameraEnabled(false);await loadReview(native.id);onSaved();
+            if(leaveAfterStop.current){leaveAfterStop.current=false;leaveToHome();}
+          }else if(interruption.current){await window.packproof.capture.interrupt(native.id,interruption.current);setError(interruption.current);captureId.current=null;updatePhase('ready');onSaved();}
           else{desktopStudyEvent(study.current,'review_opened');setElapsed(elapsedFinal.current);updatePhase('review');}
-        }).catch(reason=>{setError(errorMessage(reason));updatePhase('review');});
+        }).catch(async reason=>{if(SIGNAL_ENABLED){await window.packproof.capture.interrupt(native.id,'The recording needs recovery before submission.').catch(()=>{});setCameraEnabled(false);await loadReview(native.id).catch(()=>{});}setError(errorMessage(reason));updatePhase('review');});
       };
       started.current=performance.now();captureStartedAt.current=new Date().toISOString();captureEndedAt.current='';mediaRecorder.start(1000);desktopStudyEvent(study.current,'capture_started');void study.current?.then(timer=>timer?.phase('recording'));updatePhase('recording');suffixRef.current?.focus();
     }catch(reason){
@@ -216,9 +227,25 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
     desktopStudyEvent(study.current,'submission_authorized');setError('');updatePhase('saving');
     try {
       const reviewedDetections=detectionsRef.current.slice(0,500).map(detection=>({...detection,confirmed:confirmedLabel===detection.rawValue||undefined,notThisPackage:excludeOtherLabels&&confirmedLabel!==detection.rawValue&&appearsTracking(detection.rawValue)||undefined}));
-      await window.packproof.capture.finish(captureId.current,{detections:reviewedDetections,attestation:true,durationMs:Math.round(elapsedFinal.current),startedAt:captureStartedAt.current,endedAt:captureEndedAt.current});
-      desktopStudyEvent(study.current,'capture_saved');void study.current?.then(timer=>{timer?.phase('upload');timer?.event('upload_state_changed',{uploadState:'queued'});});captureId.current=null;updatePhase('ready');setSuccess('Evidence secured locally. Uploading in the background when a connection is available.');onSaved();
+      const submittedId=captureId.current;
+      await window.packproof.capture.finish(submittedId,{detections:reviewedDetections,attestation:true,durationMs:Math.round(elapsedFinal.current),startedAt:captureStartedAt.current,endedAt:captureEndedAt.current});
+      desktopStudyEvent(study.current,'capture_saved');void study.current?.then(timer=>{timer?.phase('upload');timer?.event('upload_state_changed',{uploadState:'queued'});});captureId.current=null;updatePhase('ready');setSuccess('Evidence secured locally. Uploading in the background when a connection is available.');onSaved();if(SIGNAL_ENABLED){onBusy(false);const job=(await window.packproof.uploads.list()).find(job=>job.id===submittedId);if(job)onQueued?.(job);}
     }catch(reason){setError(errorMessage(reason));updatePhase('review');}
+  }
+  function leaveToHome(){onBusy(false);onHome?.();}
+  async function loadReview(id:string){
+    const selected=await window.packproof.capture.preview(id);captureId.current=selected.id;setReview(selected);setReviewPlayable(false);setAttested(false);replacementId.current=undefined;
+    elapsedFinal.current=selected.recordedDurationMs||0;setElapsed(elapsedFinal.current);captureStartedAt.current=selected.metadata.startedAt;captureEndedAt.current=selected.metadata.endedAt||'';
+    detectionsRef.current=selected.metadata.detections.map(item=>({rawValue:item.value,format:item.format||'unknown',detectedAtMs:item.detectedAtMs,confirmed:item.confirmed,notThisPackage:item.notThisPackage}));setDetections(detectionsRef.current);interruption.current=selected.state==='INTERRUPTED'?selected.error||'The recording was interrupted.':'';updatePhase('review');
+  }
+  useEffect(()=>{if(SIGNAL_ENABLED&&reviewId)void loadReview(reviewId).catch(reason=>setError(errorMessage(reason)));},[reviewId]);
+  useEffect(()=>{if(autoStart&&cameraReady&&phase==='ready'&&allowance?.proofId===proof?.proofId){setAutoStart(false);void begin();}},[autoStart,cameraReady,phase,allowance,proof]);
+  useEffect(()=>{const requested=()=>{if(phaseRef.current==='recording')setLeave(true);else if(phaseRef.current==='review')leaveToHome();};window.addEventListener('signal-desktop-leave',requested);return()=>window.removeEventListener('signal-desktop-leave',requested);},[onHome]);
+  async function chooseTake(choice:'original'|'replacement'){
+    if(!review)return;setError('');try{const chosen=await window.packproof.capture.choose(review.id,choice);await loadReview(chosen.id);onSaved();}catch(reason){setError(errorMessage(reason));}
+  }
+  function startRetake(){
+    if(!review||review.replacement?.decision==='pending')return;replacementId.current=review.state==='REVIEW'?review.id:undefined;setRetake(false);setReview(null);setAttested(false);setError('');updatePhase('ready');setCameraEnabled(true);setAutoStart(true);
   }
   async function preserveInterrupted() {
     if(!captureId.current)return;
@@ -266,6 +293,20 @@ export function PackingStation({proofId, orders, settings, chooseProof, onBusy, 
     window.addEventListener('keydown',scan);return()=>window.removeEventListener('keydown',scan);
   },[settings.scannerSuffix,observe,chooseProof]);
   const canCapture=!!proof&&['READY_FOR_EVIDENCE','EVIDENCE_COMMITTED'].includes(proof.status)&&!proof.finalizedAt;
+
+  if(SIGNAL_ENABLED)return <div className={`signal-station ${phase==='recording'?'is-recording':''}`}>
+    <div className="signal-flow-top"><button className="icon-button" aria-label="Back to Home" disabled={phase==='starting'||phase==='saving'} onClick={()=>phase==='recording'?setLeave(true):leaveToHome()}><Icon name="close"/></button><span>{proof?.transaction.itemTitle||'Packing station'}</span><span className="signal-mono">{phase==='recording'?'CONTINUOUS RECORDING':'NEW PROOF'}</span></div>
+    {phase!=='recording'&&<SignalSteps step={phase==='review'?2:1}/>}
+    {error&&<ErrorNotice>{error}</ErrorNotice>}
+    <div className={`signal-camera-live${phase==='recording'?'':' signal-hidden'}`}><video ref={video} muted playsInline aria-label="Live packing camera"/><span className="signal-recording-label"><span className="record-dot"/> REC · {duration(elapsed)}</span><div className="signal-camera-bottom"><p>Keep the item, packing and seal in view.</p><button className="signal-stop" aria-label="Stop recording" disabled={phase!=='recording'} onClick={()=>stop()}><span/></button></div></div>
+    {phase==='ready'&&<div className="signal-station-ready"><section>{proof?<SignalGuide audio={settings.audio} busy={autoStart} disabled={!canCapture||allowance?.proofId!==proof.proofId||autoStart} onStart={()=>{setCameraEnabled(true);setAutoStart(true);setPreviewNonce(value=>value+1);}}/>:<><h1>What are you packing?</h1><p>Start a new Proof or choose an existing shipment.</p><button className="primary" onClick={onCreate}>Pack an item</button><button onClick={onSelect}>Select a Proof</button></>}{allowanceError&&<ErrorNotice>{allowanceError}</ErrorNotice>}{proof&&!allowance&&!allowanceError&&<p role="status">Checking recording allowance…</p>}{proof&&allowance?.reservation==='UNCONFIRMED'&&<p className="signal-note">You can record locally while offline. Reconnect to confirm submission eligibility.</p>}</section><aside><details open={!proof}><summary>Camera and shipment tools</summary><label>Camera<select disabled={busy} value={settings.cameraId} onChange={event=>void window.packproof.system.saveSettings({cameraId:event.target.value}).then(onSettings).catch(reason=>setError(errorMessage(reason)))}><option value="">System default</option>{devices.filter(device=>device.kind==='videoinput').map((device,index)=><option key={device.deviceId||index} value={device.deviceId}>{device.label||`Camera ${index+1}`}</option>)}</select></label><label>Resolution<select value={settings.resolution} onChange={event=>void window.packproof.system.saveSettings({resolution:event.target.value as DesktopSettings['resolution']}).then(onSettings)}><option value="1080p">1080p</option><option value="720p">720p</option></select></label><label>Audio<select value={settings.audio?'on':'off'} onChange={event=>void window.packproof.system.saveSettings({audio:event.target.value==='on'}).then(onSettings)}><option value="off">Off</option><option value="on">Microphone on</option></select></label>{settings.audio&&<label>Microphone<select value={settings.microphoneId} onChange={event=>void window.packproof.system.saveSettings({microphoneId:event.target.value}).then(onSettings)}><option value="">System default</option>{devices.filter(device=>device.kind==='audioinput').map((device,index)=><option key={device.deviceId||index} value={device.deviceId}>{device.label||`Microphone ${index+1}`}</option>)}</select></label>}<form onSubmit={event=>void resolve(event)}><label>Find a shipment<input placeholder="Scan or enter order / tracking" value={reference} onChange={event=>setReference(event.target.value)}/></label><button disabled={resolving||!reference.trim()}>Find shipment</button></form>{orders.slice(0,7).map(order=><button className="signal-order-option" key={order.proofId} onClick={()=>chooseProof(order.proofId)}>{order.itemSummary||order.externalReference||order.proofId}<Icon name="arrow"/></button>)}</details></aside></div>}
+    {['starting','saving'].includes(phase)&&<p role="status">{phase==='starting'?'Preparing your camera…':'Saving the original recording on this computer…'}</p>}
+    {phase==='review'&&!review&&<div className="signal-desktop-flow"><p>The recording needs recovery. Its local journal is retained.</p><button onClick={leaveToHome}>Return to Home</button></div>}{phase==='review'&&review&&<section className="signal-desktop-flow signal-review"><h1>{review.state==='INTERRUPTED'?'Your take is still here.':'Review your take.'}</h1><p>{review.state==='INTERRUPTED'?'This recording was interrupted. You can review it; a new continuous take is needed before submission.':'Check the recording before saving your Proof.'}</p>{review.byteSize>0?<video key={review.id} className="signal-original-video" src={review.url} controls playsInline onLoadedMetadata={event=>{const video=event.currentTarget;setReviewPlayable(video.videoWidth>0&&(Number.isFinite(video.duration)?video.duration>0:review.state==='REVIEW'));}} onError={()=>{setReviewPlayable(false);setError('This local recording could not play. The original is retained.');}}/>:<p>No playable bytes are available from this take. Keep the original recording or start a new take.</p>}<div className="signal-review-meta"><SignalBadge state="local">Saved on this computer</SignalBadge><span className="signal-mono">{duration(review.recordedDurationMs||0)}</span></div>{review.replacement?.decision==='pending'?<div className="signal-take-choice"><h2>Choose the take to keep.</h2><p>Both recordings remain on this computer until you choose.</p><button className="primary" disabled={review.state!=='REVIEW'||!reviewPlayable} onClick={()=>void chooseTake('replacement')}>Use new take</button><button onClick={()=>void chooseTake('original')}>Keep original take</button></div>:<><label className="check-field signal-declaration"><input type="checkbox" checked={attested} disabled={review.state!=='REVIEW'||!reviewPlayable} onChange={event=>setAttested(event.target.checked)}/><span>The item shown and attached in this Proof is the item I am shipping.</span></label><button className="primary" disabled={!attested||!reviewPlayable||review.state!=='REVIEW'} onClick={()=>void finish()}>Save to PackProof <Icon name="arrow"/></button><button className="text-button" onClick={()=>setRetake(true)}>Record another take</button><button className="text-button" onClick={leaveToHome}>Continue later</button></>}{detectionsRef.current.length>0&&<details><summary>Review detected shipping labels</summary><label>Label on this package<select value={confirmedLabel} onChange={event=>setConfirmedLabel(event.target.value)}><option value="">No label confirmed</option>{[...new Set(detectionsRef.current.map(item=>item.rawValue))].map(value=><option key={value}>{value}</option>)}</select></label><label className="check-field"><input type="checkbox" checked={excludeOtherLabels} onChange={event=>setExcludeOtherLabels(event.target.checked)}/><span>The other detected shipping labels do not belong to this package.</span></label></details>}</section>}
+    {mismatch&&<div className="notice warning">The detected label {mismatch} differs from {expected}. Check this shipment before submitting.</div>}
+    {phase==='recording'&&recognitionError&&<p className="signal-note">{recognitionError}</p>}
+    {leave&&<Modal title="Leave this recording?" close={()=>setLeave(false)}><p>Stop recording to keep this take on this computer. An interrupted take cannot be submitted as a complete packing record.</p><div className="signal-sheet-actions"><button className="primary" onClick={()=>setLeave(false)}>Keep recording</button><button onClick={()=>{setLeave(false);leaveAfterStop.current=true;stop('Recording stopped before completion. The local original is retained.');}}>Stop and save on this computer</button></div></Modal>}
+    {retake&&<Modal title="Record another take?" close={()=>setRetake(false)}><p>Your current take stays on this computer while you record again. You’ll choose which complete take to keep.</p><div className="signal-sheet-actions"><button className="primary" onClick={startRetake}>Record new take</button><button onClick={()=>setRetake(false)}>Keep this take</button></div></Modal>}
+  </div>;
 
   return <>
     {error&&<ErrorNotice>{error}</ErrorNotice>}

@@ -30,7 +30,7 @@ function transport() {
     }),
     completeUpload: vi.fn(async () => { const bytes = Buffer.concat([...data.entries()].sort((a, b) => a[0] - b[0]).map(entry => entry[1])); return { sha256: hash(bytes), byteSize: bytes.length }; }),
     commitUpload: vi.fn(async () => { committed = true; return expected!; }),
-    attestAndFinalize: vi.fn(async () => undefined),
+    attestAndFinalize: vi.fn(async () => ({durable:true})),
     discardUpload: vi.fn(async () => undefined),
   } satisfies EvidenceTransport;
   return { api, parts, data, get expected() { return expected; }, setCommitted(value: boolean) { committed = value; } };
@@ -265,4 +265,43 @@ describe('durable native evidence queue', () => {
     expect(engine.list()[0]?.error).toContain('desktop recording update');
     expect(remote.api.uploadPart).not.toHaveBeenCalled();
   });
+});
+
+describe('SIGNAL retained take selection',()=>{
+  it('keeps both encrypted originals across restart and requires an explicit choice before upload',async()=>{
+    const {engine,newEngine,remote,store}=await setup();
+    const original=await engine.beginCapture(input);await engine.appendChunk(original.id,0,Buffer.from('original take'));
+    await engine.stageCapture(original.id,{attestation:false,recordedDurationMs:5000});
+    expect(engine.activeCapture).toBe(false);await engine.processQueue();expect(remote.api.registerCapture).not.toHaveBeenCalled();
+    const candidate=await engine.beginCapture({...input,replaceId:original.id});await engine.appendChunk(candidate.id,0,Buffer.from('replacement take'));
+    await engine.stageCapture(candidate.id,{attestation:false,recordedDurationMs:4000});
+    await expect(engine.finishCapture(candidate.id,{attestation:true,recordedDurationMs:4000})).rejects.toMatchObject({code:'TAKE_SELECTION_REQUIRED'});
+    await expect(engine.retry(candidate.id)).rejects.toMatchObject({code:'RETRY_UNAVAILABLE'});
+    const restored=newEngine();await restored.initialize();await restored.setAccount('user_A');
+    expect(restored.reviewCapture(candidate.id).replacement?.decision).toBe('pending');
+    const selected=await restored.chooseTake(candidate.id,'replacement');expect(selected.id).toBe(candidate.id);
+    expect(restored.list().map(row=>row.id)).toEqual([candidate.id]);
+    expect(await store.readChunk('user_A',original.id,0)).toEqual(Buffer.from('original take'));
+    expect(await store.readChunk('user_A',candidate.id,0)).toEqual(Buffer.from('replacement take'));
+    await expect(restored.finishCapture(original.id,{attestation:true,recordedDurationMs:5000})).rejects.toMatchObject({code:'TAKE_SELECTION_REQUIRED'});
+    await restored.finishCapture(candidate.id,{attestation:true,recordedDurationMs:4000});expect(restored.list()[0].state).toBe('LOCAL');
+  });
+  it('allows the original after an interrupted retake and streams only scoped original bytes',async()=>{
+    const {engine,newEngine,store}=await setup();const original=await engine.beginCapture(input);
+    await engine.appendChunk(original.id,0,Buffer.from('12345'));await engine.appendChunk(original.id,1,Buffer.from('67890'));
+    await engine.stageCapture(original.id,{attestation:false,recordedDurationMs:5000});
+    const candidate=await engine.beginCapture({...input,replaceId:original.id});await engine.appendChunk(candidate.id,0,Buffer.from('partial'));
+    await engine.interruptCapture(candidate.id,'Interrupted retake');
+    await expect(engine.chooseTake(candidate.id,'replacement')).rejects.toMatchObject({code:'INCOMPLETE_REPLACEMENT'});
+    const chosen=await engine.chooseTake(candidate.id,'original');expect(chosen.id).toBe(original.id);
+    const restored=newEngine();await restored.initialize();await restored.setAccount('user_A');expect(restored.list().map(row=>row.id)).toEqual([original.id]);
+    const range=restored.localRecording(original.id,'bytes=2-7');const chunks=[];for await(const chunk of range.bytes)chunks.push(Buffer.from(chunk));expect(Buffer.concat(chunks).toString()).toBe('345678');
+    expect(()=>restored.localRecording(original.id,'bytes=20-')).toThrow();
+    expect(await store.readChunk('user_A',candidate.id,0)).toEqual(Buffer.from('partial'));
+    const stale=restored.localRecording(original.id);await restored.setAccount('user_B');await expect(stale.bytes.next()).rejects.toThrow();expect(()=>restored.reviewCapture(original.id)).toThrow();
+  });
+});
+
+it('SIGNAL retains compatible-server submissions until durable receipts are confirmed',async()=>{
+ const {engine,remote,store,advance}=await setup();remote.api.attestAndFinalize.mockResolvedValueOnce({durable:false});const capture=await staged(engine);engine.setRetentionHours(0);await engine.processQueue();expect(engine.list()[0].state).toBe('SUBMITTED');await engine.cleanup();expect(await store.readChunk('user_A',capture.id,0)).toBeTruthy();advance(300_001);await engine.processQueue();expect(engine.list()[0].state).toBe('COMPLETE');expect(engine.list()[0].localCopyAvailable).toBe(false);
 });

@@ -1,3 +1,5 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {signalType} from "../theme/signal";
 import type { ReactNode, RefObject } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,6 +41,7 @@ export function Button(props: {
       style={[
         styles.base,
         ANDROID_TASK_FIRST_REBUILD && styles.taskFirst,
+        SIGNAL_ENABLED && {minHeight:variant==='tertiary'?48:56,borderRadius:12},
         {
           backgroundColor: palette.background,
           borderWidth: palette.borderWidth,
@@ -52,7 +55,7 @@ export function Button(props: {
       ) : (
         <View style={styles.labelRow}>
           {props.loading ? <ActivityIndicator color={colors.disabledText} /> : props.icon ? <Ionicons name={props.icon} size={18} color={disabled ? colors.disabledText : palette.foreground} /> : null}
-          <Text style={[styles.label, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.button, { color: disabled ? colors.disabledText : palette.foreground }]}>{props.label}</Text>
+          <Text style={[styles.label, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.button, SIGNAL_ENABLED && signalType.strong, { color: disabled ? colors.disabledText : palette.foreground }]}>{props.label}</Text>
         </View>
       )}
     </PressableScale>
