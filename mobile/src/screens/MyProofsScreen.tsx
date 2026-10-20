@@ -1,3 +1,5 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {SignalRow} from "../ui/Signal";
 import { ANDROID_TASK_FIRST_REBUILD } from '../experience/android-task-first';
 import { proofDisplayTitle } from '../copy/proof-title';
 import { selectRecoveryWorkspace } from '../experience/recovery-workspace';
@@ -35,7 +37,7 @@ export function MyProofsScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
   const [filterOpen, setFilterOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(Boolean(app.proofsLibrary.query));
+  const [searchOpen, setSearchOpen] = useState(SIGNAL_ENABLED || Boolean(app.proofsLibrary.query));
   const [preparedProofIds, setPreparedProofIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(!app.proofCollection.length);
   const [snapshot, setSnapshot] = useState<{ rows: ProofCollectionItem[]; invites: InvitationInboxView[] }>({ rows:app.proofCollection, invites:app.pendingInvites });
@@ -96,16 +98,16 @@ export function MyProofsScreen() {
   const noMatches = Boolean(library.query.trim() || library.role !== 'all' || library.carrier);
   const emptyTitle = noMatches ? 'No search matches' : library.view === 'attention' ? 'Nothing needs your attention' : library.view === 'completed' ? 'No completed Proofs yet' : ANDROID_TASK_FIRST_REBUILD && library.view === 'progress' ? 'No Proofs in progress' : ANDROID_TASK_FIRST_REBUILD ? 'Your first Proof starts here' : 'No Proofs yet';
   const filterTabs = (<View style={[styles.tabs, {flexWrap:'wrap'}]} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
-      {([{id:'all',label:'All'},{id:'attention',label:'Needs action'},{id:'completed',label:'Completed'}] as const).map(option => <PressableScale key={option.id} onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{selected:library.view===option.id}} style={[styles.tab,{backgroundColor:library.view===option.id?colors.accentSoft:'transparent'}]}><Text style={[styles.tabText,{color:library.view===option.id?colors.accentText:colors.textSecondary}]}>{option.label}</Text></PressableScale>)}
+      {([{id:'all',label:'All'},{id:'progress',label:'In progress'},{id:'completed',label:SIGNAL_ENABLED?'Saved':'Completed'}] as const).map(option => <PressableScale key={option.id} onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{selected:library.view===option.id}} style={[styles.tab,{backgroundColor:library.view===option.id?(SIGNAL_ENABLED?colors.textPrimary:colors.accentSoft):colors.surfacePressed,borderRadius:999,paddingHorizontal:20,minHeight:48}]}><Text style={[styles.tabText,{color:library.view===option.id?(SIGNAL_ENABLED?colors.background:colors.accentText):colors.textSecondary}]}>{option.label}</Text></PressableScale>)}
       <Button label="More" variant="tertiary" onPress={() => setFilterOpen(true)} />
     </View>);
   const searchControl = (<View style={styles.searchRow}>
-      <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.inputBackground}]}><Ionicons name="search-outline" size={18} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search order, item, tracking…" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
+      <View style={[styles.search,{borderColor:colors.controlBorder,backgroundColor:colors.inputBackground}]}><Ionicons name="search-outline" size={18} color={colors.textSecondary}/><TextInput value={library.query} onChangeText={app.setProofsQuery} placeholder="Search by item or Proof ID" placeholderTextColor={colors.textSecondary} accessibilityLabel="Search Proofs" autoCapitalize="none" autoCorrect={false} style={[styles.input,{color:colors.textPrimary}]}/></View>
       <PressableScale onPress={() => setFilterOpen(true)} accessibilityRole="button" accessibilityLabel="Filters" style={[styles.filter,{borderColor:colors.controlBorder}]}><Ionicons name="options-outline" size={22} color={colors.textPrimary}/></PressableScale>
     </View>);
   return <AppScreen key={app.session?.userId} bottomInset={!MOBILE_TASK_UX_ENABLED} restorationReady={!loading} resetScrollKey={filterKey} onRefresh={() => void refresh()} refreshing={app.busy} initialOffsetY={app.readProofsScrollOffset()} onScrollOffset={app.setProofsScrollOffset}>
     <WorkspaceHeader section="Proofs" />
-    <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color:colors.textPrimary }]}>Proofs</Text></View>{!ANDROID_TASK_FIRST_REBUILD ? <TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}</View>
+    <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color:colors.textPrimary }]}>{SIGNAL_ENABLED?"Your Proofs":"Proofs"}</Text></View>{!ANDROID_TASK_FIRST_REBUILD ? <TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}</View>
     {ANDROID_TASK_FIRST_REBUILD ? <Text style={[taskFirstTypography.body, {color:colors.textSecondary}]}>Your records, all in one place.</Text> : null}
     {!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Shipment evidence, organized and ready to review.</Text> : null}
     <View style={[styles.libraryPanel,{backgroundColor:colors.background,borderColor:colors.border}]}>
@@ -121,10 +123,7 @@ export function MyProofsScreen() {
     {showPrepared ? <ReadyOrders onPreparedProofsChange={setPreparedProofIds} /> : null}
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
-    {libraryRows.map((item, index) => <TutorialTarget key={item.proofId} name={index===0?'proofs':''}><CompactProofRow
-      title={ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle(item) : item.transaction.itemTitle || 'Shipment Proof'}
-      detail={proofListDetail(item.presentation.displayStatus, item.presentation.nextAction.label)}
-      completed={item.presentation.completed} disabled={app.busy} onPress={() => void open(item, MOBILE_TASK_UX_ENABLED)} /></TutorialTarget>)}
+    {libraryRows.map((item, index) => <TutorialTarget key={item.proofId} name={index===0?'proofs':''}><SignalProofRow item={item} disabled={app.busy} onPress={()=>void open(item,MOBILE_TASK_UX_ENABLED)}/></TutorialTarget>)}
     {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : ANDROID_TASK_FIRST_REBUILD && library.view === 'progress' ? 'Other records are still available in All.' : ANDROID_TASK_FIRST_REBUILD ? 'Create a record of how you pack your item. No selling account connection needed.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : ANDROID_TASK_FIRST_REBUILD ? 'Create Proof' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : library.view === 'all' && ANDROID_TASK_FIRST_REBUILD ? () => app.selectCreateProof() : () => app.setProofsView('all')} /></TutorialTarget> : null}
     </View>
     </View>
@@ -139,7 +138,7 @@ export function MyProofsScreen() {
 const styles = StyleSheet.create({
   recordHeading:{flexDirection:'row',gap:12,alignItems:'center'},shipmentLine:{flexDirection:'row',gap:7,alignItems:'center'},
   heading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:12},headingCopy:{gap:5},pageTitle:{...typography.pageTitle,fontSize:29,lineHeight:36},
-  mobileTitle:{fontSize:24,lineHeight:31},
+  mobileTitle:{fontSize:SIGNAL_ENABLED?36:24,lineHeight:SIGNAL_ENABLED?40:31},
   eyebrow:{...typography.finePrint,fontFamily:'Inter-SemiBold',fontSize:10,lineHeight:15,letterSpacing:1.15},subtitle:{...typography.secondary,fontSize:14,marginTop:-8},
   libraryPanel:{gap:8},toolbar:{gap:12},
   tabs:{flexDirection:'row',gap:3},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:6,justifyContent:'center'},tabText:{...typography.secondaryStrong,fontSize:13,lineHeight:19},
@@ -147,3 +146,5 @@ const styles = StyleSheet.create({
   tableHeading:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,paddingHorizontal:16,paddingVertical:10,borderTopWidth:1,borderBottomWidth:1},columnLabel:{...typography.finePrint,fontSize:12,lineHeight:18,letterSpacing:.35},listBody:{gap:0},
   row:{padding:16,borderBottomWidth:1,gap:9},rowCopy:{gap:9,minHeight:48},rowTitle:{...typography.bodyStrong,fontSize:15,lineHeight:22},meta:{...typography.secondary,fontSize:12,lineHeight:18},status:{...typography.secondaryStrong},
 });
+
+function SignalProofRow({item,disabled,onPress}:{item:PresentedProof;disabled:boolean;onPress:()=>void}){return SIGNAL_ENABLED?<SignalRow proof={item} disabled={disabled} onPress={onPress}/>:<CompactProofRow title={proofDisplayTitle(item)} detail={proofListDetail(item.presentation.displayStatus,item.presentation.nextAction.label)} completed={item.presentation.completed} disabled={disabled} onPress={onPress}/>;}

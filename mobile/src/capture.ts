@@ -35,6 +35,8 @@ import {
 const LOCAL_CAPTURE_NAME = "packproof-seller-evidence.mp4";
 
 export interface LocalCapture {
+  replacement?: {originalUri:string;originalSessionId?:string;decision:"pending"|"accepted"|"kept-original"};
+  supersededBy?: string;
   researchNotice?: string;
   research?: ResearchCaptureState;
   localFileAvailable?: boolean;

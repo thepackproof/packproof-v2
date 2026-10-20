@@ -1,0 +1,76 @@
+name: SIGNAL review builds
+on:
+  push:
+    branches: [feat/signal-ui]
+    paths: ['web/**', 'mobile/**', 'desktop/**', '.github/workflows/signal-review-builds.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: signal-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  web:
+    name: Web production bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            mobile/package-lock.json
+            backend/package-lock.json
+      - run: npm ci --prefix mobile
+      - run: npm ci --prefix web
+      - run: npm ci --prefix backend
+      - name: Focused receipt and retained-take checks
+        run: |
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test mobile/tests/signal-receipt.test.ts mobile/tests/recording-review.test.ts
+          cd web
+          npx vitest run src/tests/signal-retake.test.ts
+      - run: npm run build --prefix web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signal-web-${{ github.sha }}
+          path: web/dist
+          retention-days: 14
+  android:
+    name: Android review APK
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci --prefix mobile
+      - run: npm run typecheck --prefix mobile
+      - name: Compile review APK with source provenance
+        env:
+          EXPO_PUBLIC_PACKPROOF_SIGNAL: 'true'
+        run: |
+          sdkmanager 'build-tools;36.0.0' 'platforms;android-36'
+          node mobile/scripts/build-local-review.cjs --expected-sha "${{ github.sha }}" --out "$RUNNER_TEMP/signal-android" --workers 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: signal-android-${{ github.sha }}
+          path: ${{ runner.temp }}/signal-android
+          if-no-files-found: warn
+          retention-days: 14

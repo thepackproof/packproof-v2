@@ -1,9 +1,9 @@
-export type ProofListView = "all" | "attention" | "completed";
+export type ProofListView = "all" | "attention" | "progress" | "completed";
 export type ProofListState = { view: ProofListView; query: string };
 const key = (scope: string) => `packproof.view.${scope}.proof-list`;
 export function readProofListState(url: URL): ProofListState {
   const filter = url.searchParams.get("filter");
-  return { view: filter === "all" || filter === "completed" ? filter : "attention", query: url.searchParams.get("q") || "" };
+  return { view: filter === "all" || filter === "completed" || filter === "progress" || filter === "attention" ? filter : "all", query: url.searchParams.get("q") || "" };
 }
 export function rememberProofListState(scope: string, state: ProofListState) {
   try { sessionStorage.setItem(key(scope), JSON.stringify(state)); } catch { /* Navigation works without storage. */ }
@@ -42,7 +42,7 @@ export function canonicalWorkspacePath(href: string, scope?: string): string {
   if (url.pathname === "/proofs" && scope && !url.search && href !== "/proofs?filter=all") {
     try {
       const saved = JSON.parse(sessionStorage.getItem(key(scope)) || "null") as ProofListState | null;
-      if (saved && ["all", "attention", "completed"].includes(saved.view)) url.searchParams.set("filter", saved.view);
+      if (saved && ["all", "attention", "progress", "completed"].includes(saved.view)) url.searchParams.set("filter", saved.view);
       // Search belongs to its history entry. Only the filter is a remembered default.
     } catch { /* The first visit defaults to Needs attention. */ }
   }

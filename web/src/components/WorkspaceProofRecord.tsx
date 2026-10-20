@@ -1,3 +1,6 @@
+import {SIGNAL_ENABLED,SignalBadge} from "../signal/Signal";
+import {hasSignalReceipt} from "../../../mobile/src/experience/signal/receipt";
+import {isGradingWorkflow} from "@packproof/copy/custody";
 import { ProofNotificationMute } from "./NotificationCenter";
 import { TrackingIntake } from "./TrackingIntake";
 import { proofReference, packingRecordLabel, shipmentRecordLabel } from "../../../mobile/src/copy/evidence-record";
@@ -56,6 +59,9 @@ export function WorkspaceProofRecord(props: {
   nextAction?: ReactNode;
 }) {
   const { proof } = props;
+  const [signalDetails,setSignalDetails]=useState(false),[savedSignal,setSavedSignal]=useState<string|null>(null);
+  const signalOwner=`${props.api?.recoveryScope}:${props.currentUserId}:${proof.proofId}:${proof.version}`;
+  useEffect(()=>{let active=true;setSavedSignal(null);if(props.api)void props.api.getRecoveryStatus(proof.proofId).then(recovery=>{if(active&&proof.evidence.some(item=>hasSignalReceipt(proof,recovery,{proofId:proof.proofId,evidenceId:item.evidenceId})))setSavedSignal(signalOwner);}).catch(()=>{});return()=>{active=false;};},[props.api,signalOwner]);
   const scope = `${props.api?.recoveryScope || location.origin}.${props.currentUserId}.${proof.proofId}`;
   const [savedTab, setTab] = useViewState<RecordTab>(`proof.${scope}.recordTab`, "Recording");
   const tab = tabs.includes(savedTab) ? savedTab : "Recording";
@@ -72,7 +78,9 @@ export function WorkspaceProofRecord(props: {
     button?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }
 
+  if(SIGNAL_ENABLED&&!isGradingWorkflow(proof.workflowType)&&!signalDetails)return <article ref={record} className="signal-record-summary"><SignalBadge state={savedSignal===signalOwner?'saved':'local'}>{savedSignal===signalOwner?'Saved to PackProof':proof.status==='FINALIZED'?'Recording received':props.presentation?.displayStatus||'In progress'}</SignalBadge><p className="signal-mono">{reference||proof.proofId}</p><h1>{title}</h1><p>{[proof.transaction.itemDescription,formatWhen(proof.createdAt)].filter(Boolean).join(' · ')}</p>{props.nextAction}{props.api&&<UploadRecoveryCards api={props.api} userId={props.currentUserId} proof={proof} onReview={props.onOpenStation} onStage={props.onOpenReceipt}/>}<RecordEvidence key={scope} scope={scope} proof={proof} api={props.api} load={props.loadEvidence}/>{props.onReviewSharing&&<button className="btn" onClick={props.onReviewSharing}>Share Proof <span aria-hidden="true">↗</span></button>}<button className="btn btn-secondary" onClick={()=>setSignalDetails(true)}>Recording history and details</button><p className="signal-mono">{proof.proofId}</p></article>;
   return <article ref={record} className="workspace-proof-record" aria-label="Proof record" data-context-anchor={`proof-record-${proof.proofId}`}>
+    {SIGNAL_ENABLED&&<button className="btn btn-tertiary" onClick={()=>setSignalDetails(false)}>Back to your Proof</button>}
     <header className="record-top">
       <div><h2>{title}</h2>{reference && <p>{reference}</p>}<details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p><p>{proof.transaction.provenance ? `From ${providerDisplay(proof.transaction.provenance.provider)}. Imported order details are read-only.` : "Order details supplied by a participant."}</p>{proof.transaction.provenance?.importedAt && <p>Imported {formatWhen(proof.transaction.provenance.importedAt)}</p>}</details></div>
       <span className={`record-seal ${proof.status === "FINALIZED" ? "is-sealed" : ""}`}><Glyph name={proof.status === "FINALIZED" ? "shield" : "file"} size={18}/>{packingRecordLabel(proof.status)}</span>

@@ -3,10 +3,10 @@ import { Image, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePackProof } from '../app/PackProofProvider';
 import { useTheme } from '../theme/ThemeProvider';
-export function RecordThumbnail({ proofId, derivativeId }: { proofId: string; derivativeId?: string | null }) {
+export function RecordThumbnail({ proofId, derivativeId,large=false }: { proofId: string; derivativeId?: string | null;large?:boolean }) {
   const app=usePackProof(), {colors}=useTheme();
   const [failed,setFailed]=useState(false);
-  return <View style={[styles.frame,{backgroundColor:colors.surfaceElevated}]} accessibilityLabel={derivativeId&&!failed?'Preview from the packing recording':'Recording preview unavailable'}>
+  return <View style={[styles.frame,large&&{width:"100%",height:152,borderRadius:16},{backgroundColor:colors.surfaceElevated}]} accessibilityLabel={derivativeId&&!failed?'Preview from the packing recording':'Recording preview unavailable'}>
     {derivativeId&&!failed ? <Image source={{uri:app.client.thumbnailUrl(proofId,derivativeId),headers:app.client.authorizedDownloadHeaders()}} style={styles.image} onError={()=>setFailed(true)} /> : <Ionicons name="videocam-outline" size={26} color={colors.textSecondary}/>}
     <View style={styles.play}><Ionicons name="play" size={10} color="#FFFFFF"/></View>
   </View>;

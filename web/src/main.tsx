@@ -38,3 +38,5 @@ if (canonicalPath === "/delete-account") {
   );
 }
 import "./workspace/workstation.css";
+
+import './signal/signal.css';

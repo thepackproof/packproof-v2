@@ -1,3 +1,4 @@
+import {SignalSubmissionScreen} from "../screens/SignalSubmissionScreen";
 import { OnboardingRoot } from "../onboarding/Onboarding";
 import { SharedOrderScreen } from "../intake/SharedOrderScreen";
 import { canNavigateForIntake } from "../intake/submissions";
@@ -296,6 +297,7 @@ function RootContent() {
       {app.route.name === "event" ? <EventDetailScreen /> : null}
     </View>;
   } else if (app.route.name === "receipt" && app.receiptProofId) body = <CommerceReceiptScreen key={app.receiptProofId} />;
+  else if (app.route.name === "submission") body = <SignalSubmissionScreen />;
   else if (app.route.name === "capture") body = <CaptureScreen />;
   else if (app.route.name === "scan") body = <ScanScreen />;
   else if (app.route.name === "review") body = <PurchaseReviewScreen />;

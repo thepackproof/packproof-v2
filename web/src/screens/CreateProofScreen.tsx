@@ -1,3 +1,4 @@
+import { SignalSteps } from '../signal/Signal';
 import { useEffect, useState, type ReactNode } from "react";
 import { readDraft, saveDraft, pendingCreationRequest, sameCreationRequest } from "../first-experience/state";
 import type { IntakePreview } from "@packproof/copy/order-intake";
@@ -51,7 +52,7 @@ export function CreateProofScreen(props: {
   const request:TransactionWriteInput={itemTitle:title.trim(),externalReference:reference.trim()||null,itemDescription:description.trim()||null,currency:currency.trim()||null,quantity:quantity?Number(quantity):null,transactionValue:amount?Number(amount):null,shipping:{carrier:carrier.trim()||null,trackingNumber:tracking.trim()||null},...(intake?{metadata:{intake:{...intake.draft.metadata.intake,confirmed:true}}}:{})};
   const pendingRequest=pendingCreationRequest(props.draftKey);
   const changedPending=!!pendingRequest&&!sameCreationRequest(pendingRequest,request);
-  return <main className="page narrow-page"><PageHeader title="Record shipment" onBack={props.onCancel} />
+  return <main className="page narrow-page signal-create"><PageHeader title="New Proof" onBack={props.onCancel} /><SignalSteps step={1}/><p className="signal-mono">LET’S START WITH THE ITEM.</p><h1>What are you<br/>packing?</h1><p>Use a name you’ll recognize later.</p>
     {!online && <p className="banner" role="status">Connect before opening the camera. {props.draftKey && draftSaved ? "Your draft is saved in this browser for this account." : "Keep this form open to retain your entered details."}</p>}
     {!draftSaved && <p className="banner" role="status">This browser could not save your draft. Keep this form open; your details may need to be entered again after closing it.</p>}
     {props.initialReference && <p className="note">Shipment reference: {props.initialReference}. Check the optional details before opening the camera.</p>}
@@ -60,11 +61,11 @@ export function CreateProofScreen(props: {
     {changedPending&&<section className="banner" aria-label="Pending creation recovery"><p>A creation request for <strong>{pendingRequest?.itemTitle||'this shipment'}</strong> may already have been saved. Changes in this form have not been sent.</p><button type="button" className="btn btn-secondary" disabled={props.busy||!online} onClick={()=>{if(pendingRequest)props.onCreate(pendingRequest);}}>Recover submitted draft</button><p>This resumes the original details so the same shipment does not get another Proof.</p></section>}
     {paste && props.onPreviewIntake ? (props.renderIntakePanel ? props.renderIntakePanel(reviewIntake) : <IntakePanel onPreview={props.onPreviewIntake} onReview={reviewIntake} />) : null}
     <form className="stack" onSubmit={e => { e.preventDefault(); if(!changedPending)props.onCreate(request); }}>
-      <label className="field"><span>What are you shipping?</span><input required maxLength={200} value={title} onChange={e => setTitle(e.target.value)} autoFocus /></label>
-      <p>Show the shipping label during your packing video. PackProof will try to read it for you.</p>
+      <label className="field"><span>Item name</span><input className="signal-item-name" required maxLength={200} value={title} onChange={e => setTitle(e.target.value)} autoFocus /></label>
+
       {intake ? <div className="note"><p>These details came from text you provided. Check them before recording.</p>{intake.warnings.map((warning,index)=><p key={index}>{warning}</p>)}<button className="btn btn-tertiary" type="button" onClick={()=>{setIntake(null);setTitle("");setReference("");setDescription("");setCurrency("USD");setQuantity("1");setAmount("");setCarrier("");setTracking("");}}>Clear pasted details</button></div> : null}
       {props.onPreviewIntake ? <button className="btn btn-tertiary" type="button" onClick={() => setPaste(!paste)}>Paste order or receipt</button> : null}
-      <details open={Boolean(intake)}><summary>Optional details</summary><div className="stack">
+      <details open={Boolean(intake)}><summary>＋ Add order or shipment details</summary><div className="stack">
         <label className="field"><span>Your reference (optional)</span><input placeholder="A reference you provide" value={reference} onChange={e => setReference(e.target.value)} /></label>
         <label className="field"><span>Description</span><textarea value={description} onChange={e => setDescription(e.target.value)} /></label>
         <label className="field"><span>Currency</span><select value={currency} onChange={e=>setCurrency(e.target.value)}><option value="USD">USD</option><option value="CAD">CAD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="AUD">AUD</option></select></label>
@@ -73,7 +74,7 @@ export function CreateProofScreen(props: {
         <label className="field"><span>Carrier</span><input placeholder="USPS, UPS, FedEx…" value={carrier} onChange={e=>setCarrier(e.target.value)} /></label>
         <label className="field"><span>Tracking number</span><input value={tracking} onChange={e=>setTracking(e.target.value)} /></label>
       </div></details>
-      <button className="btn" disabled={props.busy || !title.trim() || !online || changedPending} type="submit">{props.busy ? "Opening…" : "Open camera"}</button>
+      <div className="signal-create-footer"><strong>One item. One clear record.</strong><p>Your recording and confirmation stay together in this Proof.</p><button className="btn" disabled={props.busy || !title.trim() || !online || changedPending} type="submit">{props.busy ? "Preparing…" : "Continue to camera →"}</button><p className="signal-caption">You choose when recording starts.</p></div>
     </form>
     <details><summary>Document a grading submission</summary>
       <label className="field"><span>Number of items</span><input value={gradingCount} onChange={e => setGradingCount(e.target.value)} type="number" min={1} max={50} step={1} /></label>

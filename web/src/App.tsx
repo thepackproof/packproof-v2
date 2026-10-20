@@ -1,3 +1,4 @@
+import { SIGNAL_ENABLED } from './signal/Signal';
 import { selectFirstProofStudy, recordStudyInteraction, pauseStudyAccount, retainStudyAuth, completeStudyAuth } from './analytics/study-capture';
 import { firstProofExperienceEnabled, draftStorageKey, creationOperation, completeCreation, rejectCreationValidation, type ExperienceState } from './first-experience/state';
 import { clearReauthenticationTask, readReauthenticationTask, reauthenticationDestination, retainReauthenticationTask } from './first-experience/auth-return';
@@ -100,7 +101,7 @@ type Route =
   | { name: "uploads" }
   | { name: "activity" }
   | { name: "admin" }
-  | { name: "proofs"; view: "all" | "attention" | "completed"; query: string }
+  | { name: "proofs"; view: "all" | "attention" | "progress" | "completed"; query: string }
   | { name: "capture-launch" }
   | { name: "intake-handoff" }
   | { name: "create"; reference?: string }
@@ -515,7 +516,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   }
 
   function go(path: string) {
-    if (captureActiveRef.current) { setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
+    if (captureActiveRef.current) { window.dispatchEvent(new Event("packproof:request-capture-leave")); setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
     if (mobileTask && (path === "/new" || path.startsWith("/new?") || path.endsWith("/capture"))) startMobileCaptureEntry();
     if(firstExperience && session){if(path==='/new'||path.startsWith('/new?'))void selectFirstProofStudy(api,session.userId,'home');else if(path.endsWith('/capture'))void selectFirstProofStudy(api,session.userId,'order');else if(path==='/sample-proof')void recordStudyInteraction(api,session.userId,'help_opened');}
     if (path === "/" && !isLegalRoute(route)) path = "/app";
@@ -536,7 +537,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   }
 
   function goBack(fallback: string) {
-    if (captureActiveRef.current) { setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
+    if (captureActiveRef.current) { window.dispatchEvent(new Event("packproof:request-capture-leave")); setTaskNotice("Finish recording to save your footage before leaving capture."); return; }
     if (window.history.state?.ppFrom) { saveNavigationContext(); window.history.back(); }
     else go(fallback);
   }
@@ -738,7 +739,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
         .then(([listed, local]) => {
           if (cancelled) return;
           const rows = listed.proofs.map(item => applyLocalWork(item, local.find(recording => recording.proofId === item.proofId)));
-          const visible = rows.filter(item => route.view === "all" || (route.view === "attention" ? item.presentation.needsAttention || mobileTask && !!item.presentation.diagnostic : item.presentation.completed));
+          const visible = rows.filter(item => route.view === "all" || (route.view === "progress" ? !item.presentation.completed : route.view === "attention" ? item.presentation.needsAttention || mobileTask && !!item.presentation.diagnostic : item.presentation.completed));
           visible.sort((a, b) => {
             if (route.view !== "completed" && a.presentation.needsAttention !== b.presentation.needsAttention) return Number(b.presentation.needsAttention) - Number(a.presentation.needsAttention);
             const first = Date.parse(route.view === "completed" ? a.finalizedAt || "" : a.updatedAt) || 0;
@@ -924,7 +925,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     proofs, loading, error,
     view: route.name === "proofs" ? route.view : "all" as const,
     query: route.name === "proofs" ? route.query : "",
-    onChange: (view: "all" | "attention" | "completed", query: string) => {
+    onChange: (view: "all" | "attention" | "progress" | "completed", query: string) => {
       const parameters = new URLSearchParams();
       parameters.set("filter", view);
       if (query) parameters.set("q", query);
@@ -940,7 +941,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   if (route.name === "admin") return <Suspense fallback={<main className="app-loading" role="status">Opening administration…</main>}><AdminWorkspace api={api} access={adminAccess} accountName={session.displayName || session.username || "Administrator"} onGo={go} onSignOut={() => void requestSignOut()} /></Suspense>;
 
   return (
-    <div className={`app-shell workspace-shell${mobileTask ? " mobile-task-shell" : ""}${captureActive ? " capture-active" : ""}`}>
+    <div className={`app-shell workspace-shell${SIGNAL_ENABLED ? " signal-shell" : ""}${mobileTask ? " mobile-task-shell" : ""}${captureActive ? " capture-active" : ""}`}>
       <Onboarding key={`${session.apiBaseUrl}:${session.userId}`} api={api} firstExperience={firstExperience} onState={setExperienceState} accountKey={`${session.apiBaseUrl}:${session.userId}`} dashboard={route.name==='proofs'} ready={!busy} onDashboard={()=>go('/proofs')} onCreate={()=>go('/new')} onViewProof={id=>go(`/proofs/${encodeURIComponent(id)}`)} capture={route.name==='station'} />
         {(route.name==='proofs'||route.name==='create')&&<CompanionBridge api={api} userId={session.userId} connections={connections}/>}
         {route.name==='proof'&&proof?.status==='READY_FOR_EVIDENCE'&&proof.workflowType==='COMMERCE_SALE'&&proof.participationPolicy==='COUNTERPARTY_OPTIONAL'&&<SelectedOrderHandoff key={proof.proofId} api={api} userId={session.userId} transactionId={proof.transaction.transactionId}/>}
@@ -957,7 +958,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {!mobileTask && <WorkstationHeader route={route.name} refreshing={loading || busy} onRefresh={libraryProps.onRetry} />}
       {mobileTask && taskNotice && route.name !== "home" && <p className="task-notice" role="status">{taskNotice}</p>}
 
-      {route.name === "home" && (mobileTask ? <MobileHomeScreen firstExperience={firstExperience} experience={selectFirstExperience(experienceState)} reconciled={homeReconciled} proofs={homeProofs} recordings={recordings} recordingsLoaded={recordingsLoaded} queue={queue} loading={loading} error={error} refreshedAt={homeRefreshedAt} busy={taskBusy} notice={taskNotice} selection={taskSelection} interactions={taskInteractions} onGo={go} onRetry={libraryProps.onRetry} onAction={action => void openMobileTask(action)} onOpen={item => void openMobileTask(item)} /> : <HomeScreen taskScope={`${session.apiBaseUrl}:${session.userId}`} recordings={recordings} taskSelection={taskSelection} taskInteractions={taskInteractions} taskBusy={taskBusy} taskNotice={taskNotice} onTaskAction={action => void openMobileTask(action)} firstExperience={firstExperience} firstProof={selectFirstExperience(experienceState).status === "FIRST_PROOF"} reconciled={homeReconciled} api={api} proofs={proofs} queue={queue} connections={connections} loading={loading} error={error} pendingUploadCount={recordingsLoaded ? recordings.filter(item => !(item.finalized && item.preserved)).length : undefined} onRetry={libraryProps.onRetry} onGo={go} onOpenProof={libraryProps.onOpenProof} onOpenInvitation={libraryProps.onOpenInvitation} onOpenReceiver={libraryProps.onOpenReceiver} />)}
+      {route.name === "home" && (mobileTask ? <MobileHomeScreen api={api} firstExperience={firstExperience} experience={selectFirstExperience(experienceState)} reconciled={homeReconciled} proofs={homeProofs} recordings={recordings} recordingsLoaded={recordingsLoaded} queue={queue} loading={loading} error={error} refreshedAt={homeRefreshedAt} busy={taskBusy} notice={taskNotice} selection={taskSelection} interactions={taskInteractions} onGo={go} onRetry={libraryProps.onRetry} onAction={action => void openMobileTask(action)} onOpen={item => void openMobileTask(item)} /> : <HomeScreen taskScope={`${session.apiBaseUrl}:${session.userId}`} recordings={recordings} taskSelection={taskSelection} taskInteractions={taskInteractions} taskBusy={taskBusy} taskNotice={taskNotice} onTaskAction={action => void openMobileTask(action)} firstExperience={firstExperience} firstProof={selectFirstExperience(experienceState).status === "FIRST_PROOF"} reconciled={homeReconciled} api={api} proofs={proofs} queue={queue} connections={connections} loading={loading} error={error} pendingUploadCount={recordingsLoaded ? recordings.filter(item => !(item.finalized && item.preserved)).length : undefined} onRetry={libraryProps.onRetry} onGo={go} onOpenProof={libraryProps.onOpenProof} onOpenInvitation={libraryProps.onOpenInvitation} onOpenReceiver={libraryProps.onOpenReceiver} />)}
       {(route.name === "pack" || mobileTask && route.name === "station" && !route.proofId && !route.reference && !route.tools && !recordings.some(row => row.kind === "station" && !row.finalized)) && <MobilePackScreen api={api} queue={queue} loading={loading} error={error} onRetry={libraryProps.onRetry} onGo={go} onOpen={id => void openMobileTask(id)} onCreate={reference => go(reference ? `/new?reference=${encodeURIComponent(reference)}` : "/new")} />}
       {route.name === "fulfillment" && <OrdersScreen orders={queue} loading={loading} error={error} syncBusy={busy} syncAvailable={connections.some(item => item.status === "ACTIVE")} onRetry={libraryProps.onRetry} onOpenProof={libraryProps.onOpenProof} onOpenStation={id => go(`/proofs/${encodeURIComponent(id)}/capture`)} onOpenIntegrations={() => go("/stores")} onCreate={libraryProps.onCreate} onSync={async () => {
         setBusy(true); setError(null);
@@ -1223,6 +1224,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {route.name === "intake-handoff" ? <IntakeLinkFallback onQueue={() => go("/proofs?filter=attention")} /> : null}
       {route.name === "station" && !(mobileTask && !route.proofId && !route.reference && !route.tools && !recordings.some(row => row.kind === "station" && !row.finalized)) ? (
         <PackingStationScreen
+          onHome={()=>go("/")}
+          onView={proofId=>go(`/proofs/${encodeURIComponent(proofId)}`)}
           onCaptureActive={setCaptureActive}
           authorizedEngineSession={captureEngineSession?.context.proofId===route.proofId?captureEngineSession:null}
           acceptedIntakeSnapshot={acceptedIntakeSnapshot?.proofId===route.proofId?acceptedIntakeSnapshot:null}
@@ -1241,7 +1244,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           onAuthExpired={() => signOut(true)}
           onLeave={() => go(route.proofId ? `/proofs/${encodeURIComponent(route.proofId)}` : "/proofs")}
           onRecoverProof={(proofId) => go(`/proofs/${encodeURIComponent(proofId)}/capture`)}
-          onCompleted={(proofId) => { proofIdRef.current = null; go(`/proofs/${encodeURIComponent(proofId)}`); }}
+          onCompleted={(proofId) => { proofIdRef.current = null; if (!SIGNAL_ENABLED) go(`/proofs/${encodeURIComponent(proofId)}`); }}
         />
       ) : null}
 

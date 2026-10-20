@@ -20,6 +20,7 @@ export type AppRouteName =
   | "signature"
   | "supporting"
   | "proof"
+  | "submission"
   | "capture"
   | "scan"
   | "intake"
@@ -42,6 +43,7 @@ export type ActivityFilter = "all" | "attention" | "uploading" | "completed" | "
 export interface OrdersViewState { offsetY: number; query: string; filter?: "ready" | "started" | "completed" | "all"; }
 export interface AppRoute {
   name: AppRouteName;
+  signalSubmission?: {userId:string;apiBaseUrl:string;proofId:string;operationId:string;uri:string};
   /** Return from saved item information to the same capture. */
   returnToCapture?: boolean;
   accountSection?: AccountSection;
@@ -103,6 +105,7 @@ export function resolveBackRoute(routeName: AppRouteName, origin: WorkspaceOrigi
     case "event":
     case "complete":
       return "proof";
+    case "submission": return "home";
     case "capture":
       return "proof";
     case "station":

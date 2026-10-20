@@ -1,3 +1,5 @@
+import { signalColors } from './signal';
+import { SIGNAL_ENABLED } from '../experience/signal';
 import { useFonts } from "expo-font";
 import { EXPERIENCE_RESTORATION_REVIEW } from '../experience/restoration-review';
 import { restorationColors } from './restoration-colors';
@@ -28,7 +30,7 @@ export interface Theme {
 }
 
 const ThemeContext = createContext<Theme | null>(null);
-const defaultNativePreference = MOBILE_TASK_UX_ENABLED ? "dark" : "light";
+const defaultNativePreference = SIGNAL_ENABLED ? "light" : MOBILE_TASK_UX_ENABLED ? "dark" : "light";
 
 function schemeFromSystem(value: ColorSchemeName): ColorScheme {
   return value === "dark" ? "dark" : "light";
@@ -36,6 +38,12 @@ function schemeFromSystem(value: ColorSchemeName): ColorScheme {
 
 export function ThemeProvider(props: { children: ReactNode }) {
   const [fontsLoaded, fontError] = useFonts({
+    Manrope: require("../../assets/fonts/Manrope.ttf"),
+    "Manrope-Medium": require("../../assets/fonts/Manrope-Medium.ttf"),
+    "Manrope-SemiBold": require("../../assets/fonts/Manrope-SemiBold.ttf"),
+    "Manrope-Bold": require("../../assets/fonts/Manrope-Bold.ttf"),
+    "SpaceGrotesk-Bold": require("../../assets/fonts/SpaceGrotesk-Bold.ttf"),
+    "IBMPlexMono-Medium": require("../../assets/fonts/IBMPlexMono-Medium.ttf"),
     Inter: require("../../assets/fonts/Inter-Regular.ttf"),
     "Inter-SemiBold": require("../../assets/fonts/Inter-SemiBold.ttf"),
     "Inter-Bold": require("../../assets/fonts/Inter-Bold.ttf"),
@@ -92,7 +100,7 @@ export function ThemeProvider(props: { children: ReactNode }) {
       hydrated: hydrated && (fontsLoaded || Boolean(fontError)),
       preference,
       scheme,
-      colors: EXPERIENCE_RESTORATION_REVIEW ? restorationColors(scheme) : colorsForScheme(scheme, ANDROID_TASK_FIRST_REBUILD),
+      colors: SIGNAL_ENABLED ? signalColors(scheme) : EXPERIENCE_RESTORATION_REVIEW ? restorationColors(scheme) : colorsForScheme(scheme, ANDROID_TASK_FIRST_REBUILD),
       shadows: shadowsFor(scheme),
       reducedMotion,
       setPreference,

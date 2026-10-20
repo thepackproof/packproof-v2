@@ -1,3 +1,6 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
+import {SignalText} from "../ui/Signal";
+import {BottomSheet} from "../ui/Sheets";
 import { recordNativeStudyInteraction } from "../analytics/native-study";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Share, StyleSheet, Switch, Text, View } from "react-native";
@@ -24,7 +27,7 @@ type ShareScope = {
 const SHARED_PROOF = { purpose: "SHARED_PROOF" } as const;
 const PENDING_NOTICE = "This is your saved link. Pending changes will appear after sync. Link access cannot be checked while you are offline.";
 
-export function SharingScreen() {
+export function SharingScreen({asSheet=false,onClose}:{asSheet?:boolean;onClose?:()=>void}={}) {
   const app = usePackProof();
   const { colors } = useTheme();
   const proofId = app.proof?.proofId;
@@ -271,6 +274,7 @@ export function SharingScreen() {
   const activeLinks = links.filter(item => !item.revokedAt && (!item.expiresAt || (Number.isFinite(Date.parse(item.expiresAt)) && Date.parse(item.expiresAt) > Date.now())));
   const canHandoff = readyScopeKey === scopeKey && !initializing && !busy && !reviewRequired && Boolean(availableLink || scope);
 
+  if(SIGNAL_ENABLED && asSheet)return <BottomSheet visible title="Share your Proof" onClose={()=>onClose?.()}><View style={{gap:20}}><SignalText muted>Let someone see the recording and its details.</SignalText><View style={{padding:16,borderRadius:12,backgroundColor:colors.surfacePressed,gap:6}}><SignalText kind="strong">{app.proof?.transaction.itemTitle||'Packing record'}</SignalText><SignalText kind="mono" muted>{proofId}</SignalText></View><SignalText kind="small" muted>View-only Proof link · {availableLink?.expiresAt?`Expires ${new Date(availableLink.expiresAt).toLocaleDateString()}`:'Expires in 7 days'}</SignalText><SignalText kind="small" muted>Anyone with the link can view the shared record and its saved updates. Review recordings for private information before sharing.</SignalText>{pendingLocal&&<SignalText kind="small" muted>Only recordings already saved to this Proof are shared.</SignalText>}{error&&<SignalText kind="small" style={{color:colors.error}}>{error}</SignalText>}{notice&&<Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.accentText}]}>{notice}</Text>}<Button label={notice?.startsWith('Link copied')?'Link copied':'Copy Proof link'} icon={notice?.startsWith('Link copied')?'checkmark':'link-outline'} loading={busy||initializing} disabled={!canHandoff || offlineMode&&!availableLink} onPress={()=>void run(()=>handoff('copy'))}/>{(!scope||reviewRequired)&&!initializing&&<Button label="Review sharing details" variant="secondary" onPress={()=>void run(loadScope)}/>}<Button label="Sharing options" variant="tertiary" onPress={()=>{onClose?.();app.go('sharing');}}/><Button label="Back to Proof" variant="tertiary" onPress={()=>onClose?.()}/></View></BottomSheet>;
   return (
     <AppScreen>
       <AppHeader title="Share Proof" onBack={app.goBack} />

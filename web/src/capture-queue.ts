@@ -77,6 +77,7 @@ export async function recoverCapture(key: string): Promise<File | null> {
 }
 
 export type PendingStationCapture = {
+  replacement?: { original: PendingStationCapture; decision: "pending" | "accepted" };
   discardRequested?: boolean;
   identifierPolicy?: import('../../backend/src/identifiers/types').IdentifierPolicy;
   captureContext?: CaptureContext;
@@ -116,7 +117,9 @@ export async function saveStationCapture(capture: PendingStationCapture): Promis
     throw new Error("Choose a recording between 1 byte and 250 MB.");
   const previous = await recoverStationCapture(capture.userId ?? capture.key.slice(0, -":station".length));
   // Once finishing is accepted, a stale UI cannot replace its bytes or erase a known upload identity.
-  if (previous && (previous.uploadKey !== capture.uploadKey || (previous.apiScope && capture.apiScope && previous.apiScope !== capture.apiScope)))
+  const replacing = previous && !previous.finishConfirmed && !previous.evidenceId && capture.replacement?.decision === "pending" && capture.replacement.original.uploadKey === previous.uploadKey && capture.order.proofId === previous.order.proofId && capture.userId === previous.userId && capture.apiScope === previous.apiScope;
+  if (capture.finishConfirmed && capture.replacement?.decision === "pending") throw new Error("Choose which take to keep before submitting.");
+  if (previous && ((!replacing && previous.uploadKey !== capture.uploadKey) || (previous.apiScope && capture.apiScope && previous.apiScope !== capture.apiScope)))
     throw new Error("A recording is already saved for the original order and account. Finish it before recording another shipment.");
   if (previous?.discardRequested && !capture.discardRequested) throw discardPending();
   if (previous?.uploadKey === capture.uploadKey && previous.finishConfirmed && capture.file?.size) {
@@ -125,10 +128,22 @@ export async function saveStationCapture(capture: PendingStationCapture): Promis
     if (existingDigest !== incomingDigest) throw new Error("Finish the accepted original before replacing this recording.");
     capture = { ...previous, ...capture, digest: existingDigest, evidenceId: previous.evidenceId ?? capture.evidenceId, finishConfirmed: true };
   }
-  capture = { ...capture, shippingScans: mergeStationScans(previous?.shippingScans, capture.shippingScans) };
+  capture = { ...capture, shippingScans: mergeStationScans(previous?.uploadKey === capture.uploadKey ? previous.shippingScans : undefined, capture.shippingScans) };
   await queue("readwrite", (store) => store.put({ ...capture, kind: "station" }));
 
   });
+}
+/** The decision and selected bytes commit together. The old take is retained until submission is preserved. */
+export async function chooseStationTake(userId:string, apiScope:string, uploadKey:string, choice:'original'|'replacement'):Promise<PendingStationCapture> {
+  let selected:PendingStationCapture|null=null;
+  await serializeJournalWrite(stationCaptureKey(userId),async()=>{
+    const current=await recoverStationCapture(userId);
+    if(!current || current.userId!==userId || current.apiScope!==apiScope || current.uploadKey!==uploadKey || current.finishConfirmed || current.evidenceId || !current.replacement)throw new Error('This take changed. Reopen its review before choosing.');
+    if(choice==='replacement' && (current.interrupted || !current.file.size || !current.captureSessionId))throw new Error('This take is incomplete. Keep the previous take or record again.');
+    selected=choice==='original'?current.replacement.original:{...current,replacement:{...current.replacement,decision:'accepted'}};
+    await queue('readwrite',store=>store.put(selected!));
+  });
+  return selected!;
 }
 /** Late barcode responses can update only their original, still-pending capture. */
 export async function updateStationCaptureScans(userId: string, sessionId: string, scans: NonNullable<PendingStationCapture["shippingScans"]>): Promise<void> {
@@ -354,6 +369,17 @@ async function withBrowserLock<T>(key:string, run:()=>Promise<T>):Promise<T> {
   try { return await current; } finally { if (browserLockFallback.get(key)===current) browserLockFallback.delete(key); }
 }
 const stationJobs = new Map<string, Promise<StationSubmitResult>>();
+type StationProgress={step:SubmitStep;uploadPercent:number|null};
+const stationProgress=new Map<string,StationProgress>();
+const stationObservers=new Map<string,Set<(progress:StationProgress)=>void>>();
+export function observeStationProgress(apiScope:string,userId:string,listener:(progress:StationProgress)=>void):()=>void{
+  const key=`${apiScope}:${stationCaptureKey(userId)}`;
+  const listeners=stationObservers.get(key)??new Set();listeners.add(listener);stationObservers.set(key,listeners);
+  const snapshot=stationProgress.get(key);if(snapshot)listener(snapshot);
+  return()=>{listeners.delete(listener);if(!listeners.size)stationObservers.delete(key);};
+}
+function emitStationProgress(key:string,progress:StationProgress){stationProgress.set(key,progress);for(const listener of stationObservers.get(key)??[])listener(progress);}
+
 /** The station page and app-level worker join the same accepted operation. No new declaration prompt. */
 export function resumeStationRecording(api:PackProofApi,userId:string,active:()=>boolean,onProgress?:(progress:{step:SubmitStep;uploadPercent:number|null})=>void):Promise<StationSubmitResult> {
   const jobKey = `${api.recoveryScope || ""}:${stationCaptureKey(userId)}`;
@@ -426,7 +452,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
             if(!pending.evidenceId)throw new Error("Upload identity is unavailable. Original retained.");
             await trackTransfer(api,pending.key,()=>api.uploadResumable(pending.order.proofId,pending.evidenceId!,pending.file,value=>{assertCurrent(active);progress(value);}));assertCurrent(active);
           },
-        },onProgress:progress=>{assertCurrent(active);if(studyState.step!==progress.step&&import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:progress.step==='finalize'?'finalizing':progress.step==='commit'?'committing':progress.step==='attest'?'waiting':'uploading'});studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);},
+        },onProgress:progress=>{assertCurrent(active);if(studyState.step!==progress.step&&import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:progress.step==='finalize'?'finalizing':progress.step==='commit'?'committing':progress.step==='attest'?'waiting':'uploading'});studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);emitStationProgress(jobKey,progress);},
       });
       pending.committed = true; await saveStationCapture(pending); assertCurrent(active);
       proof=await api.getProof(pending.order.proofId);assertCurrent(active);
@@ -455,7 +481,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
       if(latest?.uploadKey===pending.uploadKey)await queue("readwrite",store=>store.put({...latest,...retryState(error,latest.attempts)}));
       throw error;
     }
-  }).finally(()=>{stationJobs.delete(jobKey);});
+  }).finally(()=>{stationJobs.delete(jobKey);stationProgress.delete(jobKey);});
   stationJobs.set(jobKey,job);return job;
 }
 

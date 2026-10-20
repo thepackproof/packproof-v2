@@ -1,3 +1,4 @@
+import {SIGNAL_ENABLED} from "../experience/signal";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
@@ -18,7 +19,7 @@ export function VideoReview({ uri, compact = false, inspection = false, accessib
     <>
     <VideoView
       player={player}
-      style={{ width: "100%", height: compact ? 144 : 200, borderRadius: 12 }}
+      style={{ width: "100%", height: SIGNAL_ENABLED ? 250 : compact ? 144 : 200, borderRadius: SIGNAL_ENABLED?16:12, backgroundColor:"#18221F" }}
       nativeControls
       allowsFullscreen
       contentFit="contain"

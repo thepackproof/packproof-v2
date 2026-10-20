@@ -6,7 +6,7 @@ import { orderPresentation } from './orders';
 
 /** One retained recording can also be the active recording; count it only once. */
 export function workspaceRecordings(saved: LocalCapture[], current: LocalCapture | null): LocalCapture[] {
-  return [...new Map([...saved, ...(current ? [current] : [])].map(capture => [capture.uri, capture])).values()];
+  return [...new Map([...saved, ...(current ? [current] : [])].map(capture => [capture.uri, capture])).values()].filter(capture=>!capture.supersededBy && capture.replacement?.decision!=='kept-original');
 }
 
 export function pendingWorkspaceRecordings(saved: LocalCapture[], current: LocalCapture | null): number {
