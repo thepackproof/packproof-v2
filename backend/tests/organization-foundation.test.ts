@@ -3,6 +3,7 @@ import express from 'express';
 import request from './in-process-http.js';
 import {randomBytes} from 'node:crypto';
 import {createPgliteDatabase} from '../src/db/pglite.js';
+import {openIsolatedTestDatabase} from './isolated-test-database.js';
 import {migrate} from '../src/db/migrate.js';
 import {insertUser} from '../src/domain/users.js';
 import {authorizeProofAccess} from '../src/domain/proof-access.js';
@@ -41,7 +42,7 @@ describe('organization foundation through shared backend services',()=>{
  const importBody=(account=accountA,member=memberA)=>({integrationAccountId:account,externalId:'ORDER-1001',operatorMembershipId:member,transaction:{itemTitle:'Synthetic shipment',quantity:1,amount:{minorUnits:'100',currency:'JPY'}}});
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_ORGANIZATIONS_ENABLED','true');vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));
-  opened=await createPgliteDatabase();await migrate(opened.db);
+  opened=await openIsolatedTestDatabase();await migrate(opened.db);
   store=new MemoryObjectStore();
   [admin,ownerA,ownerB,opA,opB,opP]=await Promise.all(Array.from({length:6},()=>insertUser(opened.db,clock)));
   await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);

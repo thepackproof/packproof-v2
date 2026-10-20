@@ -16,4 +16,4 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install 'cfn-lint>=1,<2'
       - run: cfn-lint --version
-      - run: cfn-lint --region us-east-1 --template infra/partner-foundation/isolated-foundation.json
+      - run: cfn-lint --region us-east-1 --template infra/partner-foundation/*.json
