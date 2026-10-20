@@ -22,7 +22,8 @@ process.env.PACKPROOF_DB_CA_FILE = '/tmp/packproof-rds-ca.pem';
 const steps = [
   ['--import', 'tsx', 'scripts/isolated-migration-preservation.mjs'],
   ['node_modules/vitest/vitest.mjs', 'run', 'tests/organization-foundation.test.ts',
-    'tests/partner-postgres-gate.test.ts', '--pool=threads'],
+    'tests/partner-postgres-gate.test.ts', '--pool=threads', '--reporter=default',
+    '--reporter=junit', '--outputFile=acceptance-artifacts/database-tests.xml'],
 ];
 for (const args of steps) {
   const result = spawnSync(process.execPath, args, { env: process.env, stdio: 'inherit' });

@@ -35,6 +35,7 @@ const store = new MemoryObjectStore();
 const artifacts = new URL('../acceptance-artifacts/', import.meta.url);
 await mkdir(new URL('before/', artifacts), { recursive:true });
 await mkdir(new URL('after/', artifacts), { recursive:true });
+await writeFile(new URL('synthetic-signing-public-key.pem', artifacts), keys.publicKey.export({ type:'spki', format:'pem' }));
 // Read uncompressed local ZIP entries emitted by PackProof's own bounded ZIP writer.
 function zipEntries(bytes) {
   const entries = new Map(); let offset = 0;
