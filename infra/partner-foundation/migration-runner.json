@@ -269,6 +269,21 @@
                   "Resource": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r"
                 },
                 {
+                  "Sid": "SyntheticAcceptanceArtifacts",
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/migration/*"
+                },
+                {
+                  "Sid": "AcceptanceBucketLocation",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketAcl",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h"
+                },
+                {
                   "Sid": "DescribeNetwork",
                   "Effect": "Allow",
                   "Action": [
@@ -361,11 +376,17 @@
           ]
         },
         "Artifacts": {
-          "Type": "NO_ARTIFACTS"
+          "Type": "S3",
+          "Location": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+          "Path": "acceptance/migration",
+          "Name": "evidence.zip",
+          "NamespaceType": "BUILD_ID",
+          "Packaging": "ZIP",
+          "EncryptionDisabled": false
         },
         "Source": {
           "Type": "NO_SOURCE",
-          "BuildSpec": "{\"version\":0.2,\"phases\":{\"install\":{\"runtime-versions\":{\"nodejs\":22},\"on-failure\":\"ABORT\",\"commands\":[\"git init candidate\",\"cd candidate\",\"git remote add origin https://github.com/thepackproof/packproof-v2.git\",\"git fetch --depth=1 origin \\\"$CANDIDATE_SHA\\\" \\\"$BASELINE_SHA\\\"\",\"git checkout --detach \\\"$CANDIDATE_SHA\\\"\",\"test \\\"$(git rev-parse HEAD)\\\" = \\\"$CANDIDATE_SHA\\\"\",\"git worktree add --detach /tmp/packproof-m1-baseline \\\"$BASELINE_SHA\\\"\",\"cd backend\",\"npm ci --no-audit --no-fund\",\"python3 -m pip install --quiet --disable-pip-version-check cfn-lint==1.57.2\",\"cfn-lint --region us-east-1 --template ../infra/partner-foundation/*.json\",\"ln -s \\\"$PWD/node_modules\\\" /tmp/packproof-m1-baseline/backend/node_modules\",\"curl --fail --silent --show-error --proto =https --tlsv1.2 -o /tmp/packproof-rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem\"]},\"build\":{\"on-failure\":\"ABORT\",\"commands\":[\"node scripts/isolated-m1-runner.mjs\"]}}}"
+          "BuildSpec": "{\"version\":0.2,\"phases\":{\"install\":{\"runtime-versions\":{\"nodejs\":22},\"on-failure\":\"ABORT\",\"commands\":[\"git init candidate\",\"cd candidate\",\"git remote add origin https://github.com/thepackproof/packproof-v2.git\",\"git fetch --depth=1 origin \\\"$CANDIDATE_SHA\\\" \\\"$BASELINE_SHA\\\"\",\"git checkout --detach \\\"$CANDIDATE_SHA\\\"\",\"test \\\"$(git rev-parse HEAD)\\\" = \\\"$CANDIDATE_SHA\\\"\",\"git worktree add --detach /tmp/packproof-m1-baseline \\\"$BASELINE_SHA\\\"\",\"cd backend\",\"npm ci --no-audit --no-fund\",\"python3 -m pip install --quiet --disable-pip-version-check cfn-lint==1.57.2\",\"cfn-lint --region us-east-1 --template ../infra/partner-foundation/*.json\",\"ln -s \\\"$PWD/node_modules\\\" /tmp/packproof-m1-baseline/backend/node_modules\",\"curl --fail --silent --show-error --proto =https --tlsv1.2 -o /tmp/packproof-rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem\"]},\"build\":{\"on-failure\":\"ABORT\",\"commands\":[\"node scripts/isolated-m1-runner.mjs\"]}},\"artifacts\":{\"files\":[\"**/*\"],\"base-directory\":\"candidate/backend/acceptance-artifacts\"}}"
         },
         "Environment": {
           "Type": "LINUX_CONTAINER",

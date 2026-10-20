@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, randomBytes } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createPgDatabase } from '../src/db/postgres.ts';
 import { migrate, migrationInventory, assertSchemaCurrent } from '../src/db/migrate.ts';
@@ -32,6 +32,9 @@ const signer = { signManifest: async input => ({ algorithm: 'ECDSA_SHA_256',
   keyId: 'synthetic-migration-only', signedAt: clock.now().toISOString(),
   signatureBase64: sign('sha256', Buffer.from(input.canonicalJson), keys.privateKey).toString('base64') }) };
 const store = new MemoryObjectStore();
+const artifacts = new URL('../acceptance-artifacts/', import.meta.url);
+await mkdir(new URL('before/', artifacts), { recursive:true });
+await mkdir(new URL('after/', artifacts), { recursive:true });
 // Read uncompressed local ZIP entries emitted by PackProof's own bounded ZIP writer.
 function zipEntries(bytes) {
   const entries = new Map(); let offset = 0;
@@ -76,6 +79,9 @@ try {
     await commitAttestation(opened.db, clock, user, proof.proofId, { statement: 'PACKED_DESCRIBED_ITEM', relatedEvidenceId: id });
     const final = await finalizeProof(opened.db, clock, user, proof.proofId, signer);
     const exported = await oldExport.exportEvidencePackage(opened.db, clock, store, user, proof.proofId);
+    // Preserve exact original bytes before any additive migration runs.
+    await writeFile(new URL(`before/${proof.proofId}.pkpr`, artifacts), exported);
+    await writeFile(new URL(`before/${proof.proofId}.manifest.json`, artifacts), final.manifest.canonicalJson);
     fixtures.push({ user, proofId: proof.proofId, manifest: final.manifest, exported });
   }
   const receiptsBefore = (await opened.db.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;
@@ -111,6 +117,8 @@ try {
     assert.equal(verifyManifestIntegrity({ canonicalJson: stored.canonical_json, expectedSha256: stored.sha256,
       signature: fixture.manifest.signature, publicKeyPem: keys.publicKey.export({ type:'spki', format:'pem' }).toString() }).signatureValid, true);
     const exportedAfter = await exportEvidencePackage(opened.db, clock, store, fixture.user, fixture.proofId);
+    await writeFile(new URL(`after/${fixture.proofId}.pkpr`, artifacts), exportedAfter);
+    await writeFile(new URL(`after/${fixture.proofId}.manifest.json`, artifacts), stored.canonical_json);
     const before = zipEntries(fixture.exported), after = zipEntries(exportedAfter);
     const paths = [...before.keys()].filter(name => ['manifest.json','transaction.json','participants.json','attestations.json','integrity/signatures.json','integrity/evidence.json'].includes(name) || name.startsWith('evidence/'));
     assert.ok(paths.length >= 7);
@@ -126,7 +134,7 @@ try {
       'MemoryObjectStore; AWS durability and role boundaries are separate gates',
       'Export audit projections may change; frozen core entries and original media are compared byte for byte',
       'Transaction elapsed time includes queries and lock waits; not a direct lock-hold measurement'] };
-  await writeFile('/tmp/packproof-m1-migration-evidence.json', JSON.stringify(evidence, null, 2));
+  await writeFile(new URL('migration-evidence.json', artifacts), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence));
   success = true;
 } finally {
