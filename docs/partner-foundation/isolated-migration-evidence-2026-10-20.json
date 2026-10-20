@@ -1,0 +1,880 @@
+{
+  "source": "c03fbf9b6745078fb46a2e3d1b0068bf0d0b8b5e",
+  "build": {
+    "id": "packproof-m1-20261020-migration:01f850fb-5618-4516-a0c6-a59e6c079a61",
+    "status": "SUCCEEDED",
+    "phase": "COMPLETED",
+    "phases": [
+      {
+        "phaseType": "SUBMITTED",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:19:27.696000+00:00",
+        "endTime": "2026-10-20T20:19:27.873000+00:00",
+        "durationInSeconds": 0
+      },
+      {
+        "phaseType": "QUEUED",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:19:27.873000+00:00",
+        "endTime": "2026-10-20T20:19:28.776000+00:00",
+        "durationInSeconds": 0
+      },
+      {
+        "phaseType": "PROVISIONING",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:19:28.776000+00:00",
+        "endTime": "2026-10-20T20:19:48.410000+00:00",
+        "durationInSeconds": 19,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "DOWNLOAD_SOURCE",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:19:48.410000+00:00",
+        "endTime": "2026-10-20T20:19:49.279000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "INSTALL",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:19:49.279000+00:00",
+        "endTime": "2026-10-20T20:20:43.642000+00:00",
+        "durationInSeconds": 54,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "PRE_BUILD",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:20:43.642000+00:00",
+        "endTime": "2026-10-20T20:20:43.721000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "BUILD",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:20:43.721000+00:00",
+        "endTime": "2026-10-20T20:21:05.919000+00:00",
+        "durationInSeconds": 22,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "POST_BUILD",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:21:05.919000+00:00",
+        "endTime": "2026-10-20T20:21:05.967000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "UPLOAD_ARTIFACTS",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:21:05.967000+00:00",
+        "endTime": "2026-10-20T20:21:06.464000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "FINALIZING",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-10-20T20:21:06.464000+00:00",
+        "endTime": "2026-10-20T20:21:06.765000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "COMPLETED",
+        "startTime": "2026-10-20T20:21:06.765000+00:00"
+      }
+    ],
+    "artifacts": {
+      "location": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/migration/01f850fb-5618-4516-a0c6-a59e6c079a61/evidence.zip",
+      "sha256sum": "91833d61b62691682f00250f11a7f657d8006076d63e6b2e51478b0dbcc73638",
+      "md5sum": "8733c92eefaea8ba7597d098d878e630",
+      "encryptionDisabled": false
+    },
+    "endTime": "2026-10-20T20:21:06.765000+00:00"
+  },
+  "artifactHead": {
+    "AcceptRanges": "bytes",
+    "LastModified": "2026-10-20T20:21:07+00:00",
+    "ContentLength": 29766,
+    "ChecksumCRC64NVME": "NMwi9cS5nT4=",
+    "ChecksumType": "FULL_OBJECT",
+    "ETag": "\"da49b854fedf86a87f84c3c0f2d196c9\"",
+    "VersionId": "TjXDAH3TfAN5URl1m6P9iAgmBzdpacCl",
+    "ContentType": "application/zip",
+    "ServerSideEncryption": "aws:kms",
+    "Metadata": {
+      "codebuild-content-sha256": "91833d61b62691682f00250f11a7f657d8006076d63e6b2e51478b0dbcc73638",
+      "codebuild-buildarn": "arn:aws:codebuild:us-east-1:784514617543:build/packproof-m1-20261020-migration:01f850fb-5618-4516-a0c6-a59e6c079a61",
+      "codebuild-content-md5": "8733c92eefaea8ba7597d098d878e630"
+    },
+    "SSEKMSKeyId": "arn:aws:kms:us-east-1:784514617543:key/7e055aa5-8728-4683-9cc1-10b0088b7b7a"
+  },
+  "artifactSha256": "91833d61b62691682f00250f11a7f657d8006076d63e6b2e51478b0dbcc73638",
+  "artifactFiles": [
+    "after/proof_01M5DFJHKB3H7RBKCQDFTDWK0G.manifest.json",
+    "before/proof_01M5DFJHKB3H7RBKCQDFTDWK0G.manifest.json",
+    "synthetic-signing-public-key.pem",
+    "migration-evidence.json",
+    "database-gates.json",
+    "after/proof_01M5DFJJ8RY4NYK00DY1EZNRKR.pkpr",
+    "after/proof_01M5DFJJ8RY4NYK00DY1EZNRKR.manifest.json",
+    "before/proof_01M5DFJHKB3H7RBKCQDFTDWK0G.pkpr",
+    "before/proof_01M5DFJJ8RY4NYK00DY1EZNRKR.pkpr",
+    "before/proof_01M5DFJJ8RY4NYK00DY1EZNRKR.manifest.json",
+    "database-tests.xml",
+    "after/proof_01M5DFJHKB3H7RBKCQDFTDWK0G.pkpr"
+  ],
+  "downloadRecheckedLocally": true,
+  "syntheticSignaturesVerified": 2,
+  "comparedEntries": 14,
+  "migration": {
+    "event": "isolated_migration_preservation_passed",
+    "source": "c03fbf9b6745078fb46a2e3d1b0068bf0d0b8b5e",
+    "baseline": "cb82e6e57d50c51e4c55c3e1525a3adc61ce15d5",
+    "schema": "migration_preservation_92d87965e24b31c4",
+    "ssl": {
+      "ssl": true,
+      "protocol": "TLSv1.3"
+    },
+    "historicalMigrations": 86,
+    "currentMigrations": 91,
+    "migrationElapsedMs": 597.5804479999997,
+    "maximumTransactionElapsedMs": 181.7677509999994,
+    "preflight": [
+      [
+        {
+          "database": "packproof_v2",
+          "principal": "packproof",
+          "engine": "PostgreSQL 16.15 on aarch64-unknown-linux-gnu, compiled by aarch64-unknown-linux-gnu-gcc (GCC) 12.4.0, 64-bit"
+        }
+      ],
+      [
+        {
+          "id": "001_init",
+          "checksum": "3fcf08779f9ae67305fc6a16e700ae3de13a8e73031fc889e0a0f38334bac80d",
+          "applied_at": "2026-10-20T20:20:45.372Z"
+        },
+        {
+          "id": "002_transaction_shipping_context",
+          "checksum": "56c921f1c3258d19691e552c3ec0e6c82dae689dc3f92676e3fe4c2bb12a74b9",
+          "applied_at": "2026-10-20T20:20:45.399Z"
+        },
+        {
+          "id": "003_profiles",
+          "checksum": "6c596c4d944609b5c1a88f1e1dfa061101567225cb5d7bbc5575d14aa7513c62",
+          "applied_at": "2026-10-20T20:20:45.412Z"
+        },
+        {
+          "id": "004_invitation_invitee_user",
+          "checksum": "74b1fd9f43e53130c623b969c0db3eeba4ff0b24c428ecc20fbc788176bff0a7",
+          "applied_at": "2026-10-20T20:20:45.422Z"
+        },
+        {
+          "id": "005_proof_participants_user_idx",
+          "checksum": "a2729b73eaf22b63b3ea8ef51f84977d79b43f8bdf70bc39ec87ba067e883733",
+          "applied_at": "2026-10-20T20:20:45.431Z"
+        },
+        {
+          "id": "006_canonical_proof_contract",
+          "checksum": "7fc23bb83af2eaa3872e84db109fe813b1af938dcde81b2f61e4805c08ce3941",
+          "applied_at": "2026-10-20T20:20:45.477Z"
+        },
+        {
+          "id": "007_external_reference_identity",
+          "checksum": "d85e2af2e4df501d70bf926dbe2dcf087261477c6f51a9d6db9f5e951b236a53",
+          "applied_at": "2026-10-20T20:20:45.487Z"
+        },
+        {
+          "id": "008_transaction_integration_identities",
+          "checksum": "558a4cca0c8293ea204a75e66c6ad33e424be73983393292113a89859acc9c1c",
+          "applied_at": "2026-10-20T20:20:45.508Z"
+        },
+        {
+          "id": "009_shipment_events",
+          "checksum": "3d3bd4dcc25bf62a6c4afa3b120983affd41358d0a288f7d4a2e55bcacc8fad7",
+          "applied_at": "2026-10-20T20:20:45.551Z"
+        },
+        {
+          "id": "010_trusted_shipment_integrations",
+          "checksum": "d536640c2ce15954c637779c4f0693159353a92e1fa054e23d41a4fe547ae1d5",
+          "applied_at": "2026-10-20T20:20:45.589Z"
+        },
+        {
+          "id": "011_users_search_indexes",
+          "checksum": "1519e0d8f8aaaec5fc070a90f18464629395f49627bc3d6bac2eadc950ab5030",
+          "applied_at": "2026-10-20T20:20:45.598Z"
+        },
+        {
+          "id": "012_automatic_fulfillment",
+          "checksum": "7b16a638f275dda98c59a8d5cea2ea26a3550b7a7558d472f8d847e54d4ea157",
+          "applied_at": "2026-10-20T20:20:45.648Z"
+        },
+        {
+          "id": "013_fulfillment_capture",
+          "checksum": "99a0f4bcb7c22d8914d5fde5fb55496689775a7418c25b2af6e29dfe78ad8023",
+          "applied_at": "2026-10-20T20:20:45.655Z"
+        },
+        {
+          "id": "014_external_identities",
+          "checksum": "04e3a82f15cd670a95555bda6f03f0e6aeb2ac7a380dd4696cc07b74b290e454",
+          "applied_at": "2026-10-20T20:20:45.676Z"
+        },
+        {
+          "id": "015_optional_counterparty_default",
+          "checksum": "097eba9c5852fc3666da0c7722fc25fbb362993fffaf43223f58aac057ecb4b9",
+          "applied_at": "2026-10-20T20:20:45.683Z"
+        },
+        {
+          "id": "016_custody_workflow",
+          "checksum": "6532ea8e782fc7e8870ad039a9fb8e0334e94d9612930bc32506b8ce28475f59",
+          "applied_at": "2026-10-20T20:20:45.827Z"
+        },
+        {
+          "id": "017_connected_accounts",
+          "checksum": "1a82703bb2f42545a34b749023c50912a51a245f78234cf80a2399bbd048034c",
+          "applied_at": "2026-10-20T20:20:45.860Z"
+        },
+        {
+          "id": "018_committed_evidence_immutability",
+          "checksum": "ba4db4cda653f9347fb9697eb132168b2ed3de390168b37780df0c78578fbdcb",
+          "applied_at": "2026-10-20T20:20:45.867Z"
+        },
+        {
+          "id": "019_finalized_custody_guards",
+          "checksum": "90b060a7269511bcbd0ead09e645f99ef481c53701d36ce73adc72028a96986f",
+          "applied_at": "2026-10-20T20:20:45.883Z"
+        },
+        {
+          "id": "020_workflow_protocol_version",
+          "checksum": "6515200251a7ec9a41f90a18e62bd7c07c3e6e366352736e9bc6c543a4f030e7",
+          "applied_at": "2026-10-20T20:20:45.893Z"
+        },
+        {
+          "id": "021_manifest_signature_metadata",
+          "checksum": "c1aa21d0e16b60445e4716d720c0f7dd1cf6913e94a88fa6a2f507a671e5878e",
+          "applied_at": "2026-10-20T20:20:45.900Z"
+        },
+        {
+          "id": "022_proof_email_notifications",
+          "checksum": "90af0fa729224c8580839b0877742c1d22bceee459a48b96bf575d0074d7fc61",
+          "applied_at": "2026-10-20T20:20:45.930Z"
+        },
+        {
+          "id": "023_public_platform",
+          "checksum": "646f266b64f71245ce354f8af7fb1b01c80b918bf4002ada8a89f4418b566ce3",
+          "applied_at": "2026-10-20T20:20:46.022Z"
+        },
+        {
+          "id": "024_resumable_uploads",
+          "checksum": "e6f6cc06375daddbb82dd74ce2b6295be0fb19a79da19dba1929272b1c6d8861",
+          "applied_at": "2026-10-20T20:20:46.041Z"
+        },
+        {
+          "id": "025_commerce_lifecycle",
+          "checksum": "7530ebec1e3e0ebda7555a5630ae69f3301e9e43e80d1bc7e8254923af06c138",
+          "applied_at": "2026-10-20T20:20:46.078Z"
+        },
+        {
+          "id": "026_retention_controls",
+          "checksum": "6bd98ba90f3594fa49885d3017cb1808a2bc3b78e40c4384818b914783b8564e",
+          "applied_at": "2026-10-20T20:20:46.109Z"
+        },
+        {
+          "id": "027_automatic_commerce_intake",
+          "checksum": "f72e8a019fc4ebd57280d56e4471328bafeebac5ee468e057216aa10b5484273",
+          "applied_at": "2026-10-20T20:20:46.148Z"
+        },
+        {
+          "id": "027_notification_delivery_leases",
+          "checksum": "cf3ee6fcdd0b238038749f7f95b65601354f1c7347c5cfa878cacaeb70335576",
+          "applied_at": "2026-10-20T20:20:46.156Z"
+        },
+        {
+          "id": "028_capture_sessions_relay",
+          "checksum": "1ca8d283457a8b2a677dac2eed256c799eb77e41369ea6aa49183a8fe5bf5b54",
+          "applied_at": "2026-10-20T20:20:46.209Z"
+        },
+        {
+          "id": "029_signature_experiences",
+          "checksum": "dda0b548437aca2bba4dba972feb15d657dae44fb79563934800ced736f8c691",
+          "applied_at": "2026-10-20T20:20:46.313Z"
+        },
+        {
+          "id": "030_disclosure_receipts",
+          "checksum": "951ca785e6294f0762024eaf582a71957b81786a6b744bef6a683aefb5e53e5b",
+          "applied_at": "2026-10-20T20:20:46.356Z"
+        },
+        {
+          "id": "031_capture_client_context",
+          "checksum": "ea65034f4e1858ba38817ea684bf49996ec6c3677be6e0f8d914a85c5db21bda",
+          "applied_at": "2026-10-20T20:20:46.372Z"
+        },
+        {
+          "id": "032_capture_shipping",
+          "checksum": "835dbdeaaeffd41d3fc1f600a3ce9dc7e53a99052a51959356173dd0e1c9f12e",
+          "applied_at": "2026-10-20T20:20:46.403Z"
+        },
+        {
+          "id": "033_shared_proof",
+          "checksum": "aa23dca9c0fba0213c3e5e255acff496d53e0cfa23d354a22ed500fbca57497d",
+          "applied_at": "2026-10-20T20:20:46.411Z"
+        },
+        {
+          "id": "034_seller_attestation_authorization",
+          "checksum": "8cb160767a8556f544591366ed08e94adb968279cd9908537f0c3fb6ecfa4b45",
+          "applied_at": "2026-10-20T20:20:46.430Z"
+        },
+        {
+          "id": "035_media_admission",
+          "checksum": "f2104bfc14ff1a8fab97a6503c3fcea864341321d927a4947fe8891e529dda43",
+          "applied_at": "2026-10-20T20:20:46.461Z"
+        },
+        {
+          "id": "036_durable_recovery",
+          "checksum": "f35e12d91f2852c986bbe57806fdaa825fd2cdfd56e0a022b533b0f88d294ba4",
+          "applied_at": "2026-10-20T20:20:46.518Z"
+        },
+        {
+          "id": "037_retention_policy",
+          "checksum": "e93e2ac2bfd9a757a1aab4acd6a07dfabac0737add42c96176dec82e9f688088",
+          "applied_at": "2026-10-20T20:20:46.547Z"
+        },
+        {
+          "id": "038_parcel_tracking",
+          "checksum": "0e7e0af54b27d4567fc261e5a033d35a7d0d402b77a0f4043cd2234447550b60",
+          "applied_at": "2026-10-20T20:20:46.586Z"
+        },
+        {
+          "id": "039_recipient_exports",
+          "checksum": "5534d1fdcf598c9622c3d5c77aefbc5cdc643ace361cfb9ef6ff291f1359d1c9",
+          "applied_at": "2026-10-20T20:20:46.611Z"
+        },
+        {
+          "id": "040_packing_requests",
+          "checksum": "9e6366a6048ceb325938f1ce82394937d77c70887a61a927d892ebd9610ed4d2",
+          "applied_at": "2026-10-20T20:20:46.630Z"
+        },
+        {
+          "id": "041_operations",
+          "checksum": "f0d79455388c0397c7d691b2a6d019ec4a77b4f9b70f18a2abecab1ead5e8f02",
+          "applied_at": "2026-10-20T20:20:46.651Z"
+        },
+        {
+          "id": "042_billing_usage",
+          "checksum": "2ba0e5a7c6bd3f31bbd52c8ea59a5c63912e4343e442e7b8b94850c0877876a0",
+          "applied_at": "2026-10-20T20:20:46.709Z"
+        },
+        {
+          "id": "043_policy_recovery",
+          "checksum": "4b6d5e67be77b36e41520a9daf0e3d946fc060d13b2640143af16253d516d910",
+          "applied_at": "2026-10-20T20:20:46.759Z"
+        },
+        {
+          "id": "044_support_access",
+          "checksum": "0877a7bafb8d37146dd4165804a4daf4d2f9f20e855c719021263bdaba5f465a",
+          "applied_at": "2026-10-20T20:20:46.799Z"
+        },
+        {
+          "id": "045_program_observations",
+          "checksum": "1c60b5f9201317a7f9f497f8319661a6c34e86f6b35a14f0197b3f3fdb01cd9f",
+          "applied_at": "2026-10-20T20:20:46.841Z"
+        },
+        {
+          "id": "046_billing_refund_reversals",
+          "checksum": "f325df3e4d6b7f9646f86b800b020f50a792c1217ab0d6caa9f3bd47f9f09eb9",
+          "applied_at": "2026-10-20T20:20:46.851Z"
+        },
+        {
+          "id": "047_policy_recovery_context",
+          "checksum": "23d4e1d54bcabe8881209093bb120f3f0aa86fd0162e441e554cd219e3bba5c0",
+          "applied_at": "2026-10-20T20:20:46.860Z"
+        },
+        {
+          "id": "048_billing_reconciliation",
+          "checksum": "be77bd44622a9aea2dc99838ce0351300dde070a404bd068231f58c613b80947",
+          "applied_at": "2026-10-20T20:20:46.884Z"
+        },
+        {
+          "id": "049_billing_enrollment",
+          "checksum": "2fcaf549ed3541f04887ae8d2391eb24e7689a3a55de13ad23c7c2391a0ee2b6",
+          "applied_at": "2026-10-20T20:20:46.920Z"
+        },
+        {
+          "id": "050_etsy_connected_accounts",
+          "checksum": "57cc78ad72d5ec6763691397255d33d1a823a89924b946e5ee8264aba2cd6b9f",
+          "applied_at": "2026-10-20T20:20:46.928Z"
+        },
+        {
+          "id": "051_etsy_request_budget",
+          "checksum": "53dbb16923efa6a84920fc9f5493247153d9813a2d4728157bb54fd04cd004f7",
+          "applied_at": "2026-10-20T20:20:46.944Z"
+        },
+        {
+          "id": "052_redesign_integrity",
+          "checksum": "2ebb5bb0c5769a878733d42c06c8eb5df4306184a17f0750dad4791b8a10b27e",
+          "applied_at": "2026-10-20T20:20:46.977Z"
+        },
+        {
+          "id": "053_study_ui_instrumentation",
+          "checksum": "deaae42b7bec506b9c196235924df0b9fbfdb33f43b461df2ba7d2cb7d107b30",
+          "applied_at": "2026-10-20T20:20:46.986Z"
+        },
+        {
+          "id": "054_intake_context",
+          "checksum": "96eb983a869c56cd312c6e89387e759fa7dd2fb8fc34e0f0d0674fd6a9b95c39",
+          "applied_at": "2026-10-20T20:20:47.045Z"
+        },
+        {
+          "id": "055_intake_handoffs",
+          "checksum": "614d83fa3fb9029fb1ff7f66d69c76232974e6cfd189d7ba3dc9fe51bd3ee8ce",
+          "applied_at": "2026-10-20T20:20:47.081Z"
+        },
+        {
+          "id": "056_intake_mail",
+          "checksum": "91a3a3c9747cee00878866c770ecc1ecb124061c68bf7bceffe614ce8dcc76c9",
+          "applied_at": "2026-10-20T20:20:47.121Z"
+        },
+        {
+          "id": "057_intake_shippo_sync",
+          "checksum": "2e6e3f95471f8dbfd4a7940741d6bc3f411409657d696f897cf1d67d4e7a62c7",
+          "applied_at": "2026-10-20T20:20:47.136Z"
+        },
+        {
+          "id": "058_capture_engine",
+          "checksum": "097f0e7e79b34d062078d0ccffc177940c5aabca9867fcee219c7806b2374da6",
+          "applied_at": "2026-10-20T20:20:47.176Z"
+        },
+        {
+          "id": "059_claims_access",
+          "checksum": "d4ffbcfc3935f7eafedee047be512573b6145b912cff6f0145ac41fdeb8865a1",
+          "applied_at": "2026-10-20T20:20:47.216Z"
+        },
+        {
+          "id": "060_identifier_enrichment",
+          "checksum": "cae7c9a02b56ce4c622026d3f21971a6236bd6b2291cda944b183e04d71806f4",
+          "applied_at": "2026-10-20T20:20:47.313Z"
+        },
+        {
+          "id": "061_lifecycle_snapshots",
+          "checksum": "0ca778b9f6b54aa09c2d51bed13b8d097f3cab72eef56692174de12b60c1c686",
+          "applied_at": "2026-10-20T20:20:47.341Z"
+        },
+        {
+          "id": "062_capture_completion_receipts",
+          "checksum": "c07359a05728e16c629ead70328089b81a7ea1e1b9a524568bc584b85a0707d6",
+          "applied_at": "2026-10-20T20:20:47.368Z"
+        },
+        {
+          "id": "063_record_tracking",
+          "checksum": "4b582ff6aadd03fa01c1ca144b96a647204db45bfc4a5759998da31d45410b21",
+          "applied_at": "2026-10-20T20:20:47.410Z"
+        },
+        {
+          "id": "064_notification_center",
+          "checksum": "4806adb33e9ebd35fbb224e6e98bc9af46ccedfc705ca5be0696c14fd1f2997e",
+          "applied_at": "2026-10-20T20:20:47.473Z"
+        },
+        {
+          "id": "065_ebay_deletion_cases",
+          "checksum": "e6363472ecd9273cea50a5ea2f6f523befbf5469628113adfa98da22f8ae691a",
+          "applied_at": "2026-10-20T20:20:47.507Z"
+        },
+        {
+          "id": "066_ios_capture_surfaces",
+          "checksum": "695f16cbdebf41e760ef0757253af32fa6f124fcc720cdc72c450669ce33ceb2",
+          "applied_at": "2026-10-20T20:20:47.518Z"
+        },
+        {
+          "id": "067_mobile_intake_submissions",
+          "checksum": "3f1333e6f4670e9506ab0ad0970fa83373f2c243175fef247fe99dd0616b923c",
+          "applied_at": "2026-10-20T20:20:47.570Z"
+        },
+        {
+          "id": "068_commerce_sync_checkpoints",
+          "checksum": "1a9c3cacf5f146f87dd1fe5ae125aceb9ee5c36ee971cb0e4fad6c9053133a51",
+          "applied_at": "2026-10-20T20:20:47.586Z"
+        },
+        {
+          "id": "069_system_admin",
+          "checksum": "95f2eb6a14f703fc1a7d6a69c4c651147c1590424a3978c8256e95bbc9f32cd3",
+          "applied_at": "2026-10-20T20:20:47.677Z"
+        },
+        {
+          "id": "070_public_analytics",
+          "checksum": "56f2d727ae90a9b19163f43e5b43c1f1973deb0fd0ec96262273dd9094a4c5d8",
+          "applied_at": "2026-10-20T20:20:47.699Z"
+        },
+        {
+          "id": "071_admin_error_triage",
+          "checksum": "57f74e7ade72ed5f57239d93ae06f6c0b3e1c33984ee8334843f9e558d96a247",
+          "applied_at": "2026-10-20T20:20:47.715Z"
+        },
+        {
+          "id": "072_admin_read_indexes",
+          "checksum": "43052f95d34060f14bdfd67b9756c6542d3279ac4a5a21f8480b3bd1ed5e01f1",
+          "applied_at": "2026-10-20T20:20:47.790Z"
+        },
+        {
+          "id": "073_client_version_activity",
+          "checksum": "6a1815b36939790632a73e8650e49b2fc9733e798fc75a620406f751bf75573a",
+          "applied_at": "2026-10-20T20:20:47.812Z"
+        },
+        {
+          "id": "074_desktop_capture_registration",
+          "checksum": "3d598d733ab8aaf375fc793446b2ed732b42c2bcb9c47fc732af57c9eade692a",
+          "applied_at": "2026-10-20T20:20:47.826Z"
+        },
+        {
+          "id": "075_onboarding",
+          "checksum": "f7e8272b97e92905b78b60a717964e931768758d6b3bfadf36df44c9cb6f510f",
+          "applied_at": "2026-10-20T20:20:47.852Z"
+        },
+        {
+          "id": "076_first_experience_measurement",
+          "checksum": "3b80452692918bb3589500d100b773deeb8cddf3c57b6882796e8cd1a13c1157",
+          "applied_at": "2026-10-20T20:20:47.867Z"
+        },
+        {
+          "id": "079_rnd_evidence",
+          "checksum": "197b8149953a8e04a2216433ab262159ae736e62e7ef6de9f964de4f8547deac",
+          "applied_at": "2026-10-20T20:20:48.069Z"
+        },
+        {
+          "id": "080_rnd_learning",
+          "checksum": "59fb22113251274542db12f73c9a047154ea51d07bc1fa236c44585a2841dfc5",
+          "applied_at": "2026-10-20T20:20:48.093Z"
+        },
+        {
+          "id": "081_rnd_platform",
+          "checksum": "4d2389b653275c2e669bfaee12b38dff8204578f7be1babbc3d4e70d970b4d98",
+          "applied_at": "2026-10-20T20:20:48.160Z"
+        },
+        {
+          "id": "082_rnd_enrollments",
+          "checksum": "0cf27d56b58308f5614cac9d2978997004bfc1c3fbfcdedb285cbf5213239b95",
+          "applied_at": "2026-10-20T20:20:48.205Z"
+        },
+        {
+          "id": "083_rnd_zk",
+          "checksum": "854559fa821e2ce91eadf5019fe5656decd69c33e76358f3c789a2c34903f046",
+          "applied_at": "2026-10-20T20:20:48.226Z"
+        },
+        {
+          "id": "084_rnd_annotations",
+          "checksum": "4c9d508767baf69d153b007a0f4371deb61f41ca916204c0754a75d13cc2f83c",
+          "applied_at": "2026-10-20T20:20:48.248Z"
+        },
+        {
+          "id": "085_rnd_capture_sidecars",
+          "checksum": "194d96a7e658c4d405b9f2e5af92c65b7617e814bc6342418c694f29a235908e",
+          "applied_at": "2026-10-20T20:20:48.281Z"
+        },
+        {
+          "id": "086_rnd_derivative_grants",
+          "checksum": "b1ab16a8d2ebf69ee0a692e5a2943aa92722c3272813a122e3e69890d68530a7",
+          "applied_at": "2026-10-20T20:20:48.332Z"
+        },
+        {
+          "id": "087_rnd_source_storage_dedup",
+          "checksum": "78e9a7383e377f0df24590e78ddeaacf8f73043377a9dad8e897b00c08e879ad",
+          "applied_at": "2026-10-20T20:20:48.340Z"
+        }
+      ],
+      [
+        {
+          "legacy_tenant": "ten_34a0fb73948b11dff8206718",
+          "environment": "sandbox",
+          "owner_user_id": "user_01M5DFJHJQBM34NC1X6KYBWCQV",
+          "owner_status": "ACTIVE",
+          "proof_count": "1",
+          "recorded_sellers": "1",
+          "disposition": "EXPLICIT_MERCHANT_MAPPING_REQUIRED"
+        },
+        {
+          "legacy_tenant": "ten_d93429d8a252c0bece397b7a",
+          "environment": "sandbox",
+          "owner_user_id": "user_01M5DFJJ88H5G9P3PTVN7CCGW1",
+          "owner_status": "ACTIVE",
+          "proof_count": "1",
+          "recorded_sellers": "1",
+          "disposition": "EXPLICIT_MERCHANT_MAPPING_REQUIRED"
+        }
+      ],
+      [
+        {
+          "proof_id": "proof_01M5DFJHKB3H7RBKCQDFTDWK0G",
+          "manifest_id": "man_01M5DFJHS3KMPP5AHXTP3PR2G4",
+          "sha256": "857b2e123d6338ec1c4e05ab6ce363f735663fe15b18afb7ec7737be9126edb2",
+          "canonical_bytes": 1646,
+          "signature_algorithm": "ECDSA_SHA_256",
+          "signing_key_id": "synthetic-migration-only"
+        },
+        {
+          "proof_id": "proof_01M5DFJJ8RY4NYK00DY1EZNRKR",
+          "manifest_id": "man_01M5DFJJDXWNRE6D2FSBXAH20P",
+          "sha256": "cee23d0fa306c68c80185b8c0a4822c5d76433d6ad2818382e3fcfa8d38629b8",
+          "canonical_bytes": 1646,
+          "signature_algorithm": "ECDSA_SHA_256",
+          "signing_key_id": "synthetic-migration-only"
+        }
+      ],
+      [],
+      [],
+      []
+    ],
+    "records": [
+      {
+        "proofId": "proof_01M5DFJHKB3H7RBKCQDFTDWK0G",
+        "manifestSha256": "857b2e123d6338ec1c4e05ab6ce363f735663fe15b18afb7ec7737be9126edb2",
+        "preservedEntries": {
+          "manifest.json": "857b2e123d6338ec1c4e05ab6ce363f735663fe15b18afb7ec7737be9126edb2",
+          "transaction.json": "eab08cedea995d70a04bef04657e12ccd148507986edd71c5bd741a49c0eb0f2",
+          "participants.json": "fe002a78be1ccba44f437f5fb63d37fb8f6c24c6ade1abd1ec911db43577a9f6",
+          "attestations.json": "e45121ac63c6de1bbe7bedcc32bd3362fb702cee4425e8e8ee71071a4426a21d",
+          "evidence/ev_c18b306dc0c6c712849a29c6.bin": "82579ebab309664c5394b20319dcfee9e3aef00f640f98ccff237806b24af18a",
+          "integrity/evidence.json": "3dbb8d2981c1a4221d93feaca233142f528d68acbb688fb7c2a894ce754d4557",
+          "integrity/signatures.json": "1e7f367cbcf6a18a9142e073df6f39d7968d05538a2e52c9845aa868ff92aafc"
+        },
+        "beforePackageSha256": "a19908c4bf1d143d27e846cea78134bd59ae21c08c8a588503a33763a28f4dd8",
+        "afterPackageSha256": "06e1fe3a2ee532965d8f804fce503d868e85d9ed2b9b2646b0092139e381766a"
+      },
+      {
+        "proofId": "proof_01M5DFJJ8RY4NYK00DY1EZNRKR",
+        "manifestSha256": "cee23d0fa306c68c80185b8c0a4822c5d76433d6ad2818382e3fcfa8d38629b8",
+        "preservedEntries": {
+          "manifest.json": "cee23d0fa306c68c80185b8c0a4822c5d76433d6ad2818382e3fcfa8d38629b8",
+          "transaction.json": "ad4ef116163a9affa77486a7a9699a23dc999aa840e544e378a18a7b3036a92d",
+          "participants.json": "48c26509cd99b201cd93e55743d6f6f7e9a0be0b09ad48fa886e88eb4ab61ba4",
+          "attestations.json": "16df39a628fee30e5704b24bdb59d0467276d640a589ce770b7a542f0082aeb6",
+          "evidence/ev_847b10be21a4c81d0e8cb9fd.bin": "977cbe5c44710ef79c61bd9cd69209e9bc2742127ea5acf28b6848440686b81b",
+          "integrity/evidence.json": "67158e5e1ccc82eaeec1bf68977f60a0efe59b9e19aa921e3e27dc9420ba0c27",
+          "integrity/signatures.json": "2ad38a633f6b9e8dbf2780f2ac7c94ec368ff0b9746aabe7c63310125630f282"
+        },
+        "beforePackageSha256": "b358e16f317d1c4c6f777c86dd9b148decc95fae2150fec10f70882566965695",
+        "afterPackageSha256": "8d18873f530830e966f1e73c2dbe74ffa8169b4bed0d2c75c36e6c12871a3b2e"
+      }
+    ],
+    "limitations": [
+      "Synthetic legacy evidence fixture and software signing; no capture certification",
+      "MemoryObjectStore; AWS durability and role boundaries are separate gates",
+      "Export audit projections may change; frozen core entries and original media are compared byte for byte",
+      "Transaction elapsed time includes queries and lock waits; not a direct lock-hold measurement"
+    ]
+  },
+  "gates": {
+    "event": "isolated_m1_database_checks_passed",
+    "source": "c03fbf9b6745078fb46a2e3d1b0068bf0d0b8b5e",
+    "baseline": "cb82e6e57d50c51e4c55c3e1525a3adc61ce15d5",
+    "storageAdapter": "MemoryObjectStore",
+    "authentication": "synthetic-in-process",
+    "recoveryCertified": false,
+    "deviceAcceptance": false
+  },
+  "policyValidation": {
+    "findings": [],
+    "artifactPermissions": [
+      {
+        "resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/migration/synthetic.zip",
+        "decision": "allowed"
+      },
+      {
+        "resource": "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/acceptance/synthetic.zip",
+        "decision": "implicitDeny"
+      }
+    ],
+    "executed": true
+  },
+  "priorAttempts": [
+    {
+      "buildId": "packproof-m1-20261020-migration:58860f77-6f0f-4ae8-b983-675be57b29ac",
+      "result": "Stopped at network cleanup permission precheck; no application code executed"
+    },
+    {
+      "buildId": "packproof-m1-20261020-migration:29bbda2e-72f1-4f9d-a5fd-20fb3243ba7c",
+      "result": "Migration comparison and six checks passed; media validation failed because runner lacked ffmpeg/ffprobe. Corrected in the successful run."
+    }
+  ],
+  "limits": {
+    "actualDeviceSession": false,
+    "protectedRecoveryRestore": false,
+    "applicationIamBoundary": false,
+    "independentM1Review": false,
+    "liveCohort": false
+  },
+  "cleanup": {
+    "observedAt": "2026-10-20T20:25:44.163196+00:00",
+    "runnerStackStatus": "DELETE_COMPLETE",
+    "resources": [
+      {
+        "logicalId": "BuildRole",
+        "physicalId": "packproof-m1-20261020-migration-role",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "BuildSecurityGroup",
+        "physicalId": "sg-0190ba74cd81fd973",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "DatabaseIngress",
+        "physicalId": "sgr-0f6c95016544dd51c",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "EgressSubnet",
+        "physicalId": "subnet-0017003eda1956302",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "GatewayAttachment",
+        "physicalId": "IGW|vpc-0c4f12c0ba9393ae3",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "InternetGateway",
+        "physicalId": "igw-058ddc72def0599c5",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "Logs",
+        "physicalId": "/packproof/packproof-m1-20261020/migration",
+        "status": "DELETE_SKIPPED"
+      },
+      {
+        "logicalId": "LogsKey",
+        "physicalId": "59b44c5d-f22b-4e03-bf8d-97fbff9332fe",
+        "status": "DELETE_SKIPPED"
+      },
+      {
+        "logicalId": "NatAddress",
+        "physicalId": "32.199.99.44",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "NatGateway",
+        "physicalId": "nat-07e67fb9bf6937771",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "PrivateAssociationA",
+        "physicalId": "rtbassoc-08e2b437aa7caecb9",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "PrivateAssociationB",
+        "physicalId": "rtbassoc-0afe6488857f7b9b3",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "PrivateRoute",
+        "physicalId": "rtb-02e4383bcf78eaa9e|0.0.0.0/0",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "PrivateRouteTable",
+        "physicalId": "rtb-02e4383bcf78eaa9e",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "Project",
+        "physicalId": "packproof-m1-20261020-migration",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "PublicAssociation",
+        "physicalId": "rtbassoc-0ef94fe57c8d1f1ca",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "PublicRoute",
+        "physicalId": "rtb-0e2576b9ea978df0b|0.0.0.0/0",
+        "status": "DELETE_COMPLETE"
+      },
+      {
+        "logicalId": "PublicRouteTable",
+        "physicalId": "rtb-0e2576b9ea978df0b",
+        "status": "DELETE_COMPLETE"
+      }
+    ],
+    "foundationStatus": "CREATE_COMPLETE",
+    "database": {
+      "id": "packproof-m1-20261020-db",
+      "status": "available",
+      "publiclyAccessible": false,
+      "encrypted": true,
+      "deletionProtection": true
+    },
+    "projectAbsent": true,
+    "roleAbsent": true,
+    "natState": "deleted",
+    "elasticIpReleased": true,
+    "databaseIngress": [
+      {
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "UserIdGroupPairs": [
+          {
+            "UserId": "784514617543",
+            "GroupId": "sg-075e612f687f88c7e"
+          }
+        ],
+        "IpRanges": [],
+        "Ipv6Ranges": [],
+        "PrefixListIds": []
+      }
+    ],
+    "remainingRoutes": [
+      {
+        "DestinationCidrBlock": "10.42.0.0/16",
+        "GatewayId": "local",
+        "Origin": "CreateRouteTable",
+        "State": "active"
+      }
+    ]
+  }
+}
