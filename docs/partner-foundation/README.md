@@ -1,6 +1,6 @@
-# Organization foundation candidate - 20 October 2026
+# Organization foundation candidate — 20 October 2026
 
-This implements a gated foundation batch from the attached **PackProof API Infrastructure Development Plan v1.0**, requirements M0 and M1, with the independently useful merchant receiver sample. It is **not foundation release approval or completion of M2-M5**. New organization APIs default off. No production deployment, live provider submission, customer contact, pricing change or irreversible storage setting is included.
+This implements a gated foundation batch from the attached **PackProof API Infrastructure Development Plan v1.0**, requirements M0 and M1, with the independently useful merchant receiver sample. It is **not foundation release approval or completion of M2–M5**. New organization APIs default off. No production deployment, live provider submission, customer contact, pricing change or irreversible storage setting is included.
 
 ## Baseline reconciliation (M0-01)
 
@@ -30,10 +30,10 @@ The older architecture document's exclusions do not override the attached additi
 | C08-03/04, CON-02 | `organization-router.ts`, `partner-router.ts`; encrypted secret replay | 090, 092 | Disabled entitlement bootstrap; fresh human auth for administration; hashed service keys |
 | M1-03, T06 | `domain/finalize.ts` | None | Sign outside transaction, rebuild/compare exact candidate, immutable replay; signing-boundary tests |
 | M1-03/05, AUTH-03 | Existing policy journal and restore allowlists extended | 092 | Revocations journaled; restored/missing organization authorization fails closed; real restore still required |
-| M1-04, EVT-01-04 | `platform/event-stream.ts`, deferred database triggers | 088 | Legacy `/v1/events` unchanged; new `/event-stream`; local rollback/cursor tests and real-PG gate |
+| M1-04, EVT-01–04 | `platform/event-stream.ts`, deferred database triggers | 088 | Legacy `/v1/events` unchanged; new `/event-stream`; local rollback/cursor tests and real-PG gate |
 | CON-01/04, C09-04 | `proof-pagination.ts`, problem responses | 088 stream reused | Signed tenant/environment/query cursor; committed membership snapshot |
 | M1-04, T08 | `examples/merchant-receiver` | Separate merchant schema | Inbox and job one transaction; restart/duplicate/forgery tests |
-| M1-05/06 | PostgreSQL CI gate, [operations](OPERATIONS.md), [acceptance record](ACCEPTANCE.md) | 088-092 | Candidate evidence required before activation; no release recommendation yet |
+| M1-05/06 | PostgreSQL CI gate, [operations](OPERATIONS.md), [acceptance record](ACCEPTANCE.md) | 088–092 | Candidate evidence required before activation; no release recommendation yet |
 
 ## Contracts and first synthetic integration
 
@@ -52,4 +52,4 @@ The server-side [reference adapter](../../examples/merchant-receiver/partner-cli
 - **Implemented:** additive organization/delegation/import/capture authorization, commit-safe feed, signed pagination, receiver, signing boundary, contracts, policy journal hooks and runbooks.
 - **Locally tested:** the focused results listed in ACCEPTANCE.md. PGlite and a test object store do not establish PostgreSQL concurrency, Object Lock or real device behavior.
 - **Staging verified / deployed / live-partner verified:** none in this execution. AWS connection requires reauthentication. No named consenting partner or real-device test session was supplied.
-- **M2-M5:** remain gated. They must not be reported complete from this foundation batch. The next executable gate is the PostgreSQL workflow, followed by authenticated staging T01-T09/T13 and the restore demonstration. Then continue M2-01/02/03 using existing capture and verification services.
+- **M2–M5:** remain gated. They must not be reported complete from this foundation batch. The next executable gate is the PostgreSQL workflow, followed by authenticated staging T01–T09/T13 and the restore demonstration. Then continue M2-01/02/03 using existing capture and verification services.

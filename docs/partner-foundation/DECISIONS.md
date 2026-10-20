@@ -8,7 +8,7 @@ Ownership, integration bindings and attribution are immutable. A grant intersect
 
 ## 2. Additive migration; no inferred legacy backfill
 
-Migrations 088-092 add associations and guards. No existing Proof, participant, manifest, key identity or outbox row is rewritten. The read-only preflight inventories ownership and frozen manifests. Every legacy tenant remains explicitly unmapped until its merchant ownership is reviewed. Names, email domains and colliding order IDs are insufficient evidence for a mapping. A new organization tenant cannot use owner-bound legacy API keys. Reassigning existing customer records is outside this candidate and must have a separate reviewed mapping manifest and dry-run counts.
+Migrations 088–092 add associations and guards. No existing Proof, participant, manifest, key identity or outbox row is rewritten. The read-only preflight inventories ownership and frozen manifests. Every legacy tenant remains explicitly unmapped until its merchant ownership is reviewed. Names, email domains and colliding order IDs are insufficient evidence for a mapping. A new organization tenant cannot use owner-bound legacy API keys. Reassigning existing customer records is outside this candidate and must have a separate reviewed mapping manifest and dry-run counts.
 
 ## 3. Commit-order reconciliation
 

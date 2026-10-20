@@ -35,7 +35,7 @@ export function textField(value: unknown, name: string, max = 200): string {
     value.trim().length > max ||
     /[\x00-\x1f]/.test(value)
   ) {
-    throw new DomainError("INVALID_REQUEST", `${name} must contain 1-${max} characters`, 400);
+    throw new DomainError("INVALID_REQUEST", `${name} must contain 1–${max} characters`, 400);
   }
   return value.trim();
 }
