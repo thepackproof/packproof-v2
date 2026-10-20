@@ -67,7 +67,8 @@ try {
     const transaction = await createTransaction(opened.db, clock, user, { itemTitle: `SYNTHETIC ${label}` });
     const proof = await createOrGetProof(opened.db, clock, user, transaction.transactionId, { participationPolicy: 'COUNTERPARTY_OPTIONAL' });
     const id = `ev_${randomBytes(12).toString('hex')}`, tenant = `ten_${randomBytes(12).toString('hex')}`;
-    const body = Buffer.from(`SYNTHETIC migration preservation ${label}`), objectKey = `fixture/${id}`;
+    const body = Buffer.from(`SYNTHETIC migration preservation ${label}`);
+    const objectKey = `evidence/${proof.proofId}/${id}/committed/sha256-${sha256Hex(body)}`;
     await store.put(objectKey, body, 'application/octet-stream');
     await opened.db.query("INSERT INTO evidence(id,proof_id,submitted_by,object_key,content_type,byte_size,sha256,created_at,committed_at,validation_status,evidence_type,capture_origin) VALUES($1,$2,$3,$4,'application/octet-stream',$5,$6,$7,$7,'COMMITTED','FULFILLMENT_CAPTURE','LEGACY_UNKNOWN')", [id,proof.proofId,user,objectKey,body.length,sha256Hex(body),clock.now().toISOString()]);
     await opened.db.query("INSERT INTO api_tenants(id,owner_user_id,name,environment,created_at) VALUES($1,$2,$3,'sandbox',$4)", [tenant,user,label,clock.now().toISOString()]);
