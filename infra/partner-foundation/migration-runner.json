@@ -6,6 +6,14 @@
       "Type": "String",
       "AllowedPattern": "[a-f0-9]{40}",
       "Description": "Exact reviewed PR commit to execute"
+    },
+    "EgressAvailabilityZone": {
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-east-1a",
+      "AllowedValues": [
+        "us-east-1a"
+      ],
+      "Description": "Same availability zone as the approved first private subnet"
     }
   },
   "Resources": {
@@ -62,7 +70,9 @@
       "Properties": {
         "VpcId": "vpc-0c4f12c0ba9393ae3",
         "CidrBlock": "10.42.20.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Ref": "EgressAvailabilityZone"
+        },
         "MapPublicIpOnLaunch": false
       }
     },
