@@ -12,7 +12,7 @@ export function signalJob(job:UploadView){
   if(job.replacement?.decision==='pending')return {state:'local' as const,label:'Choose a take'};
   if(job.state==='REVIEW')return {state:'local' as const,label:'Saved on this computer'};
   if(job.state==='INTERRUPTED')return {state:'attention' as const,label:'Recording interrupted · retained'};
-  if(job.state==='SUBMITTED')return {state:'local' as const,label:'Recording received · original retained'};
+  if(job.state==='SUBMITTED')return {state:'local' as const,label:job.localCopyAvailable?'Recording received · original retained':'Recording received'};
   if(job.state==='COMPLETE')return {state:'local' as const,label:'Proof finalized'};
   if(pausedStates.has(job.state))return {state:'attention' as const,label:`Upload paused${job.progress?` · ${job.progress}%`:''}`};
   return {state:'uploading' as const,label:job.state==='UPLOADING'?`Uploading · ${job.progress}%`:'Saving in progress'};
@@ -59,7 +59,7 @@ export function SignalSubmission({jobId,proofId,userId,onHome,onOpen,onReview}:{
   const saved=useSavedReceipt(proofId,userId,!!job?.evidenceId,job?.evidenceId,true);
   async function resume(){if(!job||busy)return;setBusy(true);setError('');try{await window.packproof.uploads.retry(job.id);}catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}}
   if(saved)return <div className="signal-desktop-flow"><SignalSteps step={3}/><SignalReceipt title={saved.transaction.itemTitle||job?.label||'Packing record'} proofId={saved.proofId} savedAt={saved.finalizedAt!} duration={signalDuration(job?.recordedDurationMs)} onView={onOpen} onHome={onHome}/></div>;
-  if(job?.state==='SUBMITTED')return <div className="signal-desktop-flow"><SignalSteps step={3}/><SignalBadge state="local">Recording received</SignalBadge><h1>Your record is received.</h1><p>The server has finalized this Proof. Your original stays on this computer until preservation is confirmed.</p><button className="primary" onClick={onOpen}>View your Proof</button><button onClick={onHome}>Back to Home</button></div>;
+  if(job?.state==='SUBMITTED')return <div className="signal-desktop-flow"><SignalSteps step={3}/><SignalBadge state="local">Recording received</SignalBadge><h1>Your record is received.</h1><p>The server has finalized this Proof. {job.localCopyAvailable?'Your original stays on this computer until preservation is confirmed.':'We are checking its preservation receipt.'}</p><button className="primary" onClick={onOpen}>View your Proof</button><button onClick={onHome}>Back to Home</button></div>;
   return <div className="signal-desktop-flow"><SignalSteps step={3}/>{error&&<ErrorNotice>{error}</ErrorNotice>}{job&&localStates.has(job.state)?<><h1>Your take is still here.</h1><p>Review the original recording before choosing what to do next.</p><button className="primary" onClick={()=>onReview(job)}>Review recording</button></>:<SignalProgress percent={job?.state==='UPLOADING'?job.progress:null} confirming={!!job&&['VERIFYING','COMMITTING','FINALIZING','COMPLETE'].includes(job.state)} paused={!!job&&pausedStates.has(job.state)}>{job?.error&&<p>{job.error}</p>}{job&&pausedStates.has(job.state)&&<button className="primary" disabled={busy} onClick={()=>void resume()}>{busy?'Resuming…':'Resume upload'}</button>}</SignalProgress>}<button onClick={onHome}>Continue to Home</button></div>;
 }
 export function SignalRecordSummary({proof,userId,onShare}:{proof:CanonicalProof;userId:string;onShare:()=>void}){

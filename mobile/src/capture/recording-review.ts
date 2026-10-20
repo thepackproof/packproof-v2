@@ -1,7 +1,7 @@
 import type { LocalCapture } from '../capture';
 
 export function requiresRecordingRecovery(capture: LocalCapture | null | undefined): boolean {
-  return Boolean(capture && (capture.interrupted || capture.recovery?.phase === 'RECORDING' || capture.localFileAvailable === false));
+  return Boolean(capture && (capture.interrupted || capture.encodedInspection?.playable===false || capture.recovery?.phase === 'RECORDING' || capture.localFileAvailable === false));
 }
 
 /** A camera-open request cannot silently replace an already retained take. */

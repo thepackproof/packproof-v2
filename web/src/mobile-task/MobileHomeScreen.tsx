@@ -1,3 +1,4 @@
+import {useSignalReceipt} from '../signal/useSignalReceipt';
 import {RecordThumbnail} from '../components/RecordThumbnail';
 import type {PackProofApi} from '../api/client';
 import { SignalParcel, SignalBadge } from '../signal/Signal';
@@ -32,7 +33,8 @@ export function MobileHomeScreen(props: { api?:PackProofApi; firstExperience?: b
   const saved=props.proofs.find(row=>row.presentation?.completed);
   const featured=props.proofs.find(row=>row.proofId===pendingRecording?.proofId)||saved;
   const mode=pendingRecording?(!online||pendingRecording.errorMessage?'paused':'uploading'):saved?'saved':'default';
-  const savedConfirmed=!!saved&&props.recordings.some(row=>row.proofId===saved.proofId&&row.finalized&&row.preserved);
+  const confirmed=useSignalReceipt(props.api,saved?.proofId||'',saved?.updatedAt||'',!!saved);
+  const savedConfirmed=confirmed||!!saved&&props.recordings.some(row=>row.proofId===saved.proofId&&row.finalized&&row.preserved);
 
   return <main className="page library-page mobile-home-page" aria-busy={initialLoading}>
     <div className="signal-home-grid"><section className="signal-home-primary">

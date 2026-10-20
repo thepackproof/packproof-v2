@@ -1,3 +1,4 @@
+import {inspectRecordedVideo} from '../../modules/packproof-unified-camera';
 import {SIGNAL_ENABLED} from "../experience/signal";
 import { photoAcknowledgmentForSelection, photoRetryDue, recoverPhotoSubmission } from '../capture/photo-submission-recovery';
 import { assertRecordingReplacement, assertContinuousRecording } from '../capture/recording-review';
@@ -2244,6 +2245,7 @@ export function PackProofProvider(props: { children: ReactNode }) {
       if(choice==='replacement'){
         const accepted={...candidate,replacement:{...candidate.replacement,decision:'accepted' as const}};
         assertContinuousRecording(accepted);
+        if(accepted.captureSessionId){const inspection=accepted.encodedInspection??await inspectRecordedVideo(accepted.captureSessionId,[]);if(!inspection?.playable||!(inspection.durationMs>0))throw new Error('This new take has not been confirmed playable. Your previous take is retained.');accepted.encodedInspection=inspection;}
         if(!await localCaptureExists(accepted.uri))throw new Error('This take is unavailable. Keep the previous take.');
         client.assertCaptureAccount(account.userId,account.apiBaseUrl);
         await persistCaptureMetadata(accepted); // Durable choice precedes any old-take housekeeping.
