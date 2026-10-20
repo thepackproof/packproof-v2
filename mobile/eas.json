@@ -31,7 +31,8 @@
       "extends": "shipping-integration",
       "environment": "production",
       "env": {
-        "PACKPROOF_ANDROID_VERSION_CODE": "70",
+        "PACKPROOF_ANDROID_VERSION_CODE": "71",
+        "EXPO_PUBLIC_PACKPROOF_SIGNAL": "true",
         "EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST": "true",
         "EXPO_PUBLIC_PACKPROOF_RND_PRODUCTION": "true",
         "EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX": "true",
