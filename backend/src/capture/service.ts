@@ -101,7 +101,7 @@ export async function sealCapture(db:Database,clock:Clock,actor:string,sessionId
     const digest=await manifestDigest(manifest,hash);check(value.sha256===digest,'CAPTURE_MANIFEST_MISMATCH','The capture manifest does not match its digest');
     if(row.manifest_json){check(row.manifest_sha256===digest,'CAPTURE_SEALED','A sealed recording cannot be changed');return {captureId:sessionId,sha256:digest,state:'SEALED_WITHOUT_ATTESTATION'};}
     const session=await loadCaptureSession(tx,actor,row.proof_id,sessionId,true);
-    check(['RECORDED','UPLOADING'].includes(session.state)&&session.expected_sha256===manifest.source.sha256&&Number(session.expected_byte_size)===manifest.source.byteSize&&session.content_type===manifest.source.contentType,'CAPTURE_SOURCE_MISMATCH','Seal only this session's registered original');
+    check(['RECORDED','UPLOADING'].includes(session.state)&&session.expected_sha256===manifest.source.sha256&&Number(session.expected_byte_size)===manifest.source.byteSize&&session.content_type===manifest.source.contentType,'CAPTURE_SOURCE_MISMATCH',"Seal only this session's registered original");
     const batches=(await tx.query<{body_json:{observations:Observation[];segments:MediaSegment[]}}>('SELECT body_json FROM capture_engine_batches WHERE session_id=$1 ORDER BY sequence',[sessionId])).rows;
     const priorObservations=batches.flatMap(b=>b.body_json.observations),priorSegments=batches.flatMap(b=>b.body_json.segments);
     check(canonical(manifest.observations.slice(0,priorObservations.length))===canonical(priorObservations)&&canonical(manifest.segments.slice(0,priorSegments.length))===canonical(priorSegments),'CAPTURE_JOURNAL_CONFLICT','Sealing cannot replace previously received journal entries');
