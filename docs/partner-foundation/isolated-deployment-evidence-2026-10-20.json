@@ -1,0 +1,502 @@
+{
+  "observedAt": "2026-10-20",
+  "foundationCandidate": "12dc409e6b602a715d063e13c4ddc45eb2000adb",
+  "templateSha256": "1e9bd4d28aed18b3fd4060db41e89b16996d004c4152672783a9b7b3ba7576a3",
+  "ownerDecision": "Approved in conversation before ExecuteChangeSet",
+  "stack": {
+    "StackId": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-m1-20261020/0b5a4b10-ccc0-11f1-93d0-12ffec4d9867",
+    "StackName": "packproof-m1-20261020",
+    "ChangeSetId": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/approved-m1-foundation-12dc409/0b9b298d-287a-4e83-beba-3f8644088add",
+    "Description": "PROPOSED isolated synthetic M1 test foundation. No production imports, service deployment, application IAM grants, or customer data. Requires explicit owner approval of new 90-day governance Object Lock.",
+    "Parameters": [
+      {
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "packproof-m1-20261020"
+      },
+      {
+        "ParameterKey": "RetentionDecision",
+        "ParameterValue": "APPROVED_BY_OWNER"
+      }
+    ],
+    "CreationTime": "2026-10-20T19:54:22.245000+00:00",
+    "LastUpdatedTime": "2026-10-20T19:55:07.582000+00:00",
+    "RollbackConfiguration": {},
+    "StackStatus": "CREATE_COMPLETE",
+    "DisableRollback": false,
+    "DeploymentConfig": {
+      "Mode": "STANDARD",
+      "DisableRollback": false
+    },
+    "NotificationARNs": [],
+    "Outputs": [
+      {
+        "OutputKey": "SubnetA",
+        "OutputValue": "subnet-00ce0618188c68de8"
+      },
+      {
+        "OutputKey": "SubnetB",
+        "OutputValue": "subnet-0be41abd945430b4d"
+      },
+      {
+        "OutputKey": "VpcId",
+        "OutputValue": "vpc-0c4f12c0ba9393ae3"
+      },
+      {
+        "OutputKey": "LogGroup",
+        "OutputValue": "/packproof/packproof-m1-20261020/acceptance"
+      },
+      {
+        "OutputKey": "DatabaseSecretArn",
+        "OutputValue": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r"
+      },
+      {
+        "OutputKey": "CommittedBucket",
+        "OutputValue": "packproof-m1-20261020-committedbucket-trlqhna2z8s5"
+      },
+      {
+        "OutputKey": "RecoveryBucket",
+        "OutputValue": "packproof-m1-20261020-recoverybucket-aripohrxorbp"
+      },
+      {
+        "OutputKey": "ManifestSigningKeyArn",
+        "OutputValue": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+      },
+      {
+        "OutputKey": "UploadBucket",
+        "OutputValue": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h"
+      },
+      {
+        "OutputKey": "RunnerSecurityGroupId",
+        "OutputValue": "sg-075e612f687f88c7e"
+      },
+      {
+        "OutputKey": "DatabaseEndpoint",
+        "OutputValue": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com"
+      },
+      {
+        "OutputKey": "RecoverySigningKeyArn",
+        "OutputValue": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+      }
+    ],
+    "Tags": [
+      {
+        "Key": "environment",
+        "Value": "isolated-m1-test"
+      },
+      {
+        "Key": "system",
+        "Value": "packproof"
+      },
+      {
+        "Key": "data-classification",
+        "Value": "synthetic-only"
+      },
+      {
+        "Key": "source-commit",
+        "Value": "12dc409e6b602a715d063e13c4ddc45eb2000adb"
+      }
+    ],
+    "EnableTerminationProtection": false,
+    "DriftInformation": {
+      "StackDriftStatus": "NOT_CHECKED"
+    },
+    "LastOperations": [
+      {
+        "OperationType": "CREATE_STACK",
+        "OperationId": "658c8593-59ba-434a-b221-de2de9704365"
+      }
+    ]
+  },
+  "buckets": [
+    {
+      "name": "UploadBucket",
+      "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+      "checks": {
+        "GetBucketVersioning": {
+          "Status": "Enabled"
+        },
+        "GetBucketEncryption": {
+          "ServerSideEncryptionConfiguration": {
+            "Rules": [
+              {
+                "ApplyServerSideEncryptionByDefault": {
+                  "SSEAlgorithm": "AES256"
+                },
+                "BucketKeyEnabled": false,
+                "BlockedEncryptionTypes": {
+                  "EncryptionType": [
+                    "SSE-C"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "GetPublicAccessBlock": {
+          "PublicAccessBlockConfiguration": {
+            "BlockPublicAcls": true,
+            "IgnorePublicAcls": true,
+            "BlockPublicPolicy": true,
+            "RestrictPublicBuckets": true
+          }
+        },
+        "GetBucketOwnershipControls": {
+          "OwnershipControls": {
+            "Rules": [
+              {
+                "ObjectOwnership": "BucketOwnerEnforced"
+              }
+            ]
+          }
+        },
+        "GetBucketPolicy": {
+          "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"DenyInsecureTransport\",\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":[\"arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h\",\"arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/*\"],\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}"
+        }
+      }
+    },
+    {
+      "name": "CommittedBucket",
+      "bucket": "packproof-m1-20261020-committedbucket-trlqhna2z8s5",
+      "checks": {
+        "GetBucketVersioning": {
+          "Status": "Enabled",
+          "MFADelete": "Disabled"
+        },
+        "GetBucketEncryption": {
+          "ServerSideEncryptionConfiguration": {
+            "Rules": [
+              {
+                "ApplyServerSideEncryptionByDefault": {
+                  "SSEAlgorithm": "AES256"
+                },
+                "BucketKeyEnabled": false,
+                "BlockedEncryptionTypes": {
+                  "EncryptionType": [
+                    "SSE-C"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "GetPublicAccessBlock": {
+          "PublicAccessBlockConfiguration": {
+            "BlockPublicAcls": true,
+            "IgnorePublicAcls": true,
+            "BlockPublicPolicy": true,
+            "RestrictPublicBuckets": true
+          }
+        },
+        "GetBucketOwnershipControls": {
+          "OwnershipControls": {
+            "Rules": [
+              {
+                "ObjectOwnership": "BucketOwnerEnforced"
+              }
+            ]
+          }
+        },
+        "GetBucketPolicy": {
+          "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"DenyInsecureTransport\",\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":[\"arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5\",\"arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/*\"],\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}"
+        },
+        "GetObjectLockConfiguration": {
+          "ObjectLockConfiguration": {
+            "ObjectLockEnabled": "Enabled",
+            "Rule": {
+              "DefaultRetention": {
+                "Mode": "GOVERNANCE",
+                "Days": 90
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "RecoveryBucket",
+      "bucket": "packproof-m1-20261020-recoverybucket-aripohrxorbp",
+      "checks": {
+        "GetBucketVersioning": {
+          "Status": "Enabled",
+          "MFADelete": "Disabled"
+        },
+        "GetBucketEncryption": {
+          "ServerSideEncryptionConfiguration": {
+            "Rules": [
+              {
+                "ApplyServerSideEncryptionByDefault": {
+                  "SSEAlgorithm": "AES256"
+                },
+                "BucketKeyEnabled": false,
+                "BlockedEncryptionTypes": {
+                  "EncryptionType": [
+                    "SSE-C"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "GetPublicAccessBlock": {
+          "PublicAccessBlockConfiguration": {
+            "BlockPublicAcls": true,
+            "IgnorePublicAcls": true,
+            "BlockPublicPolicy": true,
+            "RestrictPublicBuckets": true
+          }
+        },
+        "GetBucketOwnershipControls": {
+          "OwnershipControls": {
+            "Rules": [
+              {
+                "ObjectOwnership": "BucketOwnerEnforced"
+              }
+            ]
+          }
+        },
+        "GetBucketPolicy": {
+          "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"DenyInsecureTransport\",\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":[\"arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp\",\"arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*\"],\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}"
+        },
+        "GetObjectLockConfiguration": {
+          "ObjectLockConfiguration": {
+            "ObjectLockEnabled": "Enabled",
+            "Rule": {
+              "DefaultRetention": {
+                "Mode": "GOVERNANCE",
+                "Days": 90
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "signingProbes": [
+    {
+      "name": "ManifestSigningKey",
+      "keyId": "6d65691f-a10c-4547-b806-896c3d660493",
+      "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYDYA6VZiCRHBhBaDXVaeVhwYu1GzROTsIXGvNiPioGJnElNRXj+pjshtTsALkvW1zM78k4cxR7KcgF551tHTyg==",
+      "signature": "MEUCIQCqVolvwyWrQhyipEld+iPMVQdOgbr6DJaKhbWUODke8wIgSNnzOOqFR2TK9W+l/Cl0dh1z95mfEcZOCd15KcVpfCI=",
+      "message": "PackProof isolated M1 synthetic challenge 2026-10-20",
+      "keySpec": "ECC_NIST_P256",
+      "usage": "SIGN_VERIFY",
+      "locallyVerified": true
+    },
+    {
+      "name": "RecoverySigningKey",
+      "keyId": "1730036e-b64f-4137-8a1d-11964782b97d",
+      "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkqFdqTO8ZtT0SVK/gzaygiJzGjVHSZa+UjWKqH2TyuBgV+f0/XcjP0yim0q6psy9pqF47c/07+mOBF6ZNLSG2Q==",
+      "signature": "MEUCIFlx2ZvfqQU3UfV/l6UKxO8pz2sQpgQ9AQ++cN9IHjANAiEA8S8Mp9RNrcdqb8diV2Rm4occ75X1UR7niuRJZP/+Gu4=",
+      "message": "PackProof isolated M1 synthetic challenge 2026-10-20",
+      "keySpec": "ECC_NIST_P256",
+      "usage": "SIGN_VERIFY",
+      "locallyVerified": true
+    }
+  ],
+  "retentionProbes": [
+    {
+      "bucket": "packproof-m1-20261020-committedbucket-trlqhna2z8s5",
+      "key": "acceptance/synthetic-object-lock-20261020-1d1cda72-d152-4e79-8434-7e7a82673564.txt",
+      "version": "5vWMuxfFyC5WGYtrMnjkZWPmvZdRyMj9",
+      "retention": {
+        "Retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-18T19:59:42.731000+00:00"
+        }
+      },
+      "conditionalDuplicate": "An error occurred (PreconditionFailed) when calling the PutObject operation: At least one of the pre-conditions you specified did not hold",
+      "deleteWithoutBypass": "An error occurred (AccessDenied) when calling the DeleteObject operation: Access Denied because object protected by object lock.",
+      "head": {
+        "AcceptRanges": "bytes",
+        "LastModified": "2026-10-20T19:59:43+00:00",
+        "ContentLength": 38,
+        "ChecksumSHA256": "w7cI9mcenD0khcGIF77vTGyJv4EVZxn5Gt7kDzzckQI=",
+        "ChecksumType": "FULL_OBJECT",
+        "ETag": "\"0381a25e30a156633ca5a81e3ef18178\"",
+        "VersionId": "5vWMuxfFyC5WGYtrMnjkZWPmvZdRyMj9",
+        "ContentType": "text/plain",
+        "ServerSideEncryption": "AES256",
+        "Metadata": {},
+        "ObjectLockMode": "GOVERNANCE",
+        "ObjectLockRetainUntilDate": "2027-01-18T19:59:42.731000+00:00"
+      }
+    },
+    {
+      "bucket": "packproof-m1-20261020-recoverybucket-aripohrxorbp",
+      "key": "acceptance/synthetic-object-lock-20261020-f5027f8d-3f77-4c03-a447-2571a1599f5b.txt",
+      "version": "jNc_uBPbNUFD0ceXAdfWyQIeKJbeNY1b",
+      "retention": {
+        "Retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-18T20:00:07.437000+00:00"
+        }
+      },
+      "conditionalDuplicate": "An error occurred (PreconditionFailed) when calling the PutObject operation: At least one of the pre-conditions you specified did not hold",
+      "deleteWithoutBypass": "An error occurred (AccessDenied) when calling the DeleteObject operation: Access Denied because object protected by object lock.",
+      "head": {
+        "AcceptRanges": "bytes",
+        "LastModified": "2026-10-20T20:00:08+00:00",
+        "ContentLength": 38,
+        "ChecksumSHA256": "w7cI9mcenD0khcGIF77vTGyJv4EVZxn5Gt7kDzzckQI=",
+        "ChecksumType": "FULL_OBJECT",
+        "ETag": "\"0381a25e30a156633ca5a81e3ef18178\"",
+        "VersionId": "jNc_uBPbNUFD0ceXAdfWyQIeKJbeNY1b",
+        "ContentType": "text/plain",
+        "ServerSideEncryption": "AES256",
+        "Metadata": {},
+        "ObjectLockMode": "GOVERNANCE",
+        "ObjectLockRetainUntilDate": "2027-01-18T20:00:07.437000+00:00"
+      }
+    }
+  ],
+  "database": {
+    "DBInstanceIdentifier": "packproof-m1-20261020-db",
+    "DBInstanceClass": "db.t4g.micro",
+    "Engine": "postgres",
+    "DBInstanceStatus": "available",
+    "MasterUsername": "packproof",
+    "DBName": "packproof_v2",
+    "Endpoint": {
+      "Address": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+      "Port": 5432,
+      "HostedZoneId": "Z2R2ITUGPM61AM"
+    },
+    "AllocatedStorage": 20,
+    "InstanceCreateTime": "2026-10-20T19:59:36.015000+00:00",
+    "PreferredBackupWindow": "03:39-04:09",
+    "BackupRetentionPeriod": 7,
+    "DBSecurityGroups": [],
+    "VpcSecurityGroups": [
+      {
+        "VpcSecurityGroupId": "sg-000d9cd26399d10d2",
+        "Status": "active"
+      }
+    ],
+    "DBParameterGroups": [
+      {
+        "DBParameterGroupName": "packproof-m1-20261020-databaseparameters-j0dl1q9cd7zw",
+        "ParameterApplyStatus": "in-sync"
+      }
+    ],
+    "AvailabilityZone": "us-east-1b",
+    "DBSubnetGroup": {
+      "DBSubnetGroupName": "packproof-m1-20261020-databasesubnetgroup-wewd0qhgsexf",
+      "DBSubnetGroupDescription": "Isolated M1 database subnets without public routes",
+      "VpcId": "vpc-0c4f12c0ba9393ae3",
+      "SubnetGroupStatus": "Complete",
+      "Subnets": [
+        {
+          "SubnetIdentifier": "subnet-0be41abd945430b4d",
+          "SubnetAvailabilityZone": {
+            "Name": "us-east-1b"
+          },
+          "SubnetOutpost": {},
+          "SubnetStatus": "Active"
+        },
+        {
+          "SubnetIdentifier": "subnet-00ce0618188c68de8",
+          "SubnetAvailabilityZone": {
+            "Name": "us-east-1a"
+          },
+          "SubnetOutpost": {},
+          "SubnetStatus": "Active"
+        }
+      ]
+    },
+    "PreferredMaintenanceWindow": "thu:10:18-thu:10:48",
+    "UpgradeRolloutOrder": "second",
+    "PendingModifiedValues": {},
+    "LatestRestorableTime": "2026-10-20T20:02:45.894000+00:00",
+    "MultiAZ": false,
+    "EngineVersion": "16.15",
+    "AutoMinorVersionUpgrade": true,
+    "ReadReplicaDBInstanceIdentifiers": [],
+    "LicenseModel": "postgresql-license",
+    "Iops": 3000,
+    "StorageThroughput": 125,
+    "OptionGroupMemberships": [
+      {
+        "OptionGroupName": "default:postgres-16",
+        "Status": "in-sync"
+      }
+    ],
+    "PubliclyAccessible": false,
+    "StorageType": "gp3",
+    "DbInstancePort": 0,
+    "StorageEncrypted": true,
+    "KmsKeyId": "arn:aws:kms:us-east-1:784514617543:key/c3134cf2-fdcd-4b05-8d71-aac5f574721f",
+    "DbiResourceId": "db-6FIOON5EDT6AJ2N2YVMTZGENVI",
+    "CACertificateIdentifier": "rds-ca-rsa2048-g1",
+    "DomainMemberships": [],
+    "CopyTagsToSnapshot": true,
+    "MonitoringInterval": 0,
+    "DBInstanceArn": "arn:aws:rds:us-east-1:784514617543:db:packproof-m1-20261020-db",
+    "IAMDatabaseAuthenticationEnabled": false,
+    "DatabaseInsightsMode": "standard",
+    "PerformanceInsightsEnabled": false,
+    "EnabledCloudwatchLogsExports": [
+      "postgresql"
+    ],
+    "DeletionProtection": true,
+    "AssociatedRoles": [],
+    "MaxAllocatedStorage": 40,
+    "TagList": [
+      {
+        "Key": "aws:cloudformation:stack-name",
+        "Value": "packproof-m1-20261020"
+      },
+      {
+        "Key": "environment",
+        "Value": "isolated-m1-test"
+      },
+      {
+        "Key": "system",
+        "Value": "packproof"
+      },
+      {
+        "Key": "aws:cloudformation:stack-id",
+        "Value": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-m1-20261020/0b5a4b10-ccc0-11f1-93d0-12ffec4d9867"
+      },
+      {
+        "Key": "data-classification",
+        "Value": "synthetic-only"
+      },
+      {
+        "Key": "source-commit",
+        "Value": "12dc409e6b602a715d063e13c4ddc45eb2000adb"
+      },
+      {
+        "Key": "aws:cloudformation:logical-id",
+        "Value": "Database"
+      }
+    ],
+    "CustomerOwnedIpEnabled": false,
+    "NetworkType": "IPV4",
+    "ActivityStreamStatus": "stopped",
+    "BackupTarget": "region",
+    "CertificateDetails": {
+      "CAIdentifier": "rds-ca-rsa2048-g1",
+      "ValidTill": "2027-10-20T19:57:47+00:00"
+    },
+    "MasterUserSecret": {
+      "SecretArn": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r",
+      "SecretStatus": "active",
+      "KmsKeyId": "arn:aws:kms:us-east-1:784514617543:key/eea45321-ef8a-4cb4-a3a2-0688bb41186f"
+    },
+    "DedicatedLogVolume": false,
+    "IsStorageConfigUpgradeAvailable": false,
+    "EngineLifecycleSupport": "open-source-rds-extended-support"
+  },
+  "databaseTlsParameters": {
+    "rds.force_ssl": "1",
+    "ssl": "1",
+    "ssl_min_protocol_version": "TLSv1.2"
+  },
+  "limitations": {
+    "independentReview": false,
+    "applicationRoleBoundary": false,
+    "freshTargetRestore": false,
+    "deviceAcceptance": false,
+    "productionChanged": false
+  }
+}

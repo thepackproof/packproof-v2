@@ -1,6 +1,6 @@
 # Organization foundation candidate — 20 October 2026
 
-This implements a gated foundation batch from the attached **PackProof API Infrastructure Development Plan v1.0**, requirements M0 and M1, with the independently useful merchant receiver sample. It is **not foundation release approval or completion of M2–M5**. New organization APIs default off. No production deployment, live provider submission, customer contact, pricing change or irreversible storage setting is included.
+This implements a gated foundation batch from the attached **PackProof API Infrastructure Development Plan v1.0**, requirements M0 and M1, with the independently useful merchant receiver sample. It is **not foundation release approval or completion of M2-M5**. New organization APIs default off. The owner-approved isolated test foundation is deployed with 90-day GOVERNANCE Object Lock; see [deployment evidence](isolated-deployment-evidence-2026-10-20.json). Production deployment, live provider submission, customer contact and pricing decisions remain separate gates.
 
 ## Baseline reconciliation (M0-01)
 

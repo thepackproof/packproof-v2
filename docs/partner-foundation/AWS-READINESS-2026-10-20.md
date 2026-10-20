@@ -1,6 +1,6 @@
 # AWS readiness evidence - 20 October 2026
 
-AWS authentication was restored and read-only control-plane checks succeeded. This replaces the earlier authentication blocker. No service, database, bucket, key, policy or identity configuration was changed, no secret values were retrieved, and no customer objects or database rows were read.
+AWS authentication was restored and the initial read-only control-plane audit below succeeded. It replaced the earlier authentication blocker without changing the observed production or legacy environments. After Collin's explicit approval, the separate `packproof-m1-20261020` foundation was created successfully. See [deployment evidence](isolated-deployment-evidence-2026-10-20.json) and the [continuation record](../../infra/partner-foundation/README.md). No production service, customer object or customer database row was changed by this continuation.
 
 ## Deployment identity and separation
 
@@ -10,7 +10,7 @@ The inventory covered all 17 enabled regions for CloudFormation, RDS instances/c
 | --- | --- | --- |
 | V2 service with `staging` in its resource names, us-east-1 | Runtime explicitly sets `PACKPROOF_ENVIRONMENT=production`; website origins include the customer-facing site; release SHA `ccd04aba5b9305ce9bb7b2105323e63f6a95d87a`; one running API task | Treat as production. The candidate is not deployed here. Do not use the legacy staging deployment script for this milestone. |
 | Legacy service, us-east-2 | Separate legacy API/worker, old application image and database | Not an approved disposable test target. Leave it untouched. |
-| Isolated M1 environment | No separate M1 stack found | Prepare a new synthetic test target before migration and recovery exercises. |
+| Isolated M1 environment | Absent during the initial audit; subsequently created after owner approval | New `packproof-m1-20261020` foundation is the only destination for these synthetic exercises. |
 
 ## Observed controls and open gates
 

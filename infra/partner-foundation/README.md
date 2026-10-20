@@ -2,7 +2,7 @@
 
 Target: **new stack `packproof-m1-20261020`, us-east-1**, synthetic data only. The existing service named `packproof-v2-staging-api` is customer-facing production; neither it nor the us-east-2 legacy stack is a test destination. See [observed AWS readiness](../../docs/partner-foundation/AWS-READINESS-2026-10-20.md).
 
-`isolated-foundation.json` is the reviewable storage/database substrate, not a running API deployment or passed M1 gate. Its approval parameter defaults to `PENDING`, and a CloudFormation rule refuses creation until the owner has approved the new retention setting. No change set has been created or executed.
+`isolated-foundation.json` is the storage/database substrate, not a running API deployment or passed M1 gate. Collin approved its new 90-day GOVERNANCE retention in the conversation on 20 October 2026. The reviewed CREATE change set contained 17 Add actions and completed successfully. The reusable template still defaults its approval parameter to `PENDING`; a later deployment requires its own applicable owner decision. See [actual deployment evidence](../../docs/partner-foundation/isolated-deployment-evidence-2026-10-20.json).
 
 | New resource | Prepared configuration |
 | --- | --- |
@@ -15,7 +15,15 @@ Target: **new stack `packproof-m1-20261020`, us-east-1**, synthetic data only. T
 
 Buckets, keys, database, logs and bucket policies are retained when the stack is deleted or replaced. They can continue to incur AWS charges after stack deletion. Decommissioning must preserve retained versions and explicitly handle the database and keys; deleting a stack is not a cleanup procedure. No shorter retention, governance-bypass permission or production storage modification is authorized by this packet.
 
-## Execution order after the owner decision
+## Execution order and current evidence
+
+The approved foundation is `CREATE_COMPLETE`. Live reads confirmed private, encrypted PostgreSQL 16.15 with 7-day backups and deletion protection; `rds.force_ssl=1`. Both protected buckets accepted checksum-bearing synthetic objects with retention through 18 January 2027, rejected duplicate conditional writes, and denied version deletion without a governance bypass. Both KMS signing probes verified locally. These were administrative probes, not application-role or independent trust certification.
+
+`migration-runner.json` adds a disposable CodeBuild project, narrowly scoped service role, encrypted logs, and NAT egress inside this exact new VPC. The build security group permits only HTTPS egress and PostgreSQL to the new database; no inbound build connection exists. Public GitHub and npm require HTTPS internet egress. The owner password is resolved by CodeBuild directly from the new RDS-managed secret, removed from the parent environment after parsing, and never written to source, command arguments or logs. The source commit is pinned and verified. The runner has no evidence-bucket or signing-key grant and explicitly denies deletion/retention bypass.
+
+The isolated runner applies the old 86-file inventory, makes two synthetic legacy fixtures using old application source, executes the read-only preflight, then applies 088-092. It compares historical migration checksums, signed canonical manifests, signatures and frozen exported core/media entries. Export audit projections are expected to advance; whole-archive equality is not asserted. It records elapsed migration/transaction time, not a direct lock-hold measurement. The shared organization tests opt into a dedicated random PostgreSQL schema only when `PACKPROOF_TEST_DATABASE_URL` is explicitly set; ordinary local runs still use PGlite.
+
+Remove the temporary migration stack after its build finishes and its logs are recorded, to release the NAT gateway, public IP, temporary ingress, project and owner-secret role. Its encrypted log group and encryption key are deliberately retained. Keep the foundation and retained locked versions. No cleanup may bypass Object Lock.
 
 1. Record the exact reviewed candidate SHA, successful CI runs and template SHA-256. Validate with `cfn-lint --region us-east-1 --template infra/partner-foundation/isolated-foundation.json`. Create a CREATE change set for the new stack only, with `EnvironmentName=packproof-m1-20261020` and, only after approval, `RetentionDecision=APPROVED_BY_OWNER`. Review that every action is Add and no resource import or existing-resource change appears. Use CloudFormation pre-deployment validation and inspect `DescribeEvents` before execution.
 2. Execute that reviewed change set. Record actual outputs, resource identities and configuration reads. Keep owner database credentials inside a separate short-lived migration runner; never inject them into the application API. Provision separate API, recovery-worker and restore-test roles with narrowly scoped grants. Generate the dedicated 32-byte base64 cursor secret through managed secret handling. The template intentionally contains no runtime grants or fake recovery protection evidence.
