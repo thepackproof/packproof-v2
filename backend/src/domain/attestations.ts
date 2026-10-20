@@ -1,4 +1,5 @@
 import { ensureIdentifierBarrier } from '../identifiers/service.js';
+import { requireHumanActor } from '../platform/organization-access.js';
 import type { Clock } from "../clock.js";
 import { canonicalize } from "../canonical.js";
 import { sha256Hex } from "../hash.js";
@@ -82,6 +83,7 @@ export async function commitAttestation(
   },
 ): Promise<AttestationCommitView> {
   strictAttestationObject(input, ["statement", "relatedEvidenceId", "authorization"]);
+  await requireHumanActor(db,actorUserId);
   if (input.relatedEvidenceId != null && (typeof input.relatedEvidenceId !== "string" || input.relatedEvidenceId.length > 256)) {
     throw new DomainError("INVALID_ATTESTATION", "relatedEvidenceId must identify evidence on this Proof", 400);
   }

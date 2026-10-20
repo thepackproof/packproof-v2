@@ -29,6 +29,8 @@ export async function createOrGetProof(
     participationPolicy?: ParticipationPolicy;
     workflowType?: WorkflowType;
     assetCount?: number;
+    /** Internal organization adapter only; never copied from an HTTP request. */
+    organizationAssignment?: { merchantId: string; membershipId: string };
   } = {},
 ): Promise<ProofView> {
   return db.transaction(async (tx) => {
@@ -46,6 +48,19 @@ export async function createOrGetProof(
         "Only the transaction creator can create the Proof",
         403,
       );
+    }
+    let sellerUserId=actorUserId;
+    if(options.organizationAssignment){
+      const assignment=options.organizationAssignment;
+      const member=(await tx.query<{user_id:string}>(`SELECT m.user_id FROM platform_memberships m
+        JOIN platform_organizations o ON o.id=$2 JOIN platform_principals p ON p.actor_user_id=$3
+        WHERE m.id=$1 AND m.revoked_at IS NULL AND m.role IN ('OWNER','ADMIN','OPERATOR') AND o.enabled=true
+        AND p.revoked_at IS NULL AND (m.organization_id=o.id OR EXISTS(SELECT 1 FROM platform_delegations d
+          WHERE d.merchant_id=o.id AND d.partner_id=m.organization_id AND d.partner_id=p.organization_id
+          AND d.revoked_at IS NULL AND d.expires_at>CURRENT_TIMESTAMP AND d.operator_ids ? m.user_id))`,
+        [assignment.membershipId,assignment.merchantId,actorUserId])).rows[0];
+      if(!member)throw new DomainError('OPERATOR_NOT_AUTHORIZED','Assign an active, authorized operator',403);
+      sellerUserId=member.user_id;
     }
 
     const existing = await tx.query<ProofRow>(
@@ -123,7 +138,7 @@ export async function createOrGetProof(
     await tx.query(
       `INSERT INTO proof_participants (id, proof_id, user_id, role, joined_at)
        VALUES ($1, $2, $3, 'SELLER', $4)`,
-      [newId("prt"), proofId, actorUserId, now],
+      [newId("prt"), proofId, sellerUserId, now],
     );
     await appendAudit(tx, {
       proofId,
@@ -136,7 +151,7 @@ export async function createOrGetProof(
       proofId,
       actorUserId,
       eventType: "PARTICIPANT_JOINED",
-      eventData: { role: "SELLER", userId: actorUserId },
+      eventData: { role: "SELLER", userId: sellerUserId, ...(sellerUserId!==actorUserId?{assignment:'ORGANIZATION_OPERATOR',assignedBy:actorUserId}:{}) },
       at: clock.now(),
     });
 

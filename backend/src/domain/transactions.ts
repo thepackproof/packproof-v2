@@ -1,5 +1,6 @@
 import { assertTransactionCorrectionAllowed, hasBoundPackingCapture } from "./transaction-correction-policy.js";
 import type { Clock } from "../clock.js";
+import { requireOrganizationProofAccess } from '../platform/organization-access.js';
 import type { Database } from "../db/database.js";
 import { newId } from "../ids.js";
 import { canonicalize } from "../canonical.js";
@@ -42,6 +43,7 @@ export interface TransactionBundle {
   proofId: string | null;
   proofStatus: string | null;
   buyerUserId: string | null;
+    sellerUserId: string;
   provenance: TransactionProvenanceView | null;
   items: TransactionItemView[];
 }
@@ -361,7 +363,10 @@ async function attachContext(db: Database, txn: TransactionRow): Promise<Transac
   ]);
   const proofRow = proof.rows[0] ?? null;
   let buyerUserId: string | null = null;
+  let sellerUserId = txn.created_by;
   if (proofRow) {
+    const seller = await db.query<{user_id:string}>("SELECT user_id FROM proof_participants WHERE proof_id=$1 AND role='SELLER'", [proofRow.id]);
+    sellerUserId = seller.rows[0]?.user_id ?? txn.created_by;
     const buyer = await db.query<{ user_id: string }>(
       `SELECT user_id FROM proof_participants WHERE proof_id = $1 AND role = 'BUYER'`,
       [proofRow.id],
@@ -398,6 +403,7 @@ async function attachContext(db: Database, txn: TransactionRow): Promise<Transac
     proofId: proofRow?.id ?? null,
     proofStatus: proofRow?.status ?? null,
     buyerUserId,
+    sellerUserId,
     provenance: provenanceFromIdentity(identity.rows[0] ?? null, txn.transaction_metadata),
     items,
   };
@@ -456,6 +462,7 @@ async function assertCanReadTransaction(
   actorUserId: string,
   bundle: TransactionBundle,
 ): Promise<void> {
+  if(bundle.proofId)await requireOrganizationProofAccess(db,bundle.proofId,actorUserId);
   if (bundle.txn.created_by === actorUserId) {
     return;
   }
@@ -507,6 +514,7 @@ function toView(bundle: TransactionBundle): TransactionView {
     proofId: bundle.proofId,
     proofStatus: bundle.proofStatus,
     buyerUserId: bundle.buyerUserId,
+    sellerUserId: bundle.sellerUserId,
     provenance: bundle.provenance,
     items: bundle.items,
   });

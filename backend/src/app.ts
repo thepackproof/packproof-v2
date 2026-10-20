@@ -184,6 +184,7 @@ import { parseAppClientSecret } from "./integrations/connected-accounts/app-secr
 import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 import { SHOPIFY_COMMERCE_WEBHOOK_TOPICS, SHOPIFY_PRIVACY_WEBHOOK_TOPICS } from "./integrations/shopify/webhooks.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
+import { createOrganizationRouter } from './platform/organization-router.js';
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
 import { intakeRouter } from "./http/intake-router.js";
@@ -564,6 +565,7 @@ export function createApp(deps: AppDependencies): Express {
     res.json(await deps.billing.createOwnCancellationPortal(deps.db,bearerUser(req),{customerReference,subscriptionReference,operationId}));
   }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
+  app.use('/me/organizations',createOrganizationRouter(deps));
   app.get("/me/developer-access", asyncRoute(async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.json({ allowed: await hasDeveloperAccess(deps.db, bearerUser(req)) });

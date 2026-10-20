@@ -35,7 +35,7 @@ export function textField(value: unknown, name: string, max = 200): string {
     value.trim().length > max ||
     /[\x00-\x1f]/.test(value)
   ) {
-    throw new DomainError("INVALID_REQUEST", `${name} must contain 1–${max} characters`, 400);
+    throw new DomainError("INVALID_REQUEST", `${name} must contain 1-${max} characters`, 400);
   }
   return value.trim();
 }
@@ -51,6 +51,8 @@ export async function requireTenantOwner(db: Database, userId: string, tenantId:
     [tenantId, userId],
   );
   if (!found.rows[0]) throw new DomainError("TENANT_NOT_FOUND", "Tenant not found", 404);
+  if((await db.query('SELECT 1 FROM platform_organizations WHERE tenant_id=$1',[tenantId])).rows[0])
+    throw new DomainError('ORGANIZATION_CREDENTIAL_REQUIRED','Manage this organization through its explicit principal credentials',403);
   return found.rows[0];
 }
 export async function createTenant(db: Database, clock: Clock, userId: string, input: unknown) {
@@ -161,6 +163,8 @@ export async function authenticateApiKey(
     [sha256Hex(token)],
   );
   if (!found.rows[0]) throw new DomainError("UNAUTHENTICATED", "Invalid or revoked API key", 401);
+  if((await db.query('SELECT 1 FROM platform_organizations WHERE tenant_id=$1',[found.rows[0].tenantId])).rows[0])
+    throw new DomainError('ORGANIZATION_CREDENTIAL_REQUIRED','This merchant requires an organization service credential',403);
   // Previously issued keys lose access as soon as their owner is no longer eligible.
   await requireDeveloperAccess(db, found.rows[0].userId);
   return found.rows[0];

@@ -59,7 +59,7 @@ export async function reconcileProofUpdates(db:Database,clock:Clock){
 export async function listProofUpdates(db:Database,user:string){
   await requireActiveAccount(db,user);
   return (await db.query(`SELECT n.id,n.proof_id AS "proofId",n.source_event_id AS "eventId",n.category,n.title,n.created_at AS "createdAt",n.read_at AS "readAt"
-    FROM proof_update_notifications n JOIN proof_participants p ON p.proof_id=n.proof_id AND p.user_id=n.user_id WHERE n.user_id=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 100`,[user])).rows;
+    FROM proof_update_notifications n JOIN proof_participants p ON p.proof_id=n.proof_id AND p.user_id=n.user_id WHERE n.user_id=$1 AND platform_operator_access_active(n.proof_id,$1) ORDER BY n.created_at DESC,n.id DESC LIMIT 100`,[user])).rows;
 }
 export async function registerPushDevice(db:Database,clock:Clock,user:string,token:unknown,active:unknown=true){
   await requireActiveAccount(db,user);
@@ -81,6 +81,7 @@ export async function dispatchProofPush(db:Database,clock:Clock,send:typeof fetc
     WHERE o.sent_at IS NULL AND o.attempts<5 AND o.next_attempt_at<=$1 AND (o.lease_until IS NULL OR o.lease_until<=$1) ORDER BY o.next_attempt_at LIMIT 20`,[now])).rows;
   let sent=0;
   for(const row of rows){
+    if(!(await db.query('SELECT 1 WHERE platform_operator_access_active($1,$2)',[row.proof_id,row.user_id])).rows[0])continue;
     const prefs=await notificationPreferences(db,row.user_id);
     const muted=(await db.query('SELECT 1 FROM proof_notification_mutes WHERE user_id=$1 AND proof_id=$2',[row.user_id,row.proof_id])).rows.length;
     if(!prefs.enabled||!prefs[row.category]||muted){await db.query("UPDATE proof_push_deliveries SET sent_at=$3,error_code='MUTED' WHERE notification_id=$1 AND token=$2",[row.notification_id,row.token,now]);continue;}

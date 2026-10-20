@@ -49,6 +49,8 @@ import {
   type ApiScope,
 } from "./tenants.js";
 import { idempotent } from "./idempotency.js";
+import { listEventStream } from "./event-stream.js";
+import { createPartnerRouter } from './partner-router.js';
 import {
   createWebhook,
   listEvents,
@@ -96,6 +98,9 @@ const route =
   };
 export function createPlatformRouter(deps: AppDependencies) {
   const router = express.Router();
+  router.use('/partner',createPartnerRouter(deps));
+  router.get('/partner-openapi.json',rateLimit(ingressRateLimitOptions(deps.db,ingressRatePolicies.openApi)),(_req,res)=>
+    res.sendFile(fileURLToPath(new URL('../../partner-openapi.json',import.meta.url))));
   router.get("/openapi.json", rateLimit(ingressRateLimitOptions(deps.db, ingressRatePolicies.openApi)), (_req, res) =>
     res.sendFile(fileURLToPath(new URL("../../openapi.json", import.meta.url))),
   );
@@ -483,6 +488,9 @@ export function createPlatformRouter(deps: AppDependencies) {
   endpoint("get", "/events", "events:read", (db, p, req) =>
     listEvents(db, p.tenantId, req.query.after),
   );
+  endpoint("get", "/event-stream", "events:read", (db, p, req) =>
+    listEventStream(db, deps.clock, p, {signingKey: process.env.PACKPROOF_EVENT_CURSOR_KEY ?? ''},
+      {after:req.query.after,limit:req.query.limit}));
   endpoint("post", "/order-intake", "intake:write", async (_db, _p, req) =>
     previewOrderIntake(req.body),
   );

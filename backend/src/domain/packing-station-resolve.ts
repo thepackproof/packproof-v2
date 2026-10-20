@@ -123,7 +123,7 @@ async function findAuthorizedMatches(
          LEFT JOIN proof_participants seller
            ON seller.proof_id = p.id AND seller.role = 'SELLER'
         WHERE p.id = $1
-          AND (t.created_by = $2 OR seller.user_id = $2)`,
+          AND (t.created_by = $2 OR seller.user_id = $2) AND platform_operator_access_active(p.id,$2)`,
       [reference, actorUserId],
     );
     return found.rows;
@@ -136,7 +136,7 @@ async function findAuthorizedMatches(
          LEFT JOIN proof_participants seller
            ON seller.proof_id = p.id AND seller.role = 'SELLER'
         WHERE t.id = $1
-          AND (t.created_by = $2 OR seller.user_id = $2)`,
+          AND (t.created_by = $2 OR seller.user_id = $2) AND platform_operator_access_active(p.id,$2)`,
       [reference, actorUserId],
     );
     return found.rows;
@@ -160,7 +160,7 @@ async function findAuthorizedMatches(
        LEFT JOIN transaction_shipping ship ON ship.transaction_id = t.id
        LEFT JOIN commerce_order_records r ON r.transaction_id = t.id
        LEFT JOIN transaction_integration_identities i ON i.transaction_id = t.id
-      WHERE (t.created_by = $2 OR seller.user_id = $2)
+      WHERE (t.created_by = $2 OR seller.user_id = $2) AND platform_operator_access_active(p.id,$2)
         AND (
           LOWER(t.external_reference) = $1
           OR LOWER(ship.tracking_number) = $1

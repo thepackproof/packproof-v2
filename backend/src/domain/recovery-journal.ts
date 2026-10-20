@@ -1,4 +1,5 @@
 import type { Clock } from "../clock.js";
+import { requireOrganizationProofAccess } from '../platform/organization-access.js';
 import type { Database } from "../db/database.js";
 import { canonicalize } from "../canonical.js";
 import { sha256Hex } from "../hash.js";
@@ -84,6 +85,7 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
   rows.intake_source_observations = (await db.query("SELECT o.* FROM intake_source_observations o WHERE o.id IN (SELECT observation_id FROM intake_delivery_receipts WHERE proof_id=$1) OR o.id IN (SELECT observation_id FROM intake_order_snapshots WHERE proof_id=$1)",[proofId])).rows;
   rows.commerce_stage_evidence = (await db.query("SELECT e.* FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1", [proofId])).rows;
   rows.capture_engine_batches = (await db.query("SELECT b.* FROM capture_engine_batches b JOIN capture_engine_sessions s ON s.session_id=b.session_id WHERE s.proof_id=$1",[proofId])).rows;
+  rows.platform_capture_authorizations = (await db.query('SELECT * FROM platform_capture_authorizations WHERE proof_id=$1',[proofId])).rows;
   rows.capture_session_reports = (await db.query("SELECT r.* FROM capture_session_reports r JOIN capture_sessions s ON s.id=r.session_id WHERE s.proof_id=$1", [proofId])).rows;
   for (const table of ["observation_assets", "observation_evidence", "observation_external_refs"]) rows[table] = (await db.query(`SELECT j.* FROM ${table} j JOIN custody_observations o ON o.id=j.observation_id WHERE o.proof_id=$1`, [proofId])).rows;
   for (const table of ["transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities", "transaction_source_observations"]) {
@@ -99,6 +101,7 @@ export async function getRecoveryStatus(db: Database, operationId: string): Prom
 }
 
 export async function getProofRecoveryStatus(db: Database, userId: string, proofId: string) {
+  await requireOrganizationProofAccess(db,proofId,userId);
   await assertPolicyAccessSafe(db);
   const participant = await db.query("SELECT 1 FROM proof_participants WHERE proof_id=$1 AND user_id=$2", [proofId, userId]);
   if (!participant.rows[0] && !(await db.query("SELECT 1 FROM commerce_receivers WHERE proof_id=$1 AND user_id=$2 AND accepted_at IS NOT NULL", [proofId,userId])).rows[0]) throw new DomainError("PARTICIPANT_NOT_AUTHORIZED", "This record is unavailable to this account", 403);

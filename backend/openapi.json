@@ -2639,9 +2639,6 @@
               }
             }
           },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          },
           "201": {
             "description": "Durably accepted and resolved or awaiting user action",
             "content": {
@@ -2661,6 +2658,9 @@
                 }
               }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "requestBody": {
@@ -2872,9 +2872,6 @@
           }
         ],
         "responses": {
-          "default": {
-            "$ref": "#/components/responses/Error"
-          },
           "201": {
             "description": "Success",
             "content": {
@@ -2900,6 +2897,9 @@
                 }
               }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "requestBody": {
@@ -3344,6 +3344,53 @@
           }
         }
       }
+    },
+    "/event-stream": {
+      "get": {
+        "operationId": "get_commit_safe_event_stream",
+        "summary": "GET /v1/partner/event-stream",
+        "description": "Required scope: events:read. ",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Opaque signed cursor, seven-day expiry; 410 requires authorized snapshot resync and event-ID deduplication.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Capture capability and credential responses are sensitive and no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventStream"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3351,7 +3398,7 @@
       "ApiKey": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "pp_sandbox_… or pp_live_…"
+        "bearerFormat": "pp_sandbox_. or pp_live_."
       },
       "AccountBearer": {
         "type": "http",
@@ -4342,7 +4389,127 @@
           }
         },
         "description": "Read-only account/dataset pseudonymous cohort. Full 24-hour window required; withdrawal censors, failures remain. This is not all-customer conversion. Client timings are not app-controlled overhead; server outcomes derive from eligible committed-video/final-manifest history."
+      },
+      "EventStream": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "environment",
+          "events",
+          "nextCursor",
+          "highWaterMark",
+          "hasMore",
+          "cursorExpiresAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.event-stream/v1"
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "type",
+                "tenantId",
+                "data",
+                "streamSequence",
+                "schemaVersion",
+                "environment"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "tenantId": {
+                  "type": "string"
+                },
+                "streamSequence": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "schemaVersion": {
+                  "const": "packproof.event/v1.1"
+                },
+                "environment": {
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "proofId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "proofId"
+                  ]
+                }
+              }
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "highWaterMark": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "cursorExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
       }
     }
-  }
+  },
+  "x-packproof-organization-contract": "/v1/partner-openapi.json"
 }

@@ -12,6 +12,7 @@ import { MEDIA_MAX_BYTES } from "./media-admission.js";
 
 type Row = Record<string, unknown>;
 const CORE_KEYS: Record<string, string[]> = {
+  platform_capture_authorizations:['intent_id'],
   users:["id"], transactions:["id"], transaction_shipping:["id"], transaction_items:["id"], transaction_integration_identities:["id"],
   proofs:["id"], proof_participants:["id"], commerce_receivers:["proof_id"], commerce_stages:["id"], capture_sessions:["id"], capture_intents:["id"], capture_engine_sessions:["session_id"], capture_engine_batches:["session_id","sequence"], capture_session_reports:["id"],
   evidence:["id"], commerce_stage_evidence:["id"], audit_events:["id"], attestations:["id"], attestation_challenges:["id"], proof_assets:["id"],
@@ -26,12 +27,13 @@ const CORE_KEYS: Record<string, string[]> = {
 };
 const RESTORE_KEYS = {...CORE_KEYS, ...POLICY_RECOVERY_KEYS};
 const ORDER = [
-  "users","auth_identities","api_tenants","api_keys","transactions","transaction_shipping","transaction_items","transaction_integration_identities","transaction_source_observations",
+  "users","auth_identities","api_tenants","api_keys","platform_organizations","platform_memberships","platform_principals","platform_credentials","platform_delegations","platform_integration_accounts","transactions","transaction_shipping","transaction_items","transaction_integration_identities","transaction_source_observations",
   "proofs","proof_participants","commerce_receivers","commerce_stages","intake_source_observations","intake_order_snapshots","proof_order_contexts","intake_delivery_receipts","capture_sessions","capture_intents","capture_engine_sessions","capture_engine_batches","capture_session_reports","evidence","commerce_stage_evidence","audit_events","attestations","attestation_challenges",
   "proof_assets","custody_observations","custody_transfers","proof_asset_external_refs","observation_assets","observation_evidence","observation_external_refs","continuity_evaluations",
   "proof_external_references","shipment_events","capture_shipping_labels","capture_label_observations","capture_label_resolutions","capture_identifier_observations","capture_identifier_decisions","capture_identifier_checkpoints","proof_parcel_scopes","invitations","api_tenant_proofs",
   "proof_access_links","proof_disclosure_grants","proof_notification_subscriptions","proof_receipt_preferences","user_verified_contacts","proof_media_derivatives","support_access_grants","support_access_revocations",
   "proof_retention_holds","proof_retention_assignments","proof_deletion_requests","proof_disposition_state","final_manifests","proof_supplements",
+  "platform_proof_ownership","platform_external_bindings","platform_capture_authorizations",
 ];
 const SEED_TABLES = new Set(["schema_migrations","recovery_writer_fence","retention_operations_gates","item_history_graph_lock","policy_recovery_fence","policy_recovery_tables"]);
 const failure = (code: string, message: string) => new DomainError(code, message, 409);
