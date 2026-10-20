@@ -154,7 +154,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "proofs:write"
       },
       "get": {
         "operationId": "get__v1_partner_proofs",
@@ -286,7 +287,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "proofs:read"
       }
     },
     "/v1/partner/proofs/resolve": {
@@ -430,7 +432,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "proofs:read"
       }
     },
     "/v1/partner/proofs/{proofId}": {
@@ -566,7 +569,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "proofs:read"
       }
     },
     "/v1/partner/proofs/{proofId}/external-bindings": {
@@ -722,7 +726,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "proofs:write"
       }
     },
     "/v1/partner/proofs/{proofId}/capture-intents": {
@@ -878,7 +883,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "capture:request"
       }
     },
     "/v1/partner/proofs/{proofId}/review": {
@@ -1014,7 +1020,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "exports:read"
       }
     },
     "/v1/partner/proofs/{proofId}/package": {
@@ -1151,7 +1158,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "exports:read"
       }
     },
     "/v1/partner/event-stream": {
@@ -1295,7 +1303,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "events:read"
       }
     },
     "/v1/partner/webhooks": {
@@ -1441,7 +1450,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "webhooks:manage"
       },
       "get": {
         "operationId": "get__v1_partner_webhooks",
@@ -1565,7 +1575,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "webhooks:manage"
       }
     },
     "/v1/partner/webhooks/{webhookId}": {
@@ -1711,7 +1722,8 @@
               }
             }
           }
-        }
+        },
+        "x-packproof-scope": "webhooks:manage"
       }
     },
     "/me/organizations": {

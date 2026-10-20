@@ -22,6 +22,7 @@ COPY backend/certs ./certs
 # Preserve the existing service's absolute TLS CA binding during this layout change.
 COPY backend/certs /app/certs
 COPY backend/openapi.json ./openapi.json
+COPY backend/partner-openapi.json ./partner-openapi.json
 COPY backend/rnd-openapi.json ./rnd-openapi.json
 COPY config/rnd/research-build.json /app/config/rnd/research-build.json
 COPY backend/scripts/onboarding-migrate.mjs ./scripts/onboarding-migrate.mjs

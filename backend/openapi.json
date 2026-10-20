@@ -3348,7 +3348,7 @@
     "/event-stream": {
       "get": {
         "operationId": "get_commit_safe_event_stream",
-        "summary": "GET /v1/partner/event-stream",
+        "summary": "GET /v1/event-stream",
         "description": "Required scope: events:read. ",
         "security": [
           {
@@ -3389,7 +3389,8 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-packproof-scope": "events:read"
       }
     }
   },
@@ -3398,7 +3399,7 @@
       "ApiKey": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "pp_sandbox_… or pp_live_…"
+        "bearerFormat": "pp_sandbox_. or pp_live_."
       },
       "AccountBearer": {
         "type": "http",

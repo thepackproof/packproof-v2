@@ -3,11 +3,21 @@ import { migrationInventory } from '../src/db/migrate.js';
 import { splitSqlStatements } from '../src/db/sql.js';
 import { MIGRATIONS,BASELINE_DIGEST,PRODUCTION_RUNTIME_ROLE,RECEIPT_TABLES,digest,inspectInventory,inspectionReceipt,validateInspection,assertMinimalPrivileges,applyInTransaction,expectedObjects,run } from '../scripts/rnd-migrate.mjs';
 
-let inventory:Awaited<ReturnType<typeof migrationInventory>>;
-beforeAll(async()=>{inventory=await migrationInventory();});
+let inventory:Awaited<ReturnType<typeof migrationInventory>>,currentInventory:Awaited<ReturnType<typeof migrationInventory>>;
+beforeAll(async()=>{
+ currentInventory=await migrationInventory();
+ // This retired operator is intentionally pinned to the reviewed 079-087 release.
+ // Keep its original inventory fixture; newer application migrations must be refused.
+ inventory=currentInventory.filter(row=>row.id<='087_rnd_source_storage_dedup');
+});
 const source='a'.repeat(40),bridge='sha256:'+'b'.repeat(64),now=new Date('2026-10-12T00:00:00Z');
 const baseline=()=>inventory.filter(row=>!MIGRATIONS.some(pin=>pin.id===row.id)).map(({id,checksum})=>({id,checksum}));
 describe('scoped research schema operator',()=>{
+ it('refuses the newer organization candidate before inspecting or applying it',()=>{
+  expect(currentInventory.length).toBeGreaterThan(inventory.length);
+  expect(()=>inspectInventory(currentInventory,baseline())).toThrow('CANDIDATE_INVENTORY_MISMATCH');
+  expect(()=>inspectInventory(currentInventory,currentInventory)).toThrow('CANDIDATE_INVENTORY_MISMATCH');
+ });
  it('binds exactly the existing 77 receipts and all nine reviewed SQL byte hashes',()=>{
   expect(inspectInventory(inventory,baseline())).toMatchObject({pending:true,appliedCount:77});
   expect(digest(baseline())).toBe(BASELINE_DIGEST);
