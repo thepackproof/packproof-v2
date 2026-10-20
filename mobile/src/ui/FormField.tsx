@@ -1,3 +1,4 @@
+import { SIGNAL_ENABLED } from "../experience/signal";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type TextInputProps } from "react-native";
 import { radii, sizes, spacing, typography } from "../theme/tokens";
@@ -64,9 +65,9 @@ const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
   label: { ...typography.secondaryStrong },
   input: {
-    minHeight: sizes.touch,
+    minHeight: SIGNAL_ENABLED ? 64 : sizes.touch,
     borderWidth: 1,
-    borderRadius: radii.md,
+    borderRadius: SIGNAL_ENABLED ? 12 : radii.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     ...typography.body,

@@ -1,3 +1,4 @@
+import {SIGNAL_ENABLED} from '../../../web/src/signal/Signal';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 const paths: Record<string,string> = {
@@ -19,7 +20,7 @@ const paths: Record<string,string> = {
 export function Icon({name, size=20}: {name:string;size?:number}) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] ?? paths.proofs}/></svg>;
 }
-export function Brand() { return <div className="brand"><span className="brand-mark"><Icon name="shield" size={25}/><span/></span><span>PackProof<span className="brand-sub">DESKTOP WORKSTATION</span></span></div>; }
+export function Brand() { if(SIGNAL_ENABLED)return <div className="brand signal-brand"><img src="/signal/mark.svg" alt="" width="32" height="32"/><span>packproof</span></div>; return <div className="brand"><span className="brand-mark"><Icon name="shield" size={25}/><span/></span><span>PackProof<span className="brand-sub">DESKTOP WORKSTATION</span></span></div>; }
 export function Empty({icon='proofs', title, children, action}: {icon?:string;title:string;children?:ReactNode;action?:ReactNode}) {
   return <div className="empty"><span className="empty-icon"><Icon name={icon} size={27}/></span><h3>{title}</h3><p>{children}</p>{action}</div>;
 }
@@ -27,7 +28,7 @@ export function Badge({children, tone='neutral'}: {children:ReactNode;tone?:'neu
 export function ErrorNotice({children}: {children:ReactNode}) { return <div className="notice error" role="alert"><Icon name="warning"/><span>{children}</span></div>; }
 export function Modal({title, children, close}: {title:string;children:ReactNode;close:()=>void}) {
   const ref=useRef<HTMLDialogElement>(null);
-  useEffect(()=>{ref.current?.showModal(); const dialog=ref.current; return()=>dialog?.close();},[]);
-  return <dialog ref={ref} className="modal" onCancel={event=>{event.preventDefault();close();}}><div className="modal-heading"><h2>{title}</h2><button className="icon-button" aria-label="Close dialog" onClick={close}><Icon name="close"/></button></div>{children}</dialog>;
+  useEffect(()=>{const trigger=document.activeElement as HTMLElement|null;ref.current?.showModal();const dialog=ref.current;return()=>{dialog?.close();trigger?.focus();};},[]);
+  return <dialog ref={ref} className={SIGNAL_ENABLED?"modal signal-desktop-modal":"modal"} aria-label={title} onCancel={event=>{event.preventDefault();close();}}><div className="modal-heading"><h2>{title}</h2><button className="icon-button" aria-label="Close dialog" onClick={close}><Icon name="close"/></button></div>{children}</dialog>;
 }
 export function SectionHeading({title, children}: {title:string;children?:ReactNode}) { return <div className="section-heading"><h2>{title}</h2>{children}</div>; }

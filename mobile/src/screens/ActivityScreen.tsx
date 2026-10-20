@@ -30,6 +30,8 @@ import { AppHeader } from "../ui/AppHeader";
 import { StatusBadge } from "../ui/StatusBadge";
 import { proofDisplayTitle } from "../copy/proof-title";
 
+const TASK_UI = SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD;
+
 export function ActivityScreen() {
   const app = usePackProof(), { colors } = useTheme();
   const filter = app.route.activityFilter ?? "all";
@@ -54,27 +56,27 @@ export function ActivityScreen() {
   useEffect(() => { void app.run(app.syncWorkspace); }, [scope]);
   const selectedRecording = selectedSessionId ? recordings.find(capture => (capture.captureSessionId || capture.uri) === selectedSessionId || capture.recovery?.operationId === selectedSessionId) : undefined;
   function openAttentionTask(row: (typeof workspace.attention)[number]) {
-    const sessionId = ANDROID_TASK_FIRST_REBUILD ? recordingTaskSession(row, recordings) : null;
+    const sessionId = TASK_UI ? recordingTaskSession(row, recordings) : null;
     if (sessionId) app.go("activity", { activitySessionId: sessionId, activityFilter: "all" });
     else void app.openProofAction(row.proofId);
   }
   const groups = [
     { id: "attention", title: "Saved recordings needing action" },
-    { id: "uploading", title: ANDROID_TASK_FIRST_REBUILD ? "In progress" : "Uploads" },
+    { id: "uploading", title: TASK_UI ? "In progress" : "Uploads" },
     { id: "completed", title: "Saved recording copies" },
   ] as const;
   if(SIGNAL_ENABLED&&!selectedSessionId)return <AppScreen bottomInset={false} initialOffsetY={app.readWorkspaceOffset('activity')} onScrollOffset={offset=>app.setWorkspaceOffset('activity',offset)} onRefresh={()=>{setGeneration(value=>value+1);void app.run(app.syncWorkspace);}} refreshing={app.busy}><WorkspaceHeader section="Activity"/><SignalText kind="mono" muted>YOUR PROOFS, AS THEY HAPPEN.</SignalText><SignalText kind="title">Activity</SignalText><SignalText muted>Recording, saving, and the moments in between.</SignalText><OfflineBanner visible={app.offline}/><ErrorBanner message={app.error}/><SignalText kind="mono" muted>RECORDING UPDATES</SignalText>{recordings.length?recordings.slice().sort((a,b)=>Date.parse(b.recovery?.updatedAt||'')-Date.parse(a.recovery?.updatedAt||'')).map(capture=><SignalActivityRow key={capture.recovery?.operationId||capture.uri} capture={capture}/>):<SignalText kind="small" muted>Your recording updates will appear here.</SignalText>}{workspace.photoDrafts.map(draft=><SavedPhotoDraft key={draft.id} draft={draft} openProof/>)}<SignalText kind="mono" muted>PROOF UPDATES</SignalText>{notificationError&&<ErrorBanner message={notificationError}/>} {notificationsLoading?<SignalText kind="small" muted>Loading recent updates…</SignalText>:notifications.map(update=><PressableScale key={update.id} accessibilityRole="button" disabled={app.busy} onPress={()=>void app.run(async()=>{await markNotificationAfterOpen(()=>app.openProofAction(update.proofId),()=>app.client.notificationRequest(`notifications/${encodeURIComponent(update.id)}/read`,'POST',{}));})} style={{paddingVertical:16,gap:6,borderBottomWidth:1,borderColor:colors.border}}><SignalText kind="strong">{update.title}</SignalText><SignalText kind="small" muted>{app.proofCollection.find(row=>row.proofId===update.proofId)?.transaction.itemTitle||'Proof update'}</SignalText><SignalText kind="mono" muted>{formatDateTime(update.createdAt)}</SignalText></PressableScale>)}{!notificationsLoading&&!notifications.length&&!notificationError&&<SignalText kind="small" muted>No recent Proof updates.</SignalText>}<Button label="Notification preferences" variant="tertiary" onPress={()=>app.go('account',{accountSection:'notifications'})}/></AppScreen>;
   return <AppScreen bottomInset={false} initialOffsetY={selectedSessionId ? 0 : app.readWorkspaceOffset("activity")} onScrollOffset={offset => { if (!selectedSessionId) app.setWorkspaceOffset("activity", offset); }} resetScrollKey={`${filter}:${selectedSessionId ?? ""}`} onRefresh={() => { setGeneration(value => value + 1); void app.run(app.syncWorkspace); }} refreshing={app.busy}>
-    {ANDROID_TASK_FIRST_REBUILD && selectedSessionId ? <AppHeader title="Recording details" onBack={() => app.go("activity", { activityFilter: "all" })} /> : <WorkspaceHeader section={ANDROID_TASK_FIRST_REBUILD ? "Activity" : "Updates"} />}
-    {!ANDROID_TASK_FIRST_REBUILD || !selectedSessionId ? <Text accessibilityRole="header" style={[styles.title, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color: colors.textPrimary }]}>{ANDROID_TASK_FIRST_REBUILD ? "Activity" : "Updates"}</Text> : null}
+    {TASK_UI && selectedSessionId ? <AppHeader title="Recording details" onBack={() => app.go("activity", { activityFilter: "all" })} /> : <WorkspaceHeader section={TASK_UI ? "Activity" : "Updates"} />}
+    {!TASK_UI || !selectedSessionId ? <Text accessibilityRole="header" style={[styles.title, TASK_UI && taskFirstTypography.pageTitle, { color: colors.textPrimary }]}>{TASK_UI ? "Activity" : "Updates"}</Text> : null}
     {!selectedSessionId ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} accessibilityRole="tablist" accessibilityLabel="Update filters">
-      {([["all", "All"], ["attention", "Action needed"], ["uploading", ANDROID_TASK_FIRST_REBUILD ? "In progress" : "Uploading"], ["notifications", ANDROID_TASK_FIRST_REBUILD ? "For you" : "Notifications"], ["completed", "Saved copies"]] as const).map(([id, label]) => <PressableScale key={id} accessibilityRole="tab" accessibilityState={{ selected: filter === id }} onPress={() => app.go("activity", { activityFilter: id })} style={[styles.filter, { backgroundColor: filter === id ? colors.accentSoft : colors.surface }]}><Text style={[styles.text, { color: filter === id ? colors.accentText : colors.textSecondary }]}>{label}</Text></PressableScale>)}
+      {([["all", "All"], ["attention", "Action needed"], ["uploading", TASK_UI ? "In progress" : "Uploading"], ["notifications", TASK_UI ? "For you" : "Notifications"], ["completed", "Saved copies"]] as const).map(([id, label]) => <PressableScale key={id} accessibilityRole="tab" accessibilityState={{ selected: filter === id }} onPress={() => app.go("activity", { activityFilter: id })} style={[styles.filter, { backgroundColor: filter === id ? colors.accentSoft : colors.surface }]}><Text style={[styles.text, { color: filter === id ? colors.accentText : colors.textSecondary }]}>{label}</Text></PressableScale>)}
     </ScrollView> : null}
     <OfflineBanner visible={app.offline} /><ErrorBanner message={app.error} />
-    {ANDROID_TASK_FIRST_REBUILD && !selectedSessionId ? <Button label="View tasks in Proofs" variant="tertiary" onPress={() => {app.setProofsView('attention');app.go('proofs');}} /> : null}
-    {!ANDROID_TASK_FIRST_REBUILD && !selectedSessionId && (filter === 'all' || filter === 'attention') ? <View style={styles.group}>
-      <Text accessibilityRole="header" style={[styles.heading,{color:colors.textPrimary}]}>{ANDROID_TASK_FIRST_REBUILD ? "Proofs needing action" : "Action needed"} · {workspace.attention.length}</Text>
-      {workspace.attention.map(row => <CompactProofRow key={row.proofId} title={ANDROID_TASK_FIRST_REBUILD ? proofDisplayTitle(row) : row.transaction.itemTitle || 'Proof'} detail={row.taskDescription} disabled={app.busy} onPress={() => openAttentionTask(row)} />)}
+    {TASK_UI && !selectedSessionId ? <Button label="View tasks in Proofs" variant="tertiary" onPress={() => {app.setProofsView('attention');app.go('proofs');}} /> : null}
+    {!TASK_UI && !selectedSessionId && (filter === 'all' || filter === 'attention') ? <View style={styles.group}>
+      <Text accessibilityRole="header" style={[styles.heading,{color:colors.textPrimary}]}>{TASK_UI ? "Proofs needing action" : "Action needed"} · {workspace.attention.length}</Text>
+      {workspace.attention.map(row => <CompactProofRow key={row.proofId} title={TASK_UI ? proofDisplayTitle(row) : row.transaction.itemTitle || 'Proof'} detail={row.taskDescription} disabled={app.busy} onPress={() => openAttentionTask(row)} />)}
       {!workspace.attention.length ? <Text style={[styles.text,{color:colors.textSecondary}]}>{app.workspaceReconciled ? 'No Proofs need action.' : 'Refresh your Proofs to check what needs action.'}</Text> : null}
     </View> : null}
     {!selectedSessionId && (filter === 'all' || filter === 'uploading') && workspace.photoDrafts.some(draft => draft.phase === 'SUBMITTING') ? <View style={styles.group}>
@@ -86,11 +88,11 @@ export function ActivityScreen() {
       {app.photoDrafts.length ? app.photoDrafts.map(draft => <SavedPhotoDraft key={draft.id} draft={draft} openProof />) : <Text style={[styles.text, { color: colors.textSecondary }]}>No photo originals saved on this device.</Text>}
     </View> : null}
     {selectedSessionId ? <View style={styles.group}>
-      {!ANDROID_TASK_FIRST_REBUILD ? <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Selected recording</Text> : null}
-      {selectedRecording ? <View style={ANDROID_TASK_FIRST_REBUILD ? undefined : { borderWidth: 2, borderColor: colors.accent, borderRadius: 14, padding: 2 }}><ActivityRecordingRow key={selectedSessionId} capture={selectedRecording} focused /></View> : <Text accessibilityLiveRegion="polite" style={[styles.text, { color: colors.textSecondary }]}>This recording is no longer available in the current account's local Updates. View all Updates to check its latest state.</Text>}
-      {!ANDROID_TASK_FIRST_REBUILD || !selectedRecording ? <Button label="View all Updates" variant="secondary" onPress={() => app.go("activity", { activityFilter: "all" })} /> : null}
+      {!TASK_UI ? <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Selected recording</Text> : null}
+      {selectedRecording ? <View style={TASK_UI ? undefined : { borderWidth: 2, borderColor: colors.accent, borderRadius: 14, padding: 2 }}><ActivityRecordingRow key={selectedSessionId} capture={selectedRecording} focused /></View> : <Text accessibilityLiveRegion="polite" style={[styles.text, { color: colors.textSecondary }]}>This recording is no longer available in the current account's local Updates. View all Updates to check its latest state.</Text>}
+      {!TASK_UI || !selectedRecording ? <Button label="View all Updates" variant="secondary" onPress={() => app.go("activity", { activityFilter: "all" })} /> : null}
     </View> : groups.filter(section => (filter === "all" && section.id !== "completed") || filter === section.id).map(section => {
-      const rows = recordings.filter(capture => activityGroup(capture) === section.id && (section.id !== 'attention' || (ANDROID_TASK_FIRST_REBUILD
+      const rows = recordings.filter(capture => activityGroup(capture) === section.id && (section.id !== 'attention' || (TASK_UI
         ? true
         : !workspace.attention.some(row=>row.proofId===capture.captureProofId))));
       if (!rows.length && (section.id === 'attention' || section.id === 'uploading' && workspace.photoDrafts.some(draft => draft.phase === 'SUBMITTING'))) return null;
@@ -104,7 +106,7 @@ export function ActivityScreen() {
       {notificationsLoading ? <Text accessibilityLiveRegion="polite" style={[styles.text,{color:colors.textSecondary}]}>Loading recent updates…</Text> : null}
       {!notificationsLoading && !notificationError && !notifications.length ? <Text style={[styles.text, { color: colors.textSecondary }]}>Proof updates will appear here.</Text> : null}
       {notifications.map(update => <CompactProofRow key={update.id} title={update.title} detail={`${app.proofCollection.find(row=>row.proofId===update.proofId)?.transaction.itemTitle || 'Proof update'} · ${formatDateTime(update.createdAt)}`} disabled={app.busy} onPress={() => void app.run(async () => {
-        if (ANDROID_TASK_FIRST_REBUILD) {
+        if (TASK_UI) {
           await markNotificationAfterOpen(() => app.openProofAction(update.proofId), () => app.client.notificationRequest(`notifications/${encodeURIComponent(update.id)}/read`, 'POST', {}));
         } else {
           await app.openProofAction(update.proofId);
@@ -116,7 +118,7 @@ export function ActivityScreen() {
 }
 
 export function ActivityRecordingRow({ capture, focused = false }: { capture: LocalCapture; focused?: boolean }) {
-  return ANDROID_TASK_FIRST_REBUILD ? <AndroidRecordingRow capture={capture} focused={focused} /> : <LegacyRecordingRow capture={capture} />;
+  return TASK_UI ? <AndroidRecordingRow capture={capture} focused={focused} /> : <LegacyRecordingRow capture={capture} />;
 }
 
 function LegacyRecordingRow({ capture }: { capture: LocalCapture }) {

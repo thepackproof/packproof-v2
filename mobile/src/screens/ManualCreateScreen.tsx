@@ -15,6 +15,8 @@ import { ANDROID_TASK_FIRST_REBUILD } from "../experience/android-task-first";
 
 const COMMON_CURRENCIES = ["USD", "CAD", "EUR", "GBP", "AUD"] as const;
 
+const TASK_UI = SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD;
+
 export function ManualCreateScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
@@ -43,12 +45,12 @@ export function ManualCreateScreen() {
 
   return (
     <AppScreen extraBottom={24}>
-      <AppHeader title={SIGNAL_ENABLED ? "New Proof" : ANDROID_TASK_FIRST_REBUILD ? "What are you packing?" : "Record shipment"} onBack={app.goBack} />
+      <AppHeader title={SIGNAL_ENABLED ? "New Proof" : TASK_UI ? "What are you packing?" : "Record shipment"} onBack={app.goBack} />
       {SIGNAL_ENABLED&&<><SignalSteps step={1}/><SignalText kind="mono" muted>LET’S START WITH THE ITEM.</SignalText><SignalText kind="title">What are you{'\n'}packing?</SignalText><SignalText muted>Use a name you’ll recognize later.</SignalText></>}
       <ErrorBanner message={app.error} />
       {app.manualDraftNeedsRecovery ? <View><Text style={{color:colors.textSecondary,fontSize:16,lineHeight:24}}>A previous creation still needs to be checked. Recover its submitted details before starting another Proof.</Text><Button label="Recover submitted draft" variant="secondary" onPress={app.recoverManualDraft}/></View> : null}
       {app.offline ? <Text accessibilityLiveRegion="polite" style={{color:colors.textSecondary}}>Connect before creating this Proof or starting capture. Your form stays open.</Text> : null}
-      {!SIGNAL_ENABLED && <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>{ANDROID_TASK_FIRST_REBUILD ? "A short name helps you find this Proof later." : "Choose shipment → Record packing → Review and submit → Confirm saving → Share. A marketplace connection is optional."}</Text>}
+      {!SIGNAL_ENABLED && <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24 }}>{TASK_UI ? "A short name helps you find this Proof later." : "Choose shipment → Record packing → Review and submit → Confirm saving → Share. A marketplace connection is optional."}</Text>}
       {app.intakeReview ? (
         <>
           <SectionHeader title="Review your order" />
@@ -57,21 +59,21 @@ export function ManualCreateScreen() {
           ))}
         </>
       ) : null}
-      {!ANDROID_TASK_FIRST_REBUILD && !SIGNAL_ENABLED ? <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
+      {!TASK_UI && !SIGNAL_ENABLED ? <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
         <Button label="Enter details" variant="secondary" disabled onPress={() => {}} />
         <Button label="Paste order or receipt" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("intake")} />
         <Button label="Select an order" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("orders")} />
       </View> : null}
       <FormField
-        label={SIGNAL_ENABLED ? "Item name" : ANDROID_TASK_FIRST_REBUILD ? "Item or shipment" : "What are you shipping?"}
-        placeholder={ANDROID_TASK_FIRST_REBUILD ? "e.g. Vintage game console" : undefined}
+        label={SIGNAL_ENABLED ? "Item name" : TASK_UI ? "Item or shipment" : "What are you shipping?"}
+        placeholder={TASK_UI ? "e.g. Game Boy Color" : undefined}
         value={form.itemTitle}
         onChangeText={(value) => setForm({ ...form, itemTitle: value })}
         autoCapitalize="sentences"
         maxLength={200}
       />
-      {!SIGNAL_ENABLED && <Text style={{ color: colors.textSecondary, fontSize: ANDROID_TASK_FIRST_REBUILD ? 14 : 16, lineHeight: ANDROID_TASK_FIRST_REBUILD ? 20 : 24 }}>{ANDROID_TASK_FIRST_REBUILD ? "No selling account or tracking number needed. You’ll review your recording and confirm with your device before submitting." : "Show the shipping label during your packing video. PackProof will try to read it for you."}</Text>}
-      {ANDROID_TASK_FIRST_REBUILD && !SIGNAL_ENABLED ? <Button
+      {!SIGNAL_ENABLED && <Text style={{ color: colors.textSecondary, fontSize: TASK_UI ? 14 : 16, lineHeight: TASK_UI ? 20 : 24 }}>{TASK_UI ? "No selling account or tracking number needed. You’ll review your recording and confirm with your device before submitting." : "Show the shipping label during your packing video. PackProof will try to read it for you."}</Text>}
+      {TASK_UI && !SIGNAL_ENABLED ? <Button
         disabled={!form.itemTitle.trim() || app.offline || app.manualDraftNeedsRecovery}
         label="Continue to camera"
         onPress={() => void app.createManualProof()}
@@ -84,7 +86,7 @@ export function ManualCreateScreen() {
       />
       {showDetails ? (
         <>
-          {ANDROID_TASK_FIRST_REBUILD ? <Button label="Paste order or receipt" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("intake")} /> : null}
+          {TASK_UI ? <Button label="Paste order or receipt" variant="tertiary" disabled={app.busy || app.manualDraftNeedsRecovery} onPress={() => app.go("intake")} /> : null}
           <FormField
             label="Description"
             value={form.itemDescription}
@@ -176,7 +178,7 @@ export function ManualCreateScreen() {
           <Text style={[styles.help, { color: colors.textSecondary }]}>The label’s ship date is not proof of carrier acceptance. PackProof records the carrier’s first acceptance scan separately when tracking is available.</Text>
         </>
       ) : null}
-      {SIGNAL_ENABLED ? <View style={{marginTop:"auto",paddingTop:32,gap:16}}><SignalText kind="small" muted>A Proof keeps your packing recording and item details together.</SignalText><Button label="Continue to camera" icon="arrow-forward" disabled={!form.itemTitle.trim() || app.offline || app.manualDraftNeedsRecovery} loading={app.busy} onPress={()=>void app.createManualProof()}/><SignalText kind="caption" muted style={{textAlign:"center"}}>You choose when recording starts.</SignalText></View> : !ANDROID_TASK_FIRST_REBUILD ? <Button
+      {SIGNAL_ENABLED ? <View style={{marginTop:"auto",paddingTop:32,gap:16}}><SignalText kind="small" muted>A Proof keeps your packing recording and item details together.</SignalText><Button label="Continue to camera" icon="arrow-forward" disabled={!form.itemTitle.trim() || app.offline || app.manualDraftNeedsRecovery} loading={app.busy} onPress={()=>void app.createManualProof()}/><SignalText kind="caption" muted style={{textAlign:"center"}}>You choose when recording starts.</SignalText></View> : !TASK_UI ? <Button
         disabled={!form.itemTitle.trim() || app.offline || app.manualDraftNeedsRecovery}
         label="Continue to camera"
         onPress={() => void app.createManualProof()}

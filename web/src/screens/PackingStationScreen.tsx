@@ -698,7 +698,7 @@ export function PackingStationScreen(props: {
       setPreviewUrl(null);
       if (result.completion === "FINALIZED") setSavedIds(previous => new Set([...previous, pending.order.proofId]));
       dispatch({ type: "COMPLETED", completion: result.completion });
-      if (orderRef.current?.proofId) props.onCompleted?.(orderRef.current.proofId);
+      props.onCompleted?.(pending.order.proofId);
   }
   async function resumeAcceptedSave(){
     const pending=pendingRef.current;if(!pending?.finishConfirmed||busy)return;

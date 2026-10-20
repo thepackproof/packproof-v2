@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { EvidenceStore, MAX_CHUNK_BYTES, MAX_DURATION_SECONDS, MAX_EVIDENCE_BYTES } from './store.js';
-import type { CaptureFinish, CaptureInput, CaptureMetadata, EvidenceEngineOptions, EvidenceJobView, EvidenceState, ServerPart, UploadReceipt } from './types.js';
+import type { CaptureFinish, CaptureInput, CaptureMetadata, TakeReplacement, EvidenceEngineOptions, EvidenceJobView, EvidenceState, ServerPart, UploadReceipt } from './types.js';
 
 const PART_BYTES = 5 * 1024 * 1024;
 const STATEMENT = 'The item shown and attached in this Proof is the item I am shipping.';
-const RUNNABLE = new Set<EvidenceState>(['LOCAL', 'HASHING', 'READY', 'UPLOADING', 'VERIFYING', 'COMMITTING', 'FINALIZING', 'RETRYING', 'WAITING_FOR_NETWORK']);
+const RUNNABLE = new Set<EvidenceState>(['LOCAL', 'HASHING', 'READY', 'UPLOADING', 'VERIFYING', 'COMMITTING', 'FINALIZING', 'SUBMITTED', 'RETRYING', 'WAITING_FOR_NETWORK']);
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 interface Chunk { sequence: number; byteSize: number; sha256: string }
 interface Job {
@@ -31,11 +31,14 @@ interface Job {
   completedAt?: string;
   confirmedAt?: string;
   confirmedReceipt?: UploadReceipt;
+  durableConfirmed?: boolean;
   error?: string;
   errorCode?: string;
   attempts: number;
   retryAt?: number;
   localCopyAvailable: boolean;
+  replacement?: TakeReplacement;
+  supersededBy?: string;
 }
 export class EvidenceError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = 'EvidenceError'; }
@@ -89,9 +92,9 @@ export class EvidenceEngine {
       uploadedBytes: job.uploadedBytes, progress: job.state === 'COMPLETE' ? 100 : job.byteSize ? Math.min(99, Math.floor(job.uploadedBytes / job.byteSize * 100)) : 0,
       createdAt: job.createdAt, updatedAt: job.updatedAt, completedAt: job.completedAt, error: job.error, errorCode: job.errorCode,
       evidenceId: job.evidenceId, sha256: job.sha256, maxRecordingBytes: job.maxRecordingBytes, maxRecordingSeconds: job.maxRecordingSeconds,
-      localCopyAvailable: job.localCopyAvailable };
+      localCopyAvailable: job.localCopyAvailable, recordedDurationMs:job.recordedDurationMs, replacement:job.replacement, supersededBy:job.supersededBy };
   }
-  list(): EvidenceJobView[] { return this.accountTransitions ? [] : [...this.jobs.values()].filter(job => job.accountId === this.accountId && job.state !== 'DISCARDED').map(job => this.view(job)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  list(): EvidenceJobView[] { return this.accountTransitions ? [] : [...this.jobs.values()].filter(job => job.accountId === this.accountId && job.state !== 'DISCARDED' && !job.supersededBy && job.replacement?.decision !== 'kept-original' && ![...this.jobs.values()].some(candidate=>candidate.replacement?.originalId===job.id && candidate.replacement.decision!=='kept-original')).map(job => this.view(job)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   async hasOtherAccountEvidence(): Promise<boolean> { return this.accountId ? this.store.hasOtherAccounts(this.accountId) : false; }
   async storageStats(): Promise<{ availableBytes: number; stagedBytes: number; unreadableJobs: number }> {
     const availableBytes = await this.store.availableBytes();
@@ -155,7 +158,7 @@ export class EvidenceEngine {
             job.state = 'INTERRUPTED'; job.errorCode = 'CAPTURE_INTERRUPTED';
             job.error = 'The application stopped during recording. The partial original is preserved; record a new continuous video.';
             await this.save(job);
-          } else if (job.state === 'WAITING_FOR_AUTH') { job.state = 'READY'; job.retryAt = 0; await this.save(job); }
+          } else if (job.state === 'COMPLETE' && job.durableConfirmed!==true) { job.state='SUBMITTED'; job.retryAt=0; await this.save(job); } else if (job.state === 'WAITING_FOR_AUTH') { job.state = 'READY'; job.retryAt = 0; await this.save(job); }
         } catch { this.unreadableJobs++; }
       }
     }
@@ -171,6 +174,8 @@ export class EvidenceEngine {
     const camera = input.camera === undefined ? undefined : boundedText(input.camera, 300, false);
     const label = input.label === undefined ? 'Packing recording' : boundedText(input.label, 300);
     const accountId = this.accountId, epoch = this.accountEpoch;
+    const original = input.replaceId ? this.ownJob(input.replaceId) : undefined;
+    if(original && (original.proofId!==proofId || original.state!=='REVIEW' || original.attestation || original.supersededBy || original.replacement?.decision==='pending' || [...this.jobs.values()].some(candidate=>candidate.replacement?.originalId===original.id && candidate.replacement.decision!=='kept-original'))) fail('RETAKE_UNAVAILABLE','Finish choosing the current take before recording another.');
     this.beginPending = true;
     try {
       if (await this.store.availableBytes() < MAX_EVIDENCE_BYTES + 64 * 1024 * 1024) fail('DISK_SPACE_LOW', 'Free at least 320 MB on this computer before recording.');
@@ -178,7 +183,7 @@ export class EvidenceEngine {
       const now = this.date();
       const job: Job = { version: 1, id: randomUUID(), accountId, proofId, label, mimeType, state: 'AUTHORIZING', chunks: [], byteSize: 0, uploadedBytes: 0,
         metadata: { captureSource: 'DESKTOP_CAMERA', camera, appVersion, installationId, platform: process.platform, offline: input.offline === true, startedAt: now, detections: [], provenance: 'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED' },
-        attestation: false, maxRecordingBytes: MAX_EVIDENCE_BYTES, maxRecordingSeconds: MAX_DURATION_SECONDS, createdAt: now, updatedAt: now, attempts: 0, localCopyAvailable: true };
+        attestation: false, maxRecordingBytes: MAX_EVIDENCE_BYTES, maxRecordingSeconds: MAX_DURATION_SECONDS, createdAt: now, updatedAt: now, attempts: 0, localCopyAvailable: true, ...(original?{replacement:{originalId:original.id,decision:'pending' as const}}:{}) };
       await this.save(job);
       if (epoch !== this.accountEpoch || accountId !== this.accountId) fail('ACCOUNT_CHANGED', 'Sign in again before recording.');
       this.jobs.set(job.id, job);
@@ -228,13 +233,16 @@ export class EvidenceEngine {
       });
     } finally { this.outstandingChunkBytes -= data.byteLength; }
   }
-  async finishCapture(id: string, input: CaptureFinish): Promise<EvidenceJobView> {
+  async stageCapture(id: string, input: CaptureFinish): Promise<EvidenceJobView> { return this.completeCapture(id,{...input,attestation:false},false); }
+  async finishCapture(id: string, input: CaptureFinish): Promise<EvidenceJobView> { return this.completeCapture(id,input,true); }
+  private async completeCapture(id: string, input: CaptureFinish, submit:boolean): Promise<EvidenceJobView> {
     const job = this.ownJob(id);
     const result = await this.serialized(id, async () => {
       this.assertActive(job);
-      if (job.state !== 'RECORDING') fail('CAPTURE_CLOSED', 'This recording cannot be completed.');
+      if (job.state !== 'RECORDING' && !(submit && job.state==='REVIEW')) fail('CAPTURE_CLOSED', 'This recording cannot be completed.');
+      if(submit && (job.supersededBy || job.replacement?.decision==='pending' || job.replacement?.decision==='kept-original' || [...this.jobs.values()].some(candidate=>candidate.replacement?.originalId===job.id && candidate.replacement.decision!=='kept-original'))) fail('TAKE_SELECTION_REQUIRED','Choose the recording to keep before submitting.');
       if (!job.byteSize) fail('EMPTY_RECORDING', 'No recording bytes have been saved.');
-      if (input.attestation !== true) fail('ATTESTATION_REQUIRED', 'Confirm that the item shown is the item you are shipping.');
+      if (submit && input.attestation !== true) fail('ATTESTATION_REQUIRED', 'Confirm that the item shown is the item you are shipping.');
       const duration = input.recordedDurationMs ?? Math.max(0, this.now() - Date.parse(job.createdAt));
       if (!Number.isSafeInteger(duration) || duration < 0 || duration > job.maxRecordingSeconds * 1000) fail('RECORDING_LIMIT', 'The recording exceeded its duration limit. The original remains on this computer.');
       const startedAt = input.startedAt === undefined ? job.metadata.startedAt : boundedText(input.startedAt, 40);
@@ -250,11 +258,49 @@ export class EvidenceEngine {
         if (detection.confirmed !== undefined && typeof detection.confirmed !== 'boolean' || detection.notThisPackage !== undefined && typeof detection.notThisPackage !== 'boolean' || detection.confirmed && detection.notThisPackage) fail('INVALID_DETECTIONS', 'The label confirmation is invalid.');
         return { value: boundedText(detection.value, 1024), format: detection.format === undefined ? undefined : boundedText(detection.format, 80), detectedAtMs: detection.detectedAtMs, confirmed: detection.confirmed, notThisPackage: detection.notThisPackage };
       });
-      job.metadata.startedAt = new Date(startMs).toISOString(); job.metadata.endedAt = new Date(endMs).toISOString(); job.recordedDurationMs = duration; job.attestation = true; job.state = 'LOCAL';
+      job.metadata.startedAt = new Date(startMs).toISOString(); job.metadata.endedAt = new Date(endMs).toISOString(); job.recordedDurationMs = duration; job.attestation = submit; job.state = submit ? 'LOCAL' : 'REVIEW';
       await this.save(job); return this.view(job);
     });
-    if (this.options.automaticProcessing !== false) setImmediate(() => { void this.processQueue().catch(() => undefined); });
+    if (submit && this.options.automaticProcessing !== false) setImmediate(() => { void this.processQueue().catch(() => undefined); });
     return result;
+  }
+  async chooseTake(id:string, choice:'original'|'replacement'):Promise<EvidenceJobView> {
+    const candidate=this.ownJob(id);
+    return this.serialized(id,async()=>{
+      this.assertActive(candidate);
+      if(['RECORDING','AUTHORIZING'].includes(candidate.state) || candidate.replacement?.decision!=='pending' || candidate.attestation || candidate.evidenceId) fail('RETAKE_UNAVAILABLE','This take has already been selected.');
+      const original=this.ownJob(candidate.replacement.originalId);
+      return this.serialized(original.id,async()=>{
+        this.assertActive(original);
+        if(original.proofId!==candidate.proofId || original.state!=='REVIEW' || original.attestation || original.supersededBy) fail('RETAKE_UNAVAILABLE','The original is no longer available for selection.');
+        if(choice==='replacement') {
+          if(candidate.state!=='REVIEW' || !candidate.byteSize) fail('INCOMPLETE_REPLACEMENT','Only a complete recording can replace the original.');
+          await this.hashOriginal(candidate);this.assertActive(candidate);this.assertActive(original);
+        }
+        // Selection is journaled before the old take is retired. Neither file is deleted.
+        candidate.replacement={originalId:original.id,decision:choice==='replacement'?'accepted':'kept-original'};
+        await this.save(candidate);this.assertActive(candidate);
+        if(choice==='replacement'){original.supersededBy=candidate.id;await this.save(original);return this.view(candidate);}
+        return this.view(original);
+      });
+    });
+  }
+  reviewCapture(id:string) {
+    const job=this.ownJob(id);
+    if(!job.localCopyAvailable || ['RECORDING','AUTHORIZING','DISCARDED'].includes(job.state)) fail('PREVIEW_UNAVAILABLE','The local recording is not ready for playback.');
+    return {...this.view(job),mimeType:job.mimeType,metadata:job.metadata};
+  }
+  localRecording(id:string, range?:string|null) {
+    const job=this.ownJob(id);this.reviewCapture(id);
+    if(!job.byteSize)fail('PREVIEW_UNAVAILABLE','No playable bytes are available for this take.');
+    const total=job.byteSize;let start=0,end=total-1;
+    if(range){const match=/^bytes=(\d*)-(\d*)$/.exec(range);if(!match || !match[1]&&!match[2])fail('INVALID_RANGE','Invalid playback range.');
+      if(!match[1])start=Math.max(0,total-Number(match[2]));else{start=Number(match[1]);if(match[2])end=Math.min(end,Number(match[2]));}
+      if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||start>end||start>=total)fail('INVALID_RANGE','Invalid playback range.');
+    }
+    const engine=this;
+    async function* bytes(){let offset=0;for await(const chunk of engine.originalBytes(job)){engine.assertActive(job);const next=offset+chunk.length;if(next>start && offset<=end)yield new Uint8Array(chunk.subarray(Math.max(0,start-offset),Math.min(chunk.length,end-offset+1)));offset=next;if(offset>end)break;}}
+    return {mimeType:job.mimeType,total,start,end,status:range?206:200,bytes:bytes()};
   }
   async interruptCapture(id: string, reason = 'Recording interrupted. Start a new continuous video.'): Promise<EvidenceJobView> {
     const job = this.ownJob(id);
@@ -368,8 +414,10 @@ export class EvidenceEngine {
     this.assertActive(job, signal);
     if (!job.evidenceId || !job.captureSessionId) fail('LOCAL_INTEGRITY', 'The local upload record is incomplete.');
     job.state = 'FINALIZING'; await this.save(job);
-    await this.options.api.attestAndFinalize({ ...context, evidenceId: job.evidenceId, captureSessionId: job.captureSessionId, statement: STATEMENT }, signal);
+    const finalization=await this.options.api.attestAndFinalize({ ...context, evidenceId: job.evidenceId, captureSessionId: job.captureSessionId, statement: STATEMENT }, signal);
     this.assertActive(job, signal);
+    if(finalization?.durable!==true){job.state='SUBMITTED';job.retryAt=this.now()+300_000;job.error=undefined;job.errorCode=undefined;await this.save(job);return;}
+    job.durableConfirmed=true;
     job.state = 'COMPLETE'; job.completedAt = this.date(); job.attempts = 0; job.retryAt = undefined; job.error = undefined; job.errorCode = undefined;
     await this.save(job);
     try { this.options.onComplete?.(this.view(job)); } catch { /* OS notifications are advisory. */ }
@@ -424,7 +472,7 @@ export class EvidenceEngine {
   }
   async retry(id: string): Promise<EvidenceJobView> {
     const job = this.ownJob(id);
-    if (['RECORDING', 'AUTHORIZING', 'INTERRUPTED', 'DISCARDED', 'COMPLETE'].includes(job.state)) fail('RETRY_UNAVAILABLE', 'This recording cannot be retried.');
+    if (['RECORDING', 'REVIEW', 'AUTHORIZING', 'INTERRUPTED', 'DISCARDED', 'COMPLETE'].includes(job.state)) fail('RETRY_UNAVAILABLE', 'This recording cannot be retried.');
     this.controller?.abort(); await this.worker?.catch(() => undefined);
     job.attempts = 0; job.retryAt = 0; job.error = undefined; job.errorCode = undefined; job.state = job.confirmedReceipt ? 'FINALIZING' : 'READY';
     await this.save(job);
@@ -448,7 +496,7 @@ export class EvidenceEngine {
   }
   async cleanup(): Promise<void> {
     for (const job of this.jobs.values()) {
-      if (job.state !== 'COMPLETE' || !job.confirmedReceipt || !job.confirmedAt || !job.localCopyAvailable) continue;
+      if (job.state !== 'COMPLETE' || job.durableConfirmed!==true || !job.confirmedReceipt || !job.confirmedAt || !job.localCopyAvailable) continue;
       if (this.now() - Date.parse(job.confirmedAt) < this.retentionMs) continue;
       this.assertReceipt(job.confirmedReceipt, { sha256: job.sha256!, byteSize: job.byteSize });
       await this.store.removeChunks(job.accountId, job.id); job.localCopyAvailable = false; await this.save(job);

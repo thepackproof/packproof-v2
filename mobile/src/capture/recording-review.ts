@@ -16,7 +16,8 @@ export function assertRecordingReplacement(capture: LocalCapture | null, proofId
     throw new Error('This recording has entered submission. Check its existing save before recording again.');
 }
 
-export function assertContinuousRecording(capture: LocalCapture): void {
+export function assertContinuousRecording(capture: LocalCapture, related:LocalCapture[]=[]): void {
+  if(capture.supersededBy || related.some(row=>row.captureUserId===capture.captureUserId && row.captureProofId===capture.captureProofId && row.recovery?.apiBaseUrl===capture.recovery?.apiBaseUrl && row.replacement?.originalUri===capture.uri && row.replacement.decision!=='kept-original'))throw new Error('Choose which take to keep before submitting this original.');
   if(capture.replacement && capture.replacement.decision!=='accepted')throw new Error('Choose which take to keep before submitting.');
   if (requiresRecordingRecovery(capture)) throw Object.assign(new Error('This interrupted take is kept for inspection. Record a new continuous take before submitting.'), { code: 'CAPTURE_ORIGINAL_INTERRUPTED' });
 }

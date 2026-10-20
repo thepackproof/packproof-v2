@@ -77,6 +77,7 @@ export async function recoverCapture(key: string): Promise<File | null> {
 }
 
 export type PendingStationCapture = {
+  updatedAt?: string;
   replacement?: { original: PendingStationCapture; decision: "pending" | "accepted" };
   discardRequested?: boolean;
   identifierPolicy?: import('../../backend/src/identifiers/types').IdentifierPolicy;
@@ -129,7 +130,7 @@ export async function saveStationCapture(capture: PendingStationCapture): Promis
     capture = { ...previous, ...capture, digest: existingDigest, evidenceId: previous.evidenceId ?? capture.evidenceId, finishConfirmed: true };
   }
   capture = { ...capture, shippingScans: mergeStationScans(previous?.uploadKey === capture.uploadKey ? previous.shippingScans : undefined, capture.shippingScans) };
-  await queue("readwrite", (store) => store.put({ ...capture, kind: "station" }));
+  await queue("readwrite", (store) => store.put({ ...capture, updatedAt:new Date().toISOString(), kind: "station" }));
 
   });
 }
@@ -519,14 +520,14 @@ export function resumeStageRecording(api:PackProofApi,userId:string,key:string,a
   }).finally(()=>{stageJobs.delete(jobKey);});stageJobs.set(jobKey,job);return job;
 }
 
-export type LocalRecordingSummary={retryScheduled?:boolean;interrupted?:boolean;evidenceId?:string;available?:boolean;active?:boolean;discardRequested?:boolean;key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;submitted?:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
+export type LocalRecordingSummary={label?:string;updatedAt?:string;retryScheduled?:boolean;interrupted?:boolean;evidenceId?:string;available?:boolean;active?:boolean;discardRequested?:boolean;key:string;kind:"ordinary"|"station"|"stage";file:Blob;proofId:string;preserved:boolean;finalized:boolean;submitted?:boolean;committed:boolean;accepted:boolean;errorMessage?:string;retryStopped?:boolean};
 export async function listRecoverableRecordings(userId:string,api?:PackProofApi):Promise<LocalRecordingSummary[]>{
   const ordinary=(await listLocalRecordings(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
   const station=await recoverStationCapture(userId,api?.recoveryScope);
   const stages=(await listStageCaptures(userId)).filter(item=>!api||scopeMatches(item.apiScope,api));
   return [
     ...ordinary.map(item=>({...recordingRecoveryFields(item,api),key:item.key,kind:"ordinary" as const,file:item.file,proofId:item.proofId!,preserved:!!item.preserved,finalized:!!item.finalized,submitted:!!item.submitted,committed:!!item.committed,accepted:true,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
-    ...(station&&(!api||scopeMatches(station.apiScope,api))?[{...recordingRecoveryFields(station,api),key:station.key,kind:"station" as const,interrupted:station.interrupted,file:station.file,proofId:station.order.proofId,preserved:!!station.preserved,finalized:false,committed:!!station.committed,accepted:station.finishConfirmed,errorMessage:station.errorMessage,retryStopped:station.retryStopped}]:[]),
+    ...(station&&(!api||scopeMatches(station.apiScope,api))?[{...recordingRecoveryFields(station,api),key:station.key,kind:"station" as const,label:station.order.itemSummary,updatedAt:station.updatedAt,interrupted:station.interrupted,file:station.file,proofId:station.order.proofId,preserved:!!station.preserved,finalized:false,committed:!!station.committed,accepted:station.finishConfirmed,errorMessage:station.errorMessage,retryStopped:station.retryStopped}]:[]),
     ...stages.map(item=>({...recordingRecoveryFields(item,api),key:item.key,kind:"stage" as const,file:item.file,proofId:item.proofId??item.key.slice(userId.length+1,item.key.lastIndexOf(":stage:")),preserved:false,finalized:false,committed:false,accepted:!!item.submitRequested,errorMessage:item.errorMessage,retryStopped:item.retryStopped})),
   ];
 }
@@ -539,7 +540,7 @@ async function trackTransfer<T>(api:PackProofApi,key:string,run:()=>Promise<T>):
   try { return await run(); } finally { transfers.delete(identity); notifyUploadChange(); }
 }
 function recordingRecoveryFields(item: {key:string;file?:Blob;evidenceId?:string;discardRequested?:boolean;nextAttemptAt?:number;retryStopped?:boolean}, api?:PackProofApi) {
-  return {retryScheduled:!!item.nextAttemptAt && !item.retryStopped,evidenceId:item.evidenceId,available:!!item.file?.size,active:transfers.has(`${api?.recoveryScope || ""}:${item.key}`),discardRequested:item.discardRequested};
+  return {retryScheduled:!!item.nextAttemptAt && !item.retryStopped,evidenceId:item.evidenceId,available:!!item.file?.size,active:transfers.has(`${api?.recoveryScope || ""}:${item.key}`)||stationJobs.has(`${api?.recoveryScope || ""}:${item.key}`)||stageJobs.has(`${api?.recoveryScope || ""}:${item.key}`),discardRequested:item.discardRequested};
 }
 function missingRecording():Error { return Object.assign(new Error("The original recording is no longer available on this device."),{code:"CAPTURE_LOCAL_FILE_MISSING",status:422}); }
 function discardPending():Error { return Object.assign(new Error("This incomplete recording is queued for discard."),{code:"CAPTURE_DISCARD_PENDING",status:409}); }

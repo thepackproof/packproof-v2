@@ -109,6 +109,18 @@
         "EXPO_PUBLIC_PACKPROOF_API_BASE_URL": "http://127.0.0.1:3000",
         "EXPO_PUBLIC_PACKPROOF_AUTH_MODE": "dev"
       }
+    },
+    "signal-review": {
+      "extends": "mobile-ux-review",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_SIGNAL": "true"
+      }
+    },
+    "signal-ios-simulator": {
+      "extends": "ios-simulator",
+      "env": {
+        "EXPO_PUBLIC_PACKPROOF_SIGNAL": "true"
+      }
     }
   },
   "submit": {

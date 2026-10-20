@@ -33,6 +33,8 @@ import { selectTaskHome } from '../experience/task-home';
 import { workspaceRecordings } from '../copy/workspace-summary';
 import { captureRecoveryLabel } from '../capture/recovery-model';
 
+const TASK_UI = SIGNAL_ENABLED || ANDROID_TASK_FIRST_REBUILD;
+
 export function MyProofsScreen() {
   const app = usePackProof();
   const { colors } = useTheme();
@@ -71,7 +73,7 @@ export function MyProofsScreen() {
   async function refresh() { await app.run(app.syncWorkspace); setRequestedRefresh(true); }
   async function open(item: PresentedProof, act = false) {
     if (MOBILE_TASK_UX_ENABLED && act) {
-      if (ANDROID_TASK_FIRST_REBUILD) await app.openProofDestination({ proofId: item.proofId, intent: 'resume' });
+      if (TASK_UI) await app.openProofDestination({ proofId: item.proofId, intent: 'resume' });
       else await app.openProofAction(item.proofId);
       return;
     }
@@ -96,7 +98,7 @@ export function MyProofsScreen() {
     });
   }
   const noMatches = Boolean(library.query.trim() || library.role !== 'all' || library.carrier);
-  const emptyTitle = noMatches ? 'No search matches' : library.view === 'attention' ? 'Nothing needs your attention' : library.view === 'completed' ? 'No completed Proofs yet' : ANDROID_TASK_FIRST_REBUILD && library.view === 'progress' ? 'No Proofs in progress' : ANDROID_TASK_FIRST_REBUILD ? 'Your first Proof starts here' : 'No Proofs yet';
+  const emptyTitle = noMatches ? 'No search matches' : library.view === 'attention' ? 'Nothing needs your attention' : library.view === 'completed' ? 'No completed Proofs yet' : TASK_UI && library.view === 'progress' ? 'No Proofs in progress' : TASK_UI ? 'Your first Proof starts here' : 'No Proofs yet';
   const filterTabs = (<View style={[styles.tabs, {flexWrap:'wrap'}]} accessibilityRole="tablist" accessibilityLabel="Filter Proofs">
       {([{id:'all',label:'All'},{id:'progress',label:'In progress'},{id:'completed',label:SIGNAL_ENABLED?'Saved':'Completed'}] as const).map(option => <PressableScale key={option.id} onPress={() => app.setProofsView(option.id)} accessibilityRole="tab" accessibilityState={{selected:library.view===option.id}} style={[styles.tab,{backgroundColor:library.view===option.id?(SIGNAL_ENABLED?colors.textPrimary:colors.accentSoft):colors.surfacePressed,borderRadius:999,paddingHorizontal:20,minHeight:48}]}><Text style={[styles.tabText,{color:library.view===option.id?(SIGNAL_ENABLED?colors.background:colors.accentText):colors.textSecondary}]}>{option.label}</Text></PressableScale>)}
       <Button label="More" variant="tertiary" onPress={() => setFilterOpen(true)} />
@@ -107,12 +109,12 @@ export function MyProofsScreen() {
     </View>);
   return <AppScreen key={app.session?.userId} bottomInset={!MOBILE_TASK_UX_ENABLED} restorationReady={!loading} resetScrollKey={filterKey} onRefresh={() => void refresh()} refreshing={app.busy} initialOffsetY={app.readProofsScrollOffset()} onScrollOffset={app.setProofsScrollOffset}>
     <WorkspaceHeader section="Proofs" />
-    <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, ANDROID_TASK_FIRST_REBUILD && taskFirstTypography.pageTitle, { color:colors.textPrimary }]}>{SIGNAL_ENABLED?"Your Proofs":"Proofs"}</Text></View>{!ANDROID_TASK_FIRST_REBUILD ? <TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}</View>
-    {ANDROID_TASK_FIRST_REBUILD ? <Text style={[taskFirstTypography.body, {color:colors.textSecondary}]}>Your records, all in one place.</Text> : null}
+    <View style={styles.heading}><View style={styles.headingCopy}>{!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.eyebrow,{color:colors.textMuted}]}>YOUR WORKSPACE</Text> : null}<Text accessibilityRole="header" style={[styles.pageTitle, MOBILE_TASK_UX_ENABLED && styles.mobileTitle, !SIGNAL_ENABLED && TASK_UI && taskFirstTypography.pageTitle, { color:colors.textPrimary }]}>{SIGNAL_ENABLED?"Your Proofs":"Proofs"}</Text></View>{!TASK_UI ? <TutorialTarget name="create capture"><Button label="Create Proof" icon="add-outline" onPress={() => app.selectCreateProof()} /></TutorialTarget> : null}</View>
+    {TASK_UI && !SIGNAL_ENABLED ? <Text style={[taskFirstTypography.body, {color:colors.textSecondary}]}>Your records, all in one place.</Text> : null}
     {!MOBILE_TASK_UX_ENABLED ? <Text style={[styles.subtitle,{color:colors.textSecondary}]}>Shipment evidence, organized and ready to review.</Text> : null}
     <View style={[styles.libraryPanel,{backgroundColor:colors.background,borderColor:colors.border}]}>
     <View style={styles.toolbar}>
-    {ANDROID_TASK_FIRST_REBUILD ? <>{searchOpen ? searchControl : <Button label="Search Proofs" icon="search-outline" variant="tertiary" onPress={() => setSearchOpen(true)} />}{filterTabs}</> : <>{filterTabs}{searchControl}</>}
+    {TASK_UI ? <>{searchOpen ? searchControl : <Button label="Search Proofs" icon="search-outline" variant="tertiary" onPress={() => setSearchOpen(true)} />}{filterTabs}</> : <>{filterTabs}{searchControl}</>}
 
     </View>
     {!MOBILE_TASK_UX_ENABLED ? <View style={[styles.tableHeading,{backgroundColor:colors.surfaceElevated,borderColor:colors.border}]}><Text style={[styles.columnLabel,{color:colors.textMuted}]}>SHIPMENT RECORDS</Text><Text style={[styles.columnLabel,{color:colors.textMuted}]}>{loading ? 'LOADING' : `${visibleCount} IN VIEW`}</Text></View> : null}
@@ -124,7 +126,7 @@ export function MyProofsScreen() {
     {changed && !loading ? <Button label="Updates available · Refresh" variant="tertiary" onPress={() => setRequestedRefresh(true)} /> : null}
     {loading && !rows.length && !app.error ? <><ProofCardSkeleton/><ProofCardSkeleton/></> : null}
     {libraryRows.map((item, index) => <TutorialTarget key={item.proofId} name={index===0?'proofs':''}><SignalProofRow item={item} disabled={app.busy} onPress={()=>void open(item,MOBILE_TASK_UX_ENABLED)}/></TutorialTarget>)}
-    {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : ANDROID_TASK_FIRST_REBUILD && library.view === 'progress' ? 'Other records are still available in All.' : ANDROID_TASK_FIRST_REBUILD ? 'Create a record of how you pack your item. No selling account connection needed.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : ANDROID_TASK_FIRST_REBUILD ? 'Create Proof' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : library.view === 'all' && ANDROID_TASK_FIRST_REBUILD ? () => app.selectCreateProof() : () => app.setProofsView('all')} /></TutorialTarget> : null}
+    {!loading && !app.error && !app.offline && !visibleCount ? <TutorialTarget name="proofs"><EmptyState title={emptyTitle} body={noMatches ? 'Try another reference or clear your filters.' : library.view === 'attention' ? 'Waiting and uploading Proofs are still available in All.' : library.view === 'completed' ? 'Proofs appear here when their evidence is finalized. Delivery is tracked separately.' : TASK_UI && library.view === 'progress' ? 'Other records are still available in All.' : TASK_UI ? 'Create a record of how you pack your item. No selling account connection needed.' : 'Connected-store orders appear here automatically. Use New Proof for another shipment.'} actionLabel={noMatches ? 'Clear search and filters' : library.view !== 'all' ? 'View all Proofs' : TASK_UI ? 'Create Proof' : undefined} onAction={noMatches ? () => { app.setProofsQuery('');app.setProofsRoleFilter('all');app.setProofsCarrierFilter(null); } : library.view === 'all' && TASK_UI ? () => app.selectCreateProof() : () => app.setProofsView('all')} /></TutorialTarget> : null}
     </View>
     </View>
     <BottomSheet visible={filterOpen} title="Filters" onClose={() => setFilterOpen(false)}>
@@ -141,8 +143,8 @@ const styles = StyleSheet.create({
   mobileTitle:{fontSize:SIGNAL_ENABLED?36:24,lineHeight:SIGNAL_ENABLED?40:31},
   eyebrow:{...typography.finePrint,fontFamily:'Inter-SemiBold',fontSize:10,lineHeight:15,letterSpacing:1.15},subtitle:{...typography.secondary,fontSize:14,marginTop:-8},
   libraryPanel:{gap:8},toolbar:{gap:12},
-  tabs:{flexDirection:'row',gap:3},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:6,justifyContent:'center'},tabText:{...typography.secondaryStrong,fontSize:13,lineHeight:19},
-  searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:48,flexDirection:'row',alignItems:'center',paddingHorizontal:10,borderWidth:1,borderRadius:6,gap:8},input:{flex:1,...typography.secondary,fontSize:14,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:6},
+  tabs:{flexDirection:'row',gap:3},tab:{minHeight:48,paddingHorizontal:10,paddingVertical:10,borderRadius:6,justifyContent:'center'},tabText:{...typography.secondaryStrong,fontSize:SIGNAL_ENABLED?14:13,lineHeight:20},
+  searchRow:{flexDirection:'row',gap:8},search:{flex:1,minHeight:SIGNAL_ENABLED?56:48,flexDirection:'row',alignItems:'center',paddingHorizontal:16,borderWidth:1,borderRadius:SIGNAL_ENABLED?12:6,gap:8},input:{flex:1,...typography.secondary,fontSize:14,paddingVertical:8},filter:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderWidth:1,borderRadius:6},
   tableHeading:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,paddingHorizontal:16,paddingVertical:10,borderTopWidth:1,borderBottomWidth:1},columnLabel:{...typography.finePrint,fontSize:12,lineHeight:18,letterSpacing:.35},listBody:{gap:0},
   row:{padding:16,borderBottomWidth:1,gap:9},rowCopy:{gap:9,minHeight:48},rowTitle:{...typography.bodyStrong,fontSize:15,lineHeight:22},meta:{...typography.secondary,fontSize:12,lineHeight:18},status:{...typography.secondaryStrong},
 });

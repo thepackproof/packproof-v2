@@ -1,3 +1,4 @@
+import {useSignalReceipt} from '../experience/signal/use-receipt';
 import {presentationForProof} from '../copy/proof-list';
 import {workspaceRecordings} from '../copy/workspace-summary';
 import {mayCleanUpCapture} from '../capture/recovery-model';
@@ -13,13 +14,14 @@ import {ErrorBanner} from '../ui/EmptyState';
 import {SignalText,SignalParcel,SignalRow,SignalBadge} from '../ui/Signal';
 export function SignalHomeScreen(){
  const app=usePackProof(),home=useTaskHome(),{colors}=useTheme();const next=home.recommendation;
- const retained=workspaceRecordings(app.savedRecordings,app.localCapture).filter(row=>row.captureUserId===app.session?.userId&&row.recovery?.apiBaseUrl===app.apiBaseUrl);
+ const retained=workspaceRecordings(app.savedRecordings,app.localCapture).filter(row=>row.captureUserId===app.session?.userId&&row.recovery?.apiBaseUrl.replace(/\/+$/,'')===app.apiBaseUrl.replace(/\/+$/,''));
  const pending=retained.find(row=>!['FINALIZED','SUBMITTED'].includes(row.recovery?.phase||''));
  const recentSaved=home.recent.find(row=>row.presentation.completed);
  const featured=app.proofCollection.find(row=>row.proofId===pending?.captureProofId)||recentSaved;
  const uploading=!!pending?.recovery?.submitRequested;
  const paused=uploading&&(app.offline||!!pending?.recovery?.lastError);
- const saved=!!recentSaved&&retained.some(row=>row.captureProofId===recentSaved.proofId&&row.recovery&&mayCleanUpCapture(row.recovery));
+ const confirmed=useSignalReceipt(recentSaved?.proofId||'',recentSaved?.updatedAt||'',!!recentSaved);
+ const saved=confirmed||!!recentSaved&&retained.some(row=>row.captureProofId===recentSaved.proofId&&row.recovery&&mayCleanUpCapture(row.recovery));
  const mode=paused?'paused':uploading?'uploading':!pending&&recentSaved?'saved':'default';
  const selected=app.proofCollection.find(row=>row.proofId===next.targetId);
  function openProgress(){if(pending?.recovery)app.go('submission',{signalSubmission:{userId:pending.recovery.userId,apiBaseUrl:pending.recovery.apiBaseUrl,proofId:pending.recovery.proofId,operationId:pending.recovery.operationId,uri:pending.uri}});}

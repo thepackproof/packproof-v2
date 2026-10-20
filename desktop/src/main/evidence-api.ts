@@ -1,3 +1,4 @@
+import {hasSignalReceipt} from '../../../mobile/src/experience/signal/receipt';
 import { DesktopApi, DesktopApiError } from './api.js';
 import type { EvidenceTransport, UploadReceipt, CaptureAuthorization } from './evidence/types.js';
 import {desktopCaptureAllowance} from './capture-allowance.js';
@@ -69,11 +70,11 @@ export class DesktopEvidenceTransport implements EvidenceTransport {
     if (!evidence || evidence.validationStatus !== 'COMMITTED' || !evidence.committedAt || !evidence.sha256 || evidence.byteSize == null) throw new DesktopApiError('COMMIT_UNCONFIRMED', 'PackProof has not confirmed preservation of this recording. The local original is retained.', 409);
     return assertReceipt({ sha256: evidence.sha256, byteSize: evidence.byteSize }, input);
   }
-  async attestAndFinalize(input: Parameters<EvidenceTransport['attestAndFinalize']>[0], signal: AbortSignal): Promise<void> {
+  async attestAndFinalize(input: Parameters<EvidenceTransport['attestAndFinalize']>[0], signal: AbortSignal): Promise<{durable:boolean}> {
     this.api.assertAccount(input.accountId);
     if (input.statement !== 'PACKED_DESCRIBED_ITEM' && input.statement.replace(/\.$/, '') !== 'The item shown and attached in this Proof is the item I am shipping') throw new DesktopApiError('INVALID_ATTESTATION', 'Confirm the shipping statement before completing this Proof.', 400);
-    const proof = await this.api.getProof(input.proofId, signal);
-    if (proof.status === 'FINALIZED') return;
+    let proof = await this.api.getProof(input.proofId, signal);
+    if (proof.status !== 'FINALIZED') {
     this.api.assertAccount(input.accountId);
     const review = await this.api.getCaptureShippingReview(input.proofId, input.captureSessionId, signal);
     if (review.reviewRequired) throw new DesktopApiError('LABEL_REVIEW_REQUIRED', 'Review the labels seen in this recording in PackProof before completion. Your recording is preserved.', 409);
@@ -82,6 +83,13 @@ export class DesktopEvidenceTransport implements EvidenceTransport {
     this.api.assertAccount(input.accountId);
     const result = await this.api.finalizeProof(input.proofId, signal);
     if (result.proof.status !== 'FINALIZED') throw new DesktopApiError('FINALIZATION_PENDING', 'PackProof is still preserving this Proof. Completion will be checked again.', 503);
+    proof=await this.api.getProof(input.proofId,signal);
+    }
+    this.api.assertAccount(input.accountId);
+    if(proof.proofId!==input.proofId || proof.status!=='FINALIZED' || !proof.evidence.some(item=>item.evidenceId===input.evidenceId&&item.validationStatus==='COMMITTED'))throw new DesktopApiError('FINALIZATION_CONFLICT','The server has not finalized this recording in its intended Proof. The original is retained.',409);
+    let recovery=null;try{recovery=await this.api.getRecovery(input.proofId,signal);}catch(error){if(signal.aborted)throw error;}
+    this.api.assertAccount(input.accountId);
+    return {durable:hasSignalReceipt(proof,recovery,{proofId:input.proofId,evidenceId:input.evidenceId})};
   }
   async discardUpload(input: Parameters<NonNullable<EvidenceTransport['discardUpload']>>[0], signal: AbortSignal): Promise<void> {
     this.api.assertAccount(input.accountId);

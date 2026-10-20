@@ -18,5 +18,7 @@ test('a retake candidate cannot submit or start another replacement before an ex
  assert.throws(()=>assertRecordingReplacement(take,'p1',take.uri),/Choose/);
  assert.doesNotThrow(()=>assertContinuousRecording({...take,replacement:{...take.replacement!,decision:'accepted'}}));
  assert.throws(()=>assertContinuousRecording({...take,interrupted:true,replacement:{...take.replacement!,decision:'accepted'}}),/interrupted/);
+ assert.throws(()=>assertContinuousRecording({...take,uri:'file:original',replacement:undefined},[take]),/Choose/);
+ assert.throws(()=>assertContinuousRecording({...take,replacement:undefined,supersededBy:'file:new'}),/Choose/);
  assert.equal(take.replacement?.originalUri,'file:original');
 });

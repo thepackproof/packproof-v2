@@ -5,7 +5,7 @@ import type {ProofView} from '../v2-api';
 import {AppScreen} from '../ui/AppScreen';
 import {AppHeader} from '../ui/AppHeader';
 import {Button} from '../ui/Button';
-import {SignalText,SignalSteps,SignalProgress,SignalReceipt} from '../ui/Signal';
+import {SignalText,SignalSteps,SignalProgress,SignalReceipt,SignalBadge} from '../ui/Signal';
 import {hasSignalReceipt,signalDuration} from '../experience/signal/receipt';
 export function SignalSubmissionScreen(){
  const app=usePackProof(),identity=app.route.signalSubmission;
@@ -31,5 +31,6 @@ export function SignalSubmissionScreen(){
  const phase=capture?.recovery?.phase;
  const paused=app.offline||phase==='NEEDS_ATTENTION'||phase==='NEEDS_SIGN_IN'||!!capture?.recovery?.lastError;
  const confirming=['BYTES_RECEIVED','PRESERVATION_PENDING','FINALIZATION_PENDING','FINALIZED','SUBMITTED'].includes(phase||'');
+ if(!proof&&phase==='SUBMITTED')return <AppScreen><AppHeader title={title} onBack={()=>app.go('home')}/><SignalSteps step={3}/><SignalBadge state="local">Recording received</SignalBadge><SignalText kind="title">Your record is received.</SignalText><SignalText muted>The server has finalized this Proof. Your original stays on this device until preservation is confirmed.</SignalText><Button label="View your Proof" onPress={()=>void app.run(()=>app.openProof(identity.proofId))}/><Button label="Back to Home" variant="secondary" onPress={()=>app.go('home')}/></AppScreen>;
  return <AppScreen><AppHeader title={title} onBack={()=>app.go('home')}/>{proof?<SignalReceipt title={proof.transaction.itemTitle||title} proofId={proof.proofId} savedAt={proof.finalizedAt!} duration={signalDuration(capture?.durationMs)} onHome={()=>app.go('home')} onView={()=>void app.run(()=>app.openProof(proof.proofId))}/>:<><SignalSteps step={3}/><SignalProgress paused={paused} confirming={confirming} percent={Object.prototype.hasOwnProperty.call(app.uploadProgressByProof,identity.proofId)?app.uploadProgressByProof[identity.proofId]:null}/><View style={{gap:16,marginTop:24}}>{phase==='SUBMITTED'&&<SignalText kind="small" muted>Recording received. Keep the original until preservation is confirmed.</SignalText>}{checkingError&&<SignalText kind="small" muted>{checkingError}</SignalText>}{capture?.recovery?.lastError&&<SignalText kind="small" muted>{capture.recovery.lastError.message}</SignalText>}{paused&&capture&&<Button label={phase==='CONFIRMATION_NEEDED'?'Review and confirm':'Resume saving'} disabled={app.busy||app.offline} onPress={()=>void app.resumeSavedCapture(capture)}/>}<SignalText kind="small" muted>Your recording stays on this device until saving is confirmed.</SignalText><Button label="Continue to Home" variant="secondary" onPress={()=>app.go('home')}/></View></>}</AppScreen>;
 }
