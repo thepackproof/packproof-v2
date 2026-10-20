@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { creationEntryRoute, resolveBackRoute, type AppRoute } from '../src/app/navigation.ts';
 import { createProofRequestGate, SupersededProofRequest } from '../src/experience/proof-request.ts';
+import { SIGNAL_ENABLED } from '../src/experience/signal.ts';
 
 // Exercise the actual provider callbacks with navigation/storage ports. Camera hardware is separately gated.
 const source=ts.createSourceFile('provider.tsx',readFileSync(new URL('../src/app/PackProofProvider.tsx',import.meta.url),'utf8'),ts.ScriptTarget.ES2022,true,ts.ScriptKind.TSX);
@@ -17,7 +18,7 @@ function navigation(initial:AppRoute) {
  const routeRef={current:initial}, accountReturn={current:{name:'home'} as AppRoute}, captureReturn={current:null as null|{route:AppRoute;proofId:string|null}}, captureNavigationLock={current:false}, workspaceOrigin={current:'activity'}, sessionRef={current:{proofId:'selected-proof',userId:'owner',apiBaseUrl:'https://api'}};
  const notices:string[]=[];
  const ports={routeRef,accountReturn,captureReturn,captureNavigationLock,workspaceOrigin,sessionRef,creationEntryRoute,resolveBackRoute,proofRequests:{current:createProofRequestGate()},
-  ANDROID_TASK_FIRST_REBUILD:true,MOBILE_TASK_UX_ENABLED:true,FIRST_PROOF_EXPERIENCE_ENABLED:false,
+  SIGNAL_ENABLED,ANDROID_TASK_FIRST_REBUILD:true,MOBILE_TASK_UX_ENABLED:true,FIRST_PROOF_EXPERIENCE_ENABLED:false,
   startMobileCaptureEntry:()=>{},setError:(s:string|null)=>{if(s)notices.push(s);},setScanPhase:()=>{},setScanResult:()=>{},setScanInput:()=>{},setTechnicalOpen:()=>{},setConfirmFinalize:()=>{},setBatchPacking:()=>{},activityFilterMemory:{current:'all'},
   saveProofsCache:async()=>{},cacheRef:{current:{}},proofsScrollOffset:{current:0},taskIntent:()=>null,taskIntentKey:()=>'',AsyncStorage:{removeItem:async()=>{}},setRoute:(r:AppRoute)=>{routeRef.current=r;}};
  const go=callback('go',ports);const back=callback('goBack',{...ports,go});return {...ports,go,back,notices};

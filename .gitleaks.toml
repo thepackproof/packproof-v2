@@ -6,6 +6,16 @@ title = "PackProof audited non-secret fixture exceptions"
 [extend]
 useDefault = true
 
+# Reviewed CI run 39432066442 / Source secrets job 118659354224.
+# This exact identifier is the Figma design URL's file reference, not an API token.
+[[allowlists]]
+description = "Exact SIGNAL Figma design file identifier; no authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/signal\-2026\-10\-20/coverage\.json$''']
+regexes = ['''^4AtxdZJxHvpWVF3cCX14Z0$''']
+
 [[allowlists]]
 description = "Public CodeBuild execution UUID; an identifier, not an authentication credential."
 targetRules = ["generic-api-key"]
