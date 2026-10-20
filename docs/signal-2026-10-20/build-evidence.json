@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "4e5e9163383818a947cfc58519fc89474ffd8caa",
+  "runId": 39425835098,
+  "runUrl": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098",
+  "productionRelease": false,
+  "deviceVerification": "not_executed",
+  "visualAcceptance": "not_executed",
+  "jobs": [
+    {
+      "id": 118638189424,
+      "name": "Web production bundle",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/job/118638189424"
+    },
+    {
+      "id": 118638413910,
+      "name": "Android review APK",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/job/118638413910"
+    },
+    {
+      "id": 118642534444,
+      "name": "iOS simulator app and Share Extension",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/job/118642534444"
+    },
+    {
+      "id": 118642534634,
+      "name": "Desktop review / darwin / x64",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/job/118642534634"
+    },
+    {
+      "id": 118642534639,
+      "name": "Desktop review / darwin / arm64",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/job/118642534639"
+    },
+    {
+      "id": 118642535025,
+      "name": "Desktop review / win32 / x64",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/job/118642535025"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 12267941935,
+      "name": "signal-ios-simulator-4e5e9163383818a947cfc58519fc89474ffd8caa",
+      "bytes": 20392062,
+      "archiveDigest": "sha256:6aa931f859eb627f52c352624c2f0dcf776d3c390f8939255438689a6d43fe44",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12267941935",
+      "expiresAt": "2026-11-03T13:25:53Z"
+    },
+    {
+      "id": 12267220108,
+      "name": "signal-desktop-darwin-x64-4e5e9163383818a947cfc58519fc89474ffd8caa",
+      "bytes": 447515285,
+      "archiveDigest": "sha256:d21c30362cb0216f44d8f58aba5fba4cbaa09f1d92be73f2c1dcf7ba745fcbd9",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12267220108",
+      "expiresAt": "2026-11-03T13:07:59Z"
+    },
+    {
+      "id": 12266646731,
+      "name": "signal-desktop-win32-x64-4e5e9163383818a947cfc58519fc89474ffd8caa",
+      "bytes": 246268378,
+      "archiveDigest": "sha256:d4c1a77a384e3a27b8bc1e1e18dd1b3cb9def7edf5ea87e5c5497d067973e518",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12266646731",
+      "expiresAt": "2026-11-03T13:05:31Z"
+    },
+    {
+      "id": 12266362321,
+      "name": "signal-android-4e5e9163383818a947cfc58519fc89474ffd8caa",
+      "bytes": 39133122,
+      "archiveDigest": "sha256:9315e98731fbd9980a7f8a505fd9b6643c01cab556f206a38963562573af0397",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12266362321",
+      "expiresAt": "2026-11-03T13:03:15Z"
+    },
+    {
+      "id": 12265768931,
+      "name": "signal-desktop-darwin-arm64-4e5e9163383818a947cfc58519fc89474ffd8caa",
+      "bytes": 430822325,
+      "archiveDigest": "sha256:f16740ec01001d3a184b45c650116834235a23539e03966662688da0514e223e",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12265768931",
+      "expiresAt": "2026-11-03T13:04:56Z"
+    },
+    {
+      "id": 12264984628,
+      "name": "signal-web-4e5e9163383818a947cfc58519fc89474ffd8caa",
+      "bytes": 8236844,
+      "archiveDigest": "sha256:58c8c8b56e7a47bce48ca28c7332ad44c9a7caf78b909a90fe9377cf4e821c11",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12264984628",
+      "expiresAt": "2026-11-03T12:54:22Z"
+    }
+  ],
+  "android": {
+    "schema": "packproof.local-review-build.v1",
+    "createdAt": "2026-10-20T13:03:15.120Z",
+    "sourceSha": "4e5e9163383818a947cfc58519fc89474ffd8caa",
+    "file": "packproof-1.0.1-66-4e5e91633838-local-review-debug-signed.apk",
+    "sha256": "acdaffe77dc12789987d7e25d296eefd29310523b2061aec4f74e11c19209083",
+    "bytes": 84801691,
+    "package": "com.packproof.mobile",
+    "versionName": "1.0.1",
+    "versionCode": 66,
+    "profile": "mobile-ux-review",
+    "variant": "release",
+    "signing": "generated local debug key; not Play release signing",
+    "signerSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "installationScope": "Clean spare Android device or emulator only. Does not upgrade a differently signed Play install. Do not uninstall the existing app or clear its media.",
+    "distribution": "Local artifact only; no installation, upload, store submission or release performed.",
+    "buildInputs": {
+      "experienceRestoration": false,
+      "androidTaskFirst": true,
+      "dotenvLoaded": false,
+      "nativeProjectRegenerated": true
+    },
+    "runtime": {
+      "node": "v22.23.3",
+      "java": "openjdk version \"17.0.20.1\" 2026-08-18",
+      "androidBuildTools": "36.0.0",
+      "abis": [
+        "arm64-v8a",
+        "x86_64"
+      ]
+    },
+    "deviceVerification": "NOT RUN",
+    "sourceShaInBundle": true,
+    "sourceShaInConfig": true,
+    "internalReviewMarker": true,
+    "credentialsPackaged": false,
+    "bundleBytes": 2868968,
+    "pageSize16kbPassed": true
+  },
+  "status": "completed",
+  "conclusion": "success"
+}

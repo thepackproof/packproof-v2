@@ -52,7 +52,7 @@ Desktop journals formerly marked `COMPLETE` without a durable-confirmation marke
 
 `EXPO_PUBLIC_PACKPROOF_SIGNAL` (native) and `VITE_PACKPROOF_SIGNAL` (web/desktop) default on in this branch and can be set to `false` at build time. Flags are read at startup; they are not switched during a recording. EAS `signal-review` and `signal-ios-simulator` inherit existing internal profiles and retain their release validation.
 
-The review workflow runs **web → Android → iOS and desktop**. Native and desktop packages use existing review controls; no production signing credentials were changed. Desktop development identities are isolated and unsigned. iOS output is a simulator app with the Share Extension, not a signed device IPA or TestFlight build.
+The review workflow runs **web → Android → iOS and desktop**. Native and desktop packages use existing review controls; no production signing credentials were changed. Desktop development identities are isolated and have no verified publisher signing: Windows is unsigned; macOS uses an ad-hoc signature and is not notarized. iOS output is a simulator app with the Share Extension, not a signed device IPA or TestFlight build.
 
 | Platform | Review configuration |
 | --- | --- |
@@ -76,10 +76,10 @@ Only focused state/retention checks and platform compile/package checks were sel
 | Desktop evidence-engine owner suite | 25 passed, including new review/retake and receipt-retention cases |
 | Web and desktop production compilation | Passed |
 | First web/Android CI milestone | Passed: [run 39422154754](https://github.com/thepackproof/packproof-v2/actions/runs/39422154754) |
-| Final source platform packaging | See [build-results.md](build-results.md) for the final run and artifact identities |
+| Final source platform packaging | All six targets passed at `4e5e9163383818a947cfc58519fc89474ffd8caa`; see [build-results.md](build-results.md) |
 | Backend read-only health/capability check | Passed; compatibility receipt mode observed |
 | Browser integrated screenshot comparison | Not executed: cloud browser could not reach the local preview |
 | Physical capture, biometric, lifecycle, permissions, storage, installation and migration | Not executed: no attached device |
 | Real-account canonical saved journey and copied-link access | Not executed; no customer records created |
 
-The remaining acceptance work is the plan's installed-app 27-state visual review and the critical physical capture/recovery/account/upgrade/rollback paths, plus a real canonical saved result and shared-link access check. No acceptance row is promoted to pass solely by a build or a unit check. Internal build review can begin when artifacts succeed; production release gates are not met by this implementation report.
+The remaining acceptance work is the plan's installed-app 27-state visual review and the critical physical capture/recovery/account/upgrade/rollback paths, plus a real canonical saved result and shared-link access check. No acceptance row is promoted to pass solely by a build or a unit check. All platform artifacts passed and are ready for internal review; production release gates are not met by this implementation report.
