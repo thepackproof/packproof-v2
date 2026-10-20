@@ -44,7 +44,7 @@ jobs:
       - name: Reference adapter contract
         run: node --test ../examples/merchant-receiver/partner-client.test.mjs
       - name: Published contract and migration packaging compatibility
-        run: npm test -- --run tests/public-platform.test.ts tests/rnd-migrate.test.ts tests/rnd-production-packaging.test.ts --pool=threads
+        run: npm test -- --run tests/public-platform.test.ts tests/rnd-migrate.test.ts tests/rnd-production-packaging.test.ts tests/aws-s3-object-integrity.test.ts --pool=threads
       - uses: actions/upload-artifact@v4
         if: always()
         with:

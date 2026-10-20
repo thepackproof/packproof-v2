@@ -33,11 +33,14 @@ export class AwsS3ObjectStore implements ObjectStore {
   async put(key: string, body: Buffer, contentType: string): Promise<void> {
     const objectKey = assertSafeObjectKey(key);
     await this.client.send(new PutObjectCommand({ Bucket: this.bucketFor(objectKey), Key: objectKey, Body: body, ContentType: contentType,
+      // Object Lock requires an upload checksum even with SDK defaults set to WHEN_REQUIRED.
+      ChecksumAlgorithm: 'SHA256', ChecksumSHA256: Buffer.from(sha256Hex(body), 'hex').toString('base64'),
       ...(objectKey.includes("/committed/") || objectKey.startsWith("recovery/") ? {IfNoneMatch:"*"} : {}) }));
   }
   async putIfAbsent(key: string, body: Buffer, contentType: string): Promise<{created:boolean}> {
     const objectKey=assertSafeObjectKey(key);
-    try { await this.client.send(new PutObjectCommand({Bucket:this.bucketFor(objectKey),Key:objectKey,Body:body,ContentType:contentType,IfNoneMatch:"*"})); return {created:true}; }
+    try { await this.client.send(new PutObjectCommand({Bucket:this.bucketFor(objectKey),Key:objectKey,Body:body,ContentType:contentType,IfNoneMatch:"*",
+      ChecksumAlgorithm:'SHA256',ChecksumSHA256:Buffer.from(sha256Hex(body),'hex').toString('base64')})); return {created:true}; }
     catch(error) { if(isS3PreconditionFailure(error)) return {created:false}; throw error; }
   }
   async putStream(key: string, body: AsyncIterable<Uint8Array>, contentType: string, byteSize: number): Promise<{versionId?:string}> {
