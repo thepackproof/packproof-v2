@@ -3399,7 +3399,7 @@
       "ApiKey": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "pp_sandbox_. or pp_live_."
+        "bearerFormat": "pp_sandbox_… or pp_live_…"
       },
       "AccountBearer": {
         "type": "http",
