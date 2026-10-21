@@ -42,3 +42,11 @@ The temporary migration stack is `DELETE_COMPLETE`, verified at 20:25 UTC on 20 
 ## Stop and rollback
 
 On failed isolation, preservation, restore or authority checks, leave the test cohort disabled and preserve the exact failed artifacts. Stop only the new test tasks. Do not invoke the legacy staging deployment scripts, drop additive organization tables, bypass Object Lock or reset revoked grants. Test application rollback must respect the migration compatibility guard and use a compatible image.
+
+## Protected recovery and test identity results
+
+The [recovery runner](RECOVERY-DRILL.md) completed all 27 checks with separate scoped SDK roles and non-owner database logins. It restored one synthetic Proof from 25 exact protected journal versions, verified the original signature and authority projections, preserved revocation and kept the target closed. Existing writer sessions were denied after an external policy fence. The artifact was downloaded and verified, then the temporary stack, four roles, project, NAT, public address and temporary ingress were removed. Logs/keys and protected objects remain. See [exact recovery evidence](../../docs/partner-foundation/isolated-recovery-evidence-2026-10-20.json).
+
+The [identity pool](IDENTITY.md) requires authenticator-app MFA and administrator-only registration. Nine synthetic provider checks passed; the test user and temporary runner/role were removed. Only the protected test pool/client remain. See [identity evidence](../../docs/partner-foundation/isolated-identity-evidence-2026-10-20.json).
+
+These completed tests satisfy the stated synthetic acceptance portions of the sequence above. They do not deploy an API/worker service or certify device behavior. A reviewed workload-specific protection file, authenticated staging endpoints, real-device acceptance and independent M1 review remain required.
