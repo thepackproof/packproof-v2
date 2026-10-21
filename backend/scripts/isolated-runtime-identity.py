@@ -165,7 +165,8 @@ try:
     assert denied['error']['code'] == 'ORGANIZATION_ACCESS_REVOKED'
     assert hashlib.sha256(Path('runtime-artifacts/interrupted-original.mp4').read_bytes()).hexdigest() == pending['registration']['sha256']
     passed('revocation_denies_open_capture_resume_and_preserves_synthetic_original')
-    request('GET', '/v1/partner/proofs/' + proofs['ownerA'], 'partner', expect=(401, 403), headers=headersA)
+    revoked, _ = request('GET', '/v1/partner/proofs/' + proofs['ownerA'], 'partner', expect=(401, 403, 404), headers=headersA)
+    assert (revoked.get('code') or revoked.get('error', {}).get('code')) in ('MERCHANT_NOT_FOUND', 'ORGANIZATION_ACCESS_REVOKED', 'PARTNER_UNAUTHORIZED')
     request('GET', '/proofs/' + proofs['ownerA'], 'ownerA')
     headersB = {'PackProof-Merchant-Id': merchants['ownerB'], 'PackProof-Delegation-Id': grants['ownerB']}
     request('GET', '/v1/partner/proofs/' + proofs['ownerB'], 'partner', headers=headersB)
