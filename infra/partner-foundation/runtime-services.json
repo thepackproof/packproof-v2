@@ -63,7 +63,7 @@
     "ProtectionEvidence": {
       "Type": "String",
       "Default": "",
-      "MaxLength": 65536,
+      "MaxLength": 4096,
       "Description": "Public reviewed evidence JSON from actual task-role and external-fence probes"
     },
     "ProtectionDigest": {
@@ -287,6 +287,10 @@
                 }
               },
               {
+                "Name": "PACKPROOF_MANIFEST_SIGNING_ALGORITHM",
+                "Value": "ECDSA_SHA_256"
+              },
+              {
                 "Name": "ISOLATED_PROTECTION_EVIDENCE",
                 "Value": {
                   "Ref": "ProtectionEvidence"
@@ -359,6 +363,44 @@
               "Timeout": 5,
               "Retries": 3,
               "StartPeriod": 60
+            },
+            "DependsOn": [
+              {
+                "ContainerName": "temporary-volume-init",
+                "Condition": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "Name": "temporary-volume-init",
+            "Image": {
+              "Ref": "Image"
+            },
+            "Essential": false,
+            "User": "0:0",
+            "ReadonlyRootFilesystem": true,
+            "MountPoints": [
+              {
+                "SourceVolume": "temporary",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "Command": [
+              "node",
+              "-e",
+              "require('node:fs').chmodSync('/tmp',0o1777)"
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "Logs"
+                },
+                "awslogs-region": "us-east-1",
+                "awslogs-stream-prefix": "api",
+                "mode": "blocking"
+              }
             }
           }
         ]
@@ -613,6 +655,10 @@
                 }
               },
               {
+                "Name": "PACKPROOF_MANIFEST_SIGNING_ALGORITHM",
+                "Value": "ECDSA_SHA_256"
+              },
+              {
                 "Name": "ISOLATED_PROTECTION_EVIDENCE",
                 "Value": {
                   "Ref": "ProtectionEvidence"
@@ -674,6 +720,44 @@
               "Timeout": 5,
               "Retries": 3,
               "StartPeriod": 60
+            },
+            "DependsOn": [
+              {
+                "ContainerName": "temporary-volume-init",
+                "Condition": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "Name": "temporary-volume-init",
+            "Image": {
+              "Ref": "Image"
+            },
+            "Essential": false,
+            "User": "0:0",
+            "ReadonlyRootFilesystem": true,
+            "MountPoints": [
+              {
+                "SourceVolume": "temporary",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "Command": [
+              "node",
+              "-e",
+              "require('node:fs').chmodSync('/tmp',0o1777)"
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "Logs"
+                },
+                "awslogs-region": "us-east-1",
+                "awslogs-stream-prefix": "worker",
+                "mode": "blocking"
+              }
             }
           }
         ]

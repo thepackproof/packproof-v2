@@ -60,11 +60,16 @@ for(const kind of ['Api','Worker']){
  s.Outputs[`${kind}Task`]={Value:ref(`${kind}Task`)};
 }
 s.Parameters.ProtectedRecovery={Type:'String',Default:'false',AllowedValues:['false','true']};
-s.Parameters.ProtectionEvidence={Type:'String',Default:'',MaxLength:65536,Description:'Public reviewed evidence JSON from actual task-role and external-fence probes'};
+s.Parameters.ProtectionEvidence={Type:'String',Default:'',MaxLength:4096,Description:'Public reviewed evidence JSON from actual task-role and external-fence probes'};
 s.Parameters.ProtectionDigest={Type:'String',Default:'',AllowedPattern:'(|[a-f0-9]{64})'};
 s.Parameters.WriterGeneration={Type:'String',Default:'initial',AllowedPattern:'[a-zA-Z0-9-]{1,80}'};
 for(const kind of ['Api','Worker']){
  const container=s.Resources[`${kind}Task`].Properties.ContainerDefinitions[0];
+ container.Environment.push({Name:'PACKPROOF_MANIFEST_SIGNING_ALGORITHM',Value:'ECDSA_SHA_256'});
+ container.DependsOn=[{ContainerName:'temporary-volume-init',Condition:'SUCCESS'}];
+ // Fargate creates empty bind volumes root-owned. A bounded init command sets
+ // only this disposable volume's mode; application processes remain UID 1000.
+ s.Resources[`${kind}Task`].Properties.ContainerDefinitions.push({Name:'temporary-volume-init',Image:ref('Image'),Essential:false,User:'0:0',ReadonlyRootFilesystem:true,MountPoints:[{SourceVolume:'temporary',ContainerPath:'/tmp',ReadOnly:false}],Command:['node','-e',"require('node:fs').chmodSync('/tmp',0o1777)"],LogConfiguration:container.LogConfiguration});
  for(const variable of container.Environment)if(['PACKPROOF_REQUIRE_DURABLE_RECEIPTS','PACKPROOF_RECOVERY_WORKER'].includes(variable.Name))variable.Value=ref('ProtectedRecovery');
  for(const [Name,Value] of Object.entries({ISOLATED_PROTECTION_EVIDENCE:ref('ProtectionEvidence'),PACKPROOF_RECOVERY_PROTECTION_EVIDENCE_FILE:'/tmp/recovery-protection.json',PACKPROOF_RECOVERY_PROTECTION_EVIDENCE_SHA256:ref('ProtectionDigest'),PACKPROOF_RECOVERY_WRITER_GENERATION:ref('WriterGeneration')}))container.Environment.push({Name,Value});
  container.Command=['node','--input-type=module','-e',"import fs from 'node:fs'; if(process.env.PACKPROOF_REQUIRE_DURABLE_RECEIPTS==='true')fs.writeFileSync('/tmp/recovery-protection.json',process.env.ISOLATED_PROTECTION_EVIDENCE); delete process.env.ISOLATED_PROTECTION_EVIDENCE; await import('./scripts/isolated-runtime-entrypoint.mjs');"];
