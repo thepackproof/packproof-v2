@@ -1,0 +1,867 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Disposable isolated M1 recovery acceptance runner. Synthetic records only; no production resources.",
+  "Parameters": {
+    "CandidateCommit": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{40}",
+      "Description": "Exact reviewed PR commit to execute"
+    },
+    "EgressAvailabilityZone": {
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-east-1a",
+      "AllowedValues": [
+        "us-east-1a"
+      ],
+      "Description": "Same availability zone as the approved first private subnet"
+    },
+    "WriterFence": {
+      "Type": "String",
+      "Default": "OPEN",
+      "AllowedValues": [
+        "OPEN",
+        "CLOSED"
+      ],
+      "Description": "CLOSED denies source API and worker storage writes and signing, including existing STS sessions."
+    }
+  },
+  "Resources": {
+    "BuildSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3",
+        "GroupDescription": "One-shot recovery acceptance runner: HTTPS downloads and isolated PostgreSQL only",
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Public GitHub, npm, AWS APIs and RDS CA distribution over TLS"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "DestinationSecurityGroupId": "sg-000d9cd26399d10d2",
+            "Description": "Isolated test database only"
+          }
+        ]
+      }
+    },
+    "DatabaseIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": "sg-000d9cd26399d10d2",
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "BuildSecurityGroup"
+        },
+        "Description": "Temporary isolated recovery acceptance runner"
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "GatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3",
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "EgressSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3",
+        "CidrBlock": "10.42.20.0/24",
+        "AvailabilityZone": {
+          "Ref": "EgressAvailabilityZone"
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3"
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "GatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "EgressSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "NatAddress": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "GatewayAttachment",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatAddress",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "EgressSubnet"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3"
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      }
+    },
+    "PrivateAssociationA": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "subnet-00ce0618188c68de8",
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateAssociationB": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "subnet-0be41abd945430b4d",
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "LogsKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Description": "Isolated M1 migration log encryption",
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AccountAdministration",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "arn:aws:iam::784514617543:root"
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "OnlyMigrationLogs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logs.us-east-1.amazonaws.com"
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:us-east-1:784514617543:log-group:/packproof/packproof-m1-20261020/recovery"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Logs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": "/packproof/packproof-m1-20261020/recovery",
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "LogsKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "BuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261020-recovery-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": "arn:aws:codebuild:us-east-1:784514617543:project/packproof-m1-20261020-recovery"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRecoveryCoordinator",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "BuildLogs",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:us-east-1:784514617543:log-group:/packproof/packproof-m1-20261020/recovery:*"
+                },
+                {
+                  "Sid": "IsolatedDatabaseSecret",
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r"
+                },
+                {
+                  "Sid": "SyntheticAcceptanceArtifacts",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/recovery/*"
+                },
+                {
+                  "Sid": "AcceptanceBucketLocation",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketAcl",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h"
+                },
+                {
+                  "Sid": "DescribeNetwork",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeDhcpOptions",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeVpcs"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "CreateRunnerNetworkInterface",
+                  "Effect": "Allow",
+                  "Action": "ec2:CreateNetworkInterface",
+                  "Resource": [
+                    "arn:aws:ec2:us-east-1:784514617543:network-interface/*",
+                    "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-00ce0618188c68de8",
+                    "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-0be41abd945430b4d",
+                    {
+                      "Fn::Sub": "arn:aws:ec2:us-east-1:784514617543:security-group/${BuildSecurityGroup}"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "DeleteRunnerNetworkInterface",
+                  "Effect": "Allow",
+                  "Action": "ec2:DeleteNetworkInterface",
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEqualsIfExists": {
+                      "ec2:Subnet": [
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-00ce0618188c68de8",
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-0be41abd945430b4d"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Sid": "AttachCodeBuildInterface",
+                  "Effect": "Allow",
+                  "Action": "ec2:CreateNetworkInterfacePermission",
+                  "Resource": "arn:aws:ec2:us-east-1:784514617543:network-interface/*",
+                  "Condition": {
+                    "StringEquals": {
+                      "ec2:AuthorizedService": "codebuild.amazonaws.com"
+                    },
+                    "ArnEquals": {
+                      "ec2:Subnet": [
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-00ce0618188c68de8",
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-0be41abd945430b4d"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Sid": "NeverChangeStorageOrKeys",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:BypassGovernanceRetention",
+                    "s3:PutObjectRetention",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:DisableKey"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "AssumeAcceptanceRoles",
+                  "Effect": "Allow",
+                  "Action": "sts:AssumeRole",
+                  "Resource": [
+                    "arn:aws:iam::784514617543:role/packproof-m1-20261020-recovery-api",
+                    "arn:aws:iam::784514617543:role/packproof-m1-20261020-recovery-worker",
+                    "arn:aws:iam::784514617543:role/packproof-m1-20261020-recovery-reader"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Project": {
+      "Type": "AWS::CodeBuild::Project",
+      "DependsOn": [
+        "PrivateRoute",
+        "PrivateAssociationA",
+        "PrivateAssociationB",
+        "PublicRoute"
+      ],
+      "Properties": {
+        "Name": "packproof-m1-20261020-recovery",
+        "Description": "One-shot PostgreSQL and protected S3/KMS restore acceptance; no API service or production connection",
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "BuildRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "S3",
+          "Location": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+          "Path": "acceptance/recovery",
+          "Name": "evidence.zip",
+          "NamespaceType": "BUILD_ID",
+          "Packaging": "ZIP",
+          "EncryptionDisabled": false
+        },
+        "Source": {
+          "Type": "NO_SOURCE",
+          "BuildSpec": "{\"version\":0.2,\"phases\":{\"install\":{\"runtime-versions\":{\"nodejs\":22},\"on-failure\":\"ABORT\",\"commands\":[\"git init candidate\",\"cd candidate\",\"git remote add origin https://github.com/thepackproof/packproof-v2.git\",\"git fetch --depth=1 origin \\\"$CANDIDATE_SHA\\\" \\\"$BASELINE_SHA\\\"\",\"git checkout --detach \\\"$CANDIDATE_SHA\\\"\",\"test \\\"$(git rev-parse HEAD)\\\" = \\\"$CANDIDATE_SHA\\\"\",\"cd backend\",\"npm ci --no-audit --no-fund\",\"python3 -c \\\"from pathlib import Path; [p.write_text(p.read_text().replace('http://', 'https://')) for p in Path('/etc/apt').rglob('*') if p.is_file() and p.suffix in ['.list', '.sources']]\\\"\",\"apt-get update -qq\",\"DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg\",\"ffmpeg -version\",\"ffprobe -version\",\"python3 -m pip install --quiet --disable-pip-version-check cfn-lint==1.57.2\",\"cfn-lint --region us-east-1 --template ../infra/partner-foundation/*.json\",\"curl --fail --silent --show-error --proto =https --tlsv1.2 -o /tmp/packproof-rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem\"]},\"build\":{\"on-failure\":\"ABORT\",\"commands\":[\"node --import tsx scripts/isolated-recovery-acceptance.mjs\"]}},\"artifacts\":{\"files\":[\"**/*\"],\"base-directory\":\"candidate/backend/acceptance-artifacts\"}}"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:7.0",
+          "PrivilegedMode": false,
+          "ImagePullCredentialsType": "CODEBUILD",
+          "EnvironmentVariables": [
+            {
+              "Name": "CANDIDATE_SHA",
+              "Value": {
+                "Ref": "CandidateCommit"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "BASELINE_SHA",
+              "Value": "cb82e6e57d50c51e4c55c3e1525a3adc61ce15d5",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "PACKPROOF_TEST_PURPOSE",
+              "Value": "isolated-m1-synthetic",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "PACKPROOF_TEST_DB_HOST",
+              "Value": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "ISOLATED_DB_SECRET",
+              "Value": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r",
+              "Type": "SECRETS_MANAGER"
+            },
+            {
+              "Name": "PACKPROOF_RECOVERY_TEST_API_ROLE",
+              "Value": "arn:aws:iam::784514617543:role/packproof-m1-20261020-recovery-api",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "PACKPROOF_RECOVERY_TEST_WORKER_ROLE",
+              "Value": "arn:aws:iam::784514617543:role/packproof-m1-20261020-recovery-worker",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "PACKPROOF_RECOVERY_TEST_READER_ROLE",
+              "Value": "arn:aws:iam::784514617543:role/packproof-m1-20261020-recovery-reader",
+              "Type": "PLAINTEXT"
+            }
+          ]
+        },
+        "VpcConfig": {
+          "VpcId": "vpc-0c4f12c0ba9393ae3",
+          "Subnets": [
+            "subnet-00ce0618188c68de8",
+            "subnet-0be41abd945430b4d"
+          ],
+          "SecurityGroupIds": [
+            {
+              "Ref": "BuildSecurityGroup"
+            }
+          ]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "Logs"
+            },
+            "StreamName": "acceptance"
+          }
+        },
+        "TimeoutInMinutes": 30,
+        "QueuedTimeoutInMinutes": 10,
+        "ConcurrentBuildLimit": 1
+      }
+    },
+    "ApiRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261020-recovery-api",
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "BuildRole",
+                    "Arn"
+                  ]
+                }
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRecoveryAcceptance",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "DistinguishMissingMedia",
+                  "Effect": "Allow",
+                  "Action": "s3:ListBucket",
+                  "Resource": [
+                    "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+                    "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5"
+                  ]
+                },
+                {
+                  "Sid": "SyntheticMedia",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/evidence/*",
+                    "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*"
+                  ]
+                },
+                {
+                  "Sid": "ManifestSigning",
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GetPublicKey",
+                    "kms:Sign"
+                  ],
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+                },
+                {
+                  "Sid": "NoRecoveryJournal",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*"
+                },
+                {
+                  "Sid": "NoRecoverySigning",
+                  "Effect": "Deny",
+                  "Action": "kms:Sign",
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                },
+                {
+                  "Sid": "NoRetentionOrKeyAdministration",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:BypassGovernanceRetention",
+                    "s3:PutObjectRetention",
+                    "s3:PutObjectLegalHold",
+                    "kms:DisableKey",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "secretsmanager:GetSecretValue",
+                    "iam:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Fn::If": [
+                    "WritersFenced",
+                    {
+                      "Sid": "SourceWritersExternallyFenced",
+                      "Effect": "Deny",
+                      "Action": [
+                        "s3:PutObject",
+                        "kms:Sign"
+                      ],
+                      "Resource": [
+                        "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/acceptance/recovery/*",
+                        "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                        "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                      ]
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WorkerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261020-recovery-worker",
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "BuildRole",
+                    "Arn"
+                  ]
+                }
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRecoveryAcceptance",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "DistinguishMissingJournal",
+                  "Effect": "Allow",
+                  "Action": "s3:ListBucket",
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp"
+                },
+                {
+                  "Sid": "ProtectedJournal",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/acceptance/recovery/*"
+                },
+                {
+                  "Sid": "RecoverySigning",
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GetPublicKey",
+                    "kms:Sign"
+                  ],
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                },
+                {
+                  "Sid": "NoManifestSigning",
+                  "Effect": "Deny",
+                  "Action": "kms:Sign",
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+                },
+                {
+                  "Sid": "NoRetentionOrKeyAdministration",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:BypassGovernanceRetention",
+                    "s3:PutObjectRetention",
+                    "s3:PutObjectLegalHold",
+                    "kms:DisableKey",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "secretsmanager:GetSecretValue",
+                    "iam:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Fn::If": [
+                    "WritersFenced",
+                    {
+                      "Sid": "SourceWritersExternallyFenced",
+                      "Effect": "Deny",
+                      "Action": [
+                        "s3:PutObject",
+                        "kms:Sign"
+                      ],
+                      "Resource": [
+                        "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/acceptance/recovery/*",
+                        "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                        "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                      ]
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RestoreReaderRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261020-recovery-reader",
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "BuildRole",
+                    "Arn"
+                  ]
+                }
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRecoveryAcceptance",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "ExactProtectedVersions",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:GetObjectRetention"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/acceptance/recovery/*",
+                    "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*"
+                  ]
+                },
+                {
+                  "Sid": "JournalInventory",
+                  "Effect": "Allow",
+                  "Action": "s3:ListBucket",
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp",
+                  "Condition": {
+                    "StringLike": {
+                      "s3:prefix": "acceptance/recovery/*"
+                    }
+                  }
+                },
+                {
+                  "Sid": "PinnedPublicKeys",
+                  "Effect": "Allow",
+                  "Action": "kms:GetPublicKey",
+                  "Resource": [
+                    "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                    "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                  ]
+                },
+                {
+                  "Sid": "NeverSign",
+                  "Effect": "Deny",
+                  "Action": "kms:Sign",
+                  "Resource": [
+                    "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                    "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                  ]
+                },
+                {
+                  "Sid": "NoRetentionOrKeyAdministration",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:BypassGovernanceRetention",
+                    "s3:PutObjectRetention",
+                    "s3:PutObjectLegalHold",
+                    "kms:DisableKey",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "secretsmanager:GetSecretValue",
+                    "iam:*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ProjectName": {
+      "Value": {
+        "Ref": "Project"
+      }
+    },
+    "RoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "BuildRole",
+          "Arn"
+        ]
+      }
+    },
+    "LogGroup": {
+      "Value": {
+        "Ref": "Logs"
+      }
+    },
+    "ApiRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ApiRole",
+          "Arn"
+        ]
+      }
+    },
+    "WorkerRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WorkerRole",
+          "Arn"
+        ]
+      }
+    },
+    "RestoreReaderRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "RestoreReaderRole",
+          "Arn"
+        ]
+      }
+    }
+  },
+  "Conditions": {
+    "WritersFenced": {
+      "Fn::Equals": [
+        {
+          "Ref": "WriterFence"
+        },
+        "CLOSED"
+      ]
+    }
+  }
+}
