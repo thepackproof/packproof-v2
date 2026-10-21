@@ -9,7 +9,7 @@ let raw='';for await(const chunk of process.stdin)raw+=chunk;const input=JSON.pa
 assert.equal(process.env.PACKPROOF_TEST_PURPOSE,'isolated-m1-synthetic');assert.match(input.ip,/^10\.42\./);
 const digest=b=>createHash('sha256').update(b).digest('hex');
 let phase='start',lastStatus,lastCode;
-const call=(method,path,token,body,statuses=[200],extra={})=>new Promise((resolve,reject)=>{
+const once=(method,path,token,body,statuses=[200],extra={})=>new Promise((resolve,reject)=>{
  const bytes=Buffer.isBuffer(body)?body:body===undefined?null:Buffer.from(JSON.stringify(body));
  const req=https.request({host:input.ip,port:3443,servername:'packproof-m1.test',ca:input.ca,rejectUnauthorized:true,method,path,
   headers:{Host:'packproof-m1.test:3443',Authorization:`Bearer ${token}`,'Content-Type':Buffer.isBuffer(body)?'video/mp4':'application/json','Idempotency-Key':randomBytes(16).toString('hex'),...(bytes?{'Content-Length':String(bytes.length)}:{}),...extra}},res=>{
@@ -21,6 +21,15 @@ const call=(method,path,token,body,statuses=[200],extra={})=>new Promise((resolv
   });res.on('error',reject);
  });req.setTimeout(90000,()=>req.destroy(new Error('HTTP timeout')));req.on('error',reject);req.end(bytes);
 });
+const call=async(method,path,token,body,statuses=[200],extra={})=>{
+ const headers={'Idempotency-Key':randomBytes(16).toString('hex'),...extra};
+ for(let attempt=0;attempt<60;attempt++){
+  const value=await once(method,path,token,body,[...statuses,503],headers);
+  if(lastStatus===503&&value.code==='POLICY_DURABILITY_PENDING'){await delay(1000);continue;}
+  assert.ok(statuses.includes(lastStatus),'Unexpected HTTP status');return value;
+ }
+ throw new Error('Policy publication did not settle');
+};
 const report={checks:[],proofs:[]};
 try{
  const bytes=await readFile(new URL('../tests/fixtures/camera-recording.mp4',import.meta.url));

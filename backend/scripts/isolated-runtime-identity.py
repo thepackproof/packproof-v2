@@ -56,7 +56,7 @@ try:
         def connect(self):
             self.sock = context.wrap_socket(socket.create_connection((ip, 3443), timeout=30), server_hostname='packproof-m1.test')
 
-    def request(method, path, actor=None, body=None, expect=200, headers=None):
+    def request(method, path, actor=None, body=None, expect=200, headers=None, attempt=0):
         global response_status, response_code
         connection = PrivateConnection('packproof-m1.test', 3443, context=context, timeout=30)
         h = {'Content-Type': 'application/json', 'Idempotency-Key': secrets.token_hex(16)}
@@ -69,6 +69,10 @@ try:
             data = response.read()
             value = json.loads(data) if data else {}
             response_status, response_code = response.status, value.get('code') if isinstance(value, dict) else None
+            if response.status == 503 and response_code == 'POLICY_DURABILITY_PENDING' and attempt < 60:
+                connection.close()
+                time.sleep(1)
+                return request(method, path, actor, body, expect, h, attempt + 1)
             assert response.status in (expect if isinstance(expect, tuple) else (expect,)), 'Unexpected HTTP response'
             return value, dict(response.getheaders())
         finally:
