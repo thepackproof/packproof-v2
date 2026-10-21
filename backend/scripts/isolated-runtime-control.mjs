@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {writeFile,mkdir} from 'node:fs/promises';
 import {createPgDatabase} from '../src/db/postgres.ts';
 import {SecretsManagerClient,GetSecretValueCommand} from '@aws-sdk/client-secrets-manager';
+import {spawnSync} from 'node:child_process';
 assert.equal(process.env.PACKPROOF_TEST_PURPOSE,'isolated-m1-synthetic');
 assert.equal(process.env.PACKPROOF_TEST_DB_HOST,'packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com');
 const owner=JSON.parse(process.env.ISOLATED_DB_SECRET);delete process.env.ISOLATED_DB_SECRET;assert.equal(owner.username,'packproof');
@@ -44,4 +45,7 @@ try{
   heartbeats:(await db.query('SELECT * FROM operational_worker_heartbeats ORDER BY worker_name')).rows};
  await mkdir('runtime-artifacts',{recursive:true});await writeFile('runtime-artifacts/control.json',JSON.stringify(report,null,2)+'\n');
  console.log(JSON.stringify(report));
+ if(mode==='inspect'&&process.env.ISOLATED_HTTP_ARTIFACT_ID){
+  const verified=spawnSync('python3',['scripts/isolated-runtime-verify.py'],{stdio:'inherit',env:process.env});assert.equal(verified.status,0,'Independent package verifier failed');
+ }
 }finally{await opened.close();}

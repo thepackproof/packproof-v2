@@ -72,6 +72,16 @@ try{
   report.proofs.push({proofId:proof,captureId:id,evidenceId:upload.evidenceId,manifestSha256:final.manifest.sha256,packageSha256:digest(pkg),packageBytes:pkg.length});
   report.checks.push(`${owner}_operator_scope_capture_retry_upload_attestation_finalize_export`);
  }
+ phase='open_capture_for_revocation';
+ const headers={'PackProof-Merchant-Id':input.merchants.ownerA,'PackProof-Delegation-Id':input.grants.ownerA};
+ const pending=await call('POST','/v1/partner/proofs',input.tokens.partner,{integrationAccountId:input.integrations.ownerA,externalId:'INTERRUPTED-'+randomBytes(8).toString('hex'),operatorMembershipId:input.members.operatorC,transaction:{itemTitle:'Synthetic interrupted capture',quantity:1}},[201],headers);
+ const intent=await call('POST',`/v1/partner/proofs/${pending.proofId}/capture-intents`,input.tokens.partner,{allowedSurfaces:['WEB']},[201],headers);
+ const capabilities={surface:'WEB',cameraSource:'UNKNOWN',timing:'MONOTONIC',barcode:false,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:10000000,coreVersion:CORE_VERSION};
+ const opened=await call('POST','/capture-sessions/bind',input.tokens.operatorC,{launchToken:intent.launchToken,capabilities},[201]);
+ const registration={sha256:digest(bytes),byteSize:bytes.length,contentType:'video/mp4',recordedDurationMs:200,interrupted:true};
+ await call('POST',`/proofs/${pending.proofId}/capture-sessions/${opened.session.id}/complete`,input.tokens.operatorC,registration);
+ await writeFile('runtime-artifacts/interrupted-original.mp4',bytes);
+ report.interruptedCapture={proofId:pending.proofId,captureId:opened.session.id,registration};
  report.status='PASSED';
 }catch(e){report.status='FAILED';report.failure={phase,name:e.name,httpStatus:lastStatus,apiCode:lastCode};process.exitCode=1;}
 await writeFile('runtime-artifacts/capture-acceptance.json',JSON.stringify(report,null,2)+'\n');

@@ -1,0 +1,13 @@
+{
+  "schema": "packproof.trust-list.v1",
+  "generatedAt": "2026-10-21T02:49:34.623Z",
+  "expiresAt": "2026-10-28T02:49:34.624Z",
+  "keys": [
+    {
+      "keyId": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+      "algorithm": "ECDSA_SHA_256",
+      "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYDYA6VZiCRHBhBaDXVaeVhwYu1Gz\nROTsIXGvNiPioGJnElNRXj+pjshtTsALkvW1zM78k4cxR7KcgF551tHTyg==\n-----END PUBLIC KEY-----\n",
+      "status": "ACTIVE"
+    }
+  ]
+}

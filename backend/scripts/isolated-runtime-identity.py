@@ -1,5 +1,6 @@
 """Real Cognito MFA -> private TLS API acceptance. Tokens and seeds stay in memory."""
 import datetime
+import hashlib
 import http.client
 import importlib.util
 import json
@@ -75,7 +76,7 @@ try:
                 time.sleep(1)
                 return request(method, path, actor, body, expect, h, attempt + 1)
             assert response.status in (expect if isinstance(expect, tuple) else (expect,)), 'Unexpected HTTP response'
-            return value, dict(response.getheaders())
+            return value, {key.lower(): value for key, value in response.getheaders()}
         finally:
             connection.close()
 
@@ -125,19 +126,20 @@ try:
     grants, integrations, proofs = {}, {}, {}
     for actor, operator in [('ownerA', 'operatorA'), ('ownerB', 'operatorB')]:
         merchant = merchants[actor]
-        grants[actor] = request('POST', org + '/' + merchant + '/delegations', actor, {'partnerOrganizationId': partner, 'scopes': scopes, 'operatorUserIds': [users[operator]], 'expiresAt': expiry})[0]['id']
+        permitted = [users[operator]] + ([users['operatorC']] if actor == 'ownerA' else [])
+        grants[actor] = request('POST', org + '/' + merchant + '/delegations', actor, {'partnerOrganizationId': partner, 'scopes': scopes, 'operatorUserIds': permitted, 'expiresAt': expiry})[0]['id']
         integrations[actor] = request('POST', org + '/' + merchant + '/integration-accounts', actor, {'provider': 'reference', 'externalAccountId': 'same-external-account'})[0]['id']
         headers = {'PackProof-Merchant-Id': merchant, 'PackProof-Delegation-Id': grants[actor], 'Idempotency-Key': secrets.token_hex(16)}
         body = {'integrationAccountId': integrations[actor], 'externalId': 'COLLIDING-ORDER-1', 'operatorMembershipId': members[operator], 'transaction': {'itemTitle': 'Synthetic ' + actor, 'quantity': 1}}
         value, _ = request('POST', '/v1/partner/proofs', 'partner', body, 201, headers)
         proofs[actor] = value['proofId']
         replay, replay_headers = request('POST', '/v1/partner/proofs', 'partner', body, 201, headers)
-        assert replay['proofId'] == value['proofId'] and replay_headers.get('Idempotency-Replayed') == 'true'
+        assert replay['proofId'] == value['proofId'] and replay_headers.get('idempotency-replayed') == 'true'
     assert proofs['ownerA'] != proofs['ownerB']
     passed('colliding_order_ids_stay_separate_and_retries_replay')
     phase = 'capture_finalize_export'
     captured = subprocess.run(['node', '--import', 'tsx', 'scripts/isolated-runtime-capture.mjs'],
-                              input=json.dumps({'ip': ip, 'ca': ca, 'tokens': tokens, 'proofs': proofs, 'merchants': merchants, 'grants': grants}),
+                              input=json.dumps({'ip': ip, 'ca': ca, 'tokens': tokens, 'proofs': proofs, 'merchants': merchants, 'grants': grants, 'integrations': integrations, 'members': members}),
                               text=True, capture_output=True, timeout=240)
     capture_report = json.loads(Path('runtime-artifacts/capture-acceptance.json').read_text())
     report['capture'] = capture_report
@@ -150,7 +152,13 @@ try:
     request('GET', '/me/organizations', 'partner', expect=401)
     passed('partner_scope_capture_intent_events_and_personal_auth_boundary')
     request('POST', org + '/' + merchants['ownerA'] + '/delegations/' + grants['ownerA'] + '/revoke', 'ownerA', {})
+    pending = capture_report['interruptedCapture']
+    denied, _ = request('POST', '/proofs/' + pending['proofId'] + '/capture-sessions/' + pending['captureId'] + '/complete', 'operatorC', pending['registration'], expect=403)
+    assert denied['error']['code'] == 'ORGANIZATION_ACCESS_REVOKED'
+    assert hashlib.sha256(Path('runtime-artifacts/interrupted-original.mp4').read_bytes()).hexdigest() == pending['registration']['sha256']
+    passed('revocation_denies_open_capture_resume_and_preserves_synthetic_original')
     request('GET', '/v1/partner/proofs/' + proofs['ownerA'], 'partner', expect=(401, 403), headers=headersA)
+    request('GET', '/proofs/' + proofs['ownerA'], 'ownerA')
     headersB = {'PackProof-Merchant-Id': merchants['ownerB'], 'PackProof-Delegation-Id': grants['ownerB']}
     request('GET', '/v1/partner/proofs/' + proofs['ownerB'], 'partner', headers=headersB)
     passed('delegation_revocation_denies_one_merchant_without_affecting_other')
