@@ -2649,7 +2649,7 @@
       "post": {
         "operationId": "post__me_organizations_organizationId_integration_accounts",
         "summary": "POST /me/organizations/{organizationId}/integration-accounts",
-        "description": "Current owner/admin membership required.",
+        "description": "Current owner/admin membership required. Provider account namespaces are unique per environment. A claimed namespace returns INTEGRATION_ACCOUNT_CONFLICT (409); use separate account namespaces when different merchants have colliding order IDs.",
         "security": [
           {
             "PersonSession": []

@@ -64,6 +64,13 @@ describe('organization foundation through shared backend services',()=>{
   app.use((e:unknown,_r:express.Request,s:express.Response,_n:express.NextFunction)=>{if(e instanceof DomainError)s.status(e.httpStatus).json({code:e.code});else s.status(500).json({error:String(e)});});
  },60000);
  afterAll(async()=>{await opened?.close();vi.unstubAllEnvs();});
+ it('rejects duplicate integration namespaces without changing their merchant ownership',async()=>{
+  for(const [owner,merchant] of [[ownerA,merchantA],[ownerB,merchantB]]){
+   const denied=await request(app).post(`/me/organizations/${merchant}/integration-accounts`).set('Authorization',`Bearer ${owner}`).set('Idempotency-Key',`namespace-conflict-${merchant}`).send({provider:'reference',externalAccountId:'merchant-a'});
+   expect(denied.status,denied.text).toBe(409);expect(denied.body.code).toBe('INTEGRATION_ACCOUNT_CONFLICT');
+  }
+  expect((await opened.db.query("SELECT id,merchant_id FROM platform_integration_accounts WHERE environment='sandbox' AND provider='reference' AND external_account_id='merchant-a'")).rows).toEqual([{id:accountA,merchant_id:merchantA}]);
+ });
  it('T01 creates one canonical Proof per scoped order and preserves actual service and operator identities',async()=>{
   const a=await request(app).post('/v1/partner/proofs').set(headers()).set('Idempotency-Key','import-a').send(importBody());
   expect(a.status,a.text).toBe(201);proofA=a.body.proofId;

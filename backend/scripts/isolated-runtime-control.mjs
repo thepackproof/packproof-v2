@@ -16,6 +16,7 @@ try{
   await db.transaction(async tx=>{
    await tx.query("UPDATE recovery_writer_fence SET generation='m1-runtime-20261021',writes_enabled=true WHERE singleton=1");
    await tx.query('UPDATE policy_recovery_fence SET durability_required=true WHERE singleton=1');
+   for(const role of ['m1_service_api','m1_service_worker'])await tx.query(`ALTER ROLE ${role} LOGIN`);
   });
  }
  if(mode==='close'){
@@ -42,6 +43,7 @@ try{
   roles:(await db.query("SELECT rolname,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolbypassrls FROM pg_roles WHERE rolname IN ('m1_service_api','m1_service_worker') ORDER BY rolname")).rows,
   coreDelivery:(await db.query('SELECT state,COUNT(*) AS count FROM recovery_delivery GROUP BY state')).rows,
   policyDelivery:(await db.query('SELECT state,COUNT(*) AS count FROM policy_recovery_delivery GROUP BY state')).rows,
+  retainedMedia:(await db.query('SELECT id,proof_id,object_key,object_version_id,sha256,byte_size FROM evidence WHERE object_version_id IS NOT NULL ORDER BY id')).rows,
   heartbeats:(await db.query('SELECT * FROM operational_worker_heartbeats ORDER BY worker_name')).rows};
  await mkdir('runtime-artifacts',{recursive:true});await writeFile('runtime-artifacts/control.json',JSON.stringify(report,null,2)+'\n');
  console.log(JSON.stringify(report));

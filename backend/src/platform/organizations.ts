@@ -164,7 +164,8 @@ export async function createIntegrationAccount(db:Database,clock:Clock,userId:st
  return db.transaction(async tx=>{
   const org=await organizationAdmin(tx,userId,id);if(org.kind!=='MERCHANT')throw new DomainError('MERCHANT_REQUIRED','Integration accounts belong to merchants',400);
   const accountId=newId('integration');
-  await tx.query('INSERT INTO platform_integration_accounts(id,merchant_id,environment,provider,external_account_id,created_at) VALUES($1,$2,$3,$4,$5,$6)',[accountId,id,org.environment,provider,externalId,clock.now().toISOString()]);
+   const inserted=await tx.query('INSERT INTO platform_integration_accounts(id,merchant_id,environment,provider,external_account_id,created_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(environment,provider,external_account_id) DO NOTHING RETURNING id',[accountId,id,org.environment,provider,externalId,clock.now().toISOString()]);
+   if(!inserted.rows[0])throw new DomainError('INTEGRATION_ACCOUNT_CONFLICT','This integration account namespace is already registered',409);
   await auditOrganization(tx,clock,{userId,merchantId:id,requestId,operation:'INTEGRATION_NAMESPACE_CREATED',resourceId:accountId});return {id:accountId,provider,environment:org.environment,connectionStatus:'NAMESPACE_ONLY'};
  });
 }

@@ -30,6 +30,7 @@ report = {'schema': 'packproof.isolated-runtime-acceptance.v1', 'source': os.env
                                   'The synthetic developer email is admin-set only in this isolated pool; no email is sent.',
                                   'This run does not authorize production or substitute for independent release review.']}
 phase, response_status, response_code = 'discover_services', None, None
+last_request = None
 
 
 def passed(name, **facts):
@@ -58,7 +59,8 @@ try:
             self.sock = context.wrap_socket(socket.create_connection((ip, 3443), timeout=30), server_hostname='packproof-m1.test')
 
     def request(method, path, actor=None, body=None, expect=200, headers=None, attempt=0):
-        global response_status, response_code
+        global response_status, response_code, last_request
+        last_request = {'method': method, 'path': path}
         connection = PrivateConnection('packproof-m1.test', 3443, context=context, timeout=30)
         h = {'Content-Type': 'application/json', 'Idempotency-Key': secrets.token_hex(16)}
         if actor:
@@ -71,6 +73,7 @@ try:
             value = json.loads(data) if data else {}
             response_status = response.status
             response_code = (value.get('code') or value.get('error', {}).get('code')) if isinstance(value, dict) else None
+            last_request['operationId'] = response.getheader('X-PackProof-Operation-Id')
             if response.status == 503 and response_code == 'POLICY_DURABILITY_PENDING' and attempt < 60:
                 connection.close()
                 time.sleep(1)
@@ -124,11 +127,12 @@ try:
     credential = request('POST', org + '/' + partner + '/service-principals/' + principal + '/credentials', 'developer', {'scopes': scopes, 'expiresAt': expiry})[0]
     tokens['partner'] = credential['token']
     grants, integrations, proofs = {}, {}, {}
+    account_namespace = 'synthetic-' + secrets.token_hex(8)
     for actor, operator in [('ownerA', 'operatorA'), ('ownerB', 'operatorB')]:
         merchant = merchants[actor]
         permitted = [users[operator]] + ([users['operatorC']] if actor == 'ownerA' else [])
         grants[actor] = request('POST', org + '/' + merchant + '/delegations', actor, {'partnerOrganizationId': partner, 'scopes': scopes, 'operatorUserIds': permitted, 'expiresAt': expiry})[0]['id']
-        integrations[actor] = request('POST', org + '/' + merchant + '/integration-accounts', actor, {'provider': 'reference', 'externalAccountId': 'same-external-account'})[0]['id']
+        integrations[actor] = request('POST', org + '/' + merchant + '/integration-accounts', actor, {'provider': 'reference', 'externalAccountId': account_namespace + '-' + actor})[0]['id']
         headers = {'PackProof-Merchant-Id': merchant, 'PackProof-Delegation-Id': grants[actor], 'Idempotency-Key': secrets.token_hex(16)}
         body = {'integrationAccountId': integrations[actor], 'externalId': 'COLLIDING-ORDER-1', 'operatorMembershipId': members[operator], 'transaction': {'itemTitle': 'Synthetic ' + actor, 'quantity': 1}}
         value, _ = request('POST', '/v1/partner/proofs', 'partner', body, 201, headers)
@@ -136,6 +140,9 @@ try:
         replay, replay_headers = request('POST', '/v1/partner/proofs', 'partner', body, 201, headers)
         assert replay['proofId'] == value['proofId'] and replay_headers.get('idempotency-replayed') == 'true'
     assert proofs['ownerA'] != proofs['ownerB']
+    conflict, _ = request('POST', org + '/' + merchants['ownerB'] + '/integration-accounts', 'ownerB', {'provider': 'reference', 'externalAccountId': account_namespace + '-ownerA'}, expect=409)
+    assert conflict['code'] == 'INTEGRATION_ACCOUNT_CONFLICT'
+    passed('integration_namespace_conflict_is_explicit_and_does_not_transfer_ownership')
     passed('colliding_order_ids_stay_separate_and_retries_replay')
     phase = 'capture_finalize_export'
     captured = subprocess.run(['node', '--import', 'tsx', 'scripts/isolated-runtime-capture.mjs'],
@@ -168,7 +175,7 @@ try:
     report.update(status='PASSED', merchants=merchants, partner=partner, proofs=proofs)
 except Exception as error:
     report['status'] = 'FAILED'
-    report['failure'] = {'phase': phase, 'type': type(error).__name__, 'httpStatus': response_status, 'apiCode': response_code}
+    report['failure'] = {'phase': phase, 'type': type(error).__name__, 'httpStatus': response_status, 'apiCode': response_code, 'request': last_request}
     if hasattr(error, 'response'):
         report['failure']['awsCode'] = error.response.get('Error', {}).get('Code')
 finally:
