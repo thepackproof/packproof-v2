@@ -8,6 +8,7 @@ from pathlib import Path
 import secrets
 import socket
 import ssl
+import subprocess
 import sys
 import time
 import boto3
@@ -129,10 +130,17 @@ try:
         assert replay['proofId'] == value['proofId'] and replay_headers.get('Idempotency-Replayed') == 'true'
     assert proofs['ownerA'] != proofs['ownerB']
     passed('colliding_order_ids_stay_separate_and_retries_replay')
+    phase = 'capture_finalize_export'
+    captured = subprocess.run(['node', '--import', 'tsx', 'scripts/isolated-runtime-capture.mjs'],
+                              input=json.dumps({'ip': ip, 'ca': ca, 'tokens': tokens, 'proofs': proofs, 'merchants': merchants, 'grants': grants}),
+                              text=True, capture_output=True, timeout=240)
+    capture_report = json.loads(Path('runtime-artifacts/capture-acceptance.json').read_text())
+    report['capture'] = capture_report
+    assert captured.returncode == 0 and capture_report['status'] == 'PASSED'
+    passed('two_merchant_capture_finalize_and_export_over_https')
     phase = 'partner_scoping_and_revocation'
     headersA = {'PackProof-Merchant-Id': merchants['ownerA'], 'PackProof-Delegation-Id': grants['ownerA']}
     request('GET', '/v1/partner/proofs/' + proofs['ownerB'], 'partner', expect=(403, 404), headers=headersA)
-    request('POST', '/v1/partner/proofs/' + proofs['ownerA'] + '/capture-intents', 'partner', {'allowedSurfaces': ['WEB']}, 201, headersA)
     request('GET', '/v1/partner/event-stream', 'partner', headers=headersA)
     request('GET', '/me/organizations', 'partner', expect=401)
     passed('partner_scope_capture_intent_events_and_personal_auth_boundary')
