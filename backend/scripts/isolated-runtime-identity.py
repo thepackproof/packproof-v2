@@ -145,6 +145,7 @@ try:
     passed('integration_namespace_conflict_is_explicit_and_does_not_transfer_ownership')
     passed('colliding_order_ids_stay_separate_and_retries_replay')
     phase = 'capture_finalize_export'
+    last_request, response_status, response_code = None, None, None
     captured = subprocess.run(['node', '--import', 'tsx', 'scripts/isolated-runtime-capture.mjs'],
                               input=json.dumps({'ip': ip, 'ca': ca, 'tokens': tokens, 'proofs': proofs, 'merchants': merchants, 'grants': grants, 'integrations': integrations, 'members': members}),
                               text=True, capture_output=True, timeout=240)

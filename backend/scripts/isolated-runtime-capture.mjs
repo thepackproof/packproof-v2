@@ -24,11 +24,12 @@ const once=(method,path,token,body,statuses=[200],extra={})=>new Promise((resolv
 const call=async(method,path,token,body,statuses=[200],extra={})=>{
  const headers={'Idempotency-Key':randomBytes(16).toString('hex'),...extra};
  for(let attempt=0;attempt<60;attempt++){
-  const value=await once(method,path,token,body,[...statuses,503],headers);
-  if(lastStatus===503&&(value.code??value.error?.code)==='POLICY_DURABILITY_PENDING'){await delay(1000);continue;}
+  const value=await once(method,path,token,body,[...statuses,409,503],headers);
+  const pending=(lastStatus===503&&lastCode==='POLICY_DURABILITY_PENDING')||(lastStatus===409&&lastCode==='PRESERVATION_PENDING');
+  if(pending){await delay(1000);continue;}
   assert.ok(statuses.includes(lastStatus),'Unexpected HTTP status');return value;
  }
- throw new Error('Policy publication did not settle');
+ throw new Error('Preservation publication did not settle');
 };
 const report={checks:[],proofs:[]};
 try{
