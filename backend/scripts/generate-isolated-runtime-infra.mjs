@@ -7,10 +7,10 @@ const manifestKey=`arn:aws:kms:${region}:${account}:key/6d65691f-a10c-4547-b806-
 const ref=x=>({Ref:x}),att=(x,y='Arn')=>({'Fn::GetAtt':[x,y]}),sub=x=>({'Fn::Sub':x});
 const allow=(Sid,Action,Resource,extra={})=>({Sid,Effect:'Allow',Action,Resource,...extra});
 const ecsTrust={Version:'2012-10-17',Statement:[{Effect:'Allow',Principal:{Service:'ecs-tasks.amazonaws.com'},Action:'sts:AssumeRole',Condition:{StringEquals:{'aws:SourceAccount':account},ArnLike:{'aws:SourceArn':`arn:aws:ecs:${region}:${account}:*`}}}]};
-const t={AWSTemplateFormatVersion:'2010-09-09',Description:'Private synthetic M1 API/worker acceptance assets; never targets production.',Parameters:{CandidateCommit:base.Parameters.CandidateCommit,WriterFence:base.Parameters.WriterFence},Conditions:base.Conditions,Resources:{},Outputs:{}};
+const t={AWSTemplateFormatVersion:'2010-09-09',Description:'Private synthetic M1 API/worker acceptance assets; never targets production.',Parameters:{EgressAvailabilityZone:base.Parameters.EgressAvailabilityZone,CandidateCommit:base.Parameters.CandidateCommit,WriterFence:base.Parameters.WriterFence},Conditions:base.Conditions,Resources:{},Outputs:{}};
 const r=t.Resources;
 for(const [k,v] of Object.entries(base.Resources))if(/^(BuildSecurityGroup|DatabaseIngress|InternetGateway|GatewayAttachment|EgressSubnet|PublicRouteTable|PublicAssociation|PublicRoute|NatAddress|NatGateway|PrivateRouteTable|PrivateAssociationA|PrivateAssociationB|PrivateRoute)$/.test(k))r[k]=structuredClone(v);
-r.EgressSubnet.Properties.AvailabilityZone='us-east-1a';
+r.EgressSubnet.Properties.AvailabilityZone=ref('EgressAvailabilityZone');
 // Preserve evidence after disposable compute and egress are removed.
 r.Logs={Type:'AWS::Logs::LogGroup',DeletionPolicy:'Retain',UpdateReplacePolicy:'Retain',Properties:{LogGroupName:`/packproof/${prefix}`,RetentionInDays:30}};
 r.Repository={Type:'AWS::ECR::Repository',DeletionPolicy:'Retain',UpdateReplacePolicy:'Retain',Properties:{RepositoryName:prefix,ImageTagMutability:'IMMUTABLE',ImageScanningConfiguration:{ScanOnPush:true},EncryptionConfiguration:{EncryptionType:'AES256'},EmptyOnDelete:false}};
