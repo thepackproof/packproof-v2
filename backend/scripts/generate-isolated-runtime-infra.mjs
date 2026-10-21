@@ -51,6 +51,11 @@ r.Trail={Type:'AWS::CloudTrail::Trail',DependsOn:'AuditPolicy',Properties:{Trail
 for(const x of ['ApiRole','WorkerRole','ApiExecutionRole','WorkerExecutionRole'])t.Outputs[x]={Value:att(x)};
 for(const x of ['ApiDatabaseSecret','WorkerDatabaseSecret','ConfigurationSecret','TlsSecret','ServiceSecurityGroup','BuildSecurityGroup','Cluster','Logs','Project'])t.Outputs[x]={Value:ref(x)};
 t.Outputs.Repository={Value:att('Repository','RepositoryUri')};t.Outputs.AuditTrail={Value:att('Trail')};
+t.Parameters.ComputeEnabled={Type:'String',Default:'true',AllowedValues:['true','false'],Description:'Pause only after service DesiredCount is zero and the database is closed; removes temporary build and egress resources.'};
+t.Conditions.ComputeActive={'Fn::Equals':[ref('ComputeEnabled'),'true']};
+for(const name of ['BuildSecurityGroup','DatabaseIngress','InternetGateway','GatewayAttachment','EgressSubnet','PublicRouteTable','PublicAssociation','PublicRoute','NatAddress','NatGateway','PrivateRouteTable','PrivateAssociationA','PrivateAssociationB','PrivateRoute','BuildRole','Project','ApiTlsIngress'])r[name].Condition='ComputeActive';
+for(const name of ['BuildSecurityGroup','Project'])t.Outputs[name].Condition='ComputeActive';
+r.Trail.Properties.IsLogging={'Fn::If':['ComputeActive',true,false]};
 fs.writeFileSync(new URL('infra/partner-foundation/runtime-assets.json',root),JSON.stringify(t,null,2)+'\n');
 const s={AWSTemplateFormatVersion:'2010-09-09',Description:'Private separate API and worker tasks; digest-pinned synthetic acceptance.',Parameters:{Image:{Type:'String',AllowedPattern:'784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:[a-f0-9]{64}'},CandidateCommit:base.Parameters.CandidateCommit,DesiredCount:{Type:'Number',Default:1,AllowedValues:[0,1]},...Object.fromEntries(['ApiRole','WorkerRole','ApiExecutionRole','WorkerExecutionRole','ApiDatabaseSecret','WorkerDatabaseSecret','ConfigurationSecret','TlsSecret','ServiceSecurityGroup','Cluster','Logs'].map(x=>[x,{Type:'String'}]))},Resources:{},Outputs:{}};
 for(const kind of ['Api','Worker']){

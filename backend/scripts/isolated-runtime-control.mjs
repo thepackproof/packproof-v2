@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {writeFile,mkdir} from 'node:fs/promises';
 import {createPgDatabase} from '../src/db/postgres.ts';
+import {SecretsManagerClient,GetSecretValueCommand} from '@aws-sdk/client-secrets-manager';
 assert.equal(process.env.PACKPROOF_TEST_PURPOSE,'isolated-m1-synthetic');
 assert.equal(process.env.PACKPROOF_TEST_DB_HOST,'packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com');
 const owner=JSON.parse(process.env.ISOLATED_DB_SECRET);delete process.env.ISOLATED_DB_SECRET;assert.equal(owner.username,'packproof');
@@ -21,7 +22,20 @@ try{
   for(const role of ['m1_service_api','m1_service_worker'])await db.query(`ALTER ROLE ${role} NOLOGIN`);
   await db.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='m1_service_20261021' AND usename IN ('m1_service_api','m1_service_worker') AND pid<>pg_backend_pid()");
  }
- const report={schema:'packproof.isolated-runtime-control.v1',mode,source:process.env.CANDIDATE_SHA,buildId:process.env.CODEBUILD_BUILD_ID,
+ const loginChecks=[];
+ if(mode==='inspect'){
+  const secrets=new SecretsManagerClient({region:'us-east-1'});
+  for(const kind of ['api','worker']){
+   const secret=await secrets.send(new GetSecretValueCommand({SecretId:process.env[`${kind.toUpperCase()}DATABASE_SECRET_ARN`]}));
+   const runtimeUrl=new URL(url);runtimeUrl.username=`m1_service_${kind}`;runtimeUrl.password=secret.SecretString;
+   const runtime=createPgDatabase(runtimeUrl.toString());
+   try{
+    const row=(await runtime.db.query("SELECT current_user AS login,current_database() AS database,has_schema_privilege(current_user,'public','CREATE') AS can_create_schema_objects,has_column_privilege(current_user,'recovery_writer_fence','generation','UPDATE') AS can_change_writer_generation,has_table_privilege(current_user,'recovery_delivery','UPDATE') AS can_publish_receipts")).rows[0];
+    assert.equal(row.login,`m1_service_${kind}`);assert.equal(row.database,'m1_service_20261021');assert.equal(row.can_create_schema_objects,false);assert.equal(row.can_change_writer_generation,false);assert.equal(row.can_publish_receipts,kind==='worker');loginChecks.push(row);
+   }finally{await runtime.close();}
+  }
+ }
+ const report={schema:'packproof.isolated-runtime-control.v1',mode,source:process.env.CANDIDATE_SHA,buildId:process.env.CODEBUILD_BUILD_ID,loginChecks,
   database:'m1_service_20261021',writerFence:(await db.query('SELECT * FROM recovery_writer_fence')).rows,
   policyFence:(await db.query('SELECT * FROM policy_recovery_fence')).rows,
   roles:(await db.query("SELECT rolname,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolbypassrls FROM pg_roles WHERE rolname IN ('m1_service_api','m1_service_worker') ORDER BY rolname")).rows,

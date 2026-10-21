@@ -23,6 +23,15 @@
         "CLOSED"
       ],
       "Description": "CLOSED denies source API and worker storage writes and signing, including existing STS sessions."
+    },
+    "ComputeEnabled": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Pause only after service DesiredCount is zero and the database is closed; removes temporary build and egress resources."
     }
   },
   "Conditions": {
@@ -32,6 +41,14 @@
           "Ref": "WriterFence"
         },
         "CLOSED"
+      ]
+    },
+    "ComputeActive": {
+      "Fn::Equals": [
+        {
+          "Ref": "ComputeEnabled"
+        },
+        "true"
       ]
     }
   },
@@ -65,7 +82,8 @@
             }
           }
         ]
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "DatabaseIngress": {
       "Type": "AWS::EC2::SecurityGroupIngress",
@@ -78,10 +96,12 @@
           "Ref": "BuildSecurityGroup"
         },
         "Description": "Temporary isolated recovery acceptance runner"
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "InternetGateway": {
-      "Type": "AWS::EC2::InternetGateway"
+      "Type": "AWS::EC2::InternetGateway",
+      "Condition": "ComputeActive"
     },
     "GatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
@@ -90,7 +110,8 @@
         "InternetGatewayId": {
           "Ref": "InternetGateway"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "EgressSubnet": {
       "Type": "AWS::EC2::Subnet",
@@ -101,13 +122,15 @@
           "Ref": "EgressAvailabilityZone"
         },
         "MapPublicIpOnLaunch": false
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": "vpc-0c4f12c0ba9393ae3"
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
@@ -120,7 +143,8 @@
         "GatewayId": {
           "Ref": "InternetGateway"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "PublicAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
@@ -131,14 +155,16 @@
         "RouteTableId": {
           "Ref": "PublicRouteTable"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "NatAddress": {
       "Type": "AWS::EC2::EIP",
       "DependsOn": "GatewayAttachment",
       "Properties": {
         "Domain": "vpc"
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "NatGateway": {
       "Type": "AWS::EC2::NatGateway",
@@ -152,13 +178,15 @@
         "SubnetId": {
           "Ref": "EgressSubnet"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": "vpc-0c4f12c0ba9393ae3"
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "PrivateRoute": {
       "Type": "AWS::EC2::Route",
@@ -170,7 +198,8 @@
         "NatGatewayId": {
           "Ref": "NatGateway"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "PrivateAssociationA": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
@@ -179,7 +208,8 @@
         "RouteTableId": {
           "Ref": "PrivateRouteTable"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "PrivateAssociationB": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
@@ -188,7 +218,8 @@
         "RouteTableId": {
           "Ref": "PrivateRouteTable"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "Logs": {
       "Type": "AWS::Logs::LogGroup",
@@ -308,7 +339,8 @@
         "SourceSecurityGroupId": {
           "Ref": "BuildSecurityGroup"
         }
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "ApiRole": {
       "Type": "AWS::IAM::Role",
@@ -956,7 +988,8 @@
             }
           }
         ]
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "Project": {
       "Type": "AWS::CodeBuild::Project",
@@ -1103,7 +1136,8 @@
         "TimeoutInMinutes": 40,
         "QueuedTimeoutInMinutes": 10,
         "ConcurrentBuildLimit": 1
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "AuditBucket": {
       "Type": "AWS::S3::Bucket",
@@ -1222,7 +1256,13 @@
       "DependsOn": "AuditPolicy",
       "Properties": {
         "TrailName": "packproof-m1-20261021-runtime",
-        "IsLogging": true,
+        "IsLogging": {
+          "Fn::If": [
+            "ComputeActive",
+            true,
+            false
+          ]
+        },
         "IsMultiRegionTrail": false,
         "IncludeGlobalServiceEvents": false,
         "EnableLogFileValidation": true,
@@ -1299,7 +1339,8 @@
     "BuildSecurityGroup": {
       "Value": {
         "Ref": "BuildSecurityGroup"
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "Cluster": {
       "Value": {
@@ -1314,7 +1355,8 @@
     "Project": {
       "Value": {
         "Ref": "Project"
-      }
+      },
+      "Condition": "ComputeActive"
     },
     "Repository": {
       "Value": {
