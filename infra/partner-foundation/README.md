@@ -49,4 +49,12 @@ The [recovery runner](RECOVERY-DRILL.md) completed all 27 checks with separate s
 
 The [identity pool](IDENTITY.md) requires authenticator-app MFA and administrator-only registration. Nine synthetic provider checks passed; the test user and temporary runner/role were removed. Only the protected test pool/client remain. See [identity evidence](../../docs/partner-foundation/isolated-identity-evidence-2026-10-20.json).
 
-These completed tests satisfy the stated synthetic acceptance portions of the sequence above. They do not deploy an API/worker service or certify device behavior. A reviewed workload-specific protection file, authenticated staging endpoints, real-device acceptance and independent M1 review remain required.
+Those coordinator/provider tests satisfy their stated synthetic portions of the sequence. Their role identities and scope are distinct from the deployed workloads below; they do not certify device behavior.
+
+## Separate runtime continuation
+
+The [runtime templates and procedure](RUNTIME.md) add a private API and recovery worker as separate Fargate services, distinct ECS-only workload/execution roles, non-owner database logins, managed secrets, pinned private HTTPS and the test MFA pool. Actual task probes verify conditional storage, signing separation, deletion denial and an external fence applied to already-issued credentials. The SHA-pinned protection record truthfully identifies implementation review; independent release approval remains outstanding.
+
+The exact application image, failed and successful endpoint attempts, offline package verification and final pause state are in [runtime evidence](../../docs/partner-foundation/isolated-runtime-evidence-2026-10-21.json). Pause removes temporary build/egress resources only after services stop and database logins are closed. The retained database, image, locked evidence, secrets and audit records remain subject to their existing retention and charges. Resume requires fresh TLS/protection/trust evidence and the documented checks, not a replay of an expired approval packet.
+
+Actual web/Android lifecycle acceptance, deployed revocation during streamed export/queued delivery, full-release CI and independent M1 review remain separate gates.
