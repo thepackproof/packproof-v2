@@ -197,14 +197,21 @@ try {
  assert.equal(restored.canonical_json,final.manifest.canonicalJson);assert.equal(restored.sha256,final.manifest.sha256);
  const sourceManifest=(await ownerSource.query('SELECT canonical_json,sha256,signature_base64,signing_key_id FROM final_manifests WHERE proof_id=$1',[proofId])).rows[0];assert.deepEqual(restored,sourceManifest);
  await writeFile('acceptance-artifacts/after-manifest.json',restored.canonical_json);
- for(const table of ['platform_organizations','platform_memberships','platform_principals','platform_credentials','platform_delegations','platform_integration_accounts','platform_proof_ownership','platform_external_bindings','platform_capture_authorizations']){const sql=`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY to_jsonb(t)::text`;assert.deepEqual((await target.query(sql)).rows,(await ownerSource.query(sql)).rows,`${table} restoration differs`);}
+ // Migration 092 intentionally omits credential usage telemetry from the policy
+ // journal. Compare every authority field; never emit credential hashes in diffs.
+ for(const table of ['platform_organizations','platform_memberships','platform_principals','platform_credentials','platform_delegations','platform_integration_accounts','platform_proof_ownership','platform_external_bindings','platform_capture_authorizations']){
+  const projection=table==='platform_credentials'?"to_jsonb(t)-'last_used_at'":'to_jsonb(t)';
+  const sql=`SELECT ${projection} AS row FROM ${table} t ORDER BY (${projection})::text`;
+  assert.ok(JSON.stringify((await target.query(sql)).rows)===JSON.stringify((await ownerSource.query(sql)).rows),`${table} authority restoration differs`);
+ }
+ assert.equal((await target.query('SELECT count(*)::int AS n FROM platform_credentials WHERE last_used_at IS NOT NULL')).rows[0].n,0);
  assert.ok((await target.query('SELECT revoked_at FROM platform_delegations WHERE id=$1',[grant])).rows[0].revoked_at);
  assert.equal((await inspectPolicyRecoveryReconciliation(target)).matches,true);
  await assert.rejects(()=>assertPolicyAccessSafe(target),e=>e.code==='POLICY_RECOVERY_UNAVAILABLE');
  await assert.rejects(()=>authorizeProofAccess(target,proofId,operator),e=>['ORGANIZATION_ACCESS_REVOKED','POLICY_RECOVERY_UNAVAILABLE'].includes(e.code));
  await assert.rejects(()=>target.query("UPDATE final_manifests SET canonical_json='{}' WHERE proof_id=$1",[proofId]));
  assert.deepEqual((await target.query('SELECT writes_enabled,generation FROM recovery_writer_fence')).rows[0],{writes_enabled:false,generation:`replacement-${runId}`});
- check('fresh_restore_preserves_manifest_and_revoked_authority',{manifestSha256:restored.sha256,organizationTablesCompared:9,trafficMayOpen:false,writersEnabled:false});
+ check('fresh_restore_preserves_manifest_and_revoked_authority',{manifestSha256:restored.sha256,organizationTablesCompared:9,excludedTelemetry:['platform_credentials.last_used_at'],trafficMayOpen:false,writersEnabled:false});
  report.completedAt=clock.now().toISOString();report.status='PASSED';await save();
  await putControl('completed.json',{runId,status:'PASSED',checks:report.checks.length});
 } catch(error){failed=true;report.status='FAILED';report.failure={phase,code:String(error.code??error.name??'ERROR'),message:String(error.message??'').replace(/postgres(?:ql)?:\/\/\S+/g,'[REDACTED CONNECTION]').slice(0,500)};for(const value of [secret.password,...Object.values(passwords)])report.failure.message=report.failure.message.replaceAll(value,'[REDACTED]');console.error(JSON.stringify({event:'recovery_acceptance_failed',...report.failure}));await save();}
@@ -214,5 +221,6 @@ finally{
  for(const name of createdDatabases.reverse()){try{await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);report.cleanup.databases.push({name,removed:true});}catch(e){report.cleanup.databases.push({name,removed:false,code:e.code});failed=true;}}
  for(const name of createdRoles.reverse()){try{await admin.query(`DROP ROLE ${name}`);report.cleanup.roles.push({name,removed:true});}catch(e){report.cleanup.roles.push({name,removed:false,code:e.code});failed=true;}}
  await opened[0].close();if(failed&&report.status==='PASSED')report.status='FAILED_CLEANUP';await save();
+ await putControl('report.json',report);
 }
 if(failed)process.exitCode=1;
