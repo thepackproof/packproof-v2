@@ -122,7 +122,7 @@ try {
  const merchant=(await createOrganization(api,clock,developer,{kind:'MERCHANT',name:'Synthetic recovery merchant',ownerUserId:owner},runId)).id;
  const partner=(await createOrganization(api,clock,developer,{kind:'PARTNER',name:'Synthetic recovery partner'},runId)).id;
  for(const id of [merchant,partner])await setOrganizationEntitlement(api,clock,developer,id,{enabled:true},runId);
- const member=(await addOrganizationMember(api,clock,owner,merchant,{userId:operator,role:'OPERATOR'},runId)).id;
+ const member=(await addOrganizationMember(api,clock,developer,partner,{userId:operator,role:'OPERATOR'},runId)).id;
  const principal=(await createServicePrincipal(api,clock,developer,partner,{name:'Synthetic recovery principal'},runId)).id;
  const expiresAt=new Date(Date.now()+86400000).toISOString();
  const credential=(await issuePartnerCredential(api,clock,developer,partner,principal,{scopes:[...PARTNER_SCOPES],expiresAt},runId)).token;
