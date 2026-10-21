@@ -167,7 +167,13 @@ try:
     passed('revocation_denies_open_capture_resume_and_preserves_synthetic_original')
     revoked, _ = request('GET', '/v1/partner/proofs/' + proofs['ownerA'], 'partner', expect=(401, 403, 404), headers=headersA)
     assert (revoked.get('code') or revoked.get('error', {}).get('code')) in ('MERCHANT_NOT_FOUND', 'ORGANIZATION_ACCESS_REVOKED', 'PARTNER_UNAUTHORIZED')
-    request('GET', '/proofs/' + proofs['ownerA'], 'ownerA')
+    # Organization ownership does not fabricate a human contributor association.
+    request('GET', '/proofs/' + proofs['ownerA'], 'ownerA', expect=403)
+    merchant_principal = request('POST', org + '/' + merchants['ownerA'] + '/service-principals', 'ownerA', {'name': 'Synthetic merchant reader'})[0]['id']
+    merchant_credential = request('POST', org + '/' + merchants['ownerA'] + '/service-principals/' + merchant_principal + '/credentials', 'ownerA', {'scopes': ['proofs:read'], 'expiresAt': expiry})[0]
+    tokens['merchantReader'] = merchant_credential['token']
+    request('GET', '/v1/partner/proofs/' + proofs['ownerA'], 'merchantReader', headers={'PackProof-Merchant-Id': merchants['ownerA']})
+    request('POST', org + '/' + merchants['ownerA'] + '/credentials/' + merchant_credential['id'] + '/revoke', 'ownerA', {})
     headersB = {'PackProof-Merchant-Id': merchants['ownerB'], 'PackProof-Delegation-Id': grants['ownerB']}
     request('GET', '/v1/partner/proofs/' + proofs['ownerB'], 'partner', headers=headersB)
     passed('delegation_revocation_denies_one_merchant_without_affecting_other')
