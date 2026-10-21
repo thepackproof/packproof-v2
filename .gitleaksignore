@@ -13,3 +13,12 @@
 # idempotency identifier used only to compare a JSON round trip. The source is
 # now formatted on separate lines; retain only this exact historical exception.
 13a466a28d99a97dc83990f7bbca499ab364b908:mobile/tests/manual-operation.test.ts:generic-api-key:7
+
+# Reviewed CI run 39530967581 / Source secrets job 118996820509.
+# These exact historical lines contain a synthetic S3 probe body/path and an
+# assertion label. They contain no credential, token, password or signing secret.
+# Runtime STS credentials and database passwords are obtained/generated in memory.
+# Restrict each exception to the original commit, file, rule and line; retain all
+# other history scanning and all default rules.
+707ba1c2b26853cec39c6afb335fbb67e4e21c8d:backend/scripts/isolated-recovery-acceptance.mjs:generic-api-key:79
+707ba1c2b26853cec39c6afb335fbb67e4e21c8d:backend/scripts/isolated-recovery-acceptance.mjs:generic-api-key:168
