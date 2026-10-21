@@ -1,0 +1,1326 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Private synthetic M1 API/worker acceptance assets; never targets production.",
+  "Parameters": {
+    "CandidateCommit": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{40}",
+      "Description": "Exact reviewed PR commit to execute"
+    },
+    "WriterFence": {
+      "Type": "String",
+      "Default": "OPEN",
+      "AllowedValues": [
+        "OPEN",
+        "CLOSED"
+      ],
+      "Description": "CLOSED denies source API and worker storage writes and signing, including existing STS sessions."
+    }
+  },
+  "Conditions": {
+    "WritersFenced": {
+      "Fn::Equals": [
+        {
+          "Ref": "WriterFence"
+        },
+        "CLOSED"
+      ]
+    }
+  },
+  "Resources": {
+    "BuildSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3",
+        "GroupDescription": "One-shot recovery acceptance runner: HTTPS downloads and isolated PostgreSQL only",
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Public GitHub, npm, AWS APIs and RDS CA distribution over TLS"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "DestinationSecurityGroupId": "sg-000d9cd26399d10d2",
+            "Description": "Isolated test database only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3443,
+            "ToPort": 3443,
+            "DestinationSecurityGroupId": {
+              "Ref": "ServiceSecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": "sg-000d9cd26399d10d2",
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "BuildSecurityGroup"
+        },
+        "Description": "Temporary isolated recovery acceptance runner"
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "GatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3",
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "EgressSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3",
+        "CidrBlock": "10.42.20.0/24",
+        "AvailabilityZone": "us-east-1a",
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3"
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "GatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "EgressSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "NatAddress": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "GatewayAttachment",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatAddress",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "EgressSubnet"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3"
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      }
+    },
+    "PrivateAssociationA": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "subnet-00ce0618188c68de8",
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateAssociationB": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "subnet-0be41abd945430b4d",
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "Logs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": "/packproof/packproof-m1-20261021-runtime",
+        "RetentionInDays": 30
+      }
+    },
+    "Repository": {
+      "Type": "AWS::ECR::Repository",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "RepositoryName": "packproof-m1-20261021-runtime",
+        "ImageTagMutability": "IMMUTABLE",
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "EmptyOnDelete": false
+      }
+    },
+    "Cluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": "packproof-m1-20261021-runtime",
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "enabled"
+          }
+        ]
+      }
+    },
+    "ApiDatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "packproof-m1-20261021-runtime/ApiDatabase",
+        "Description": "Synthetic private acceptance only; populated by bootstrap without logging values"
+      }
+    },
+    "WorkerDatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "packproof-m1-20261021-runtime/WorkerDatabase",
+        "Description": "Synthetic private acceptance only; populated by bootstrap without logging values"
+      }
+    },
+    "ConfigurationSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "packproof-m1-20261021-runtime/Configuration",
+        "Description": "Synthetic private acceptance only; populated by bootstrap without logging values"
+      }
+    },
+    "TlsSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": "packproof-m1-20261021-runtime/Tls",
+        "Description": "Synthetic private acceptance only; populated by bootstrap without logging values"
+      }
+    },
+    "ServiceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": "vpc-0c4f12c0ba9393ae3",
+        "GroupDescription": "Private API and worker; no public ingress",
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "DestinationSecurityGroupId": "sg-000d9cd26399d10d2"
+          }
+        ]
+      }
+    },
+    "ServiceDatabaseIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": "sg-000d9cd26399d10d2",
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "ServiceSecurityGroup"
+        }
+      }
+    },
+    "ApiTlsIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ServiceSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 3443,
+        "ToPort": 3443,
+        "SourceSecurityGroupId": {
+          "Ref": "BuildSecurityGroup"
+        }
+      }
+    },
+    "ApiRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261021-runtime-api",
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRecoveryAcceptance",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "DistinguishMissingMedia",
+                  "Effect": "Allow",
+                  "Action": "s3:ListBucket",
+                  "Resource": [
+                    "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+                    "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5"
+                  ]
+                },
+                {
+                  "Sid": "SyntheticMedia",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/evidence/*",
+                    "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*"
+                  ]
+                },
+                {
+                  "Sid": "ManifestSigning",
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GetPublicKey",
+                    "kms:Sign"
+                  ],
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+                },
+                {
+                  "Sid": "NoRecoveryJournal",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*"
+                },
+                {
+                  "Sid": "NoRecoverySigning",
+                  "Effect": "Deny",
+                  "Action": "kms:Sign",
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                },
+                {
+                  "Sid": "NoRetentionOrKeyAdministration",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:BypassGovernanceRetention",
+                    "s3:PutObjectRetention",
+                    "s3:PutObjectLegalHold",
+                    "kms:DisableKey",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "secretsmanager:GetSecretValue",
+                    "iam:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Fn::If": [
+                    "WritersFenced",
+                    {
+                      "Sid": "SourceWritersExternallyFenced",
+                      "Effect": "Deny",
+                      "Action": [
+                        "s3:PutObject",
+                        "kms:Sign"
+                      ],
+                      "Resource": [
+                        "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*",
+                        "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                        "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                      ]
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "ReadTestConfiguration",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/config/*"
+                },
+                {
+                  "Sid": "WriteRoleProbe",
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/probes/api/*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ApiExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261021-runtime-api-execution",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ExecutionOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "EcrAuthentication",
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "ExactImagePull",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchGetImage",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchCheckLayerAvailability"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Repository",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Sid": "TaskLogs",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:us-east-1:784514617543:log-group:${Logs}:*"
+                  }
+                },
+                {
+                  "Sid": "OnlyInjectedSecrets",
+                  "Effect": "Allow",
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Resource": [
+                    {
+                      "Ref": "ApiDatabaseSecret"
+                    },
+                    {
+                      "Ref": "ConfigurationSecret"
+                    },
+                    {
+                      "Ref": "TlsSecret"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WorkerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261021-runtime-worker",
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRecoveryAcceptance",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "DistinguishMissingJournal",
+                  "Effect": "Allow",
+                  "Action": "s3:ListBucket",
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp"
+                },
+                {
+                  "Sid": "ProtectedJournal",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*"
+                },
+                {
+                  "Sid": "RecoverySigning",
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GetPublicKey",
+                    "kms:Sign"
+                  ],
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                },
+                {
+                  "Sid": "NoManifestSigning",
+                  "Effect": "Deny",
+                  "Action": "kms:Sign",
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+                },
+                {
+                  "Sid": "NoRetentionOrKeyAdministration",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:BypassGovernanceRetention",
+                    "s3:PutObjectRetention",
+                    "s3:PutObjectLegalHold",
+                    "kms:DisableKey",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "secretsmanager:GetSecretValue",
+                    "iam:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Fn::If": [
+                    "WritersFenced",
+                    {
+                      "Sid": "SourceWritersExternallyFenced",
+                      "Effect": "Deny",
+                      "Action": [
+                        "s3:PutObject",
+                        "kms:Sign"
+                      ],
+                      "Resource": [
+                        "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*",
+                        "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*",
+                        "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                        "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+                      ]
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "ReadTestConfiguration",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/config/*"
+                },
+                {
+                  "Sid": "WriteRoleProbe",
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/probes/worker/*"
+                },
+                {
+                  "Sid": "ManifestPublicTrust",
+                  "Effect": "Allow",
+                  "Action": "kms:GetPublicKey",
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WorkerExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261021-runtime-worker-execution",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ExecutionOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "EcrAuthentication",
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "ExactImagePull",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchGetImage",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchCheckLayerAvailability"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Repository",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Sid": "TaskLogs",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:us-east-1:784514617543:log-group:${Logs}:*"
+                  }
+                },
+                {
+                  "Sid": "OnlyInjectedSecrets",
+                  "Effect": "Allow",
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Resource": [
+                    {
+                      "Ref": "WorkerDatabaseSecret"
+                    },
+                    {
+                      "Ref": "ConfigurationSecret"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "BuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-m1-20261021-runtime-build",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": "arn:aws:codebuild:us-east-1:784514617543:project/packproof-m1-20261021-runtime"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRecoveryCoordinator",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "BuildLogs",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:us-east-1:784514617543:log-group:${Logs}:*"
+                  }
+                },
+                {
+                  "Sid": "IsolatedDatabaseSecret",
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r"
+                },
+                {
+                  "Sid": "SyntheticAcceptanceArtifacts",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/*"
+                },
+                {
+                  "Sid": "AcceptanceBucketLocation",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketAcl",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h"
+                },
+                {
+                  "Sid": "DescribeNetwork",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeDhcpOptions",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeVpcs"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "CreateRunnerNetworkInterface",
+                  "Effect": "Allow",
+                  "Action": "ec2:CreateNetworkInterface",
+                  "Resource": [
+                    "arn:aws:ec2:us-east-1:784514617543:network-interface/*",
+                    "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-00ce0618188c68de8",
+                    "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-0be41abd945430b4d",
+                    {
+                      "Fn::Sub": "arn:aws:ec2:us-east-1:784514617543:security-group/${BuildSecurityGroup}"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "DeleteRunnerNetworkInterface",
+                  "Effect": "Allow",
+                  "Action": "ec2:DeleteNetworkInterface",
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEqualsIfExists": {
+                      "ec2:Subnet": [
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-00ce0618188c68de8",
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-0be41abd945430b4d"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Sid": "AttachCodeBuildInterface",
+                  "Effect": "Allow",
+                  "Action": "ec2:CreateNetworkInterfacePermission",
+                  "Resource": "arn:aws:ec2:us-east-1:784514617543:network-interface/*",
+                  "Condition": {
+                    "StringEquals": {
+                      "ec2:AuthorizedService": "codebuild.amazonaws.com"
+                    },
+                    "ArnEquals": {
+                      "ec2:Subnet": [
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-00ce0618188c68de8",
+                        "arn:aws:ec2:us-east-1:784514617543:subnet/subnet-0be41abd945430b4d"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Sid": "NeverChangeStorageOrKeys",
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:BypassGovernanceRetention",
+                    "s3:PutObjectRetention",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:DisableKey"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "ConfigureSyntheticServices",
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:PutSecretValue",
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "ApiDatabaseSecret"
+                    },
+                    {
+                      "Ref": "WorkerDatabaseSecret"
+                    },
+                    {
+                      "Ref": "ConfigurationSecret"
+                    },
+                    {
+                      "Ref": "TlsSecret"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "EcrAuthentication",
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "PublishExactRepository",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:PutImage",
+                    "ecr:DescribeImages"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Repository",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Sid": "DiscoverPrivateTasks",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:ListTasks",
+                    "ecs:DescribeTasks"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "SyntheticIdentityOnly",
+                  "Effect": "Allow",
+                  "Action": [
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminDeleteUser",
+                    "cognito-idp:AdminSetUserPassword",
+                    "cognito-idp:AdminInitiateAuth",
+                    "cognito-idp:AdminRespondToAuthChallenge",
+                    "cognito-idp:AdminUserGlobalSignOut",
+                    "cognito-idp:DescribeUserPool",
+                    "cognito-idp:DescribeUserPoolClient",
+                    "cognito-idp:GetUserPoolMfaConfig"
+                  ],
+                  "Resource": "arn:aws:cognito-idp:us-east-1:784514617543:userpool/us-east-1_1wLVqaizj"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Project": {
+      "Type": "AWS::CodeBuild::Project",
+      "DependsOn": [
+        "PrivateRoute",
+        "PrivateAssociationA",
+        "PrivateAssociationB",
+        "PublicRoute"
+      ],
+      "Properties": {
+        "Name": "packproof-m1-20261021-runtime",
+        "Description": "Build exact image and exercise separate private Fargate processes with synthetic identities",
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "BuildRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "S3",
+          "Location": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+          "Path": "acceptance/runtime",
+          "Name": "runtime.zip",
+          "NamespaceType": "BUILD_ID",
+          "Packaging": "ZIP",
+          "EncryptionDisabled": false
+        },
+        "Source": {
+          "Type": "NO_SOURCE",
+          "BuildSpec": "{\"version\":0.2,\"phases\":{\"install\":{\"runtime-versions\":{\"nodejs\":22},\"on-failure\":\"ABORT\",\"commands\":[\"git init candidate\",\"cd candidate\",\"git remote add origin https://github.com/thepackproof/packproof-v2.git\",\"git fetch --depth=1 origin \\\"$CANDIDATE_SHA\\\"\",\"git checkout --detach \\\"$CANDIDATE_SHA\\\"\",\"test \\\"$(git rev-parse HEAD)\\\" = \\\"$CANDIDATE_SHA\\\"\",\"cd backend\",\"npm ci --no-audit --no-fund\",\"python3 -m pip install --quiet --disable-pip-version-check cfn-lint==1.57.2\",\"cfn-lint --region us-east-1 --template ../infra/partner-foundation/*.json\",\"curl --fail --silent --show-error --proto =https --tlsv1.2 -o /tmp/packproof-rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem\"]},\"build\":{\"on-failure\":\"CONTINUE\",\"commands\":[\"mkdir -p runtime-artifacts\",\"if [ \\\"$RUNTIME_PHASE\\\" = bootstrap ]; then node --import tsx scripts/isolated-runtime-bootstrap.mjs; fi\",\"if [ \\\"$RUNTIME_PHASE\\\" = bootstrap ]; then cd .. && aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 784514617543.dkr.ecr.us-east-1.amazonaws.com && docker build -f backend/Dockerfile --label org.opencontainers.image.revision=\\\"$CANDIDATE_SHA\\\" -t \\\"$IMAGE_REPOSITORY:$CANDIDATE_SHA\\\" . && docker push \\\"$IMAGE_REPOSITORY:$CANDIDATE_SHA\\\" && cd backend; fi\",\"if [ \\\"$RUNTIME_PHASE\\\" = acceptance ]; then python3 scripts/isolated-runtime-identity.py; fi\"]}},\"artifacts\":{\"files\":[\"**/*\"],\"base-directory\":\"candidate/backend/runtime-artifacts\"}}"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_MEDIUM",
+          "Image": "aws/codebuild/standard:7.0",
+          "PrivilegedMode": true,
+          "ImagePullCredentialsType": "CODEBUILD",
+          "EnvironmentVariables": [
+            {
+              "Name": "CANDIDATE_SHA",
+              "Value": {
+                "Ref": "CandidateCommit"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "PACKPROOF_TEST_PURPOSE",
+              "Value": "isolated-m1-synthetic",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "PACKPROOF_TEST_DB_HOST",
+              "Value": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "ISOLATED_DB_SECRET",
+              "Value": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r",
+              "Type": "SECRETS_MANAGER"
+            },
+            {
+              "Name": "RUNTIME_PHASE",
+              "Value": "bootstrap",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "IMAGE_REPOSITORY",
+              "Value": {
+                "Fn::GetAtt": [
+                  "Repository",
+                  "RepositoryUri"
+                ]
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "ISOLATED_USER_POOL_ID",
+              "Value": "us-east-1_1wLVqaizj",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "ISOLATED_CLIENT_ID",
+              "Value": "4jq0gv2vo88nbd3cn09eud6npq",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "RUNTIME_CLUSTER",
+              "Value": {
+                "Ref": "Cluster"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "APIDATABASE_SECRET_ARN",
+              "Value": {
+                "Ref": "ApiDatabaseSecret"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "WORKERDATABASE_SECRET_ARN",
+              "Value": {
+                "Ref": "WorkerDatabaseSecret"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "CONFIGURATION_SECRET_ARN",
+              "Value": {
+                "Ref": "ConfigurationSecret"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "TLS_SECRET_ARN",
+              "Value": {
+                "Ref": "TlsSecret"
+              },
+              "Type": "PLAINTEXT"
+            }
+          ]
+        },
+        "VpcConfig": {
+          "VpcId": "vpc-0c4f12c0ba9393ae3",
+          "Subnets": [
+            "subnet-00ce0618188c68de8",
+            "subnet-0be41abd945430b4d"
+          ],
+          "SecurityGroupIds": [
+            {
+              "Ref": "BuildSecurityGroup"
+            }
+          ]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "Logs"
+            },
+            "StreamName": "acceptance"
+          }
+        },
+        "TimeoutInMinutes": 40,
+        "QueuedTimeoutInMinutes": 10,
+        "ConcurrentBuildLimit": 1
+      }
+    },
+    "AuditBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "AuditRetention",
+              "Status": "Enabled",
+              "ExpirationInDays": 90,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 90
+              }
+            }
+          ]
+        }
+      }
+    },
+    "AuditPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AuditBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AuditBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${AuditBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "AuditBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": "arn:aws:cloudtrail:us-east-1:784514617543:trail/packproof-m1-20261021-runtime"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${AuditBucket.Arn}/AWSLogs/784514617543/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "aws:SourceArn": "arn:aws:cloudtrail:us-east-1:784514617543:trail/packproof-m1-20261021-runtime"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Trail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": "AuditPolicy",
+      "Properties": {
+        "TrailName": "packproof-m1-20261021-runtime",
+        "IsLogging": true,
+        "IsMultiRegionTrail": false,
+        "IncludeGlobalServiceEvents": false,
+        "EnableLogFileValidation": true,
+        "S3BucketName": {
+          "Ref": "AuditBucket"
+        },
+        "EventSelectors": [
+          {
+            "IncludeManagementEvents": true,
+            "ReadWriteType": "All"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ApiRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ApiRole",
+          "Arn"
+        ]
+      }
+    },
+    "WorkerRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WorkerRole",
+          "Arn"
+        ]
+      }
+    },
+    "ApiExecutionRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ApiExecutionRole",
+          "Arn"
+        ]
+      }
+    },
+    "WorkerExecutionRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WorkerExecutionRole",
+          "Arn"
+        ]
+      }
+    },
+    "ApiDatabaseSecret": {
+      "Value": {
+        "Ref": "ApiDatabaseSecret"
+      }
+    },
+    "WorkerDatabaseSecret": {
+      "Value": {
+        "Ref": "WorkerDatabaseSecret"
+      }
+    },
+    "ConfigurationSecret": {
+      "Value": {
+        "Ref": "ConfigurationSecret"
+      }
+    },
+    "TlsSecret": {
+      "Value": {
+        "Ref": "TlsSecret"
+      }
+    },
+    "ServiceSecurityGroup": {
+      "Value": {
+        "Ref": "ServiceSecurityGroup"
+      }
+    },
+    "BuildSecurityGroup": {
+      "Value": {
+        "Ref": "BuildSecurityGroup"
+      }
+    },
+    "Cluster": {
+      "Value": {
+        "Ref": "Cluster"
+      }
+    },
+    "Logs": {
+      "Value": {
+        "Ref": "Logs"
+      }
+    },
+    "Project": {
+      "Value": {
+        "Ref": "Project"
+      }
+    },
+    "Repository": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Repository",
+          "RepositoryUri"
+        ]
+      }
+    },
+    "AuditTrail": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Trail",
+          "Arn"
+        ]
+      }
+    }
+  }
+}

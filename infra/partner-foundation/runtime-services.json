@@ -1,0 +1,655 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Private separate API and worker tasks; digest-pinned synthetic acceptance.",
+  "Parameters": {
+    "Image": {
+      "Type": "String",
+      "AllowedPattern": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:[a-f0-9]{64}"
+    },
+    "CandidateCommit": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{40}",
+      "Description": "Exact reviewed PR commit to execute"
+    },
+    "DesiredCount": {
+      "Type": "Number",
+      "Default": 1,
+      "AllowedValues": [
+        0,
+        1
+      ]
+    },
+    "ApiRole": {
+      "Type": "String"
+    },
+    "WorkerRole": {
+      "Type": "String"
+    },
+    "ApiExecutionRole": {
+      "Type": "String"
+    },
+    "WorkerExecutionRole": {
+      "Type": "String"
+    },
+    "ApiDatabaseSecret": {
+      "Type": "String"
+    },
+    "WorkerDatabaseSecret": {
+      "Type": "String"
+    },
+    "ConfigurationSecret": {
+      "Type": "String"
+    },
+    "TlsSecret": {
+      "Type": "String"
+    },
+    "ServiceSecurityGroup": {
+      "Type": "String"
+    },
+    "Cluster": {
+      "Type": "String"
+    },
+    "Logs": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "ApiTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "packproof-m1-20261021-runtime-api",
+        "Cpu": "256",
+        "Memory": "1024",
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "RuntimePlatform": {
+          "CpuArchitecture": "X86_64",
+          "OperatingSystemFamily": "LINUX"
+        },
+        "ExecutionRoleArn": {
+          "Ref": "ApiExecutionRole"
+        },
+        "TaskRoleArn": {
+          "Ref": "ApiRole"
+        },
+        "Volumes": [
+          {
+            "Name": "temporary"
+          }
+        ],
+        "ContainerDefinitions": [
+          {
+            "Name": "api",
+            "Image": {
+              "Ref": "Image"
+            },
+            "Essential": true,
+            "ReadonlyRootFilesystem": true,
+            "User": "1000:1000",
+            "MountPoints": [
+              {
+                "SourceVolume": "temporary",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "Command": [
+              "node",
+              "scripts/isolated-runtime-entrypoint.mjs"
+            ],
+            "Environment": [
+              {
+                "Name": "AWS_REGION",
+                "Value": "us-east-1"
+              },
+              {
+                "Name": "PACKPROOF_TEST_PURPOSE",
+                "Value": "isolated-m1-synthetic"
+              },
+              {
+                "Name": "PACKPROOF_ENVIRONMENT",
+                "Value": "staging"
+              },
+              {
+                "Name": "PACKPROOF_PROCESS_ROLE",
+                "Value": "api"
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_SHA",
+                "Value": {
+                  "Ref": "CandidateCommit"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_IMAGE",
+                "Value": {
+                  "Ref": "Image"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_VERSION",
+                "Value": "m1-runtime-acceptance"
+              },
+              {
+                "Name": "PACKPROOF_MIGRATE_ON_START",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_DB_HOST",
+                "Value": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com"
+              },
+              {
+                "Name": "PACKPROOF_DB_NAME",
+                "Value": "m1_service_20261021"
+              },
+              {
+                "Name": "PACKPROOF_DB_USER",
+                "Value": "m1_service_api"
+              },
+              {
+                "Name": "PACKPROOF_DB_CA_FILE",
+                "Value": "/app/backend/certs/rds-us-east-1-bundle.pem"
+              },
+              {
+                "Name": "PACKPROOF_AUTH_MODE",
+                "Value": "cognito"
+              },
+              {
+                "Name": "PACKPROOF_COGNITO_USER_POOL_ID",
+                "Value": "us-east-1_1wLVqaizj"
+              },
+              {
+                "Name": "PACKPROOF_COGNITO_CLIENT_ID",
+                "Value": "4jq0gv2vo88nbd3cn09eud6npq"
+              },
+              {
+                "Name": "PACKPROOF_DEV_AUTH",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_PUBLIC_URL",
+                "Value": "https://packproof-m1.test:3443"
+              },
+              {
+                "Name": "PACKPROOF_WEB_ORIGINS",
+                "Value": "https://packproof-m1.test:3443"
+              },
+              {
+                "Name": "PACKPROOF_OBJECT_STORAGE",
+                "Value": "s3"
+              },
+              {
+                "Name": "PACKPROOF_S3_BUCKET",
+                "Value": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h"
+              },
+              {
+                "Name": "PACKPROOF_COMMITTED_S3_BUCKET",
+                "Value": "packproof-m1-20261020-committedbucket-trlqhna2z8s5"
+              },
+              {
+                "Name": "PACKPROOF_MANIFEST_SIGNING_MODE",
+                "Value": "kms"
+              },
+              {
+                "Name": "PACKPROOF_MANIFEST_SIGNING_REQUIRED",
+                "Value": "true"
+              },
+              {
+                "Name": "PACKPROOF_MANIFEST_KMS_KEY_ARN",
+                "Value": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+              },
+              {
+                "Name": "PACKPROOF_ORGANIZATIONS_ENABLED",
+                "Value": "true"
+              },
+              {
+                "Name": "PACKPROOF_CREDENTIAL_STORE",
+                "Value": "secrets-manager"
+              },
+              {
+                "Name": "PACKPROOF_MEDIA_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_RECIPIENT_EXPORT_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_COMMERCE_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_CAPTURE_SHIPMENT_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_WEBHOOK_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_REQUIRE_DURABLE_RECEIPTS",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_S3_BUCKET",
+                "Value": "packproof-m1-20261020-recoverybucket-aripohrxorbp"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_KMS_KEY_ARN",
+                "Value": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+              },
+              {
+                "Name": "PACKPROOF_API_TASK_ROLE_ARN",
+                "Value": {
+                  "Ref": "ApiRole"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_TASK_ROLE_ARN",
+                "Value": {
+                  "Ref": "WorkerRole"
+                }
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "PACKPROOF_DB_PASSWORD",
+                "ValueFrom": {
+                  "Ref": "ApiDatabaseSecret"
+                }
+              },
+              {
+                "Name": "ISOLATED_CONFIGURATION",
+                "ValueFrom": {
+                  "Ref": "ConfigurationSecret"
+                }
+              },
+              {
+                "Name": "ISOLATED_TLS",
+                "ValueFrom": {
+                  "Ref": "TlsSecret"
+                }
+              }
+            ],
+            "PortMappings": [
+              {
+                "ContainerPort": 3443,
+                "Protocol": "tcp"
+              }
+            ],
+            "StopTimeout": 60,
+            "LinuxParameters": {
+              "InitProcessEnabled": true
+            },
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "Logs"
+                },
+                "awslogs-region": "us-east-1",
+                "awslogs-stream-prefix": "api",
+                "mode": "blocking"
+              }
+            },
+            "HealthCheck": {
+              "Command": [
+                "CMD-SHELL",
+                "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+              ],
+              "Interval": 30,
+              "Timeout": 5,
+              "Retries": 3,
+              "StartPeriod": 60
+            }
+          }
+        ]
+      }
+    },
+    "ApiService": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "ServiceName": "packproof-m1-20261021-runtime-api",
+        "Cluster": {
+          "Ref": "Cluster"
+        },
+        "LaunchType": "FARGATE",
+        "PlatformVersion": "LATEST",
+        "DesiredCount": {
+          "Ref": "DesiredCount"
+        },
+        "TaskDefinition": {
+          "Ref": "ApiTask"
+        },
+        "EnableExecuteCommand": false,
+        "DeploymentConfiguration": {
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true
+          },
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 100
+        },
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "Subnets": [
+              "subnet-00ce0618188c68de8",
+              "subnet-0be41abd945430b4d"
+            ],
+            "SecurityGroups": [
+              {
+                "Ref": "ServiceSecurityGroup"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "WorkerTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "packproof-m1-20261021-runtime-worker",
+        "Cpu": "256",
+        "Memory": "1024",
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "RuntimePlatform": {
+          "CpuArchitecture": "X86_64",
+          "OperatingSystemFamily": "LINUX"
+        },
+        "ExecutionRoleArn": {
+          "Ref": "WorkerExecutionRole"
+        },
+        "TaskRoleArn": {
+          "Ref": "WorkerRole"
+        },
+        "Volumes": [
+          {
+            "Name": "temporary"
+          }
+        ],
+        "ContainerDefinitions": [
+          {
+            "Name": "worker",
+            "Image": {
+              "Ref": "Image"
+            },
+            "Essential": true,
+            "ReadonlyRootFilesystem": true,
+            "User": "1000:1000",
+            "MountPoints": [
+              {
+                "SourceVolume": "temporary",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "Command": [
+              "node",
+              "scripts/isolated-runtime-entrypoint.mjs"
+            ],
+            "Environment": [
+              {
+                "Name": "AWS_REGION",
+                "Value": "us-east-1"
+              },
+              {
+                "Name": "PACKPROOF_TEST_PURPOSE",
+                "Value": "isolated-m1-synthetic"
+              },
+              {
+                "Name": "PACKPROOF_ENVIRONMENT",
+                "Value": "staging"
+              },
+              {
+                "Name": "PACKPROOF_PROCESS_ROLE",
+                "Value": "worker"
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_SHA",
+                "Value": {
+                  "Ref": "CandidateCommit"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_IMAGE",
+                "Value": {
+                  "Ref": "Image"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_VERSION",
+                "Value": "m1-runtime-acceptance"
+              },
+              {
+                "Name": "PACKPROOF_MIGRATE_ON_START",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_DB_HOST",
+                "Value": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com"
+              },
+              {
+                "Name": "PACKPROOF_DB_NAME",
+                "Value": "m1_service_20261021"
+              },
+              {
+                "Name": "PACKPROOF_DB_USER",
+                "Value": "m1_service_worker"
+              },
+              {
+                "Name": "PACKPROOF_DB_CA_FILE",
+                "Value": "/app/backend/certs/rds-us-east-1-bundle.pem"
+              },
+              {
+                "Name": "PACKPROOF_AUTH_MODE",
+                "Value": "cognito"
+              },
+              {
+                "Name": "PACKPROOF_COGNITO_USER_POOL_ID",
+                "Value": "us-east-1_1wLVqaizj"
+              },
+              {
+                "Name": "PACKPROOF_COGNITO_CLIENT_ID",
+                "Value": "4jq0gv2vo88nbd3cn09eud6npq"
+              },
+              {
+                "Name": "PACKPROOF_DEV_AUTH",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_PUBLIC_URL",
+                "Value": "https://packproof-m1.test:3443"
+              },
+              {
+                "Name": "PACKPROOF_WEB_ORIGINS",
+                "Value": "https://packproof-m1.test:3443"
+              },
+              {
+                "Name": "PACKPROOF_OBJECT_STORAGE",
+                "Value": "s3"
+              },
+              {
+                "Name": "PACKPROOF_S3_BUCKET",
+                "Value": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h"
+              },
+              {
+                "Name": "PACKPROOF_COMMITTED_S3_BUCKET",
+                "Value": "packproof-m1-20261020-committedbucket-trlqhna2z8s5"
+              },
+              {
+                "Name": "PACKPROOF_MANIFEST_SIGNING_MODE",
+                "Value": "kms"
+              },
+              {
+                "Name": "PACKPROOF_MANIFEST_SIGNING_REQUIRED",
+                "Value": "true"
+              },
+              {
+                "Name": "PACKPROOF_MANIFEST_KMS_KEY_ARN",
+                "Value": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493"
+              },
+              {
+                "Name": "PACKPROOF_ORGANIZATIONS_ENABLED",
+                "Value": "true"
+              },
+              {
+                "Name": "PACKPROOF_CREDENTIAL_STORE",
+                "Value": "secrets-manager"
+              },
+              {
+                "Name": "PACKPROOF_MEDIA_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_RECIPIENT_EXPORT_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_COMMERCE_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_CAPTURE_SHIPMENT_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_WEBHOOK_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_REQUIRE_DURABLE_RECEIPTS",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_WORKER",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_S3_BUCKET",
+                "Value": "packproof-m1-20261020-recoverybucket-aripohrxorbp"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_KMS_KEY_ARN",
+                "Value": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d"
+              },
+              {
+                "Name": "PACKPROOF_API_TASK_ROLE_ARN",
+                "Value": {
+                  "Ref": "ApiRole"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_TASK_ROLE_ARN",
+                "Value": {
+                  "Ref": "WorkerRole"
+                }
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "PACKPROOF_DB_PASSWORD",
+                "ValueFrom": {
+                  "Ref": "WorkerDatabaseSecret"
+                }
+              },
+              {
+                "Name": "ISOLATED_CONFIGURATION",
+                "ValueFrom": {
+                  "Ref": "ConfigurationSecret"
+                }
+              }
+            ],
+            "PortMappings": [],
+            "StopTimeout": 60,
+            "LinuxParameters": {
+              "InitProcessEnabled": true
+            },
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "Logs"
+                },
+                "awslogs-region": "us-east-1",
+                "awslogs-stream-prefix": "worker",
+                "mode": "blocking"
+              }
+            },
+            "HealthCheck": {
+              "Command": [
+                "CMD-SHELL",
+                "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+              ],
+              "Interval": 30,
+              "Timeout": 5,
+              "Retries": 3,
+              "StartPeriod": 60
+            }
+          }
+        ]
+      }
+    },
+    "WorkerService": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "ServiceName": "packproof-m1-20261021-runtime-worker",
+        "Cluster": {
+          "Ref": "Cluster"
+        },
+        "LaunchType": "FARGATE",
+        "PlatformVersion": "LATEST",
+        "DesiredCount": {
+          "Ref": "DesiredCount"
+        },
+        "TaskDefinition": {
+          "Ref": "WorkerTask"
+        },
+        "EnableExecuteCommand": false,
+        "DeploymentConfiguration": {
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true
+          },
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 100
+        },
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "Subnets": [
+              "subnet-00ce0618188c68de8",
+              "subnet-0be41abd945430b4d"
+            ],
+            "SecurityGroups": [
+              {
+                "Ref": "ServiceSecurityGroup"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiTask": {
+      "Value": {
+        "Ref": "ApiTask"
+      }
+    },
+    "WorkerTask": {
+      "Value": {
+        "Ref": "WorkerTask"
+      }
+    }
+  }
+}
