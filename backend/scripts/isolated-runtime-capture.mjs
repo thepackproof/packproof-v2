@@ -16,7 +16,7 @@ const once=(method,path,token,body,statuses=[200],extra={})=>new Promise((resolv
   const chunks=[];res.on('data',b=>chunks.push(b));res.on('end',()=>{
    const data=Buffer.concat(chunks);lastStatus=res.statusCode;
    let value;try{value=JSON.parse(data.toString());}catch{value=data;}
-   lastCode=value?.code; if(!statuses.includes(res.statusCode)){reject(new Error('Unexpected HTTP status'));return;}
+   lastCode=value?.code??value?.error?.code; if(!statuses.includes(res.statusCode)){reject(new Error('Unexpected HTTP status'));return;}
    resolve(value);
   });res.on('error',reject);
  });req.setTimeout(90000,()=>req.destroy(new Error('HTTP timeout')));req.on('error',reject);req.end(bytes);
@@ -25,7 +25,7 @@ const call=async(method,path,token,body,statuses=[200],extra={})=>{
  const headers={'Idempotency-Key':randomBytes(16).toString('hex'),...extra};
  for(let attempt=0;attempt<60;attempt++){
   const value=await once(method,path,token,body,[...statuses,503],headers);
-  if(lastStatus===503&&value.code==='POLICY_DURABILITY_PENDING'){await delay(1000);continue;}
+  if(lastStatus===503&&(value.code??value.error?.code)==='POLICY_DURABILITY_PENDING'){await delay(1000);continue;}
   assert.ok(statuses.includes(lastStatus),'Unexpected HTTP status');return value;
  }
  throw new Error('Policy publication did not settle');
@@ -38,7 +38,7 @@ try{
   phase=owner+':intent';
   const intent=await call('POST',`/v1/partner/proofs/${proof}/capture-intents`,input.tokens.partner,{allowedSurfaces:['WEB']},[201],headers);
   const capabilities={surface:'WEB',cameraSource:'UNKNOWN',timing:'MONOTONIC',barcode:false,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:10000000,coreVersion:CORE_VERSION};
-  const denied=await call('POST','/capture-sessions/bind',input.tokens[other],{launchToken:intent.launchToken,capabilities},[409]);assert.equal(denied.code,'CAPTURE_INTENT_INVALID');
+  const denied=await call('POST','/capture-sessions/bind',input.tokens[other],{launchToken:intent.launchToken,capabilities},[409]);assert.equal(denied.error.code,'CAPTURE_INTENT_INVALID');
   phase=owner+':bind';
   const bound=await call('POST','/capture-sessions/bind',token,{launchToken:intent.launchToken,capabilities},[201]);
   const id=bound.session.id,source={sha256:digest(bytes),byteSize:bytes.length,contentType:'video/mp4',durationMs:200};

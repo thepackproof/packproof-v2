@@ -68,7 +68,8 @@ try:
             response = connection.getresponse()
             data = response.read()
             value = json.loads(data) if data else {}
-            response_status, response_code = response.status, value.get('code') if isinstance(value, dict) else None
+            response_status = response.status
+            response_code = (value.get('code') or value.get('error', {}).get('code')) if isinstance(value, dict) else None
             if response.status == 503 and response_code == 'POLICY_DURABILITY_PENDING' and attempt < 60:
                 connection.close()
                 time.sleep(1)
