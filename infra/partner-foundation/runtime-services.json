@@ -51,6 +51,30 @@
     },
     "Logs": {
       "Type": "String"
+    },
+    "ProtectedRecovery": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "ProtectionEvidence": {
+      "Type": "String",
+      "Default": "",
+      "MaxLength": 65536,
+      "Description": "Public reviewed evidence JSON from actual task-role and external-fence probes"
+    },
+    "ProtectionDigest": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(|[a-f0-9]{64})"
+    },
+    "WriterGeneration": {
+      "Type": "String",
+      "Default": "initial",
+      "AllowedPattern": "[a-zA-Z0-9-]{1,80}"
     }
   },
   "Resources": {
@@ -97,7 +121,9 @@
             ],
             "Command": [
               "node",
-              "scripts/isolated-runtime-entrypoint.mjs"
+              "--input-type=module",
+              "-e",
+              "import fs from 'node:fs'; if(process.env.PACKPROOF_REQUIRE_DURABLE_RECEIPTS==='true')fs.writeFileSync('/tmp/recovery-protection.json',process.env.ISOLATED_PROTECTION_EVIDENCE); delete process.env.ISOLATED_PROTECTION_EVIDENCE; await import('./scripts/isolated-runtime-entrypoint.mjs');"
             ],
             "Environment": [
               {
@@ -230,11 +256,15 @@
               },
               {
                 "Name": "PACKPROOF_REQUIRE_DURABLE_RECEIPTS",
-                "Value": "false"
+                "Value": {
+                  "Ref": "ProtectedRecovery"
+                }
               },
               {
                 "Name": "PACKPROOF_RECOVERY_WORKER",
-                "Value": "false"
+                "Value": {
+                  "Ref": "ProtectedRecovery"
+                }
               },
               {
                 "Name": "PACKPROOF_RECOVERY_S3_BUCKET",
@@ -254,6 +284,28 @@
                 "Name": "PACKPROOF_RECOVERY_TASK_ROLE_ARN",
                 "Value": {
                   "Ref": "WorkerRole"
+                }
+              },
+              {
+                "Name": "ISOLATED_PROTECTION_EVIDENCE",
+                "Value": {
+                  "Ref": "ProtectionEvidence"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_PROTECTION_EVIDENCE_FILE",
+                "Value": "/tmp/recovery-protection.json"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_PROTECTION_EVIDENCE_SHA256",
+                "Value": {
+                  "Ref": "ProtectionDigest"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_WRITER_GENERATION",
+                "Value": {
+                  "Ref": "WriterGeneration"
                 }
               }
             ],
@@ -395,7 +447,9 @@
             ],
             "Command": [
               "node",
-              "scripts/isolated-runtime-entrypoint.mjs"
+              "--input-type=module",
+              "-e",
+              "import fs from 'node:fs'; if(process.env.PACKPROOF_REQUIRE_DURABLE_RECEIPTS==='true')fs.writeFileSync('/tmp/recovery-protection.json',process.env.ISOLATED_PROTECTION_EVIDENCE); delete process.env.ISOLATED_PROTECTION_EVIDENCE; await import('./scripts/isolated-runtime-entrypoint.mjs');"
             ],
             "Environment": [
               {
@@ -528,11 +582,15 @@
               },
               {
                 "Name": "PACKPROOF_REQUIRE_DURABLE_RECEIPTS",
-                "Value": "false"
+                "Value": {
+                  "Ref": "ProtectedRecovery"
+                }
               },
               {
                 "Name": "PACKPROOF_RECOVERY_WORKER",
-                "Value": "false"
+                "Value": {
+                  "Ref": "ProtectedRecovery"
+                }
               },
               {
                 "Name": "PACKPROOF_RECOVERY_S3_BUCKET",
@@ -552,6 +610,28 @@
                 "Name": "PACKPROOF_RECOVERY_TASK_ROLE_ARN",
                 "Value": {
                   "Ref": "WorkerRole"
+                }
+              },
+              {
+                "Name": "ISOLATED_PROTECTION_EVIDENCE",
+                "Value": {
+                  "Ref": "ProtectionEvidence"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_PROTECTION_EVIDENCE_FILE",
+                "Value": "/tmp/recovery-protection.json"
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_PROTECTION_EVIDENCE_SHA256",
+                "Value": {
+                  "Ref": "ProtectionDigest"
+                }
+              },
+              {
+                "Name": "PACKPROOF_RECOVERY_WRITER_GENERATION",
+                "Value": {
+                  "Ref": "WriterGeneration"
                 }
               }
             ],

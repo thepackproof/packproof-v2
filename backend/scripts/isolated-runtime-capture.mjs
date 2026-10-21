@@ -29,7 +29,7 @@ try{
   phase=owner+':intent';
   const intent=await call('POST',`/v1/partner/proofs/${proof}/capture-intents`,input.tokens.partner,{allowedSurfaces:['WEB']},[201],headers);
   const capabilities={surface:'WEB',cameraSource:'UNKNOWN',timing:'MONOTONIC',barcode:false,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:10000000,coreVersion:CORE_VERSION};
-  await call('POST','/capture-sessions/bind',input.tokens[other],{launchToken:intent.launchToken,capabilities},[403,404]);
+  const denied=await call('POST','/capture-sessions/bind',input.tokens[other],{launchToken:intent.launchToken,capabilities},[409]);assert.equal(denied.code,'CAPTURE_INTENT_INVALID');
   phase=owner+':bind';
   const bound=await call('POST','/capture-sessions/bind',token,{launchToken:intent.launchToken,capabilities},[201]);
   const id=bound.session.id,source={sha256:digest(bytes),byteSize:bytes.length,contentType:'video/mp4',durationMs:200};
@@ -37,7 +37,7 @@ try{
   const observations=[{id:'start',captureId:id,type:'CAPTURE_STARTED',startMs:0,endMs:0,source:'DEVICE',model:null,confidence:null,value:null,timePrecision:'APPROXIMATE'},{id:'end',captureId:id,type:'CAPTURE_ENDED',startMs:200,endMs:200,source:'DEVICE',model:null,confidence:null,value:null,timePrecision:'APPROXIMATE'}];
   const manifest=await createManifest(bound.context,source,[segment],observations,hash);
   phase=owner+':complete';
-  await call('POST',`/proofs/${proof}/capture-sessions/${id}/complete`,token,{...source,recordedDurationMs:200});
+  await call('POST',`/proofs/${proof}/capture-sessions/${id}/complete`,token,{...source,recordedDurationMs:200,interrupted:owner==='ownerA'});
   await call('GET',`/proofs/${proof}/capture-sessions/${id}`,token);
   await call('POST',`/proofs/${proof}/capture-sessions/${id}/complete`,token,{...source,recordedDurationMs:200});
   await call('POST',`/capture-sessions/${id}/seal`,token,{source,segments:[segment],observations,sha256:await manifestDigest(manifest,hash)});
