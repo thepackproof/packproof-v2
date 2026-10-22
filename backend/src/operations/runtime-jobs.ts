@@ -6,6 +6,7 @@ import type { AppConfig } from '../config.js';
 import type { ManifestSigningRuntime } from '../integrity/signing-runtime.js';
 import { processRecoveryOutbox, type RecoveryPublisher } from '../domain/recovery-journal.js';
 import { sweepExpiredMediaAdmissions } from '../domain/media-admission.js';
+import type {RecipientPreservationRuntime} from '../export/recipient-preservation.js';
 import { processRecipientExport } from '../domain/recipient-exports.js';
 import { processPendingThumbnails } from '../domain/media-thumbnails.js';
 import { reconcileDurableFinalizedUsage } from '../billing/usage-ledger.js';
@@ -26,7 +27,7 @@ export function createRecoveryPublisher(config:AppConfig,store:ObjectStore,signi
       return trust.keys.find(key=>key.keyId===keyId&&key.status==='ACTIVE')?.publicKeyPem??null;
     }};
 }
-export function startOperationsWorkers(db:Database,clock:Clock,store:ObjectStore,config:AppConfig,publisher?:RecoveryPublisher,env:NodeJS.ProcessEnv=process.env,extraJobs:ScheduledJob[]=[]) {
+export function startOperationsWorkers(db:Database,clock:Clock,store:ObjectStore,config:AppConfig,publisher?:RecoveryPublisher,env:NodeJS.ProcessEnv=process.env,extraJobs:ScheduledJob[]=[],recipients?:RecipientPreservationRuntime) {
   const jobs:ScheduledJob[]=[...extraJobs,
     {name:'usage-reconciliation',intervalMs:30000,run:()=>reconcileDurableFinalizedUsage(db,clock)},
     {name:'operational-cleanup',intervalMs:3600000,run:async()=>{
@@ -35,7 +36,7 @@ export function startOperationsWorkers(db:Database,clock:Clock,store:ObjectStore
     }},
   ];
   if(env.PACKPROOF_MEDIA_WORKER!=='false')jobs.push({name:'thumbnails',intervalMs:5000,run:()=>processPendingThumbnails(db,clock,store)});
-  if(env.PACKPROOF_RECIPIENT_EXPORT_WORKER!=='false')jobs.push({name:'recipient-exports',intervalMs:5000,run:()=>processRecipientExport(db,clock,store)});
+  if(env.PACKPROOF_RECIPIENT_EXPORT_WORKER!=='false')jobs.push({name:'recipient-exports',intervalMs:5000,run:()=>processRecipientExport(db,clock,store,recipients)});
   if(publisher){
     jobs.push({name:'preservation',intervalMs:2000,run:()=>processRecoveryOutbox(db,clock,publisher)});
     jobs.push({name:'policy-recovery',intervalMs:1000,run:async()=>{for(let i=0;i<20;i++){const result=await processPolicyRecoveryOutbox(db,clock,publisher);if(!result.processed)break;}}});

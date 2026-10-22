@@ -10,7 +10,7 @@ import { verifyManifestIntegrity } from "./manifest-signing.js";
 import { assertPolicyAccessSafe, currentPolicySequence, requireDurablePolicySequence } from "./policy-recovery.js";
 import { verifyPreservedJournalVersion } from "./recovery-journal-object.js";
 
-export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED" | "SOURCE_OBSERVED" | "ENVELOPE_REQUESTED" | "ENVELOPE_SIGNED" | "CLAIM_CASE_RECORDED";
+export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED" | "SOURCE_OBSERVED" | "ENVELOPE_REQUESTED" | "ENVELOPE_SIGNED" | "CLAIM_CASE_RECORDED" | "RECIPIENT_EXPORT_REQUESTED" | "RECIPIENT_EXPORT_PRESERVED" | "RECIPIENT_EXPORT_APPROVED" | "RECIPIENT_EXPORT_FAILED";
 interface RecoveryRow {
   operation_id: string; sequence: number | string; proof_id: string; kind: RecoveryKind;
   request_sha256: string; canonical_json: string; sha256: string; previous_sha256: string | null;
@@ -89,6 +89,14 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
   // Immutable requests/results are reconstructed; transient leases are not.
   for (const table of ['integrity_envelope_jobs', 'integrity_envelope_results']) rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
   for (const table of ['claim_cases', 'claim_case_revisions']) rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
+  // Only the new protected path promises export reconstruction. Legacy artifacts
+  // are never silently upgraded or copied under replacement object identities.
+  rows.recipient_export_jobs = (await db.query("SELECT * FROM recipient_export_jobs WHERE proof_id=$1 AND request_json::jsonb ? 'preservation'",[proofId])).rows;
+  rows.recipient_export_preservations = (await db.query('SELECT * FROM recipient_export_preservations WHERE proof_id=$1',[proofId])).rows;
+  rows.recipient_export_approvals = (await db.query("SELECT a.* FROM recipient_export_approvals a JOIN recipient_export_jobs j ON j.id=a.job_id WHERE j.proof_id=$1 AND j.request_json::jsonb ? 'preservation'",[proofId])).rows;
+  rows.signature_cases = (await db.query("SELECT c.* FROM signature_cases c WHERE c.proof_id=$1 AND c.id IN (SELECT case_id FROM recipient_export_jobs WHERE proof_id=$1 AND request_json::jsonb ? 'preservation')",[proofId])).rows;
+  rows.signature_snapshots = (await db.query("SELECT s.* FROM signature_snapshots s WHERE s.proof_id=$1 AND s.id IN (SELECT c.snapshot_id FROM signature_cases c JOIN recipient_export_jobs j ON j.case_id=c.id WHERE j.proof_id=$1 AND j.request_json::jsonb ? 'preservation')",[proofId])).rows;
+  rows.signature_case_approvals = (await db.query("SELECT a.* FROM signature_case_approvals a WHERE a.case_id IN (SELECT case_id FROM recipient_export_jobs WHERE proof_id=$1 AND request_json::jsonb ? 'preservation')",[proofId])).rows;
   rows.capture_session_reports = (await db.query("SELECT r.* FROM capture_session_reports r JOIN capture_sessions s ON s.id=r.session_id WHERE s.proof_id=$1", [proofId])).rows;
   for (const table of ["observation_assets", "observation_evidence", "observation_external_refs"]) rows[table] = (await db.query(`SELECT j.* FROM ${table} j JOIN custody_observations o ON o.id=j.observation_id WHERE o.proof_id=$1`, [proofId])).rows;
   for (const table of ["transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities", "transaction_source_observations"]) {

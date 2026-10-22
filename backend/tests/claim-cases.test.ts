@@ -1,3 +1,5 @@
+import {recipientStorageFixture} from './recipient-storage-fixture.js';
+import {RECIPIENT_PROTECTION_PROFILE,type RecipientPreservationRuntime} from '../src/export/recipient-preservation.js';
 import {beforeAll,afterAll,describe,it,expect,vi} from 'vitest';
 import {readFile,mkdtemp,rm} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
@@ -30,7 +32,10 @@ import type {AppDependencies} from '../src/app.js';
 import type {Request} from 'express';
 
 describe('merchant ClaimCase identity and exact review binding',()=>{
- const clock={now:()=>new Date('2026-10-22T12:00:00Z')};
+ let now=new Date('2026-10-22T12:00:00Z');const clock={now:()=>new Date(now)};
+ const policy={profile:RECIPIENT_PROTECTION_PROFILE,bucket:'protected-recipient-fixture',retainUntil:'2027-10-22T12:00:00.000Z'};
+ const protectedFiles=recipientStorageFixture(clock,policy);
+ const protection:RecipientPreservationRuntime={policy,writerGeneration:'initial',reader:protectedFiles.store,writer:protectedFiles.store};
  const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'}),pem=keys.publicKey.export({type:'spki',format:'pem'}).toString();
  const objects=new Map<string,Buffer>();
  const journal={putIfAbsent:async(key:string,bytes:Buffer)=>{if(objects.has(key))return {created:false};objects.set(key,Buffer.from(bytes));return {created:true};},get:async(key:string,ref?:{versionId:string})=>{const body=objects.get(key);if(ref&&ref.versionId!==`test:${body&&sha256Hex(body)}`)throw Error('Wrong test journal version');return body?{body,contentType:'application/json'}:null;},head:async(key:string)=>{const body=objects.get(key);return body?{versionId:`test:${sha256Hex(body)}`,byteSize:body.length,contentType:'application/json'}:null;}};
@@ -121,22 +126,57 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
   await expect(bindClaimExport(h.db,clock,opA,proofA,exportInput(unsupported,'bad'),profile)).rejects.toMatchObject({code:'CLAIM_PROFILE_UNSUPPORTED'});
   await expect(h.db.transaction(tx=>assertClaimExportCurrent(tx,{now:()=>new Date('2026-10-23T12:00:00Z')},opA,proofA,b))).rejects.toMatchObject({code:'CLAIM_REFRESH_REQUIRED'});
  });
+ it('rejects inactive storage and stale writers, freezes retry identity and journals terminal failures',async()=>{
+  const c=await createClaimCase(h.db,clock,opA,proofA,input('du_worker_fence'));await preserve();
+  await expect(queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'no-store'))).rejects.toMatchObject({code:'EXPORT_PROTECTION_UNAVAILABLE'});
+  const job=await queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'fenced-worker'),protection);
+  await expect(h.db.query("UPDATE recipient_export_jobs SET idempotency_key='changed' WHERE id=$1",[job.jobId])).rejects.toThrow('RECIPIENT_EXPORT_IMMUTABLE');
+  await preserve();const writes=protectedFiles.calls.filter(c=>c.operation==='put').length;
+  expect(await processRecipientExport(h.db,clock,h.objectStore,{...protection,writerGeneration:'retired-generation'})).toEqual({processed:0,failed:0});
+  expect(protectedFiles.calls.filter(c=>c.operation==='put')).toHaveLength(writes);
+  expect((await h.db.query('SELECT job_id FROM recipient_export_preservations WHERE job_id=$1',[job.jobId])).rows).toHaveLength(0);
+  now=new Date(now.getTime()+11*60000);
+  await reviseClaimCase(h.db,clock,opA,proofA,c.claimCaseId,revision(c,'changed-before-retry',{lifecycleStatus:'under_review',allowedActions:[]}));await preserve();
+  expect(await processRecipientExport(h.db,clock,h.objectStore,protection)).toEqual({processed:0,failed:1});
+  expect((await getRecipientExport(h.db,opA,proofA,job.jobId,clock)).failureCode).toBe('CLAIM_REVISION_CHANGED');
+  await preserve();
+  expect((await h.db.query("SELECT state FROM recovery_delivery WHERE operation_id=$1",[`recipient-failed:${job.jobId}`])).rows[0].state).toBe('DURABLE');
+ });
  it('renders and approves exact files, then blocks approval and download after a case change',async()=>{
   const c=await createClaimCase(h.db,clock,opA,proofA,input('du_export'));
-  await expect(queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'before-preservation'))).rejects.toMatchObject({code:'PRESERVATION_PENDING'});
+  await expect(queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'before-preservation'),protection)).rejects.toMatchObject({code:'PRESERVATION_PENDING'});
   await preserve();
-  const job=await queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'render-claim'));
-  const processed=await processRecipientExport(h.db,clock,h.objectStore);
+  const job=await queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'render-claim'),protection);
+  expect(await processRecipientExport(h.db,clock,h.objectStore,protection)).toEqual({processed:0,failed:0});
+  await preserve();
+  protectedFiles.loseArtifactResponse();
+  expect(await processRecipientExport(h.db,clock,h.objectStore,protection)).toEqual({processed:0,failed:1});
+  const published=protectedFiles.objects.get(`recipient-exports/v2/${job.jobId}/artifact.json`)!;
+  expect(published).toBeDefined();
+  const writes=protectedFiles.calls.filter(c=>c.operation==='put').length;
+  now=new Date(now.getTime()+60000);
+  const processed=await processRecipientExport(h.db,clock,h.objectStore,protection);
+  expect(protectedFiles.calls.filter(c=>c.operation==='put')).toHaveLength(writes);
+  expect((await h.db.query<{artifact_json:string}>('SELECT artifact_json FROM recipient_export_jobs WHERE id=$1',[job.jobId])).rows[0].artifact_json).toBe(published.bytes.toString());
   expect(processed,JSON.stringify(await getRecipientExport(h.db,opA,proofA,job.jobId,clock))).toEqual({processed:1,failed:0});
+  expect((await getRecipientExport(h.db,opA,proofA,job.jobId,clock)).state).toBe('PRESERVING');
+  await preserve();
   const ready=await getRecipientExport(h.db,opA,proofA,job.jobId,clock);expect(ready.claimReview?.state).toBe('REVIEW_REQUIRED');
   expect(ready.artifact.claimCase.snapshotSha256).toBe(c.snapshotSha256);expect(ready.artifact.sources[0].sourceActorUserId).toBe(opA);
   const approval={artifactSha256:ready.artifactSha256,claimSnapshotSha256:c.snapshotSha256,action:'EXPORT_FOR_MERCHANT_REVIEW',legibilityConfirmed:true};
-  await expect(approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,{...approval,action:'AUTHORIZE_PROVIDER_SUBMISSION'})).rejects.toMatchObject({code:'CLAIM_APPROVAL_ACTION_REQUIRED'});
-  expect((await approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,approval)).claimReview?.state).toBe('APPROVED');
-  expect((await downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock)).subarray(0,2).toString()).toBe('PK');
+  await expect(approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,{...approval,action:'AUTHORIZE_PROVIDER_SUBMISSION'},protection)).rejects.toMatchObject({code:'CLAIM_APPROVAL_ACTION_REQUIRED'});
+  expect((await approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,approval,protection)).claimReview?.state).toBe('APPROVAL_PRESERVING');
+  await expect(downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock,protection)).rejects.toMatchObject({code:'PRESERVATION_PENDING'});
+  await preserve();
+  expect((await getRecipientExport(h.db,opA,proofA,job.jobId,clock)).claimReview?.state).toBe('APPROVED');
+  const file=ready.artifact.files[0], saved=protectedFiles.objects.get(file.objectKey)!;const original=Buffer.from(saved.bytes);
+  saved.bytes=Buffer.from('corrupted preserved bytes');
+  await expect(downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock,protection)).rejects.toMatchObject({code:'EXPORT_PROTECTION_MISMATCH'});
+  saved.bytes=original;
+  expect((await downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock,protection)).subarray(0,2).toString()).toBe('PK');
   await reviseClaimCase(h.db,clock,opA,proofA,c.claimCaseId,revision(c,'closed',{lifecycleStatus:'under_review',allowedActions:[]}));
-  await expect(approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,approval)).rejects.toMatchObject({code:'CLAIM_REVISION_CHANGED'});
-  await expect(downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock)).rejects.toMatchObject({code:'CLAIM_REVISION_CHANGED'});
+  await expect(approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,approval,protection)).rejects.toMatchObject({code:'CLAIM_REVISION_CHANGED'});
+  await expect(downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock,protection)).rejects.toMatchObject({code:'CLAIM_REVISION_CHANGED'});
   const stale=await getRecipientExport(h.db,opA,proofA,job.jobId,clock);expect(stale.claimReview).toMatchObject({state:'REVIEW_REQUIRED',requiresNewApproval:true,reason:'CLAIM_REVISION_CHANGED'});expect(stale.approval).not.toBeNull();
  },60000);
  it('keeps HTTP feature gates, current human identity and submission denial explicit',async()=>{
@@ -165,8 +205,18 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
    const database=(await target.db.query<{name:string}>('SELECT current_database() AS name')).rows[0].name;
    const core=[...objects].filter(([key])=>key.startsWith('recovery/v1/')).map(([,body])=>body),policy=[...objects].filter(([key])=>key.startsWith('recovery/policy/v1/')).map(([,body])=>body);
    await h.db.query('UPDATE recovery_writer_fence SET writes_enabled=false WHERE singleton=1');
-   await restoreFreshRecoveryDatabase(target.db,{expectedDatabase:database,restoreRole:'packproof_restore_claims',isolatedTargetReference:'synthetic-claim-target',oldWriterFenceReference:'synthetic-source-closed',targetWriterGeneration:'claim-replay-test',core:{envelopes:core,expectedWatermark:core.at(-1)!},policy:{envelopes:policy,expectedWatermark:policy.at(-1)!},trustedPublicKey:publisher.trustedPublicKey,sourceStore:{get:(key,ref)=>key.startsWith('recovery/')?journal.get(key,ref?.versionId?{versionId:ref.versionId}:undefined):media.get(key,ref),head:(key,ref)=>key.startsWith('recovery/')?journal.head(key):media.head(key,ref),getStream:media.getStream.bind(media)}});
+   const restoreInput:Parameters<typeof restoreFreshRecoveryDatabase>[1]={expectedDatabase:database,restoreRole:'packproof_restore_claims',isolatedTargetReference:'synthetic-claim-target',oldWriterFenceReference:'synthetic-source-closed',targetWriterGeneration:'claim-replay-test',core:{envelopes:core,expectedWatermark:core.at(-1)!},policy:{envelopes:policy,expectedWatermark:policy.at(-1)!},trustedPublicKey:publisher.trustedPublicKey,recipients:protection.reader,sourceStore:{get:(key,ref)=>key.startsWith('recovery/')?journal.get(key,ref?.versionId?{versionId:ref.versionId}:undefined):media.get(key,ref),head:(key,ref)=>key.startsWith('recovery/')?journal.head(key):media.head(key,ref),getStream:media.getStream.bind(media)}};
+   const output=[...protectedFiles.objects].find(([key])=>key.endsWith('/artifact.json'))?.[1];
+   if(output){const original=output.bytes;output.bytes=Buffer.from('altered artifact');
+    await expect(restoreFreshRecoveryDatabase(target.db,restoreInput)).rejects.toMatchObject({code:'EXPORT_PROTECTION_MISMATCH'});
+    expect((await target.db.query('SELECT id FROM proofs')).rows).toHaveLength(0);output.bytes=original;
+   }
+   await restoreFreshRecoveryDatabase(target.db,restoreInput);
    for(const table of ['claim_cases','claim_case_revisions'])expect((await target.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows).toEqual((await h.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows);
+   if((await h.db.query('SELECT id FROM recipient_export_jobs')).rows.length)for(const table of ['recipient_export_jobs','recipient_export_preservations','recipient_export_approvals','signature_cases','signature_snapshots']){
+    const order=table.includes('preservations')||table.includes('approvals')?'job_id':'id';
+    expect((await target.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY ${order}`)).rows).toEqual((await h.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY ${order}`)).rows);
+   }
    expect((await target.db.query<{writes_enabled:boolean}>('SELECT writes_enabled FROM recovery_writer_fence')).rows[0].writes_enabled).toBe(false);
   }finally{await target.close();}
  },60000);

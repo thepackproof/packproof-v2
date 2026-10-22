@@ -11,9 +11,15 @@ import { verifyManifestIntegrity, type ManifestSignature } from "./manifest-sign
 import { MEDIA_MAX_BYTES } from "./media-admission.js";
 import { envelopeBundleKey, envelopeOperationId, verifyEnvelopeBundle, verifyEnvelopeSource, validateEnvelopeReceipt, type EnvelopeRequest, type EnvelopeWorker, type ProtectedReceipt } from '../integrity/envelope-jobs.js';
 import { jcsBytes } from '../integrity/envelope-profile.js';
+import {verifyRecipientArtifact} from '../export/recipient-artifact.js';
+import {recipientRequestOperation,recipientResultOperation,recipientApprovalOperation,type RecipientArtifactReader} from '../export/recipient-preservation.js';
+import type {ExportRequest,Job} from './recipient-exports.js';
+import type {SignatureCasePreview} from './signature.js';
 
 type Row = Record<string, unknown>;
 const CORE_KEYS: Record<string, string[]> = {
+  recipient_export_jobs:['id'],recipient_export_preservations:['job_id'],recipient_export_approvals:['job_id'],
+  signature_snapshots:['id'],signature_cases:['id'],signature_case_approvals:['case_id'],
   claim_cases:['id'], claim_case_revisions:['id'],
   integrity_envelope_jobs:['operation_id'], integrity_envelope_results:['operation_id'],
   platform_capture_authorizations:['intent_id'],
@@ -40,6 +46,7 @@ const ORDER = [
   "platform_proof_ownership","platform_external_bindings","platform_capture_authorizations",
   "integrity_envelope_jobs","integrity_envelope_results",
   "claim_cases","claim_case_revisions",
+  "signature_snapshots","signature_cases","signature_case_approvals","recipient_export_jobs","recipient_export_preservations","recipient_export_approvals",
 ];
 const SEED_TABLES = new Set(["schema_migrations","recovery_writer_fence","retention_operations_gates","item_history_graph_lock","policy_recovery_fence","policy_recovery_tables"]);
 const failure = (code: string, message: string) => new DomainError(code, message, 409);
@@ -63,6 +70,8 @@ export interface FreshRecoveryRestoreInput {
   sourceStore: Pick<ObjectStore,"get"|"head"|"getStream">;
   /** Required when the admitted journal includes additive envelope records. */
   envelopes?: Pick<EnvelopeWorker, 'store' | 'trustedPublicKey'>;
+  /** Required when protected recipient artifact results exist in the journal. */
+  recipients?: RecipientArtifactReader;
 }
 
 /**
@@ -157,6 +166,7 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
   const media=await verifyMedia(rows,input.sourceStore);
   await verifyFrozenRecords(rows,input.trustedPublicKey);
   await verifyEnvelopeRecords(rows, core.map(row=>row.event), input);
+  await verifyRecipientRecords(rows,core.map(row=>row.event),input);
   const journalVersions=new Map<string,string>();
   for(const {event,bytes} of core){const key=`recovery/v1/${sha256Hex(String(event.operationId))}.json`;journalVersions.set(key,await verifyJournalObject(input.sourceStore,key,bytes));}
   for(const bytes of input.policy.envelopes){const {event}=await verifyPolicyEnvelope(bytes,input.trustedPublicKey);const key=`recovery/policy/v1/${event.sequence.padStart(20,'0')}.json`;journalVersions.set(key,await verifyJournalObject(input.sourceStore,key,bytes));}
@@ -191,6 +201,7 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
         // permit dependencies before the final immutable status transition.
         if(table==='proofs'&&row.status==='FINALIZED'){row.status='EVIDENCE_COMMITTED';row.finalized_at=null;row.manifest_id=null;}
         if(table==='commerce_stages'&&row.finalized_at!=null){row.finalized_at=null;row.canonical_json=null;row.sha256=null;}
+        if(table==='recipient_export_jobs'&&['QUEUED','RENDERING'].includes(String(row.state))){row.state='QUEUED';row.attempts=0;row.lease_token=null;row.lease_until=null;row.failure_code=null;row.completed_at=null;}
         await insert(table,row);
       }
     }
@@ -224,6 +235,62 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
 }
 
 function safeIdentifier(value:string){if(!/^[a-z_][a-z0-9_]*$/.test(value))throw failure('RECOVERY_RESTORE_SCHEMA_MISMATCH','Unsupported schema identifier');return `"${value}"`;}
+async function verifyRecipientRecords(rows:Map<string,Map<string,Row>>,core:Row[],input:FreshRecoveryRestoreInput){
+  const jobs=[...(rows.get('recipient_export_jobs')?.values()??[])];
+  const byId=(table:string,id:unknown)=>[...(rows.get(table)?.values()??[])].find(row=>row.id===id);
+  const byJob=(table:string,id:unknown)=>[...(rows.get(table)?.values()??[])].find(row=>row.job_id===id);
+  const bad=()=>failure('RECOVERY_RECIPIENT_CONFLICT','Protected export recovery facts or exact artifact versions are inconsistent');
+  const eventRow=(operation:string,proofId:unknown,table:string,key:string,value:unknown)=>{
+    const event=core.find(e=>e.operationId===operation&&e.proofId===proofId);
+    const payload=event?.payload as {rows?:Record<string,Row[]>}|undefined;
+    return payload?.rows?.[table]?.find(row=>row[key]===value);
+  };
+  for(const row of jobs){
+    const job=row as unknown as Job,r=JSON.parse(job.request_json) as ExportRequest;
+    const requested=eventRow(recipientRequestOperation(job.id),job.proof_id,'recipient_export_jobs','id',job.id);
+    const c=byId('signature_cases',job.case_id),snapshot=c&&byId('signature_snapshots',c.snapshot_id);
+    if(!r.preservation||!r.claimCase||sha256Hex(job.request_json)!==job.request_sha256||canonicalize(r)!==job.request_json||
+      ['id','proof_id','case_id','actor_user_id','idempotency_key','profile_id','created_at'].some(key=>canonicalize(requested?.[key]??null)!==canonicalize(row[key]??null))||requested?.request_json!==job.request_json||requested?.request_sha256!==job.request_sha256||requested?.case_id!==job.case_id||requested?.actor_user_id!==job.actor_user_id||
+      !c||c.proof_id!==job.proof_id||c.actor_user_id!==job.actor_user_id||sha256Hex(String(c.payload_json))!==c.sha256||c.sha256!==r.caseSha256||
+      !snapshot||snapshot.proof_id!==job.proof_id||snapshot.actor_user_id!==job.actor_user_id||sha256Hex(String(snapshot.payload_json))!==snapshot.sha256)throw bad();
+    const preview=JSON.parse(String(c.payload_json)) as SignatureCasePreview;
+    if(preview.snapshotId!==snapshot.id||preview.snapshotSha256!==snapshot.sha256||preview.proofId!==job.proof_id||r.caseId!==job.case_id)throw bad();
+    const claim=byId('claim_cases',r.claimCase.claimCaseId);
+    const revision=[...(rows.get('claim_case_revisions')?.values()??[])].find(v=>v.claim_case_id===claim?.id&&v.snapshot_sha256===r.claimCase!.snapshotSha256);
+    if(!claim||claim.proof_id!==job.proof_id||!revision||revision.proof_id!==job.proof_id||revision.snapshot_json!==canonicalize(r.claimCase.snapshot)||
+      sha256Hex(String(revision.snapshot_json))!==r.claimCase.snapshotSha256)throw bad();
+    const result=byJob('recipient_export_preservations',job.id),approval=byJob('recipient_export_approvals',job.id);
+    if(result){
+      if(!input.recipients)throw failure('RECOVERY_RECIPIENT_VERIFIER_REQUIRED','Protected recipient recovery requires exact-version artifact verification');
+      const accepted=eventRow(recipientResultOperation(job.id),job.proof_id,'recipient_export_preservations','job_id',job.id);
+      if(canonicalize(eventRow(recipientResultOperation(job.id),job.proof_id,'recipient_export_jobs','id',job.id)??null)!==canonicalize(row)||job.state!=='READY'||!job.artifact_json||result.proof_id!==job.proof_id||result.request_sha256!==job.request_sha256||
+        result.artifact_sha256!==job.artifact_sha256||sha256Hex(job.artifact_json)!==job.artifact_sha256||!accepted||canonicalize(accepted)!==canonicalize(result))throw bad();
+      const verified=await verifyRecipientArtifact({job,preview,bytes:Buffer.from(job.artifact_json),receipt:result.receipt_json as ProtectedReceipt,reader:input.recipients});
+      for(const source of verified.artifact.sources){
+        const selected=preview.evidence.find(e=>e.evidenceId===source.evidenceId)!;
+        const evidence=byId(selected.stageId?'commerce_stage_evidence':'evidence',source.evidenceId);
+        const stage=selected.stageId?byId('commerce_stages',selected.stageId):undefined;
+        if(!evidence||evidence.sha256!==source.sourceSha256||source.sourceActorUserId!==(stage?stage.actor_user_id:evidence.submitted_by)||
+          (stage?(stage.proof_id!==job.proof_id||evidence.stage_id!==stage.id):evidence.proof_id!==job.proof_id))throw bad();
+      }
+    }else{
+      if(job.artifact_json||job.artifact_sha256||approval||!['QUEUED','RENDERING','FAILED'].includes(job.state))throw bad();
+      if(job.state==='FAILED'){
+        const failed=eventRow(`recipient-failed:${job.id}`,job.proof_id,'recipient_export_jobs','id',job.id);
+        if(!failed||canonicalize(failed)!==canonicalize(row))throw bad();
+      }
+    }
+    if(approval){
+      const accepted=eventRow(recipientApprovalOperation(job.id),job.proof_id,'recipient_export_approvals','job_id',job.id);
+      if(approval.actor_user_id!==job.actor_user_id||approval.artifact_sha256!==job.artifact_sha256||approval.legibility_confirmed!==true||
+        !accepted||canonicalize(accepted)!==canonicalize(approval))throw bad();
+    }
+  }
+  for(const table of ['recipient_export_preservations','recipient_export_approvals'])for(const row of rows.get(table)?.values()??[])if(!jobs.some(job=>job.id===row.job_id))throw bad();
+  for(const c of rows.get('signature_cases')?.values()??[])if(!jobs.some(job=>job.case_id===c.id))throw bad();
+  for(const snapshot of rows.get('signature_snapshots')?.values()??[])if(![...(rows.get('signature_cases')?.values()??[])].some(c=>c.snapshot_id===snapshot.id))throw bad();
+  for(const approval of rows.get('signature_case_approvals')?.values()??[]){const c=byId('signature_cases',approval.case_id);if(!c||approval.actor_user_id!==c.actor_user_id||approval.preview_sha256!==c.sha256)throw bad();}
+}
 async function verifyEnvelopeRecords(rows:Map<string,Map<string,Row>>,core:Row[],input:FreshRecoveryRestoreInput){
   const jobs=[...(rows.get('integrity_envelope_jobs')?.values()??[])],results=rows.get('integrity_envelope_results');
   if(!jobs.length&&!results?.size)return;

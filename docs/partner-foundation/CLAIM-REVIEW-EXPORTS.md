@@ -32,14 +32,14 @@ The machine contract is `backend/claim-export-openapi.json`, served at `/v1/clai
 | C07-02 source selection | `export/claim-profiles.ts`; existing scoped snapshot | Deterministic references and explicit gaps; no generated factual assertions |
 | C07-03 files | Existing recipient renderer and streaming paths | Linux integration renders real synthetic media and checks exact approval/download |
 | C07-04 exact binding | Request/artifact snapshot, versioned reason/network profile | Changed deadline/profile/revision and submission action denied |
-| C07-05 export states | Existing job plus `claimReview` projection | PREPARING, REVIEW_REQUIRED, APPROVED or FAILED; provider submission unavailable |
+| C07-05 export states | Existing job plus `claimReview` projection | PREPARING, REVIEW_REQUIRED, APPROVAL_PRESERVING, APPROVED or FAILED; provider submission unavailable |
 | Recovery | Existing accepted-event outbox and fresh-target restore allowlist | Claim identities/revisions replay byte-for-byte; target writes remain closed |
 
 Case revision, audit and recovery event commit together. Case history is included in the existing core snapshot and restored after its organization/account dependencies. Synthetic tests use real signing/verification with in-memory storage doubles; they are not cloud Object Lock evidence. The PostgreSQL foundation gate additionally runs the claim suite to exercise concurrent revision serialization against PostgreSQL 16.
 
 ## Release boundary
 
-Before activation: run the current migration preservation/operator and rollback-bridge review for 093/094; validate deployed claims, policy revocation and replay with the actual runtime roles; preserve recipient artifact versions and accepted export/approval records durably; validate the human review interface and actual web/Android lifecycle; identify a consenting merchant and its account. The existing recipient export jobs and derived files are not yet covered by a complete protected export replay protocol. This feature flag must remain off until that gap is closed. No production migration, IAM change, provider call or merchant submission is implied by merging this slice.
+Before activation: run the current migration preservation/operator and rollback-bridge review for 093/094/095; validate deployed claims, policy revocation and replay with the actual runtime roles; validate the protected recipient artifact and request/result/approval recovery protocol under actual deployed roles; validate the human review interface and actual web/Android lifecycle; identify a consenting merchant and its account. The additive protected export protocol is described in RECIPIENT-PRESERVATION.md. Local and CI fixtures do not establish actual cloud protection or production restoration. The feature flag remains off until those activation gates close. No production migration, IAM change, provider call or merchant submission is implied by merging this slice.
 
 The remaining provider adapter requires eligible account authorization, exact API-version validation, provider-retrieved case state and permitted actions, exact-package submission approval and timeout reconciliation before retry. Shopify Payments is not inferred to be a direct Stripe account. Provider acceptance and claim outcomes are separate from packet generation.
 
