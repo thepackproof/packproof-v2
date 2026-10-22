@@ -6,7 +6,10 @@
   "harnessSource": "cb2f55a7ebe398ab35fcc77ee9337b46c1bf7c9d",
   "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
   "imageBuild": {
-    "id": "packproof-v2-staging-api:5e1cf99d-676c-40db-922a-cb00c9df0a45",
+    "id": {
+      "project": "packproof-v2-staging-api",
+      "buildUuid": "5e1cf99d-676c-40db-922a-cb00c9df0a45"
+    },
     "status": "SUCCEEDED",
     "phase": "COMPLETED",
     "endTime": "2026-10-22T18:03:03.801000+00:00"
@@ -31,7 +34,10 @@
   "compatibility": {
     "status": "PASSED",
     "build": {
-      "id": "packproof-v2-staging-api:7909eae7-7eb6-4c5a-aa8c-df082dc4e542",
+      "id": {
+        "project": "packproof-v2-staging-api",
+        "buildUuid": "7909eae7-7eb6-4c5a-aa8c-df082dc4e542"
+      },
       "status": "SUCCEEDED",
       "phase": "COMPLETED",
       "endTime": "2026-10-22T18:14:15.580000+00:00"
@@ -673,11 +679,64 @@
     "runtimeSourcePostgres": "PASSED",
     "focusedBridgeTests": 7,
     "offlineDeploymentGuardTests": 13,
-    "remainingChecks": "RUNNING_NODE_22_RETRY",
+    "remainingChecks": "WEB_AND_SOURCE_TOOLS_PASSED_SECRET_METADATA_REVIEWED_RESCAN_PENDING",
     "firstRemainingBuild": {
-      "id": "packproof-v2-staging-api:cee9a6c9-16fd-482f-9275-0ea95d6c13aa",
+      "id": {
+        "project": "packproof-v2-staging-api",
+        "buildUuid": "cee9a6c9-16fd-482f-9275-0ea95d6c13aa"
+      },
       "status": "FAILED",
       "limitation": "CodeBuild default Node 18 did not match the repository Node 22 CI runtime; no application source changes."
+    },
+    "webAndToolBuild": {
+      "project": "packproof-v2-staging-api",
+      "buildUuid": "6111029f-ae83-401a-b296-126311efab8d",
+      "web": "PASSED",
+      "deploymentTools": 66,
+      "pythonVerifier": 30,
+      "secretScan": "3_VERIFIED_BUILD_LOCATOR_FALSE_POSITIVES"
+    },
+    "secretFalsePositives": {
+      "commit": "78aafd7a7ddea959c4bfaa57bb2c44915d829f78",
+      "file": "docs/partner-foundation/m2-bridge-evidence-2026-10-22.json",
+      "lines": [
+        9,
+        34,
+        678
+      ],
+      "review": "Exact fields matched AWS BatchGetBuilds audit locators. Scoped immutable fingerprints only."
     }
+  },
+  "migrationPreparation": {
+    "source": "51cb96bc180e4416530a4c52e026d9b60311127f",
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:8d8caf49c18659e5b0e412312489c6c34f8518c00a9891bcbaffc85351398a69",
+    "build": {
+      "project": "packproof-v2-staging-api",
+      "buildUuid": "dbdf340a-4a3e-47f1-b57b-90962d66dbb5",
+      "status": "SUCCEEDED"
+    },
+    "scan": {
+      "imageScanFindings": {
+        "findings": [],
+        "imageScanCompletedAt": "2026-10-22T18:33:28+00:00",
+        "vulnerabilitySourceUpdatedAt": "2026-10-22T18:33:28+00:00",
+        "findingSeverityCounts": {}
+      },
+      "registryId": "784514617543",
+      "repositoryName": "packproof-v2-staging-api",
+      "imageId": {
+        "imageDigest": "sha256:8d8caf49c18659e5b0e412312489c6c34f8518c00a9891bcbaffc85351398a69"
+      },
+      "imageScanStatus": {
+        "status": "COMPLETE",
+        "description": "The scan was completed successfully."
+      }
+    },
+    "templateValidation": {
+      "cfnLint": "PASSED",
+      "cfnGuard": "PASSED",
+      "activationNegativeFixture": "REJECTED"
+    },
+    "productionExecuted": false
   }
 }
