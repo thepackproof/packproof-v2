@@ -1,0 +1,1098 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PackProof merchant claim review exports",
+    "version": "2026-10-22.1",
+    "description": "Additive, disabled-by-default first-party human workflow. Both PACKPROOF_ORGANIZATIONS_ENABLED and PACKPROOF_CLAIM_EXPORTS_ENABLED must be true. Current direct merchant membership and contributor access to the finalized Proof are required. Recent authentication (five minutes) is required at these HTTP surfaces. Case data is merchant-reported and unverified by PackProof. The provider account is a registered namespace, not an OAuth connection. No provider submission is supported."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "humanBearer": []
+    }
+  ],
+  "paths": {
+    "/proofs/{id}/claim-cases": {
+      "get": {
+        "operationId": "listClaimCases",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized result; no provider submission or acknowledgment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      },
+      "post": {
+        "operationId": "createClaimCase",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Current authorized result; no provider submission or acknowledgment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/claim-cases/{claimCaseId}": {
+      "get": {
+        "operationId": "getClaimCase",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "claimCaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized result; no provider submission or acknowledgment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/claim-cases/{claimCaseId}/revisions": {
+      "post": {
+        "operationId": "reviseClaimCase",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "claimCaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimRevision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Current authorized result; no provider submission or acknowledgment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/claim-cases/{claimCaseId}/submissions": {
+      "post": {
+        "operationId": "providerSubmissionUnavailable",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "claimCaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/recipient-exports": {
+      "post": {
+        "operationId": "queueClaimBoundRecipientExport",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimBoundExport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Current authorized result; no provider submission or acknowledgment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/recipient-exports/{jobId}": {
+      "get": {
+        "operationId": "getClaimBoundRecipientExport",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized result; no provider submission or acknowledgment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/recipient-exports/{jobId}/approve": {
+      "post": {
+        "operationId": "approveClaimBoundRecipientExport",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimExportApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current authorized result; no provider submission or acknowledgment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/recipient-exports/{jobId}/download": {
+      "get": {
+        "operationId": "downloadApprovedClaimExport",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact approved submission files and review receipt; rechecks current case, access, deadline and preservation.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "humanBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "First-party authenticated human session; service credentials are refused."
+      }
+    },
+    "schemas": {
+      "ClaimCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "integrationAccountId": {
+            "type": "string"
+          },
+          "disputeId": {
+            "type": "string"
+          },
+          "paymentId": {
+            "type": "string"
+          },
+          "orderLineIds": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string"
+            },
+            "description": "Existing transaction item IDs in this Proof. Empty means payment-only scope; no line allocation is implied."
+          },
+          "reasonCode": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "network": {
+            "enum": [
+              "MASTERCARD",
+              "VISA",
+              "AMEX",
+              "DISCOVER",
+              "OTHER",
+              "UNKNOWN"
+            ]
+          },
+          "lifecycleStatus": {
+            "enum": [
+              "needs_response",
+              "warning_needs_response",
+              "under_review",
+              "warning_under_review",
+              "won",
+              "lost",
+              "warning_closed",
+              "prevented"
+            ]
+          },
+          "providerDeadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retrievedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "allowedActions": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "enum": [
+                "RESPOND",
+                "ACCEPT"
+              ]
+            }
+          },
+          "region": {
+            "const": "US"
+          },
+          "paymentMethod": {
+            "const": "CARD"
+          }
+        },
+        "required": [
+          "integrationAccountId",
+          "disputeId",
+          "paymentId",
+          "orderLineIds",
+          "reasonCode",
+          "network",
+          "lifecycleStatus",
+          "providerDeadline",
+          "retrievedAt",
+          "allowedActions",
+          "region",
+          "paymentMethod"
+        ]
+      },
+      "ClaimRevision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedSnapshotSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "reasonCode": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "network": {
+            "enum": [
+              "MASTERCARD",
+              "VISA",
+              "AMEX",
+              "DISCOVER",
+              "OTHER",
+              "UNKNOWN"
+            ]
+          },
+          "lifecycleStatus": {
+            "enum": [
+              "needs_response",
+              "warning_needs_response",
+              "under_review",
+              "warning_under_review",
+              "won",
+              "lost",
+              "warning_closed",
+              "prevented"
+            ]
+          },
+          "providerDeadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retrievedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "allowedActions": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "enum": [
+                "RESPOND",
+                "ACCEPT"
+              ]
+            }
+          },
+          "region": {
+            "const": "US"
+          },
+          "paymentMethod": {
+            "const": "CARD"
+          }
+        },
+        "required": [
+          "expectedSnapshotSha256",
+          "reasonCode",
+          "network",
+          "lifecycleStatus",
+          "providerDeadline",
+          "retrievedAt",
+          "allowedActions",
+          "region",
+          "paymentMethod"
+        ]
+      },
+      "ClaimSnapshot": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "const": "packproof.claim-case/v1"
+          },
+          "claimCaseId": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "integrationAccountId": {
+            "type": "string"
+          },
+          "provider": {
+            "const": "stripe"
+          },
+          "providerAccountId": {
+            "type": "string"
+          },
+          "disputeId": {
+            "type": "string"
+          },
+          "paymentId": {
+            "type": "string"
+          },
+          "orderLineIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reasonCode": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "network": {
+            "enum": [
+              "MASTERCARD",
+              "VISA",
+              "AMEX",
+              "DISCOVER",
+              "OTHER",
+              "UNKNOWN"
+            ]
+          },
+          "lifecycleStatus": {
+            "enum": [
+              "needs_response",
+              "warning_needs_response",
+              "under_review",
+              "warning_under_review",
+              "won",
+              "lost",
+              "warning_closed",
+              "prevented"
+            ]
+          },
+          "providerDeadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retrievedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "allowedActions": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "enum": [
+                "RESPOND",
+                "ACCEPT"
+              ]
+            }
+          },
+          "source": {
+            "const": "MERCHANT_REPORTED"
+          },
+          "providerVerification": {
+            "const": "UNVERIFIED"
+          },
+          "apiVersion": {
+            "const": "MANUAL_PORTAL"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previousSha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "region": {
+            "const": "US"
+          },
+          "paymentMethod": {
+            "const": "CARD"
+          }
+        }
+      },
+      "ClaimView": {
+        "type": "object",
+        "required": [
+          "claimCaseId",
+          "revisionId",
+          "revision",
+          "snapshotSha256",
+          "snapshot",
+          "preservation",
+          "providerSubmission"
+        ],
+        "properties": {
+          "claimCaseId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "snapshotSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ClaimSnapshot"
+          },
+          "preservation": {
+            "type": "object",
+            "description": "PRESERVED only after the independent recovery outbox has issued a durable receipt."
+          },
+          "providerSubmission": {
+            "const": "UNAVAILABLE"
+          }
+        }
+      },
+      "ClaimList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cases": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ClaimView"
+            }
+          }
+        },
+        "required": [
+          "cases"
+        ]
+      },
+      "ClaimBoundExport": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "description": "Existing scoped SignatureCase preview ID, distinct from the ClaimCase business identity."
+          },
+          "claimCaseId": {
+            "type": "string"
+          },
+          "claimSnapshotSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "profileId": {
+            "enum": [
+              "stripe-dispute-us-mastercard-v2",
+              "stripe-dispute-us-other-v2"
+            ]
+          },
+          "destinationInstructionsReviewed": {
+            "const": true
+          },
+          "destinationDeadline": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "narrative": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "frames": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "evidenceId": {
+                  "type": "string"
+                },
+                "offsetMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 21600000
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                }
+              },
+              "required": [
+                "evidenceId",
+                "offsetMs",
+                "label"
+              ]
+            }
+          }
+        },
+        "required": [
+          "caseId",
+          "claimCaseId",
+          "claimSnapshotSha256",
+          "profileId",
+          "destinationInstructionsReviewed",
+          "destinationDeadline",
+          "narrative",
+          "frames"
+        ]
+      },
+      "ClaimExportApproval": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "artifactSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "claimSnapshotSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "action": {
+            "const": "EXPORT_FOR_MERCHANT_REVIEW"
+          },
+          "legibilityConfirmed": {
+            "const": true
+          }
+        },
+        "required": [
+          "artifactSha256",
+          "claimSnapshotSha256",
+          "action",
+          "legibilityConfirmed"
+        ]
+      },
+      "ExportView": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "claimCaseId": {
+            "type": "string"
+          },
+          "claimSnapshotSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "action": {
+            "const": "EXPORT_FOR_MERCHANT_REVIEW"
+          },
+          "providerSubmission": {
+            "const": "UNAVAILABLE"
+          },
+          "state": {
+            "enum": [
+              "QUEUED",
+              "RENDERING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "claimReview": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "enum": [
+                  "PREPARING",
+                  "REVIEW_REQUIRED",
+                  "APPROVED",
+                  "FAILED"
+                ]
+              },
+              "requiresNewApproval": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "artifact": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Frozen exact case revision, versioned reason/network profile, scope, source hashes/actors/offsets, gaps and output hashes. Historical approval remains inspectable after the case changes."
+          }
+        }
+      }
+    }
+  }
+}

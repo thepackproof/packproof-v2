@@ -14,6 +14,7 @@ import { jcsBytes } from '../integrity/envelope-profile.js';
 
 type Row = Record<string, unknown>;
 const CORE_KEYS: Record<string, string[]> = {
+  claim_cases:['id'], claim_case_revisions:['id'],
   integrity_envelope_jobs:['operation_id'], integrity_envelope_results:['operation_id'],
   platform_capture_authorizations:['intent_id'],
   users:["id"], transactions:["id"], transaction_shipping:["id"], transaction_items:["id"], transaction_integration_identities:["id"],
@@ -38,6 +39,7 @@ const ORDER = [
   "proof_retention_holds","proof_retention_assignments","proof_deletion_requests","proof_disposition_state","final_manifests","proof_supplements",
   "platform_proof_ownership","platform_external_bindings","platform_capture_authorizations",
   "integrity_envelope_jobs","integrity_envelope_results",
+  "claim_cases","claim_case_revisions",
 ];
 const SEED_TABLES = new Set(["schema_migrations","recovery_writer_fence","retention_operations_gates","item_history_graph_lock","policy_recovery_fence","policy_recovery_tables"]);
 const failure = (code: string, message: string) => new DomainError(code, message, 409);

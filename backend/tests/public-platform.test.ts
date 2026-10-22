@@ -334,6 +334,9 @@ describe("public partner platform", () => {
     expect(nativeLink.status).toBe(201);
   });
   it("publishes a contract covering every JSON route and binary transport route", async () => {
+    const claims = await request(app).get('/v1/claim-export-openapi.json');
+    expect(claims.status).toBe(200);
+    expect(claims.body.paths['/proofs/{id}/claim-cases']).toHaveProperty('post');
     const spec = await request(app).get("/v1/openapi.json");
     expect(spec.status).toBe(200);
     expect(spec.body.openapi).toBe("3.1.0");
