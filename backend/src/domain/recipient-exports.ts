@@ -13,7 +13,7 @@ import {newId} from '../ids.js';
 import {DomainError} from './errors.js';
 import {getSignatureCase, type SignatureCasePreview} from './signature.js';
 import {appendAudit} from './audit.js';
-import {RECIPIENT_PROFILES,recipientProfile,validateRecipientFiles,type RecipientProfile,type EncodedRecipientFile} from '../export/recipient-profiles.js';
+import {RECIPIENT_PROFILES,recipientProfile,recipientProfileNeedsReview,validateRecipientFiles,type RecipientProfile,type EncodedRecipientFile} from '../export/recipient-profiles.js';
 import {extractRecipientFrame,renderFactsImages,recipientPdf,RENDERER_VERSION} from '../export/recipient-renderer.js';
 import {zipFiles} from '../export/zip.js';
 type Frame={evidenceId:string;offsetMs:number;label:string};
@@ -22,7 +22,7 @@ type FileMeta={name:string;contentType:string;byteSize:number;sha256:string;obje
 type Artifact={schema:string;jobId:string;proofId:string;caseId:string;caseSha256:string;snapshotId:string;snapshotSha256:string;manifestSha256:string|null;recordAsOf?:{sequence:number;sha256:string|null;snapshotAt:string};profile:RecipientProfile;scope:string;approvedNarrative:string;destinationDeadline:string;files:FileMeta[];sources:Array<{evidenceId:string;sourceSha256:string;requestedOffsetMs:number;presentationTimestampMs:number;extractionTool:string;recipeVersion:string;crop:null;transform:string;originalFrameSha256:string;originalFrameObjectKey:string;derivedFileSha256:string}>;gaps:string[];createdAt:string;portalAcceptance:'NOT_TESTED';submission:'MERCHANT_CONTROLLED'};
 type Job={id:string;proof_id:string;case_id:string;actor_user_id:string;request_json:string;request_sha256:string;state:string;attempts:number;artifact_json:string|null;artifact_sha256:string|null;failure_code:string|null;created_at:string};
 const fail=(code:string,message:string,status=409)=>new DomainError(code,message,status);
-export function listRecipientProfiles(clock:Clock){return {profiles:RECIPIENT_PROFILES.map(p=>({...p,reviewRequired:clock.now().getTime()>=Date.parse(p.reviewAfter)})),limitations:'Profile constraints are checked against official instructions. Actual case deadlines, portal acceptance and reviewer comprehension require separate confirmation.'};}
+export function listRecipientProfiles(clock:Clock){return {profiles:RECIPIENT_PROFILES.map(p=>({...p,reviewRequired:recipientProfileNeedsReview(p,clock.now())})),limitations:'Profile constraints are checked against official instructions. Actual case deadlines, portal acceptance and reviewer comprehension require separate confirmation.'};}
 export async function queueRecipientExport(db:Database,clock:Clock,actor:string,proofId:string,input:Record<string,unknown>){
  const profile=recipientProfile(input.profileId,clock.now());
  if(typeof input.caseId!=='string'||typeof input.idempotencyKey!=='string'||!input.idempotencyKey.trim()||input.idempotencyKey.length>200)throw fail('EXPORT_INPUT_INVALID','A case, destination profile and retry key are required.',400);

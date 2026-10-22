@@ -1,11 +1,21 @@
 import { DomainError } from '../domain/errors.js';
 export interface RecipientProfile {id:string;destination:'EBAY_PAYMENT_DISPUTE'|'STRIPE_DISPUTE';disputeType:string;region:'US';network:string;version:string;types:string[];maxBytes:number;exclusiveBytes:boolean;maxFiles:number;maxPages:number;targetBytes:number;requiredFacts:string[];sourceUrls:string[];checkedAt:string;reviewAfter:string;owner:string;acceptance:'PORTAL_VALIDATION_REQUIRED'}
 const common={version:'2026-09-07.1',region:'US' as const,checkedAt:'2026-09-07',reviewAfter:'2026-10-07',owner:'PackProof reviewer-export owner',acceptance:'PORTAL_VALIDATION_REQUIRED' as const};
-export const RECIPIENT_PROFILES:RecipientProfile[]=[
+const historicalProfiles:RecipientProfile[]=[
  {...common,id:'ebay-payment-dispute-us-v1',destination:'EBAY_PAYMENT_DISPUTE',disputeType:'PAYMENT_DISPUTE',network:'ANY',types:['image/jpeg','image/png'],maxBytes:1750000,exclusiveBytes:true,maxFiles:5,maxPages:5,targetBytes:1600000,requiredFacts:['order context','attributed facts','issue-specific stills','material gaps'],sourceUrls:['https://www.ebay.com/help/selling/getting-paid/handling-payment-disputes?id=4799','https://export.ebay.com/en/fees-regulations-policies/seller-protection/handling-payment-disputes/']},
  ...['MASTERCARD','OTHER'].map(network=>({...common,id:`stripe-dispute-us-${network.toLowerCase()}-v1`,destination:'STRIPE_DISPUTE' as const,disputeType:'PAYMENT_DISPUTE',network,types:['application/pdf','image/jpeg','image/png'],maxBytes:4500000,exclusiveBytes:false,maxFiles:1,maxPages:network==='MASTERCARD'?19:19,targetBytes:4000000,requiredFacts:['order context','issue-specific evidence','provider delivery facts or explicit gap','material omissions'],sourceUrls:['https://docs.stripe.com/disputes/best-practices','https://docs.stripe.com/disputes/responding']}))
 ];
-export function recipientProfile(id:unknown,now:Date){const p=RECIPIENT_PROFILES.find(x=>x.id===id);if(!p)throw new DomainError('EXPORT_PROFILE_REVIEW_REQUIRED','This destination, region or card network has no reviewed export profile.',409);if(now.getTime()>=Date.parse(p.reviewAfter))throw new DomainError('EXPORT_PROFILE_STALE','The destination instructions need review before creating another packet.',409);return p;}
+// A new review is a new profile identity. Historical requests/artifacts keep the
+// complete version they accepted; an expired profile is never silently relabeled.
+// Official Stripe/eBay instructions rechecked 2026-10-22; see the source review.
+// The 19-page OTHER-network cap is our conservative product limit, not a claim
+// that every card network publishes the Mastercard-specific restriction.
+export const RECIPIENT_PROFILES:RecipientProfile[]=[...historicalProfiles,...historicalProfiles.map(p=>({...p,
+ id:p.id.replace(/-v1$/,'-v2'),version:'2026-10-22.1',checkedAt:'2026-10-22',reviewAfter:'2026-11-21',
+ types:[...p.types],requiredFacts:[...p.requiredFacts],sourceUrls:[...p.sourceUrls]
+}))];
+export function recipientProfileNeedsReview(profile:RecipientProfile,now:Date){return !Number.isFinite(now.getTime())||now.getTime()<Date.parse(profile.checkedAt)||now.getTime()>=Date.parse(profile.reviewAfter);}
+export function recipientProfile(id:unknown,now:Date){const p=RECIPIENT_PROFILES.find(x=>x.id===id);if(!p)throw new DomainError('EXPORT_PROFILE_REVIEW_REQUIRED','This destination, region or card network has no reviewed export profile.',409);if(recipientProfileNeedsReview(p,now))throw new DomainError('EXPORT_PROFILE_STALE','The destination instructions need a current review before creating another packet.',409);return p;}
 export interface EncodedRecipientFile {name:string;contentType:string;bytes:Buffer;pages:number;width?:number;height?:number}
 export function validateRecipientFiles(profile:RecipientProfile,files:EncodedRecipientFile[]){
  if(files.length<1||files.length>profile.maxFiles)throw new DomainError('EXPORT_FILE_COUNT_LIMIT','Select fewer relevant files for this destination.',413);
