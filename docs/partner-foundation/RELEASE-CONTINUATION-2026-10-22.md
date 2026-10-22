@@ -1,4 +1,4 @@
-# Full-release continuation - 2026-10-22
+# Full-release continuation — 2026-10-22
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
 
@@ -33,7 +33,15 @@ limited to that exact historical line. PostgreSQL CI also stalled at unbounded
 media installation, so all matching CI setup steps now use installed binaries or
 bounded installation. An additional admission/download byte-budget check rejects
 oversize work before artifact I/O; its two boundary checks and seven access checks
-passed locally. The updated full CI and container results are still pending.
+passed locally. The updated container from `99e5283be1b117f4cf5a393d1850ccfab5992b58`
+passed packaging and disabled-runtime checks. Its immutable digest is
+`sha256:7c11381d50533186a077af3ed3d95b21b00e290c0eec52a5fc62635af4e9bc4b`;
+the ECR scan completed with no findings at 20:06 UTC. CI found that the publication
+transport had replaced the new test fixture's non-ASCII character. The fixture
+now uses an explicit Unicode escape; all other changed runtime files matched the
+local Git blob hashes. The continuation document's typography is also restored
+using ASCII-escaped JSON during publication. The mobile job timed out downloading
+an Ubuntu package; no mobile assertion failed. Full CI remains required.
 
 Production remains the accepted inactive task revision 49 below. No organizations,
 envelope API, envelope worker or claim export feature has been enabled by this

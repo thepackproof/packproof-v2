@@ -3,7 +3,7 @@ import { assertEnvelopeRequestBudget } from '../src/integrity/envelope-access.js
 import type { EnvelopeRequest } from '../src/integrity/envelope-jobs.js';
 
 const request = (sizes: number[]) => ({
-  manifests: [{ canonicalJson: '�' }],
+  manifests: [{ canonicalJson: '\u00e9' }],
   originals: sizes.map(byteSize => ({ byteSize })),
 }) as Pick<EnvelopeRequest, 'manifests' | 'originals'>;
 
