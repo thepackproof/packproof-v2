@@ -4,6 +4,23 @@ This additive M2 source implements exact-file preservation and recovery for new
 claim-bound merchant review exports. It does not activate production, submit a
 provider dispute, backfill legacy packets or establish merchant acceptance.
 
+## Actual-role storage acceptance - 22 October 2026
+
+Three isolated Fargate roles passed 26 storage assertions against the compiled
+adapter at application source cb74098996147ebe74a149ccb38fec8f86ce3a60. The worker
+reconciled a lost publication response to the same exact artifact and obeyed the
+external write fence with cached credentials. API and restore-reader roles read
+the pinned versions and were denied latest-version reads and protected writes.
+Deletion, retention shortening and cross-bucket access were denied. All tasks
+exited 0; every saved report was downloaded and its SHA-256 checked. Infrastructure
+and source bindings are in the [cloud evidence](recipient-storage-cloud-evidence-2026-10-22.json).
+
+The run used synthetic files and a two-day test bucket floor. It did not open a
+database, run the application HTTP flow or certify physical capture. Full fresh
+database restore remains false. All test writers are fenced and temporary build
+and egress resources were removed. The claim-review UI and scoped database grant
+helper are merged, with production activation still gated.
+
 ## Accepted facts and files
 
 Migration 095 adds immutable artifact receipts and freezes terminal export rows.
