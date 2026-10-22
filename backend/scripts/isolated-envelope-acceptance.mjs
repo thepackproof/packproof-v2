@@ -75,7 +75,9 @@ try{
   assert.ok(await denied(()=>signTransport.sign({KeyId:config.keys.manifest,Message:Buffer.alloc(32),MessageType:'DIGEST',SigningAlgorithm:'ECDSA_SHA_256'})));check('root_signing_denied');
   assert.ok(await denied(()=>kms.send(new SignCommand({KeyId:config.keys.envelope,Message:Buffer.alloc(32),MessageType:'RAW',SigningAlgorithm:'ECDSA_SHA_256'}),options())));check('raw_envelope_signing_denied');
   assert.ok(await denied(()=>s3.send(new DeleteObjectCommand({Bucket:journal,Key:probeKey,VersionId:saved.VersionId,ExpectedBucketOwner:account}),options())));check('protected_version_deletion_denied');
-  assert.ok(await denied(()=>s3.send(new PutObjectRetentionCommand({Bucket:journal,Key:probeKey,VersionId:saved.VersionId,Retention:{Mode:'COMPLIANCE',RetainUntilDate:new Date()},ExpectedBucketOwner:account}),options())));check('retention_shortening_denied');
+  // A past deadline is rejected as malformed before permission evaluation. Use
+  // a valid future deadline shorter than the actual two-day retained version.
+  assert.ok(await denied(()=>s3.send(new PutObjectRetentionCommand({Bucket:journal,Key:probeKey,VersionId:saved.VersionId,Retention:{Mode:'COMPLIANCE',RetainUntilDate:new Date(Date.now()+3600000)},ExpectedBucketOwner:account}),options())));check('retention_shortening_denied');
   assert.ok(await denied(()=>s3.send(new PutObjectCommand({Bucket:committed,Key:`forbidden-worker/${run}`,Body:bytes,ChecksumAlgorithm:'SHA256'}),options())));check('original_writes_denied');
   const secrets=new SecretsManagerClient({region,credentials,maxAttempts:1});
   assert.ok(await denied(()=>secrets.send(new GetSecretValueCommand({SecretId:env('DATABASE_SECRET_ARN')}),options())));check('direct_secret_read_denied');

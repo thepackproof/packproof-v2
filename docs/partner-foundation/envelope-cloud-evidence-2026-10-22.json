@@ -1,0 +1,234 @@
+{
+  "schema": "packproof.isolated-envelope-execution-evidence.v1",
+  "recordedAt": "2026-10-22",
+  "status": "IN_PROGRESS_PROBE_FIX",
+  "scope": "Synthetic M2 worker acceptance; not production activation, device evidence, merchant pilot or independent human release approval",
+  "source": "557eef41c2b7eac4e5e0039521af96c5901919ce",
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/111",
+  "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:eac3cea4f893cae3a4adce696d77901963a67178985c5cda3fc93e63531892de",
+  "ci": {
+    "focused": {
+      "runId": 39727525848,
+      "jobId": 119654765074,
+      "status": "PASSED",
+      "typescriptTests": 58,
+      "pythonTests": 32,
+      "includesRealPostgreSqlOverlappingLeases": true
+    },
+    "infrastructure": {
+      "runId": 39727525878,
+      "status": "PASSED"
+    },
+    "broad": {
+      "runId": 39727525846,
+      "lastObservedStatus": "PASSED"
+    },
+    "precedingBroadRun": {
+      "runId": 39725692107,
+      "backendConclusion": "CANCELLED",
+      "reason": "Superseded; not represented as passed"
+    }
+  },
+  "builds": {
+    "image": {
+      "id": "packproof-m1-20261021-runtime:4c02b9b4-455f-45e0-b5c1-123945a305c2",
+      "status": "SUCCEEDED",
+      "scanStatus": "COMPLETE",
+      "scanFindingSeverityCounts": {}
+    },
+    "bootstrapFirst": {
+      "id": "packproof-m1-20261021-runtime:b1409d6e-6282-469e-b53a-f712526771d7",
+      "status": "FAILED_INSTALL",
+      "cause": "Default Ubuntu mirror used HTTP outside the HTTPS-only test egress; controller/database creation was not reached"
+    },
+    "bootstrap": {
+      "id": "packproof-m1-20261021-runtime:29c23945-1018-42ab-8b7f-8b951845aa0b",
+      "status": "SUCCEEDED",
+      "buildspecSha256": "125c47748ada7f7686828fba842e44c64653c30df64e790f2ce1b4c3694c61ba",
+      "buildspecFile": "infra/partner-foundation/envelope-control.buildspec",
+      "sourceUnchanged": true
+    }
+  },
+  "infrastructure": {
+    "account": "784514617543",
+    "region": "us-east-1",
+    "stack": "packproof-m2-20261022-envelope",
+    "lastObservedStackStatus": "UPDATE_COMPLETE",
+    "resources": {
+      "RecoveryKey": "arn:aws:kms:us-east-1:784514617543:key/a746077f-0b60-4a08-9c0c-c91a1618e274",
+      "CommittedBucket": "packproof-m2-20261022-envelope-committedbucket-kxgcvzvbe4yd",
+      "RestoreTask": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-20261022-envelope-restore:2",
+      "WorkerTask": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-20261022-envelope-worker:2",
+      "Logs": "/packproof/packproof-m2-20261022-envelope",
+      "ArtifactBucket": "packproof-m2-20261022-envelope-artifactbucket-zeqoxkkdrcjv",
+      "ManifestKey": "arn:aws:kms:us-east-1:784514617543:key/a889465f-d2f3-4483-9dce-a1d6d72f42ce",
+      "EnvelopeKey": "arn:aws:kms:us-east-1:784514617543:key/2094f232-087c-4ce5-ba34-1b5af5fd3cf9",
+      "RestoreRole": "arn:aws:iam::784514617543:role/packproof-m2-20261022-envelope-restore",
+      "UploadBucket": "packproof-m2-20261022-envelope-uploadbucket-2l4xulzsieb0",
+      "RestoreExecutionRole": "arn:aws:iam::784514617543:role/packproof-m2-20261022-envelope-restore-execution",
+      "JournalBucket": "packproof-m2-20261022-envelope-journalbucket-uoevnv4sm6mc",
+      "ServiceSecurityGroup": "sg-0f9eb34ec26318728",
+      "WorkerRole": "arn:aws:iam::784514617543:role/packproof-m2-20261022-envelope-worker",
+      "WorkerExecutionRole": "arn:aws:iam::784514617543:role/packproof-m2-20261022-envelope-worker-execution",
+      "RestoreDatabaseSecret": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m2-20261022-envelope/RestoreDatabase-LFnYjG",
+      "WorkerDatabaseSecret": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m2-20261022-envelope/WorkerDatabase-zvEYXC"
+    },
+    "writerFenceLastVerified": "OPEN",
+    "configurationVersionLastVerified": ".IO0h1W8zgcNbgWo8_jGctuJZC6AxyP_",
+    "temporaryBuildAuthority": true,
+    "m1ComputeEnabled": true,
+    "m1WriterFence": "CLOSED",
+    "m1ServicesDesiredRunningPending": 0,
+    "newEcsTasksLaunched": 1,
+    "retention": {
+      "mode": "COMPLIANCE",
+      "days": 2,
+      "versioning": "Enabled",
+      "privateAccessBlockVerified": true,
+      "encryptedWith": "AES256"
+    }
+  },
+  "database": {
+    "name": "m2_integrity_20261022",
+    "workerRole": "m2_envelope_worker",
+    "migrations": 92,
+    "migrationInventorySha256": "a1175b530b7d9e65d0c236ad025331092384a8968f19f76bcc960e16a08f1bc4",
+    "sourceWriterEnabled": true,
+    "workerLoginEnabled": true,
+    "restoreDatabaseCreated": false,
+    "productionMigrationsChanged": false
+  },
+  "configuration": {
+    "bucket": "packproof-m2-20261022-envelope-uploadbucket-2l4xulzsieb0",
+    "key": "acceptance/m2/config/runtime.json",
+    "versionId": ".IO0h1W8zgcNbgWo8_jGctuJZC6AxyP_",
+    "sha256": "8ff7b6617d7205c86859ba8242d8b88acaded3a056b81a1e3b1fac4060c48b78"
+  },
+  "fixture": {
+    "proofId": "proof_01M5H1ZESJ2JJN18RSFAGNMVSE",
+    "manifestSha256": "c480fc7897e1ee96f45f5a61e9a36ec0a38b0d7cb6161cd9deb8003efe692e11",
+    "original": {
+      "bucket": "packproof-m2-20261022-envelope-committedbucket-kxgcvzvbe4yd",
+      "key": "evidence/proof_01M5H1ZESJ2JJN18RSFAGNMVSE/evd_m2_synthetic_20261022/committed/sha256-a42e0e1e1b829275ab98da0b246368e8f6bc20c314a66285925d8940c9ff67b0",
+      "versionId": "5IWEtdGhMXQy3zDiGubY7uxCYeEf90xl",
+      "sha256": "a42e0e1e1b829275ab98da0b246368e8f6bc20c314a66285925d8940c9ff67b0",
+      "byteSize": 1883
+    },
+    "method": "OWNER_SEEDED_LEGACY_UNKNOWN_DOMAIN_FINALIZATION_NO_DEVICE_OR_HTTP_ASSERTION",
+    "retainUntil": "2026-10-23T05:40:09.610Z"
+  },
+  "publicTrust": {
+    "keys": {
+      "manifest": "arn:aws:kms:us-east-1:784514617543:key/a889465f-d2f3-4483-9dce-a1d6d72f42ce",
+      "recovery": "arn:aws:kms:us-east-1:784514617543:key/a746077f-0b60-4a08-9c0c-c91a1618e274",
+      "envelope": "arn:aws:kms:us-east-1:784514617543:key/2094f232-087c-4ce5-ba34-1b5af5fd3cf9"
+    },
+    "publicKeyDerBase64": {
+      "manifest": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4qX7Os8mlCKBREIL0uQgTcYF5u8ChFsQRHiQh0qVsUdbKCRrLjIw3CIg1bp+hPtUwYFH2BWgx8plGS18yW62yA==",
+      "recovery": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE23ANNCIS5FcOItHWYC1MCVwsT0t3y7AGJoZ9vA9wrDA4Cr+xxynLhcKT+/siMwwga5dODRDTH4uazgNMtTYWcw==",
+      "envelope": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmRaQKUxklQSsSWR08NciY0C/Hl4m6PSzBCgOGUR4VpcszzZm1Ts7mVhdDbxDzBa41/7gmMOm7VuVpxal30vApw=="
+    },
+    "allThreeBindingsIndependentlyVerified": true,
+    "registrySignatureIndependentlyVerifiedWith": "Python cryptography ECDSA/SHA256",
+    "registryReviewExpiresAt": "2026-10-22T17:40:09.610Z"
+  },
+  "pendingChangeSet": {
+    "name": "pin-config-open-probe",
+    "id": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/pin-config-open-probe/607baff0-819d-403e-bd63-ad57acd4bddc",
+    "lastObservedExecutionStatus": "EXECUTE_COMPLETE",
+    "scope": "Pin exact configuration into one-shot tasks and open only the M2 worker IAM fence for its probe",
+    "executeAttempts": 2,
+    "reportedAwsApiCalls": 0,
+    "outcome": "Automatic approval review timed out twice; no AWS calls ran. After the connection recovered, a read verified the change set still AVAILABLE; execution then succeeded and the exact configuration pins were verified."
+  },
+  "notYetVerified": [
+    "Actual M2 workload role permission/protection probe",
+    "Existing task credential IAM fence rejection",
+    "Real S3 lost-response retry preserving the first accepted envelope",
+    "READY following protected result publication",
+    "Offline verification of an actual M2 worker export",
+    "Fresh isolated database reconstruction of the actual M2 result",
+    "Source DB/logins and temporary compute closed after acceptance"
+  ],
+  "resumption": [
+    "Read stack/change-set/task states before any mutation; do not repeat an already executed change set.",
+    "Continue from the existing M2 database/configuration; never re-bootstrap it or reset its recovery sequence.",
+    "Verify current trust/configuration freshness, actual task image and pinned version/hash.",
+    "Complete the role/fence/work/export/restore procedure in infra/partner-foundation/ENVELOPE-ACCEPTANCE.md.",
+    "Close M2 source and restore logins with the owner-only controller, close IAM, remove TemporaryBuildAuthority, then pause M1 temporary compute with its services still at zero.",
+    "Retain protected objects, secrets, keys, images, journals and logs; publish final evidence with actual checks and failures."
+  ],
+  "production": {
+    "changedByThisAcceptanceWork": false,
+    "fullDevelopmentPlanComplete": false
+  },
+  "probeAttempts": [
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/faeb8710dd5a4138aa05226b394a00b4",
+      "exitCode": 1,
+      "result": {
+        "event": "m2_acceptance_complete",
+        "schema": "packproof.isolated-envelope-acceptance.v1",
+        "mode": "probe",
+        "run": "faeb8710dd5a4138aa05226b394a00b4",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/faeb8710dd5a4138aa05226b394a00b4",
+        "family": "packproof-m2-20261022-envelope-worker",
+        "revision": "2",
+        "source": "557eef41c2b7eac4e5e0039521af96c5901919ce",
+        "expectedImage": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:eac3cea4f893cae3a4adce696d77901963a67178985c5cda3fc93e63531892de",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "checks": [
+          "original_exact_version_bytes_and_compliance_retention",
+          "journal_conditional_creation",
+          "journal_duplicate_refused",
+          "journal_actual_compliance_retention",
+          "worker_keys_sign_digest",
+          "root_signing_denied",
+          "raw_envelope_signing_denied",
+          "protected_version_deletion_denied"
+        ],
+        "kmsCalls": [
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a746077f-0b60-4a08-9c0c-c91a1618e274",
+            "messageType": "DIGEST",
+            "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+            "requestId": "7df82317-c7ea-4dad-826e-8cf29826e0cc"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/2094f232-087c-4ce5-ba34-1b5af5fd3cf9",
+            "messageType": "DIGEST",
+            "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+            "requestId": "d9ccc069-7def-4b95-9712-b66a4c9b7eef"
+          }
+        ],
+        "originalProtection": {
+          "object": {
+            "bucket": "packproof-m2-20261022-envelope-committedbucket-kxgcvzvbe4yd",
+            "key": "evidence/proof_01M5H1ZESJ2JJN18RSFAGNMVSE/evd_m2_synthetic_20261022/committed/sha256-a42e0e1e1b829275ab98da0b246368e8f6bc20c314a66285925d8940c9ff67b0",
+            "versionId": "5IWEtdGhMXQy3zDiGubY7uxCYeEf90xl"
+          },
+          "sha256": "a42e0e1e1b829275ab98da0b246368e8f6bc20c314a66285925d8940c9ff67b0",
+          "byteSize": 1883,
+          "mode": "COMPLIANCE",
+          "retainUntil": "2026-10-24T05:40:09.378Z",
+          "verifiedAt": "2026-10-22T06:41:00.880Z"
+        },
+        "status": "FAILED",
+        "failure": {
+          "name": "InvalidArgument",
+          "code": null,
+          "status": 400
+        },
+        "reportObject": {
+          "bucket": "packproof-m2-20261022-envelope-uploadbucket-2l4xulzsieb0",
+          "key": "acceptance/m2/worker/faeb8710dd5a4138aa05226b394a00b4.json",
+          "versionId": "l0_4mr9xXdSU6noWdlb8sxdvUDKZwYL0",
+          "sha256": "df706fb9bc696a1ff09500625bd995430e7e8213b4a2a288d0ade9ca8ccfe338",
+          "byteSize": 1905
+        }
+      },
+      "cause": "The shortening probe supplied a date already in the past at service evaluation. S3 rejected it with InvalidArgument before IAM; this does not prove retention-change permission. Corrected to a valid future date shorter than the retained deadline; repeat actual-role probe required."
+    }
+  ]
+}

@@ -14,7 +14,7 @@
         "test \"$(git rev-parse HEAD)\" = \"$CANDIDATE_SHA\"",
         "cd backend",
         "npm ci --no-audit --no-fund",
-        "if [ \"$M2_CONTROL\" = bootstrap ]; then apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg; fi",
+        "if [ \"$M2_CONTROL\" = bootstrap ]; then printf '%s\\n' 'deb https://archive.ubuntu.com/ubuntu jammy main universe' 'deb https://archive.ubuntu.com/ubuntu jammy-updates main universe' 'deb https://security.ubuntu.com/ubuntu jammy-security main universe' > /tmp/m2-apt.sources.list; apt-get -o Dir::Etc::sourcelist=/tmp/m2-apt.sources.list -o Dir::Etc::sourceparts=- -o Acquire::Retries=1 -o Acquire::https::Timeout=30 update -qq && apt-get -o Dir::Etc::sourcelist=/tmp/m2-apt.sources.list -o Dir::Etc::sourceparts=- -o Acquire::Retries=1 -o Acquire::https::Timeout=30 install -y -qq --no-install-recommends ffmpeg; fi",
         "curl --fail --silent --show-error --proto =https --tlsv1.2 -o /tmp/packproof-rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem"
       ]
     },
