@@ -1,7 +1,11 @@
 # M2 inactive-schema migration operator
 
-Status: implemented operator and focused transaction tests. No production execution,
-rollback-image acceptance, runtime-role activation or M2 release is implied.
+Status: production migrations 093-095 applied and independently verified on
+22 October 2026. The accepted inactive bridge runs at task revision 49; all 94
+receipts match. Temporary database and AWS migration access was removed.
+See the [production execution receipt](m2-inactive-production-migration-2026-10-22.json)
+and [immutable bridge acceptance](m2-bridge-acceptance-2026-10-22.json).
+Runtime-role activation and the full M2 release remain separate gates.
 
 `backend/scripts/m2-migrate.mjs` is the exact 093-095 migration boundary. The
 previous foundation operator still accepts only its historical 088-092 release.

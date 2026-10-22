@@ -1,0 +1,567 @@
+{
+  "schema": "packproof.m2-inactive-production-migration.v1",
+  "status": "PASSED_INACTIVE_SCHEMA_ONLY",
+  "recordedAt": "2026-10-22T19:18:41.552Z",
+  "compatibilityAcceptance": {
+    "path": "docs/partner-foundation/m2-bridge-acceptance-2026-10-22.json",
+    "commit": "50b23971b57626c4f15cefa265ad81abbdec8879",
+    "sha256": "0bfb364d3726fcfd993b1d0b37220ac56b9cf5924bc9f06890ddd4c6f3561ec1",
+    "immutable": true
+  },
+  "production": {
+    "source": "399f306a2fdac37511c8659c73d5a059dd759b7a",
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+    "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:49",
+    "serviceStatus": "ACTIVE",
+    "desiredCount": 1,
+    "runningCount": 1,
+    "pendingCount": 0,
+    "rolloutState": "COMPLETED"
+  },
+  "canary": {
+    "observedAt": "2026-10-22T19:00:15.095490+00:00",
+    "deployment": {
+      "serviceDeploymentArn": "arn:aws:ecs:us-east-1:784514617543:service-deployment/packproof-v2-staging-cluster/packproof-v2-staging-api/i1RfmI76MdtCVZWxIuyZY",
+      "serviceArn": "arn:aws:ecs:us-east-1:784514617543:service/packproof-v2-staging-cluster/packproof-v2-staging-api",
+      "clusterArn": "arn:aws:ecs:us-east-1:784514617543:cluster/packproof-v2-staging-cluster",
+      "createdAt": "2026-10-22T18:50:56.442000+00:00",
+      "startedAt": "2026-10-22T18:50:56.497000+00:00",
+      "finishedAt": "2026-10-22T18:59:39.990000+00:00",
+      "updatedAt": "2026-10-22T18:59:39.990000+00:00",
+      "sourceServiceRevisions": [
+        {
+          "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/9541157609586903688",
+          "requestedTaskCount": 0,
+          "runningTaskCount": 0,
+          "pendingTaskCount": 0,
+          "requestedTestTrafficWeight": 0,
+          "requestedProductionTrafficWeight": 0
+        }
+      ],
+      "targetServiceRevision": {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/0624476454361889538",
+        "requestedTaskCount": 1,
+        "runningTaskCount": 1,
+        "pendingTaskCount": 0,
+        "requestedTestTrafficWeight": 100,
+        "requestedProductionTrafficWeight": 100
+      },
+      "status": "SUCCESSFUL",
+      "deploymentConfiguration": {
+        "deploymentCircuitBreaker": {
+          "enable": true,
+          "rollback": true,
+          "resetOnHealthyTask": true,
+          "thresholdConfiguration": {
+            "type": "BOUNDED_PERCENT",
+            "value": 50
+          }
+        },
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100,
+        "alarms": {
+          "alarmNames": [
+            "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm"
+          ],
+          "rollback": true,
+          "enable": true
+        },
+        "strategy": "CANARY",
+        "bakeTimeInMinutes": 3,
+        "canaryConfiguration": {
+          "canaryPercent": 5,
+          "canaryBakeTimeInMinutes": 3
+        }
+      },
+      "deploymentCircuitBreaker": {
+        "status": "MONITORING_COMPLETE",
+        "failureCount": 0,
+        "threshold": 3
+      },
+      "alarms": {
+        "status": "MONITORING_COMPLETE",
+        "alarmNames": [
+          "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm"
+        ],
+        "triggeredAlarmNames": []
+      }
+    },
+    "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:49",
+    "desiredCount": 1,
+    "runningCount": 1,
+    "pendingCount": 0,
+    "configuration": {
+      "primaryContainerExact": true,
+      "preservedServiceFields": {
+        "executionRoleArn": true,
+        "taskRoleArn": true,
+        "cpu": true,
+        "memory": true,
+        "cpuArchitecture": true,
+        "networkConfiguration": true,
+        "healthCheckPath": true,
+        "scalingTarget": true
+      },
+      "deploymentPolicyExact": true
+    },
+    "publicChecks": {
+      "event": "m2_bridge_public_acceptance",
+      "status": "PASSED",
+      "observedAt": "2026-10-22T18:56:04.0129687Z",
+      "meta": {
+        "service": "packproof-api",
+        "environment": "production",
+        "commit": "399f306a2fdac37511c8659c73d5a059dd759b7a",
+        "version": "1.0.3-m2-bridge-399f306a",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54"
+      },
+      "health": "ok",
+      "readiness": "ready",
+      "unauthenticatedStatus": 401,
+      "corsStatus": 204,
+      "corsOrigin": "https://thepackproof.com"
+    }
+  },
+  "migration": {
+    "operatorSource": "51cb96bc180e4416530a4c52e026d9b60311127f",
+    "operatorImage": "sha256:8d8caf49c18659e5b0e412312489c6c34f8518c00a9891bcbaffc85351398a69",
+    "inspectionBefore": {
+      "schema": "packproof.m2-migration-inspection.v1",
+      "source": "51cb96bc180e4416530a4c52e026d9b60311127f",
+      "compatibleImage": "sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+      "compatibilityEvidenceSha256": "0bfb364d3726fcfd993b1d0b37220ac56b9cf5924bc9f06890ddd4c6f3561ec1",
+      "inspectedAt": "2026-10-22T19:04:37.907Z",
+      "migrations": [
+        {
+          "id": "093_integrity_envelope_jobs",
+          "checksum": "6f4d3f3e3f52fd82816aa84fc74b70c60853b27ca155670359058741f6b84b9b"
+        },
+        {
+          "id": "094_claim_cases",
+          "checksum": "e32f262ef9cba012d3bcd886476239f75876a148d3567a1e99ac76bad7f7658e"
+        },
+        {
+          "id": "095_recipient_export_preservation",
+          "checksum": "1cecb6cdc12ef5ba89e0515599c8be7b875e99a4cf1a47eee2c4be08e9a25ce2"
+        }
+      ],
+      "state": {
+        "pending": true,
+        "appliedCount": 91,
+        "inventoryDigest": "1f9acaaa62fc4f3f19bf4af6331b94053d9662587d461d29d74900c6d5f896b9",
+        "appliedDigest": "4c8fdf8c9a1c08b22c1b13ddd54dc34c7e51cdd3a1dc238edb5485a7a970556e",
+        "runtimeRoles": [
+          "packproof_app_runtime_v1"
+        ],
+        "runtimeAuthorityDigest": "a84b77c0276a9d9b4ece2a893c86c516a34f075a96f77ee2469bb6bc62b84f06",
+        "frozen": {
+          "final_manifests": {
+            "count": 21,
+            "sha256": "ba7154adcabb1410a88de1379becd7f67ccfc3ffdf2ca210aabc5e40cb61d572"
+          },
+          "evidence": {
+            "count": 31,
+            "sha256": "d9544480f16877f34876f876f773022966cd80a0cb7fcd2d3ae107a2b23d5c4f"
+          },
+          "commerce_stages": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "commerce_stage_evidence": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "proof_supplements": {
+            "count": 18,
+            "sha256": "2486bea4fff6ba0aee95f31655713d20a3dbc146d920f53f54ecabc4dbbcba5d"
+          },
+          "signature_snapshots": {
+            "count": 81,
+            "sha256": "cfc4a011ac28f8b5c929c4ad9e676c7684ee0c10cca6a0961241d17b4357dbb1"
+          },
+          "signature_cases": {
+            "count": 1,
+            "sha256": "78ab4470a087f91caaf59049c696c1bcd6643bf6441afb938ba5bf0963f7f0f1"
+          },
+          "signature_case_approvals": {
+            "count": 1,
+            "sha256": "bfad23d9f22a2badee2ed572b1bf8c9e2f4d6cdbd08863bfa016746c84957377"
+          },
+          "recipient_export_jobs": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "recipient_export_approvals": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        }
+      },
+      "inspectionSha256": "c5c1e5e90cc5b9b8f47c60fd943eee6f96768e99f43c09b4207d5f26fdbe56cc"
+    },
+    "applied": {
+      "event": "m2_migration_applied",
+      "source": "51cb96bc180e4416530a4c52e026d9b60311127f",
+      "compatibleImage": "sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+      "compatibilityEvidenceSha256": "0bfb364d3726fcfd993b1d0b37220ac56b9cf5924bc9f06890ddd4c6f3561ec1",
+      "inspectionSha256": "c5c1e5e90cc5b9b8f47c60fd943eee6f96768e99f43c09b4207d5f26fdbe56cc",
+      "appliedCount": 94,
+      "alreadyApplied": false,
+      "runtimeAuthorityDigest": "a84b77c0276a9d9b4ece2a893c86c516a34f075a96f77ee2469bb6bc62b84f06",
+      "frozen": {
+        "final_manifests": {
+          "count": 21,
+          "sha256": "ba7154adcabb1410a88de1379becd7f67ccfc3ffdf2ca210aabc5e40cb61d572"
+        },
+        "evidence": {
+          "count": 31,
+          "sha256": "d9544480f16877f34876f876f773022966cd80a0cb7fcd2d3ae107a2b23d5c4f"
+        },
+        "commerce_stages": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "commerce_stage_evidence": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "proof_supplements": {
+          "count": 18,
+          "sha256": "2486bea4fff6ba0aee95f31655713d20a3dbc146d920f53f54ecabc4dbbcba5d"
+        },
+        "signature_snapshots": {
+          "count": 81,
+          "sha256": "cfc4a011ac28f8b5c929c4ad9e676c7684ee0c10cca6a0961241d17b4357dbb1"
+        },
+        "signature_cases": {
+          "count": 1,
+          "sha256": "78ab4470a087f91caaf59049c696c1bcd6643bf6441afb938ba5bf0963f7f0f1"
+        },
+        "signature_case_approvals": {
+          "count": 1,
+          "sha256": "bfad23d9f22a2badee2ed572b1bf8c9e2f4d6cdbd08863bfa016746c84957377"
+        },
+        "recipient_export_jobs": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "recipient_export_approvals": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      }
+    },
+    "inspectionAfter": {
+      "schema": "packproof.m2-migration-inspection.v1",
+      "source": "51cb96bc180e4416530a4c52e026d9b60311127f",
+      "compatibleImage": "sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+      "compatibilityEvidenceSha256": "0bfb364d3726fcfd993b1d0b37220ac56b9cf5924bc9f06890ddd4c6f3561ec1",
+      "inspectedAt": "2026-10-22T19:10:18.731Z",
+      "migrations": [
+        {
+          "id": "093_integrity_envelope_jobs",
+          "checksum": "6f4d3f3e3f52fd82816aa84fc74b70c60853b27ca155670359058741f6b84b9b"
+        },
+        {
+          "id": "094_claim_cases",
+          "checksum": "e32f262ef9cba012d3bcd886476239f75876a148d3567a1e99ac76bad7f7658e"
+        },
+        {
+          "id": "095_recipient_export_preservation",
+          "checksum": "1cecb6cdc12ef5ba89e0515599c8be7b875e99a4cf1a47eee2c4be08e9a25ce2"
+        }
+      ],
+      "state": {
+        "pending": false,
+        "appliedCount": 94,
+        "inventoryDigest": "1f9acaaa62fc4f3f19bf4af6331b94053d9662587d461d29d74900c6d5f896b9",
+        "appliedDigest": "1f9acaaa62fc4f3f19bf4af6331b94053d9662587d461d29d74900c6d5f896b9",
+        "runtimeRoles": [
+          "packproof_app_runtime_v1"
+        ],
+        "runtimeAuthorityDigest": "a84b77c0276a9d9b4ece2a893c86c516a34f075a96f77ee2469bb6bc62b84f06",
+        "frozen": {
+          "final_manifests": {
+            "count": 21,
+            "sha256": "ba7154adcabb1410a88de1379becd7f67ccfc3ffdf2ca210aabc5e40cb61d572"
+          },
+          "evidence": {
+            "count": 31,
+            "sha256": "d9544480f16877f34876f876f773022966cd80a0cb7fcd2d3ae107a2b23d5c4f"
+          },
+          "commerce_stages": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "commerce_stage_evidence": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "proof_supplements": {
+            "count": 18,
+            "sha256": "2486bea4fff6ba0aee95f31655713d20a3dbc146d920f53f54ecabc4dbbcba5d"
+          },
+          "signature_snapshots": {
+            "count": 81,
+            "sha256": "cfc4a011ac28f8b5c929c4ad9e676c7684ee0c10cca6a0961241d17b4357dbb1"
+          },
+          "signature_cases": {
+            "count": 1,
+            "sha256": "78ab4470a087f91caaf59049c696c1bcd6643bf6441afb938ba5bf0963f7f0f1"
+          },
+          "signature_case_approvals": {
+            "count": 1,
+            "sha256": "bfad23d9f22a2badee2ed572b1bf8c9e2f4d6cdbd08863bfa016746c84957377"
+          },
+          "recipient_export_jobs": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "recipient_export_approvals": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        }
+      },
+      "inspectionSha256": "a034f19a589c5e80eb361489a196687f3e356a2fb0817212804b178600bfbae4"
+    }
+  },
+  "preservation": {
+    "frozenRowsUnchanged": true,
+    "runtimeAuthorityUnchanged": true,
+    "originalInventoryUnchanged": true,
+    "manifestInventoryUnchanged": true,
+    "allSignaturesVerified": true,
+    "allOriginalsVerified": true,
+    "temporaryRolesAbsent": true,
+    "allOneShotTasksExitedZero": true,
+    "manifestCount": 21,
+    "signaturesVerified": 21,
+    "originalVersionsVerified": 29,
+    "originalBytesVerified": 95560373,
+    "frozenManifestInventorySha256": "ee9ed3982f90d01aab8f914cd468ac084d8917619eb8f921588ebbc6c8baf4f7",
+    "committedEvidenceInventorySha256": "ea9aa1a40423a712fbe66b317e67e7bb15dff61351eb41e338020d6f678a495c",
+    "sourceMigrationCount": 91,
+    "productionMigrationCount": 94,
+    "runtimeAuthority": {
+      "rolsuper": false,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolreplication": false,
+      "rolbypassrls": false,
+      "owner_member": false,
+      "owner_set": false,
+      "schema_create": false,
+      "migration_write": false
+    },
+    "tls": {
+      "ssl": true,
+      "version": "TLSv1.3"
+    },
+    "organizationCount": 0,
+    "inFlightRecipientJobs": 0
+  },
+  "publicAcceptance": {
+    "event": "m2_bridge_public_acceptance",
+    "status": "PASSED",
+    "observedAt": "2026-10-22T19:08:30.4086930Z",
+    "meta": {
+      "service": "packproof-api",
+      "environment": "production",
+      "commit": "399f306a2fdac37511c8659c73d5a059dd759b7a",
+      "version": "1.0.3-m2-bridge-399f306a",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54"
+    },
+    "health": "ok",
+    "readiness": "ready",
+    "unauthenticatedStatus": 401,
+    "corsStatus": 204,
+    "corsOrigin": "https://thepackproof.com"
+  },
+  "publicAcceptanceAfterCleanup": {
+    "event": "m2_bridge_public_acceptance",
+    "status": "PASSED",
+    "observedAt": "2026-10-22T19:17:17.8455980Z",
+    "meta": {
+      "service": "packproof-api",
+      "environment": "production",
+      "commit": "399f306a2fdac37511c8659c73d5a059dd759b7a",
+      "version": "1.0.3-m2-bridge-399f306a",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54"
+    },
+    "health": "ok",
+    "readiness": "ready",
+    "unauthenticatedStatus": 401,
+    "corsStatus": 204,
+    "corsOrigin": "https://thepackproof.com"
+  },
+  "tasks": [
+    {
+      "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/f990a23d95e0488fa71d1bac7094dcfb",
+      "status": "STOPPED",
+      "startedAt": "2026-10-22T18:24:56.579000+00:00",
+      "stoppedAt": "2026-10-22T18:25:29.993000+00:00",
+      "containers": [
+        {
+          "name": "Main",
+          "imageDigest": "sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/7eec50442d384df785132205009571a2",
+      "status": "STOPPED",
+      "startedAt": "2026-10-22T18:41:56.760000+00:00",
+      "stoppedAt": "2026-10-22T18:42:28.578000+00:00",
+      "containers": [
+        {
+          "name": "Main",
+          "imageDigest": "sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/a8f0ddd8b7e2419e9a91fae39df7c789",
+      "status": "STOPPED",
+      "startedAt": "2026-10-22T19:04:36.069000+00:00",
+      "stoppedAt": "2026-10-22T19:05:02.950000+00:00",
+      "containers": [
+        {
+          "name": "migration",
+          "imageDigest": "sha256:8d8caf49c18659e5b0e412312489c6c34f8518c00a9891bcbaffc85351398a69",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/27d2358bd0cf41a8a00ff8f21bea0111",
+      "status": "STOPPED",
+      "startedAt": "2026-10-22T19:07:01.710000+00:00",
+      "stoppedAt": "2026-10-22T19:07:27.701000+00:00",
+      "containers": [
+        {
+          "name": "migration",
+          "imageDigest": "sha256:8d8caf49c18659e5b0e412312489c6c34f8518c00a9891bcbaffc85351398a69",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/47ac8b3c1b6946058434c5ed21783bf0",
+      "status": "STOPPED",
+      "startedAt": "2026-10-22T19:10:16.884000+00:00",
+      "stoppedAt": "2026-10-22T19:10:44.777000+00:00",
+      "containers": [
+        {
+          "name": "migration",
+          "imageDigest": "sha256:8d8caf49c18659e5b0e412312489c6c34f8518c00a9891bcbaffc85351398a69",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/ce8fff1e07874169ac54946ac2ed6dea",
+      "status": "STOPPED",
+      "startedAt": "2026-10-22T19:10:20.919000+00:00",
+      "stoppedAt": "2026-10-22T19:10:55.284000+00:00",
+      "containers": [
+        {
+          "name": "Main",
+          "imageDigest": "sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+          "exitCode": 0
+        }
+      ]
+    }
+  ],
+  "cleanup": {
+    "database": {
+      "event": "m2_migration_cleanup_verified",
+      "status": "PASSED",
+      "temporaryMigrationRoles": 0,
+      "readOnly": true,
+      "inspectionSha256": "a034f19a589c5e80eb361489a196687f3e356a2fb0817212804b178600bfbae4",
+      "observedAt": "2026-10-22T19:10:18.786Z"
+    },
+    "stack": [
+      {
+        "id": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-m2-migrate-20261022/0f00dd60-ce4b-11f1-a75a-0afff850ce9b",
+        "status": "DELETE_COMPLETE"
+      }
+    ],
+    "roles": [
+      {
+        "name": "packproof-m2-migrate-20261022-task",
+        "absent": true
+      },
+      {
+        "name": "packproof-m2-migrate-20261022-execution",
+        "absent": true
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-migrate-20261022:1",
+        "status": "INACTIVE"
+      },
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-bridge-preflight-20261022:1",
+        "status": "INACTIVE"
+      }
+    ],
+    "runningTasks": [
+      [],
+      []
+    ],
+    "retainedLogs": [
+      {
+        "name": "/packproof/packproof-m2-migrate-20261022",
+        "retentionInDays": 30
+      }
+    ],
+    "serviceUnchangedDuringMigration": true,
+    "rollbackAlarm": [
+      {
+        "name": "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm",
+        "state": "OK",
+        "updatedAt": "2026-10-14T01:16:51.966000+00:00"
+      }
+    ]
+  },
+  "ci": {
+    "bridgeRuntimeBackend": {
+      "source": "399f306a2fdac37511c8659c73d5a059dd759b7a",
+      "run": 39827487882,
+      "job": 119994539703,
+      "status": "SUCCESS",
+      "passed": 1408,
+      "skipped": 16
+    },
+    "productionTooling": {
+      "source": "71b92de2ff4d5feece76e7f47fd0dfb5323ed0d5",
+      "run": 39832950298,
+      "status": "SUCCESS",
+      "backendPassed": 1482,
+      "backendSkipped": 17
+    },
+    "postInspectionScript": {
+      "source": "2221506c93cbfccec37e905e0e036dfabdee0b39",
+      "sha256": "eb18349a273e5f7d929088d84290731a1511679f01f9fc0d24906f8bff89a3b5",
+      "actualCloudExecution": "PASSED"
+    }
+  },
+  "limits": {
+    "organizationsEnabled": false,
+    "claimExportsEnabled": false,
+    "envelopeRoutesEnabled": false,
+    "productionSeparatedRuntimeRoles": false,
+    "productionProtectedStorageAccepted": false,
+    "physicalDeviceAcceptance": false,
+    "humanReview": false,
+    "consentingMerchantPilot": false,
+    "fullM2Release": false,
+    "fullDevelopmentPlanComplete": false,
+    "rollback": "Use only the accepted 94-compatible inactive bridge while its strict schema and inactivity boundary holds. Task definition 48 is not compatible with 94 receipts."
+  }
+}

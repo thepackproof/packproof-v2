@@ -1,8 +1,47 @@
-# Full-release continuation — 2026-10-22
+# Full-release continuation - 2026-10-22
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
  
-## Combined recipient lifecycle and fresh restore - 22 October 2026
+## Production compatibility bridge and inactive M2 schema - 22 October 2026, 19:17 UTC
+
+PR #123 released the compatibility bridge on the separate inactive-foundation
+release branch. Production now runs task revision 49, source
+`399f306a2fdac37511c8659c73d5a059dd759b7a`, image digest
+`sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54`.
+The existing 5% canary completed at 100% with no triggered rollback alarm.
+Its configuration, runtime authority and historical behavior were preserved.
+Do not merge that older release branch into main.
+
+The exact owner-injected operator applied migrations 093-095 in one transaction.
+Production now has 94 matching receipts. Independent post-inspection matched all
+ten frozen-record inventories and the effective runtime-authority digest.
+The deployed bridge verified all 21 manifest signatures and all 29 exact original
+versions (95,560,373 bytes), matching the pre-migration inventories. Public health,
+readiness, source identity, unauthenticated denial and CORS checks passed after
+the migration and again after cleanup.
+
+All six one-shot tasks stopped successfully. The temporary database login is
+absent, both temporary IAM roles are deleted, both temporary task definitions are
+inactive, and the temporary CloudFormation stack reached DELETE_COMPLETE. Audit
+logs are retained for 30 days. The [final migration receipt](m2-inactive-production-migration-2026-10-22.json)
+binds these results to the [immutable bridge acceptance](m2-bridge-acceptance-2026-10-22.json).
+The accepted bridge is the rollback boundary for this inactive 94-receipt schema;
+the earlier task revision 48 is incompatible and must not be restored.
+
+Exact runtime CI passed 1,408 backend tests (16 skipped); the main-line operator
+and tooling candidate passed full CI, including 1,482 backend tests (17 skipped).
+The earlier Node 18 build mismatch, historical build-locator secret-scan false
+positives and PowerShell harness timeout remain recorded with their corrections.
+The post-inspection script also passed in its actual owner-injected cloud task.
+
+Organizations, claim exports and envelope routes remain disabled. The six new
+tables are empty and have no non-owner grants. Separate production API/worker
+permissions, protected storage and feature activation remain open, as do envelope
+HTTP admission/status/export, public key-history distribution, RFC 3161 timestamps,
+physical-device acceptance, human review and the consenting merchant pilot.
+This completes the inactive-schema release; it does not complete M2 or the plan.
+
+## Earlier combined recipient lifecycle and fresh restore - 22 October 2026
 
 PRs #120 and #121 added actual separate database logins and the exact inactive
 093-095 migration operator. PR #122 adds the combined RDS/S3/KMS acceptance
@@ -36,7 +75,7 @@ are retained. The synthetic fixture and two-day retention floor are explicit.
 
 This closes the combined actual-role recipient database/storage restore gap.
 It does not establish HTTP authorization, physical capture, human review or a
-consenting merchant pilot. Production remains at foundation task revision 48;
+consenting merchant pilot. At that checkpoint production remained at foundation task revision 48;
 migrations 093-095, a compatible rollback bridge, separated baseline runtime
 privileges and production protection/activation are still separate gates. The
 envelope API, key-history distribution, trusted timestamp and later conditional

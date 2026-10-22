@@ -1,7 +1,6 @@
 {
   "schema": "packproof.m2-inactive-bridge-evidence.v1",
-  "status": "COMPATIBILITY_PASSED_ROLLOUT_PENDING",
-  "recordedAt": "2026-10-22T18:30:27.826Z",
+  "status": "COMPATIBILITY_AND_INACTIVE_PRODUCTION_MIGRATION_PASSED",
   "runtimeSource": "399f306a2fdac37511c8659c73d5a059dd759b7a",
   "harnessSource": "cb2f55a7ebe398ab35fcc77ee9337b46c1bf7c9d",
   "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
@@ -667,19 +666,19 @@
     }
   },
   "releaseScope": {
-    "productionServiceChanged": false,
-    "productionSchemaChanged": false,
+    "productionServiceChanged": true,
+    "productionSchemaChanged": true,
     "organizationsActivated": false,
     "physicalDeviceAcceptance": false,
     "humanReview": false,
     "merchantPilot": false
   },
   "ci": {
-    "runtimeSourceBackend": "RUNNING",
+    "runtimeSourceBackend": "PASSED_1408_TESTS_16_SKIPPED",
     "runtimeSourcePostgres": "PASSED",
     "focusedBridgeTests": 7,
     "offlineDeploymentGuardTests": 13,
-    "remainingChecks": "WEB_AND_SOURCE_TOOLS_PASSED_SECRET_METADATA_REVIEWED_RESCAN_PENDING",
+    "remainingChecks": "WEB_SOURCE_TOOLS_AND_EXACT_FINGERPRINT_SECRET_RESCAN_PASSED",
     "firstRemainingBuild": {
       "id": {
         "project": "packproof-v2-staging-api",
@@ -705,6 +704,26 @@
         678
       ],
       "review": "Exact fields matched AWS BatchGetBuilds audit locators. Scoped immutable fingerprints only."
+    },
+    "secretRescan": {
+      "project": "packproof-v2-staging-api",
+      "buildUuid": "b5946b3a-37d0-478f-b850-0c1b576383f2",
+      "status": "SUCCEEDED",
+      "scannedCommits": 497,
+      "leaks": 0
+    },
+    "mainTooling": {
+      "source": "71b92de2ff4d5feece76e7f47fd0dfb5323ed0d5",
+      "run": 39832950298,
+      "status": "SUCCESS",
+      "backendPassed": 1482,
+      "backendSkipped": 17
+    },
+    "priorMainRepeat": {
+      "run": 39826991026,
+      "status": "BACKEND_FAILED_POWERSHELL_TEST_TIMEOUT",
+      "backendPassed": 1481,
+      "correction": "PowerShell harness timeout increased from 15 to 60 seconds; corrected candidate full CI passed. Local Windows PowerShell 5 policy rejection was not bypassed."
     }
   },
   "migrationPreparation": {
@@ -737,6 +756,13 @@
       "cfnGuard": "PASSED",
       "activationNegativeFixture": "REJECTED"
     },
-    "productionExecuted": false
+    "productionExecuted": true
+  },
+  "preparationRecordedAt": "2026-10-22T18:30:27.826Z",
+  "recordedAt": "2026-10-22T19:17:17.8455980Z",
+  "completedReleaseEvidence": "m2-inactive-production-migration-2026-10-22.json",
+  "immutableCompatibilityAcceptance": {
+    "path": "m2-bridge-acceptance-2026-10-22.json",
+    "sha256": "0bfb364d3726fcfd993b1d0b37220ac56b9cf5924bc9f06890ddd4c6f3561ec1"
   }
 }

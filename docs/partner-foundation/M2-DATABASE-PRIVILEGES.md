@@ -2,9 +2,10 @@
 
 `backend/scripts/m2-runtime-privileges.mjs` prepares explicit grants for two
 separately provisioned API and worker database roles after migrations 093-095.
-It is not called by startup or deployment. No production grant or migration is
-implied by this source change, and the existing foundation operator remains pinned
-to its original migration boundary.
+It is not called by startup or deployment. Production migrations 093-095 have now
+applied through the separate exact M2 operator, with the old runtime's effective
+authority unchanged and no non-owner grants on the six new tables. This privilege
+policy has not been activated in production. See the [inactive migration receipt](m2-inactive-production-migration-2026-10-22.json).
 
 | Record | API | Worker |
 | --- | --- | --- |
@@ -36,8 +37,9 @@ credentials, application data, schema or unrelated grants. Reapplication is exac
 Do not attach the old broad runtime group and assume a direct REVOKE overrides it.
 
 Provisioning baseline application permissions, real separate task identities,
-protected cloud storage, source-bound acceptance, the compatible rollback bridge,
-production migration and merchant/device acceptance are still required. A successful
+protected cloud storage, source-bound activation acceptance and merchant/device
+acceptance are still required. The inactive rollback bridge and production
+migrations are complete as recorded above. A successful
 grant receipt is evidence of this database permission boundary only.
 
 The focused CI suite runs the policy against PostgreSQL 16 with independent role

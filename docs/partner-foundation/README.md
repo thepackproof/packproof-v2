@@ -2,6 +2,10 @@
 
 This implements the M0/M1 foundation from the attached PackProof API Infrastructure Development Plan v1.0. PR #108 is merged, the exact five production migrations have applied, and the backend candidate completed its configuration-preserving canary at 100% traffic. Organization APIs remain disabled. The [technical review](RELEASE-REVIEW.md) records a scoped GO for the isolated foundation and unactivated backend rollout; the [release receipt](foundation-release-evidence-2026-10-22.json) records the successful rollout and removal of temporary migration access. M2-M5 are not declared complete.
 
+The [current continuation](RELEASE-CONTINUATION-2026-10-22.md) also records the
+completed revision-49 compatibility bridge and inactive production migrations
+093-095. Production now has 94 exact receipts; M2 feature activation remains gated.
+
 ## Baseline reconciliation (M0-01)
 
 Implementation base: `main` at `cb82e6e57d50c51e4c55c3e1525a3adc61ce15d5`, repository `thepackproof/packproof-v2`. The plan's documented `bbcea01bdb8574da751125f35ad97ecc976f4dba` is older. The GitHub tree was pinned before editing; backend source was reconciled to that tree. The final candidate is identified by PR #108 and its exact CI artifacts. The [22 October continuation](RELEASE-CONTINUATION-2026-10-22.md) repairs limited SIGNAL behavior and client test expectations and records restored AWS access. Historical results below retain their original source bindings; they are not the current CI status.
@@ -30,10 +34,10 @@ The older architecture document's exclusions do not override the attached additi
 | C08-03/04, CON-02 | `organization-router.ts`, `partner-router.ts`; encrypted secret replay | 090, 092 | Disabled entitlement bootstrap; fresh human auth for administration; hashed service keys |
 | M1-03, T06 | `domain/finalize.ts` | None | Sign outside transaction, rebuild/compare exact candidate, immutable replay; signing-boundary tests |
 | M1-03/05, AUTH-03 | Existing policy journal and restore allowlists extended | 092 | Revocations journaled; isolated fresh-target restore preserves authority and denies revoked access; deployed cutover remains gated |
-| M1-04, EVT-01â€“04 | `platform/event-stream.ts`, deferred database triggers | 088 | Legacy `/v1/events` unchanged; new `/event-stream`; local rollback/cursor tests and real-PG gate |
+| M1-04, EVT-01-04 | `platform/event-stream.ts`, deferred database triggers | 088 | Legacy `/v1/events` unchanged; new `/event-stream`; local rollback/cursor tests and real-PG gate |
 | CON-01/04, C09-04 | `proof-pagination.ts`, problem responses | 088 stream reused | Signed tenant/environment/query cursor; committed membership snapshot |
 | M1-04, T08 | `examples/merchant-receiver` | Separate merchant schema | Inbox and job one transaction; restart/duplicate/forgery tests |
-| M1-05/06 | PostgreSQL CI gate, [operations](OPERATIONS.md), [acceptance record](ACCEPTANCE.md) | 088â€“092 | Scoped M1 recommendation recorded in RELEASE-REVIEW.md; production organization activation remains gated |
+| M1-05/06 | PostgreSQL CI gate, [operations](OPERATIONS.md), [acceptance record](ACCEPTANCE.md) | 088-092 | Scoped M1 recommendation recorded in RELEASE-REVIEW.md; production organization activation remains gated |
 
 ## Contracts and first synthetic integration
 
