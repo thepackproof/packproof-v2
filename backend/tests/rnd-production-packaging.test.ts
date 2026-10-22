@@ -20,11 +20,11 @@ it('keeps the backend locked install independent of the parent application packa
  expect(docker).toContain('COPY backend/partner-openapi.json ./partner-openapi.json');
  expect(docker).toContain('COPY backend/certs /app/certs'); // Preserve the live absolute CA-file binding.
 });
-it('keeps all 91 migration files byte-identical to the reviewed Git index with LF endings',async()=>{
- const files=(await readdir(path.join(backend,'migrations'))).filter(name=>name.endsWith('.sql')).sort();expect(files).toHaveLength(91);
+it('keeps all 92 migration files byte-identical to the reviewed Git index with LF endings',async()=>{
+ const files=(await readdir(path.join(backend,'migrations'))).filter(name=>name.endsWith('.sql')).sort();expect(files).toHaveLength(92);
  const output=execFileSync('git',['ls-files','--stage','--','backend/migrations'],{cwd:root,encoding:'utf8'});
  const indexed=new Map(output.trim().split(/\r?\n/).map(line=>{const found=/^100644 ([a-f0-9]{40}) 0\t(.+)$/.exec(line);if(!found)throw Error('Unmerged or unexpected migration index entry');return [found[2],found[1]];}));
- expect(indexed.size).toBe(91);
+ expect(indexed.size).toBe(92);
  for(const name of files){const bytes=await readFile(path.join(backend,'migrations',name)),gitBlob=execFileSync('git',['cat-file','blob',indexed.get('backend/migrations/'+name)!],{cwd:root});expect(bytes.includes(13),name).toBe(false);expect(createHash('sha256').update(bytes).digest('hex'),name).toBe(createHash('sha256').update(gitBlob).digest('hex'));}
 },30_000);
 it('imports the compiled server graph and resolves contracts, profile, migrations and scripts from the image layout',async()=>{
@@ -63,7 +63,7 @@ await readFile('certs/rds-us-east-1-bundle.pem');
 console.log(JSON.stringify({profile:'capture-receipts-v1',migrations:inventory.length,runtimeRole:PRODUCTION_RUNTIME_ROLE,serverImported:true}));`;
  await writeFile(path.join(imageBackend,'packaging-smoke.mjs'),script);
  const smoke=spawnSync(process.execPath,['packaging-smoke.mjs'],{cwd:imageBackend,encoding:'utf8',timeout:15_000,env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot,AWS_EC2_METADATA_DISABLED:'true'}});
- expect(smoke.status,smoke.stdout+smoke.stderr).toBe(0);expect(JSON.parse(smoke.stdout.trim())).toEqual({profile:'capture-receipts-v1',migrations:91,runtimeRole:'packproof_app_runtime_v1',serverImported:true});
+ expect(smoke.status,smoke.stdout+smoke.stderr).toBe(0);expect(JSON.parse(smoke.stdout.trim())).toEqual({profile:'capture-receipts-v1',migrations:92,runtimeRole:'packproof_app_runtime_v1',serverImported:true});
 },30_000);
 it('leaves legacy builds/deployment inert before credentials, source uploads or cloud writes',async()=>{
  const build=await readFile(path.join(backend,'buildspec.yml'),'utf8');

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PackProof independent offline ZIP verifier v1.2.0 (Python 3.10+, OpenSSL for signatures).
+"""PackProof independent offline ZIP verifier v1.4.0 (Python 3.10+, OpenSSL for legacy signatures).
 Never extracts archive entries, executes package content, or opens network connections.
 Trust lists must be obtained and authenticated separately from the package.
 """
@@ -20,7 +20,7 @@ import sys
 import tempfile
 import zipfile
 
-VERSION = '1.3.1'
+VERSION = '1.4.0'
 MAX_BYTES = 220 * 1024 * 1024
 MAX_JSON = 8 * 1024 * 1024
 MAX_ENTRIES = 4096
@@ -451,7 +451,7 @@ def verify_lifecycle_snapshot(package, metadata, name_set, hashes, read_json, st
 
 def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
            authority_key_path=None, authority_key_id=None, expected_snapshot=None,
-           expected_proof=None, expected_tenant=None):
+           expected_proof=None, expected_tenant=None, envelope_trust_path=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     if trust_path and registry_path:
         fail('INVALID_TRUST_REGISTRY', 'Choose a legacy trust list or a signed registry, not both')
@@ -494,6 +494,20 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
                 fail('UNSAFE_ARCHIVE', 'JSON entry exceeds size limit')
             return json_bytes(read(name))
         package = read_json('package.json')
+        if isinstance(package, dict) and package.get('schema') == 'packproof.signed-proof-package.v2':
+            if expected_snapshot or expected_tenant or trust_path or registry_path:
+                fail('UNSUPPORTED_CONTEXT', 'This profile requires its separately authenticated envelope trust file and does not assert a tenant or current lifecycle head')
+            try:
+                from envelope import verify_package
+                result = verify_package(package, name_set, read, envelope_trust_path, now, expected_proof, expected)
+                result['verifierVersion'] = VERSION
+                return result
+            except ImportError:
+                fail('SIGNATURE_UNCHECKED', 'Install verifier/requirements-envelope.txt to verify the additive envelope profile')
+            except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+                fail('INVALID_INTEGRITY_PROFILE', 'Malformed, substituted or unsupported integrity profile')
+        if envelope_trust_path:
+            fail('UNSUPPORTED_CONTEXT', 'Envelope trust cannot authenticate a legacy package')
         if not isinstance(package, dict) or package.get('schema') not in ('packproof.proof-package.v1', 'packproof.disclosure-package.v1'):
             fail('UNSUPPORTED_VERSION', 'Unsupported Proof package version')
         metadata = read_json('archive.json') if 'archive.json' in name_set else None
@@ -730,6 +744,7 @@ def main(argv=None):
     parser.add_argument('--expected-proof-id', help='Independently known Proof identity')
     parser.add_argument('--expected-tenant-id', help='Required authenticated tenant identity; unsupported human-only profiles fail closed')
     parser.add_argument('--trust-list', help='Separately obtained authenticated trust-list JSON; never use a package-included key')
+    parser.add_argument('--envelope-trust', help='Separately authenticated issuer/key history for the additive JCS/ES256 profile')
     parser.add_argument('--trust-registry', help='Signed, dated registry JSON authenticated with an independently pinned authority')
     parser.add_argument('--trust-authority-key', help='Independently pinned registry-authority public PEM file, outside the archive')
     parser.add_argument('--trust-authority-key-id', help='Independently obtained identity of the pinned registry authority')
@@ -747,7 +762,8 @@ def main(argv=None):
         result = verify(args.package, args.expected_manifest_sha256, args.trust_list,
                         registry_path=args.trust_registry, authority_key_path=args.trust_authority_key,
                         authority_key_id=args.trust_authority_key_id, expected_snapshot=args.expected_lifecycle_snapshot_sha256,
-                        expected_proof=args.expected_proof_id, expected_tenant=args.expected_tenant_id)
+                        expected_proof=args.expected_proof_id, expected_tenant=args.expected_tenant_id,
+                        envelope_trust_path=args.envelope_trust)
         exit_code = 0 if result['status'] in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') else 2
     except VerificationError as error:
         result = {'verifierVersion': VERSION, 'status': error.status, 'message': str(error)}

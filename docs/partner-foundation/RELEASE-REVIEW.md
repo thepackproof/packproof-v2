@@ -1,4 +1,4 @@
-# M1 technical release review — 22 October 2026
+# M1 technical release review â€” 22 October 2026
 
 Reviewer: **Codex, the implementing agent**. This is a distinct technical review of the source, deployed checks and release requests; it is not an independent human review. The plan assigns a reviewer role but does not mandate a separate human approver.
 
@@ -39,3 +39,13 @@ No observed unresolved integrity, cross-merchant disclosure or admitted-recordin
 5. **M3-M5:** retain the plan's demand, measured pilot and stable-profile entry criteria. A source merge or synthetic demonstration is not evidence that these later milestones have been executed.
 
 The owner has authorized the necessary engineering and release work. These remaining items are evidence and implementation gaps, not requests to repeat that authorization. Independent implementation can continue while a particular external activation is blocked.
+
+## M2 envelope engineering review - 22 October 2026
+
+Reviewer: Codex, the implementing agent, separately reviewing the implementation, source-bound CI and downloaded cloud evidence. Decision: **GO to merge the additive, inactive envelope implementation and its acceptance tooling. HOLD production migration 093 and envelope activation until their remaining gates are implemented and evidenced.** This does not reopen the M2 test writers or claim a full M2 release.
+
+Candidate `54119e7ee02b79511d8f7b8df46355456069ebf0` passed 1,452 backend tests, 15 credential/session guards, web/mobile checks and PostgreSQL invariants. Focused conformance passed 58 TypeScript and 32 Python checks, including independent PostgreSQL lease contention. The web dependency audit initially failed because the npm registry returned an endpoint error; its targeted retry passed the configured high-severity gate, while reporting two moderate findings. It is not a zero-finding audit. The immutable acceptance image's ECR scan reported no findings.
+
+The [cloud record](envelope-cloud-evidence-2026-10-22.json) supplies 25 actual-role assertions, separately downloaded and hash-checked artifacts, independently authenticated public key pins, and successful fresh-target reconstruction. The envelope worker signs outside transactions, consumes the accepted frozen snapshot, preserves conditional S3 winners, reconciles a lost publication response, and waits for the protected result journal before READY. Source and restore both retain the same manifest and bundle digests. Protected bytes remain retained; both database logins are NOLOGIN, IAM is CLOSED, all tasks are stopped, temporary owner authority is removed, and the build project/role/NAT are absent.
+
+The review is limited to the implemented internal path. API admission/status/export authorization, production COMPLIANCE protection without replacing existing original identities, a new migration/compatibility bridge, public key-history distribution, RFC 3161, deployed rotation/compromise tests, legacy supplement/stage transaction boundaries, real devices and the merchant pilot remain open. The existing production service remains on the earlier foundation release. Both backend deployment workflows require explicit dispatch, so this source merge does not deploy the new migration or activate these paths.

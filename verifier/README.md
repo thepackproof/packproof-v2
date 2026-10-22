@@ -1,6 +1,8 @@
-# Proof Anywhere verifier 1.3.1
+# Proof Anywhere verifier 1.4.0
 
 Download `verify.py` separately from the PackProof repository/release. It is a standalone, read-only Python program; it does not import the PackProof server, log in, extract archive paths, execute package contents, fetch keys, or upload media. Python 3.10+ is required. Signature checks additionally require an installed OpenSSL executable. Missing OpenSSL, process crashes, launch failures and timeouts return `SIGNATURE_UNCHECKED`; these are not mathematical evidence of an invalid signature. On Windows, use a native Windows OpenSSL executable supported by the host.
+
+The additive JCS/ES256 profile is an engineering preview, not an activated production export. For that profile, also obtain `envelope.py` from the same release and install `requirements-envelope.txt` in a dedicated Python environment. Verify with `--envelope-trust independently-authenticated-issuer-keys.json`; the exact issuer and dated key history must come from outside the archive. Missing dependencies fail closed as `SIGNATURE_UNCHECKED`. See [the profile and activation gates](../docs/partner-foundation/ENVELOPE-PROFILE.md). Legacy packages retain their existing serializer, signature algorithms and trust options.
 
 ```bash
 python3 verify.py proof.zip --trust-list independently-obtained-trust.json

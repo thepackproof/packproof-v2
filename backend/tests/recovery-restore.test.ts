@@ -1,4 +1,7 @@
 import { generateKeyPairSync, sign } from "node:crypto";
+import { FlattenedSign } from 'jose';
+import { enqueueEnvelopeFromRecovery, processEnvelopeJob, envelopeJobStatus, type EnvelopeStore, type EnvelopeWorker } from '../src/integrity/envelope-jobs.js';
+import { ENVELOPE_TYPE, jcsBytes, type ExactObject } from '../src/integrity/envelope-profile.js';
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -14,6 +17,7 @@ import { getRecoveryStatus, processRecoveryOutbox, type RecoveryPublisher } from
 import { assertPolicyAccessSafe, inspectPolicyRecoveryReconciliation, processPolicyRecoveryOutbox } from "../src/domain/policy-recovery.js";
 import { restoreFreshRecoveryDatabase, type FreshRecoveryRestoreInput } from "../src/domain/recovery-restore.js";
 import { LocalObjectStore } from "../src/s3/local-object-store.js";
+import { VersionedMemoryObjectStore } from './versioned-memory-object-store.js';
 import { createAccessLink, revokeAccessLink } from "../src/domain/access-links.js";
 import { inviteCommerceReceiver, acceptCommerceReceiver, createCommerceStage, initializeStageEvidence, commitStageEvidence, finalizeCommerceStage } from "../src/domain/commerce-lifecycle.js";
 import { appendProofSupplement } from "../src/domain/proof-supplements.js";
@@ -47,9 +51,9 @@ describe('fresh isolated accepted-record reconstruction',()=>{
     await db.query('SET ROLE packproof_restore');
     return (await db.query<{name:string}>('SELECT current_database() AS name')).rows[0].name;
   }
-  async function source(withStaleBackup=false){
+  async function source(withStaleBackup=false,memoryMedia=false){
     const dir=await mkdtemp(path.join(os.tmpdir(),'packproof-actual-replay-'));cleanup(()=>rm(dir,{recursive:true,force:true}));
-    const media=new LocalObjectStore(path.join(dir,'media'),'http://test','test');
+    const media=memoryMedia?new VersionedMemoryObjectStore():new LocalObjectStore(path.join(dir,'media'),'http://test','test');
     let opened=await createPgliteDatabase(path.join(dir,'live'));let closeOpened=cleanup(opened.close);
     let h=await createHarness(clock,{opened,objectStore:media});let closeHarness=cleanup(h.close);
     const seller=await createUser(h),transaction=await createTransaction(h.db,clock,seller,{itemTitle:'Acknowledged after backup'}),proof=await createOrGetProof(h.db,clock,seller,transaction.transactionId);
@@ -77,6 +81,45 @@ describe('fresh isolated accepted-record reconstruction',()=>{
     const input:FreshRecoveryRestoreInput={expectedDatabase:'',restoreRole:'packproof_restore',isolatedTargetReference:'test-isolated-target',oldWriterFenceReference:'test-external-fence-reference',targetWriterGeneration:'replacement-test',core:{envelopes:core,expectedWatermark:core.at(-1)!},policy:{envelopes:policy,expectedWatermark:policy.at(-1)!},trustedPublicKey:publisher.trustedPublicKey,sourceStore:{get:(key,ref)=>key.startsWith('recovery/')?journal.get(key):media.get(key,ref),head:(key,ref)=>key.startsWith('recovery/')?journal.head(key):media.head(key,ref),getStream:media.getStream.bind(media)}};
     return {h,dir,evidence,seller,publisher,drain,nativeAuthorization,proofId:proof.proofId,input,acknowledged,acceptedAuditRows,link,journal};
   }
+  it('reconstructs the first accepted envelope and pending work without keys, mutable leases, or resigning',async()=>{
+    const f=await source(false,true),retention='2027-10-22T05:00:00.000Z',objects=new Map<string,{body:Buffer;object:ExactObject}>();
+    const store:EnvelopeStore={
+      find:async(bucket,key)=>objects.get(`${bucket}/${key}`)??null,
+      preserve:async(bucket,key,body,until)=>{
+        const id=`${bucket}/${key}`;if(!objects.has(id))objects.set(id,{body,object:{bucket,key,versionId:`envelope-version-${objects.size+1}`}});
+        const saved=objects.get(id)!;return store.verify({storage:saved.object,sha256:sha256Hex(saved.body),byteSize:saved.body.length},until);
+      },
+      verify:async(artifact,until)=>{
+        const {bucket,key,versionId}=artifact.storage;
+        const saved=bucket==='restore-artifacts'?objects.get(`${bucket}/${key}`):await f.input.sourceStore.get(key,{versionId});
+        expect(saved).toBeTruthy();expect(sha256Hex(saved!.body)).toBe(artifact.sha256);expect(saved!.body.length).toBe(artifact.byteSize);
+        if(bucket==='restore-artifacts')expect((saved as {object:ExactObject}).object.versionId).toBe(versionId);
+        return {object:artifact.storage,sha256:artifact.sha256,byteSize:artifact.byteSize,mode:'COMPLIANCE',retainUntil:until,verifiedAt:clock.now().toISOString()};
+      },
+    };
+    const worker:EnvelopeWorker={writerGeneration:'initial',store,sourceJournal:f.publisher,trustedPublicKey:async(issuer,kid)=>issuer==='https://restore.example.test'&&kid==='restore-envelope-key'?pem:null,
+      sign:async(kid,bytes)=>new FlattenedSign(bytes).setProtectedHeader(JSON.parse(jcsBytes({alg:'ES256',kid,typ:ENVELOPE_TYPE}).toString())).sign(keys.privateKey)};
+    const job=await enqueueEnvelopeFromRecovery(f.h.db,clock,{sourceOperationId:`finalize:${f.proofId}`,evidenceBucket:'restore-originals',artifactBucket:'restore-artifacts',issuer:'https://restore.example.test',keyId:'restore-envelope-key',retainUntil:retention,writerGeneration:'initial'});
+    expect((await processRecoveryOutbox(f.h.db,clock,f.publisher)).state).toBe('DURABLE');
+    expect((await processEnvelopeJob(f.h.db,clock,worker)).state).toBe('SIGNED_PENDING_DURABILITY');
+    expect((await processRecoveryOutbox(f.h.db,clock,f.publisher)).state).toBe('DURABLE');
+    // Add a second frozen record whose requested signature is still pending.
+    const supplement=await appendProofSupplement(f.h.db,clock,f.publisher.signer,f.seller,f.proofId,{operationId:'pending-envelope',kind:'CORRECTION',facts:{note:'Additional recorded context'}});
+    expect((await processRecoveryOutbox(f.h.db,clock,f.publisher)).state).toBe('DURABLE');
+    const pending=await enqueueEnvelopeFromRecovery(f.h.db,clock,{sourceOperationId:`supplement:${supplement.supplementId}`,evidenceBucket:'restore-originals',artifactBucket:'restore-artifacts',issuer:'https://restore.example.test',keyId:'restore-envelope-key',retainUntil:retention,writerGeneration:'initial'});
+    expect((await processRecoveryOutbox(f.h.db,clock,f.publisher)).state).toBe('DURABLE');
+    await f.h.db.query("UPDATE integrity_envelope_delivery SET state='LEASED',lease_token='lost-worker',lease_until=$2 WHERE operation_id=$1",[pending.operationId,'2026-10-01T00:00:00Z']);
+    const core=[...f.journal.objects].filter(([key])=>key.startsWith('recovery/v1/')).map(([,bytes])=>bytes),fresh=await target();
+    const expectedDatabase=await assumeRestoreRole(fresh.db),input={...f.input,expectedDatabase,core:{envelopes:core,expectedWatermark:core.at(-1)!}};
+    await expect(restoreFreshRecoveryDatabase(fresh.db,input)).rejects.toMatchObject({code:'RECOVERY_ENVELOPE_VERIFIER_REQUIRED'});
+    const report=await restoreFreshRecoveryDatabase(fresh.db,{...input,envelopes:worker});
+    expect(report.counts.integrity_envelope_jobs).toBe(2);expect(report.counts.integrity_envelope_results).toBe(1);
+    expect(await envelopeJobStatus(fresh.db,job.operationId)).toEqual({state:'READY'});
+    expect(await envelopeJobStatus(fresh.db,pending.operationId)).toMatchObject({state:'PENDING'});
+    expect((await fresh.db.query('SELECT lease_token FROM integrity_envelope_delivery')).rows).toEqual([{lease_token:null},{lease_token:null}]);
+    expect((await fresh.db.query('SELECT bundle_json,bundle_sha256,receipt_json FROM integrity_envelope_results')).rows).toEqual((await f.h.db.query('SELECT bundle_json,bundle_sha256,receipt_json FROM integrity_envelope_results')).rows);
+    expect((await fresh.db.query('SELECT writes_enabled FROM recovery_writer_fence')).rows[0].writes_enabled).toBe(false);
+  },30000);
   it('rejects an older disk backup as a target and reconstructs the acknowledged final record in a new fenced database',async()=>{
     const fixture=await source(true),stale=await target(path.join(fixture.dir,'stale'));
     expect((await stale.db.query<{status:string}>('SELECT status FROM proofs WHERE id=$1',[fixture.proofId])).rows[0].status).not.toBe('FINALIZED');

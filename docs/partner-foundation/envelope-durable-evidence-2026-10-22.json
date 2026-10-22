@@ -1,0 +1,59 @@
+{
+  "schema": "packproof.envelope-engineering-evidence.v1",
+  "status": "ENGINEERING_VERIFIED_NOT_ACTIVATED",
+  "sourceCommit": "7cdb4c368670f8428c0c65cce24add5568624f26",
+  "sourceTree": "1f54fb59040ba1ace60dd23eaa5ff8f1c4db1a8b",
+  "environment": "GitHub Actions Ubuntu, PostgreSQL 16, Node 22, Python 3.12",
+  "conformance": {
+    "runId": 39725256370,
+    "jobId": 119647572097,
+    "conclusion": "success",
+    "typescriptTestsPassed": 53,
+    "typescriptFilesPassed": 5,
+    "legacyPythonTestsPassed": 32,
+    "typescriptCompletedAt": "2026-10-22T04:59:26Z",
+    "coverage": [
+      "JCS and ES256 encoding, independent Python package verification",
+      "Exact source versions, coverage commitments and streamed export revocation",
+      "Real domain core finalization and unchanged frozen manifest bytes",
+      "Durable request and result publication gates",
+      "Lost object responses and database rollback after publication",
+      "Expired leases, lease renewal and writer-generation fencing",
+      "Overlapping leases on independent real PostgreSQL pools accept one stored result",
+      "Fresh database reconstruction preserves the accepted signature and rebuilds pending work without stale leases",
+      "S3 transport adapter rejects modified bytes, wrong versions and insufficient compliance retention"
+    ]
+  },
+  "foundationRegression": {
+    "runId": 39725256401,
+    "jobId": 119647572234,
+    "conclusion": "success",
+    "includes": "Existing organization, event-stream, real PostgreSQL, migration-boundary and packaging gates"
+  },
+  "storageAndKeys": {
+    "workerStateTests": "Explicit synthetic protected-storage and signing adapters",
+    "s3AdapterTests": "Mock AWS transport; actual request fields and returned-version checks exercised",
+    "priorActualKmsEvidence": "envelope-kms-evidence-2026-10-22.json",
+    "hostedEnvelopeWorkerAcceptance": "NOT_RUN",
+    "objectLockDeploymentClaim": false,
+    "cameraDeviceClaim": false
+  },
+  "production": {
+    "changedByThisTest": false,
+    "releasedSource": "99bb2dfe0eb16d8d513617fdd4b9608d7baac3f9",
+    "migration093Applied": false,
+    "envelopeRoutesEnabled": false,
+    "envelopeWorkerScheduled": false,
+    "organizationActivationEnabled": false
+  },
+  "remainingGates": [
+    "Scoped runtime grants and hosted worker integration",
+    "Authorized cohort, status and export routing",
+    "Independent issuer/key-history distribution and deployed rotation checks",
+    "Actual role, storage, crash, fence and restore acceptance",
+    "Reviewed migration compatibility bridge before production migration 093",
+    "Legacy stage/supplement transaction boundary review",
+    "RFC 3161 validation and supported timestamp authority configuration",
+    "Real-device recovery and consenting merchant pilot"
+  ]
+}

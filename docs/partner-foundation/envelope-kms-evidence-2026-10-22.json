@@ -1,0 +1,40 @@
+{
+  "schema": "packproof.envelope-kms-evidence.v1",
+  "date": "2026-10-22",
+  "status": "PASSED_FORMAT_AND_CRYPTO_ONLY",
+  "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/4041c408c7334b688ad59584291f0a26",
+  "taskDefinition": "packproof-m1-20261021-runtime-api:6",
+  "taskRole": "packproof-m1-20261021-runtime-api",
+  "exitCode": 0,
+  "image": "sha256:37b60e0ad990f78e93485e3421f0265c9cea8a67e2441ccfa27a35d8cffad03e",
+  "receipt": {
+    "event": "m2_envelope_kms_fixture",
+    "keyArn": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+    "digestHex": "259920e7ef1a6f2dabca20e5db9aa9d57925ed55fb7f6000bc95c8d22ac560f0",
+    "messageType": "DIGEST",
+    "KeyId": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+    "SigningAlgorithm": "ECDSA_SHA_256",
+    "Signature": "MEUCIHWCbgAW3gp7goPMTzqlC0GAc7zjJ8r7BzdEHngMA6d6AiEAwD42cEDCMCBtqqEXu1nJQy/yVOdhpUU5HMuWFfj/h6c=",
+    "publicKeyBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYDYA6VZiCRHBhBaDXVaeVhwYu1GzROTsIXGvNiPioGJnElNRXj+pjshtTsALkvW1zM78k4cxR7KcgF551tHTyg==",
+    "requestId": "392eef48-a57f-4656-8807-a09ea8f3d625",
+    "observedAt": "2026-10-22T04:32:54.072Z",
+    "synthetic": true,
+    "storagePreservationNotTested": true
+  },
+  "fixture": "backend/tests/fixtures/envelope-kms-20261022.json",
+  "fixtureSha256": "804966aab97260c4044f01f7b9026e48ea71d7d496453175c218f596d1032d85",
+  "validation": {
+    "jose": "6.2.13",
+    "pkijs": "3.4.1",
+    "pythonCryptography": "50.0.2",
+    "pythonRfc8785": "0.1.4",
+    "independentResult": "VERIFIED",
+    "syntheticEvaluationTime": "2026-10-22T05:00:00.000Z"
+  },
+  "limits": [
+    "Synthetic manifest and storage identity only; no real recording or preservation receipt.",
+    "Probe ran under the isolated API workload role; no customer production key was used.",
+    "The CLI connector could not carry binary DIGEST input correctly; that failed attempt produced no signature. The successful probe used the installed AWS SDK in ECS.",
+    "No RFC 3161 token, durable signing job, production activation or merchant-pilot claim."
+  ]
+}

@@ -1,0 +1,6 @@
+# Optional additive JCS/ES256 profile. Legacy verification remains stdlib + OpenSSL.
+cryptography==50.0.2
+rfc8785==0.1.4
+cffi==2.1.1
+pycparser==3.11
+typing-extensions==4.16.0
