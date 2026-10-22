@@ -23,6 +23,9 @@ const sources=[{evidenceId:"evidence_1",contentType:"video/mp4"}];
 const previewPath="recipient-exports/rex_job1/files/0?preview=true";
 const downloadPath="recipient-exports/rex_job1/download";
 
+const claimBinding={claimCaseId:'claim_one',snapshotSha256:'b'.repeat(64),deadline:'2099-09-09T12:00:00.000Z',network:'VISA'};
+const bound={...ready,claimCaseId:claimBinding.claimCaseId,claimSnapshotSha256:claimBinding.snapshotSha256,action:'EXPORT_FOR_MERCHANT_REVIEW',providerSubmission:'UNAVAILABLE',claimReview:{state:'REVIEW_REQUIRED',requiresNewApproval:false,reason:null},preservation:{result:{status:'PRESERVED'},approval:null as null|{status:string}}};
+
 beforeEach(()=>{
   sessionStorage.clear();
   vi.stubGlobal("Blob",NodeBlob);
@@ -32,6 +35,43 @@ beforeEach(()=>{
   vi.spyOn(HTMLAnchorElement.prototype,"click").mockImplementation(()=>undefined);
 });
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
+
+it('binds case preparation and waits for durable approval before downloading exact files',async()=>{
+ let current:unknown={...bound,state:'PRESERVING',artifact:null,claimReview:{...bound.claimReview,state:'PREPARING'}};
+ const pending={...bound,approval:approved.approval,claimReview:{...bound.claimReview,state:'APPROVAL_PRESERVING'},preservation:{result:{status:'PRESERVED'},approval:{status:'COMMITTED_PENDING_DURABILITY'}}};
+ const featureRequest=vi.fn(async(_id:string,path:string,method?:string)=>{
+  if(path==='recipient-exports/profiles')return {profiles:profiles.profiles.map(p=>({...p,id:p.id.replace('-v1','-v2')}))};
+  if(path==='recipient-exports'&&method==='POST')return current;
+  if(path.endsWith('/approve')){current=pending;return pending;}
+  return current;
+ });
+ const featureDownload=vi.fn(async(_proof:string,_path:string)=>new Blob([bytes],{type:'image/jpeg'}));
+ render(<RecipientExportPanel userId="seller-fixture" api={{recoveryScope,featureRequest,featureDownload} as unknown as PackProofApi} proofId={proofId} caseId={caseId} sources={sources} claim={claimBinding}/>);
+ await screen.findByRole('option',{name:/Stripe dispute.*other networks/});
+ expect(screen.queryByRole('option',{name:/eBay payment dispute/})).not.toBeInTheDocument();
+ expect(screen.getByLabelText('Submission deadline from your case')).toHaveAttribute('readonly');
+ fireEvent.click(screen.getByLabelText('I checked the current instructions and deadline for this case.'));
+ fireEvent.click(screen.getByRole('button',{name:'Add a source frame'}));fireEvent.change(screen.getByLabelText('Factual label'),{target:{value:'Packing observation'}});
+ fireEvent.click(screen.getByRole('button',{name:'Prepare exact files'}));await screen.findByRole('status');
+ expect(featureRequest).toHaveBeenCalledWith(proofId,'recipient-exports','POST',expect.objectContaining({profileId:'stripe-dispute-us-other-v2',claimCaseId:claimBinding.claimCaseId,claimSnapshotSha256:claimBinding.snapshotSha256,destinationDeadline:claimBinding.deadline}));
+ expect(featureDownload).not.toHaveBeenCalled();
+ current=bound;fireEvent.click(screen.getByRole('button',{name:'Check preparation again'}));await screen.findByRole('img',{name:'Submission file 1: facts-1.jpg'});
+ fireEvent.click(screen.getByLabelText('I reviewed these exact files and text; the relevant details are readable.'));
+ fireEvent.click(screen.getByRole('button',{name:'Approve files for merchant review'}));await screen.findByRole('button',{name:'Preserving your approval'});
+ expect(featureRequest).toHaveBeenCalledWith(proofId,'recipient-exports/rex_job1/approve','POST',{artifactSha256,legibilityConfirmed:true,claimSnapshotSha256:claimBinding.snapshotSha256,action:'EXPORT_FOR_MERCHANT_REVIEW'});
+ expect(featureDownload.mock.calls.some(c=>c[1]===downloadPath)).toBe(false);
+ expect(screen.getByRole('button',{name:'Preserving your approval'})).toBeDisabled();
+ current={...pending,claimReview:{...pending.claimReview,state:'APPROVED'},preservation:{...pending.preservation,approval:{status:'PRESERVED'}}};
+ fireEvent.click(screen.getByRole('button',{name:'Check preparation again'}));const download=await screen.findByRole('button',{name:'Download approved files again'});fireEvent.click(download);
+ await waitFor(()=>expect(featureDownload).toHaveBeenCalledWith(proofId,downloadPath));
+});
+
+it('rejects a cached export from another claim revision before opening files',async()=>{
+ sessionStorage.setItem(`${savedKey}.${claimBinding.claimCaseId}.${claimBinding.snapshotSha256}`,'rex_job1');
+ const featureRequest=vi.fn(async(_id:string,path:string)=>path.endsWith('/profiles')?{profiles:[]}:{...bound,claimSnapshotSha256:'c'.repeat(64)}),featureDownload=vi.fn();
+ render(<RecipientExportPanel userId="seller-fixture" api={{recoveryScope,featureRequest,featureDownload} as unknown as PackProofApi} proofId={proofId} caseId={caseId} sources={sources} claim={claimBinding}/>);
+ await screen.findByRole('alert');expect(featureDownload).not.toHaveBeenCalled();expect(screen.queryByRole('button',{name:'Approve files for merchant review'})).not.toBeInTheDocument();
+});
 
 it("prepares selected source moments, verifies the exact preview, approves its digest, and re-downloads with the existing receipt",async()=>{
   const actions:string[]=[];
@@ -91,7 +131,7 @@ it("recovers malformed format and saved-job responses without losing the case or
     if(path==="recipient-exports/rex_job1")return jobReadable?ready:{...ready,artifact:{...ready.artifact,files:[ready.artifact.files[0],ready.artifact.files[0]]}};
     throw new Error("No mutation should occur during recovery");
   });
-  const featureDownload=vi.fn(async()=>new Blob([bytes],{type:"image/jpeg"}));
+  const featureDownload=vi.fn(async(_proof:string,_path:string)=>new Blob([bytes],{type:"image/jpeg"}));
   render(<RecipientExportPanel userId="seller-fixture" api={{recoveryScope,featureRequest,featureDownload} as unknown as PackProofApi} proofId={proofId} caseId={caseId} sources={sources}/>);
   await screen.findByRole("alert");
   expect(screen.getByRole("heading",{name:"Prepare submission files"})).toBeInTheDocument();

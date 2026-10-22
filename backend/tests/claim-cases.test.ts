@@ -16,7 +16,7 @@ import {importPartnerOrder,addPartnerBinding} from '../src/platform/partner-proo
 import {finalizeProof} from '../src/domain/finalize.js';
 import {commitAttestation} from '../src/domain/attestations.js';
 import {createSignatureSnapshot,buildSignatureCase} from '../src/domain/signature.js';
-import {createClaimCase,getClaimCase,reviseClaimCase} from '../src/domain/claim-cases.js';
+import {createClaimCase,getClaimCase,reviseClaimCase,claimCaseOptions} from '../src/domain/claim-cases.js';
 import {bindClaimExport,assertClaimExportCurrent,claimEvidenceSelection} from '../src/export/claim-profiles.js';
 import {recipientProfile} from '../src/export/recipient-profiles.js';
 import {queueRecipientExport,processRecipientExport,getRecipientExport,approveRecipientExport,downloadRecipientExport} from '../src/domain/recipient-exports.js';
@@ -93,6 +93,10 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
  });
  it('denies crossed merchants, payments, lines, service actors and forged provenance',async()=>{
   const c=await createClaimCase(h.db,clock,opA,proofA,input('du_scope'));
+  const options=await claimCaseOptions(h.db,opA,proofA);
+  expect(options.proofId).toBe(proofA);expect(options.payments).toHaveLength(2);
+  expect(options.payments.every(p=>[accountA,accountA2].includes(p.integrationAccountId)&&p.paymentId==='ch_shared')).toBe(true);
+  await expect(claimCaseOptions(h.db,opB,proofA)).rejects.toThrow();
   await expect(getClaimCase(h.db,opB,proofA,c.claimCaseId)).rejects.toThrow();
   await expect(createClaimCase(h.db,clock,opA,proofA,input('du_cross',accountB))).rejects.toMatchObject({code:'CLAIM_ACCOUNT_UNSUPPORTED'});
   await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_payment'),paymentId:'unbound'})).rejects.toMatchObject({code:'CLAIM_PAYMENT_SCOPE'});
@@ -186,11 +190,13 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
   expect(await requireRecentClaimAuthentication({clock,auth:{authenticate:async()=>({userId:opA,authenticatedAt:clock.now().getTime()/1000-10})}} as AppDependencies,req)).toBe(opA);
   const c=await createClaimCase(h.db,clock,opA,proofA,input('du_http'));
   const base=`/proofs/${proofA}/claim-cases`;
+  const optionsResponse=await request(h.app).get(`${base}/options`).set(auth(opA));expect(optionsResponse.status,optionsResponse.text).toBe(200);expect(optionsResponse.body.proofId).toBe(proofA);
   const read=await request(h.app).get(`${base}/${c.claimCaseId}`).set(auth(opA));expect(read.status,read.text).toBe(200);expect(read.headers['cache-control']).toContain('no-store');
   const submit=await request(h.app).post(`${base}/${c.claimCaseId}/submissions`).set(auth(opA)).send({});expect(submit.status).toBe(409);expect(submit.body.code??submit.body.error?.code).toBe('CLAIM_PROVIDER_SUBMISSION_UNAVAILABLE');
   vi.stubEnv('PACKPROOF_CLAIM_EXPORTS_ENABLED','false');expect((await request(h.app).get(base).set(auth(opA))).status).toBe(503);vi.stubEnv('PACKPROOF_CLAIM_EXPORTS_ENABLED','true');
   await revokeOrganizationMember(h.db,clock,ownerA,merchantA,memberA,'revoke');
   await expect(getClaimCase(h.db,opA,proofA,c.claimCaseId)).rejects.toThrow();
+  await expect(claimCaseOptions(h.db,opA,proofA)).rejects.toThrow();
   await expect(createClaimCase(h.db,clock,opA,proofA,input('du_http'))).rejects.toThrow();
  });
  it('reconstructs exact claim identities and revision history in a fresh fenced database',async()=>{

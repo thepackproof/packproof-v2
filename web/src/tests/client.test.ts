@@ -3,6 +3,20 @@ import { joinUrl, PackProofApi } from "../api/client";
 import { ApiError } from "../api/types";
 
 describe("API client boundary", () => {
+  it('sends explicit claim retry keys in headers for creates and revisions',async()=>{
+    const fetchMock=vi.fn(async()=>new Response('{}',{status:200,headers:{'Content-Type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    try{
+      const api=new PackProofApi({baseUrl:'',getToken:()=> 'fixture-token'}),body={disputeId:'du_fixture'};
+      await api.claimWrite('proof/one',null,body,'stable-create');
+      await api.claimWrite('proof/one','claim/one',{expectedSnapshotSha256:'a'.repeat(64)},'stable-revision');
+      const calls=fetchMock.mock.calls as unknown as Array<[string,RequestInit]>;
+      expect(calls.map(c=>c[0])).toEqual(['/proofs/proof%2Fone/claim-cases','/proofs/proof%2Fone/claim-cases/claim%2Fone/revisions']);
+      expect(new Headers(calls[0][1].headers).get('Idempotency-Key')).toBe('stable-create');
+      expect(new Headers(calls[1][1].headers).get('Idempotency-Key')).toBe('stable-revision');
+      expect(JSON.parse(String(calls[0][1].body))).toEqual(body);
+    }finally{vi.unstubAllGlobals();}
+  });
   it("joins same-origin and absolute API URLs", () => {
     expect(joinUrl("", "/me/proofs")).toBe("/me/proofs");
     expect(joinUrl("http://127.0.0.1:3000", "/proofs/abc")).toBe(

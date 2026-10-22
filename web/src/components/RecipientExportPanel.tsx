@@ -2,11 +2,12 @@ import { randomId } from "../random-id";
 import { useEffect, useRef, useState } from "react";
 import type { PackProofApi } from "../api/client";
 
+type ClaimBinding={claimCaseId:string;snapshotSha256:string;deadline:string;network:string};
 type Profile = { id:string; destination:"EBAY_PAYMENT_DISPUTE"|"STRIPE_DISPUTE"; network:string; region:string; version:string; reviewRequired:boolean };
 type FileInfo = { name:string; contentType:string; byteSize:number; sha256:string };
 type Approval = { artifactSha256:string; actorUserId:string; approvedAt:string };
-type Job = { jobId:string; proofId:string; caseId:string; state:string; artifactSha256:string|null; failureCode:string|null; approval?:Approval|null; artifact?:{files:FileInfo[];approvedNarrative:string;gaps:string[]}|null };
-const states=new Set(["QUEUED","RENDERING","READY","FAILED"]),hash=/^[a-f0-9]{64}$/;
+type Job = { claimCaseId?:string;claimSnapshotSha256?:string;claimReview?:{state:string;requiresNewApproval:boolean;reason:string|null};preservation?:{result?:{status:string};approval?:{status:string}|null};jobId:string; proofId:string; caseId:string; state:string; artifactSha256:string|null; failureCode:string|null; approval?:Approval|null; artifact?:{files:FileInfo[];approvedNarrative:string;gaps:string[]}|null };
+const states=new Set(["QUEUED","RENDERING","PRESERVING","READY","FAILED"]),hash=/^[a-f0-9]{64}$/;
 const object=(v:unknown):v is Record<string,unknown>=>Boolean(v)&&typeof v==="object"&&!Array.isArray(v);
 function profilesFrom(value:unknown):Profile[]{
   if(!object(value)||!Array.isArray(value.profiles)||value.profiles.length>20)throw new Error("Submission formats could not be read. Reload formats to try again.");
@@ -14,9 +15,14 @@ function profilesFrom(value:unknown):Profile[]{
   if(profiles.some(p=>!object(p)||typeof p.id!=="string"||!p.id||typeof p.version!=="string"||typeof p.reviewRequired!=="boolean"||!["EBAY_PAYMENT_DISPUTE","STRIPE_DISPUTE"].includes(String(p.destination))||typeof p.network!=="string"||typeof p.region!=="string")||new Set(profiles.map(p=>p.id)).size!==profiles.length)throw new Error("Submission formats could not be read. Reload formats to try again.");
   return profiles as Profile[];
 }
-function jobFrom(value:unknown,proofId:string,caseId:string):Job{
+function jobFrom(value:unknown,proofId:string,caseId:string,claim?:ClaimBinding):Job{
   const invalid=()=>new Error("The saved preparation response could not be read. Check preparation again; your case remains available.");
   if(!object(value)||typeof value.jobId!=="string"||!/^[A-Za-z0-9_-]{1,200}$/.test(value.jobId)||value.proofId!==proofId||value.caseId!==caseId||!states.has(String(value.state)))throw invalid();
+  if(claim){
+    if(value.claimCaseId!==claim.claimCaseId||value.claimSnapshotSha256!==claim.snapshotSha256||value.action!=='EXPORT_FOR_MERCHANT_REVIEW'||value.providerSubmission!=='UNAVAILABLE'||!object(value.claimReview)||!['PREPARING','REVIEW_REQUIRED','APPROVAL_PRESERVING','APPROVED','FAILED'].includes(String(value.claimReview.state))||typeof value.claimReview.requiresNewApproval!=='boolean')throw invalid();
+    if(value.state==='READY'&&(!object(value.preservation)||!object(value.preservation.result)||value.preservation.result.status!=='PRESERVED'))throw invalid();
+    if(value.claimReview.state==='APPROVED'&&(!value.approval||value.claimReview.requiresNewApproval||!object(value.preservation)||!object(value.preservation.approval)||value.preservation.approval.status!=='PRESERVED'))throw invalid();
+  }
   if(value.state==="READY"){
     const a=value.artifact;
     if(typeof value.artifactSha256!=="string"||!hash.test(value.artifactSha256)||!object(a)||!Array.isArray(a.files)||a.files.length<1||a.files.length>5||typeof a.approvedNarrative!=="string"||!Array.isArray(a.gaps)||a.gaps.some(g=>typeof g!=="string"))throw invalid();
@@ -38,8 +44,8 @@ function failureMessage(code:string|null){
   return "The files could not be prepared. Review the source selection or try again when preparation is available.";
 }
 
-export function RecipientExportPanel({api,userId,proofId,caseId,sources}:{api:PackProofApi;userId:string;proofId:string;caseId:string;sources:Array<{evidenceId:string;contentType:string}>}){
-  const savedJobKey=`packproof.export.${api.recoveryScope}.${userId}.${proofId}.${caseId}`;
+export function RecipientExportPanel({api,userId,proofId,caseId,sources,claim}:{api:PackProofApi;userId:string;proofId:string;caseId:string;claim?:ClaimBinding;sources:Array<{evidenceId:string;contentType:string}>}){
+  const savedJobKey=`packproof.export.${api.recoveryScope}.${userId}.${proofId}.${caseId}${claim?`.${claim.claimCaseId}.${claim.snapshotSha256}`:""}`;
   const [profiles,setProfiles]=useState<Profile[]>([]),[profileId,setProfileId]=useState("");
   const [frames,setFrames]=useState<Array<{evidenceId:string;seconds:string;label:string}>>([]);
   const [narrative,setNarrative]=useState(""),[deadline,setDeadline]=useState(""),[reviewed,setReviewed]=useState(false);
@@ -51,32 +57,32 @@ export function RecipientExportPanel({api,userId,proofId,caseId,sources}:{api:Pa
   function publish(value:Job,version:number){if(version!==epoch.current||scope.current!==savedJobKey)return;setSavedJob({scope:savedJobKey,value});setRetryJobId(value.jobId);try{sessionStorage.setItem(savedJobKey,value.jobId);}catch{}}
   useEffect(()=>{
     scope.current=savedJobKey;epoch.current++;const version=epoch.current;
-    setSavedJob(null);setRetryJobId(null);setError(null);setBusy(false);setLegible(false);setFrames([]);setNarrative("");setDeadline("");setReviewed(false);requestKey.current=randomId();
+    setSavedJob(null);setRetryJobId(null);setError(null);setBusy(false);setLegible(false);setFrames([]);setNarrative("");setDeadline(claim?new Date(Date.parse(claim.deadline)-new Date(claim.deadline).getTimezoneOffset()*60000).toISOString().slice(0,16):"");setReviewed(false);requestKey.current=randomId();
     let active=true;
-    try{const id=sessionStorage.getItem(savedJobKey);if(id&&/^[A-Za-z0-9_-]{1,200}$/.test(id)){setRetryJobId(id);void api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(id)}`).then(value=>{const parsed=jobFrom(value,proofId,caseId);if(active)publish(parsed,version);}).catch(e=>{if(active&&epoch.current===version)setError(e instanceof Error?e.message:"The saved preparation could not be reopened. Check preparation again.");});}}catch{}
+    try{const id=sessionStorage.getItem(savedJobKey);if(id&&/^[A-Za-z0-9_-]{1,200}$/.test(id)){setRetryJobId(id);void api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(id)}`).then(value=>{const parsed=jobFrom(value,proofId,caseId,claim);if(active)publish(parsed,version);}).catch(e=>{if(active&&epoch.current===version)setError(e instanceof Error?e.message:"The saved preparation could not be reopened. Check preparation again.");});}}catch{}
     return()=>{active=false;epoch.current++;};
   },[api,proofId,caseId,savedJobKey]);
   useEffect(()=>{
     let active=true;setProfiles([]);setProfileId("");
-    void api.featureRequest<unknown>(proofId,`${path}/profiles`).then(result=>{const parsed=profilesFrom(result);if(active){setProfiles(parsed);setProfileId(parsed.find(p=>!p.reviewRequired)?.id??"");}}).catch(e=>{if(active)setError(e instanceof Error?e.message:"Submission formats are temporarily unavailable. Reload formats to try again.");});
+    void api.featureRequest<unknown>(proofId,`${path}/profiles`).then(result=>{const parsed=profilesFrom(result).filter(p=>!claim||(p.destination==="STRIPE_DISPUTE"&&p.region==="US"&&p.network===(claim.network==="MASTERCARD"?"MASTERCARD":"OTHER")&&p.id.endsWith("-v2")));if(active){setProfiles(parsed);setProfileId(parsed.find(p=>!p.reviewRequired)?.id??"");}}).catch(e=>{if(active)setError(e instanceof Error?e.message:"Submission formats are temporarily unavailable. Reload formats to try again.");});
     return()=>{active=false;};
-  },[api,proofId,profileReload]);
+  },[api,proofId,profileReload,claim?.snapshotSha256]);
   useEffect(()=>{
-    if(!job||!["QUEUED","RENDERING"].includes(job.state))return;
+    if(!job||(!["QUEUED","RENDERING","PRESERVING"].includes(job.state)&&job.claimReview?.state!=="APPROVAL_PRESERVING"))return;
     let active=true,running=false;const version=epoch.current;
-    const timer=window.setInterval(async()=>{if(running)return;running=true;try{const parsed=jobFrom(await api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(job.jobId)}`),proofId,caseId);if(active)publish(parsed,version);}catch(e){if(active)setError(e instanceof Error?e.message:"Preparation status is temporarily unavailable. Check preparation again.");}finally{running=false;}},3000);
+    const timer=window.setInterval(async()=>{if(running)return;running=true;try{const parsed=jobFrom(await api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(job.jobId)}`),proofId,caseId,claim);if(active)publish(parsed,version);}catch(e){if(active)setError(e instanceof Error?e.message:"Preparation status is temporarily unavailable. Check preparation again.");}finally{running=false;}},3000);
     return()=>{active=false;clearInterval(timer);};
-  },[api,proofId,caseId,job?.jobId,job?.state]);
+  },[api,proofId,caseId,job?.jobId,job?.state,job?.claimReview?.state]);
   useEffect(()=>{
     let active=true;const urls:string[]=[];setPreviews([]);setLegible(false);
-    if(job?.state==="READY"&&job.artifact)void Promise.all(job.artifact.files.map(async(file,index)=>{
+    if(job?.state==="READY"&&job.artifact&&!job.claimReview?.requiresNewApproval)void Promise.all(job.artifact.files.map(async(file,index)=>{
       const blob=await api.featureDownload(proofId,`${path}/${encodeURIComponent(job.jobId)}/files/${index}?preview=true`);await verifyPreview(blob,file);
       if(!active)return "";const url=URL.createObjectURL(blob);urls.push(url);return url;
     })).then(values=>{if(active)setPreviews(values);}).catch(e=>{urls.forEach(URL.revokeObjectURL);if(active){active=false;setPreviews([]);setError(e instanceof Error?e.message:"The exact files could not be opened. Check preparation again.");}});
     return()=>{active=false;urls.forEach(URL.revokeObjectURL);};
-  },[api,proofId,job?.jobId,job?.state,job?.artifactSha256,previewReload]);
+  },[api,proofId,job?.jobId,job?.state,job?.artifactSha256,job?.claimReview?.requiresNewApproval,previewReload]);
   function changed(){epoch.current++;try{sessionStorage.removeItem(savedJobKey);}catch{}setSavedJob(null);setRetryJobId(null);setLegible(false);requestKey.current=randomId();setError(null);}
-  async function run(action:(version:number)=>Promise<void>){if(busy)return;const version=epoch.current;setBusy(true);setError(null);try{await action(version);}catch(e){if(epoch.current===version)setError(e instanceof Error?e.message:"This action could not finish. Retry shortly.");}finally{if(epoch.current===version)setBusy(false);}}
+  async function run(action:(version:number)=>Promise<void>){if(busy)return;const version=epoch.current;setBusy(true);setError(null);try{await action(version);}catch(e){if(epoch.current===version){setError(e instanceof Error?e.message:"This action could not finish. Retry shortly.");if(claim)setSavedJob(null);}}finally{if(epoch.current===version)setBusy(false);}}
   const canPrepare=reviewed&&Number.isFinite(Date.parse(deadline))&&Date.parse(deadline)>Date.now()&&profileId&&frames.length&&frames.every(f=>f.label.trim()&&f.seconds!==""&&Number.isFinite(Number(f.seconds))&&Number(f.seconds)>=0&&Number(f.seconds)<=21600);
   return <section className="recipient-export-panel stack" aria-label="Submission files">
     <h4>Prepare submission files</h4>
@@ -86,7 +92,7 @@ export function RecipientExportPanel({api,userId,proofId,caseId,sources}:{api:Pa
     <fieldset disabled={busy} className="stack">
       <legend>Source selection and destination</legend>
       <label className="field"><span>Destination</span><select value={profileId} onChange={e=>{changed();setProfileId(e.target.value);}}><option value="">Choose a format</option>{profiles.map(p=><option key={p.id} value={p.id} disabled={p.reviewRequired}>{p.destination==="EBAY_PAYMENT_DISPUTE"?"eBay payment dispute · images":`Stripe dispute · ${p.network==="MASTERCARD"?"Mastercard":"other networks"} · PDF`} · {p.region}{p.reviewRequired?" · requires updated review":""}</option>)}</select></label>
-      <label className="field"><span>Submission deadline from your case</span><input type="datetime-local" value={deadline} onChange={e=>{changed();setDeadline(e.target.value);}}/></label>
+      <label className="field"><span>Submission deadline from your case</span><input type="datetime-local" readOnly={Boolean(claim)} value={deadline} onChange={e=>{changed();setDeadline(e.target.value);}}/></label>
       <label className="row"><input type="checkbox" checked={reviewed} onChange={e=>{changed();setReviewed(e.target.checked);}}/>I checked the current instructions and deadline for this case.</label>
       {frames.map((frame,index)=><fieldset key={index}><legend>Frame {index+1}</legend>
         <label className="field"><span>Recording</span><select value={frame.evidenceId} onChange={e=>{changed();setFrames(old=>old.map((f,i)=>i===index?{...f,evidenceId:e.target.value}:f));}}>{recordings.map((r,i)=><option key={r.evidenceId} value={r.evidenceId}>Recording {i+1}</option>)}</select></label>
@@ -96,20 +102,22 @@ export function RecipientExportPanel({api,userId,proofId,caseId,sources}:{api:Pa
       </fieldset>)}
       <button className="btn btn-secondary" disabled={!recordings.length||frames.length>=4} onClick={()=>{changed();setFrames(old=>[...old,{evidenceId:recordings[0].evidenceId,seconds:"0",label:""}]);}}>Add a source frame</button>
       <label className="field"><span>Supporting text · your statement</span><textarea maxLength={2000} value={narrative} onChange={e=>{changed();setNarrative(e.target.value);}}/></label>
-      <button className="btn" disabled={!canPrepare} onClick={()=>void run(async version=>{const parsed=jobFrom(await api.featureRequest<unknown>(proofId,path,"POST",{caseId,profileId,frames:frames.map(f=>({evidenceId:f.evidenceId,offsetMs:Math.round(Number(f.seconds)*1000),label:f.label})),narrative,destinationDeadline:new Date(deadline).toISOString(),destinationInstructionsReviewed:true,idempotencyKey:requestKey.current}),proofId,caseId);publish(parsed,version);})}>Prepare exact files</button>
+      <button className="btn" disabled={!canPrepare} onClick={()=>void run(async version=>{const parsed=jobFrom(await api.featureRequest<unknown>(proofId,path,"POST",{caseId,profileId,frames:frames.map(f=>({evidenceId:f.evidenceId,offsetMs:Math.round(Number(f.seconds)*1000),label:f.label})),narrative,destinationDeadline:claim?.deadline??new Date(deadline).toISOString(),destinationInstructionsReviewed:true,idempotencyKey:requestKey.current,...(claim?{claimCaseId:claim.claimCaseId,claimSnapshotSha256:claim.snapshotSha256}:{})}),proofId,caseId,claim);publish(parsed,version);})}>Prepare exact files</button>
     </fieldset>
-    {job&&["QUEUED","RENDERING"].includes(job.state)&&<p role="status">Your files are being prepared. The original recording stays unchanged.</p>}
-    {retryJobId&&<button className="btn btn-secondary" disabled={busy} onClick={()=>void run(async version=>{const parsed=jobFrom(await api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(retryJobId)}`),proofId,caseId);publish(parsed,version);setPreviewReload(n=>n+1);})}>Check preparation again</button>}
+    {job&&["QUEUED","RENDERING","PRESERVING"].includes(job.state)&&<p role="status">Your files are being prepared. The original recording stays unchanged.</p>}
+    {retryJobId&&<button className="btn btn-secondary" disabled={busy} onClick={()=>void run(async version=>{const parsed=jobFrom(await api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(retryJobId)}`),proofId,caseId,claim);publish(parsed,version);setPreviewReload(n=>n+1);})}>Check preparation again</button>}
+    {job?.claimReview?.state==="APPROVAL_PRESERVING"&&<p role="status">Your approval is being preserved. Download will be available when preservation finishes.</p>}
+    {job?.claimReview?.requiresNewApproval&&<p role="alert">The case has changed or needs a fresh observation. Reload the case and prepare new files.</p>}
     {job?.state==="FAILED"&&<p role="alert">{failureMessage(job.failureCode)}</p>}
     {job?.state==="READY"&&job.artifact&&<div className="stack">
       <h4>Exact files for approval</h4>
       {job.artifact.files.map((file,index)=><figure key={`${index}-${file.name}`}><figcaption>{file.name} · {(file.byteSize/1000).toFixed(0)} KB</figcaption>{previews[index]&&(file.contentType==="application/pdf"?<iframe title={`Preview ${file.name}`} src={previews[index]} style={{width:"100%",height:"32rem"}}/>:<img src={previews[index]} alt={`Submission file ${index+1}: ${file.name}`} style={{maxWidth:"100%",height:"auto"}}/>)}</figure>)}
       <p>{job.artifact.approvedNarrative}</p><ul>{job.artifact.gaps.map((gap,i)=><li key={i}>{gap}</li>)}</ul>
       {!job.approval&&<label className="row"><input type="checkbox" checked={legible} onChange={e=>setLegible(e.target.checked)}/>I reviewed these exact files and text; the relevant details are readable.</label>}
-      <button className="btn" disabled={busy||(!job.approval&&(!legible||previews.length!==job.artifact.files.length))} onClick={()=>void run(async version=>{
-        if(!job.approval){const approved=jobFrom(await api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(job.jobId)}/approve`,"POST",{artifactSha256:job.artifactSha256,legibilityConfirmed:true}),proofId,caseId);if(!approved.approval||approved.artifactSha256!==job.artifactSha256)throw new Error("Approval was not confirmed for these exact files. Check preparation again.");publish(approved,version);}
+      <button className="btn" disabled={busy||job.claimReview?.state==="APPROVAL_PRESERVING"||job.claimReview?.requiresNewApproval||(!job.approval&&(!legible||previews.length!==job.artifact.files.length))} onClick={()=>void run(async version=>{
+        if(!job.approval){const approved=jobFrom(await api.featureRequest<unknown>(proofId,`${path}/${encodeURIComponent(job.jobId)}/approve`,"POST",{artifactSha256:job.artifactSha256,legibilityConfirmed:true,...(claim?{claimSnapshotSha256:claim.snapshotSha256,action:"EXPORT_FOR_MERCHANT_REVIEW"}:{})}),proofId,caseId,claim);if(!approved.approval||approved.artifactSha256!==job.artifactSha256)throw new Error("Approval was not confirmed for these exact files. Check preparation again.");publish(approved,version);if(claim&&approved.claimReview?.state!=="APPROVED")return;}
         const blob=await api.featureDownload(proofId,`${path}/${encodeURIComponent(job.jobId)}/download`);if(version!==epoch.current)return;const url=URL.createObjectURL(blob),anchor=document.createElement("a");anchor.href=url;anchor.download="packproof-submission-files.zip";anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
-      })}>{job.approval?"Download approved files again":"Approve and download files"}</button>
+      })}>{job.claimReview?.state==="APPROVAL_PRESERVING"?"Preserving your approval":job.approval?"Download approved files again":claim?"Approve files for merchant review":"Approve and download files"}</button>
       <p className="note">Upload the files in the submission folder to your case. PackProof has not submitted a dispute or confirmed portal acceptance.</p>
     </div>}
   </section>;
