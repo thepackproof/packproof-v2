@@ -74,7 +74,10 @@ export function createEnvelopeS3Store(input: {
     try {
       const result = await input.transport.put({ Bucket: bucket, Key: key, Body: bytes, ContentType: 'application/json', ContentLength: bytes.length,
         IfNoneMatch: '*', ChecksumAlgorithm: 'SHA256', ChecksumSHA256: createHash('sha256').update(bytes).digest('base64'),
-        ObjectLockMode: 'COMPLIANCE', ObjectLockRetainUntilDate: new Date(retainUntil), ExpectedBucketOwner: input.expectedBucketOwner });
+        // The deployment controls default retention. Workload roles must not
+        // need PutObjectRetention, including through retention headers on PUT.
+        // Accept only after reading the actual returned version's protection.
+        ExpectedBucketOwner: input.expectedBucketOwner });
       const storage = { bucket, key, versionId: result.VersionId! };
       return verify({ storage, sha256: createHash('sha256').update(bytes).digest('hex'), byteSize: bytes.length }, retainUntil);
     } catch (error) {

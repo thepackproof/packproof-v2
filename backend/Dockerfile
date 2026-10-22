@@ -33,6 +33,7 @@ COPY backend/scripts/foundation-migrate-cli.mjs ./scripts/foundation-migrate-cli
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
 COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs
 COPY backend/scripts/isolated-runtime-queued-revocation.mjs ./scripts/isolated-runtime-queued-revocation.mjs
+COPY backend/scripts/isolated-envelope-acceptance.mjs ./scripts/isolated-envelope-acceptance.mjs
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

@@ -24,10 +24,15 @@ describe('exact-version protected envelope storage adapter', () => {
     expect(f.calls.map(c => c.operation)).toEqual(['get', 'retention']);
     for (const call of f.calls) expect(call.input).toMatchObject({ VersionId: 'exact-version-1', ExpectedBucketOwner: '123456789012' });
   });
-  it('conditionally creates an explicitly locked artifact with a verified upload checksum and reads the returned version', async () => {
+  it('conditionally creates an artifact without retention authority and verifies the returned version protection', async () => {
     const f = fixture(); await f.store.preserve('artifacts', key, body, until);
-    expect(f.calls[0]).toMatchObject({ operation: 'put', input: { IfNoneMatch: '*', ChecksumAlgorithm: 'SHA256', ChecksumSHA256: Buffer.from(sha256(body), 'hex').toString('base64'), ObjectLockMode: 'COMPLIANCE', ObjectLockRetainUntilDate: new Date(until), ExpectedBucketOwner: '123456789012' } });
+    expect(f.calls[0]).toMatchObject({ operation: 'put', input: { IfNoneMatch: '*', ChecksumAlgorithm: 'SHA256', ChecksumSHA256: Buffer.from(sha256(body), 'hex').toString('base64'), ExpectedBucketOwner: '123456789012' } });
+    expect(f.calls[0].input.ObjectLockMode).toBeUndefined();
+    expect(f.calls[0].input.ObjectLockRetainUntilDate).toBeUndefined();
     expect(f.calls[1]).toMatchObject({ operation: 'get', input: { VersionId: 'exact-version-1' } });
+    expect(f.calls[2]).toMatchObject({ operation: 'retention', input: { VersionId: 'exact-version-1' } });
+    f.value.until = now;
+    await expect(f.store.preserve('artifacts', key, body, until)).rejects.toThrow('ENVELOPE_PROTECTION_MISMATCH');
   });
   it.each(['GOVERNANCE', 'missing'])('refuses %s as compliance protection', async mode => {
     const f = fixture(); f.value.mode = mode;
