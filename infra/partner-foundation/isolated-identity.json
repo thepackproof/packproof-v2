@@ -1,0 +1,284 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Isolated M1 synthetic identity pool. Required TOTP MFA, administrator-created users only, no production identity references or messaging integrations.",
+  "Resources": {
+    "UserPool": {
+      "Type": "AWS::Cognito::UserPool",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "UserPoolName": {
+          "Fn::Sub": "${AWS::StackName}-users"
+        },
+        "DeletionProtection": "ACTIVE",
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": true
+        },
+        "MfaConfiguration": "ON",
+        "EnabledMfas": [
+          "SOFTWARE_TOKEN_MFA"
+        ],
+        "UsernameConfiguration": {
+          "CaseSensitive": false
+        },
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "admin_only",
+              "Priority": 1
+            }
+          ]
+        },
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 16,
+            "RequireLowercase": true,
+            "RequireUppercase": true,
+            "RequireNumbers": true,
+            "RequireSymbols": true,
+            "TemporaryPasswordValidityDays": 1
+          }
+        },
+        "UserPoolTags": {
+          "system": "packproof",
+          "environment": "isolated-m1-test",
+          "data-classification": "synthetic-only"
+        }
+      }
+    },
+    "UserPoolClient": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "ClientName": {
+          "Fn::Sub": "${AWS::StackName}-acceptance"
+        },
+        "UserPoolId": {
+          "Ref": "UserPool"
+        },
+        "GenerateSecret": false,
+        "EnableTokenRevocation": true,
+        "PreventUserExistenceErrors": "ENABLED",
+        "ExplicitAuthFlows": [
+          "ALLOW_USER_SRP_AUTH",
+          "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+          "ALLOW_REFRESH_TOKEN_AUTH"
+        ],
+        "AuthSessionValidity": 3,
+        "AccessTokenValidity": 15,
+        "IdTokenValidity": 15,
+        "RefreshTokenValidity": 1,
+        "TokenValidityUnits": {
+          "AccessToken": "minutes",
+          "IdToken": "minutes",
+          "RefreshToken": "days"
+        },
+        "ReadAttributes": [
+          "sub",
+          "email",
+          "email_verified"
+        ]
+      }
+    },
+    "RunnerRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "IncludeRunner",
+      "Properties": {
+        "RoleName": "packproof-m1-20261020-identity-runner",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": "arn:aws:codebuild:us-east-1:784514617543:project/packproof-m1-20261020-identity"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "SyntheticIdentityOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "IsolatedUserPool",
+                  "Effect": "Allow",
+                  "Action": [
+                    "cognito-idp:DescribeUserPool",
+                    "cognito-idp:DescribeUserPoolClient",
+                    "cognito-idp:GetUserPoolMfaConfig",
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminSetUserPassword",
+                    "cognito-idp:AdminInitiateAuth",
+                    "cognito-idp:AdminRespondToAuthChallenge",
+                    "cognito-idp:AdminSetUserMFAPreference",
+                    "cognito-idp:AdminUserGlobalSignOut",
+                    "cognito-idp:AdminDeleteUser"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "UserPool",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Sid": "AcceptanceLogs",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:us-east-1:784514617543:log-group:/packproof/packproof-m1-20261020/acceptance:*"
+                },
+                {
+                  "Sid": "AcceptanceArtifact",
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/identity/*"
+                },
+                {
+                  "Sid": "AcceptanceBucketLocation",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketAcl",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Runner": {
+      "Type": "AWS::CodeBuild::Project",
+      "Condition": "IncludeRunner",
+      "Properties": {
+        "Name": "packproof-m1-20261020-identity",
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "RunnerRole",
+            "Arn"
+          ]
+        },
+        "TimeoutInMinutes": 10,
+        "ConcurrentBuildLimit": 1,
+        "Source": {
+          "Type": "NO_SOURCE",
+          "BuildSpec": "{\"version\":0.2,\"phases\":{\"build\":{\"on-failure\":\"ABORT\",\"commands\":[\"git init candidate\",\"cd candidate\",\"git remote add origin https://github.com/thepackproof/packproof-v2.git\",\"git fetch --depth=1 origin \\\"$CANDIDATE_SHA\\\"\",\"git checkout --detach \\\"$CANDIDATE_SHA\\\"\",\"test \\\"$(git rev-parse HEAD)\\\" = \\\"$CANDIDATE_SHA\\\"\",\"python3 backend/scripts/isolated-identity-acceptance.py\"]}},\"artifacts\":{\"files\":[\"**/*\"],\"base-directory\":\"candidate/identity-artifacts\"}}"
+        },
+        "Artifacts": {
+          "Type": "S3",
+          "Location": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+          "Path": "acceptance/identity",
+          "Name": "identity.zip",
+          "NamespaceType": "BUILD_ID",
+          "Packaging": "ZIP",
+          "EncryptionDisabled": false
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:7.0",
+          "PrivilegedMode": false,
+          "EnvironmentVariables": [
+            {
+              "Name": "CANDIDATE_SHA",
+              "Value": {
+                "Ref": "CandidateCommit"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "PACKPROOF_TEST_PURPOSE",
+              "Value": "isolated-m1-synthetic",
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "ISOLATED_USER_POOL_ID",
+              "Value": {
+                "Ref": "UserPool"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "ISOLATED_CLIENT_ID",
+              "Value": {
+                "Ref": "UserPoolClient"
+              },
+              "Type": "PLAINTEXT"
+            }
+          ]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": "/packproof/packproof-m1-20261020/acceptance",
+            "StreamName": "identity"
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "UserPoolId": {
+      "Value": {
+        "Ref": "UserPool"
+      }
+    },
+    "ClientId": {
+      "Value": {
+        "Ref": "UserPoolClient"
+      }
+    },
+    "Issuer": {
+      "Value": {
+        "Fn::Sub": "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+      }
+    },
+    "RunnerProject": {
+      "Condition": "IncludeRunner",
+      "Value": {
+        "Ref": "Runner"
+      }
+    }
+  },
+  "Parameters": {
+    "CandidateCommit": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{40}"
+    },
+    "RunnerEnabled": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    }
+  },
+  "Conditions": {
+    "IncludeRunner": {
+      "Fn::Equals": [
+        {
+          "Ref": "RunnerEnabled"
+        },
+        "true"
+      ]
+    }
+  }
+}

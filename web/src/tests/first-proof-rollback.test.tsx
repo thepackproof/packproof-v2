@@ -29,8 +29,8 @@ it('restores a pending draft and retries its exact operation after presentation 
   return json({proofs:[],invitations:[],items:[],marketplaces:[],connections:[],sources:[],onboarding_completed:true,onboarding_enrolled:false,current_version:1});
  }));
  render(<App/>);
- expect(await screen.findByRole('textbox',{name:'What are you shipping?'})).toHaveValue('Unsent replacement title');
- expect(screen.getByRole('button',{name:'Open camera'})).toBeDisabled();
+ expect(await screen.findByRole('textbox',{name:'Item name'})).toHaveValue('Unsent replacement title');
+ expect(screen.getByRole('button',{name:/Continue to camera/})).toBeDisabled();
  fireEvent.click(screen.getByRole('button',{name:'Recover submitted draft'}));
  await waitFor(()=>expect(proofAttempts).toBe(1));
  expect(submitted).toEqual([{...original,idempotencyKey:identity}]);

@@ -1,0 +1,126 @@
+{
+  "schema": "packproof.isolated-identity-evidence.v1",
+  "source": "ffd03b292564487977ea55898a8d63e88b13af7a",
+  "buildId": "packproof-m1-20261020-identity:c5e534f7-1397-4f0f-99de-fa1bb8b87881",
+  "buildStatus": "SUCCEEDED",
+  "artifact": {
+    "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+    "key": "acceptance/identity/c5e534f7-1397-4f0f-99de-fa1bb8b87881/identity.zip",
+    "versionId": "YSoV2P2ar02ZPuihkX7Tt0EOlYeL8CGK",
+    "sha256": "43023b93445e1bf6280d8360dde200071d10c20c22087703de4064e639e613f3",
+    "bytes": 702,
+    "encryption": "aws:kms",
+    "locallyDownloadedAndVerified": true
+  },
+  "report": {
+    "schema": "packproof.isolated-identity-acceptance.v1",
+    "source": "ffd03b292564487977ea55898a8d63e88b13af7a",
+    "poolId": "us-east-1_1wLVqaizj",
+    "clientId": "4jq0gv2vo88nbd3cn09eud6npq",
+    "checks": [
+      {
+        "name": "required_totp_and_admin_only_registration",
+        "passed": true
+      },
+      {
+        "name": "self_registration_denied",
+        "passed": true
+      },
+      {
+        "name": "incorrect_password_denied",
+        "passed": true
+      },
+      {
+        "name": "password_alone_does_not_issue_tokens",
+        "passed": true
+      },
+      {
+        "name": "totp_enrollment_completed",
+        "passed": true
+      },
+      {
+        "name": "subsequent_login_requires_totp",
+        "passed": true
+      },
+      {
+        "name": "incorrect_totp_denied",
+        "passed": true
+      },
+      {
+        "name": "correct_totp_authenticates",
+        "passed": true
+      },
+      {
+        "name": "signed_out_token_rejected_by_cognito",
+        "passed": true
+      }
+    ],
+    "limits": [
+      "Synthetic software-token test; no real person or device enrollment.",
+      "No API service or production identity pool uses this test pool.",
+      "Cognito revocation behavior is not proof of application JWT/session revocation."
+    ],
+    "status": "PASSED",
+    "syntheticUserRemoved": true
+  },
+  "cleanup": {
+    "checkedAt": "2026-10-21T02:06:11.437450+00:00",
+    "project": {
+      "projects": [],
+      "projectsNotFound": [
+        "packproof-m1-20261020-identity"
+      ]
+    },
+    "role": "An error occurred (NoSuchEntity) when calling the GetRole operation: The role with name packproof-m1-20261020-identity-runner cannot be found.",
+    "pool": {
+      "Id": "us-east-1_1wLVqaizj",
+      "Name": "packproof-m1-20261020-identity-users",
+      "MfaConfiguration": "ON",
+      "AdminCreateUserConfig": {
+        "AllowAdminCreateUserOnly": true,
+        "UnusedAccountValidityDays": 1
+      },
+      "DeletionProtection": "ACTIVE",
+      "Policies": {
+        "PasswordPolicy": {
+          "MinimumLength": 16,
+          "RequireUppercase": true,
+          "RequireLowercase": true,
+          "RequireNumbers": true,
+          "RequireSymbols": true,
+          "TemporaryPasswordValidityDays": 1
+        },
+        "SignInPolicy": {
+          "AllowedFirstAuthFactors": [
+            "PASSWORD"
+          ]
+        }
+      },
+      "AccountRecoverySetting": {
+        "RecoveryMechanisms": [
+          {
+            "Priority": 1,
+            "Name": "admin_only"
+          }
+        ]
+      }
+    },
+    "users": {
+      "Users": []
+    }
+  },
+  "cloudFormation": {
+    "stack": "packproof-m1-20261020-identity",
+    "state": "UPDATE_COMPLETE",
+    "retainedResources": [
+      "UserPool",
+      "UserPoolClient"
+    ],
+    "runnerEnabled": false
+  },
+  "validation": {
+    "infrastructureRun": 39530337100,
+    "accessAnalyzerFindings": 0
+  },
+  "releaseRecommendation": "HOLD: test identity only; deployed authenticated application and actual device/human acceptance remain open."
+}

@@ -60,6 +60,7 @@ export function OrdersScreen(props: OrdersScreenProps) {
           {([["ready", "Needs fulfillment"], ["started", "Proof started"], ["completed", "Completed"], ["all", "All orders"]] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => { setFilter(value); setPage(0); }}>{label}</button>)}
         </div>
         <div className="secondary-button-group">
+          <button className="btn btn-secondary" disabled={props.loading} onClick={props.onRetry}>Refresh orders</button>
           <select aria-label="Marketplace filter" value={marketplace} onChange={event => { setMarketplace(event.target.value); setPage(0); }}><option value="all">All marketplaces</option>{providers.map(([provider, label]) => <option key={provider} value={provider}>{label}</option>)}</select>
           <button className="btn btn-secondary" disabled={props.loading || props.syncBusy || props.syncAvailable === false} title={props.syncAvailable === false ? "Connect an available marketplace to synchronize orders" : undefined} onClick={() => void props.onSync()}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M18 18A8 8 0 0 1 5 15" /></svg>{props.syncBusy ? "Syncing…" : "Sync"}</button>
         </div>

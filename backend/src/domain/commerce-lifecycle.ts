@@ -16,6 +16,8 @@ import { sha256Hex } from "../hash.js";
 import { DomainError } from "./errors.js";
 import { loadProof, requireParticipant } from "./proof-access.js";
 import { appendAudit } from "./audit.js";
+import { requireOrganizationProofAccess, requireHumanActor } from '../platform/organization-access.js';
+import { partnerReadAuthorization } from '../platform/proof-read-grant.js';
 
 export const COMMERCE_STAGES = ["RECEIPT", "RETURN_PACKING", "RETURN_RECEIPT"] as const;
 export type CommerceStageType = (typeof COMMERCE_STAGES)[number];
@@ -50,7 +52,9 @@ export async function requireCommerceAccess(
 ): Promise<"SELLER" | "BUYER"> {
   await assertPolicyAccessSafe(db);
   await requireActiveAccount(db, userId);
+  await requireOrganizationProofAccess(db, proofId, userId);
   await commerceProof(db, proofId);
+  if(await partnerReadAuthorization(db,userId,proofId))return 'SELLER';
   const member = await db.query<{ role: "SELLER" | "BUYER" }>(
     "SELECT role FROM proof_participants WHERE proof_id=$1 AND user_id=$2",
     [proofId, userId],
@@ -388,6 +392,7 @@ export async function finalizeCommerceStage(
   signer?: ManifestSigner,
   options: {requireDurableReceipts?: boolean} = {},
 ) {
+  await requireHumanActor(db,userId);
   return db.transaction(async (tx) => {
     const stage = await ownedStage(tx, proofId, stageId, userId);
     if (statement !== ATTESTATIONS[stage.stage_type])

@@ -33,16 +33,17 @@ function mockApi(completedOnTap = false) {
   vi.stubGlobal("fetch", mock);
   return mock;
 }
-it("navigates Home to Pack and starts manual creation in one tap without integrations", async () => {
+it("opens the station from the profile menu and starts manual packing from Home without integrations", async () => {
   const fetch = mockApi();
   render(<App />);
-  expect(await screen.findByRole("heading", { name: "Create a Proof" })).toBeInTheDocument();
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("link", { name: "Pack" }));
-  expect(await screen.findByRole("heading", { name: "Pack" })).toBeInTheDocument();
-  expect(window.location.pathname).toBe("/pack");
+  expect(await screen.findByRole("heading", { name: "Pack it. Keep the proof." })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Open profile menu" }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Profile destinations" })).getByRole("link", { name: "Packing station" }));
+  expect(await screen.findByRole("heading", { name: "Packing Station" })).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/station");
   fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("link", { name: "Home" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Create Proof" }));
-  expect(await screen.findByLabelText("What are you shipping?")).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Pack an item" }));
+  expect(await screen.findByLabelText("Item name")).toBeInTheDocument();
   expect(window.location.pathname).toBe("/new");
   expect(fetch.mock.calls.every(([input]) => !String(input).includes("connected-accounts/connect"))).toBe(true);
 });
@@ -55,12 +56,12 @@ it("revalidates a recommended target and opens the finalized record instead of c
   expect(fetch.mock.calls.some(([input]) => String(input).endsWith(`/proofs/${summary.proofId}`))).toBe(true);
   expect(window.location.pathname.endsWith("/capture")).toBe(false);
 });
-it("rollback disables the mobile composition without touching upload recovery", async () => {
+it("the legacy mobile toggle does not disable SIGNAL or upload recovery", async () => {
   vi.stubEnv("VITE_PACKPROOF_MOBILE_TASK_UX", "false");
   mockApi();
   render(<App />);
-  expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
-  expect(screen.queryByRole("navigation", { name: "Primary navigation" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Pack it. Keep the proof." })).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
   await waitFor(() => expect(queue.list).toHaveBeenCalled());
   vi.unstubAllEnvs();
 });

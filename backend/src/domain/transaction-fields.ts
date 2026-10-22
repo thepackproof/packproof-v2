@@ -122,6 +122,7 @@ export function toTransactionView(
     proofId: string | null;
     proofStatus: string | null;
     buyerUserId: string | null;
+    sellerUserId?: string;
     provenance?: TransactionProvenanceView | null;
     items?: TransactionItemView[];
     correctionPolicy?: TransactionCorrectionPolicy;
@@ -144,7 +145,7 @@ export function toTransactionView(
     shipping: toShippingView(shipping),
     proofId: extras.proofId,
     proofStatus: extras.proofStatus,
-    sellerUserId: row.created_by,
+    sellerUserId: extras.sellerUserId ?? row.created_by,
     buyerUserId: extras.buyerUserId,
     provenance: extras.provenance ?? null,
     items: extras.items ?? [],

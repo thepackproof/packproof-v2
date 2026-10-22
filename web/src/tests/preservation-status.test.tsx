@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { preservationMessage, type RecoveryView } from "../components/PreservationStatus";
 import { WorkspaceProofRecord } from "../components/WorkspaceProofRecord";
 import { canonicalProof } from "./fixtures";
@@ -27,6 +27,7 @@ it("checks preservation inside the canonical record",async()=>{
     getCapabilities:vi.fn().mockResolvedValue({schemaVersion:1,preservation:{receiptVersions:[1],durableReceiptsRequired:true}}),
   };
   render(<WorkspaceProofRecord api={api as unknown as PackProofApi} proof={proof} currentUserId="user_seller" />);
+  fireEvent.click(screen.getByRole("button", { name: "Recording history and details" }));
   expect(await screen.findByRole("status")).toHaveTextContent("Recording received. Preservation in progress.");
   expect(api.getRecoveryStatus).toHaveBeenCalledWith("proof");
   expect(api.getProof).toHaveBeenCalledWith("proof");

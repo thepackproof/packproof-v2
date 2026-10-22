@@ -36,6 +36,9 @@ export const POLICY_RECOVERY_KEYS: Record<string, string[]> = {
   proof_receipt_preferences: ["proof_id", "user_id"], user_verified_contacts: ["user_id", "email_normalized"],
   proof_retention_holds: ["id"], proof_retention_assignments: ["id"], proof_disposition_state: ["proof_id"], proof_media_derivatives: ["id"],
   support_access_grants: ["id"], support_access_revocations: ["grant_id"],
+  platform_organizations:['id'],platform_memberships:['id'],platform_principals:['id'],platform_credentials:['id'],platform_delegations:['id'],
+  platform_integration_accounts:['id'],platform_proof_ownership:['proof_id'],
+  platform_external_bindings:['merchant_id','environment','integration_account_id','resource_type','external_id'],
 };
 
 export async function configurePolicyDurability(db: Database, input: {required: boolean}) {

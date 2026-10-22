@@ -7,8 +7,10 @@ import { requireCommerceAccess } from "./commerce-lifecycle.js";
 import { DomainError } from "./errors.js";
 import { assertHoldAdmissionOpen, evaluateProofDisposition } from "./retention-policy.js";
 import { enqueueRecoveryEvent, buildProofRecoverySnapshot } from "./recovery-journal.js";
+import { requireOrganizationProofAccess } from '../platform/organization-access.js';
 
 async function requireRetentionAccess(db: Database, proofId: string, userId: string) {
+  await requireOrganizationProofAccess(db,proofId,userId);
   const member = await db.query(
     "SELECT 1 FROM proof_participants WHERE proof_id=$1 AND user_id=$2",
     [proofId, userId],

@@ -18,8 +18,8 @@ it('offers recovery of the exact submitted request after edits or reopening with
  const key=draftStorageKey('/api','alice');const identity=creationOperation(key,original);
  saveDraft(key,{title:'New unsent title',reference:'',description:'',currency:'USD',quantity:'1',amount:'',carrier:'',tracking:'',intake:null});
  const options=props(key);render(<CreateProofScreen {...options}/>);
- expect(screen.getByRole('textbox',{name:'What are you shipping?'})).toHaveValue('New unsent title');
- expect(screen.getByRole('button',{name:'Open camera'})).toBeDisabled();
+ expect(screen.getByRole('textbox',{name:'Item name'})).toHaveValue('New unsent title');
+ expect(screen.getByRole('button',{name:/Continue to camera/})).toBeDisabled();
  expect(screen.getByText('Original camera')).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Recover submitted draft'}));
  expect(options.onCreate).toHaveBeenCalledExactlyOnceWith(original);

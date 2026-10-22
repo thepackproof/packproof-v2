@@ -1,0 +1,646 @@
+{
+  "schema": "packproof.isolated-recovery-evidence.v1",
+  "source": "54b8e11bb9daa8f67baeede5a03e56124e6f33d7",
+  "buildId": "packproof-m1-20261020-recovery:b2cb206e-3246-4e3d-b372-33feb4418888",
+  "buildStatus": "SUCCEEDED",
+  "templateSha256": "c6ece3d59e367c50ca9094e95be690ea2cf7ef6422579bb42da2b1633f1d5360",
+  "artifact": {
+    "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+    "key": "acceptance/recovery/b2cb206e-3246-4e3d-b372-33feb4418888/evidence.zip",
+    "versionId": "bR79YbxhzwOqYcCXpaVkLAL3EQGtHlBm",
+    "sha256": "31f22a7152291c72f29fc7cdc990fe8b38188a77414be6fd0fbe4ac5cccf6619",
+    "bytes": 25897,
+    "encryption": "aws:kms",
+    "files": [
+      "recovery-acceptance.json",
+      "core-head.json",
+      "policy-head.json",
+      "after-manifest.json",
+      "public-trust.json",
+      "before.pkpr",
+      "before-manifest.json"
+    ],
+    "fileHashes": {
+      "recovery-acceptance.json": "aeb366136051651c8cf1c06b1f9356dc7d04f1bfbf76bb6b560066be6a2b0178",
+      "core-head.json": "7620caf945851fc0b36cf5a6d39d3eb1c9024dd42c8a9d8d4367713b89c2a76d",
+      "policy-head.json": "4bb55f527a2ab17f2c9dd259f4042ed4dd9b3035588740dccf8b7d779023c540",
+      "after-manifest.json": "cf0d379f1d6fdec11e40fbbb3f1a2fe0596a3f24a9667bb5df6f152f8c940fd3",
+      "public-trust.json": "8385717bd6ac62cc73294a41dc1d4aef2aa9b16e68ada9d4db834fa30eeb1c94",
+      "before.pkpr": "21d6933b48222c3654ac91c73225efc3b1203f615dd0bcd28441ca52c3d269aa",
+      "before-manifest.json": "cf0d379f1d6fdec11e40fbbb3f1a2fe0596a3f24a9667bb5df6f152f8c940fd3"
+    },
+    "locallyDownloadedAndVerified": true,
+    "locallyVerifiedSignatures": [
+      "original manifest",
+      "core head",
+      "policy head"
+    ]
+  },
+  "report": {
+    "schema": "packproof.isolated-recovery-acceptance.v1",
+    "runId": "101f2215dfe973c1",
+    "source": "54b8e11bb9daa8f67baeede5a03e56124e6f33d7",
+    "buildId": "packproof-m1-20261020-recovery:b2cb206e-3246-4e3d-b372-33feb4418888",
+    "startedAt": "2026-10-21T02:06:43.392Z",
+    "databaseHost": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+    "sourceDatabase": "m1_source_101f2215dfe973c1",
+    "targetDatabase": "m1_restore_101f2215dfe973c1",
+    "journalPrefix": "acceptance/recovery/101f2215dfe973c1/",
+    "checks": [
+      {
+        "name": "api_recovery_signing_denied",
+        "passed": true,
+        "code": "AccessDeniedException"
+      },
+      {
+        "name": "worker_manifest_signing_denied",
+        "passed": true,
+        "code": "AccessDeniedException"
+      },
+      {
+        "name": "restore_reader_signing_denied",
+        "passed": true,
+        "code": "AccessDeniedException"
+      },
+      {
+        "name": "api_journal_write_denied",
+        "passed": true,
+        "code": "AccessDenied"
+      },
+      {
+        "name": "worker_version_delete_denied",
+        "passed": true,
+        "code": "AccessDenied"
+      },
+      {
+        "name": "api_journal_read_denied",
+        "passed": true,
+        "code": "AccessDenied"
+      },
+      {
+        "name": "journal_conditional_creation",
+        "passed": true
+      },
+      {
+        "name": "journal_version_retention",
+        "passed": true,
+        "key": "acceptance/recovery/101f2215dfe973c1/probe.txt",
+        "version": "EOfAvewVsq2zsnsCB4p_iCylTWV6_jFc",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:45.253Z"
+        }
+      },
+      {
+        "name": "api_database_login",
+        "passed": true,
+        "role": "m1_api_101f2215dfe973c1",
+        "database": "m1_source_101f2215dfe973c1",
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolbypassrls": false
+      },
+      {
+        "name": "worker_database_login",
+        "passed": true,
+        "role": "m1_worker_101f2215dfe973c1",
+        "database": "m1_source_101f2215dfe973c1",
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolbypassrls": false
+      },
+      {
+        "name": "restore_database_login",
+        "passed": true,
+        "role": "packproof_restore_101f2215dfe973c1",
+        "database": "m1_restore_101f2215dfe973c1",
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolbypassrls": false
+      },
+      {
+        "name": "api_cannot_reopen_database_fence",
+        "passed": true,
+        "code": "42501"
+      },
+      {
+        "name": "api_cannot_publish_receipts",
+        "passed": true,
+        "code": "42501"
+      },
+      {
+        "name": "worker_cannot_change_generation",
+        "passed": true,
+        "code": "42501"
+      },
+      {
+        "name": "api_cannot_create_schema_objects",
+        "passed": true,
+        "code": "42501"
+      },
+      {
+        "name": "shared_capture_and_kms_finalization",
+        "passed": true,
+        "proofId": "proof_01M5E3C7N8QD0FK89RN226BNH3",
+        "manifestSha256": "cf0d379f1d6fdec11e40fbbb3f1a2fe0596a3f24a9667bb5df6f152f8c940fd3",
+        "media": {
+          "object_key": "evidence/proof_01M5E3C7N8QD0FK89RN226BNH3/evd_01M5E3C7VF7MA87KX1TJH1615P/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+          "object_version_id": "9r.79wr1_JuEu94Ah47ZkXxgYBfeD923",
+          "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+          "byte_size": "1701"
+        },
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:53.553Z"
+        }
+      },
+      {
+        "name": "source_revocation_enforced",
+        "passed": true
+      },
+      {
+        "name": "source_database_writer_fence",
+        "passed": true
+      },
+      {
+        "name": "old_worker_session_write_denied",
+        "passed": true,
+        "code": "AccessDenied"
+      },
+      {
+        "name": "old_worker_session_signing_denied",
+        "passed": true,
+        "code": "AccessDeniedException"
+      },
+      {
+        "name": "old_api_session_write_denied",
+        "passed": true,
+        "code": "AccessDenied"
+      },
+      {
+        "name": "old_api_session_signing_denied",
+        "passed": true,
+        "code": "AccessDeniedException"
+      },
+      {
+        "name": "source_database_sessions_disabled",
+        "passed": true
+      },
+      {
+        "name": "readonly_signed_head_inventory",
+        "passed": true,
+        "coreObjects": 3,
+        "policyObjects": 22,
+        "exactVersions": 25
+      },
+      {
+        "name": "tampered_and_wrong_key_envelopes_denied",
+        "passed": true
+      },
+      {
+        "name": "incomplete_restore_head_denied",
+        "passed": true
+      },
+      {
+        "name": "fresh_restore_preserves_manifest_and_revoked_authority",
+        "passed": true,
+        "manifestSha256": "cf0d379f1d6fdec11e40fbbb3f1a2fe0596a3f24a9667bb5df6f152f8c940fd3",
+        "organizationTablesCompared": 9,
+        "excludedTelemetry": [
+          "platform_credentials.last_used_at"
+        ],
+        "trafficMayOpen": false,
+        "writersEnabled": false
+      }
+    ],
+    "limits": [
+      "Synthetic actors and repository camera fixture; no actual device session",
+      "Role-scoped SDK clients and separate PostgreSQL logins in an acceptance coordinator; no deployed API or worker service",
+      "Pinned public keys and signed heads collected with a separate read-only role; independent human review remains open",
+      "Target remains closed to traffic; this does not authorize production cutover"
+    ],
+    "controlPrefix": "acceptance/recovery/control/101f2215dfe973c1/",
+    "externalFence": {
+      "runId": "101f2215dfe973c1",
+      "writerFence": "CLOSED",
+      "changeSetArn": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/close-writers-101f2215dfe973c1/e9ceff89-12a8-4614-a77b-d13796c4ace8",
+      "stackStatus": "UPDATE_COMPLETE",
+      "closedAt": "2026-10-21T02:08:33.626055+00:00"
+    },
+    "inventory": [
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000001.json",
+        "versionId": "xOKt73ROSWIDadBmCVhIlqVX7nmDBE7w",
+        "sha256": "4540464806557d263f5898711608648d070b42a2de461828bdccd2dda321ce1e",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:54.017Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000002.json",
+        "versionId": "l_fNfSeaMzBdTacWMWw.RaGPwMEQKuLv",
+        "sha256": "2893a3ec913158e6bcb86859b4c22e4082ffc0ffdf55105a6e9abdaa55814f5f",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:54.157Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000003.json",
+        "versionId": "M4wwTqc20lk0Qg7AJ9Mvi65XO2Ytkf_P",
+        "sha256": "92d519a985a1191f1451920fd7cbc722eab4580d424aa094a926f3e8b7d00901",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:54.295Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000004.json",
+        "versionId": "AJ23lnMKpQAQYCjH5_DoGGIOn4duLLDn",
+        "sha256": "eed44d5def1c8998c4d5264e8c9f40e4eee6fe2b7a7e319a247b09d9abe6d2bf",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:54.446Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000005.json",
+        "versionId": "eggTvZXbeoVcWHI9tJ5YQfi9Ef1nQzC5",
+        "sha256": "c453fb7af2b107f36322384101a68cbe5ec325a03133ffe6597726bb15b25cb8",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:54.593Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000006.json",
+        "versionId": "tscfjrRTa1K.aTWJ15rXTfRmXPL6Yl50",
+        "sha256": "fb12ad973eea08283a7711c15a664cdbb7fe843bbe4f39a39f8ab0e998e1eb2e",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:54.729Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000007.json",
+        "versionId": "AV8ySauiZ_4_x79d5V.b.ycbRqbcVRPi",
+        "sha256": "9e6c929a24cdb6103f397b8cbceb30360ba5aee96c48ca567d433c3ec8e3417f",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:54.881Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000008.json",
+        "versionId": "SwnLVRSZk4WCuA5Byla.7lMfav2EMKAz",
+        "sha256": "3224c83b326dc17086b2c5f5f8f93e5c11be3cf009e70e05bfa29bb1ea574d92",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:55.029Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000009.json",
+        "versionId": "TWb0rGNVJ0AB.k9miZFsE_8oAe6kdxxA",
+        "sha256": "768f1fc28bf91f2e87c82ea5295e2988f6d6a79acdc98a7acba7efb6bb97c0ba",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:55.228Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000010.json",
+        "versionId": "DYBWuR59CnB36sAk7EUaSdCyzJZxE8x1",
+        "sha256": "9df28cff4fdfdcde4cafaa576138208bca629f5a9900d272711aa3cac01e9757",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:55.417Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000011.json",
+        "versionId": "Woj_iavVhtm6oK0Md4vaRWpZtSeHQ5Gp",
+        "sha256": "89fade3bd2bc6abc52c2b684520fcb9aa67023fbd31e51b12972fe648a05224c",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:55.577Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000012.json",
+        "versionId": "miN3i_EW_MQEBnDJp0G8NoeTwaLOdoMj",
+        "sha256": "3bead4473546e4468d3f72c1faf846002262e87fbd7a15d49c4996e4cad695c3",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:55.718Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000013.json",
+        "versionId": "hVPwhvqo4so4M0TdA5WXMNgIS3LgYNMu",
+        "sha256": "a11b34914a5ac20706f7f01e6f6a61e94c94a9a30488698dc8be83b8a43367be",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:55.852Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000014.json",
+        "versionId": "ANnwtZb5dsRe5B4BhtdeBRv.6KqaVnMh",
+        "sha256": "20a8fa29367cb3fbe50f2306f4505c8aabb48e7a98a0802a7dfcd074df30178d",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:56.003Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000015.json",
+        "versionId": "0QLd6sc56R1Houz49tMr8Yqs8wY5Tk7I",
+        "sha256": "228a81ce0775c38bb88ff96598c69f7bec98d22c7823c44e32013fd7a9416835",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:56.157Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000016.json",
+        "versionId": "kBjJkT9d.A9oPOQO8cQ7gvirqOD6pR0.",
+        "sha256": "3e404984ca28e25986cc548c7022175dde6b3fe20c8386931e55c6447c496bb4",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:56.307Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000017.json",
+        "versionId": "J16aM4PkykWB3x29AFJHzjDhmhzAPZfI",
+        "sha256": "815828d2958dab21cb8c703b2f7bbe9402f16673b305d6e9ba4943df7b74cdd9",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:56.446Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000018.json",
+        "versionId": "yoOJlUr4I9h8dYgniTugyHBWmfssBbeg",
+        "sha256": "73370bc5a6e783d8a4586e79be2371be049c41e4600e33a3aeff9749f584cf61",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:56.628Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000019.json",
+        "versionId": "Vp24FEXreltR3cnAuTKdaDwv_uD7ZD6m",
+        "sha256": "1f4d1a48ca1f632ee0612d60965f1f38f5993607a60e4d090355b87dbefbe079",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:56.763Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000020.json",
+        "versionId": "zp.lHyIQI8OOF18rz5NOYHCmBi9MWu3L",
+        "sha256": "fc96a7c047c603a36ba8d1888559ff8f0ae4e8482f995c0e2b22cd8b88898ffb",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:56.933Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000021.json",
+        "versionId": "k7FbW_9dRYkxR.clcFmi9CiURPYqqI2d",
+        "sha256": "f700caf3444fb140d9c13bd2f80df10cc59becea757ae7fdbadafe19b27adb33",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:57.110Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/policy/v1/00000000000000000022.json",
+        "versionId": "XwhftJOCQSQjIzRejNvoATtzOzZDGR8S",
+        "sha256": "4bb55f527a2ab17f2c9dd259f4042ed4dd9b3035588740dccf8b7d779023c540",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:59.043Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/v1/4f041bab3350b61d32f88a4422d6e3ede200213dbc26ac1a1822a057007ee56c.json",
+        "versionId": "EmyaQgrz.zYbvnpfacKsp9hMgzKypIsD",
+        "sha256": "6531483ae79686c9dca772147628ed5b45668d8a06e2403fd9ae90781521880a",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:57.566Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/v1/790ac557e03b27e5a5afaa63688cce8006b3f7fc3c613a5c8559f286da3f2cc7.json",
+        "versionId": "pJdLKa1FD9diNLs4_irNFlUXShKFyPYK",
+        "sha256": "7620caf945851fc0b36cf5a6d39d3eb1c9024dd42c8a9d8d4367713b89c2a76d",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:57.923Z"
+        }
+      },
+      {
+        "key": "acceptance/recovery/101f2215dfe973c1/recovery/v1/acab2f84e74144aa7055159a409d095b0a121bde0be68cdccb5180037152b91f.json",
+        "versionId": "h5fKjo_w.QgVk9Kn6zJkNXZzgP0QoacM",
+        "sha256": "4d0b2d06f0490b4d41bdab812246e610dd11e64bd8628f4fd5dfbc9639260166",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-19T02:06:57.283Z"
+        }
+      }
+    ],
+    "restore": {
+      "version": 1,
+      "mode": "FRESH_RECONSTRUCTION",
+      "startedAt": "2026-10-21T02:08:36.937Z",
+      "completedAt": "2026-10-21T02:08:38.832Z",
+      "coreHead": "5d04efbd6b613b5c398587452b5871e1ade67df39ad34a0edd9a5e18726b7427",
+      "policyHead": "defd972724e361165ba5fc76fe040505ebc74bd8cba39f6c799a48c7685cbd5f",
+      "counts": {
+        "users": 4,
+        "api_tenants": 1,
+        "platform_organizations": 2,
+        "platform_memberships": 3,
+        "platform_principals": 1,
+        "platform_credentials": 1,
+        "platform_delegations": 1,
+        "platform_integration_accounts": 1,
+        "transactions": 1,
+        "proofs": 1,
+        "proof_participants": 1,
+        "capture_sessions": 1,
+        "capture_intents": 1,
+        "capture_engine_sessions": 1,
+        "capture_session_reports": 1,
+        "evidence": 1,
+        "audit_events": 12,
+        "attestations": 1,
+        "api_tenant_proofs": 1,
+        "user_verified_contacts": 1,
+        "final_manifests": 1,
+        "platform_proof_ownership": 1,
+        "platform_external_bindings": 1,
+        "platform_capture_authorizations": 1,
+        "recovery_events": 3,
+        "recovery_delivery": 3
+      },
+      "media": {
+        "objects": 1,
+        "byteSize": 1701,
+        "exactVersionsVerified": true
+      },
+      "unrecoverableInvitationIds": [],
+      "contextOnlyProofIds": [],
+      "isolatedTargetReference": "isolated-rds:m1_restore_101f2215dfe973c1",
+      "oldWriterFenceReference": "s3://packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/recovery/control/101f2215dfe973c1/fence-complete.json",
+      "trafficMayOpen": false,
+      "writersEnabled": false,
+      "remainingGates": [
+        "Independent verification of old-writer infrastructure fence",
+        "Policy restore audit publication and exact reconciliation",
+        "Domain audit after the last core envelope, non-core product/integration/billing metadata restore",
+        "Measured deployment restore drill and independently authorized cutover"
+      ]
+    },
+    "restoreElapsedMs": 1894.956137999994,
+    "completedAt": "2026-10-21T02:08:38.929Z",
+    "status": "PASSED",
+    "cleanup": {
+      "databases": [
+        {
+          "name": "m1_restore_101f2215dfe973c1",
+          "removed": true
+        },
+        {
+          "name": "m1_source_101f2215dfe973c1",
+          "removed": true
+        }
+      ],
+      "roles": [
+        {
+          "name": "packproof_restore_101f2215dfe973c1",
+          "removed": true
+        },
+        {
+          "name": "m1_worker_101f2215dfe973c1",
+          "removed": true
+        },
+        {
+          "name": "m1_api_101f2215dfe973c1",
+          "removed": true
+        }
+      ]
+    }
+  },
+  "cleanup": {
+    "stack": "DELETE_COMPLETE",
+    "nat": "deleted",
+    "project": "absent",
+    "checkedAt": "2026-10-21T02:12:56.183404+00:00",
+    "roles": {
+      "packproof-m1-20261020-recovery-role": "An error occurred (NoSuchEntity) when calling the GetRole operation: The role with name packproof-m1-20261020-recovery-role cannot be found.",
+      "packproof-m1-20261020-recovery-api": "An error occurred (NoSuchEntity) when calling the GetRole operation: The role with name packproof-m1-20261020-recovery-api cannot be found.",
+      "packproof-m1-20261020-recovery-worker": "An error occurred (NoSuchEntity) when calling the GetRole operation: The role with name packproof-m1-20261020-recovery-worker cannot be found.",
+      "packproof-m1-20261020-recovery-reader": "An error occurred (NoSuchEntity) when calling the GetRole operation: The role with name packproof-m1-20261020-recovery-reader cannot be found."
+    },
+    "addresses": {
+      "Addresses": []
+    },
+    "databaseIngress": {
+      "SecurityGroupRules": [
+        {
+          "SecurityGroupRuleId": "sgr-0d981a563d725da08",
+          "GroupId": "sg-000d9cd26399d10d2",
+          "GroupOwnerId": "784514617543",
+          "IsEgress": true,
+          "IpProtocol": "-1",
+          "FromPort": -1,
+          "ToPort": -1,
+          "CidrIpv4": "0.0.0.0/0",
+          "Tags": [],
+          "SecurityGroupRuleArn": "arn:aws:ec2:us-east-1:784514617543:security-group-rule/sgr-0d981a563d725da08"
+        },
+        {
+          "SecurityGroupRuleId": "sgr-07e0f9782f425b40b",
+          "GroupId": "sg-000d9cd26399d10d2",
+          "GroupOwnerId": "784514617543",
+          "IsEgress": false,
+          "IpProtocol": "tcp",
+          "FromPort": 5432,
+          "ToPort": 5432,
+          "ReferencedGroupInfo": {
+            "GroupId": "sg-075e612f687f88c7e",
+            "UserId": "784514617543"
+          },
+          "Tags": [],
+          "SecurityGroupRuleArn": "arn:aws:ec2:us-east-1:784514617543:security-group-rule/sgr-07e0f9782f425b40b"
+        }
+      ]
+    },
+    "routes": {
+      "RouteTables": [
+        {
+          "Associations": [
+            {
+              "Main": true,
+              "RouteTableAssociationId": "rtbassoc-05c2dd94087314a6d",
+              "RouteTableId": "rtb-05ee97c6869a5baab",
+              "AssociationState": {
+                "State": "associated"
+              }
+            }
+          ],
+          "PropagatingVgws": [],
+          "RouteTableId": "rtb-05ee97c6869a5baab",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.42.0.0/16",
+              "GatewayId": "local",
+              "Origin": "CreateRouteTable",
+              "State": "active"
+            }
+          ],
+          "Tags": [],
+          "VpcId": "vpc-0c4f12c0ba9393ae3",
+          "OwnerId": "784514617543"
+        }
+      ]
+    },
+    "database": {
+      "DBInstanceStatus": "available",
+      "PubliclyAccessible": false,
+      "StorageEncrypted": true,
+      "DeletionProtection": true
+    }
+  },
+  "attempts": [
+    {
+      "build": "5c850252-d8de-472d-8cec-dce09e5a94cf",
+      "source": "c1c5a093e3b113579e6b93ae9285c63c65c127e9",
+      "result": "FAILED",
+      "reason": "Harness compared last_used_at telemetry deliberately excluded by existing migration 092; exact manifest restored, authority comparison stopped at credentials.",
+      "artifactLimit": "Build ABORT prevented archive upload. CloudWatch log and protected source objects remain. Retry permits failed-build artifact upload and saves the final control report."
+    },
+    {
+      "build": "b2cb206e-3246-4e3d-b372-33feb4418888",
+      "source": "54b8e11bb9daa8f67baeede5a03e56124e6f33d7",
+      "result": "PASSED",
+      "fix": "Compare all authority fields while excluding the documented usage telemetry; no application migration or restore behavior changed."
+    }
+  ],
+  "validation": {
+    "cfnLintRun": 39530967626,
+    "focusedPostgresRun": 39530967580,
+    "accessAnalyzerRolePolicies": 4,
+    "accessAnalyzerFindings": 0
+  },
+  "releaseRecommendation": "HOLD: synthetic acceptance only; deployed workload boundaries, actual devices and independent review remain required."
+}

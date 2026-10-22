@@ -14,6 +14,7 @@ const anchor = { anchorId: "moment", evidenceId: videoEvidence.evidenceId, stage
 function apiStub(anchors: unknown[] = [], stages: unknown[] = []) {
   return {
     recoveryScope: "https://api.example.test",
+    getRecoveryStatus: vi.fn(async () => ({ evidence: [], declarations: [], finalization: { status: "NOT_FINALIZED", receipt: null } })),
     featureRequest: vi.fn(async () => ({ snapshot: { data: { anchors } } })),
     lifecycleRequest: vi.fn(async () => ({ role: "BUYER", stages })),
   };
@@ -64,16 +65,18 @@ describe("simplified live Proof record", () => {
     const load = vi.fn(async () => new Blob(["original"], { type: "video/mp4" }));
     const props = { proof, currentUserId: userId, loadEvidence: load };
     const first = render(<WorkspaceProofRecord {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: "Recording history and details" }));
     const player = await screen.findByLabelText("Recorded packing evidence") as HTMLVideoElement;
     fireEvent.timeUpdate(player, { target: { currentTime: 12 } });
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     expect(screen.getByLabelText("Recorded packing evidence")).not.toBeVisible();
     await userEvent.click(screen.getByRole("tab", { name: "Recording" }));
     expect(screen.getByLabelText("Recorded packing evidence")).toBe(player);
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledTimes(2);
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     first.unmount();
     const second = render(<WorkspaceProofRecord {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: "Recording history and details" }));
     expect(screen.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
     screen.getByRole("tab", { name: "Activity" }).focus();
     await userEvent.keyboard("{ArrowLeft}");
@@ -91,6 +94,7 @@ describe("simplified live Proof record", () => {
   it("uses recorded chronology and carrier reports in their own tabs", async () => {
     const selectEvent = vi.fn();
     render(<WorkspaceProofRecord proof={proof} currentUserId={userId} onOpenEvent={selectEvent} />);
+    await userEvent.click(screen.getByRole("button", { name: "Recording history and details" }));
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     const timeline = screen.getByRole("tabpanel", { name: "Activity" });
     expect(within(timeline).getByText("Proof created")).toBeInTheDocument();
@@ -113,6 +117,7 @@ describe("simplified live Proof record", () => {
     ] };
     render(<WorkspaceProofRecord proof={{ ...finalized, commerceStages: [stage] }} currentUserId="user_buyer" role="BUYER" api={api as unknown as PackProofApi} loadEvidence={async () => new Blob(["packing"], { type: "video/mp4" })} />);
     expect(screen.queryByRole("tab", { name: "Receipt" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Recording history and details" }));
     expect(screen.getAllByRole("tab").map(item => item.textContent)).toEqual(["Recording", "Activity", "Tracking"]);
     await screen.findByLabelText("Recorded packing evidence");
     await userEvent.click(screen.getByRole("button", { name: "Video 2" }));

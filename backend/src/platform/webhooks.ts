@@ -14,6 +14,7 @@ import { DomainError } from "../domain/errors.js";
 import { newId } from "../ids.js";
 import { canonicalize } from "../canonical.js";
 import { record, textField } from "./tenants.js";
+import { requireBackgroundCredential } from './organization-access.js';
 
 export const EVENT_TYPES = [
   "proof.created",
@@ -367,7 +368,15 @@ export async function dispatchWebhooks(
     if (!row) break;
     let status = 0;
     try {
-      await requireDeveloperAccess(db, row.owner_user_id);
+      const currentWebhook=await db.query('SELECT 1 FROM api_webhooks WHERE id=$1 AND revoked_at IS NULL',[row.webhook_id]);
+      if(!currentWebhook.rows[0])throw new Error('Webhook revoked');
+      const organizationAuthorization=(await db.query<{credential_id:string;delegation_id:string|null}>(
+        'SELECT credential_id,delegation_id FROM platform_webhook_authorizations WHERE webhook_id=$1',[row.webhook_id])).rows[0];
+      if(organizationAuthorization)await requireBackgroundCredential(db,organizationAuthorization.credential_id,organizationAuthorization.delegation_id,'webhooks:manage');
+      else {
+        if((await db.query('SELECT 1 FROM platform_organizations WHERE tenant_id=$1',[row.tenant_id])).rows[0])throw new Error('Organization webhook authorization unavailable');
+        await requireDeveloperAccess(db, row.owner_user_id);
+      }
       const url = validateWebhookUrl(row.url, config);
       const body = canonicalize(publicEvent(row, row.tenant_id));
       const timestamp = Math.floor(clock.now().getTime() / 1000);

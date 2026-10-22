@@ -97,6 +97,22 @@ export async function finalizeProof(
   signer?: ManifestSigner,
   options: { requireDurableReceipts?: boolean } = {},
 ): Promise<FinalizeView> {
+  // Sign outside domain and stream locks. The second transaction rebuilds the
+  // exact candidate under the existing locks and rechecks current authorization.
+  // A concurrent change is a conflict, never a signature over different bytes.
+  const first=await finalizeTransaction(db,clock,actorUserId,proofId,signer,options);
+  if(!('candidate' in first))return first;
+  const signature=await signer!.signManifest(first.candidate);
+  const result=await finalizeTransaction(db,clock,actorUserId,proofId,signer,options,{...first.candidate,signature});
+  if('candidate' in result)throw new Error('Unexpected finalization preparation');
+  return result;
+}
+
+interface FinalizeCandidate {proofId:string;manifestId:string;canonicalJson:string;sha256:string;finalizedAt:string}
+async function finalizeTransaction(
+  db:Database,clock:Clock,actorUserId:string,proofId:string,signer:ManifestSigner|undefined,
+  options:{requireDurableReceipts?:boolean},signed?:FinalizeCandidate & {signature:ManifestSignature},
+):Promise<FinalizeView|{candidate:FinalizeCandidate}> {
   return db.transaction(async (tx) => {
     const existingProof = await tx.query<ProofRow>(`SELECT * FROM proofs WHERE id = $1`, [proofId]);
     if (!existingProof.rows[0]) {
@@ -257,9 +273,9 @@ export async function finalizeProof(
       provenanceFromIdentity(identity.rows[0] ?? null, txn.transaction_metadata),
     );
 
-    const now = clock.now();
+    const now = signed ? new Date(signed.finalizedAt) : clock.now();
     const auditEventIds = await listAuditIds(tx, proofId);
-    const manifestId = newId("man");
+    const manifestId = signed?.manifestId ?? newId("man");
     const storedItems = await listTransactionItems(tx, proof.transaction_id);
     const identifiers=await sealedIdentifiers(tx,proofId);
     const payload: Record<string, unknown> = {
@@ -412,7 +428,10 @@ export async function finalizeProof(
     const canonicalJson = canonicalize(payload);
     const digest = sha256Hex(canonicalJson);
 
-    const signature = signer ? await signer.signManifest({ proofId, manifestId, canonicalJson, sha256: digest }) : null;
+    if(signer&&!signed)return {candidate:{proofId,manifestId,canonicalJson,sha256:digest,finalizedAt:now.toISOString()}};
+    if(signed&&(signed.sha256!==digest||signed.canonicalJson!==canonicalJson))
+      throw new DomainError('FINALIZATION_CONTEXT_CHANGED','The Proof changed while signing. Review its current state and retry finalization.',409);
+    const signature = signed?.signature ?? null;
     await tx.query(
       `INSERT INTO final_manifests (id, proof_id, canonical_json, sha256, created_at, signature_algorithm, signature_base64, signing_key_id, signed_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,

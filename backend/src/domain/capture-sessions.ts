@@ -12,6 +12,7 @@ import { newId } from '../ids.js';
 import { appendAudit } from './audit.js';
 import { DomainError } from './errors.js';
 import { assertNotFinalized, loadProof, requireParticipant } from './proof-access.js';
+import { requireCaptureOrganizationAuthorization } from '../platform/organization-access.js';
 import { asRequiredIso } from './types.js';
 
 export const CAPTURE_POLICY_VERSION = 'packproof.direct-capture/v1';
@@ -107,6 +108,8 @@ async function captureAccess(db: Database, actor: string, proofId: string, writa
   return {workflowStep:"PACKING"};
 }
 export async function loadCaptureSession(db: Database, actor: string, proofId: string, sessionId: string, lock = false) {
+  const engine=(await db.query<{intent_id:string}>('SELECT intent_id FROM capture_engine_sessions WHERE session_id=$1',[sessionId])).rows[0];
+  if(engine)await requireCaptureOrganizationAuthorization(db,engine.intent_id);
   const result = await db.query<CaptureSessionRow>(`SELECT * FROM capture_sessions WHERE id=$1 AND proof_id=$2 AND actor_user_id=$3${lock ? ' FOR UPDATE' : ''}`, [sessionId,proofId,actor]);
   if (!result.rows[0]) throw new DomainError('CAPTURE_SESSION_NOT_FOUND','Capture session does not belong to this participant and Proof',404);
   return {...result.rows[0],client_reported_context:await readCaptureClientContext(db,sessionId)};

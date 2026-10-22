@@ -1,0 +1,1132 @@
+{
+  "schema": "packproof.isolated-runtime-evidence.v1",
+  "date": "2026-10-21",
+  "status": "PASSED_AND_PAUSED",
+  "scope": "Synthetic private foundation only; production and legacy unchanged",
+  "image": {
+    "source": "9a070777857812dc8bcc56a898b32f5e2f14effc",
+    "uri": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:c6dab1bb36d868a5c1287058b8a448c3c306c860a70c8eede7ddd342250962dd",
+    "scan": {
+      "status": {
+        "status": "COMPLETE",
+        "description": "The scan was completed successfully."
+      },
+      "counts": {}
+    },
+    "build": {
+      "id": "packproof-m1-20261021-runtime:d2145600-1797-4afe-a298-2d5d7feba064",
+      "archiveSha256": "7a08018aa1d5115bcde2eac9ae21541245bdcba2556efa7e4f12c1c28a78d855",
+      "versionId": "Qb0S_OB0t8b1jIXbMrfaYQBh1RURSMEk",
+      "downloadedHashVerified": true
+    }
+  },
+  "assets": {
+    "ApiExecutionRole": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-api-execution",
+    "BuildSecurityGroup": "sg-0aebbae38434acd55",
+    "Cluster": "packproof-m1-20261021-runtime",
+    "ApiDatabaseSecret": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/ApiDatabase-oV03Dp",
+    "TlsSecret": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/Tls-7INDCk",
+    "Logs": "/packproof/packproof-m1-20261021-runtime",
+    "Project": "packproof-m1-20261021-runtime",
+    "ApiRole": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-api",
+    "Repository": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime",
+    "ConfigurationSecret": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/Configuration-iSvDYo",
+    "ServiceSecurityGroup": "sg-0f9eb34ec26318728",
+    "AuditTrail": "arn:aws:cloudtrail:us-east-1:784514617543:trail/packproof-m1-20261021-runtime",
+    "WorkerRole": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-worker",
+    "WorkerExecutionRole": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-worker-execution",
+    "WorkerDatabaseSecret": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/WorkerDatabase-eQcMIm"
+  },
+  "serviceStacks": {
+    "assets": "packproof-m1-20261021-runtime",
+    "services": "packproof-m1-20261021-services"
+  },
+  "bootstrap": {
+    "id": "packproof-m1-20261021-runtime:d21ec136-16e3-4f79-b0f7-a842c5760ba9",
+    "sha256": "0fad6c13694955c0383997cc8788accf89cdc9e3a7015116d076e4941872cc9a",
+    "versionId": "hd.4Jib5yPu9HwfqziAHMw_lkbZ7bDoZ"
+  },
+  "protectionControl": {
+    "id": "packproof-m1-20261021-runtime:d950f83b-b92e-40c8-8255-fb0951f29c71",
+    "sha256": "ebd50d04531d8d8d4c45d286284969f9e9bbd8ce21b1963f93a43f71ce59cccc",
+    "versionId": "qK9e.Qwuikl_wpEyiLixT59wFVJtjjg7"
+  },
+  "roleProbes": [
+    {
+      "event": "runtime_role_probe_complete",
+      "schema": "packproof.runtime-role-probe.v1",
+      "kind": "worker",
+      "run": "06b2ba18164137b1",
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/b6cf27d2df5f467ba756e0a2bf7e0544",
+      "checks": [
+        "own_storage_write",
+        "conditional_creation",
+        "own_signing",
+        "other_signing_denied",
+        "worker_version_delete_denied",
+        "external_fence_denies_existing_task_credentials"
+      ],
+      "source": "b8605465a55bb267e5da722b24826a62f880f54f",
+      "initialPassed": true,
+      "status": "PASSED"
+    },
+    {
+      "event": "runtime_role_probe_complete",
+      "schema": "packproof.runtime-role-probe.v1",
+      "kind": "api",
+      "run": "6ee00f31649f82c3",
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/0b067f1771c64f6b875741c54db50dff",
+      "checks": [
+        "own_storage_write",
+        "conditional_creation",
+        "own_signing",
+        "other_signing_denied",
+        "api_journal_write_denied",
+        "external_fence_denies_existing_task_credentials"
+      ],
+      "source": "b8605465a55bb267e5da722b24826a62f880f54f",
+      "initialPassed": true,
+      "status": "PASSED"
+    }
+  ],
+  "protectionConfiguration": {
+    "roles": [
+      {
+        "role": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-api",
+        "evaluations": [
+          {
+            "action": "kms:ScheduleKeyDeletion",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny"
+          },
+          {
+            "action": "kms:DisableKey",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny"
+          },
+          {
+            "action": "kms:PutKeyPolicy",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny"
+          }
+        ]
+      },
+      {
+        "role": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-worker",
+        "evaluations": [
+          {
+            "action": "kms:ScheduleKeyDeletion",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny"
+          },
+          {
+            "action": "kms:DisableKey",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny"
+          },
+          {
+            "action": "kms:PutKeyPolicy",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny"
+          }
+        ]
+      }
+    ],
+    "recoveryBucket": [
+      {
+        "Status": "Enabled",
+        "MFADelete": "Disabled"
+      },
+      {
+        "ObjectLockConfiguration": {
+          "ObjectLockEnabled": "Enabled",
+          "Rule": {
+            "DefaultRetention": {
+              "Mode": "GOVERNANCE",
+              "Days": 90
+            }
+          }
+        }
+      }
+    ],
+    "kmsEvidenceMethod": "IAM SimulatePrincipalPolicy returned explicitDeny for ScheduleKeyDeletion, DisableKey and PutKeyPolicy under both task roles. The connector rendered the resource ARN as a generic placeholder in this response. No destructive KMS API was invoked."
+  },
+  "protectionEvidence": {
+    "file": "runtime-protection-evidence-2026-10-21.json",
+    "compactJsonSha256": "7c125c10d67afaa74c3ab27e68c9ca86e94b6a246f008a76dec07dafa54b4a6e"
+  },
+  "deployment": {
+    "tasks": {
+      "api": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/5fb69288b0774619a65bc72c3f17bdb8",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m1-20261021-runtime-api:4",
+        "imageDigest": "sha256:c6dab1bb36d868a5c1287058b8a448c3c306c860a70c8eede7ddd342250962dd",
+        "healthStatus": "HEALTHY"
+      },
+      "worker": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/1ba8197511be45f8a6a92ae945d3e164",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m1-20261021-runtime-worker:4",
+        "imageDigest": "sha256:c6dab1bb36d868a5c1287058b8a448c3c306c860a70c8eede7ddd342250962dd",
+        "healthStatus": "HEALTHY"
+      }
+    },
+    "observation": "Healthy tasks observed during the successful HTTPS acceptance run; current stopped state is recorded under shutdown."
+  },
+  "attempts": [
+    {
+      "buildId": "555f0f2b-af1a-488b-978c-ff166b83fb71",
+      "result": "STOPPED_BEFORE_ACCEPTANCE",
+      "reason": "Corrected test error-envelope handling before any users were created."
+    },
+    {
+      "buildId": "01ddcaa3-11a6-4dc5-be00-18e72c9cde73",
+      "result": "HARNESS_ASSERTION_FAILED",
+      "reason": "Case-sensitive lookup of the replay header; all six MFA identities and owner boundaries passed; six users removed."
+    },
+    {
+      "buildId": "a197862a-6aa8-4e6c-8076-dd4e8406185e",
+      "result": "FAILED_INTEGRATION_NAMESPACE_CONFLICT",
+      "reason": "Harness reused an account namespace across merchants. The deployment also exposed an unhandled unique-constraint error returning 500. The fixture now uses distinct account namespaces with colliding order IDs; application source 9a070777857812dc8bcc56a898b32f5e2f14effc atomically returns 409 INTEGRATION_ACCOUNT_CONFLICT without transferring ownership. Six synthetic users were removed."
+    },
+    {
+      "buildId": "a2422e0e-f760-4aa3-a562-6673a3a0f9da",
+      "result": "STOPPED_BEFORE_IMAGE_BUILD",
+      "reason": "Added image.json output to preserve a non-empty artifact for image-only builds."
+    },
+    {
+      "buildId": "fa1162d5-69e5-49ea-bed4-1d78933da513",
+      "source": "9a070777857812dc8bcc56a898b32f5e2f14effc",
+      "result": "HARNESS_STOPPED_ON_EXPECTED_PRESERVATION_PENDING",
+      "checksPassed": 11,
+      "syntheticUsersRemoved": 6,
+      "reason": "Private TLS, six real MFA identities, owner boundaries, namespace 409 and idempotency passed. Capture reached finalization while its evidence receipt was publishing. The harness now retries only documented pending-preservation codes with bounded waits and the same idempotency key; application behavior unchanged."
+    },
+    {
+      "buildId": "4eb46d51-46a4-48d9-8c30-bf3834b40edb",
+      "source": "e171db2bc0e2c29a17d07763da7b4d6f26d85fa7",
+      "result": "HARNESS_STOPPED_ON_EXPECTED_REVOKED_MERCHANT_404",
+      "checksPassed": 14,
+      "syntheticUsersRemoved": 6,
+      "artifactSha256": "47273847a22a6ec0228034309d22ef2e0175a11a535a7cfce701a3fcd880aa1f",
+      "reason": "Both complete capture/finalize/export flows and revoked open-capture denial passed. Revoked delegated merchant access intentionally returns 404 MERCHANT_NOT_FOUND; the corrected harness accepts that explicit denial. Application behavior unchanged."
+    },
+    {
+      "buildId": "3a6e0dae-48fc-4bd4-acba-e899aaba3655",
+      "source": "e5f8bd4bfe60c8ccadd77c5e0ddfc6b3cf47fe32",
+      "result": "HARNESS_ASSUMED_MERCHANT_OWNER_WAS_HUMAN_CONTRIBUTOR",
+      "checksPassed": 14,
+      "syntheticUsersRemoved": 6,
+      "reason": "Both capture/export flows and revoked capture/partner denial passed. The personal Proof route correctly returned PARTICIPANT_NOT_AUTHORIZED for the merchant owner, who is not its recording contributor. The corrected check uses an owner-issued, read-only merchant credential and keeps the personal-route denial; no application permission was broadened."
+    }
+  ],
+  "limits": [
+    "Synthetic camera fixture and isolated identities; not actual web/Android device lifecycle acceptance.",
+    "The developer email was admin-set only in the isolated test pool; no real email-verification or enrollment certification.",
+    "Implementation review only; independent M1-06 human release recommendation remains open.",
+    "Revocation during an already streaming export and queued external delivery remains unexecuted in this deployed runtime.",
+    "No customer outreach, provider submission, live cohort or production deployment.",
+    "Full release CI remains blocked by the existing 84 web and two mobile assertions; backend success is not a green full release."
+  ],
+  "ci": {
+    "applicationSource": "9a070777857812dc8bcc56a898b32f5e2f14effc",
+    "foundation": {
+      "runId": 39535955182,
+      "result": "PASSED",
+      "checks": 41
+    },
+    "infrastructure": {
+      "runId": 39535955272,
+      "result": "PASSED"
+    },
+    "full": {
+      "runId": 39535955232,
+      "backend": "PASSED",
+      "passed": 1397,
+      "skipped": 15,
+      "typecheck": "PASSED",
+      "build": "PASSED",
+      "credentialGuards": 15,
+      "workflow": "FAILURE",
+      "releaseBlockers": [
+        "Existing baseline web assertions",
+        "Existing baseline mobile assertions"
+      ],
+      "webFailures": 84,
+      "mobileFailures": 2
+    },
+    "codeql": {
+      "runId": 39535955578,
+      "result": "PASSED"
+    }
+  },
+  "httpAcceptance": {
+    "schema": "packproof.isolated-runtime-acceptance.v1",
+    "source": "56c7588c896ef1b3d16749f795a87b49cd70343b",
+    "buildId": "packproof-m1-20261021-runtime:25264bc2-ea95-4c86-a428-3fcbd7913c74",
+    "startedAt": "2026-10-21T03:22:28.851782+00:00",
+    "checks": [
+      {
+        "name": "separate_healthy_private_fargate_tasks",
+        "passed": true
+      },
+      {
+        "name": "pinned_tls_readiness_and_unauthenticated_denial",
+        "passed": true
+      },
+      {
+        "name": "cognito_mfa_api_identity_developer",
+        "passed": true
+      },
+      {
+        "name": "cognito_mfa_api_identity_ownerA",
+        "passed": true
+      },
+      {
+        "name": "cognito_mfa_api_identity_ownerB",
+        "passed": true
+      },
+      {
+        "name": "cognito_mfa_api_identity_operatorA",
+        "passed": true
+      },
+      {
+        "name": "cognito_mfa_api_identity_operatorB",
+        "passed": true
+      },
+      {
+        "name": "cognito_mfa_api_identity_operatorC",
+        "passed": true
+      },
+      {
+        "name": "merchant_owner_and_developer_boundaries",
+        "passed": true
+      },
+      {
+        "name": "integration_namespace_conflict_is_explicit_and_does_not_transfer_ownership",
+        "passed": true
+      },
+      {
+        "name": "colliding_order_ids_stay_separate_and_retries_replay",
+        "passed": true
+      },
+      {
+        "name": "two_merchant_capture_finalize_and_export_over_https",
+        "passed": true
+      },
+      {
+        "name": "partner_scope_capture_intent_events_and_personal_auth_boundary",
+        "passed": true
+      },
+      {
+        "name": "revocation_denies_open_capture_resume_and_preserves_synthetic_original",
+        "passed": true
+      },
+      {
+        "name": "delegation_revocation_denies_one_merchant_without_affecting_other",
+        "passed": true
+      },
+      {
+        "name": "credential_revocation_denies_remaining_access",
+        "passed": true
+      }
+    ],
+    "limits": [
+      "Synthetic identities in the isolated Cognito pool; no real person/device enrollment.",
+      "The synthetic developer email is admin-set only in this isolated pool; no email is sent.",
+      "This run does not authorize production or substitute for independent release review."
+    ],
+    "tasks": {
+      "api": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/5fb69288b0774619a65bc72c3f17bdb8",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m1-20261021-runtime-api:4",
+        "imageDigest": "sha256:c6dab1bb36d868a5c1287058b8a448c3c306c860a70c8eede7ddd342250962dd",
+        "healthStatus": "HEALTHY"
+      },
+      "worker": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/1ba8197511be45f8a6a92ae945d3e164",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m1-20261021-runtime-worker:4",
+        "imageDigest": "sha256:c6dab1bb36d868a5c1287058b8a448c3c306c860a70c8eede7ddd342250962dd",
+        "healthStatus": "HEALTHY"
+      }
+    },
+    "userIds": {
+      "developer": "user_01M5E7PQ8SX6NWA9W83QKMWVG1",
+      "ownerA": "user_01M5E7PRSWENZ4SGMZ28S1CWGW",
+      "ownerB": "user_01M5E7PT69SZKD5GA73XP57SQK",
+      "operatorA": "user_01M5E7PVP9S45S7PZ7JC9D9ZHT",
+      "operatorB": "user_01M5E7PX4N19H0CBK84BZZHAE8",
+      "operatorC": "user_01M5E7PYKPNV3GVWP894GEW2GH"
+    },
+    "capture": {
+      "checks": [
+        "ownerA_operator_scope_capture_retry_upload_attestation_finalize_export",
+        "ownerB_operator_scope_capture_retry_upload_attestation_finalize_export"
+      ],
+      "proofs": [
+        {
+          "proofId": "proof_01M5E7QD50EZJ98S1B1A935BD6",
+          "captureId": "cap_01M5E7QKZ9T2KSM01Y12V07E5F",
+          "evidenceId": "evd_01M5E7QM6H8SAZB1763CT9YJCT",
+          "manifestSha256": "03dfd309b832efcacb40c6ab03861d97336d8fc1d170d87e2762a1c000d7e163",
+          "packageSha256": "e14f22121f1a0878e82e426ca5bbcef010f3cbe295f3cc78de00ad368da348d4",
+          "packageBytes": 33093
+        },
+        {
+          "proofId": "proof_01M5E7QHCZ3SKJY8F15B2DBD44",
+          "captureId": "cap_01M5E7QX09S9CJBC22760H5QQ2",
+          "evidenceId": "evd_01M5E7QX700HHZTB3GD5C7NHYT",
+          "manifestSha256": "e44b5b9bafe219a1cf73e63cbf1e84f29e1c2577820070d21b2407e473a0ddcc",
+          "packageSha256": "034b3a56f29c5fdadda509785a00e7a5147a1cc64c341e124568fe74ccb319de",
+          "packageBytes": 33097
+        }
+      ],
+      "interruptedCapture": {
+        "proofId": "proof_01M5E7R3N16B2QZEXWYT0B3C41",
+        "captureId": "cap_01M5E7R5VFEGEPMVNNBG0SRVY9",
+        "registration": {
+          "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+          "byteSize": 1701,
+          "contentType": "video/mp4",
+          "recordedDurationMs": 200,
+          "interrupted": true
+        }
+      },
+      "status": "PASSED"
+    },
+    "status": "PASSED",
+    "merchants": {
+      "ownerA": "org_01M5E7PYP1PGQMJ5PZSREHQ9HE",
+      "ownerB": "org_01M5E7PYQBNCB7EQFV71D1CHSZ"
+    },
+    "partner": "org_01M5E7PYSDGR7T9781FWPGGXQJ",
+    "proofs": {
+      "ownerA": "proof_01M5E7QD50EZJ98S1B1A935BD6",
+      "ownerB": "proof_01M5E7QHCZ3SKJY8F15B2DBD44"
+    },
+    "syntheticUsersRemoved": 6,
+    "artifact": {
+      "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+      "key": "acceptance/runtime/25264bc2-ea95-4c86-a428-3fcbd7913c74/runtime.zip",
+      "versionId": "IVffdNsE204hf8IrnjMTm4J8K8ASvp37",
+      "sha256": "69212645ef44e43bc7b8429a45ba3a3bc8e9049ab176acaaa7163ea59d1c87b9",
+      "downloadedHashVerified": true
+    }
+  },
+  "cognitoCleanup": {
+    "pool": "us-east-1_1wLVqaizj",
+    "remainingUsers": 0,
+    "paginated": false,
+    "verifiedAt": "2026-10-21T03:25:16.223Z"
+  },
+  "inspection": {
+    "schema": "packproof.isolated-runtime-control.v1",
+    "mode": "inspect",
+    "source": "56c7588c896ef1b3d16749f795a87b49cd70343b",
+    "buildId": "packproof-m1-20261021-runtime:5152f67c-e06a-47a6-9516-cf88d6bc5762",
+    "loginChecks": [
+      {
+        "login": "m1_service_api",
+        "database": "m1_service_20261021",
+        "can_create_schema_objects": false,
+        "can_change_writer_generation": false,
+        "can_publish_receipts": false
+      },
+      {
+        "login": "m1_service_worker",
+        "database": "m1_service_20261021",
+        "can_create_schema_objects": false,
+        "can_change_writer_generation": false,
+        "can_publish_receipts": true
+      }
+    ],
+    "database": "m1_service_20261021",
+    "writerFence": [
+      {
+        "singleton": 1,
+        "generation": "m1-runtime-20261021",
+        "writes_enabled": true
+      }
+    ],
+    "policyFence": [
+      {
+        "singleton": 1,
+        "mode": "NORMAL",
+        "durability_required": true,
+        "expected_sequence": null,
+        "expected_head_sha256": null,
+        "reconciled_sequence": "255",
+        "reconciled_head_sha256": "a90ccc5c5aeb33d326ec37c39450e3fd31c5b83ce2a54c2a0fad473291e7f23b",
+        "baseline_completed": true
+      }
+    ],
+    "roles": [
+      {
+        "rolname": "m1_service_api",
+        "rolcanlogin": true,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolbypassrls": false
+      },
+      {
+        "rolname": "m1_service_worker",
+        "rolcanlogin": true,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolbypassrls": false
+      }
+    ],
+    "coreDelivery": [
+      {
+        "state": "DURABLE",
+        "count": "20"
+      }
+    ],
+    "policyDelivery": [
+      {
+        "state": "DURABLE",
+        "count": "255"
+      }
+    ],
+    "retainedMedia": [
+      {
+        "id": "evd_01M5E6ZH2MTC2P0JBKP3TWA3GW",
+        "proof_id": "proof_01M5E6Z9Y34X7JZ5VVXWPE183Z",
+        "object_key": "evidence/proof_01M5E6Z9Y34X7JZ5VVXWPE183Z/evd_01M5E6ZH2MTC2P0JBKP3TWA3GW/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "object_version_id": "FF6eLCQuCXBuJRP53nEIrMjKb.kocF4k",
+        "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "byte_size": "1701"
+      },
+      {
+        "id": "evd_01M5E77RCPTS31PHCSWGJ82V46",
+        "proof_id": "proof_01M5E77J9YXFSHV2MJ8WRAB8BN",
+        "object_key": "evidence/proof_01M5E77J9YXFSHV2MJ8WRAB8BN/evd_01M5E77RCPTS31PHCSWGJ82V46/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "object_version_id": "8gQYhtfYdo5rlEhI6iQGIvvv1RG_3oZZ",
+        "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "byte_size": "1701"
+      },
+      {
+        "id": "evd_01M5E781A1CTVCGZPNGE6ZTCCM",
+        "proof_id": "proof_01M5E77NKRYM42G945M14ENFGC",
+        "object_key": "evidence/proof_01M5E77NKRYM42G945M14ENFGC/evd_01M5E781A1CTVCGZPNGE6ZTCCM/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "object_version_id": "gebMGfAb5GTdFPck0TK87zi3PlW__o70",
+        "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "byte_size": "1701"
+      },
+      {
+        "id": "evd_01M5E7F94TRFYZ8FPH6JKN4H19",
+        "proof_id": "proof_01M5E7F1RQRAZEEVXVKGFPC3BC",
+        "object_key": "evidence/proof_01M5E7F1RQRAZEEVXVKGFPC3BC/evd_01M5E7F94TRFYZ8FPH6JKN4H19/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "object_version_id": "_aXBV6Xx.Gx6WzHAUjy3A.OARyNxX1.V",
+        "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "byte_size": "1701"
+      },
+      {
+        "id": "evd_01M5E7FGPE3Y5CRAPH5JFQDE38",
+        "proof_id": "proof_01M5E7F6HHWADE3DASXGGC1N3R",
+        "object_key": "evidence/proof_01M5E7F6HHWADE3DASXGGC1N3R/evd_01M5E7FGPE3Y5CRAPH5JFQDE38/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "object_version_id": "FCVyqrH2xn1y1UPgQD6poqjhDIlGhrgX",
+        "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "byte_size": "1701"
+      },
+      {
+        "id": "evd_01M5E7QM6H8SAZB1763CT9YJCT",
+        "proof_id": "proof_01M5E7QD50EZJ98S1B1A935BD6",
+        "object_key": "evidence/proof_01M5E7QD50EZJ98S1B1A935BD6/evd_01M5E7QM6H8SAZB1763CT9YJCT/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "object_version_id": "5s9UNmv57_wjK4RcUUzV3pp59clkri4E",
+        "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "byte_size": "1701"
+      },
+      {
+        "id": "evd_01M5E7QX700HHZTB3GD5C7NHYT",
+        "proof_id": "proof_01M5E7QHCZ3SKJY8F15B2DBD44",
+        "object_key": "evidence/proof_01M5E7QHCZ3SKJY8F15B2DBD44/evd_01M5E7QX700HHZTB3GD5C7NHYT/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "object_version_id": "HZg4ZWY7ID0kTPGGW3GP2lJd4bywMFsu",
+        "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "byte_size": "1701"
+      }
+    ],
+    "heartbeats": [
+      {
+        "worker_name": "ebay-deletion",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T03:06:15.030Z",
+        "last_success_at": "2026-10-21T03:06:15.030Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "ebay-deletion",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:26:26.253Z",
+        "last_success_at": "2026-10-21T03:26:26.253Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "mobile-intake",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:26:26.177Z",
+        "last_success_at": "2026-10-21T03:26:26.177Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "mobile-intake",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T03:06:14.948Z",
+        "last_success_at": "2026-10-21T03:06:14.948Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "operational-cleanup",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:05:56.462Z",
+        "last_success_at": "2026-10-21T03:05:56.462Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "operational-cleanup",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T02:45:15.235Z",
+        "last_success_at": "2026-10-21T02:45:15.235Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "order-shippo",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T03:06:29.950Z",
+        "last_success_at": "2026-10-21T03:06:29.950Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "order-shippo",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:26:41.179Z",
+        "last_success_at": "2026-10-21T03:26:41.179Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "policy-recovery",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:26:41.867Z",
+        "last_success_at": "2026-10-21T03:26:41.867Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "policy-recovery",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T03:06:35.505Z",
+        "last_success_at": "2026-10-21T03:06:35.505Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "preservation",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T03:06:33.643Z",
+        "last_success_at": "2026-10-21T03:06:33.643Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "preservation",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:26:41.111Z",
+        "last_success_at": "2026-10-21T03:26:41.111Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "proof-update-notifications",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T03:06:30.030Z",
+        "last_success_at": "2026-10-21T03:06:30.030Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "proof-update-notifications",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:26:41.234Z",
+        "last_success_at": "2026-10-21T03:26:41.234Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "usage-reconciliation",
+        "instance_id": "bdb25f2d-e152-415f-8cde-79e7a44fc9a4",
+        "heartbeat_at": "2026-10-21T03:26:26.266Z",
+        "last_success_at": "2026-10-21T03:26:26.266Z",
+        "state": "IDLE"
+      },
+      {
+        "worker_name": "usage-reconciliation",
+        "instance_id": "8d1e8844-bbc0-4795-b2aa-f1c2537e4a2f",
+        "heartbeat_at": "2026-10-21T03:06:15.118Z",
+        "last_success_at": "2026-10-21T03:06:15.118Z",
+        "state": "IDLE"
+      }
+    ],
+    "artifact": {
+      "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+      "key": "acceptance/runtime/5152f67c-e06a-47a6-9516-cf88d6bc5762/runtime.zip",
+      "versionId": "qoW4ccUxNJWuCzO0GFMCKYjDW314OeOr",
+      "sha256": "53a1c6d35c69a3b255e45f01dbff229d02116c4d9d4e12abc84cf0bb502aaec1",
+      "downloadedHashVerified": true
+    }
+  },
+  "offlineVerification": {
+    "schema": "packproof.isolated-runtime-verification.v1",
+    "source": "56c7588c896ef1b3d16749f795a87b49cd70343b",
+    "buildId": "packproof-m1-20261021-runtime:5152f67c-e06a-47a6-9516-cf88d6bc5762",
+    "acceptanceArchive": {
+      "buildId": "25264bc2-ea95-4c86-a428-3fcbd7913c74",
+      "sha256": "69212645ef44e43bc7b8429a45ba3a3bc8e9049ab176acaaa7163ea59d1c87b9",
+      "versionId": "IVffdNsE204hf8IrnjMTm4J8K8ASvp37"
+    },
+    "publicTrustSource": "Separate control-plane GetPublicKey for the pinned KMS ARN; committed public PEM outside both packages.",
+    "packages": [
+      {
+        "owner": "ownerA",
+        "proofId": "proof_01M5E7QD50EZJ98S1B1A935BD6",
+        "manifestSha256": "03dfd309b832efcacb40c6ab03861d97336d8fc1d170d87e2762a1c000d7e163",
+        "packageSha256": "e14f22121f1a0878e82e426ca5bbcef010f3cbe295f3cc78de00ad368da348d4",
+        "verification": {
+          "status": "VERIFIED",
+          "verifierVersion": "1.3.0",
+          "signatureVerified": true,
+          "archiveHashInventoryVerified": true,
+          "independentDigestMatched": true,
+          "evidenceVerified": 1,
+          "completeMedia": true,
+          "filesMatched": 14,
+          "trust": {
+            "status": "FRESH",
+            "generatedAt": "2026-10-21T02:49:34.623Z",
+            "expiresAt": "2026-10-28T02:49:34.624Z",
+            "networkUsed": false,
+            "limitation": "No online revocation check was performed. Trust depends on how this list was obtained."
+          },
+          "limitations": [
+            "Integrity does not establish physical truth, authenticity, or liability.",
+            "The root signature does not cover later supplements. Each declared signed entry is checked separately; other export files remain inventory self-consistency only.",
+            "A received signed chain cannot establish that no later events exist. Its export snapshot time is not independently attested.",
+            "Archive-included keys never establish trust. No media was uploaded."
+          ]
+        }
+      },
+      {
+        "owner": "ownerB",
+        "proofId": "proof_01M5E7QHCZ3SKJY8F15B2DBD44",
+        "manifestSha256": "e44b5b9bafe219a1cf73e63cbf1e84f29e1c2577820070d21b2407e473a0ddcc",
+        "packageSha256": "034b3a56f29c5fdadda509785a00e7a5147a1cc64c341e124568fe74ccb319de",
+        "verification": {
+          "status": "VERIFIED",
+          "verifierVersion": "1.3.0",
+          "signatureVerified": true,
+          "archiveHashInventoryVerified": true,
+          "independentDigestMatched": true,
+          "evidenceVerified": 1,
+          "completeMedia": true,
+          "filesMatched": 14,
+          "trust": {
+            "status": "FRESH",
+            "generatedAt": "2026-10-21T02:49:34.623Z",
+            "expiresAt": "2026-10-28T02:49:34.624Z",
+            "networkUsed": false,
+            "limitation": "No online revocation check was performed. Trust depends on how this list was obtained."
+          },
+          "limitations": [
+            "Integrity does not establish physical truth, authenticity, or liability.",
+            "The root signature does not cover later supplements. Each declared signed entry is checked separately; other export files remain inventory self-consistency only.",
+            "A received signed chain cannot establish that no later events exist. Its export snapshot time is not independently attested.",
+            "Archive-included keys never establish trust. No media was uploaded."
+          ]
+        }
+      }
+    ],
+    "status": "PASSED"
+  },
+  "mediaRetention": [
+    {
+      "evidenceId": "evd_01M5E6ZH2MTC2P0JBKP3TWA3GW",
+      "key": "evidence/proof_01M5E6Z9Y34X7JZ5VVXWPE183Z/evd_01M5E6ZH2MTC2P0JBKP3TWA3GW/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+      "version": "FF6eLCQuCXBuJRP53nEIrMjKb.kocF4k",
+      "retention": {
+        "Mode": "GOVERNANCE",
+        "RetainUntilDate": "2027-01-19T03:09:51.402000+00:00"
+      }
+    },
+    {
+      "evidenceId": "evd_01M5E77RCPTS31PHCSWGJ82V46",
+      "key": "evidence/proof_01M5E77J9YXFSHV2MJ8WRAB8BN/evd_01M5E77RCPTS31PHCSWGJ82V46/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+      "version": "8gQYhtfYdo5rlEhI6iQGIvvv1RG_3oZZ",
+      "retention": {
+        "Mode": "GOVERNANCE",
+        "RetainUntilDate": "2027-01-19T03:14:20.979000+00:00"
+      }
+    },
+    {
+      "evidenceId": "evd_01M5E781A1CTVCGZPNGE6ZTCCM",
+      "key": "evidence/proof_01M5E77NKRYM42G945M14ENFGC/evd_01M5E781A1CTVCGZPNGE6ZTCCM/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+      "version": "gebMGfAb5GTdFPck0TK87zi3PlW__o70",
+      "retention": {
+        "Mode": "GOVERNANCE",
+        "RetainUntilDate": "2027-01-19T03:14:30.068000+00:00"
+      }
+    },
+    {
+      "evidenceId": "evd_01M5E7F94TRFYZ8FPH6JKN4H19",
+      "key": "evidence/proof_01M5E7F1RQRAZEEVXVKGFPC3BC/evd_01M5E7F94TRFYZ8FPH6JKN4H19/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+      "version": "_aXBV6Xx.Gx6WzHAUjy3A.OARyNxX1.V",
+      "retention": {
+        "Mode": "GOVERNANCE",
+        "RetainUntilDate": "2027-01-19T03:18:27.497000+00:00"
+      }
+    },
+    {
+      "evidenceId": "evd_01M5E7FGPE3Y5CRAPH5JFQDE38",
+      "key": "evidence/proof_01M5E7F6HHWADE3DASXGGC1N3R/evd_01M5E7FGPE3Y5CRAPH5JFQDE38/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+      "version": "FCVyqrH2xn1y1UPgQD6poqjhDIlGhrgX",
+      "retention": {
+        "Mode": "GOVERNANCE",
+        "RetainUntilDate": "2027-01-19T03:18:35.202000+00:00"
+      }
+    },
+    {
+      "evidenceId": "evd_01M5E7QM6H8SAZB1763CT9YJCT",
+      "key": "evidence/proof_01M5E7QD50EZJ98S1B1A935BD6/evd_01M5E7QM6H8SAZB1763CT9YJCT/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+      "version": "5s9UNmv57_wjK4RcUUzV3pp59clkri4E",
+      "retention": {
+        "Mode": "GOVERNANCE",
+        "RetainUntilDate": "2027-01-19T03:23:00.982000+00:00"
+      }
+    },
+    {
+      "evidenceId": "evd_01M5E7QX700HHZTB3GD5C7NHYT",
+      "key": "evidence/proof_01M5E7QHCZ3SKJY8F15B2DBD44/evd_01M5E7QX700HHZTB3GD5C7NHYT/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+      "version": "HZg4ZWY7ID0kTPGGW3GP2lJd4bywMFsu",
+      "retention": {
+        "Mode": "GOVERNANCE",
+        "RetainUntilDate": "2027-01-19T03:23:10.459000+00:00"
+      }
+    }
+  ],
+  "pauseChangeReview": [
+    {
+      "stack": "packproof-m1-20261021-services",
+      "status": "CREATE_COMPLETE",
+      "changes": [
+        {
+          "Action": "Modify",
+          "LogicalResourceId": "ApiService",
+          "ResourceType": "AWS::ECS::Service",
+          "Replacement": "False"
+        },
+        {
+          "Action": "Modify",
+          "LogicalResourceId": "WorkerService",
+          "ResourceType": "AWS::ECS::Service",
+          "Replacement": "False"
+        }
+      ],
+      "events": [
+        {
+          "OperationStatus": "SUCCEEDED",
+          "EventType": "STACK_EVENT"
+        },
+        {
+          "OperationStatus": "IN_PROGRESS",
+          "EventType": "STACK_EVENT"
+        }
+      ]
+    },
+    {
+      "stack": "packproof-m1-20261021-runtime",
+      "status": "CREATE_COMPLETE",
+      "changes": [
+        {
+          "Action": "Modify",
+          "LogicalResourceId": "ApiRole",
+          "ResourceType": "AWS::IAM::Role",
+          "Replacement": "False"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "ApiTlsIngress",
+          "ResourceType": "AWS::EC2::SecurityGroupIngress"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "BuildRole",
+          "ResourceType": "AWS::IAM::Role"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "BuildSecurityGroup",
+          "ResourceType": "AWS::EC2::SecurityGroup"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "DatabaseIngress",
+          "ResourceType": "AWS::EC2::SecurityGroupIngress"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "EgressSubnet",
+          "ResourceType": "AWS::EC2::Subnet"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "GatewayAttachment",
+          "ResourceType": "AWS::EC2::VPCGatewayAttachment"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "InternetGateway",
+          "ResourceType": "AWS::EC2::InternetGateway"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "NatAddress",
+          "ResourceType": "AWS::EC2::EIP"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "NatGateway",
+          "ResourceType": "AWS::EC2::NatGateway"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "PrivateAssociationA",
+          "ResourceType": "AWS::EC2::SubnetRouteTableAssociation"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "PrivateAssociationB",
+          "ResourceType": "AWS::EC2::SubnetRouteTableAssociation"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "PrivateRouteTable",
+          "ResourceType": "AWS::EC2::RouteTable"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "PrivateRoute",
+          "ResourceType": "AWS::EC2::Route"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "Project",
+          "ResourceType": "AWS::CodeBuild::Project"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "PublicAssociation",
+          "ResourceType": "AWS::EC2::SubnetRouteTableAssociation"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "PublicRouteTable",
+          "ResourceType": "AWS::EC2::RouteTable"
+        },
+        {
+          "Action": "Remove",
+          "LogicalResourceId": "PublicRoute",
+          "ResourceType": "AWS::EC2::Route"
+        },
+        {
+          "Action": "Modify",
+          "LogicalResourceId": "Trail",
+          "ResourceType": "AWS::CloudTrail::Trail",
+          "Replacement": "False"
+        },
+        {
+          "Action": "Modify",
+          "LogicalResourceId": "WorkerRole",
+          "ResourceType": "AWS::IAM::Role",
+          "Replacement": "False"
+        }
+      ],
+      "events": [
+        {
+          "OperationStatus": "SUCCEEDED",
+          "EventType": "STACK_EVENT"
+        },
+        {
+          "OperationStatus": "IN_PROGRESS",
+          "EventType": "STACK_EVENT"
+        }
+      ]
+    }
+  ],
+  "shutdown": {
+    "services": {
+      "stack": "packproof-m1-20261021-services",
+      "status": "UPDATE_COMPLETE",
+      "desiredCountPerService": 0,
+      "runningTasks": 0,
+      "taskStops": [
+        {
+          "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/1ba8197511be45f8a6a92ae945d3e164",
+          "status": "STOPPED",
+          "desired": "STOPPED"
+        },
+        {
+          "arn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/5fb69288b0774619a65bc72c3f17bdb8",
+          "status": "STOPPED",
+          "desired": "STOPPED"
+        }
+      ]
+    },
+    "databaseCloseBuild": "packproof-m1-20261021-runtime:7be9af9e-3c43-4c13-9105-c4046d1b621a",
+    "status": "VERIFIED",
+    "databaseClose": {
+      "source": "56c7588c896ef1b3d16749f795a87b49cd70343b",
+      "buildId": "packproof-m1-20261021-runtime:7be9af9e-3c43-4c13-9105-c4046d1b621a",
+      "database": "m1_service_20261021",
+      "writerFence": [
+        {
+          "singleton": 1,
+          "generation": "m1-runtime-20261021",
+          "writes_enabled": false
+        }
+      ],
+      "roles": [
+        {
+          "rolname": "m1_service_api",
+          "rolcanlogin": false,
+          "rolsuper": false,
+          "rolcreatedb": false,
+          "rolcreaterole": false,
+          "rolbypassrls": false
+        },
+        {
+          "rolname": "m1_service_worker",
+          "rolcanlogin": false,
+          "rolsuper": false,
+          "rolcreatedb": false,
+          "rolcreaterole": false,
+          "rolbypassrls": false
+        }
+      ],
+      "coreDelivery": [
+        {
+          "state": "DURABLE",
+          "count": "20"
+        }
+      ],
+      "policyDelivery": [
+        {
+          "state": "DURABLE",
+          "count": "255"
+        }
+      ],
+      "artifact": {
+        "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+        "key": "acceptance/runtime/7be9af9e-3c43-4c13-9105-c4046d1b621a/runtime.zip",
+        "versionId": "7npicYIv6y90xjExSCSrulT4tuzR7iFf",
+        "sha256": "8ed66882aff18a765d35ab56f6acae6760669884cbcfdafa64ccd5224f3365df",
+        "downloadedHashVerified": true
+      }
+    },
+    "resources": {
+      "verifiedAt": "2026-10-21T03:35:42.274899+00:00",
+      "stack": "UPDATE_COMPLETE",
+      "parameters": [
+        {
+          "ParameterKey": "WriterFence",
+          "ParameterValue": "CLOSED"
+        },
+        {
+          "ParameterKey": "ComputeEnabled",
+          "ParameterValue": "false"
+        },
+        {
+          "ParameterKey": "EgressAvailabilityZone",
+          "ParameterValue": "us-east-1a"
+        },
+        {
+          "ParameterKey": "CandidateCommit",
+          "ParameterValue": "56c7588c896ef1b3d16749f795a87b49cd70343b"
+        }
+      ],
+      "retainedOutputs": [
+        "ApiExecutionRole",
+        "Cluster",
+        "ApiDatabaseSecret",
+        "TlsSecret",
+        "Logs",
+        "ApiRole",
+        "Repository",
+        "ConfigurationSecret",
+        "ServiceSecurityGroup",
+        "AuditTrail",
+        "WorkerRole",
+        "WorkerExecutionRole",
+        "WorkerDatabaseSecret"
+      ],
+      "projects": 0,
+      "projectsNotFound": [
+        "packproof-m1-20261021-runtime"
+      ],
+      "buildRole": "ABSENT",
+      "nat": [
+        {
+          "id": "nat-08ae5624e44670bb9",
+          "state": "deleted"
+        }
+      ],
+      "addresses": 0,
+      "routeTables": [
+        {
+          "id": "rtb-05ee97c6869a5baab",
+          "routes": [
+            {
+              "DestinationCidrBlock": "10.42.0.0/16",
+              "GatewayId": "local",
+              "Origin": "CreateRouteTable",
+              "State": "active"
+            }
+          ]
+        }
+      ],
+      "services": [
+        {
+          "name": "packproof-m1-20261021-runtime-api",
+          "desired": 0,
+          "running": 0,
+          "pending": 0
+        },
+        {
+          "name": "packproof-m1-20261021-runtime-worker",
+          "desired": 0,
+          "running": 0,
+          "pending": 0
+        }
+      ]
+    },
+    "testTrail": {
+      "IsLogging": false,
+      "LatestDeliveryTime": "2026-10-21T03:32:25.960000+00:00"
+    },
+    "retained": [
+      "Dedicated isolated database and original foundation",
+      "API/worker task and execution roles with writer fence closed",
+      "Immutable images, task definitions and zero-count services",
+      "Managed runtime secrets and protected Cognito pool/client",
+      "Committed media, recovery journals, versioned acceptance archives and audit/log records"
+    ]
+  },
+  "assetsSnapshotScope": "Resources provisioned before acceptance; current retained/removed resources are recorded under shutdown.",
+  "releaseRecommendation": "HOLD: implementation evidence does not replace independent M1-06 review or the remaining device/release gates.",
+  "deploymentCorrections": [
+    {
+      "finding": "Initial task startup lacked the required KMS signing algorithm setting.",
+      "correction": "Set PACKPROOF_MANIFEST_SIGNING_ALGORITHM=ECDSA_SHA_256 in the isolated service template."
+    },
+    {
+      "finding": "The Fargate temporary bind volume was root-owned and not writable by application UID 1000.",
+      "correction": "A short initializer sets only the temporary volume to mode 1777; application containers keep UID 1000 and read-only root filesystems."
+    },
+    {
+      "finding": "An older task revision with durability disabled encountered the database policy after protected mode was enabled.",
+      "correction": "The guard correctly refused startup. Protected-mode revision 3, and subsequently corrected application revision 4, ran healthy with matching policy/generation."
+    }
+  ]
+}

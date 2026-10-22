@@ -1,0 +1,758 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "PROPOSED isolated synthetic M1 test foundation. No production imports, service deployment, application IAM grants, or customer data. Requires explicit owner approval of new 90-day governance Object Lock.",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "packproof-m1-20261020",
+      "AllowedPattern": "packproof-m1-[a-z0-9-]{1,24}",
+      "MaxLength": 40
+    },
+    "RetentionDecision": {
+      "Type": "String",
+      "Default": "PENDING",
+      "AllowedValues": [
+        "PENDING",
+        "APPROVED_BY_OWNER"
+      ],
+      "Description": "Set only after the plan owner explicitly approves this new isolated 90-day GOVERNANCE retention setting."
+    }
+  },
+  "Rules": {
+    "OwnerRetentionApproval": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "RetentionDecision"
+              },
+              "APPROVED_BY_OWNER"
+            ]
+          },
+          "AssertDescription": "The attached plan page 39 requires explicit owner approval for irreversible retention settings."
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "Vpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.42.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "SubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.42.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "SubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.42.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "RunnerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Only separately reviewed isolated M1 test runners attach here",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Isolated M1 PostgreSQL; runner security group only",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "RunnerSecurityGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "DatabaseSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Isolated M1 database subnets without public routes",
+        "SubnetIds": [
+          {
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetB"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "DatabaseParameters": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "Description": "PostgreSQL 16 with server TLS enforced",
+        "Family": "postgres16",
+        "Parameters": {
+          "rds.force_ssl": "1"
+        },
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "Database": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "${EnvironmentName}-db"
+        },
+        "DBName": "packproof_v2",
+        "Engine": "postgres",
+        "EngineVersion": "16.15",
+        "DBInstanceClass": "db.t4g.micro",
+        "AllocatedStorage": "20",
+        "MaxAllocatedStorage": 40,
+        "StorageType": "gp3",
+        "StorageEncrypted": true,
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "BackupRetentionPeriod": 7,
+        "CopyTagsToSnapshot": true,
+        "DeleteAutomatedBackups": false,
+        "DeletionProtection": true,
+        "AutoMinorVersionUpgrade": true,
+        "MasterUsername": "packproof",
+        "ManageMasterUserPassword": true,
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnetGroup"
+        },
+        "DBParameterGroupName": {
+          "Ref": "DatabaseParameters"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "UploadBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "AbortIncompleteMultipartUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 7
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "UploadBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Bucket": {
+          "Ref": "UploadBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "UploadBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${UploadBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CommittedBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "ObjectLockEnabled": true,
+        "ObjectLockConfiguration": {
+          "ObjectLockEnabled": "Enabled",
+          "Rule": {
+            "DefaultRetention": {
+              "Mode": "GOVERNANCE",
+              "Days": 90
+            }
+          }
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "AbortIncompleteMultipartUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 7
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "CommittedBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Bucket": {
+          "Ref": "CommittedBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "CommittedBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${CommittedBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "RecoveryBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "ObjectLockEnabled": true,
+        "ObjectLockConfiguration": {
+          "ObjectLockEnabled": "Enabled",
+          "Rule": {
+            "DefaultRetention": {
+              "Mode": "GOVERNANCE",
+              "Days": 90
+            }
+          }
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "AbortIncompleteMultipartUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 7
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "RecoveryBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Bucket": {
+          "Ref": "RecoveryBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "RecoveryBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${RecoveryBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ManifestSigningKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "${EnvironmentName} ManifestSigningKey for synthetic staging evidence only"
+        },
+        "KeySpec": "ECC_NIST_P256",
+        "KeyUsage": "SIGN_VERIFY",
+        "PendingWindowInDays": 30,
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "RecoverySigningKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "${EnvironmentName} RecoverySigningKey for synthetic staging evidence only"
+        },
+        "KeySpec": "ECC_NIST_P256",
+        "KeyUsage": "SIGN_VERIFY",
+        "PendingWindowInDays": 30,
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/packproof/${EnvironmentName}/acceptance"
+        },
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "system",
+            "Value": "packproof"
+          },
+          {
+            "Key": "environment",
+            "Value": "isolated-m1-test"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VpcId": {
+      "Value": {
+        "Ref": "Vpc"
+      }
+    },
+    "RunnerSecurityGroupId": {
+      "Value": {
+        "Ref": "RunnerSecurityGroup"
+      }
+    },
+    "SubnetA": {
+      "Value": {
+        "Ref": "SubnetA"
+      }
+    },
+    "SubnetB": {
+      "Value": {
+        "Ref": "SubnetB"
+      }
+    },
+    "DatabaseEndpoint": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Database",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "DatabaseSecretArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Database",
+          "MasterUserSecret.SecretArn"
+        ]
+      }
+    },
+    "UploadBucket": {
+      "Value": {
+        "Ref": "UploadBucket"
+      }
+    },
+    "CommittedBucket": {
+      "Value": {
+        "Ref": "CommittedBucket"
+      }
+    },
+    "RecoveryBucket": {
+      "Value": {
+        "Ref": "RecoveryBucket"
+      }
+    },
+    "ManifestSigningKeyArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ManifestSigningKey",
+          "Arn"
+        ]
+      }
+    },
+    "RecoverySigningKeyArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "RecoverySigningKey",
+          "Arn"
+        ]
+      }
+    },
+    "LogGroup": {
+      "Value": {
+        "Ref": "LogGroup"
+      }
+    }
+  }
+}

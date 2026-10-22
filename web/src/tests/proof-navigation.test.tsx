@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+vi.mock("../signal/Signal", async original => ({ ...await original<typeof import("../signal/Signal")>(), SIGNAL_ENABLED: false }));
 import { App } from "../App";
 import { PackProofApi } from "../api/client";
 import { saveSession } from "../auth/session";

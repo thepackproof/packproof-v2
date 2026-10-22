@@ -3,6 +3,8 @@ import "fake-indexeddb/auto";
 import { Blob as NodeBlob } from "node:buffer";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// The retained desktop composition remains a supported rollback path.
+vi.mock("../signal/Signal", async original => ({ ...await original<typeof import("../signal/Signal")>(), SIGNAL_ENABLED: false }));
 import { App } from "../App";
 import {clearStationCapture} from "../capture-queue";
 import { isDevAuthAvailable, saveSession } from "../auth/session";
@@ -332,7 +334,7 @@ describe("PackProof web reference client", () => {
   it("lets an authenticated user load Proof discovery summaries", async () => {
     signInSession();
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Proofs" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your Proofs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Vintage camera")).length).toBeGreaterThan(0);
     expect(screen.getByText("Recording needed")).toBeInTheDocument();
     expect(screen.getByText("ORD-48392")).toBeInTheDocument();
@@ -445,8 +447,10 @@ describe("PackProof web reference client", () => {
       }),
     );
     render(<App />);
-    expect(await screen.findByText("Nothing needs your attention")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Needs attention" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByText("No Proofs yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Saved" }));
+    expect(await screen.findByText("No completed Proofs yet")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "View all Proofs" }));
     expect(await screen.findByText(/^No Proofs yet$/)).toBeInTheDocument();
   });
@@ -509,8 +513,8 @@ describe("PackProof web reference client", () => {
 
   it("routes legacy Create Scan links into the minimal shipment form", async () => {
     signInSession(); window.history.replaceState(null, "", "/new/scan"); render(<App />);
-    expect(await screen.findByRole("heading", { name: "Record shipment" })).toBeInTheDocument();
-    expect(screen.getByLabelText("What are you shipping?")).toBeRequired();
+    expect(await screen.findByRole("heading", { name: "What are you packing?" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Item name")).toBeRequired();
     expect(screen.getByRole("button", { name: "Paste order or receipt" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Reference")).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/me/packing-station/resolve"))).toBe(false);
@@ -572,8 +576,8 @@ describe("PackProof web reference client", () => {
     }));
     window.history.replaceState(null, "", "/new");
     render(<App />);
-    await userEvent.type(screen.getByLabelText("What are you shipping?"), "Parcel with camera");
-    await userEvent.click(screen.getByRole("button", { name: "Open camera" }));
+    await userEvent.type(screen.getByLabelText("Item name"), "Parcel with camera");
+    await userEvent.click(screen.getByRole("button", { name: /Continue to camera/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     expect(screen.getByLabelText("Packing camera preview")).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/integrations/transactions/import"))).toBe(false);
@@ -582,14 +586,14 @@ describe("PackProof web reference client", () => {
 
   it("keeps manual intake minimal and marketplace connections out of its path", async () => {
     signInSession(); window.history.replaceState(null, "", "/new"); render(<App />);
-    expect(screen.getByRole("heading", { name: "Record shipment" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open camera" })).toBeDisabled();
-    expect(screen.getByLabelText("What are you shipping?")).toBeRequired();
+    expect(screen.getByRole("heading", { name: "What are you packing?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Continue to camera/ })).toBeDisabled();
+    expect(screen.getByLabelText("Item name")).toBeRequired();
     expect(screen.queryByRole("button", { name: "Import purchase" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Scan order or label" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect eBay" })).not.toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText("What are you shipping?"), "One item");
-    expect(screen.getByRole("button", { name: "Open camera" })).toBeEnabled();
+    await userEvent.type(screen.getByLabelText("Item name"), "One item");
+    expect(screen.getByRole("button", { name: /Continue to camera/ })).toBeEnabled();
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/integrations/transactions/import"), expect.anything());
   });
 
@@ -1135,13 +1139,13 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByRole("button", { name: "Finish recording" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Scan Package to Finish" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Finish recording" }));
-    expect(await screen.findByLabelText("Recorded packing video")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Recorded packing video")).toBeInTheDocument());
     expect(uploadInits).toBe(0);
-    expect(await screen.findByRole("button", { name: "Confirm and submit" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Save to PackProof" })).toBeDisabled();
     await waitFor(() => expect(screen.getByRole("checkbox", { name: /The item shown and attached/ })).toBeEnabled());
     await user.click(screen.getByRole("checkbox", { name: /The item shown and attached/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm and submit" })).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: "Confirm and submit" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save to PackProof" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Save to PackProof" }));
     await waitFor(() => expect(window.location.pathname).toBe(`/proofs/${fulfillmentItem.proofId}`));
     expect(await screen.findByRole("article", { name: "Proof record" })).toBeInTheDocument();
     expect(proofCreates).toBe(0);
@@ -1237,8 +1241,8 @@ describe("PackProof web reference client", () => {
     expect(screen.getByLabelText("Recorded packing video")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("checkbox", { name: /The item shown and attached/ })).toBeEnabled());
     await user.click(screen.getByRole("checkbox", { name: /The item shown and attached/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm and submit" })).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: "Confirm and submit" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save to PackProof" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Save to PackProof" }));
     await waitFor(() => expect(window.location.pathname).toBe(`/proofs/${fulfillmentItem.proofId}`));
     expect(await screen.findByRole("article", { name: "Proof record" })).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/shipping-observations"))).toBe(true);

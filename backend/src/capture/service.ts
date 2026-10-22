@@ -1,4 +1,5 @@
 import { attestationContext } from "../domain/attestation-context.js";
+import { requireCaptureOrganizationAuthorization } from '../platform/organization-access.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Database } from '../db/database.js';
 import type { Clock } from '../clock.js';
@@ -16,7 +17,7 @@ interface IntentRow {id:string;proof_id:string;actor_user_id:string;token_sha256
 export interface EngineRow {session_id:string;proof_id:string;actor_user_id:string;context_json:CaptureContext;context_sha256:string;manifest_json:CaptureManifest|null;manifest_sha256:string|null;}
 export async function engineRow(db:Database,sessionId:string,lock=false) {return (await db.query<EngineRow>(`SELECT * FROM capture_engine_sessions WHERE session_id=$1${lock?' FOR UPDATE':''}`,[sessionId])).rows[0]??null;}
 function fields(v:unknown,names:string[]):asserts v is Record<string,unknown> { check(v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(k=>names.includes(k)),'CAPTURE_SCHEMA_INVALID','Only documented capture fields are accepted'); }
-export async function issueIntent(db:Database,clock:Clock,actor:string,proofId:string,allowed:Surface[]=['ANDROID','IOS','WEB','WAREHOUSE']) {
+export async function issueIntent(db:Database,clock:Clock,actor:string,proofId:string,allowed:Surface[]=['ANDROID','IOS','WEB','WAREHOUSE'],origin?:{serviceActorUserId:string}) {
   check(Array.isArray(allowed)&&allowed.length>0&&allowed.length<=4&&allowed.every(x=>['ANDROID','IOS','WEB','WAREHOUSE'].includes(x)),'CAPTURE_SURFACE_INVALID','Choose a supported capture surface');
   return db.transaction(async tx=>{
     await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[actor]);
@@ -33,7 +34,7 @@ export async function issueIntent(db:Database,clock:Clock,actor:string,proofId:s
     if(tracking&&/^[A-Z0-9]{10,64}$/.test(tracking)) expected.push({kind:'TRACKING',value:tracking,source:transaction.provenance?.source??'OPERATOR',version:sha256Hex(canonical({tracking,transactionId:proof.transaction_id}))});
     const context:IntentRow['context_json']={schema:CAPTURE_SCHEMA,intentId:id,proofId,transactionId:proof.transaction_id,transactionDigest:snapshot.contextSha256,actorId:actor,expected,policy:{...POLICY}};
     await tx.query('INSERT INTO capture_intents(id,proof_id,actor_user_id,token_sha256,context_json,surfaces,created_at,expires_at) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8)',[id,proofId,actor,sha256Hex(token),JSON.stringify(context),JSON.stringify(allowed),clock.now().toISOString(),expiresAt]);
-    await appendAudit(tx,{proofId,actorUserId:actor,eventType:'CAPTURE_INTENT_CREATED',eventData:{intentId:id,schema:CAPTURE_SCHEMA},at:clock.now()});
+    await appendAudit(tx,{proofId,actorUserId:origin?.serviceActorUserId??actor,eventType:'CAPTURE_INTENT_CREATED',eventData:{intentId:id,schema:CAPTURE_SCHEMA,...(origin?{requestedForOperator:actor,principalType:'SERVICE'}:{})},at:clock.now()});
     // Fragment tokens avoid access-log/referrer/query-string propagation. No order PII in URLs.
     return {intentId:id,launchToken:`${id}.${token}`,expiresAt,schema:CAPTURE_SCHEMA,allowedSurfaces:allowed,launchPath:`/capture#intent=${id}.${token}`,nativePath:`packproof://capture#intent=${id}.${token}`};
   });
@@ -49,6 +50,7 @@ export async function bindIntent(db:Database,clock:Clock,actor:string,value:unkn
     const row=(await tx.query<IntentRow>('SELECT * FROM capture_intents WHERE id=$1 AND actor_user_id=$2 FOR UPDATE',[id,actor])).rows[0];
     check(row&&timingSafeEqual(Buffer.from(sha256Hex(secret)),Buffer.from(row.token_sha256)),'CAPTURE_INTENT_INVALID','This capture link is unavailable for your account');
     check(!row.consumed_at,'CAPTURE_INTENT_USED','This link has already opened a recording. Recover that recording from its original order');
+    await requireCaptureOrganizationAuthorization(tx,id);
     check(new Date(row.expires_at).getTime()>clock.now().getTime(),'CAPTURE_INTENT_EXPIRED','This capture link has expired. Open a new link from the order');
     check(row.surfaces.includes(capabilities.surface),'CAPTURE_SURFACE_INVALID','This link does not allow that capture surface');
     const currentSnapshot=await attestationContext(tx,row.context_json.transactionId);
@@ -61,6 +63,8 @@ export async function bindIntent(db:Database,clock:Clock,actor:string,value:unkn
   });
 }
 async function access(db:Database,actor:string,sessionId:string,lock=false) {
+  const intent=(await db.query<{intent_id:string}>('SELECT intent_id FROM capture_engine_sessions WHERE session_id=$1',[sessionId])).rows[0];
+  if(intent)await requireCaptureOrganizationAuthorization(db,intent.intent_id);
   const row=await engineRow(db,sessionId,lock);check(row&&row.actor_user_id===actor,'CAPTURE_SESSION_NOT_FOUND','Open this recording in its original account');await requireParticipant(db,row.proof_id,actor,'SELLER');return row;
 }
 export async function receiveBatch(db:Database,clock:Clock,actor:string,sessionId:string,value:unknown) {
@@ -97,7 +101,7 @@ export async function sealCapture(db:Database,clock:Clock,actor:string,sessionId
     const digest=await manifestDigest(manifest,hash);check(value.sha256===digest,'CAPTURE_MANIFEST_MISMATCH','The capture manifest does not match its digest');
     if(row.manifest_json){check(row.manifest_sha256===digest,'CAPTURE_SEALED','A sealed recording cannot be changed');return {captureId:sessionId,sha256:digest,state:'SEALED_WITHOUT_ATTESTATION'};}
     const session=await loadCaptureSession(tx,actor,row.proof_id,sessionId,true);
-    check(['RECORDED','UPLOADING'].includes(session.state)&&session.expected_sha256===manifest.source.sha256&&Number(session.expected_byte_size)===manifest.source.byteSize&&session.content_type===manifest.source.contentType,'CAPTURE_SOURCE_MISMATCH','Seal only this session’s registered original');
+    check(['RECORDED','UPLOADING'].includes(session.state)&&session.expected_sha256===manifest.source.sha256&&Number(session.expected_byte_size)===manifest.source.byteSize&&session.content_type===manifest.source.contentType,'CAPTURE_SOURCE_MISMATCH',"Seal only this session's registered original");
     const batches=(await tx.query<{body_json:{observations:Observation[];segments:MediaSegment[]}}>('SELECT body_json FROM capture_engine_batches WHERE session_id=$1 ORDER BY sequence',[sessionId])).rows;
     const priorObservations=batches.flatMap(b=>b.body_json.observations),priorSegments=batches.flatMap(b=>b.body_json.segments);
     check(canonical(manifest.observations.slice(0,priorObservations.length))===canonical(priorObservations)&&canonical(manifest.segments.slice(0,priorSegments.length))===canonical(priorSegments),'CAPTURE_JOURNAL_CONFLICT','Sealing cannot replace previously received journal entries');

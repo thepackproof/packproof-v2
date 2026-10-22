@@ -67,7 +67,7 @@ it("replaces a failed Orders load with its successful retry instead of retaining
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByRole("button", { name: "DS-1001" })).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Refresh workspace" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Refresh orders" })).toBeEnabled();
   expect(attempts).toBe(2);
 });
 

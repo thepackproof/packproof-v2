@@ -78,7 +78,7 @@ export async function listMyProofs(
        JOIN proofs p ON p.id = pp.proof_id
        JOIN transactions t ON t.id = p.transaction_id
        LEFT JOIN transaction_shipping s ON s.transaction_id = t.id
-      WHERE pp.user_id = $1
+      WHERE pp.user_id = $1 AND platform_operator_access_active(pp.proof_id,$1)
       ORDER BY
         CASE WHEN p.status = 'FINALIZED' THEN 1 ELSE 0 END ASC,
         CASE WHEN p.status = 'FINALIZED' THEN p.finalized_at ELSE p.updated_at END DESC,
@@ -152,7 +152,7 @@ export async function queryMyProofs(db: Database, actorUserId: string, query: Pr
   await requireActiveAccount(db, actorUserId);
   const found = await db.query<NavigationRow>(`
     WITH accessible AS (
-      SELECT pp.proof_id,pp.role,NULL::TEXT AS invitation_id,'PARTICIPANT'::TEXT AS access_kind FROM proof_participants pp WHERE pp.user_id=$1
+      SELECT pp.proof_id,pp.role,NULL::TEXT AS invitation_id,'PARTICIPANT'::TEXT AS access_kind FROM proof_participants pp WHERE pp.user_id=$1 AND platform_operator_access_active(pp.proof_id,$1)
       UNION ALL
       SELECT i.proof_id,'BUYER'::TEXT AS role,MIN(i.id) AS invitation_id,'INVITATION'::TEXT AS access_kind FROM invitations i
        WHERE i.invitee_user_id=$1 AND i.status='PENDING' AND (i.expires_at IS NULL OR i.expires_at>$2)

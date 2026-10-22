@@ -22,11 +22,17 @@ COPY backend/certs ./certs
 # Preserve the existing service's absolute TLS CA binding during this layout change.
 COPY backend/certs /app/certs
 COPY backend/openapi.json ./openapi.json
+COPY backend/partner-openapi.json ./partner-openapi.json
 COPY backend/rnd-openapi.json ./rnd-openapi.json
 COPY config/rnd/research-build.json /app/config/rnd/research-build.json
 COPY backend/scripts/onboarding-migrate.mjs ./scripts/onboarding-migrate.mjs
 COPY backend/scripts/measurement-migrate.mjs ./scripts/measurement-migrate.mjs
 COPY backend/scripts/rnd-migrate.mjs ./scripts/rnd-migrate.mjs
+COPY backend/scripts/foundation-migrate.mjs ./scripts/foundation-migrate.mjs
+COPY backend/scripts/foundation-migrate-cli.mjs ./scripts/foundation-migrate-cli.mjs
+COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
+COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs
+COPY backend/scripts/isolated-runtime-queued-revocation.mjs ./scripts/isolated-runtime-queued-revocation.mjs
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

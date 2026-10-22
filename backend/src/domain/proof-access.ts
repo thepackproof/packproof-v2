@@ -3,6 +3,8 @@ import { DomainError } from "./errors.js";
 import type { ParticipantRow, ProofRow } from "./types.js";
 import { assertPolicyAccessSafe } from "./policy-recovery.js";
 import { requireActiveAccount } from "./account-access.js";
+import { requireOrganizationProofAccess } from '../platform/organization-access.js';
+import { partnerReadAuthorization } from '../platform/proof-read-grant.js';
 
 export async function loadProof(
   db: Database,
@@ -42,6 +44,12 @@ export async function authorizeProofAccess(
 ): Promise<ParticipantRow> {
   await assertPolicyAccessSafe(db);
   await requireActiveAccount(db, userId);
+  const readGrant=await partnerReadAuthorization(db,userId,proofId);
+  if(readGrant){
+    if(role)throw new DomainError('READ_ONLY_AUTHORIZATION','Delegated export authorization cannot perform a role-bound action',403);
+    return readGrant;
+  }
+  await requireOrganizationProofAccess(db, proofId, userId);
   const result = await db.query<ParticipantRow>(
     role
       ? `SELECT * FROM proof_participants WHERE proof_id = $1 AND user_id = $2 AND role = $3`

@@ -54,6 +54,7 @@ describe("Etsy selling account and automatic intake", () => {
   it("shows an unavailable provider with a disabled connection action and an explanation", async () => {
     const props = accountProps();
     render(<ConnectedAccountsPanel {...props} providers={[{ ...provider, enabled: false }]} />);
+    await userEvent.click(screen.getByText(/Coming soon \/ unavailable channels/, { selector: "summary" }));
     expect(screen.queryByText(/connection setup is pending|not enabled in this environment/)).not.toBeInTheDocument();
     expect(screen.getByRole("article", { name: "Etsy" })).toBeInTheDocument();
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
