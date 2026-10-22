@@ -1,0 +1,57 @@
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let tasks = Resources.*[ Type == 'AWS::ECS::TaskDefinition' ]
+let services = Resources.*[ Type == 'AWS::ECS::Service' ]
+let databases = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
+rule retained_private_storage {
+    %buckets {
+        DeletionPolicy == 'Retain'
+        UpdateReplacePolicy == 'Retain'
+        Properties {
+            PublicAccessBlockConfiguration {
+                BlockPublicAcls == true
+                BlockPublicPolicy == true
+                IgnorePublicAcls == true
+                RestrictPublicBuckets == true
+            }
+            VersioningConfiguration.Status == 'Enabled'
+            BucketEncryption.ServerSideEncryptionConfiguration[*].ServerSideEncryptionByDefault.SSEAlgorithm == 'AES256'
+            OwnershipControls.Rules[*].ObjectOwnership == 'BucketOwnerEnforced'
+        }
+    }
+    Resources.CommittedBucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Mode == 'COMPLIANCE'
+    Resources.JournalBucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Mode == 'COMPLIANCE'
+    Resources.RecipientBucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Mode == 'COMPLIANCE'
+    Resources.CommittedBucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Days == 2
+    Resources.JournalBucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Days == 2
+    Resources.RecipientBucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Days == 2
+    Parameters.WriterFence.Default == 'CLOSED'
+    Parameters.TemporaryBuildAuthority.Default == 'false'
+}
+rule bounded_isolated_tasks {
+    %tasks.Properties {
+        Cpu == '512'
+        Memory == '2048'
+        NetworkMode == 'awsvpc'
+        ContainerDefinitions[*] {
+            ReadonlyRootFilesystem == true
+            Privileged !exists
+            PortMappings !exists
+        }
+        ContainerDefinitions[ Essential == true ] {
+            User == '1000:1000'
+            Secrets[*].Name == 'PACKPROOF_DB_PASSWORD'
+        }
+        ContainerDefinitions[ Essential == false ] {
+            Name == 'temporary-volume-init'
+            User == '0:0'
+            Secrets !exists
+        }
+    }
+    %services empty
+    %databases empty
+}
+rule isolated_secret_injection {
+    Resources.ApiTask.Properties.ContainerDefinitions[ Essential == true ].Secrets[*].ValueFrom.Ref == 'ApiDatabaseSecret'
+    Resources.WorkerTask.Properties.ContainerDefinitions[ Essential == true ].Secrets[*].ValueFrom.Ref == 'WorkerDatabaseSecret'
+    Resources.RestoreTask.Properties.ContainerDefinitions[ Essential == true ].Secrets[*].ValueFrom.Ref == 'RestoreDatabaseSecret'
+}
